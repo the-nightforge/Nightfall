@@ -57,6 +57,27 @@ interface CallResult {
 
 type CallBody = { raw: unknown; reason: CallOutcome; detail?: string };
 
+/**
+ * Thời gian Google bảo hãy chờ trước khi gọi lại. Ưu tiên header Retry-After
+ * (giây), sau đó tới google.rpc.RetryInfo trong thân lỗi, dạng "27s"/"1.5s".
+ * Trả undefined khi không có gì đọc được - chỗ gọi sẽ dùng mặc định của mình.
+ */
+async function retryAfterMs(res: Response): Promise<number | undefined> {
+  const header = Number(res.headers.get("retry-after"));
+  if (Number.isFinite(header) && header > 0) return header * 1_000;
+
+  try {
+    const body = (await res.json()) as {
+      error?: { details?: { "@type"?: string; retryDelay?: string }[] };
+    };
+    const info = body.error?.details?.find((d) => d["@type"]?.endsWith("RetryInfo"));
+    const secs = Number(String(info?.retryDelay ?? "").replace(/s$/, ""));
+    return Number.isFinite(secs) && secs > 0 ? secs * 1_000 : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export class GeminiBrain implements BotBrain {
   readonly name = "gemini";
 
@@ -107,8 +128,13 @@ export class GeminiBrain implements BotBrain {
       });
 
       if (res.status === 429) {
-        this.opts.governor.trip(roomCode);
-        return { raw: null, reason: "429" };
+        const wait = await retryAfterMs(res);
+        this.opts.governor.backOff(wait);
+        return {
+          raw: null,
+          reason: "429",
+          detail: `backoff_${this.opts.governor.cooldownRemainingMs()}ms`,
+        };
       }
       // Bốn nguyên nhân rất khác nhau cùng gộp vào "bad_json" (HTTP lỗi, thân
       // không phải JSON, thiếu trường text, text không parse được). Gộp thì tiện

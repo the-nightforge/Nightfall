@@ -86,18 +86,60 @@ describe("GeminiBrain.decideNight", () => {
     expect(await b.decideNight(wolfNightView())).toBeNull();
   });
 
-  it("ngắt mạch khi gặp 429 và không gọi lại", async () => {
-    const governor = new BotGovernor(60);
+  function rateLimited(retryDelay?: string, headers?: Record<string, string>) {
+    const body = retryDelay
+      ? {
+          error: {
+            code: 429,
+            details: [
+              { "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay },
+            ],
+          },
+        }
+      : {};
+    return new Response(JSON.stringify(body), { status: 429, headers });
+  }
+
+  // Bản cũ tắt Gemini tới hết ván ngay lần 429 đầu tiên, nên một lần chạm rate
+  // limit thoáng qua làm mọi bot câm vĩnh viễn. Điều phải bảo vệ ở đây là bot
+  // gọi lại được sau khi hết nghỉ, chứ không chỉ là nó có tạm dừng.
+  it("gặp 429 thì nghỉ theo retryDelay rồi gọi lại được", async () => {
+    let t = 0;
+    const governor = new BotGovernor(60, () => t);
     let calls = 0;
     const b = brain(async () => {
       calls += 1;
-      return new Response("{}", { status: 429 });
+      return rateLimited("7s");
     }, governor);
 
     expect(await b.decideNight(wolfNightView())).toBeNull();
+    expect(calls).toBe(1);
+
+    t = 6_999;
     expect(await b.decideNight(wolfNightView())).toBeNull();
     expect(calls).toBe(1);
-    expect(governor.canCall("ABCDE")).toBe(false);
+
+    t = 7_000;
+    await b.decideNight(wolfNightView());
+    expect(calls).toBe(2);
+  });
+
+  it("ưu tiên header Retry-After hơn retryDelay trong thân lỗi", async () => {
+    let t = 0;
+    const governor = new BotGovernor(60, () => t);
+    const b = brain(async () => rateLimited("60s", { "retry-after": "3" }), governor);
+
+    await b.decideNight(wolfNightView());
+    expect(governor.cooldownRemainingMs()).toBe(3_000);
+  });
+
+  it("429 không kèm thông tin chờ thì dùng mặc định", async () => {
+    let t = 0;
+    const governor = new BotGovernor(60, () => t);
+    const b = brain(async () => rateLimited(), governor);
+
+    await b.decideNight(wolfNightView());
+    expect(governor.cooldownRemainingMs()).toBe(30_000);
   });
 
   it("không gọi API khi đã chạm trần", async () => {
