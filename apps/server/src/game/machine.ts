@@ -8,7 +8,6 @@ const ROLE_REVEAL_MS = 10_000;
 const RESULT_MS = 8_000;
 const GAME_OVER_MS = 30_000;
 
-const pendingEndNight = new Map<string, boolean>();
 const pendingEndVote = new Map<string, boolean>();
 
 function engine(room: Room): GameEngine {
@@ -40,7 +39,6 @@ export function startGame(room: Room): void {
   const players = room.members.map((m) => ({ id: m.playerId, name: m.name, isBot: m.isBot }));
   room.engine = GameEngine.create(players, room.config);
   room.status = "IN_GAME";
-  pendingEndNight.set(room.code, false);
   pendingEndVote.set(room.code, false);
 
   // ROLE_REVEAL rồi tự vào đêm
@@ -51,21 +49,10 @@ export function startGame(room: Room): void {
 function beginNight(room: Room): void {
   clearRoomTimers(room.code);
   const e = engine(room);
-  pendingEndNight.set(room.code, false);
   e.setPhase("NIGHT", room.config.nightSeconds * 1000);
   scheduleNightBots(room);
   setRoomTimer(room.code, () => endNight(room), room.config.nightSeconds * 1000 + 500);
   sync(room);
-}
-
-/** Gọi sau khi một Sói hành động xong - nếu đủ điều kiện thì kết thúc đêm sớm. */
-export function maybeEndNightEarly(room: Room): void {
-  if (!room.engine || room.engine.state.phase !== "NIGHT") return;
-  if (!room.engine.isNightComplete()) return;
-  if (pendingEndNight.get(room.code)) return;
-  pendingEndNight.set(room.code, true);
-  // Chờ chút cho các vai trò tuỳ chọn (Tiên Tri/Bảo Vệ/Phù Thủy) kịp hành động
-  setRoomTimer(room.code, () => endNight(room), 1_500);
 }
 
 function endNight(room: Room): void {
@@ -163,7 +150,6 @@ function scheduleNightBots(room: Room): void {
           );
           const target = randomOf(targets);
           if (target) e.submitNightAction(p.id, "KILL", target.id);
-          maybeEndNightEarly(room);
         } catch {
           /* bot bỏ lượt */
         }

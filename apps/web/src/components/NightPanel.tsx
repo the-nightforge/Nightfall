@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ROLE_META, type RoomSnapshot } from "@masoi/shared";
 import { PlayerGrid } from "./PlayerGrid";
+import { canActAtNight } from "@/lib/night-role";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -27,7 +28,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
   const meta = role ? ROLE_META[role] : null;
 
   // Dân thường: chỉ ngủ
-  if (!meta?.nightOrder) {
+  if (!meta || !canActAtNight(role)) {
     return (
       <div className="card text-center">
         <p className="text-2xl">😴</p>
