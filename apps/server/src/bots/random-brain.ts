@@ -15,7 +15,9 @@ class RandomBrain implements BotBrain {
 
     if (view.you.role === "WITCH") {
       const actions = witchActions(view);
-      // Giữ nguyên hành vi cũ: ưu tiên cứu, không tự ý dùng bình độc
+      // Ưu tiên bình cứu ngay khi còn dùng được, không tự ý dùng bình độc.
+      // Khác code cũ một điểm có chủ ý: code cũ chỉ cứu ở vòng 1, nên nếu Phù Thuỷ
+      // không hành động được vòng đó thì bình cứu không bao giờ được dùng.
       if (actions.includes("HEAL")) return { action: "HEAL", targetId: null };
       return null;
     }
