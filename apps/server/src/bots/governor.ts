@@ -46,7 +46,7 @@ export async function withTimeout<T>(
   ms: number,
 ): Promise<T | null> {
   const controller = new AbortController();
-  let timer: NodeJS.Timeout;
+  let timer!: NodeJS.Timeout;
   const timeoutPromise = new Promise<null>((resolve) => {
     timer = setTimeout(() => {
       resolve(null);
