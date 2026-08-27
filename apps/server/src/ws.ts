@@ -21,9 +21,11 @@ import { config } from "./config";
 import { GameError } from "@masoi/game-engine";
 import { roomService, RoomError } from "./rooms/service";
 import { getRoomSyncByPlayer } from "./rooms/index-helpers";
-import { getRoom } from "./rooms/store";
+import { getRoom, loadRoomFromRedis, persistRoom } from "./rooms/store";
 import { trackSocket, untrackSocket, broadcastRoom } from "./rooms/broadcast";
 import { maybeEndNightEarly, maybeEndVotingEarly } from "./game/machine";
+import { getPlayerRoom, updateSessionRoom } from "./redis";
+import { reconnectPlayer } from "./rooms/reconnect";
 
 // ---- Rate limit đơn giản (sliding window trong bộ nhớ) ----
 const actionLog = new Map<string, number[]>();
@@ -79,17 +81,19 @@ export function setupSocket(io: SocketServer): void {
 
     // Tự động rejo vào phòng cũ nếu còn session
     (async () => {
-      const roomCode = getRoomSyncByPlayer(playerId);
-      if (roomCode) {
-        const room = getRoom(roomCode);
-        if (room) {
-          const member = room.members.find((m) => m.playerId === playerId);
-          if (member) {
-            member.connected = true;
-            await socket.join(roomCode);
-            broadcastRoom(roomCode);
-          }
-        }
+      const room = await reconnectPlayer(playerId, {
+        findCachedRoom: (id) => {
+          const roomCode = getRoomSyncByPlayer(id);
+          return roomCode ? getRoom(roomCode) : undefined;
+        },
+        getPersistedRoomCode: getPlayerRoom,
+        loadRoom: loadRoomFromRedis,
+        clearPersistedRoom: (id) => updateSessionRoom(id, null),
+        saveRoom: persistRoom,
+      });
+      if (room) {
+        await socket.join(room.code);
+        broadcastRoom(room.code);
       }
     })().catch(() => undefined);
 
