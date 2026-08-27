@@ -212,17 +212,20 @@ export class GameEngine {
     if (st.phase !== "NIGHT") throw new GameError("Chỉ xử lý đêm khi đang trong pha NIGHT");
 
     const deaths: DeathInfo[] = [];
+    const addDeath = (death: DeathInfo): void => {
+      if (!deaths.some((item) => item.playerId === death.playerId)) {
+        deaths.push(death);
+      }
+    };
 
     // 1. Xác định nạn nhân bị cắn
-    let wolfVictim: string | null = null;
     if (st.night.killTarget) {
       const victim = this.player(st.night.killTarget);
       if (victim && victim.alive) {
         const guarded = st.night.guardTarget === victim.id;
         const healed = st.night.healTonight && !st.healUsed;
         if (!guarded && !healed) {
-          deaths.push({ playerId: victim.id, name: victim.name, cause: "wolf" });
-          wolfVictim = victim.id;
+          addDeath({ playerId: victim.id, name: victim.name, cause: "wolf" });
         }
       }
     }
@@ -234,7 +237,7 @@ export class GameEngine {
     if (st.night.poisonTarget && !st.poisonUsed) {
       const victim = this.player(st.night.poisonTarget);
       if (victim && victim.alive) {
-        deaths.push({ playerId: victim.id, name: victim.name, cause: "poison" });
+        addDeath({ playerId: victim.id, name: victim.name, cause: "poison" });
         st.poisonUsed = true;
       }
     }

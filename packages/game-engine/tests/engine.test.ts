@@ -123,6 +123,22 @@ describe("Thứ tự xử lý hành động ban đêm", () => {
     expect(e.state.poisonUsed).toBe(true);
   });
 
+  it("không tính một người chết hai lần khi vừa bị Sói cắn vừa trúng độc", () => {
+    const e = makeEngine(7);
+    const wolf = findPlayersByRole(e, "WEREWOLF")[0];
+    const witch = findPlayersByRole(e, "WITCH")[0];
+    const target = e.state.players.find(
+      (p) => p.alive && p.id !== wolf.id && p.id !== witch.id && p.role !== "WEREWOLF",
+    )!;
+
+    e.submitNightAction(wolf.id, "KILL", target.id);
+    e.submitNightAction(witch.id, "POISON", target.id);
+    const deaths = e.resolveNight();
+
+    expect(deaths.filter((d) => d.playerId === target.id)).toHaveLength(1);
+    expect(e.state.lastNightDeaths.filter((d) => d.playerId === target.id)).toHaveLength(1);
+  });
+
   it("Bảo Vệ không thể bảo vệ cùng một người hai đêm liên tiếp", () => {
     const e = makeEngine(7);
     const guard = findPlayersByRole(e, "GUARD")[0];
