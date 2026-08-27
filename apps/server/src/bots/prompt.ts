@@ -2,7 +2,7 @@ import type { RoomSnapshot } from "@masoi/shared";
 import { legalNightTargets, legalVoteTargets, soloNightAction, witchActions } from "./targets";
 
 export interface GeminiSchema {
-  type: string;
+  type: string | string[];
   properties: Record<string, unknown>;
   required: string[];
 }
@@ -116,7 +116,9 @@ export function buildNightPrompt(view: RoomSnapshot): PromptSpec | null {
 
   if (isWitch) {
     properties.action = { type: "string", enum: witchActions(view) };
-    properties.targetId = { type: "string", enum: [...targets, null], nullable: true };
+    // Nullable đúng chuẩn Gemini structured output: type là mảng, không nhét
+    // null vào enum (đó là 400 INVALID_ARGUMENT), không dùng field "nullable".
+    properties.targetId = { type: ["string", "null"], enum: targets };
     required.push("action");
   } else {
     properties.targetId = { type: "string", enum: targets };
@@ -162,7 +164,7 @@ export function buildDayPrompt(view: RoomSnapshot): PromptSpec | null {
       properties: {
         think: THINK,
         chat: { type: "string", description: "Lời thoại, tối đa 300 ký tự" },
-        voteTargetId: { type: "string", enum: [...targets, null], nullable: true },
+        voteTargetId: { type: ["string", "null"], enum: targets },
       },
       required: ["think", "chat"],
     },

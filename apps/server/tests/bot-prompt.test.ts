@@ -54,12 +54,18 @@ describe("ranh giới bảo mật của prompt", () => {
     expect(text).not.toContain("SEER");
     expect(text).not.toContain("WITCH");
     expect(text).not.toContain("GUARD");
+    // prompt.ts chỉ render vai bằng văn xuôi tiếng Việt nên 4 dòng trên không
+    // bao giờ đỏ dù prompt.ts có bị sửa để nhận thẳng state chưa lọc - assert
+    // này nhắm đúng dấu hiệu tiếng Việt mà code thực sự phát ra cho đồng bọn Sói,
+    // để một hồi quy như vậy còn có cái gì đó bắt được.
+    expect(text).not.toContain("đồng bọn Sói");
   });
 
   it("prompt của Sói nêu đồng bọn nhưng không nêu vai phe làng", () => {
     const spec = buildNightPrompt(wolfView());
     const text = `${spec!.system}\n${spec!.user}`;
     expect(text).toContain("Sang");
+    expect(text).toContain("đồng bọn Sói");
     expect(text).not.toContain("SEER");
     expect(text).not.toContain("WITCH");
   });
@@ -79,10 +85,11 @@ describe("responseSchema", () => {
     expect(target.enum).toEqual(["v"]);
   });
 
-  it("prompt ngày có enum phiếu bầu cho phép null", () => {
+  it("prompt ngày có voteTargetId nullable đúng chuẩn Gemini: type mảng, null không nằm trong enum", () => {
     const spec = buildDayPrompt(villagerView());
-    const vote = spec!.schema.properties.voteTargetId as { enum: (string | null)[] };
-    expect(vote.enum).toEqual(["w", "s", null]);
+    const vote = spec!.schema.properties.voteTargetId as { type: string[]; enum: string[] };
+    expect(vote.type).toEqual(["string", "null"]);
+    expect(vote.enum).toEqual(["w", "s"]);
   });
 
   it("Dân Làng không có prompt đêm", () => {
