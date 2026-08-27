@@ -10,6 +10,7 @@ import { usablePlannedVote } from "../bots/targets";
 import { newId } from "../util";
 import type { NightDecision } from "../bots/types";
 import { pendingEndVote, pendingVote } from "./bot-room-state";
+import { clearDiscussionSkipVotes, updateDiscussionSkipVote } from "./discussion-skip";
 
 const ROLE_REVEAL_MS = 10_000;
 const RESULT_MS = 8_000;
@@ -42,6 +43,7 @@ function checkWinOrContinue(room: Room, next: () => void): void {
 
 export function startGame(room: Room): void {
   room.chatLog = [];
+  clearDiscussionSkipVotes(room.code);
   const players = room.members.map((m) => ({ id: m.playerId, name: m.name, isBot: m.isBot }));
   room.engine = GameEngine.create(players, room.config);
   room.status = "IN_GAME";
@@ -75,6 +77,7 @@ function endNight(room: Room): void {
 
 function beginDiscussion(room: Room): void {
   clearRoomTimers(room.code);
+  clearDiscussionSkipVotes(room.code);
   engine(room).setPhase("DAY_DISCUSSION", room.config.discussionSeconds * 1000);
   setRoomTimer(room.code, () => beginVoting(room), room.config.discussionSeconds * 1000 + 500);
   scheduleDayBots(room);
@@ -82,13 +85,23 @@ function beginDiscussion(room: Room): void {
 }
 
 function beginVoting(room: Room): void {
+  if (!room.engine || room.engine.state.phase !== "DAY_DISCUSSION") return;
   clearRoomTimers(room.code);
+  clearDiscussionSkipVotes(room.code);
   const e = engine(room);
   pendingEndVote.set(room.code, false);
   e.setPhase("VOTING", room.config.voteSeconds * 1000);
   scheduleVoteBots(room);
   setRoomTimer(room.code, () => endVoting(room), room.config.voteSeconds * 1000 + 500);
   sync(room);
+}
+
+export function submitDiscussionSkip(room: Room, playerId: string, skip: boolean): string | null {
+  const result = updateDiscussionSkipVote(room, playerId, skip);
+  if (!result.ok) return result.error;
+  if (result.unanimous) beginVoting(room);
+  else sync(room);
+  return null;
 }
 
 export function maybeEndVotingEarly(room: Room): void {
@@ -112,6 +125,7 @@ function endVoting(room: Room): void {
 
 export function resetToLobby(room: Room): void {
   clearRoomTimers(room.code);
+  clearDiscussionSkipVotes(room.code);
   room.engine = null;
   room.status = "LOBBY";
   for (const m of room.members) m.ready = false;

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_ROOM_CONFIG, type ChatMessage } from "@masoi/shared";
 import { startGame } from "../src/game/machine";
+import { discussionSkipVotes } from "../src/game/discussion-skip";
 import type { Room } from "../src/rooms/store";
 
 vi.mock("../src/rooms/store", () => ({
@@ -47,9 +48,11 @@ function lobbyWithOldChat(): Room {
 describe("vòng đời chat giữa các ván", () => {
   it("xoá toàn bộ chat của ván cũ khi bắt đầu ván mới", () => {
     const room = lobbyWithOldChat();
+    discussionSkipVotes.set(room.code, new Set(["p1"]));
 
     startGame(room);
 
     expect(room.chatLog).toEqual([]);
+    expect(discussionSkipVotes.has(room.code)).toBe(false);
   });
 });

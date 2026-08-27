@@ -3,6 +3,7 @@ import type { ChatMessage, RoomConfig } from "@masoi/shared";
 import { DEFAULT_ROOM_CONFIG, MAX_PLAYERS_PER_ROOM } from "@masoi/shared";
 import { redis } from "../redis";
 import { cleanupRoomBotState } from "../game/bot-room-state";
+import { clearDiscussionSkipVotes } from "../game/discussion-skip";
 
 export interface RoomMember {
   playerId: string;
@@ -57,6 +58,7 @@ export function removeRoom(code: string): void {
   // Không dọn thì pendingVote/pendingEndVote và ngân sách governor tích luỹ
   // một entry cho mỗi phòng bị bỏ hoang trong suốt vòng đời process.
   cleanupRoomBotState(code);
+  clearDiscussionSkipVotes(code);
 }
 
 // ---- Timers ----

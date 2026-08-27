@@ -15,6 +15,7 @@ import {
   resetGamePayload,
   gameActionPayload,
   votePayload,
+  skipDiscussionPayload,
   addBotPayload,
 } from "@masoi/shared";
 import { config } from "./config";
@@ -23,7 +24,7 @@ import { roomService, RoomError } from "./rooms/service";
 import { getRoomSyncByPlayer } from "./rooms/index-helpers";
 import { getRoom, loadRoomFromRedis, persistRoom } from "./rooms/store";
 import { trackSocket, untrackSocket, broadcastRoom } from "./rooms/broadcast";
-import { maybeEndVotingEarly } from "./game/machine";
+import { maybeEndVotingEarly, submitDiscussionSkip } from "./game/machine";
 import { getPlayerRoom, updateSessionRoom } from "./redis";
 import { reconnectPlayer } from "./rooms/reconnect";
 
@@ -189,6 +190,20 @@ export function setupSocket(io: SocketServer): void {
       maybeEndVotingEarly(room);
       broadcastRoom(roomCode);
       void import("./rooms/store").then((m) => m.persistRoom(room));
+    });
+
+    handler(CLIENT_EVENTS.GAME_SKIP_DISCUSSION, async (payload) => {
+      const { skip } = skipDiscussionPayload.parse(payload);
+      if (!allowAction(`skip-discussion:${playerId}`, 10, 3_000)) {
+        throw new RoomError("Thao tác quá nhanh");
+      }
+      const roomCode = getRoomSyncByPlayer(playerId);
+      if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
+      const room = getRoom(roomCode);
+      if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
+
+      const error = submitDiscussionSkip(room, playerId, skip);
+      if (error) throw new RoomError(error);
     });
 
     handler(CLIENT_EVENTS.CHAT_SEND, async (payload) => {
