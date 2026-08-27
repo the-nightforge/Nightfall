@@ -215,6 +215,99 @@ describe("Bỏ phiếu", () => {
     expect(() => e.submitVote("p6", "p1")).toThrow(/chết/);
     expect(() => e.submitVote("p1", "p6")).toThrow(/đã chết/);
   });
+
+  it("tính phiếu không treo là một phiếu đã hoàn thành", () => {
+    const e = makeEngine(6);
+    toVoting(e);
+    for (const player of e.state.players) e.submitVote(player.id, null);
+
+    expect(e.allAliveVoted()).toBe(true);
+    expect(e.voteTally()).toEqual({ players: {}, noElimination: 6 });
+    expect(e.resolveVote()).toBeNull();
+    expect(e.state.players.every((player) => player.alive)).toBe(true);
+  });
+
+  it("loại player chỉ khi player cao nhất duy nhất và hơn không treo", () => {
+    const e = makeEngine(6);
+    toVoting(e);
+    e.submitVote("p1", "p3");
+    e.submitVote("p2", "p3");
+    e.submitVote("p3", "p3");
+    e.submitVote("p4", null);
+    e.submitVote("p5", null);
+    e.submitVote("p6", "p1");
+
+    expect(e.resolveVote()?.playerId).toBe("p3");
+  });
+
+  it("không loại ai khi không treo cao nhất hoặc hòa cao nhất", () => {
+    const noEliminationWins = makeEngine(6);
+    toVoting(noEliminationWins);
+    noEliminationWins.submitVote("p1", null);
+    noEliminationWins.submitVote("p2", null);
+    noEliminationWins.submitVote("p3", null);
+    noEliminationWins.submitVote("p4", "p5");
+    noEliminationWins.submitVote("p5", "p5");
+    noEliminationWins.submitVote("p6", "p1");
+    expect(noEliminationWins.resolveVote()).toBeNull();
+
+    const tied = makeEngine(6);
+    toVoting(tied);
+    tied.submitVote("p1", null);
+    tied.submitVote("p2", null);
+    tied.submitVote("p3", "p5");
+    tied.submitVote("p4", "p5");
+    tied.submitVote("p5", "p1");
+    tied.submitVote("p6", "p2");
+    expect(tied.resolveVote()).toBeNull();
+  });
+
+  it("không cho người chết vote không treo hoặc người sống đổi phiếu", () => {
+    const e = makeEngine(6);
+    toVoting(e);
+    e.state.players[5].alive = false;
+    expect(() => e.submitVote("p6", null)).toThrow(/chết/);
+
+    e.submitVote("p1", null);
+    expect(() => e.submitVote("p1", "p2")).toThrow(/đã bỏ phiếu/);
+    e.submitVote("p2", "p3");
+    expect(() => e.submitVote("p2", null)).toThrow(/đã bỏ phiếu/);
+  });
+
+  it("snapshot phân biệt chưa vote và đã chọn không treo", () => {
+    const e = makeEngine(6);
+    toVoting(e);
+    expect(e.snapshotFor("p1")).toMatchObject({
+      hasVoted: false,
+      myVote: null,
+      noEliminationVoteCount: 0,
+    });
+
+    e.submitVote("p1", null);
+    expect(e.snapshotFor("p1")).toMatchObject({
+      hasVoted: true,
+      myVote: null,
+      noEliminationVoteCount: 1,
+    });
+    expect(e.snapshotFor("p2")).toMatchObject({
+      hasVoted: false,
+      myVote: null,
+      noEliminationVoteCount: 1,
+    });
+  });
+
+  // Phiếu không treo không được cộng vào bất kỳ player nào: nếu lọt vào
+  // PlayerView.voteCount thì UI sẽ hiện số phiếu ma trên đầu người chơi.
+  it("phiếu không treo không làm tăng voteCount của player nào", () => {
+    const e = makeEngine(6);
+    toVoting(e);
+    e.submitVote("p1", null);
+    e.submitVote("p2", null);
+
+    const view = e.snapshotFor("p1");
+    expect(view.players.every((player) => player.voteCount === 0)).toBe(true);
+    expect(view.noEliminationVoteCount).toBe(2);
+  });
 });
 
 describe("Điều kiện thắng", () => {

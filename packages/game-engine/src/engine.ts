@@ -34,7 +34,14 @@ export interface PlayerGameView {
     healUsed: boolean;
     poisonUsed: boolean;
   } | null;
+  /**
+   * Đã gửi phiếu hay chưa. Cần cờ riêng vì myVote === null có hai nghĩa:
+   * chưa vote, hoặc đã chọn "Không treo ai".
+   */
+  hasVoted: boolean;
   myVote: string | null;
+  /** Số phiếu "Không treo ai", tách khỏi PlayerView.voteCount. */
+  noEliminationVoteCount: number;
   votesRevealed: boolean;
   lastNightDeaths: PublicDeath[];
   lastEliminated: PublicDeath | null;
@@ -263,14 +270,20 @@ export class GameEngine {
 
   // ---- Bình chọn ban ngày ----
 
-  submitVote(voterId: string, targetId: string): void {
+  /** targetId null nghĩa là chọn "Không treo ai", không phải bỏ trống phiếu. */
+  submitVote(voterId: string, targetId: string | null): void {
     const st = this.state;
     if (st.phase !== "VOTING") throw new GameError("Chỉ được bỏ phiếu trong pha bỏ phiếu");
     const voter = this.mustPlayer(voterId);
     if (!voter.alive) throw new GameError("Người chết không được bỏ phiếu");
-    const target = this.player(targetId);
-    if (!target) throw new GameError("Mục tiêu không tồn tại");
-    if (!target.alive) throw new GameError("Không thể bỏ phiếu cho người đã chết");
+    // So với undefined, không dùng truthiness: một phiếu không treo đã lưu là
+    // null, và coi nó như chưa vote sẽ cho phép đổi phiếu vòng qua luật này.
+    if (st.votes[voterId] !== undefined) throw new GameError("Bạn đã bỏ phiếu");
+    if (targetId !== null) {
+      const target = this.player(targetId);
+      if (!target) throw new GameError("Mục tiêu không tồn tại");
+      if (!target.alive) throw new GameError("Không thể bỏ phiếu cho người đã chết");
+    }
     st.votes[voterId] = targetId;
   }
 
@@ -278,28 +291,45 @@ export class GameEngine {
     return this.alivePlayers().every((p) => this.state.votes[p.id] !== undefined);
   }
 
-  voteTally(): Record<string, number> {
-    const tally: Record<string, number> = {};
+  /**
+   * Tách phiếu người chơi khỏi phiếu không treo. Gộp chung vào một Record sẽ
+   * cần một id giả cho lựa chọn không treo, và id đó sẽ rò ra snapshot cùng UI.
+   */
+  voteTally(): { players: Record<string, number>; noElimination: number } {
+    const players: Record<string, number> = {};
+    let noElimination = 0;
     for (const targetId of Object.values(this.state.votes)) {
-      tally[targetId] = (tally[targetId] ?? 0) + 1;
+      if (targetId === null) noElimination += 1;
+      else players[targetId] = (players[targetId] ?? 0) + 1;
     }
-    return tally;
+    return { players, noElimination };
   }
 
   /** Trả về người bị loại; hoà phiếu trả về null (không ai bị loại). */
   resolveVote(now = Date.now()): PublicDeath | null {
     const st = this.state;
     if (st.phase !== "VOTING") throw new GameError("Chỉ xử lý phiếu khi đang bỏ phiếu");
+    // "Không treo ai" là một ứng viên ngang hàng với người chơi, không phải
+    // phiếu trắng bị bỏ qua: nó phải thắng được và phải hoà được.
     const tally = this.voteTally();
-    const entries = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+    type VoteCandidate =
+      | { type: "PLAYER"; targetId: string; count: number }
+      | { type: "NO_ELIMINATION"; count: number };
+    const candidates: VoteCandidate[] = Object.entries(tally.players).map(
+      ([targetId, count]) => ({ type: "PLAYER", targetId, count }),
+    );
+    if (tally.noElimination > 0) {
+      candidates.push({ type: "NO_ELIMINATION", count: tally.noElimination });
+    }
+    candidates.sort((left, right) => right.count - left.count);
+
+    const leader = candidates[0];
+    const secondCount = candidates[1]?.count ?? -1;
+    const uniqueLeader = leader !== undefined && leader.count > secondCount;
     let eliminated: PublicDeath | null = null;
 
-    if (
-      entries.length > 0 &&
-      (entries.length === 1 || entries[0][1] > entries[1][1])
-    ) {
-      const [targetId, count] = entries[0];
-      const p = this.player(targetId);
+    if (uniqueLeader && leader.type === "PLAYER") {
+      const p = this.player(leader.targetId);
       if (p && p.alive) {
         p.alive = false;
         eliminated = { playerId: p.id, name: p.name };
@@ -307,7 +337,12 @@ export class GameEngine {
     }
 
     st.lastEliminated = eliminated;
-    st.log.push(eliminated ? `Dân làng đã loại ${eliminated.name}.` : "Hoà phiếu, không ai bị loại.");
+    // Ba kết cục khác nhau về ý nghĩa nên log phải phân biệt được, dù UI gộp
+    // hai nhánh không có nạn nhân vào cùng một câu.
+    if (eliminated) st.log.push(`Dân làng đã loại ${eliminated.name}.`);
+    else if (uniqueLeader && leader.type === "NO_ELIMINATION") {
+      st.log.push("Dân làng quyết định không treo ai.");
+    } else st.log.push("Hoà phiếu, không ai bị loại.");
     st.phase = "ELIMINATION";
     st.phaseEndsAt = now + 8_000;
     return eliminated;
@@ -341,6 +376,9 @@ export class GameEngine {
     const viewerIsWolf = viewer !== undefined && viewer.alive && roleTeam(viewer.role) === "wolves";
 
     const tally = this.voteTally();
+    const showVoteCounts = st.phase === "VOTING" || revealAll;
+    // Người chết không có phiếu nào để mà "đã bỏ", nên hasVoted của họ luôn false.
+    const hasVoted = viewer?.alive === true && st.votes[viewerId] !== undefined;
     const playersView = st.players.map((p) => ({
       id: p.id,
       name: p.name,
@@ -351,7 +389,7 @@ export class GameEngine {
         : viewerIsWolf && p.id !== viewerId && roleTeam(p.role) === "wolves"
           ? p.role
           : undefined,
-      voteCount: st.phase === "VOTING" || revealAll ? tally[p.id] ?? 0 : 0,
+      voteCount: showVoteCounts ? tally.players[p.id] ?? 0 : 0,
     }));
 
     const seerResultEntry = viewer ? st.night.seerResults[viewerId] : undefined;
@@ -393,7 +431,11 @@ export class GameEngine {
               poisonUsed: st.poisonUsed,
             }
           : null,
-      myVote: viewer?.alive ? st.votes[viewerId] ?? null : null,
+      hasVoted,
+      // ?? null ở đây an toàn vì đã gác bằng hasVoted: chỉ đọc khi thật sự có
+      // phiếu, nên null trả về là phiếu không treo chứ không phải "chưa vote".
+      myVote: hasVoted ? st.votes[viewerId] ?? null : null,
+      noEliminationVoteCount: showVoteCounts ? tally.noElimination : 0,
       votesRevealed: st.phase === "ELIMINATION" || st.phase === "GAME_OVER" || st.phase === "CHECK_WIN",
       lastNightDeaths: st.phase === "NIGHT_RESULT" || st.phase === "DAY_DISCUSSION" ? st.lastNightDeaths : [],
       lastEliminated: st.phase === "ELIMINATION" || st.phase === "CHECK_WIN" ? st.lastEliminated : null,

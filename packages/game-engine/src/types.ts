@@ -40,8 +40,18 @@ export interface GameState {
   config: RoomConfig;
   winner: Winner;
   night: NightState;
-  /** Lưu lượng bình phương theo đêm/ngày: voterId -> targetId */
-  votes: Record<string, string>;
+  /**
+   * Phiếu ban ngày: voterId -> lựa chọn.
+   *
+   * Ba trạng thái phân biệt bằng chính kiểu dữ liệu, không cần cờ phụ:
+   *  - key vắng mặt / undefined: chưa bỏ phiếu
+   *  - string: bỏ phiếu cho người chơi đó
+   *  - null: chọn "Không treo ai"
+   *
+   * Vì null là một phiếu hợp lệ, mọi kiểm tra "đã vote chưa" phải so với
+   * undefined chứ không được dùng truthiness.
+   */
+  votes: Record<string, string | null>;
   guardPrevious: string | null;
   healUsed: boolean;
   poisonUsed: boolean;
