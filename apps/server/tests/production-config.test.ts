@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { healthHttpStatus } from "../src/health";
+import { healthHttpStatus, redisConnectionHealthy } from "../src/health";
 import { resolvePort } from "../src/config";
 
 describe("resolvePort", () => {
@@ -32,5 +32,13 @@ describe("healthHttpStatus", () => {
     expect(healthHttpStatus({ db: true, redis: true })).toBe(200);
     expect(healthHttpStatus({ db: false, redis: true })).toBe(503);
     expect(healthHttpStatus({ db: true, redis: false })).toBe(200);
+  });
+});
+
+describe("redisConnectionHealthy", () => {
+  it("reads the existing Redis connection state without waiting on a command", () => {
+    expect(redisConnectionHealthy("ready")).toBe(true);
+    expect(redisConnectionHealthy("reconnecting")).toBe(false);
+    expect(redisConnectionHealthy("end")).toBe(false);
   });
 });

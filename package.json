@@ -2,6 +2,9 @@
   "name": "ma-soi-online",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "workspaces": [
     "packages/*",
     "apps/*"

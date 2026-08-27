@@ -137,7 +137,7 @@ export function setupSocket(io: SocketServer): void {
 
     handler(CLIENT_EVENTS.ROOM_KICK, async (payload) => {
       const { targetId } = kickPayload.parse(payload);
-      roomService.kick(playerId, targetId);
+      await roomService.kick(playerId, targetId);
     });
 
     handler(CLIENT_EVENTS.ROOM_UPDATE_CONFIG, async (payload) => {

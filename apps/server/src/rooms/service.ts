@@ -92,45 +92,47 @@ export const roomService = {
   },
 
   async leave(playerId: string): Promise<void> {
-    const roomCode = await this.findRoomOf(playerId);
-    if (!roomCode) return;
-    const room = getRoom(roomCode);
-    if (!room) return;
+    await withPlayerRoomLock(playerId, async () => {
+      const roomCode = await this.findRoomOf(playerId);
+      if (!roomCode) return;
+      const room = getRoom(roomCode);
+      if (!room) return;
 
-    room.members = room.members.filter((m) => m.playerId !== playerId);
-    await updateSessionRoom(playerId, null);
+      room.members = room.members.filter((m) => m.playerId !== playerId);
+      await updateSessionRoom(playerId, null);
 
-    if (room.members.length === 0) {
-      removeRoom(room.code);
-      await deletePersistedRoom(room.code);
-      try {
-        await prisma.roomRecord.updateMany({
-          where: { code: room.code, closedAt: null },
-          data: { closedAt: new Date() },
-        });
-      } catch {
-        /* ignore */
+      if (room.members.length === 0) {
+        removeRoom(room.code);
+        await deletePersistedRoom(room.code);
+        try {
+          await prisma.roomRecord.updateMany({
+            where: { code: room.code, closedAt: null },
+            data: { closedAt: new Date() },
+          });
+        } catch {
+          /* ignore */
+        }
+        return;
       }
-      return;
-    }
 
-    if (room.hostId === playerId) {
-      const next =
-        room.members.find((m) => !m.isBot && m.connected) ??
-        room.members.find((m) => !m.isBot) ??
-        room.members[0];
-      room.hostId = next.playerId;
-    }
-
-    // Rời giữa trận: đánh dấu chết để không treo game
-    if (room.engine) {
-      const p = room.engine.getState().players.find((pl) => pl.id === playerId);
-      if (p && p.alive && room.status === "IN_GAME") {
-        p.alive = false;
+      if (room.hostId === playerId) {
+        const next =
+          room.members.find((m) => !m.isBot && m.connected) ??
+          room.members.find((m) => !m.isBot) ??
+          room.members[0];
+        room.hostId = next.playerId;
       }
-    }
-    await persistRoom(room);
-    broadcastRoom(room.code);
+
+      // Rời giữa trận: đánh dấu chết để không treo game
+      if (room.engine) {
+        const p = room.engine.getState().players.find((pl) => pl.id === playerId);
+        if (p && p.alive && room.status === "IN_GAME") {
+          p.alive = false;
+        }
+      }
+      await persistRoom(room);
+      broadcastRoom(room.code);
+    });
   },
 
   async findRoomOf(playerId: string): Promise<string | null> {
@@ -158,18 +160,21 @@ export const roomService = {
     void persistRoom(room).then(() => broadcastRoom(room.code));
   },
 
-  kick(hostId: string, targetId: string): void {
-    const roomCode = getRoomSyncByPlayer(hostId);
-    if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
-    const room = getRoom(roomCode)!;
-    assertHost(room, hostId);
-    if (room.status !== "LOBBY") throw new RoomError("Chỉ được loại người chơi trước khi bắt đầu");
-    if (hostId === targetId) throw new RoomError("Không thể tự loại mình");
-    const target = room.members.find((m) => m.playerId === targetId);
-    if (!target) throw new RoomError("Người chơi không tồn tại");
-    room.members = room.members.filter((m) => m.playerId !== targetId);
-    void updateSessionRoom(targetId, null);
-    void persistRoom(room).then(() => broadcastRoom(room.code));
+  async kick(hostId: string, targetId: string): Promise<void> {
+    await withPlayerRoomLock(targetId, async () => {
+      const roomCode = getRoomSyncByPlayer(hostId);
+      if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
+      const room = getRoom(roomCode)!;
+      assertHost(room, hostId);
+      if (room.status !== "LOBBY") throw new RoomError("Chỉ được loại người chơi trước khi bắt đầu");
+      if (hostId === targetId) throw new RoomError("Không thể tự loại mình");
+      const target = room.members.find((m) => m.playerId === targetId);
+      if (!target) throw new RoomError("Người chơi không tồn tại");
+      room.members = room.members.filter((m) => m.playerId !== targetId);
+      await updateSessionRoom(targetId, null);
+      await persistRoom(room);
+      broadcastRoom(room.code);
+    });
   },
 
   updateConfig(hostId: string, config: RoomConfig): void {

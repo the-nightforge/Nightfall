@@ -24,7 +24,7 @@ ma-soi-online/
 
 ## Yêu cầu
 
-- Node.js >= 20
+- Node.js >= 20.19
 - Docker Desktop (cho PostgreSQL & Redis)
 
 ## Cài đặt & chạy local
