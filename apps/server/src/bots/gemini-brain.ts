@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { RoomSnapshot } from "@masoi/shared";
 import type { BotBrain, DayDecision, NightDecision } from "./types";
-import { legalNightTargets, legalVoteTargets, soloNightAction } from "./targets";
+import { legalNightTargets, legalVoteTargets, soloNightAction, witchActions } from "./targets";
 import { buildDayPrompt, buildNightPrompt, type PromptSpec } from "./prompt";
 import { BotGovernor, withTimeout } from "./governor";
 
@@ -29,6 +29,18 @@ const daySchema = z.object({
 
 const CHAT_MAX = 300;
 
+/**
+ * Mã lỗi thô để phân biệt lý do fallback trong log sản xuất. Chỉ dùng để log,
+ * không phải phân cấp lỗi — cố tình giữ thô: một chuỗi liệt kê nhỏ là đủ.
+ */
+type CallOutcome = "ok" | "429" | "timeout" | "bad_json" | "bad_shape" | "illegal_target";
+
+interface CallResult {
+  raw: unknown | null;
+  reason: CallOutcome;
+  startedAt: number;
+}
+
 export class GeminiBrain implements BotBrain {
   readonly name = "gemini";
 
@@ -38,8 +50,12 @@ export class GeminiBrain implements BotBrain {
     return this.opts.fetchImpl ?? ((u, i) => fetch(u, i));
   }
 
-  /** Trả về JSON đã parse, hoặc null cho mọi nhánh thất bại. */
-  private async call(roomCode: string, spec: PromptSpec): Promise<unknown | null> {
+  /**
+   * Gọi Gemini và trả JSON thô kèm mã lý do ở tầng mạng (chưa qua Zod/hợp lệ).
+   * Trả null (không gọi được, hết ngân sách) nếu bị chặn trước khi gọi — nhánh
+   * đó không log vì chưa có gì để đo độ trễ.
+   */
+  private async call(roomCode: string, spec: PromptSpec): Promise<CallResult | null> {
     if (!this.opts.governor.canCall(roomCode)) return null;
     this.opts.governor.recordCall(roomCode);
 
@@ -47,8 +63,8 @@ export class GeminiBrain implements BotBrain {
       `https://generativelanguage.googleapis.com/v1beta/models/` +
       `${this.opts.model}:generateContent?key=${this.opts.apiKey}`;
 
-    const started = Date.now();
-    const raw = await withTimeout(async (signal) => {
+    const startedAt = Date.now();
+    const result = await withTimeout<{ raw: unknown; reason: CallOutcome }>(async (signal) => {
       const res = await this.fetchImpl(url, {
         method: "POST",
         signal,
@@ -65,61 +81,103 @@ export class GeminiBrain implements BotBrain {
 
       if (res.status === 429) {
         this.opts.governor.trip(roomCode);
-        return null;
+        return { raw: null, reason: "429" };
       }
-      if (!res.ok) return null;
+      // Mọi phản hồi không dùng được (mã lỗi khác 429, thân JSON hỏng, thiếu
+      // trường text) đều gộp vào "bad_json" — chỉ cần đủ thô để phân biệt với
+      // 429/timeout/bad_shape/illegal_target trong log, không cần chi tiết hơn.
+      if (!res.ok) return { raw: null, reason: "bad_json" };
 
-      const body = (await res.json()) as {
-        candidates?: { content?: { parts?: { text?: string }[] } }[];
-      };
+      let body: { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+      try {
+        body = (await res.json()) as typeof body;
+      } catch {
+        return { raw: null, reason: "bad_json" };
+      }
+
       const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
-      return text ? (JSON.parse(text) as unknown) : null;
+      if (!text) return { raw: null, reason: "bad_json" };
+
+      try {
+        return { raw: JSON.parse(text) as unknown, reason: "ok" };
+      } catch {
+        return { raw: null, reason: "bad_json" };
+      }
     }, this.opts.timeoutMs);
 
-    // Không log prompt, không log think, không log key
-    console.log(`[bot] ${this.opts.model} ${Date.now() - started}ms ${raw ? "ok" : "fallback"}`);
-    return raw;
+    // withTimeout trả null khi hết hạn chót HOẶC khi work ném lỗi (mạng lỗi, bị
+    // huỷ) — ở tầng này không phân biệt được nguyên nhân cụ thể nên gộp vào "timeout".
+    const { raw, reason } = result ?? { raw: null, reason: "timeout" as const };
+    return { raw, reason, startedAt };
+  }
+
+  /** Chỉ log: model, độ trễ, kết quả cuối cùng, mã lỗi. Không log prompt/key/think. */
+  private logOutcome(startedAt: number, reason: CallOutcome): void {
+    console.log(`[bot] ${this.opts.model} ${Date.now() - startedAt}ms reason=${reason}`);
   }
 
   async decideNight(view: RoomSnapshot): Promise<NightDecision | null> {
     const spec = buildNightPrompt(view);
     if (!spec) return null;
 
-    const raw = await this.call(view.code, spec);
-    if (raw === null) return null;
+    const result = await this.call(view.code, spec);
+    if (!result) return null;
+    const { raw, reason, startedAt } = result;
+
+    const finish = (value: NightDecision | null, outcome: CallOutcome): NightDecision | null => {
+      this.logOutcome(startedAt, outcome);
+      return value;
+    };
+
+    if (raw === null) return finish(null, reason);
 
     const parsed = nightSchema.safeParse(raw);
-    if (!parsed.success) return null;
+    if (!parsed.success) return finish(null, "bad_shape");
 
     if (view.you?.role === "WITCH") {
       const action = parsed.data.action;
-      if (action === "HEAL") return { action: "HEAL", targetId: null };
-      if (action !== "POISON") return null;
+      // Cổng hợp lệ thứ hai: xác nhận hành động Phù Thuỷ chọn còn dùng được
+      // (bình đã dùng thì engine sẽ từ chối) — không tin riêng Zod.
+      if (!action || !witchActions(view).includes(action)) return finish(null, "illegal_target");
+      if (action === "HEAL") return finish({ action: "HEAL", targetId: null }, "ok");
+      if (action !== "POISON") return finish(null, "ok"); // SKIP: bot chủ động không làm gì
       const target = parsed.data.targetId ?? null;
-      if (!target || !legalNightTargets(view, "POISON").includes(target)) return null;
-      return { action: "POISON", targetId: target };
+      if (!target || !legalNightTargets(view, "POISON").includes(target)) {
+        return finish(null, "illegal_target");
+      }
+      return finish({ action: "POISON", targetId: target }, "ok");
     }
 
     const action = soloNightAction(view.you?.role);
-    if (!action) return null;
+    if (!action) return finish(null, "illegal_target");
     const target = parsed.data.targetId ?? null;
-    if (!target || !legalNightTargets(view, action).includes(target)) return null;
-    return { action, targetId: target };
+    if (!target || !legalNightTargets(view, action).includes(target)) {
+      return finish(null, "illegal_target");
+    }
+    return finish({ action, targetId: target }, "ok");
   }
 
   async decideDay(view: RoomSnapshot): Promise<DayDecision | null> {
     const spec = buildDayPrompt(view);
     if (!spec) return null;
 
-    const raw = await this.call(view.code, spec);
-    if (raw === null) return null;
+    const result = await this.call(view.code, spec);
+    if (!result) return null;
+    const { raw, reason, startedAt } = result;
+
+    const finish = (value: DayDecision | null, outcome: CallOutcome): DayDecision | null => {
+      this.logOutcome(startedAt, outcome);
+      return value;
+    };
+
+    if (raw === null) return finish(null, reason);
 
     const parsed = daySchema.safeParse(raw);
-    if (!parsed.success) return null;
+    if (!parsed.success) return finish(null, "bad_shape");
 
     const vote = parsed.data.voteTargetId ?? null;
     const legal = vote && legalVoteTargets(view).includes(vote) ? vote : null;
 
-    return { chat: parsed.data.chat.slice(0, CHAT_MAX), voteTargetId: legal };
+    return finish({ chat: parsed.data.chat.slice(0, CHAT_MAX), voteTargetId: legal }, "ok");
   }
 }

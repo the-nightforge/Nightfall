@@ -29,6 +29,31 @@ function wolfNightView(): RoomSnapshot {
   };
 }
 
+function witchNightView(): RoomSnapshot {
+  return {
+    code: "ABCDE",
+    hostId: "w",
+    phase: "NIGHT",
+    config: { ...DEFAULT_ROOM_CONFIG },
+    round: 1,
+    phaseEndsAt: null,
+    you: { id: "w", name: "Witch", ready: true, connected: true, role: "WITCH", alive: true },
+    players: [
+      { id: "w", name: "Witch", alive: true, isBot: true, role: "WITCH" },
+      { id: "v", name: "Vân", alive: true, isBot: false },
+      { id: "s", name: "Sang", alive: true, isBot: false },
+    ],
+    night: { canAct: true, acted: false, wolfTarget: null, seerResult: null, healUsed: false, poisonUsed: false },
+    myVote: null,
+    votesRevealed: false,
+    lastNightDeaths: [],
+    lastEliminated: null,
+    winner: null,
+    chatLog: [],
+    log: [],
+  };
+}
+
 function reply(payload: unknown, status = 200): Response {
   const body = {
     candidates: [{ content: { parts: [{ text: JSON.stringify(payload) }] } }],
@@ -96,6 +121,32 @@ describe("GeminiBrain.decideNight", () => {
     const v = { ...wolfNightView(), night: null };
     expect(await b.decideNight(v)).toBeNull();
     expect(calls).toBe(0);
+  });
+});
+
+describe("GeminiBrain.decideNight (Phù Thuỷ)", () => {
+  it("chấp nhận HEAL khi bình cứu còn dùng được", async () => {
+    const b = brain(async () => reply({ think: "x", action: "HEAL" }));
+    expect(await b.decideNight(witchNightView())).toEqual({ action: "HEAL", targetId: null });
+  });
+
+  it("chấp nhận POISON với mục tiêu hợp lệ", async () => {
+    const b = brain(async () => reply({ think: "x", action: "POISON", targetId: "v" }));
+    expect(await b.decideNight(witchNightView())).toEqual({ action: "POISON", targetId: "v" });
+  });
+
+  it("từ chối hành động mô hình chọn nhưng không còn dùng được", async () => {
+    const b = brain(async () => reply({ think: "x", action: "HEAL" }));
+    const v = {
+      ...witchNightView(),
+      night: { canAct: true, acted: false, wolfTarget: null, seerResult: null, healUsed: true, poisonUsed: false },
+    };
+    expect(await b.decideNight(v)).toBeNull();
+  });
+
+  it("từ chối POISON với mục tiêu ngoài danh sách hợp lệ", async () => {
+    const b = brain(async () => reply({ think: "x", action: "POISON", targetId: "khong-ton-tai" }));
+    expect(await b.decideNight(witchNightView())).toBeNull();
   });
 });
 
