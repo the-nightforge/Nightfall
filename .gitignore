@@ -10,3 +10,7 @@ coverage/
 prisma/migrations/dev.db*
 
 .vercel
+
+# Scratch cua worktree va subagent-driven development
+.claude/worktrees/
+.superpowers/
