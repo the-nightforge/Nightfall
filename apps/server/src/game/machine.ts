@@ -9,14 +9,11 @@ import { botBrain, randomBrain, resetBotBudget } from "../bots";
 import { usablePlannedVote } from "../bots/targets";
 import { newId } from "../util";
 import type { NightDecision } from "../bots/types";
+import { pendingEndVote, pendingVote } from "./bot-room-state";
 
 const ROLE_REVEAL_MS = 10_000;
 const RESULT_MS = 8_000;
 const GAME_OVER_MS = 30_000;
-
-const pendingEndVote = new Map<string, boolean>();
-/** Phiếu bot đã định trong pha thảo luận, dùng lại ở pha bỏ phiếu. */
-const pendingVote = new Map<string, Map<string, string>>();
 
 function engine(room: Room): GameEngine {
   if (!room.engine) throw new Error("Chưa có trận đấu");
@@ -155,7 +152,7 @@ function applyNight(room: Room, botId: string, decision: NightDecision | null): 
   }
 }
 
-function scheduleNightBots(room: Room): void {
+export function scheduleNightBots(room: Room): void {
   // Trần thời gian nộp quyết định: nhanh hơn hẳn thời lượng đêm, để endNight()
   // không bao giờ phải chờ mạng — kể cả với nightSeconds ngắn nhất (15s = 6s trần).
   const deadlineMs = Math.min(8_000, room.config.nightSeconds * 400);

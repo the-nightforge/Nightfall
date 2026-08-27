@@ -2,6 +2,7 @@ import { GameEngine } from "@masoi/game-engine";
 import type { ChatMessage, RoomConfig } from "@masoi/shared";
 import { DEFAULT_ROOM_CONFIG, MAX_PLAYERS_PER_ROOM } from "@masoi/shared";
 import { redis } from "../redis";
+import { cleanupRoomBotState } from "../game/bot-room-state";
 
 export interface RoomMember {
   playerId: string;
@@ -53,6 +54,9 @@ export function createRoom(code: string, host: RoomMember): Room {
 export function removeRoom(code: string): void {
   clearRoomTimers(code);
   rooms.delete(code);
+  // Không dọn thì pendingVote/pendingEndVote và ngân sách governor tích luỹ
+  // một entry cho mỗi phòng bị bỏ hoang trong suốt vòng đời process.
+  cleanupRoomBotState(code);
 }
 
 // ---- Timers ----
