@@ -260,7 +260,8 @@ describe("Hành động không hợp lệ & quyền hạn", () => {
     // Chỉ cần con sói còn lại hành động là đủ
     const aliveWolf = wolves[1] ?? wolves[0];
     if (!aliveWolf.alive) throw new Error("test setup sai");
-    e.submitNightAction(aliveWolf.id, "KILL", "p1");
+    const target = e.state.players.find((player) => player.alive && player.role !== "WEREWOLF")!;
+    e.submitNightAction(aliveWolf.id, "KILL", target.id);
     expect(e.isNightComplete()).toBe(true);
   });
 
