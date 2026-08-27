@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Sửa các lỗi bảo mật/gameplay chặn phát hành và chuẩn bị monorepo Ma Sói Online để chạy frontend trên Vercel, backend trên Northflank, PostgreSQL trên Neon và Redis trên Upstash.
+**Goal:** Sửa các lỗi bảo mật/gameplay chặn phát hành và chuẩn bị monorepo Ma Sói Online để chạy frontend trên Vercel, backend trên Render, PostgreSQL trên Neon và Redis trên Upstash.
 
-**Architecture:** Giữ Next.js frontend và Express/Socket.IO backend tách biệt trong cùng npm workspace. Backend chạy một instance lâu dài trên Northflank, giữ trạng thái nóng trong RAM và dùng Redis/PostgreSQL managed; frontend chỉ biết URL backend public qua biến môi trường.
+**Architecture:** Giữ Next.js frontend và Express/Socket.IO backend tách biệt trong cùng npm workspace. Backend chạy một instance lâu dài trên Render, giữ trạng thái nóng trong RAM và dùng Redis/PostgreSQL managed; frontend chỉ biết URL backend public qua biến môi trường.
 
-**Tech Stack:** TypeScript, Next.js 14, React 18, Express 4, Socket.IO 4, Prisma 5, PostgreSQL, ioredis, Vitest 2, Docker, Vercel, Northflank, Neon, Upstash, GitHub CLI.
+**Tech Stack:** TypeScript, Next.js 16, React 19, Express 4, Socket.IO 4, Prisma 5, PostgreSQL, ioredis, Vitest 4, Docker, Vercel, Render, Neon, Upstash, GitHub CLI.
 
 **Spec:** `docs/superpowers/specs/2026-08-27-production-deployment-design.md`
 
@@ -14,7 +14,7 @@
 
 - Repository GitHub phải là private và có tên `ma-soi-online`.
 - Không commit `.env`, token, mật khẩu hoặc connection string thật.
-- Frontend chỉ chạy trên Vercel; backend chỉ chạy trên Northflank.
+- Frontend chỉ chạy trên Vercel; backend chỉ chạy trên Render.
 - Backend dùng đúng một instance trong giai đoạn MVP.
 - Server là nguồn dữ liệu duy nhất cho vai trò, hành động, chat và kết quả.
 - Nếu backend restart giữa trận, phòng quay về lobby; không khôi phục timer hoặc hành động dở.
@@ -542,7 +542,7 @@ git commit -m "feat: prepare backend for managed hosting"
 - Modify: `README.md`
 
 **Interfaces:**
-- Consumes: Northflank public backend URL through `NEXT_PUBLIC_SERVER_URL`.
+- Consumes: Render public backend URL through `NEXT_PUBLIC_SERVER_URL`.
 - Produces: reproducible Vercel build and exact dashboard configuration instructions.
 
 - [ ] **Step 1: Add Vercel monorepo configuration**
@@ -562,7 +562,7 @@ Create `vercel.json`:
 Create `apps/web/.env.example` containing:
 
 ```dotenv
-NEXT_PUBLIC_SERVER_URL=https://ma-soi-server-example.code.run
+NEXT_PUBLIC_SERVER_URL=https://ma-soi-server-example.onrender.com
 ```
 
 The value is documentation only and not a live credential.
@@ -573,9 +573,9 @@ Document exact fields:
 
 - Neon: copy the pooled PostgreSQL connection string to `DATABASE_URL`.
 - Upstash: copy the TLS Redis connection string to `REDIS_URL`.
-- Northflank: build with `Dockerfile.server`, expose `$PORT` using HTTP/1.1, health path `/api/health`, one instance, environment `NODE_ENV=production`.
-- Vercel: import the same GitHub repository, use root repository with `vercel.json`, set `NEXT_PUBLIC_SERVER_URL` to the Northflank HTTPS domain.
-- After Vercel deploy: set Northflank `CORS_ORIGIN` to the exact Vercel origin and redeploy.
+- Render: create a Docker Web Service from `main` using `Dockerfile.server`, let Render manage `$PORT`, set health path `/api/health`, use one instance and set `NODE_ENV=production`.
+- Vercel: import the same GitHub repository, use root repository with `vercel.json`, set `NEXT_PUBLIC_SERVER_URL` to the Render HTTPS origin.
+- After Vercel deploy: set Render `CORS_ORIGIN` to the exact Vercel origin and redeploy.
 - Explain free-tier limits and the restart-to-lobby behavior.
 
 - [ ] **Step 3: Verify frontend production build**
@@ -704,7 +704,7 @@ Expected: `isPrivate` is true, default branch is `main`, and local branch tracks
 
 **Interfaces:**
 - Consumes: GitHub repository URL and verified build artifacts.
-- Produces: exact user-facing steps or completed deployments for Neon, Upstash, Northflank and Vercel.
+- Produces: exact user-facing steps or completed deployments for Neon, Upstash, Render and Vercel.
 
 - [ ] **Step 1: Create or connect managed services**
 
@@ -712,7 +712,7 @@ Use existing signed-in accounts when available. If account creation, login, paym
 
 - [ ] **Step 2: Configure backend secrets**
 
-Set these only in Northflank:
+Set these only in Render:
 
 ```text
 DATABASE_URL = Neon pooled connection string
@@ -721,11 +721,11 @@ NODE_ENV = production
 CORS_ORIGIN = exact Vercel HTTPS origin after frontend deployment
 ```
 
-Leave `PORT` managed by Northflank.
+Leave `PORT` managed by Render.
 
 - [ ] **Step 3: Configure frontend environment**
 
-Set `NEXT_PUBLIC_SERVER_URL` in Vercel to the exact Northflank HTTPS origin and redeploy the frontend.
+Set `NEXT_PUBLIC_SERVER_URL` in Vercel to the exact Render HTTPS origin and redeploy the frontend.
 
 - [ ] **Step 4: Run public smoke verification**
 

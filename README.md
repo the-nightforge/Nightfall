@@ -12,7 +12,7 @@ Game Ma Sói (Werewolf) online multiplayer theo thời gian thực - MVP bản c
 ```
 ma-soi-online/
 ├── apps/
-│   ├── web/          # Next.js 14 + Tailwind (App Router)
+│   ├── web/          # Next.js 16 + React 19 + Tailwind (App Router)
 │   └── server/       # Express + Socket.IO + Prisma + Redis
 ├── packages/
 │   ├── game-engine/  # Luật chơi thuần (không phụ thuộc IO) + Vitest
@@ -54,24 +54,29 @@ Mở http://localhost:3000 → nhập biệt danh → **Tạo phòng mới** →
 
 ## Triển khai bản dùng thử miễn phí
 
-Kiến trúc triển khai: **Vercel (web) → Northflank (server) → Neon (PostgreSQL) + Upstash (Redis)**. Backend chỉ chạy **một instance** vì trạng thái ván đang chơi được giữ trong RAM.
+Kiến trúc triển khai: **Vercel (web) → Render (server) → Neon (PostgreSQL) + Upstash (Redis)**. Backend chỉ chạy **một instance** vì trạng thái ván đang chơi được giữ trong RAM.
+
+Bản đang chạy:
+
+- Frontend: <https://ma-soi-online-nu.vercel.app>
+- Backend health: <https://ma-soi-server-xzhv.onrender.com/api/health>
 
 ### 1. Neon PostgreSQL
 
 1. Tạo project và database PostgreSQL trên Neon.
 2. Mở phần connection details, chọn pooled connection và sao chép chuỗi kết nối.
-3. Chuỗi này sẽ được lưu dưới tên `DATABASE_URL` trong Northflank; không đưa vào Git hoặc Vercel.
+3. Chuỗi này sẽ được lưu dưới tên `DATABASE_URL` trong Render; không đưa vào Git hoặc Vercel.
 
 ### 2. Upstash Redis
 
 1. Tạo Redis database cùng khu vực gần backend nhất có thể.
 2. Sao chép TLS connection string bắt đầu bằng `rediss://`.
-3. Chuỗi này sẽ được lưu dưới tên `REDIS_URL` trong Northflank; không đưa vào Git.
+3. Chuỗi này sẽ được lưu dưới tên `REDIS_URL` trong Render; không đưa vào Git.
 
-### 3. Northflank backend
+### 3. Render backend
 
-1. Tạo service từ repository GitHub này và chọn build bằng Dockerfile `Dockerfile.server`.
-2. Dùng một instance, cấu hình public HTTP port trỏ vào internal port `4000`, giao thức HTTP/1.1 và health path `/api/health`.
+1. Tạo **Web Service** từ repository GitHub này, chọn môi trường Docker, nhánh `main` và Dockerfile `Dockerfile.server`.
+2. Dùng một instance và đặt Health Check Path là `/api/health`. Render tự cấp biến `PORT`, không cần tạo thủ công.
 3. Thêm các biến môi trường:
 
 ```text
@@ -85,22 +90,23 @@ BOT_AI_ENABLED=true
 
 `BOT_AI_ENABLED` là công tắc tắt nhanh: đặt `false` để toàn bộ bot quay lại chọn ngẫu nhiên ngay lập tức mà không cần deploy lại hay đổi `GEMINI_API_KEY`. Mặc định bật khi đã có key.
 
-Image lắng nghe cổng `4000` theo mặc định và `Dockerfile.server` khai báo cùng cổng; nếu Northflank cấp biến `PORT`, server sẽ ưu tiên giá trị đó. Lần khởi động container sẽ chạy `prisma migrate deploy` trước khi mở server. Ghi lại HTTPS domain của backend, ví dụ `https://ma-soi-server-example.code.run`.
+Server ưu tiên biến `PORT` do Render cấp và dùng cổng `4000` khi chạy container cục bộ. Lần khởi động container sẽ chạy `prisma migrate deploy` trước khi mở server. Ghi lại HTTPS origin của backend, ví dụ `https://ma-soi-server-xzhv.onrender.com`.
 
 ### 4. Vercel frontend
 
 1. Import cùng repository vào Vercel và giữ Root Directory là thư mục gốc repository; file `vercel.json` đã chứa lệnh build monorepo.
-2. Thêm biến môi trường `NEXT_PUBLIC_SERVER_URL` bằng chính xác HTTPS origin của Northflank, không có dấu `/` cuối.
+2. Thêm biến môi trường `NEXT_PUBLIC_SERVER_URL` bằng chính xác HTTPS origin của Render, không có dấu `/` cuối.
 3. Deploy frontend và ghi lại origin Vercel.
-4. Quay lại Northflank, đổi `CORS_ORIGIN` thành origin Vercel chính xác rồi redeploy backend.
+4. Quay lại Render, đổi `CORS_ORIGIN` thành origin Vercel chính xác rồi redeploy backend.
 
 ### 5. Kiểm tra sau triển khai
 
-- Mở `https://<backend>/api/health`; kết quả tốt là HTTP 200 với `{ "ok": true, "db": true, "redis": true }`.
+- Mở `https://<backend>/api/health`; trạng thái đầy đủ là HTTP 200 với `{ "ok": true, "db": true, "redis": true }`.
+- Nếu PostgreSQL lỗi, endpoint trả HTTP 503. Nếu chỉ Redis tạm lỗi, endpoint vẫn trả HTTP 200 với `redis: false` vì server còn có thể phục vụ phòng đang nằm trong RAM.
 - Mở frontend Vercel, tạo người chơi và phòng mới, thêm bot rồi xác nhận Socket.IO kết nối được.
 - Không lưu `DATABASE_URL`, `REDIS_URL` hoặc token người chơi trong file được commit.
 
-Các gói miễn phí có giới hạn tài nguyên và có thể thay đổi hoặc tạm ngủ. Đây là cấu hình phù hợp cho MVP dùng thử, không phải tải production lớn. Nếu backend restart giữa trận, phòng được đưa về lobby an toàn thay vì khôi phục timer/hành động dang dở.
+Các gói miễn phí có giới hạn tài nguyên và có thể thay đổi. Render Free có thể tạm ngủ khi không hoạt động nên lần truy cập đầu tiên có thể khởi động chậm. Đây là cấu hình phù hợp cho MVP dùng thử, không phải tải production lớn. Nếu backend restart giữa trận, phòng được đưa về lobby an toàn thay vì khôi phục timer/hành động dang dở.
 
 ## Scripts
 
@@ -114,7 +120,7 @@ Các gói miễn phí có giới hạn tài nguyên và có thể thay đổi ho
 | `npm run build` | Build shared → engine → server → web |
 | `npm run db:generate` | Prisma generate client |
 | `npm run db:migrate` | Prisma migrate deploy |
-| `npx tsx apps/server/scripts/e2e.ts` | E2E smoke test: 6 người chơi thật qua Socket.IO chơi trọn ván |
+| `npm run test:e2e` | E2E smoke test qua Socket.IO; cần server local và hiện chưa dùng làm release gate cho tới khi luồng sẵn sàng được tự động hoá |
 | `npm run bot:probe` | Gọi Gemini một lần với ván giả để kiểm tra key và prompt (cần `GEMINI_API_KEY`) |
 
 ## REST API
@@ -122,7 +128,7 @@ Các gói miễn phí có giới hạn tài nguyên và có thể thay đổi ho
 | Method | Path | Body | Response | Mô tả |
 |---|---|---|---|---|
 | POST | `/api/players` | `{ nickname }` | `{ playerId, token, nickname }` | Đăng ký người chơi khách. Token giữ ở client (localStorage), server chỉ lưu SHA-256 |
-| GET | `/api/health` | - | `{ ok, db, redis }` | Kiểm tra server + PostgreSQL + Redis; trả 503 khi dependency lỗi |
+| GET | `/api/health` | - | `{ ok, db, redis }` | Kiểm tra PostgreSQL và Redis; trả 503 khi PostgreSQL lỗi, Redis lỗi được báo bằng `redis: false` |
 
 ## Socket.IO events
 

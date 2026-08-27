@@ -7,7 +7,7 @@
 ## Phạm vi
 
 - Frontend Next.js triển khai trên Vercel.
-- Backend Express và Socket.IO triển khai trên Northflank Developer Sandbox.
+- Backend Express và Socket.IO triển khai trên Render Web Service.
 - PostgreSQL sử dụng Neon Free.
 - Redis sử dụng Upstash Free.
 - Sửa các lỗi gameplay và bảo mật ảnh hưởng trực tiếp đến việc phát hành public.
@@ -32,21 +32,28 @@ Vercel - Next.js frontend
     |
     | HTTPS + Socket.IO
     v
-Northflank - Express/Socket.IO server (1 instance)
+Render - Express/Socket.IO server (1 instance)
     |                         |
     | PostgreSQL              | Redis/TLS
     v                         v
 Neon Free                 Upstash Free
 ```
 
-Frontend và backend tiếp tục dùng chung monorepo. Northflank chạy một backend instance để phù hợp với mô hình trạng thái phòng trong RAM hiện tại. Redis lưu ánh xạ phiên/phòng và bản sao phòng phục vụ reconnect. PostgreSQL lưu danh tính khách, room record và game result.
+Frontend và backend tiếp tục dùng chung monorepo. Render chạy một backend instance để phù hợp với mô hình trạng thái phòng trong RAM hiện tại. Redis lưu ánh xạ phiên/phòng và bản sao phòng phục vụ reconnect. PostgreSQL lưu danh tính khách, room record và game result.
+
+## Trạng thái triển khai thực tế
+
+- Repository: <https://github.com/kangha23/ma-soi-online>
+- Frontend Vercel: <https://ma-soi-online-nu.vercel.app>
+- Backend Render: <https://ma-soi-server-xzhv.onrender.com>
+- Health check: <https://ma-soi-server-xzhv.onrender.com/api/health>
 
 ## Luồng triển khai
 
 1. Khởi tạo repository GitHub private `ma-soi-online` và đẩy mã nguồn đã kiểm thử.
 2. Tạo Neon PostgreSQL và lấy `DATABASE_URL` dạng pooled connection khi phù hợp.
 3. Tạo Upstash Redis và lấy `REDIS_URL` dùng TLS.
-4. Deploy backend Northflank từ GitHub để lấy domain `code.run`.
+4. Deploy backend Render từ GitHub để lấy domain `onrender.com`.
 5. Deploy frontend Vercel với `NEXT_PUBLIC_SERVER_URL` trỏ đến backend.
 6. Cập nhật `CORS_ORIGIN` của backend bằng domain Vercel chính xác.
 7. Xác minh health check, kết nối Socket.IO và luồng tạo phòng.
@@ -57,7 +64,7 @@ Mọi secret chỉ được đặt trong dashboard của dịch vụ. `.env`, to
 
 Backend phải:
 
-- Ưu tiên biến `PORT` do Northflank cung cấp, sau đó mới dùng `SERVER_PORT` cho local.
+- Ưu tiên biến `PORT` do Render cung cấp, sau đó mới dùng `SERVER_PORT` cho local.
 - Bind HTTP server trên `0.0.0.0`.
 - Cho phép CORS từ danh sách origin cấu hình qua `CORS_ORIGIN`.
 - Cung cấp health check tại `/api/health`.
@@ -115,7 +122,7 @@ Nếu backend restart giữa trận, phòng được đưa về lobby như hành
 - Lỗi Neon hoặc Upstash phải được log ở mức đủ chẩn đoán nhưng không chứa token, vai trò hoặc payload bí mật.
 - Redis tạm lỗi không làm process crash; gameplay một instance tiếp tục bằng RAM, nhưng reconnect sau restart có thể mất.
 - Nếu đạt quota miễn phí, giao diện cần hiển thị lỗi kết nối thay vì treo vô hạn.
-- Northflank Sandbox, Neon Free và Upstash Free chỉ dùng cho thử nghiệm/MVP, không được mô tả là hạ tầng production có SLA.
+- Render Free, Neon Free và Upstash Free chỉ dùng cho thử nghiệm/MVP, không được mô tả là hạ tầng production có SLA. Render có thể tạm ngủ khi không hoạt động nên cần chấp nhận cold start.
 
 ## Kiểm thử
 
@@ -130,7 +137,7 @@ Nếu backend restart giữa trận, phòng được đưa về lobby như hành
 
 ### Smoke test
 
-- `/api/health` trả `ok: true` và `db: true` trên backend public.
+- `/api/health` trả `ok: true` và `db: true` trên backend public. Redis khỏe được thể hiện bằng `redis: true`; Redis suy giảm không làm liveness trả 503.
 - Frontend public tải không có lỗi console nghiêm trọng.
 - Tạo danh tính khách và phòng thành công.
 - Thêm bot đủ sáu người, chuyển qua `ROLE_REVEAL` và `NIGHT`.
@@ -142,7 +149,6 @@ Nếu backend restart giữa trận, phòng được đưa về lobby như hành
 - Không còn lỗi P0/P1 đã liệt kê trong phạm vi thiết kế.
 - Unit test, typecheck và production build đều đạt.
 - GitHub repository private không chứa secret.
-- Backend Northflank và frontend Vercel có URL HTTPS hoạt động.
+- Backend Render và frontend Vercel có URL HTTPS hoạt động.
 - Frontend kết nối được Socket.IO tới backend public.
 - README mô tả đầy đủ cách chạy local, biến môi trường, quy trình deploy và giới hạn gói miễn phí.
-
