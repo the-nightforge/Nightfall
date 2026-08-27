@@ -41,6 +41,7 @@ function checkWinOrContinue(room: Room, next: () => void): void {
 }
 
 export function startGame(room: Room): void {
+  room.chatLog = [];
   const players = room.members.map((m) => ({ id: m.playerId, name: m.name, isBot: m.isBot }));
   room.engine = GameEngine.create(players, room.config);
   room.status = "IN_GAME";

@@ -1,0 +1,55 @@
+import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_ROOM_CONFIG, type ChatMessage } from "@masoi/shared";
+import { startGame } from "../src/game/machine";
+import type { Room } from "../src/rooms/store";
+
+vi.mock("../src/rooms/store", () => ({
+  clearRoomTimers: () => undefined,
+  persistRoom: async () => undefined,
+  setRoomTimer: () => undefined,
+}));
+
+vi.mock("../src/rooms/broadcast", () => ({
+  broadcastRoom: () => undefined,
+  emitToPlayers: () => undefined,
+}));
+
+vi.mock("../src/db", () => ({
+  prisma: {},
+}));
+
+const oldMessages: ChatMessage[] = [
+  { id: "lobby", channel: "lobby", playerId: "p1", playerName: "Người 1", text: "lobby cũ", at: 1 },
+  { id: "day", channel: "day", playerId: "p2", playerName: "Người 2", text: "ban ngày cũ", at: 2 },
+  { id: "wolves", channel: "wolves", playerId: "p3", playerName: "Người 3", text: "sói cũ", at: 3 },
+  { id: "dead", channel: "dead", playerId: "p4", playerName: "Người 4", text: "người chết cũ", at: 4 },
+];
+
+function lobbyWithOldChat(): Room {
+  return {
+    code: "ABCDE",
+    hostId: "p1",
+    status: "LOBBY",
+    members: Array.from({ length: 6 }, (_, index) => ({
+      playerId: `p${index + 1}`,
+      name: `Người ${index + 1}`,
+      ready: true,
+      connected: true,
+      isBot: false,
+    })),
+    config: { ...DEFAULT_ROOM_CONFIG },
+    engine: null,
+    chatLog: [...oldMessages],
+    createdAt: 0,
+  };
+}
+
+describe("vòng đời chat giữa các ván", () => {
+  it("xoá toàn bộ chat của ván cũ khi bắt đầu ván mới", () => {
+    const room = lobbyWithOldChat();
+
+    startGame(room);
+
+    expect(room.chatLog).toEqual([]);
+  });
+});
