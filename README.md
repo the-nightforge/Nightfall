@@ -52,13 +52,60 @@ Mở http://localhost:3000 → nhập biệt danh → **Tạo phòng mới** →
 
 > Lưu ý: nếu cổng 4000 bị chiếm (WSL...), đổi `SERVER_PORT=4100` trong `apps/server/.env` và `NEXT_PUBLIC_SERVER_URL` tương ứng.
 
+## Triển khai bản dùng thử miễn phí
+
+Kiến trúc triển khai: **Vercel (web) → Northflank (server) → Neon (PostgreSQL) + Upstash (Redis)**. Backend chỉ chạy **một instance** vì trạng thái ván đang chơi được giữ trong RAM.
+
+### 1. Neon PostgreSQL
+
+1. Tạo project và database PostgreSQL trên Neon.
+2. Mở phần connection details, chọn pooled connection và sao chép chuỗi kết nối.
+3. Chuỗi này sẽ được lưu dưới tên `DATABASE_URL` trong Northflank; không đưa vào Git hoặc Vercel.
+
+### 2. Upstash Redis
+
+1. Tạo Redis database cùng khu vực gần backend nhất có thể.
+2. Sao chép TLS connection string bắt đầu bằng `rediss://`.
+3. Chuỗi này sẽ được lưu dưới tên `REDIS_URL` trong Northflank; không đưa vào Git.
+
+### 3. Northflank backend
+
+1. Tạo service từ repository GitHub này và chọn build bằng Dockerfile `Dockerfile.server`.
+2. Dùng một instance, public HTTP port lấy từ biến `$PORT`, giao thức HTTP/1.1 và health path `/api/health`.
+3. Thêm các biến môi trường:
+
+```text
+DATABASE_URL=<Neon pooled connection string>
+REDIS_URL=<Upstash rediss:// connection string>
+NODE_ENV=production
+CORS_ORIGIN=https://YOUR-PROJECT.vercel.app
+```
+
+Northflank tự cấp `PORT`, không cần tự đặt. Lần khởi động container sẽ chạy `prisma migrate deploy` trước khi mở server. Ghi lại HTTPS domain của backend, ví dụ `https://ma-soi-server-example.code.run`.
+
+### 4. Vercel frontend
+
+1. Import cùng repository vào Vercel và giữ Root Directory là thư mục gốc repository; file `vercel.json` đã chứa lệnh build monorepo.
+2. Thêm biến môi trường `NEXT_PUBLIC_SERVER_URL` bằng chính xác HTTPS origin của Northflank, không có dấu `/` cuối.
+3. Deploy frontend và ghi lại origin Vercel.
+4. Quay lại Northflank, đổi `CORS_ORIGIN` thành origin Vercel chính xác rồi redeploy backend.
+
+### 5. Kiểm tra sau triển khai
+
+- Mở `https://<backend>/api/health`; kết quả tốt là HTTP 200 với `{ "ok": true, "db": true, "redis": true }`.
+- Mở frontend Vercel, tạo người chơi và phòng mới, thêm bot rồi xác nhận Socket.IO kết nối được.
+- Không lưu `DATABASE_URL`, `REDIS_URL` hoặc token người chơi trong file được commit.
+
+Các gói miễn phí có giới hạn tài nguyên và có thể thay đổi hoặc tạm ngủ. Đây là cấu hình phù hợp cho MVP dùng thử, không phải tải production lớn. Nếu backend restart giữa trận, phòng được đưa về lobby an toàn thay vì khôi phục timer/hành động dang dở.
+
 ## Scripts
 
 | Lệnh | Mô tả |
 |---|---|
 | `npm run dev:server` | Server dev (tsx watch, cổng 4100) |
 | `npm run dev:web` | Next.js dev (cổng 3000) |
-| `npm run test` | Unit test game engine (Vitest, 24 tests) |
+| `npm run test` | Unit test game engine (Vitest) |
+| `npm test --workspace @masoi/server` | Unit test bảo mật và quy tắc backend |
 | `npm run lint` | Typecheck toàn bộ |
 | `npm run build` | Build shared → engine → server → web |
 | `npm run db:generate` | Prisma generate client |
@@ -70,7 +117,7 @@ Mở http://localhost:3000 → nhập biệt danh → **Tạo phòng mới** →
 | Method | Path | Body | Response | Mô tả |
 |---|---|---|---|---|
 | POST | `/api/players` | `{ nickname }` | `{ playerId, token, nickname }` | Đăng ký người chơi khách. Token giữ ở client (localStorage), server chỉ lưu SHA-256 |
-| GET | `/api/health` | - | `{ ok, db }` | Kiểm tra server + DB |
+| GET | `/api/health` | - | `{ ok, db, redis }` | Kiểm tra server + PostgreSQL + Redis; trả 503 khi dependency lỗi |
 
 ## Socket.IO events
 
@@ -115,7 +162,7 @@ Kết nối: `io(SERVER_URL, { auth: { playerId, token } })`.
 - Phù Thủy: 1 bình cứu (cứu nạn nhân của sói) + 1 bình độc, mỗi bình dùng 1 lần cả ván.
 - Ban ngày: thảo luận → bỏ phiếu; nhiều phiếu nhất bị loại; **hoà phiếu không ai bị loại**.
 - Sói thắng khi số Sói ≥ số phe làng còn sống; làng thắng khi hết Sói.
-- Server tự chuyển pha khi hết giờ hoặc mọi hành động bắt buộc hoàn tất.
+- Server giữ trọn thời gian ban đêm đã cấu hình để mọi vai trò có cơ hội hành động; pha bỏ phiếu có thể kết thúc sớm khi mọi người còn sống đã bỏ phiếu.
 
 ## Reconnect
 
