@@ -58,6 +58,38 @@ export function pushChat(room: Room, message: ChatMessage): void {
   if (room.chatLog.length > 100) room.chatLog.splice(0, room.chatLog.length - 100);
 }
 
+/** Chỉ trả về lịch sử kênh chat mà người xem hiện tại được phép đọc. */
+export function visibleChatLog(room: Room, viewerId: string): ChatMessage[] {
+  const member = room.members.find((candidate) => candidate.playerId === viewerId);
+  if (!member) return [];
+
+  const messagesFor = (channel: string) =>
+    room.chatLog.filter((message) => message.channel === channel).slice(-60);
+
+  if (room.status === "LOBBY" || !room.engine) return messagesFor("lobby");
+
+  const view = room.engine.snapshotFor(viewerId);
+  if (!view.you) return [];
+  if (view.phase === "GAME_OVER") return messagesFor("lobby");
+  if (!view.you.alive) return messagesFor("dead");
+
+  if (view.phase === "NIGHT") {
+    return view.you.role === "WEREWOLF" ? messagesFor("wolves") : [];
+  }
+
+  if (
+    view.phase === "ROLE_REVEAL" ||
+    view.phase === "NIGHT_RESULT" ||
+    view.phase === "DAY_DISCUSSION" ||
+    view.phase === "VOTING" ||
+    view.phase === "ELIMINATION"
+  ) {
+    return messagesFor("day");
+  }
+
+  return [];
+}
+
 /** Snapshot đầy đủ cho MỘT người chơi cụ thể - đã lọc thông tin bí mật theo quyền. */
 export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
   const member = room.members.find((m) => m.playerId === viewerId);
@@ -112,7 +144,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
     lastNightDeaths: gameView?.lastNightDeaths ?? [],
     lastEliminated: gameView?.lastEliminated ?? null,
     winner: gameView?.winner ?? null,
-    chatLog: room.chatLog.slice(-60),
+    chatLog: visibleChatLog(room, viewerId),
     log: gameView?.log ?? [],
   };
 }
