@@ -5,7 +5,7 @@ import {
   type RoomConfig,
 } from "@masoi/shared";
 import { prisma } from "../db";
-import { updateSessionRoom } from "../redis";
+import { getPlayerRoom, updateSessionRoom } from "../redis";
 import { botName, generateRoomCode, newId } from "../util";
 import { broadcastRoom, emitToPlayers } from "./broadcast";
 import { buildSnapshot, resolveChat, pushChat } from "./snapshot";
@@ -21,6 +21,7 @@ import {
 } from "./store";
 import { getRoomSyncByPlayer, getRoomsCache } from "./index-helpers";
 import { startGame, resetToLobby } from "../game/machine";
+import { allRequiredPlayersReady, roomEntryError } from "./rules";
 
 export class RoomError extends Error {}
 
@@ -36,6 +37,9 @@ function assertHost(room: Room, playerId: string): void {
 
 export const roomService = {
   async create(playerId: string, name: string): Promise<Room> {
+    if (await this.findRoomOf(playerId)) {
+      throw new RoomError("Bạn phải rời phòng hiện tại trước khi tạo phòng khác");
+    }
     let code = generateRoomCode();
     while (getRoom(code) || (await loadRoomFromRedis(code))) {
       code = generateRoomCode();
@@ -62,6 +66,8 @@ export const roomService = {
 
     // Reconnect: đã là thành viên
     const existing = room.members.find((m) => m.playerId === playerId);
+    const entryError = roomEntryError(await this.findRoomOf(playerId), code, room.status, !!existing);
+    if (entryError) throw new RoomError(entryError);
     if (existing) {
       existing.connected = true;
       existing.name = name;
@@ -126,6 +132,13 @@ export const roomService = {
     for (const room of [...getRoomsCache()]) {
       if (room.members.some((m) => m.playerId === playerId)) return room.code;
     }
+    const persistedCode = await getPlayerRoom(playerId);
+    if (!persistedCode) return null;
+    const persistedRoom = getRoom(persistedCode) ?? (await loadRoomFromRedis(persistedCode));
+    if (persistedRoom?.members.some((member) => member.playerId === playerId)) {
+      return persistedRoom.code;
+    }
+    await updateSessionRoom(playerId, null);
     return null;
   },
 
@@ -198,6 +211,9 @@ export const roomService = {
     if (room.status !== "LOBBY") throw new RoomError("Trận đấu đang diễn ra");
     const err = validateRoomConfig(room.config, room.members.length);
     if (err) throw new RoomError(err);
+    if (!allRequiredPlayersReady(room)) {
+      throw new RoomError("Vẫn còn người chơi chưa sẵn sàng");
+    }
     startGame(room);
   },
 

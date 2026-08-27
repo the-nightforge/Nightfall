@@ -21,6 +21,9 @@ export function Lobby({ snapshot, identity, onReady, onStart, onKick, onAddBot, 
   const count = snapshot.players.length;
   const configError = validateRoomConfig(snapshot.config, count);
   const myReady = me?.ready ?? false;
+  const unreadyGuests = snapshot.players.filter(
+    (player) => !player.isBot && player.id !== snapshot.hostId && !player.ready,
+  );
 
   return (
     <div className="space-y-4">
@@ -69,7 +72,11 @@ export function Lobby({ snapshot, identity, onReady, onStart, onKick, onAddBot, 
       <div className="flex flex-col gap-2">
         {isHost ? (
           <>
-            <button className="btn-primary w-full" onClick={onStart} disabled={!!configError || count < MIN_PLAYERS_TO_START}>
+            <button
+              className="btn-primary w-full"
+              onClick={onStart}
+              disabled={!!configError || count < MIN_PLAYERS_TO_START || unreadyGuests.length > 0}
+            >
               Bắt đầu trận đấu
             </button>
             <button className="btn-secondary w-full" onClick={onAddBot} disabled={count >= 15}>
@@ -87,6 +94,11 @@ export function Lobby({ snapshot, identity, onReady, onStart, onKick, onAddBot, 
         {count < MIN_PLAYERS_TO_START && (
           <p className="text-center text-xs text-mist/50">
             Chờ thêm {MIN_PLAYERS_TO_START - count} người nữa để bắt đầu.
+          </p>
+        )}
+        {isHost && count >= MIN_PLAYERS_TO_START && unreadyGuests.length > 0 && (
+          <p className="text-center text-xs text-amber-300">
+            Chờ {unreadyGuests.map((player) => player.name).join(", ")} sẵn sàng.
           </p>
         )}
         <button className="btn-secondary w-full" onClick={onLeave}>Rời phòng</button>
