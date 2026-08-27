@@ -294,6 +294,11 @@ function scheduleVoteBots(room: Room): void {
           if (!target) return;
           try {
             room.engine.submitVote(member.playerId, target);
+            // Phiếu của người thật được broadcast ngay trong handler socket, còn
+            // phiếu bot thì không: client giữ nguyên snapshot cũ nên mọi voteCount
+            // đứng yên ở 0 tới tận lúc pha kết thúc. Trong phòng toàn bot, bộ đếm
+            // "Không treo ai (x phiếu)" vì thế trông như hỏng.
+            sync(room);
             maybeEndVotingEarly(room);
           } catch {
             /* bỏ phiếu lỗi */
