@@ -9,6 +9,8 @@ export interface BrainChoice {
   apiKey: string;
   model: string;
   maxCalls: number;
+  /** Khớp config.chatMaxLength; mặc định 300 khi không truyền (test tiện lợi). */
+  chatMaxLength?: number;
 }
 
 /**
@@ -26,6 +28,7 @@ export function chooseBrain(choice: BrainChoice, governor?: BotGovernor): BotBra
     model: choice.model,
     governor: governor ?? new BotGovernor(choice.maxCalls),
     timeoutMs: 8_000,
+    chatMaxLength: choice.chatMaxLength,
   });
 }
 
@@ -35,6 +38,7 @@ const brain = chooseBrain(
     apiKey: config.geminiApiKey,
     model: config.geminiModel,
     maxCalls: config.botAiMaxCallsPerGame,
+    chatMaxLength: config.chatMaxLength,
   },
   sharedGovernor,
 );

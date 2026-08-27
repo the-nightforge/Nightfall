@@ -13,6 +13,8 @@ export interface GeminiOptions {
   governor: BotGovernor;
   timeoutMs: number;
   fetchImpl?: GeminiFetch;
+  /** Cắt lời chat còn tối đa bấy nhiêu ký tự. Nên khớp config.chatMaxLength. */
+  chatMaxLength?: number;
 }
 
 const nightSchema = z.object({
@@ -27,7 +29,13 @@ const daySchema = z.object({
   voteTargetId: z.string().nullable().optional(),
 });
 
-const CHAT_MAX = 300;
+const DEFAULT_CHAT_MAX = 300;
+
+/**
+ * Đủ cho { think<=200 ký tự, action, chat<=300 ký tự, targetId } dưới dạng JSON,
+ * cộng đệm cho token hoá tiếng Việt (dấu tách âm tiết thành nhiều token hơn ASCII).
+ */
+const MAX_OUTPUT_TOKENS = 500;
 
 /**
  * Mã lỗi thô để phân biệt lý do fallback trong log sản xuất. Chỉ dùng để log,
@@ -59,22 +67,27 @@ export class GeminiBrain implements BotBrain {
     if (!this.opts.governor.canCall(roomCode)) return null;
     this.opts.governor.recordCall(roomCode);
 
-    const url =
-      `https://generativelanguage.googleapis.com/v1beta/models/` +
-      `${this.opts.model}:generateContent?key=${this.opts.apiKey}`;
+    // Key đi trong header, không nằm trong URL - tránh mọi nguy cơ lọt vào log
+    // proxy hay error cause dù hiện tại chưa nơi nào log URL này.
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.opts.model}:generateContent`;
 
     const startedAt = Date.now();
     const result = await withTimeout<{ raw: unknown; reason: CallOutcome }>(async (signal) => {
       const res = await this.fetchImpl(url, {
         method: "POST",
         signal,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": this.opts.apiKey },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: spec.system }] },
           contents: [{ role: "user", parts: [{ text: spec.user }] }],
           generationConfig: {
             responseMimeType: "application/json",
             responseSchema: spec.schema,
+            maxOutputTokens: MAX_OUTPUT_TOKENS,
+            // Tắt suy luận mở rộng: output đã ngắn (schema ép cấu trúc), suy luận
+            // ngầm chỉ tổ tốn thời gian và là nguyên nhân nhiều khả năng nhất khiến
+            // request vượt deadline 8s rồi âm thầm rơi về RandomBrain.
+            thinkingConfig: { thinkingBudget: 0 },
           },
         }),
       });
@@ -178,6 +191,7 @@ export class GeminiBrain implements BotBrain {
     const vote = parsed.data.voteTargetId ?? null;
     const legal = vote && legalVoteTargets(view).includes(vote) ? vote : null;
 
-    return finish({ chat: parsed.data.chat.slice(0, CHAT_MAX), voteTargetId: legal }, "ok");
+    const chatMax = this.opts.chatMaxLength ?? DEFAULT_CHAT_MAX;
+    return finish({ chat: parsed.data.chat.slice(0, chatMax), voteTargetId: legal }, "ok");
   }
 }
