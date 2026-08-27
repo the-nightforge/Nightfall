@@ -6,7 +6,8 @@ import { config, isProd } from "./config";
 import { apiRouter } from "./http";
 import { setupSocket } from "./ws";
 import { setIo } from "./rooms/broadcast";
-import { pingRedis } from "./redis";
+import { pingRedis, redis } from "./redis";
+import { prisma } from "./db";
 
 async function main(): Promise<void> {
   const app = express();
@@ -34,18 +35,25 @@ async function main(): Promise<void> {
   const redisOk = await pingRedis();
   console.log(`[server] Redis: ${redisOk ? "OK" : "KHÔNG kết nối được - kiểm tra docker compose"}`);
 
-  server.listen(config.port, () => {
+  server.listen(config.port, "0.0.0.0", () => {
     console.log(`[server] Ma Sói server đang chạy tại http://localhost:${config.port}`);
   });
 
-  const shutdown = () => {
+  let shuttingDown = false;
+  const shutdown = async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     console.log("[server] Đang tắt...");
+    const forceExit = setTimeout(() => process.exit(1), 5_000);
+    forceExit.unref();
     io.close();
-    server.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 3000);
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await Promise.allSettled([prisma.$disconnect(), redis.quit()]);
+    clearTimeout(forceExit);
+    process.exit(0);
   };
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", () => void shutdown());
+  process.on("SIGTERM", () => void shutdown());
 }
 
 main().catch((err) => {

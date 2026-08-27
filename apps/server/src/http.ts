@@ -2,6 +2,8 @@ import { Router } from "express";
 import { prisma } from "./db";
 import { newToken, sha256 } from "./util";
 import { nicknameSchema } from "@masoi/shared";
+import { pingRedis } from "./redis";
+import { healthHttpStatus } from "./health";
 
 export const apiRouter = Router();
 
@@ -36,5 +38,7 @@ apiRouter.get("/health", async (_req, res) => {
   } catch {
     dbOk = false;
   }
-  res.json({ ok: true, db: dbOk });
+  const redisOk = await pingRedis();
+  const health = { db: dbOk, redis: redisOk };
+  res.status(healthHttpStatus(health)).json({ ok: dbOk && redisOk, ...health });
 });

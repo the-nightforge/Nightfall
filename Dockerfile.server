@@ -1,0 +1,39 @@
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY apps/server/package.json apps/server/package.json
+COPY packages/shared/package.json packages/shared/package.json
+COPY packages/game-engine/package.json packages/game-engine/package.json
+COPY apps/web/package.json apps/web/package.json
+RUN npm ci
+
+COPY tsconfig.base.json ./
+COPY packages/shared packages/shared
+COPY packages/game-engine packages/game-engine
+COPY apps/server apps/server
+
+RUN npm run db:generate
+RUN npm run build:shared
+RUN npm run build:engine
+RUN npm run build:server
+RUN npm prune --omit=dev
+
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY --from=builder /app/package.json /app/package-lock.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/game-engine/package.json ./packages/game-engine/package.json
+COPY --from=builder /app/packages/game-engine/dist ./packages/game-engine/dist
+COPY --from=builder /app/apps/server/package.json ./apps/server/package.json
+COPY --from=builder /app/apps/server/dist ./apps/server/dist
+COPY --from=builder /app/apps/server/prisma ./apps/server/prisma
+
+EXPOSE 4000
+CMD ["sh", "-c", "npm run db:migrate --workspace @masoi/server && node apps/server/dist/index.js"]

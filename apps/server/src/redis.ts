@@ -1,7 +1,7 @@
 import Redis from "ioredis";
 import { config } from "./config";
 
-export const redis = new Redis(process.env.REDIS_URL ?? "redis://127.0.0.1:6380", {
+export const redis = new Redis(config.redisUrl, {
   lazyConnect: false,
   maxRetriesPerRequest: 3,
   retryStrategy: (times) => Math.min(times * 500, 5000),
