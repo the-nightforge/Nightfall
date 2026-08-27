@@ -38,6 +38,7 @@ function brain(
   jsonMode: "json_schema" | "prompt" = "prompt",
   governor = new BotGovernor(60),
   cooldown = new Cooldown(),
+  extra: Partial<ConstructorParameters<typeof OpenAiCompatBrain>[0]> = {},
 ) {
   return new OpenAiCompatBrain({
     baseUrl: "https://x/v1",
@@ -48,6 +49,7 @@ function brain(
     timeoutMs: 1_000,
     jsonMode,
     fetchImpl,
+    ...extra,
   });
 }
 
@@ -122,7 +124,10 @@ describe("OpenAiCompatBrain", () => {
 });
 
 describe("OpenAiCompatBrain: hình dạng request", () => {
-  async function capture(jsonMode: "json_schema" | "prompt") {
+  async function capture(
+    jsonMode: "json_schema" | "prompt",
+    extra: Partial<ConstructorParameters<typeof OpenAiCompatBrain>[0]> = {},
+  ) {
     let body: any = null;
     const b = brain(
       async (_u, init) => {
@@ -130,6 +135,9 @@ describe("OpenAiCompatBrain: hình dạng request", () => {
         return reply('{"think":"x","chat":"a","voteTargetId":null}');
       },
       jsonMode,
+      new BotGovernor(60),
+      new Cooldown(),
+      extra,
     );
     await b.decideDay(dayView());
     return body;
@@ -157,5 +165,28 @@ describe("OpenAiCompatBrain: hình dạng request", () => {
     expect(schema.properties.voteTargetId.type).toEqual(["string", "null"]);
     expect(schema.properties.voteTargetId.enum).toContain(null);
     expect(schema.properties.chat.type).toBe("string");
+  });
+
+  // "OpenAI-compatible" không có nghĩa là giống nhau. gpt-5.x trả 400 cho
+  // max_tokens và cho mọi temperature khác 1, nên hai tham số này phải khai báo
+  // theo từng nhà cung cấp - đặt cứng là chặng đó hỏng ở mọi lời gọi.
+  it("mặc định dùng max_tokens", async () => {
+    const body = await capture("prompt");
+    expect(body.max_tokens).toBe(500);
+    expect(body.max_completion_tokens).toBeUndefined();
+  });
+
+  it("đổi sang max_completion_tokens khi được yêu cầu", async () => {
+    const body = await capture("json_schema", { maxTokensParam: "max_completion_tokens" });
+    expect(body.max_completion_tokens).toBe(500);
+    expect(body.max_tokens).toBeUndefined();
+  });
+
+  it("không gửi temperature khi không cấu hình", async () => {
+    expect((await capture("prompt")).temperature).toBeUndefined();
+  });
+
+  it("gửi temperature khi có cấu hình", async () => {
+    expect((await capture("prompt", { temperature: 1.2 })).temperature).toBe(1.2);
   });
 });

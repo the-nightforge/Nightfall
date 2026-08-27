@@ -9,7 +9,12 @@ import { DEFAULT_ROOM_CONFIG, type RoomSnapshot } from "@masoi/shared";
 
 // Script được chạy từ thư mục gốc repo (npm run bot:probe), nhưng key nằm ở
 // apps/server/.env theo README - nạp rõ đường dẫn thay vì dựa vào cwd.
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
+//
+// override: mặc định dotenv nhường biến môi trường đã tồn tại, nên một key cũ
+// còn sót trong shell sẽ lặng lẽ che key trong .env - probe báo hỏng trong khi
+// key bạn vừa thêm hoàn toàn tốt, và chẳng có gì trong log chỉ ra điều đó. Với
+// một công cụ chẩn đoán chạy tay thì file phải là nguồn sự thật.
+dotenv.config({ path: path.resolve(__dirname, "../.env"), override: true });
 
 const view: RoomSnapshot = {
   code: "PROBE",

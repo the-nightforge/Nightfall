@@ -70,6 +70,7 @@ export function chooseBrain(choice: BrainChoice, governor?: BotGovernor): BotBra
         // Proxy nhận response_format nhưng bỏ qua lặng lẽ rồi trả văn xuôi, nên
         // phải dỗ JSON bằng chính lời nhắc. Đo 5/5 lượt parse được.
         jsonMode: "prompt",
+        temperature: 1.2,
         chatMaxLength: choice.chatMaxLength,
         label: `primary:${choice.primaryModel}`,
       }),
@@ -87,6 +88,9 @@ export function chooseBrain(choice: BrainChoice, governor?: BotGovernor): BotBra
         timeoutMs: FALLBACK_TIMEOUT_MS,
         // OpenAI cài đặt json_schema thật: dùng nó thay vì dỗ bằng prompt.
         jsonMode: "json_schema",
+        // gpt-5.x đòi max_completion_tokens và chỉ chấp nhận temperature mặc định;
+        // gửi max_tokens hoặc temperature 1.2 là 400 ở mọi lời gọi.
+        maxTokensParam: "max_completion_tokens",
         chatMaxLength: choice.chatMaxLength,
         label: `openai:${choice.openaiModel}`,
       }),

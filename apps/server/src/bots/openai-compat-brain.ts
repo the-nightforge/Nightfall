@@ -33,6 +33,17 @@ export interface OpenAiCompatOptions {
   jsonMode: JsonMode;
   fetchImpl?: CompatFetch;
   chatMaxLength?: number;
+  /**
+   * Tên tham số giới hạn độ dài output. "OpenAI-compatible" không có nghĩa là
+   * giống nhau: dòng gpt-5.x từ chối thẳng "max_tokens" và đòi
+   * "max_completion_tokens", trả 400 cho mọi lời gọi chứ không âm thầm bỏ qua.
+   */
+  maxTokensParam?: "max_tokens" | "max_completion_tokens";
+  /**
+   * Bỏ trống để dùng mặc định của model. gpt-5.x chỉ chấp nhận đúng giá trị 1 và
+   * trả 400 với mọi giá trị khác, nên không đặt cứng ở đây được.
+   */
+  temperature?: number;
   /** Tên hiển thị trong log, để phân biệt hai nhà cung cấp cùng dùng lớp này. */
   label?: string;
 }
@@ -99,8 +110,8 @@ export class OpenAiCompatBrain implements BotBrain {
       messages,
       // Proxy mặc định trả SSE; ép non-streaming để đọc một lần cho xong.
       stream: false,
-      max_tokens: MAX_OUTPUT_TOKENS,
-      temperature: 1.2,
+      [this.opts.maxTokensParam ?? "max_tokens"]: MAX_OUTPUT_TOKENS,
+      ...(this.opts.temperature === undefined ? {} : { temperature: this.opts.temperature }),
       ...(this.opts.jsonMode === "json_schema"
         ? {
             response_format: {
