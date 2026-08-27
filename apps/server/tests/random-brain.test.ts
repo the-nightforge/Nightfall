@@ -20,6 +20,7 @@ function view(over: Partial<RoomSnapshot> = {}): RoomSnapshot {
     ],
     night: { canAct: true, acted: false, wolfTarget: null, seerResult: null },
     myVote: null,
+    discussionSkip: null,
     votesRevealed: false,
     lastNightDeaths: [],
     lastEliminated: null,

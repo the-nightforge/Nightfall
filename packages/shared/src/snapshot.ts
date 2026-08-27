@@ -30,6 +30,13 @@ export interface NightActionView {
   poisonUsed?: boolean;
 }
 
+export interface DiscussionSkipView {
+  votes: number;
+  required: number;
+  hasVoted: boolean;
+  canVote: boolean;
+}
+
 /** Snapshot toàn bộ trạng thái phòng + trận đấu dành cho MỘT người chơi cụ thể. */
 export interface RoomSnapshot {
   code: string;
@@ -51,6 +58,8 @@ export interface RoomSnapshot {
   night: NightActionView | null;
   /** id người viewer đã bỏ phiếu (trong VOTING) */
   myVote: string | null;
+  /** Đồng thuận kết thúc thảo luận sớm; chỉ có trong DAY_DISCUSSION. */
+  discussionSkip: DiscussionSkipView | null;
   votesRevealed: boolean;
   lastNightDeaths: { playerId: string; name: string }[];
   lastEliminated: { playerId: string; name: string } | null;

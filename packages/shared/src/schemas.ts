@@ -69,6 +69,7 @@ export const gameActionPayload = z
   .strict();
 
 export const votePayload = z.object({ targetId: z.string().min(1) }).strict();
+export const skipDiscussionPayload = z.object({ skip: z.boolean() }).strict();
 export const chatSendPayload = z.object({ text: z.string().trim().min(1).max(300) }).strict();
 
 export const addBotPayload = z.object({}).strict();

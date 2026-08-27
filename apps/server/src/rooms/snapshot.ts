@@ -143,6 +143,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
     })(),
     night: gameView?.nightInfo ?? null,
     myVote: gameView?.myVote ?? null,
+    discussionSkip: null,
     votesRevealed: gameView?.votesRevealed ?? false,
     lastNightDeaths: gameView?.lastNightDeaths ?? [],
     lastEliminated: gameView?.lastEliminated ?? null,

@@ -19,6 +19,7 @@ function view(): RoomSnapshot {
     ],
     night: null,
     myVote: null,
+    discussionSkip: null,
     votesRevealed: false,
     lastNightDeaths: [],
     lastEliminated: null,
