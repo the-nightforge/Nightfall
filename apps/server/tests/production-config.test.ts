@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { healthHttpStatus, redisConnectionHealthy } from "../src/health";
-import { resolvePort } from "../src/config";
+import { resolveBotAiMaxCallsPerGame, resolvePort } from "../src/config";
 
 describe("resolvePort", () => {
   it("prefers the platform-provided PORT", () => {
@@ -25,6 +25,29 @@ describe("resolvePort", () => {
   it("rejects an invalid local SERVER_PORT too", () => {
     expect(() => resolvePort({ SERVER_PORT: "nope" })).toThrow(/SERVER_PORT/);
   });
+});
+
+describe("resolveBotAiMaxCallsPerGame", () => {
+  it("mặc định 60 khi không cấu hình", () => {
+    expect(resolveBotAiMaxCallsPerGame({})).toBe(60);
+  });
+
+  it("dùng giá trị hợp lệ do vận hành đặt", () => {
+    expect(resolveBotAiMaxCallsPerGame({ BOT_AI_MAX_CALLS_PER_GAME: "120" })).toBe(120);
+  });
+
+  // "" nằm trong danh sách vì đây là cách âm thầm nhất để dính lỗi này:
+  // BOT_AI_MAX_CALLS_PER_GAME= trong .env, hay biến bị nền tảng deploy vật
+  // chất hoá thành "" khi không đặt, sẽ ra Number("") === 0, không bị "??"
+  // bắt (nó chỉ bắt null/undefined) - phải bị chặn ở đây, không được lọt qua.
+  it.each(["invalid", "0", "-1", "1.5", "NaN", ""])(
+    "ném lỗi thay vì âm thầm ra NaN hoặc 0 (cả hai đều khiến Gemini không bao giờ chạy, không log): %s",
+    (value) => {
+      expect(() => resolveBotAiMaxCallsPerGame({ BOT_AI_MAX_CALLS_PER_GAME: value })).toThrow(
+        /BOT_AI_MAX_CALLS_PER_GAME/,
+      );
+    },
+  );
 });
 
 describe("healthHttpStatus", () => {
