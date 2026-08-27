@@ -80,7 +80,10 @@ REDIS_URL=<Upstash rediss:// connection string>
 NODE_ENV=production
 CORS_ORIGIN=https://YOUR-PROJECT.vercel.app
 GEMINI_API_KEY=<API key Gemini, không bắt buộc - thiếu thì bot chạy ngẫu nhiên>
+BOT_AI_ENABLED=true
 ```
+
+`BOT_AI_ENABLED` là công tắc tắt nhanh: đặt `false` để toàn bộ bot quay lại chọn ngẫu nhiên ngay lập tức mà không cần deploy lại hay đổi `GEMINI_API_KEY`. Mặc định bật khi đã có key.
 
 Image lắng nghe cổng `4000` theo mặc định và `Dockerfile.server` khai báo cùng cổng; nếu Northflank cấp biến `PORT`, server sẽ ưu tiên giá trị đó. Lần khởi động container sẽ chạy `prisma migrate deploy` trước khi mở server. Ghi lại HTTPS domain của backend, ví dụ `https://ma-soi-server-example.code.run`.
 
