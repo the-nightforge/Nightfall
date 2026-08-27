@@ -3,6 +3,9 @@ import type { Room } from "../rooms/store";
 import { clearRoomTimers, persistRoom, setRoomTimer } from "../rooms/store";
 import { broadcastRoom } from "../rooms/broadcast";
 import { prisma } from "../db";
+import { buildSnapshot } from "../rooms/snapshot";
+import { randomBrain } from "../bots/random-brain";
+import type { NightDecision } from "../bots/types";
 
 const ROLE_REVEAL_MS = 10_000;
 const RESULT_MS = 8_000;
@@ -130,84 +133,47 @@ function onGameOver(room: Room): void {
   setRoomTimer(room.code, () => resetToLobby(room), GAME_OVER_MS);
 }
 
-// ---- Bot đơn giản để một người có thể test toàn ván ----
+// ---- Bot ----
 
-function randomOf<T>(arr: T[]): T | undefined {
-  return arr[Math.floor(Math.random() * arr.length)];
+function applyNight(room: Room, botId: string, decision: NightDecision | null): void {
+  if (!decision) return;
+  try {
+    engine(room).submitNightAction(botId, decision.action, decision.targetId);
+  } catch {
+    /* engine là trọng tài cuối; sai luật thì bot bỏ lượt */
+  }
 }
 
 function scheduleNightBots(room: Room): void {
-  const e = engine(room);
-  for (const p of e.state.players) {
-    if (!p.isBot || !p.alive) continue;
+  for (const member of room.members) {
+    if (!member.isBot) continue;
     const delay = 2_000 + Math.floor(Math.random() * 3_000);
-
-    if (p.role === "WEREWOLF") {
-      setRoomTimer(room.code, () => {
-        try {
-          const targets = e.state.players.filter(
-            (t) => t.alive && t.role !== "WEREWOLF",
-          );
-          const target = randomOf(targets);
-          if (target) e.submitNightAction(p.id, "KILL", target.id);
-        } catch {
-          /* bot bỏ lượt */
-        }
-      }, delay);
-    }
-
-    if (p.role === "SEER") {
-      setRoomTimer(room.code, () => {
-        try {
-          const targets = e.state.players.filter((t) => t.alive && t.id !== p.id);
-          const target = randomOf(targets);
-          if (target) e.submitNightAction(p.id, "SEE", target.id);
-        } catch {
-          /* bỏ lượt */
-        }
-      }, delay + 500);
-    }
-
-    if (p.role === "GUARD") {
-      setRoomTimer(room.code, () => {
-        try {
-          const targets = e.state.players.filter(
-            (t) => t.alive && t.id !== e.state.guardPrevious,
-          );
-          const target = randomOf(targets);
-          if (target) e.submitNightAction(p.id, "GUARD", target.id);
-        } catch {
-          /* bỏ lượt */
-        }
-      }, delay + 1_000);
-    }
-
-    if (p.role === "WITCH" && !e.state.healUsed && e.state.round === 1) {
-      setRoomTimer(room.code, () => {
-        try {
-          if (!e.state.healUsed) e.submitNightAction(p.id, "HEAL", null);
-        } catch {
-          /* bỏ lượt */
-        }
-      }, delay + 1_200);
-    }
+    setRoomTimer(room.code, () => {
+      void (async () => {
+        if (!room.engine || room.engine.state.phase !== "NIGHT") return;
+        const view = buildSnapshot(room, member.playerId);
+        applyNight(room, member.playerId, await randomBrain.decideNight(view));
+      })();
+    }, delay);
   }
 }
 
 function scheduleVoteBots(room: Room): void {
-  const e = engine(room);
-  for (const p of e.state.players) {
-    if (!p.isBot || !p.alive) continue;
+  for (const member of room.members) {
+    if (!member.isBot) continue;
     setRoomTimer(room.code, () => {
-      try {
-        if (e.state.phase !== "VOTING" || !p.alive) return;
-        const targets = e.state.players.filter((t) => t.alive && t.id !== p.id);
-        const target = randomOf(targets);
-        if (target) e.submitVote(p.id, target.id);
-        maybeEndVotingEarly(room);
-      } catch {
-        /* bỏ phiếu lỗi */
-      }
+      void (async () => {
+        if (!room.engine || room.engine.state.phase !== "VOTING") return;
+        const view = buildSnapshot(room, member.playerId);
+        const decision = await randomBrain.decideDay(view);
+        if (!decision?.voteTargetId) return;
+        try {
+          room.engine.submitVote(member.playerId, decision.voteTargetId);
+          maybeEndVotingEarly(room);
+        } catch {
+          /* bỏ phiếu lỗi */
+        }
+      })();
     }, 3_000 + Math.floor(Math.random() * 8_000));
   }
 }
