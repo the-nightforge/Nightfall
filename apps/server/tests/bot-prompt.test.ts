@@ -95,6 +95,43 @@ describe("ranh giới bảo mật của prompt", () => {
   });
 });
 
+describe("chống lặp lời", () => {
+  function withOwnLine(): RoomSnapshot {
+    const base = villagerView();
+    return {
+      ...base,
+      chatLog: [
+        ...base.chatLog,
+        { id: "2", channel: "day", playerId: "v", playerName: "Vân", text: "Từ từ đã", at: 2 },
+      ],
+    };
+  }
+
+  // Không có dấu này, mọi dòng đều trông như lời người khác nên bot không biết
+  // mình đã nói gì - đó là lý do các persona kiệm lời lặp gần nguyên văn mỗi vòng.
+  it("đánh dấu (bạn) đúng vào lời của chính bot, không đánh dấu lời người khác", () => {
+    const user = buildDayPrompt(withOwnLine())!.user;
+    expect(user).toContain("Vân (bạn): Từ từ đã");
+    expect(user).toContain("Sang: Tôi nghi Wolf");
+    expect(user).not.toContain("Sang (bạn)");
+  });
+
+  it("có nhắc đừng lặp khi bot đã từng nói", () => {
+    expect(buildDayPrompt(withOwnLine())!.user).toContain("nói ý mới");
+  });
+
+  /** Chỉ phần trong <chat>, vì playerLines cũng dùng dấu "(bạn)" cho danh sách người chơi. */
+  function chatSection(user: string): string {
+    return user.slice(user.indexOf("<chat>"), user.indexOf("</chat>"));
+  }
+
+  it("chưa nói lần nào thì không thêm nhắc nhở thừa và không dòng chat nào bị đánh dấu", () => {
+    const user = buildDayPrompt(villagerView())!.user;
+    expect(user).not.toContain("nói ý mới");
+    expect(chatSection(user)).not.toContain("(bạn)");
+  });
+});
+
 describe("responseSchema", () => {
   it("enum mục tiêu đêm của Sói chỉ gồm người ngoài phe Sói", () => {
     const spec = buildNightPrompt(wolfView());

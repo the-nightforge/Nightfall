@@ -113,6 +113,11 @@ export class GeminiBrain implements BotBrain {
             responseMimeType: "application/json",
             responseSchema: spec.schema,
             maxOutputTokens: MAX_OUTPUT_TOKENS,
+            // Ghim thay vì để mặc định (không công bố, đổi theo model). Đo được:
+            // nhỉnh hơn một chút về đa dạng lời thoại, không lệch persona. Đây chỉ
+            // là đòn bẩy phụ - thứ thực sự chống lặp là đánh dấu lời của chính bot
+            // trong chatBlock, vì riêng nâng temperature gần như không ăn thua.
+            temperature: 1.2,
             // Giữ suy luận ở mức thấp: output đã ngắn (schema ép cấu trúc), suy
             // luận ngầm chỉ tốn thời gian và có thể đẩy request vượt deadline 8s
             // rồi âm thầm rơi về RandomBrain.
