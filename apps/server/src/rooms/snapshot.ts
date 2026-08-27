@@ -143,7 +143,9 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
       }));
     })(),
     night: gameView?.nightInfo ?? null,
+    hasVoted: gameView?.hasVoted ?? false,
     myVote: gameView?.myVote ?? null,
+    noEliminationVoteCount: gameView?.noEliminationVoteCount ?? 0,
     discussionSkip: getDiscussionSkipView(room, viewerId),
     votesRevealed: gameView?.votesRevealed ?? false,
     lastNightDeaths: gameView?.lastNightDeaths ?? [],

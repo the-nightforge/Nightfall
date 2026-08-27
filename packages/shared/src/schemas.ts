@@ -68,7 +68,9 @@ export const gameActionPayload = z
   })
   .strict();
 
-export const votePayload = z.object({ targetId: z.string().min(1) }).strict();
+// targetId null nghĩa là "Không treo ai" - một lựa chọn có chủ đích, không phải
+// phiếu trống. Vẫn strict và vẫn chặn chuỗi rỗng: chỉ nới đúng chỗ null.
+export const votePayload = z.object({ targetId: z.string().min(1).nullable() }).strict();
 export const skipDiscussionPayload = z.object({ skip: z.boolean() }).strict();
 export const chatSendPayload = z.object({ text: z.string().trim().min(1).max(300) }).strict();
 

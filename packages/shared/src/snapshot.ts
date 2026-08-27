@@ -56,8 +56,15 @@ export interface RoomSnapshot {
   } | null;
   players: PlayerView[];
   night: NightActionView | null;
-  /** id người viewer đã bỏ phiếu (trong VOTING) */
+  /**
+   * Viewer đã gửi phiếu chưa. Cần cờ riêng vì myVote === null vừa có thể là
+   * chưa vote, vừa có thể là đã chọn "Không treo ai".
+   */
+  hasVoted: boolean;
+  /** id người viewer đã bỏ phiếu; null khi chưa vote hoặc chọn không treo ai */
   myVote: string | null;
+  /** Số phiếu "Không treo ai"; tách khỏi PlayerView.voteCount */
+  noEliminationVoteCount: number;
   /** Đồng thuận kết thúc thảo luận sớm; chỉ có trong DAY_DISCUSSION. */
   discussionSkip: DiscussionSkipView | null;
   votesRevealed: boolean;
