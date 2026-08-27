@@ -46,11 +46,15 @@ export async function withTimeout<T>(
   ms: number,
 ): Promise<T | null> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ms);
+  let timer: NodeJS.Timeout;
+  const timeoutPromise = new Promise<null>((resolve) => {
+    timer = setTimeout(() => {
+      resolve(null);
+      controller.abort();
+    }, ms);
+  });
   try {
-    const result = await work(controller.signal);
-    // If the signal was aborted, return null regardless of the result
-    return controller.signal.aborted ? null : result;
+    return await Promise.race([work(controller.signal), timeoutPromise]);
   } catch {
     return null;
   } finally {

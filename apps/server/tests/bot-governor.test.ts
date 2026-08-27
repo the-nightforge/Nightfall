@@ -57,4 +57,18 @@ describe("withTimeout", () => {
       throw new Error("mạng hỏng");
     }, 1_000)).toBeNull();
   });
+
+  it("hạn chót cứng: trả null trong ms ngay cả khi công việc bỏ qua signal", async () => {
+    const start = Date.now();
+    const result = await withTimeout(
+      () => new Promise<string>(() => {}), // Never settles, ignores signal
+      25,
+    );
+    const elapsed = Date.now() - start;
+
+    // Must return null and respect the timeout
+    expect(result).toBeNull();
+    // Should complete within 100ms (generous margin for test flakiness)
+    expect(elapsed).toBeLessThan(100);
+  });
 });
