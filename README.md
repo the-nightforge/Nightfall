@@ -79,6 +79,7 @@ DATABASE_URL=<Neon pooled connection string>
 REDIS_URL=<Upstash rediss:// connection string>
 NODE_ENV=production
 CORS_ORIGIN=https://YOUR-PROJECT.vercel.app
+GEMINI_API_KEY=<API key Gemini, không bắt buộc - thiếu thì bot chạy ngẫu nhiên>
 ```
 
 Image lắng nghe cổng `4000` theo mặc định và `Dockerfile.server` khai báo cùng cổng; nếu Northflank cấp biến `PORT`, server sẽ ưu tiên giá trị đó. Lần khởi động container sẽ chạy `prisma migrate deploy` trước khi mở server. Ghi lại HTTPS domain của backend, ví dụ `https://ma-soi-server-example.code.run`.
@@ -111,6 +112,7 @@ Các gói miễn phí có giới hạn tài nguyên và có thể thay đổi ho
 | `npm run db:generate` | Prisma generate client |
 | `npm run db:migrate` | Prisma migrate deploy |
 | `npx tsx apps/server/scripts/e2e.ts` | E2E smoke test: 6 người chơi thật qua Socket.IO chơi trọn ván |
+| `npm run bot:probe` | Gọi Gemini một lần với ván giả để kiểm tra key và prompt (cần `GEMINI_API_KEY`) |
 
 ## REST API
 
@@ -173,6 +175,6 @@ socket reconnect với cùng auth → server xác thực token (SHA-256 lookup),
 
 - Single-instance server: trạng thái phòng chính nằm trong RAM, Redis là bản sao phục vụ khôi phục phòng (phòng đang giữa trận khi restart sẽ được trả về LOBBY an toàn).
 - Chưa có voice/video, chưa có lịch sử ván chi tiết trong UI.
-- Bot hành động ngẫu nhiên, chưa có AI.
+- Bot dùng Gemini để chọn mục tiêu và thảo luận; thiếu `GEMINI_API_KEY`, hết quota, hoặc API lỗi thì tự rơi về bot ngẫu nhiên.
 - Chưa có persistence cho chat/khôi phục trận dở sau khi server chết giữa chừng.
 - Rate limit chống spam dựa trên bộ nhớ đơn giản.
