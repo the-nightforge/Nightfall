@@ -21,6 +21,8 @@ export interface NightActionView {
   acted: boolean;
   /** Với Sói: mục tiêu hiện tại cả bọn đã chọn */
   wolfTarget?: string | null;
+  /** Với Bảo Vệ: mục tiêu đêm trước, không được đỡ lại */
+  guardPrevious?: string | null;
   /** Với Tiên Tri: kết quả soi gần nhất */
   seerResult?: { targetId: string; targetName: string; isWolf: boolean } | null;
   /** Với Phù Thủy */

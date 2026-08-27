@@ -29,6 +29,7 @@ export interface PlayerGameView {
     canAct: boolean;
     acted: boolean;
     wolfTarget: string | null;
+    guardPrevious?: string | null;
     seerResult: { targetId: string; targetName: string; isWolf: boolean } | null;
     healUsed: boolean;
     poisonUsed: boolean;
@@ -386,6 +387,7 @@ export class GameEngine {
                       : st.night.healTonight || st.night.poisonTarget !== null,
               wolfTarget:
                 roleTeam(viewer.role) === "wolves" ? st.night.killTarget : null,
+              guardPrevious: viewer.role === "GUARD" ? st.guardPrevious : undefined,
               seerResult,
               healUsed: st.healUsed,
               poisonUsed: st.poisonUsed,
