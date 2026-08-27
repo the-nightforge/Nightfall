@@ -7,13 +7,15 @@ import { PlayerGrid } from "./PlayerGrid";
 interface Props {
   snapshot: RoomSnapshot;
   onVote: (targetId: string) => void;
+  onSkipDiscussion: (skip: boolean) => void;
 }
 
-export function DayView({ snapshot, onVote }: Props) {
+export function DayView({ snapshot, onVote, onSkipDiscussion }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const isVoting = snapshot.phase === "VOTING";
   const dead = !snapshot.you?.alive;
   const myVote = snapshot.myVote;
+  const discussionSkip = snapshot.discussionSkip;
 
   return (
     <div className="space-y-4">
@@ -68,6 +70,26 @@ export function DayView({ snapshot, onVote }: Props) {
           <p className="text-2xl">☀️</p>
           <p className="font-semibold text-white">Thảo luận! Ai là Ma Sói?</p>
           <p className="text-sm text-mist/70">Dùng khung chat bên dưới để tranh luận.</p>
+          {discussionSkip && (
+            discussionSkip.canVote ? (
+              <div className="mt-3">
+                <button
+                  className={discussionSkip.hasVoted ? "btn-secondary w-full" : "btn-primary w-full"}
+                  onClick={() => onSkipDiscussion(!discussionSkip.hasVoted)}
+                >
+                  {discussionSkip.hasVoted ? "Huỷ skip" : "Skip thảo luận"}
+                  {` (${discussionSkip.votes}/${discussionSkip.required})`}
+                </button>
+                <p className="mt-1 text-xs text-mist/50">
+                  Cần toàn bộ người thật còn sống đồng ý.
+                </p>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-mist/60">
+                Người chơi còn sống muốn skip: {discussionSkip.votes}/{discussionSkip.required}
+              </p>
+            )
+          )}
         </div>
       )}
     </div>

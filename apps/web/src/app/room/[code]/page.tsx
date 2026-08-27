@@ -56,7 +56,13 @@ export default function RoomPage() {
       case "NIGHT_RESULT":
       case "DAY_DISCUSSION":
       case "VOTING":
-        return <DayView snapshot={snapshot} onVote={(targetId) => room.emit("game:vote", { targetId })} />;
+        return (
+          <DayView
+            snapshot={snapshot}
+            onVote={(targetId) => room.emit("game:vote", { targetId })}
+            onSkipDiscussion={(skip) => room.emit("game:skip-discussion", { skip })}
+          />
+        );
       case "ELIMINATION":
       case "CHECK_WIN":
         return <EliminationView snapshot={snapshot} />;
