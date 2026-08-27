@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: masoi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: masoi
+      POSTGRES_PASSWORD: masoi_dev_password
+      POSTGRES_DB: masoi
+    ports:
+      - "5433:5432"
+    volumes:
+      - masoi_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U masoi"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: masoi-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - masoi_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  masoi_pgdata:
+  masoi_redisdata:

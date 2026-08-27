@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.next/
+.turbo/
+*.tsbuildinfo
+.env
+.env.local
+coverage/
+prisma/migrations/dev.db*

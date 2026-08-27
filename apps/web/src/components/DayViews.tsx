@@ -1,0 +1,149 @@
+"use client";
+
+import { useState } from "react";
+import type { RoomSnapshot } from "@masoi/shared";
+import { PlayerGrid } from "./PlayerGrid";
+
+interface Props {
+  snapshot: RoomSnapshot;
+  onVote: (targetId: string) => void;
+}
+
+export function DayView({ snapshot, onVote }: Props) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const isVoting = snapshot.phase === "VOTING";
+  const dead = !snapshot.you?.alive;
+  const myVote = snapshot.myVote;
+
+  return (
+    <div className="space-y-4">
+      {snapshot.phase === "NIGHT_RESULT" && (
+        <div className="card text-center">
+          <p className="text-2xl">🌅</p>
+          {snapshot.lastNightDeaths.length > 0 ? (
+            <>
+              <p className="font-semibold text-blood-400">Đêm qua {snapshot.lastNightDeaths.length} người đã mất:</p>
+              <p className="mt-1 text-white">
+                {snapshot.lastNightDeaths.map((d) => d.name).join(", ")}
+              </p>
+            </>
+          ) : (
+            <p className="mt-1 font-semibold text-emerald-300">
+              Trời sáng, không ai mất tích. Một đêm bình yên!
+            </p>
+          )}
+        </div>
+      )}
+
+      {isVoting && (
+        <div className={`card ${dead ? "opacity-70" : ""}`}>
+          <h3 className="mb-2 font-bold text-white">
+            {dead ? "Bạn đã chết - không được bỏ phiếu" : "Chọn người bạn nghi là Ma Sói"}
+          </h3>
+          {myVote && !dead && (
+            <p className="mb-2 text-sm text-emerald-300">
+              Bạn đã bỏ phiếu cho {snapshot.players.find((p) => p.id === myVote)?.name}. Đang chờ người khác...
+            </p>
+          )}
+          <PlayerGrid
+            snapshot={snapshot}
+            selectable={!dead && !myVote}
+            selectedId={selected ?? myVote}
+            onSelect={setSelected}
+          />
+          {!dead && !myVote && (
+            <button
+              className="btn-primary mt-3 w-full"
+              disabled={!selected}
+              onClick={() => selected && onVote(selected)}
+            >
+              Bỏ phiếu
+            </button>
+          )}
+        </div>
+      )}
+
+      {snapshot.phase === "DAY_DISCUSSION" && (
+        <div className="card text-center">
+          <p className="text-2xl">☀️</p>
+          <p className="font-semibold text-white">Thảo luận! Ai là Ma Sói?</p>
+          <p className="text-sm text-mist/70">Dùng khung chat bên dưới để tranh luận.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function EliminationView({ snapshot }: { snapshot: RoomSnapshot }) {
+  return (
+    <div className="card text-center">
+      <p className="text-2xl">⚖️</p>
+      {snapshot.lastEliminated ? (
+        <>
+          <p className="mt-1 font-semibold text-white">
+            Làng đã quyết định loại <span className="text-blood-400">{snapshot.lastEliminated.name}</span>.
+          </p>
+          {(() => {
+            const p = snapshot.players.find((x) => x.id === snapshot.lastEliminated!.playerId);
+            if (p?.role) {
+              const wolf = p.role === "WEREWOLF";
+              return (
+                <p className={`mt-1 text-sm font-semibold ${wolf ? "text-emerald-300" : "text-blood-400"}`}>
+                  Hắn/Họ là... {wolf ? "MA SÓI!" : "Dân làng vô tội!"}
+                </p>
+              );
+            }
+            return null;
+          })()}
+        </>
+      ) : (
+        <p className="mt-1 font-semibold text-white">Hoà phiếu! Không ai bị loại hôm nay.</p>
+      )}
+    </div>
+  );
+}
+
+export function GameOverView({
+  snapshot,
+  isHost,
+  onReset,
+  onLeave,
+}: {
+  snapshot: RoomSnapshot;
+  isHost: boolean;
+  onReset: () => void;
+  onLeave: () => void;
+}) {
+  const wolvesWin = snapshot.winner === "wolves";
+  return (
+    <div className="space-y-4">
+      <div className={`card border-2 text-center py-8 ${wolvesWin ? "border-blood-500 bg-blood-600/10" : "border-emerald-500/60 bg-emerald-900/10"}`}>
+        <div className="text-5xl">{wolvesWin ? "🐺" : "🎉"}</div>
+        <h2 className={`mt-3 text-2xl font-bold ${wolvesWin ? "text-blood-400" : "text-emerald-300"}`}>
+          {wolvesWin ? "Phe Ma Sói chiến thắng!" : "Phe Dân Làng chiến thắng!"}
+        </h2>
+      </div>
+
+      <div className="card">
+        <h3 className="mb-2 font-semibold text-white">Vai trò của tất cả mọi người:</h3>
+        <ul className="space-y-2 text-sm">
+          {snapshot.players.map((p) => (
+            <li key={p.id} className="flex items-center justify-between rounded-lg bg-night-800 px-3 py-2">
+              <span className={p.alive ? "text-white" : "text-mist/50 line-through"}>{p.name}</span>
+              <span className={p.role === "WEREWOLF" ? "font-semibold text-blood-400" : "text-emerald-300"}>
+                {p.role === "WEREWOLF" ? "Ma Sói" : p.role === "SEER" ? "Tiên Tri" : p.role === "GUARD" ? "Bảo Vệ" : p.role === "WITCH" ? "Phù Thủy" : "Dân Làng"}
+                {!p.alive && " (đã chết)"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="flex gap-2">
+        {isHost && <button className="btn-primary flex-1" onClick={onReset}>Chơi lại (về phòng chờ)</button>}
+        <button className="btn-secondary flex-1" onClick={onLeave}>Rời phòng</button>
+      </div>
+      {!isHost && <p className="text-center text-xs text-mist/50">Chờ chủ phòng bấm chơi lại hoặc rời phòng.</p>}
+    </div>
+  );
+}
