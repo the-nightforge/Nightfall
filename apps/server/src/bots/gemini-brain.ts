@@ -92,10 +92,16 @@ export class GeminiBrain implements BotBrain {
             responseMimeType: "application/json",
             responseSchema: spec.schema,
             maxOutputTokens: MAX_OUTPUT_TOKENS,
-            // Tắt suy luận mở rộng: output đã ngắn (schema ép cấu trúc), suy luận
-            // ngầm chỉ tổ tốn thời gian và là nguyên nhân nhiều khả năng nhất khiến
-            // request vượt deadline 8s rồi âm thầm rơi về RandomBrain.
-            thinkingConfig: { thinkingBudget: 0 },
+            // Giữ suy luận ở mức thấp: output đã ngắn (schema ép cấu trúc), suy
+            // luận ngầm chỉ tốn thời gian và có thể đẩy request vượt deadline 8s
+            // rồi âm thầm rơi về RandomBrain.
+            //
+            // Dòng 3.x bỏ thinkingBudget và thay bằng thinkingLevel: gửi
+            // thinkingBudget: 0 tới gemini-3.5-flash-lite là 400 INVALID_ARGUMENT
+            // cho *mọi* request, tức Gemini không bao giờ chạy. API có validate
+            // giá trị (chuỗi bịa cũng trả 400), nên "LOW" là mức thật, không phải
+            // field bị bỏ qua âm thầm. Đo thực tế: thoughtsTokenCount = 0, ~1.5s.
+            thinkingConfig: { thinkingLevel: "LOW" },
           },
         }),
       });
