@@ -150,9 +150,13 @@ function scheduleNightBots(room: Room): void {
     const delay = 2_000 + Math.floor(Math.random() * 3_000);
     setRoomTimer(room.code, () => {
       void (async () => {
-        if (!room.engine || room.engine.state.phase !== "NIGHT") return;
-        const view = buildSnapshot(room, member.playerId);
-        applyNight(room, member.playerId, await randomBrain.decideNight(view));
+        try {
+          if (!room.engine || room.engine.state.phase !== "NIGHT") return;
+          const view = buildSnapshot(room, member.playerId);
+          applyNight(room, member.playerId, await randomBrain.decideNight(view));
+        } catch {
+          /* não bot lỗi (mạng, JSON hỏng,...) không được kéo sập cả tiến trình */
+        }
       })();
     }, delay);
   }
@@ -163,15 +167,19 @@ function scheduleVoteBots(room: Room): void {
     if (!member.isBot) continue;
     setRoomTimer(room.code, () => {
       void (async () => {
-        if (!room.engine || room.engine.state.phase !== "VOTING") return;
-        const view = buildSnapshot(room, member.playerId);
-        const decision = await randomBrain.decideDay(view);
-        if (!decision?.voteTargetId) return;
         try {
-          room.engine.submitVote(member.playerId, decision.voteTargetId);
-          maybeEndVotingEarly(room);
+          if (!room.engine || room.engine.state.phase !== "VOTING") return;
+          const view = buildSnapshot(room, member.playerId);
+          const decision = await randomBrain.decideDay(view);
+          if (!decision?.voteTargetId) return;
+          try {
+            room.engine.submitVote(member.playerId, decision.voteTargetId);
+            maybeEndVotingEarly(room);
+          } catch {
+            /* bỏ phiếu lỗi */
+          }
         } catch {
-          /* bỏ phiếu lỗi */
+          /* não bot lỗi (mạng, JSON hỏng,...) không được kéo sập cả tiến trình */
         }
       })();
     }, 3_000 + Math.floor(Math.random() * 8_000));
