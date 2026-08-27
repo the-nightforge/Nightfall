@@ -21,6 +21,10 @@ export const config = {
   chatMaxLength: Number(process.env.CHAT_MAX_LENGTH ?? 300),
   chatRateLimitCount: Number(process.env.CHAT_RATE_LIMIT_COUNT ?? 5),
   chatRateLimitWindowMs: Number(process.env.CHAT_RATE_LIMIT_WINDOW_MS ?? 5000),
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
+  geminiModel: process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite",
+  botAiEnabled: process.env.BOT_AI_ENABLED !== "false",
+  botAiMaxCallsPerGame: Number(process.env.BOT_AI_MAX_CALLS_PER_GAME ?? 60),
 };
 
 export const isProd = config.nodeEnv === "production";

@@ -1,10 +1,13 @@
 import { GameEngine } from "@masoi/game-engine";
+import { SERVER_EVENTS } from "@masoi/shared";
 import type { Room } from "../rooms/store";
 import { clearRoomTimers, persistRoom, setRoomTimer } from "../rooms/store";
-import { broadcastRoom } from "../rooms/broadcast";
+import { broadcastRoom, emitToPlayers } from "../rooms/broadcast";
 import { prisma } from "../db";
-import { buildSnapshot } from "../rooms/snapshot";
-import { randomBrain } from "../bots/random-brain";
+import { buildSnapshot, pushChat, resolveChat } from "../rooms/snapshot";
+import { botBrain, randomBrain, resetBotBudget } from "../bots";
+import { usablePlannedVote } from "../bots/targets";
+import { newId } from "../util";
 import type { NightDecision } from "../bots/types";
 
 const ROLE_REVEAL_MS = 10_000;
@@ -12,6 +15,8 @@ const RESULT_MS = 8_000;
 const GAME_OVER_MS = 30_000;
 
 const pendingEndVote = new Map<string, boolean>();
+/** Phiếu bot đã định trong pha thảo luận, dùng lại ở pha bỏ phiếu. */
+const pendingVote = new Map<string, Map<string, string>>();
 
 function engine(room: Room): GameEngine {
   if (!room.engine) throw new Error("Chưa có trận đấu");
@@ -74,6 +79,7 @@ function beginDiscussion(room: Room): void {
   clearRoomTimers(room.code);
   engine(room).setPhase("DAY_DISCUSSION", room.config.discussionSeconds * 1000);
   setRoomTimer(room.code, () => beginVoting(room), room.config.discussionSeconds * 1000 + 500);
+  scheduleDayBots(room);
   sync(room);
 }
 
@@ -111,6 +117,8 @@ export function resetToLobby(room: Room): void {
   room.engine = null;
   room.status = "LOBBY";
   for (const m of room.members) m.ready = false;
+  pendingVote.delete(room.code);
+  resetBotBudget(room.code);
   sync(room);
 }
 
@@ -129,6 +137,9 @@ function onGameOver(room: Room): void {
     })
     .catch(() => undefined);
 
+  pendingVote.delete(room.code);
+  resetBotBudget(room.code);
+
   sync(room);
   setRoomTimer(room.code, () => resetToLobby(room), GAME_OVER_MS);
 }
@@ -145,24 +156,94 @@ function applyNight(room: Room, botId: string, decision: NightDecision | null): 
 }
 
 function scheduleNightBots(room: Room): void {
+  // Trần thời gian nộp quyết định: nhanh hơn hẳn thời lượng đêm, để endNight()
+  // không bao giờ phải chờ mạng — kể cả với nightSeconds ngắn nhất (15s = 6s trần).
+  const deadlineMs = Math.min(8_000, room.config.nightSeconds * 400);
+
   for (const member of room.members) {
     if (!member.isBot) continue;
+    const view = buildSnapshot(room, member.playerId);
+    if (!view.night?.canAct) continue;
+
     const delay = 2_000 + Math.floor(Math.random() * 3_000);
+    // Gọi ngay ở t=0, nộp ở max(delay, lúc kết quả về)
+    const pending = botBrain().decideNight(view);
+    const earliest = new Promise<void>((r) => setTimeout(r, delay));
+    let settled = false;
+
+    void (async () => {
+      try {
+        const decision = await pending;
+        await earliest;
+        if (settled) return;
+        settled = true;
+        if (!room.engine || room.engine.state.phase !== "NIGHT") return;
+        applyNight(room, member.playerId, decision ?? (await randomBrain.decideNight(view)));
+      } catch {
+        /* não bot lỗi (mạng, JSON hỏng,...) không được kéo sập cả tiến trình */
+      }
+    })();
+
     setRoomTimer(room.code, () => {
       void (async () => {
         try {
+          if (settled) return;
+          settled = true;
           if (!room.engine || room.engine.state.phase !== "NIGHT") return;
-          const view = buildSnapshot(room, member.playerId);
           applyNight(room, member.playerId, await randomBrain.decideNight(view));
         } catch {
           /* não bot lỗi (mạng, JSON hỏng,...) không được kéo sập cả tiến trình */
         }
       })();
-    }, delay);
+    }, deadlineMs);
   }
 }
 
+function scheduleDayBots(room: Room): void {
+  const bots = room.members.filter((m) => m.isBot);
+  const window = room.config.discussionSeconds * 1_000;
+  const votes = new Map<string, string>();
+  pendingVote.set(room.code, votes);
+
+  bots.forEach((member, i) => {
+    // Rải đều trong khung thảo luận thay vì dội ra cùng lúc
+    const delay = Math.floor(((i + 1) / (bots.length + 1)) * window);
+    setRoomTimer(room.code, () => {
+      void (async () => {
+        try {
+          if (!room.engine || room.engine.state.phase !== "DAY_DISCUSSION") return;
+          const view = buildSnapshot(room, member.playerId);
+          const decision = await botBrain().decideDay(view);
+          if (!decision) return;
+          if (decision.voteTargetId) votes.set(member.playerId, decision.voteTargetId);
+          if (decision.chat) {
+            const resolved = resolveChat(room, member.playerId);
+            if (resolved.ok) {
+              // ChatMessage cần đủ id và at; dựng giống hệt service.chat()
+              const message = {
+                id: newId(),
+                channel: resolved.channel,
+                playerId: member.playerId,
+                playerName: member.name,
+                text: decision.chat,
+                at: Date.now(),
+              };
+              pushChat(room, message);
+              emitToPlayers(resolved.recipients, SERVER_EVENTS.CHAT_NEW, message);
+              void persistRoom(room);
+            }
+          }
+        } catch {
+          /* não bot lỗi (mạng, JSON hỏng,...) không được kéo sập cả tiến trình */
+        }
+      })();
+    }, delay);
+  });
+}
+
 function scheduleVoteBots(room: Room): void {
+  const votes = pendingVote.get(room.code);
+
   for (const member of room.members) {
     if (!member.isBot) continue;
     setRoomTimer(room.code, () => {
@@ -170,10 +251,14 @@ function scheduleVoteBots(room: Room): void {
         try {
           if (!room.engine || room.engine.state.phase !== "VOTING") return;
           const view = buildSnapshot(room, member.playerId);
-          const decision = await randomBrain.decideDay(view);
-          if (!decision?.voteTargetId) return;
+
+          const target =
+            usablePlannedVote(view, votes?.get(member.playerId)) ??
+            (await randomBrain.decideDay(view))?.voteTargetId;
+
+          if (!target) return;
           try {
-            room.engine.submitVote(member.playerId, decision.voteTargetId);
+            room.engine.submitVote(member.playerId, target);
             maybeEndVotingEarly(room);
           } catch {
             /* bỏ phiếu lỗi */

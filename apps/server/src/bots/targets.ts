@@ -51,3 +51,9 @@ export function legalVoteTargets(view: RoomSnapshot): string[] {
   const me = view.you?.id;
   return view.players.filter((p) => p.alive && p.id !== me).map((p) => p.id);
 }
+
+/** Phiếu bot đã định ở pha thảo luận chỉ dùng được nếu vẫn còn hợp lệ lúc bỏ phiếu. */
+export function usablePlannedVote(view: RoomSnapshot, planned: string | undefined): string | null {
+  if (!planned) return null;
+  return legalVoteTargets(view).includes(planned) ? planned : null;
+}
