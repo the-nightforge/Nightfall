@@ -103,7 +103,8 @@ Trang phòng chỉ truyền callback mới xuống `DayView`; component không t
 - `beginDiscussion` tạo tập phiếu rỗng cho ngày mới.
 - `beginVoting` xoá tập phiếu trước khi broadcast snapshot pha mới.
 - `startGame`, `resetToLobby` và cleanup khi xoá phòng cũng xoá state để không rò rỉ giữa các ván hoặc tích luỹ bộ nhớ.
-- Nếu thành viên rời phòng theo một luồng hợp lệ trong lúc chơi, lần chuẩn hoá kế tiếp loại id đó khỏi cả danh sách đủ điều kiện và tập phiếu.
+- Nếu thành viên rời phòng theo một luồng hợp lệ trong lúc chơi, server hoàn tất các mutation trong bộ nhớ và chuẩn hoá eligibility trước lần `await` I/O đầu tiên. Nếu số phiếu còn lại đã bằng ngưỡng mới, phòng chuyển sang `VOTING` ngay thay vì có cửa sổ tạm thời hiển thị `x/x` nhưng vẫn chờ timer.
+- Callback AI thảo luận đã bắt đầu trước khi skip phải kiểm tra lại đúng engine, vòng, phase và `phaseEndsAt` sau `await`; kết quả muộn bị bỏ hoàn toàn, không được ghi phiếu dự kiến hoặc phát chat sang pha sau.
 
 ## Lỗi và bảo mật
 
@@ -128,6 +129,8 @@ Viết test trước phần triển khai cho các trường hợp:
 - Phòng có bot vẫn dùng được nhưng bot không được tính.
 - Sang ngày mới, reset và bắt đầu ván mới đều có tập phiếu rỗng.
 - Cleanup phòng xoá entry khỏi map trạng thái tạm.
+- Người chưa đồng ý rời phòng làm tiến độ từ `2/3` thành `2/2` thì phòng chuyển ngay sang `VOTING`.
+- Request AI bot đang chờ khi đạt đồng thuận không được ghi chat hoặc phiếu dự kiến sau khi chuyển pha.
 - Typecheck/build frontend xác nhận callback và kiểu snapshot mới được nối đúng.
 
 ## Ngoài phạm vi

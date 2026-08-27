@@ -10,7 +10,11 @@ import { usablePlannedVote } from "../bots/targets";
 import { newId } from "../util";
 import type { NightDecision } from "../bots/types";
 import { pendingEndVote, pendingVote } from "./bot-room-state";
-import { clearDiscussionSkipVotes, updateDiscussionSkipVote } from "./discussion-skip";
+import {
+  clearDiscussionSkipVotes,
+  hasUnanimousDiscussionSkip,
+  updateDiscussionSkipVote,
+} from "./discussion-skip";
 
 const ROLE_REVEAL_MS = 10_000;
 const RESULT_MS = 8_000;
@@ -102,6 +106,12 @@ export function submitDiscussionSkip(room: Room, playerId: string, skip: boolean
   if (result.unanimous) beginVoting(room);
   else sync(room);
   return null;
+}
+
+export function reconcileDiscussionSkip(room: Room): boolean {
+  if (!hasUnanimousDiscussionSkip(room)) return false;
+  beginVoting(room);
+  return room.engine?.state.phase === "VOTING";
 }
 
 export function maybeEndVotingEarly(room: Room): void {
@@ -214,7 +224,7 @@ export function scheduleNightBots(room: Room): void {
   }
 }
 
-function scheduleDayBots(room: Room): void {
+export function scheduleDayBots(room: Room): void {
   const bots = room.members.filter((m) => m.isBot);
   const window = room.config.discussionSeconds * 1_000;
   const votes = new Map<string, string>();
@@ -227,8 +237,17 @@ function scheduleDayBots(room: Room): void {
       void (async () => {
         try {
           if (!room.engine || room.engine.state.phase !== "DAY_DISCUSSION") return;
+          const discussionEngine = room.engine;
+          const discussionRound = discussionEngine.state.round;
+          const discussionEndsAt = discussionEngine.state.phaseEndsAt;
           const view = buildSnapshot(room, member.playerId);
           const attempt = await botBrain().decideDay(view);
+          if (
+            room.engine !== discussionEngine ||
+            discussionEngine.state.phase !== "DAY_DISCUSSION" ||
+            discussionEngine.state.round !== discussionRound ||
+            discussionEngine.state.phaseEndsAt !== discussionEndsAt
+          ) return;
           if (!attempt.ok || !attempt.value) return;
           const decision = attempt.value;
           if (decision.voteTargetId) votes.set(member.playerId, decision.voteTargetId);

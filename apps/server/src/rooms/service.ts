@@ -20,7 +20,7 @@ import {
   type RoomMember,
 } from "./store";
 import { getRoomSyncByPlayer, getRoomsCache } from "./index-helpers";
-import { startGame, resetToLobby } from "../game/machine";
+import { reconcileDiscussionSkip, startGame, resetToLobby } from "../game/machine";
 import { allRequiredPlayersReady, roomEntryError } from "./rules";
 import { withPlayerRoomLock } from "./player-room-lock";
 
@@ -99,10 +99,10 @@ export const roomService = {
       if (!room) return;
 
       room.members = room.members.filter((m) => m.playerId !== playerId);
-      await updateSessionRoom(playerId, null);
 
       if (room.members.length === 0) {
         removeRoom(room.code);
+        await updateSessionRoom(playerId, null);
         await deletePersistedRoom(room.code);
         try {
           await prisma.roomRecord.updateMany({
@@ -130,8 +130,10 @@ export const roomService = {
           p.alive = false;
         }
       }
+      const discussionAdvanced = reconcileDiscussionSkip(room);
+      await updateSessionRoom(playerId, null);
       await persistRoom(room);
-      broadcastRoom(room.code);
+      if (!discussionAdvanced) broadcastRoom(room.code);
     });
   },
 

@@ -518,3 +518,17 @@ Expected: `## main...origin/main [ahead 4]` và không có file chưa commit.
 Run: `git push origin main`
 
 Expected: remote `main` tiến tới commit mới nhất và Render có thể auto-deploy theo cấu hình repository hiện tại.
+
+---
+
+### Post-review amendments
+
+Code review trước khi push bổ sung hai regression bắt buộc:
+
+- `apps/server/tests/day-bot-scheduling.test.ts`: dùng deferred promise để chứng minh callback AI bắt đầu trong `DAY_DISCUSSION` bị bỏ nếu resolve sau khi unanimous skip đã chuyển phòng sang `VOTING`.
+- `apps/server/tests/discussion-skip-leave.test.ts`: chứng minh khi người chưa đồng ý rời phòng, ngưỡng `2/3` được chuẩn hoá thành `2/2` và chuyển pha ngay.
+
+Implementation tương ứng:
+
+- `scheduleDayBots` lưu token gồm engine instance, `round`, phase và `phaseEndsAt`, rồi kiểm tra lại ngay sau `await botBrain().decideDay(view)` trước khi ghi vote/chat.
+- `reconcileDiscussionSkip(room)` được gọi trong `roomService.leave` sau khi cập nhật membership/alive state và trước lần `await` I/O đầu tiên; deferred-Redis test khoá thứ tự này để không lộ snapshot `2/2` còn ở `DAY_DISCUSSION`.

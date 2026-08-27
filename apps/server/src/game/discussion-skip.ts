@@ -54,6 +54,13 @@ export function updateDiscussionSkipVote(
   return { ok: true, unanimous: eligible.size > 0 && votes.size === eligible.size };
 }
 
+export function hasUnanimousDiscussionSkip(room: Room): boolean {
+  if (!room.engine || room.engine.getState().phase !== "DAY_DISCUSSION") return false;
+  const eligible = eligibleHumanIds(room);
+  if (eligible.size === 0) return false;
+  return normalizedVotes(room, eligible).size === eligible.size;
+}
+
 function eligibleHumanIds(room: Room): Set<string> {
   if (!room.engine || room.engine.getState().phase !== "DAY_DISCUSSION") return new Set();
 
