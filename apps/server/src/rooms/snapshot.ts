@@ -1,4 +1,5 @@
 import type { ChatMessage, RoomSnapshot } from "@masoi/shared";
+import { getDiscussionSkipView } from "../game/discussion-skip";
 import type { Room } from "./store";
 
 /**
@@ -143,7 +144,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
     })(),
     night: gameView?.nightInfo ?? null,
     myVote: gameView?.myVote ?? null,
-    discussionSkip: null,
+    discussionSkip: getDiscussionSkipView(room, viewerId),
     votesRevealed: gameView?.votesRevealed ?? false,
     lastNightDeaths: gameView?.lastNightDeaths ?? [],
     lastEliminated: gameView?.lastEliminated ?? null,
