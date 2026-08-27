@@ -175,7 +175,10 @@ export function scheduleNightBots(room: Room): void {
         if (settled) return;
         settled = true;
         if (!room.engine || room.engine.state.phase !== "NIGHT") return;
-        applyNight(room, member.playerId, decision ?? (await randomBrain.decideNight(view)));
+        // Chỉ lượt HỎNG mới đáng để RandomBrain đánh bừa thay. Bot chủ động
+        // không làm gì (đã chết, Phù Thuỷ chọn SKIP) phải được tôn trọng.
+        const fallback = decision.ok ? decision : await randomBrain.decideNight(view);
+        applyNight(room, member.playerId, fallback.ok ? fallback.value : null);
       } catch {
         /* não bot lỗi (mạng, JSON hỏng,...) không được kéo sập cả tiến trình */
       }
@@ -187,7 +190,7 @@ export function scheduleNightBots(room: Room): void {
           if (settled) return;
           settled = true;
           if (!room.engine || room.engine.state.phase !== "NIGHT") return;
-          applyNight(room, member.playerId, await randomBrain.decideNight(view));
+          applyNight(room, member.playerId, (await randomBrain.decideNight(view)).value);
         } catch {
           /* não bot lỗi (mạng, JSON hỏng,...) không được kéo sập cả tiến trình */
         }
@@ -210,8 +213,9 @@ function scheduleDayBots(room: Room): void {
         try {
           if (!room.engine || room.engine.state.phase !== "DAY_DISCUSSION") return;
           const view = buildSnapshot(room, member.playerId);
-          const decision = await botBrain().decideDay(view);
-          if (!decision) return;
+          const attempt = await botBrain().decideDay(view);
+          if (!attempt.ok || !attempt.value) return;
+          const decision = attempt.value;
           if (decision.voteTargetId) votes.set(member.playerId, decision.voteTargetId);
           if (decision.chat) {
             const resolved = resolveChat(room, member.playerId);
@@ -251,7 +255,7 @@ function scheduleVoteBots(room: Room): void {
 
           const target =
             usablePlannedVote(view, votes?.get(member.playerId)) ??
-            (await randomBrain.decideDay(view))?.voteTargetId;
+            (await randomBrain.decideDay(view)).value?.voteTargetId;
 
           if (!target) return;
           try {

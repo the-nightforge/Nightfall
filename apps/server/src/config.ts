@@ -41,6 +41,13 @@ export const config = {
   chatRateLimitWindowMs: Number(process.env.CHAT_RATE_LIMIT_WINDOW_MS ?? 5000),
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
   geminiModel: process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite",
+  // Nhà cung cấp chính: endpoint OpenAI-compatible. Thiếu bất kỳ mảnh nào thì
+  // chặng này bị bỏ qua và chuỗi bắt đầu từ nhà cung cấp kế tiếp.
+  botAiBaseUrl: process.env.BOT_AI_BASE_URL ?? "",
+  botAiApiKey: process.env.BOT_AI_API_KEY ?? "",
+  botAiModel: process.env.BOT_AI_MODEL ?? "gemini-3.7-flash",
+  openaiApiKey: process.env.OPENAI_API_KEY ?? "",
+  openaiModel: process.env.OPENAI_MODEL ?? "gpt-5.6-luna",
   botAiEnabled: process.env.BOT_AI_ENABLED !== "false",
   botAiMaxCallsPerGame: resolveBotAiMaxCallsPerGame(process.env),
 };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BotGovernor, withTimeout } from "../src/bots/governor";
+import { BotGovernor, Cooldown, withTimeout } from "../src/bots/governor";
 
 describe("BotGovernor", () => {
   it("cho gọi tới khi chạm trần", () => {
@@ -10,64 +10,58 @@ describe("BotGovernor", () => {
     expect(g.canCall("R")).toBe(false);
   });
 
-  it("429 chặn lời gọi trong lúc nghỉ", () => {
-    let t = 0;
-    const g = new BotGovernor(10, () => t);
-    g.backOff(5_000);
-    expect(g.canCall("R")).toBe(false);
-  });
-
-  // Đây là lý do tồn tại của backOff: bản cũ tắt hẳn tới hết ván nên một lần
-  // chạm rate limit thoáng qua khiến mọi bot câm vĩnh viễn, không có đường về.
-  it("hết giờ nghỉ thì cho gọi lại", () => {
-    let t = 0;
-    const g = new BotGovernor(10, () => t);
-    g.backOff(5_000);
-    t = 4_999;
-    expect(g.canCall("R")).toBe(false);
-    t = 5_000;
-    expect(g.canCall("R")).toBe(true);
-  });
-
-  // Quota là của API key chứ không của phòng, nên nghỉ phải là toàn cục - nếu
-  // không, các phòng còn lại vẫn đâm vào đúng bức tường vừa dựng lên.
-  it("nghỉ áp dụng cho mọi phòng, không riêng phòng gặp 429", () => {
-    let t = 0;
-    const g = new BotGovernor(10, () => t);
-    g.backOff(5_000);
-    expect(g.canCall("KHAC")).toBe(false);
-  });
-
-  it("chỉ nới dài hạn nghỉ, không rút ngắn", () => {
-    let t = 0;
-    const g = new BotGovernor(10, () => t);
-    g.backOff(60_000);
-    g.backOff(1_000);
-    expect(g.cooldownRemainingMs()).toBe(60_000);
-  });
-
-  it("thiếu retryDelay thì dùng mặc định, và chặn trên retryDelay quá dài", () => {
-    let t = 0;
-    const g = new BotGovernor(10, () => t);
-    g.backOff();
-    expect(g.cooldownRemainingMs()).toBe(30_000);
-
-    const g2 = new BotGovernor(10, () => t);
-    g2.backOff(10 * 60_000);
-    expect(g2.cooldownRemainingMs()).toBe(120_000);
-  });
-
-  it("reset trả phòng về trạng thái sạch nhưng giữ nguyên hạn nghỉ", () => {
-    let t = 0;
-    const g = new BotGovernor(1, () => t);
+  it("reset trả phòng về trạng thái sạch", () => {
+    const g = new BotGovernor(1);
     g.recordCall("R");
     g.reset("R");
     expect(g.canCall("R")).toBe(true);
+  });
+});
 
-    g.backOff(5_000);
-    g.reset("R");
-    // Ván mới không làm quota của API key hồi lại
-    expect(g.canCall("R")).toBe(false);
+describe("Cooldown", () => {
+  it("chặn trong lúc nghỉ", () => {
+    let t = 0;
+    const c = new Cooldown(() => t);
+    c.backOff(5_000);
+    expect(c.active()).toBe(true);
+  });
+
+  // Đây là lý do tồn tại của Cooldown: bản đầu tắt hẳn tới hết ván nên một lần
+  // chạm rate limit thoáng qua khiến mọi bot câm vĩnh viễn, không có đường về.
+  it("hết giờ nghỉ thì thôi chặn", () => {
+    let t = 0;
+    const c = new Cooldown(() => t);
+    c.backOff(5_000);
+    t = 4_999;
+    expect(c.active()).toBe(true);
+    t = 5_000;
+    expect(c.active()).toBe(false);
+  });
+
+  it("chỉ nới dài hạn nghỉ, không rút ngắn", () => {
+    const c = new Cooldown(() => 0);
+    c.backOff(60_000);
+    c.backOff(1_000);
+    expect(c.remainingMs()).toBe(60_000);
+  });
+
+  it("thiếu thông tin chờ thì dùng mặc định, và chặn trên giá trị quá dài", () => {
+    const a = new Cooldown(() => 0);
+    a.backOff();
+    expect(a.remainingMs()).toBe(30_000);
+    const b = new Cooldown(() => 0);
+    b.backOff(10 * 60_000);
+    expect(b.remainingMs()).toBe(120_000);
+  });
+
+  // Quota thuộc về một API key, nên hết quota ở nhà cung cấp này không được
+  // khoá nhà cung cấp khác - nếu không cả chuỗi dự phòng sập vì một cú 429.
+  it("độc lập giữa các nhà cung cấp", () => {
+    const a = new Cooldown(() => 0);
+    const b = new Cooldown(() => 0);
+    a.backOff(5_000);
+    expect(a.active()).toBe(true);
+    expect(b.active()).toBe(false);
   });
 });
 

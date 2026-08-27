@@ -6,8 +6,6 @@
 import path from "node:path";
 import dotenv from "dotenv";
 import { DEFAULT_ROOM_CONFIG, type RoomSnapshot } from "@masoi/shared";
-import { GeminiBrain } from "../src/bots/gemini-brain";
-import { BotGovernor } from "../src/bots/governor";
 
 // Script được chạy từ thư mục gốc repo (npm run bot:probe), nhưng key nằm ở
 // apps/server/.env theo README - nạp rõ đường dẫn thay vì dựa vào cwd.
@@ -39,25 +37,27 @@ const view: RoomSnapshot = {
 };
 
 async function main() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.error("Thiếu GEMINI_API_KEY trong apps/server/.env");
-    process.exit(1);
+  // Import động, KHÔNG phải import tĩnh: import được hoisted lên trước mọi câu
+  // lệnh, nên ../src/config sẽ chạy dotenv.config() theo cwd (gốc repo, không có
+  // .env) trước khi dòng dotenv ở trên kịp trỏ đúng apps/server/.env - và cả
+  // chuỗi nhà cung cấp bị dựng từ config rỗng.
+  const { botBrain } = await import("../src/bots");
+
+  // Đi qua đúng chuỗi mà server dùng, kể cả fallback - probe gọi thẳng một nhà
+  // cung cấp sẽ không phát hiện được lỗi nằm ở khâu chọn hay khâu chuyển tiếp.
+  const brain = botBrain();
+  console.log(`Chuỗi: ${brain.name}`);
+
+  const attempt = await brain.decideDay(view);
+  if (!attempt.ok) {
+    console.error("Mọi nhà cung cấp đều hỏng - xem dòng [bot] phía trên");
+    process.exitCode = 1;
+    return;
   }
-
-  const brain = new GeminiBrain({
-    apiKey,
-    model: process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite",
-    governor: new BotGovernor(5),
-    timeoutMs: 15_000,
-  });
-
-  const decision = await brain.decideDay(view);
-  console.log("Kết quả:", decision);
-  if (!decision) console.error("Không nhận được quyết định hợp lệ - xem log phía trên");
+  console.log("Kết quả:", attempt.value ?? "(chủ động không nói gì)");
 }
 
 main().catch((err) => {
   console.error("[bot-probe] Lỗi:", err instanceof Error ? err.message : err);
-  process.exit(1);
+  process.exitCode = 1;
 });

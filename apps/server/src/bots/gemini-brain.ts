@@ -1,9 +1,15 @@
-import { z } from "zod";
 import type { RoomSnapshot } from "@masoi/shared";
-import type { BotBrain, DayDecision, NightDecision } from "./types";
-import { legalNightTargets, legalVoteTargets, soloNightAction, witchActions } from "./targets";
+import type { Attempt, BotBrain, DayDecision, NightDecision } from "./types";
+import { failed, nothingToDo } from "./types";
 import { buildDayPrompt, buildNightPrompt, type PromptSpec } from "./prompt";
-import { BotGovernor, withTimeout } from "./governor";
+import { BotGovernor, Cooldown, withTimeout } from "./governor";
+import {
+  DEFAULT_CHAT_MAX,
+  interpretDay,
+  interpretNight,
+  type CallOutcome,
+  type LogOutcome,
+} from "./decide";
 
 export type GeminiFetch = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -11,37 +17,19 @@ export interface GeminiOptions {
   apiKey: string;
   model: string;
   governor: BotGovernor;
+  /** Riêng cho nhà cung cấp này; không dùng chung với nhà cung cấp khác. */
+  cooldown: Cooldown;
   timeoutMs: number;
   fetchImpl?: GeminiFetch;
   /** Cắt lời chat còn tối đa bấy nhiêu ký tự. Nên khớp config.chatMaxLength. */
   chatMaxLength?: number;
 }
 
-const nightSchema = z.object({
-  think: z.string(),
-  action: z.enum(["HEAL", "POISON", "SKIP"]).optional(),
-  targetId: z.string().nullable().optional(),
-});
-
-const daySchema = z.object({
-  think: z.string(),
-  chat: z.string(),
-  voteTargetId: z.string().nullable().optional(),
-});
-
-const DEFAULT_CHAT_MAX = 300;
-
 /**
  * Đủ cho { think<=200 ký tự, action, chat<=300 ký tự, targetId } dưới dạng JSON,
  * cộng đệm cho token hoá tiếng Việt (dấu tách âm tiết thành nhiều token hơn ASCII).
  */
 const MAX_OUTPUT_TOKENS = 500;
-
-/**
- * Mã lỗi thô để phân biệt lý do fallback trong log sản xuất. Chỉ dùng để log,
- * không phải phân cấp lỗi — cố tình giữ thô: một chuỗi liệt kê nhỏ là đủ.
- */
-type CallOutcome = "ok" | "429" | "timeout" | "bad_json" | "bad_shape" | "illegal_target";
 
 interface CallResult {
   raw: unknown | null;
@@ -93,7 +81,7 @@ export class GeminiBrain implements BotBrain {
    * đó không log vì chưa có gì để đo độ trễ.
    */
   private async call(roomCode: string, spec: PromptSpec): Promise<CallResult | null> {
-    if (!this.opts.governor.canCall(roomCode)) return null;
+    if (this.opts.cooldown.active() || !this.opts.governor.canCall(roomCode)) return null;
     this.opts.governor.recordCall(roomCode);
 
     // Key đi trong header, không nằm trong URL - tránh mọi nguy cơ lọt vào log
@@ -134,11 +122,11 @@ export class GeminiBrain implements BotBrain {
 
       if (res.status === 429) {
         const wait = await retryAfterMs(res);
-        this.opts.governor.backOff(wait);
+        this.opts.cooldown.backOff(wait);
         return {
           raw: null,
           reason: "429",
-          detail: `backoff_${this.opts.governor.cooldownRemainingMs()}ms`,
+          detail: `backoff_${this.opts.cooldown.remainingMs()}ms`,
         };
       }
       // Bốn nguyên nhân rất khác nhau cùng gộp vào "bad_json" (HTTP lỗi, thân
@@ -182,86 +170,42 @@ export class GeminiBrain implements BotBrain {
     return { raw, reason, detail, startedAt };
   }
 
-  /**
-   * Chỉ log: model, độ trễ, kết quả cuối cùng, mã lỗi và chi tiết thô kèm theo.
-   * Không log prompt/key/think.
-   */
-  private logOutcome(startedAt: number, reason: CallOutcome, detail?: string): void {
-    const suffix = detail ? ` detail=${detail}` : "";
-    console.log(`[bot] ${this.opts.model} ${Date.now() - startedAt}ms reason=${reason}${suffix}`);
+  private logger(startedAt: number): LogOutcome {
+    return (outcome, detail) => {
+      const suffix = detail ? ` detail=${detail}` : "";
+      console.log(`[bot] ${this.name} ${Date.now() - startedAt}ms reason=${outcome}${suffix}`);
+    };
   }
 
-  async decideNight(view: RoomSnapshot): Promise<NightDecision | null> {
+  async decideNight(view: RoomSnapshot): Promise<Attempt<NightDecision>> {
     const spec = buildNightPrompt(view);
-    if (!spec) return null;
+    if (!spec) return nothingToDo();
 
     const result = await this.call(view.code, spec);
-    if (!result) return null;
-    const { raw, reason, detail, startedAt } = result;
+    // Bị governor chặn trước khi gọi (hết ngân sách hoặc đang nghỉ vì 429) là
+    // một lượt hỏng: đúng lúc cần thử nhà cung cấp khác nhất.
+    if (!result) return failed();
 
-    const finish = (
-      value: NightDecision | null,
-      outcome: CallOutcome,
-      det?: string,
-    ): NightDecision | null => {
-      this.logOutcome(startedAt, outcome, det);
-      return value;
-    };
-
-    if (raw === null) return finish(null, reason, detail);
-
-    const parsed = nightSchema.safeParse(raw);
-    if (!parsed.success) return finish(null, "bad_shape");
-
-    if (view.you?.role === "WITCH") {
-      const action = parsed.data.action;
-      // Cổng hợp lệ thứ hai: xác nhận hành động Phù Thuỷ chọn còn dùng được
-      // (bình đã dùng thì engine sẽ từ chối) — không tin riêng Zod.
-      if (!action || !witchActions(view).includes(action)) return finish(null, "illegal_target");
-      if (action === "HEAL") return finish({ action: "HEAL", targetId: null }, "ok");
-      if (action !== "POISON") return finish(null, "ok"); // SKIP: bot chủ động không làm gì
-      const target = parsed.data.targetId ?? null;
-      if (!target || !legalNightTargets(view, "POISON").includes(target)) {
-        return finish(null, "illegal_target");
-      }
-      return finish({ action: "POISON", targetId: target }, "ok");
+    const log = this.logger(result.startedAt);
+    if (result.raw === null) {
+      log(result.reason, result.detail);
+      return failed();
     }
-
-    const action = soloNightAction(view.you?.role);
-    if (!action) return finish(null, "illegal_target");
-    const target = parsed.data.targetId ?? null;
-    if (!target || !legalNightTargets(view, action).includes(target)) {
-      return finish(null, "illegal_target");
-    }
-    return finish({ action, targetId: target }, "ok");
+    return interpretNight(view, result.raw, log);
   }
 
-  async decideDay(view: RoomSnapshot): Promise<DayDecision | null> {
+  async decideDay(view: RoomSnapshot): Promise<Attempt<DayDecision>> {
     const spec = buildDayPrompt(view);
-    if (!spec) return null;
+    if (!spec) return nothingToDo();
 
     const result = await this.call(view.code, spec);
-    if (!result) return null;
-    const { raw, reason, detail, startedAt } = result;
+    if (!result) return failed();
 
-    const finish = (
-      value: DayDecision | null,
-      outcome: CallOutcome,
-      det?: string,
-    ): DayDecision | null => {
-      this.logOutcome(startedAt, outcome, det);
-      return value;
-    };
-
-    if (raw === null) return finish(null, reason, detail);
-
-    const parsed = daySchema.safeParse(raw);
-    if (!parsed.success) return finish(null, "bad_shape");
-
-    const vote = parsed.data.voteTargetId ?? null;
-    const legal = vote && legalVoteTargets(view).includes(vote) ? vote : null;
-
-    const chatMax = this.opts.chatMaxLength ?? DEFAULT_CHAT_MAX;
-    return finish({ chat: parsed.data.chat.slice(0, chatMax), voteTargetId: legal }, "ok");
+    const log = this.logger(result.startedAt);
+    if (result.raw === null) {
+      log(result.reason, result.detail);
+      return failed();
+    }
+    return interpretDay(view, result.raw, this.opts.chatMaxLength ?? DEFAULT_CHAT_MAX, log);
   }
 }

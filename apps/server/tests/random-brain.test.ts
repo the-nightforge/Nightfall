@@ -33,19 +33,19 @@ function view(over: Partial<RoomSnapshot> = {}): RoomSnapshot {
 describe("RandomBrain.decideNight", () => {
   it("Sói luôn chọn mục tiêu hợp lệ", async () => {
     const d = await randomBrain.decideNight(view());
-    expect(d).toEqual({ action: "KILL", targetId: "c" });
+    expect(d).toEqual({ ok: true, value: { action: "KILL", targetId: "c" } });
   });
 
   it("trả null khi không được hành động", async () => {
     const v = view({ night: { canAct: false, acted: false } });
-    expect(await randomBrain.decideNight(v)).toBeNull();
+    expect(await randomBrain.decideNight(v)).toEqual({ ok: true, value: null });
   });
 
   it("trả null cho Dân Làng", async () => {
     const v = view({
       you: { id: "a", name: "A", ready: true, connected: true, role: "VILLAGER", alive: true },
     });
-    expect(await randomBrain.decideNight(v)).toBeNull();
+    expect(await randomBrain.decideNight(v)).toEqual({ ok: true, value: null });
   });
 
   it("Phù Thuỷ dùng bình cứu khi còn và không nhận mục tiêu", async () => {
@@ -53,7 +53,7 @@ describe("RandomBrain.decideNight", () => {
       you: { id: "a", name: "A", ready: true, connected: true, role: "WITCH", alive: true },
       night: { canAct: true, acted: false, healUsed: false, poisonUsed: false },
     });
-    expect(await randomBrain.decideNight(v)).toEqual({ action: "HEAL", targetId: null });
+    expect(await randomBrain.decideNight(v)).toEqual({ ok: true, value: { action: "HEAL", targetId: null } });
   });
 
   it("Phù Thuỷ hết cả hai bình thì bỏ lượt", async () => {
@@ -61,19 +61,19 @@ describe("RandomBrain.decideNight", () => {
       you: { id: "a", name: "A", ready: true, connected: true, role: "WITCH", alive: true },
       night: { canAct: true, acted: false, healUsed: true, poisonUsed: true },
     });
-    expect(await randomBrain.decideNight(v)).toBeNull();
+    expect(await randomBrain.decideNight(v)).toEqual({ ok: true, value: null });
   });
 });
 
 describe("RandomBrain.decideDay", () => {
   it("không bao giờ chat", async () => {
     const d = await randomBrain.decideDay(view({ phase: "DAY_DISCUSSION" }));
-    expect(d?.chat).toBeNull();
+    expect(d.value?.chat).toBeNull();
   });
 
   it("chọn phiếu trong danh sách hợp lệ", async () => {
     const d = await randomBrain.decideDay(view({ phase: "VOTING" }));
-    expect(["b", "c"]).toContain(d?.voteTargetId);
+    expect(["b", "c"]).toContain(d.value?.voteTargetId);
   });
 
   it("trả null khi đã chết", async () => {
@@ -81,6 +81,6 @@ describe("RandomBrain.decideDay", () => {
       phase: "VOTING",
       you: { id: "a", name: "A", ready: true, connected: true, role: "WEREWOLF", alive: false },
     });
-    expect(await randomBrain.decideDay(v)).toBeNull();
+    expect(await randomBrain.decideDay(v)).toEqual({ ok: true, value: null });
   });
 });

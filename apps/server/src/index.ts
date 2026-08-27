@@ -36,7 +36,7 @@ async function main(): Promise<void> {
   const redisOk = await pingRedis();
   console.log(`[server] Redis: ${redisOk ? "OK" : "KHÔNG kết nối được - kiểm tra docker compose"}`);
   // Không log key hay bất kỳ phần nào của nó - chỉ nêu tên bộ não đang dùng.
-  console.log(`[server] Bot AI: ${botBrain().name === "gemini" ? "Gemini đang bật" : "chạy ngẫu nhiên (random)"}`);
+  console.log(`[server] Bot AI: ${botBrain().name === "random" ? "chạy ngẫu nhiên (random)" : `chuỗi ${botBrain().name}`}`);
 
   server.listen(config.port, "0.0.0.0", () => {
     console.log(`[server] Ma Sói server đang chạy tại http://localhost:${config.port}`);

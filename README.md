@@ -84,9 +84,23 @@ DATABASE_URL=<Neon pooled connection string>
 REDIS_URL=<Upstash rediss:// connection string>
 NODE_ENV=production
 CORS_ORIGIN=https://YOUR-PROJECT.vercel.app
-GEMINI_API_KEY=<API key Gemini, không bắt buộc - thiếu thì bot chạy ngẫu nhiên>
 BOT_AI_ENABLED=true
+
+# Chuỗi nhà cung cấp cho bot, thử lần lượt từ trên xuống.
+# Thiếu bất kỳ mảnh nào của một chặng thì chặng đó bị bỏ qua.
+# Không chặng nào cấu hình được thì bot chơi ngẫu nhiên và không chat.
+BOT_AI_BASE_URL=<endpoint OpenAI-compatible, kèm /v1>
+BOT_AI_API_KEY=<key của endpoint đó>
+BOT_AI_MODEL=gemini-3.7-flash
+OPENAI_API_KEY=<key OpenAI>
+OPENAI_MODEL=gpt-5.6-luna
+GEMINI_API_KEY=<API key Google AI Studio, dạng AIza...>
+GEMINI_MODEL=gemini-3.5-flash-lite
 ```
+
+Mỗi chặng có hạn nghỉ riêng sau khi bị 429, nên hết quota ở một nhà cung cấp không làm treo các nhà cung cấp còn lại. Trần `BOT_AI_MAX_CALLS_PER_GAME` thì dùng chung cho cả chuỗi vì nó nói về chi phí của một ván.
+
+Không phải endpoint OpenAI-compatible nào cũng thực sự cài đặt `response_format`: có nơi nhận rồi bỏ qua và trả văn xuôi. Chặng `BOT_AI_*` vì thế mô tả JSON ngay trong lời nhắc rồi parse khoan dung, còn chặng OpenAI dùng `json_schema` strict.
 
 `BOT_AI_ENABLED` là công tắc tắt nhanh: đặt `false` để toàn bộ bot quay lại chọn ngẫu nhiên ngay lập tức mà không cần deploy lại hay đổi `GEMINI_API_KEY`. Mặc định bật khi đã có key.
 
