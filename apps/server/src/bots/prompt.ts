@@ -2,7 +2,7 @@ import type { RoomSnapshot } from "@masoi/shared";
 import { legalNightTargets, legalVoteTargets, soloNightAction, witchActions } from "./targets";
 
 export interface GeminiSchema {
-  type: string | string[];
+  type: string;
   properties: Record<string, unknown>;
   required: string[];
 }
@@ -116,9 +116,12 @@ export function buildNightPrompt(view: RoomSnapshot): PromptSpec | null {
 
   if (isWitch) {
     properties.action = { type: "string", enum: witchActions(view) };
-    // Nullable đúng chuẩn Gemini structured output: type là mảng, không nhét
-    // null vào enum (đó là 400 INVALID_ARGUMENT), không dùng field "nullable".
-    properties.targetId = { type: ["string", "null"], enum: targets };
+    // responseSchema chỉ nhận tập con OpenAPI 3.0: "type" phải là giá trị đơn.
+    // Mảng ["string","null"] là cú pháp JSON Schema, chỉ hợp lệ ở responseJsonSchema
+    // - gửi vào đây là 400 INVALID_ARGUMENT. Cờ "nullable" cũng có tiền lệ bị từ
+    // chối, nên không mã hoá nullable ở đâu cả: targetId nằm ngoài "required",
+    // Phù Thuỷ không nhắm ai thì bỏ trống, và nightSchema đã .optional().
+    properties.targetId = { type: "string", enum: targets };
     required.push("action");
   } else {
     properties.targetId = { type: "string", enum: targets };
@@ -157,14 +160,14 @@ export function buildDayPrompt(view: RoomSnapshot): PromptSpec | null {
       chatBlock(view),
       "",
       "Nói một câu góp vào cuộc thảo luận, và chọn người bạn định bỏ phiếu.",
-      "Nếu chưa quyết được thì để voteTargetId là null.",
+      "Nếu chưa quyết được thì bỏ trống voteTargetId, đừng điền bừa.",
     ].join("\n"),
     schema: {
       type: "object",
       properties: {
         think: THINK,
         chat: { type: "string", description: "Lời thoại, tối đa 300 ký tự" },
-        voteTargetId: { type: ["string", "null"], enum: targets },
+        voteTargetId: { type: "string", enum: targets },
       },
       required: ["think", "chat"],
     },

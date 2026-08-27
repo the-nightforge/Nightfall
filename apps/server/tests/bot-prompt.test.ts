@@ -46,6 +46,23 @@ function wolfView(): RoomSnapshot {
   };
 }
 
+/** Snapshot của Phù Thuỷ còn cả hai bình: nhánh duy nhất có targetId không bắt buộc */
+function witchView(): RoomSnapshot {
+  return {
+    ...villagerView(),
+    phase: "NIGHT",
+    you: { id: "v", name: "Vân", ready: true, connected: true, role: "WITCH", alive: true },
+    night: {
+      canAct: true,
+      acted: false,
+      wolfTarget: null,
+      seerResult: null,
+      healUsed: false,
+      poisonUsed: false,
+    },
+  };
+}
+
 describe("ranh giới bảo mật của prompt", () => {
   it("prompt của Dân Làng không chứa vai trò của bất kỳ ai khác", () => {
     const spec = buildDayPrompt(villagerView());
@@ -85,11 +102,28 @@ describe("responseSchema", () => {
     expect(target.enum).toEqual(["v"]);
   });
 
-  it("prompt ngày có voteTargetId nullable đúng chuẩn Gemini: type mảng, null không nằm trong enum", () => {
+  // responseSchema chỉ nhận tập con OpenAPI 3.0, nơi "type" là giá trị đơn.
+  // Mảng ["string","null"] là JSON Schema và bị trả về 400 INVALID_ARGUMENT,
+  // khiến mọi prompt ngày và mọi prompt đêm của Phù Thuỷ hỏng im lặng.
+  it("prompt ngày: voteTargetId là type đơn, không mã hoá nullable, và nằm ngoài required", () => {
     const spec = buildDayPrompt(villagerView());
-    const vote = spec!.schema.properties.voteTargetId as { type: string[]; enum: string[] };
-    expect(vote.type).toEqual(["string", "null"]);
+    const vote = spec!.schema.properties.voteTargetId as {
+      type: string;
+      enum: string[];
+      nullable?: boolean;
+    };
+    expect(vote.type).toBe("string");
     expect(vote.enum).toEqual(["w", "s"]);
+    expect(vote.nullable).toBeUndefined();
+    expect(spec!.schema.required).not.toContain("voteTargetId");
+  });
+
+  it("prompt đêm Phù Thuỷ: targetId là type đơn và nằm ngoài required", () => {
+    const spec = buildNightPrompt(witchView());
+    const target = spec!.schema.properties.targetId as { type: string; nullable?: boolean };
+    expect(target.type).toBe("string");
+    expect(target.nullable).toBeUndefined();
+    expect(spec!.schema.required).not.toContain("targetId");
   });
 
   it("Dân Làng không có prompt đêm", () => {
