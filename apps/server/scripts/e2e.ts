@@ -201,7 +201,7 @@ async function main() {
     } else if (current.phase === "VOTING") {
       for (let i = 0; i < PLAYER_COUNT; i++) {
         const s = watchers[i].last;
-        if (s?.phase !== "VOTING" || !s.you?.alive || s.myVote) continue;
+        if (s?.phase !== "VOTING" || !s.you?.alive || s.hasVoted) continue;
         const targets = s.players.filter((p: any) => p.alive && p.id !== s.you.id);
         const t = targets[Math.floor(Math.random() * targets.length)];
         sockets[i].emit("game:vote", { targetId: t.id });

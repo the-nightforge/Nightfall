@@ -6,7 +6,8 @@ import { PlayerGrid } from "./PlayerGrid";
 
 interface Props {
   snapshot: RoomSnapshot;
-  onVote: (targetId: string) => void;
+  /** null nghĩa là "Không treo ai" - một lựa chọn, không phải huỷ phiếu. */
+  onVote: (targetId: string | null) => void;
   onSkipDiscussion: (skip: boolean) => void;
 }
 
@@ -15,6 +16,9 @@ export function DayView({ snapshot, onVote, onSkipDiscussion }: Props) {
   const isVoting = snapshot.phase === "VOTING";
   const dead = !snapshot.you?.alive;
   const myVote = snapshot.myVote;
+  // Phải dùng cờ này chứ không dùng truthiness của myVote: một phiếu "không treo
+  // ai" cũng có myVote === null, và khoá UI theo myVote sẽ để ngỏ lá phiếu đó.
+  const hasVoted = snapshot.hasVoted;
   const discussionSkip = snapshot.discussionSkip;
 
   return (
@@ -42,25 +46,38 @@ export function DayView({ snapshot, onVote, onSkipDiscussion }: Props) {
           <h3 className="mb-2 font-bold text-white">
             {dead ? "Bạn đã chết - không được bỏ phiếu" : "Chọn người bạn nghi là Ma Sói"}
           </h3>
-          {myVote && !dead && (
+          {hasVoted && !dead && (
             <p className="mb-2 text-sm text-emerald-300">
-              Bạn đã bỏ phiếu cho {snapshot.players.find((p) => p.id === myVote)?.name}. Đang chờ người khác...
+              {myVote
+                ? `Bạn đã bỏ phiếu cho ${snapshot.players.find((p) => p.id === myVote)?.name}.`
+                : "Bạn đã chọn không treo ai."}
+              {" Đang chờ người khác..."}
             </p>
           )}
           <PlayerGrid
             snapshot={snapshot}
-            selectable={!dead && !myVote}
+            selectable={!dead && !hasVoted}
             selectedId={selected ?? myVote}
             onSelect={setSelected}
           />
-          {!dead && !myVote && (
-            <button
-              className="btn-primary mt-3 w-full"
-              disabled={!selected}
-              onClick={() => selected && onVote(selected)}
-            >
-              Bỏ phiếu
-            </button>
+          {!dead && !hasVoted ? (
+            <>
+              <button
+                className="btn-primary mt-3 w-full"
+                disabled={!selected}
+                onClick={() => selected && onVote(selected)}
+              >
+                Bỏ phiếu
+              </button>
+              <button className="btn-secondary mt-2 w-full" onClick={() => onVote(null)}>
+                Không treo ai ({snapshot.noEliminationVoteCount} phiếu)
+              </button>
+            </>
+          ) : (
+            // Người chết và người đã vote chỉ theo dõi tiến độ, không có thao tác.
+            <p className="mt-3 text-center text-xs text-mist/60">
+              Không treo ai: {snapshot.noEliminationVoteCount} phiếu
+            </p>
           )}
         </div>
       )}
@@ -119,7 +136,9 @@ export function EliminationView({ snapshot }: { snapshot: RoomSnapshot }) {
           })()}
         </>
       ) : (
-        <p className="mt-1 font-semibold text-white">Hoà phiếu! Không ai bị loại hôm nay.</p>
+        // Không còn khẳng định hoà phiếu: không ai bị loại giờ có hai lý do
+        // (hoà, hoặc "Không treo ai" thắng) mà snapshot không phân biệt.
+        <p className="mt-1 font-semibold text-white">Không ai bị loại hôm nay.</p>
       )}
     </div>
   );

@@ -59,7 +59,7 @@ export default function RoomPage() {
         return (
           <DayView
             snapshot={snapshot}
-            onVote={(targetId) => room.emit("game:vote", { targetId })}
+            onVote={(targetId: string | null) => room.emit("game:vote", { targetId })}
             onSkipDiscussion={(skip) => room.emit("game:skip-discussion", { skip })}
           />
         );
