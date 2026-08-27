@@ -1,5 +1,8 @@
 FROM node:20.19-alpine AS builder
 
+# Prisma schema engine cần libssl; image alpine không có sẵn OpenSSL
+RUN apk add --no-cache openssl
+
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -21,6 +24,8 @@ RUN npm run build:server
 RUN npm prune --omit=dev
 
 FROM node:20.19-alpine AS runner
+
+RUN apk add --no-cache openssl
 
 WORKDIR /app
 ENV NODE_ENV=production
