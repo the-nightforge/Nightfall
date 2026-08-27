@@ -3,7 +3,8 @@ dist/
 .next/
 .turbo/
 *.tsbuildinfo
-.env
-.env.local
+.env*
+!.env.example
+!**/.env.example
 coverage/
 prisma/migrations/dev.db*

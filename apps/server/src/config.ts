@@ -3,8 +3,14 @@ import dotenv from "dotenv";
 dotenv.config();
 
 export function resolvePort(env: NodeJS.ProcessEnv): number {
-  const value = Number(env.PORT ?? env.SERVER_PORT ?? 4000);
-  return Number.isInteger(value) && value > 0 && value <= 65_535 ? value : 4000;
+  const key = env.PORT !== undefined ? "PORT" : env.SERVER_PORT !== undefined ? "SERVER_PORT" : null;
+  if (!key) return 4000;
+
+  const value = Number(env[key]);
+  if (!Number.isInteger(value) || value <= 0 || value > 65_535) {
+    throw new Error(`${key} phải là số nguyên từ 1 đến 65535`);
+  }
+  return value;
 }
 
 export const config = {

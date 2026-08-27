@@ -22,6 +22,7 @@ import {
 import { getRoomSyncByPlayer, getRoomsCache } from "./index-helpers";
 import { startGame, resetToLobby } from "../game/machine";
 import { allRequiredPlayersReady, roomEntryError } from "./rules";
+import { withPlayerRoomLock } from "./player-room-lock";
 
 export class RoomError extends Error {}
 
@@ -37,53 +38,57 @@ function assertHost(room: Room, playerId: string): void {
 
 export const roomService = {
   async create(playerId: string, name: string): Promise<Room> {
-    if (await this.findRoomOf(playerId)) {
-      throw new RoomError("Bạn phải rời phòng hiện tại trước khi tạo phòng khác");
-    }
-    let code = generateRoomCode();
-    while (getRoom(code) || (await loadRoomFromRedis(code))) {
-      code = generateRoomCode();
-    }
-    const member: RoomMember = { playerId, name, ready: false, connected: true, isBot: false };
-    const room = createRoom(code, member);
-    try {
-      await prisma.roomRecord.create({
-        data: { id: newId(), code, hostName: name },
-      });
-    } catch {
-      /* DB lỗi không chặn chơi */
-    }
-    await persistRoom(room);
-    await updateSessionRoom(playerId, code);
-    broadcastRoom(code);
-    return room;
+    return withPlayerRoomLock(playerId, async () => {
+      if (await this.findRoomOf(playerId)) {
+        throw new RoomError("Bạn phải rời phòng hiện tại trước khi tạo phòng khác");
+      }
+      let code = generateRoomCode();
+      while (getRoom(code) || (await loadRoomFromRedis(code))) {
+        code = generateRoomCode();
+      }
+      const member: RoomMember = { playerId, name, ready: false, connected: true, isBot: false };
+      const room = createRoom(code, member);
+      try {
+        await prisma.roomRecord.create({
+          data: { id: newId(), code, hostName: name },
+        });
+      } catch {
+        /* DB lỗi không chặn chơi */
+      }
+      await persistRoom(room);
+      await updateSessionRoom(playerId, code);
+      broadcastRoom(code);
+      return room;
+    });
   },
 
   async join(playerId: string, name: string, rawCode: string): Promise<Room> {
-    const code = rawCode.trim().toUpperCase();
-    let room = getRoom(code) ?? (await loadRoomFromRedis(code));
-    if (!room) throw new RoomError("Không tìm thấy phòng");
+    return withPlayerRoomLock(playerId, async () => {
+      const code = rawCode.trim().toUpperCase();
+      const room = getRoom(code) ?? (await loadRoomFromRedis(code));
+      if (!room) throw new RoomError("Không tìm thấy phòng");
 
-    // Reconnect: đã là thành viên
-    const existing = room.members.find((m) => m.playerId === playerId);
-    const entryError = roomEntryError(await this.findRoomOf(playerId), code, room.status, !!existing);
-    if (entryError) throw new RoomError(entryError);
-    if (existing) {
-      existing.connected = true;
-      existing.name = name;
-    } else {
-      if (room.members.length >= MAX_PLAYERS_PER_ROOM) throw new RoomError("Phòng đã đầy");
-      const dupName = room.members.some(
-        (m) => m.name.trim().localeCompare(name.trim(), "vi", { sensitivity: "accent" }) === 0,
-      );
-      if (dupName) throw new RoomError("Biệt danh đã có người trong phòng sử dụng");
-      room.members.push({ playerId, name, ready: false, connected: true, isBot: false });
-    }
+      // Reconnect: đã là thành viên
+      const existing = room.members.find((m) => m.playerId === playerId);
+      const entryError = roomEntryError(await this.findRoomOf(playerId), code, room.status, !!existing);
+      if (entryError) throw new RoomError(entryError);
+      if (existing) {
+        existing.connected = true;
+        existing.name = name;
+      } else {
+        if (room.members.length >= MAX_PLAYERS_PER_ROOM) throw new RoomError("Phòng đã đầy");
+        const dupName = room.members.some(
+          (m) => m.name.trim().localeCompare(name.trim(), "vi", { sensitivity: "accent" }) === 0,
+        );
+        if (dupName) throw new RoomError("Biệt danh đã có người trong phòng sử dụng");
+        room.members.push({ playerId, name, ready: false, connected: true, isBot: false });
+      }
 
-    await persistRoom(room);
-    await updateSessionRoom(playerId, code);
-    broadcastRoom(code);
-    return room;
+      await persistRoom(room);
+      await updateSessionRoom(playerId, code);
+      broadcastRoom(code);
+      return room;
+    });
   },
 
   async leave(playerId: string): Promise<void> {

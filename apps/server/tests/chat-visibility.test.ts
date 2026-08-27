@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG, type ChatMessage } from "@masoi/shared";
-import { visibleChatLog } from "../src/rooms/snapshot";
+import { resolveChat, visibleChatLog } from "../src/rooms/snapshot";
 import type { Room } from "../src/rooms/store";
 
 const messages: ChatMessage[] = [
@@ -86,5 +86,17 @@ describe("visibleChatLog", () => {
 
   it("only returns lobby chat after the game", () => {
     expect(channels(visibleChatLog(room("GAME_OVER"), "villager"))).toEqual(["lobby"]);
+  });
+});
+
+describe("resolveChat", () => {
+  it("does not send living-player daytime chat to dead players", () => {
+    const result = resolveChat(room("DAY_DISCUSSION"), "villager");
+
+    expect(result).toEqual({
+      ok: true,
+      channel: "day",
+      recipients: ["wolf", "villager"],
+    });
   });
 });

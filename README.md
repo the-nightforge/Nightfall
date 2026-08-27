@@ -71,7 +71,7 @@ Kiến trúc triển khai: **Vercel (web) → Northflank (server) → Neon (Post
 ### 3. Northflank backend
 
 1. Tạo service từ repository GitHub này và chọn build bằng Dockerfile `Dockerfile.server`.
-2. Dùng một instance, public HTTP port lấy từ biến `$PORT`, giao thức HTTP/1.1 và health path `/api/health`.
+2. Dùng một instance, cấu hình public HTTP port trỏ vào internal port `4000`, giao thức HTTP/1.1 và health path `/api/health`.
 3. Thêm các biến môi trường:
 
 ```text
@@ -81,7 +81,7 @@ NODE_ENV=production
 CORS_ORIGIN=https://YOUR-PROJECT.vercel.app
 ```
 
-Northflank tự cấp `PORT`, không cần tự đặt. Lần khởi động container sẽ chạy `prisma migrate deploy` trước khi mở server. Ghi lại HTTPS domain của backend, ví dụ `https://ma-soi-server-example.code.run`.
+Image lắng nghe cổng `4000` theo mặc định và `Dockerfile.server` khai báo cùng cổng; nếu Northflank cấp biến `PORT`, server sẽ ưu tiên giá trị đó. Lần khởi động container sẽ chạy `prisma migrate deploy` trước khi mở server. Ghi lại HTTPS domain của backend, ví dụ `https://ma-soi-server-example.code.run`.
 
 ### 4. Vercel frontend
 
@@ -128,13 +128,13 @@ Kết nối: `io(SERVER_URL, { auth: { playerId, token } })`.
 | Event | Payload (Zod validated) | Quyền |
 |---|---|---|
 | `room:create` | `{}` | - |
-| `room:join` | `{ code: string(5) }` | Biệt danh không trùng trong phòng |
+| `room:join` | `{ code: string(5) }` | Biệt danh không trùng; phải rời phòng cũ; người mới không thể vào trận đang chạy |
 | `room:leave` | `{}` | Thành viên |
 | `room:set-ready` | `{ ready: boolean }` | Thành viên, ngoài trận |
 | `room:kick` | `{ targetId }` | Chủ phòng, trước khi bắt đầu |
 | `room:update-config` | `{ config: RoomConfig }` | Chủ phòng, ngoài trận |
 | `room:add-bot` | `{}` | Chủ phòng, ngoài trận |
-| `room:start` | `{}` | Chủ phòng; cần ≥6 người + config hợp lệ |
+| `room:start` | `{}` | Chủ phòng; cần ≥6 người, config hợp lệ và mọi khách thật đã sẵn sàng |
 | `room:reset` | `{}` | Chủ phòng, sau GAME_OVER → về phòng chờ |
 | `game:action` | `{ type: KILL\|SEE\|GUARD\|HEAL\|POISON, targetId?: string\|null }` | Đúng vai trò, còn sống, đang NIGHT |
 | `game:vote` | `{ targetId }` | Còn sống, đang VOTING |

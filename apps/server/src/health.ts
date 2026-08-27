@@ -4,5 +4,5 @@ export interface DependencyHealth {
 }
 
 export function healthHttpStatus(health: DependencyHealth): 200 | 503 {
-  return health.db && health.redis ? 200 : 503;
+  return health.db ? 200 : 503;
 }

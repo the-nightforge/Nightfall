@@ -40,5 +40,5 @@ apiRouter.get("/health", async (_req, res) => {
   }
   const redisOk = await pingRedis();
   const health = { db: dbOk, redis: redisOk };
-  res.status(healthHttpStatus(health)).json({ ok: dbOk && redisOk, ...health });
+  res.status(healthHttpStatus(health)).json({ ok: dbOk, ...health });
 });

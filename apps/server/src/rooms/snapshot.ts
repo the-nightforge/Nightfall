@@ -47,7 +47,10 @@ export function resolveChat(room: Room, senderId: string):
   }
 
   if (view.phase === "DAY_DISCUSSION" || view.phase === "VOTING" || view.phase === "ROLE_REVEAL" || view.phase === "NIGHT_RESULT" || view.phase === "ELIMINATION") {
-    return { ok: true, channel: "day", recipients: room.members.filter((m) => !m.isBot).map((m) => m.playerId) };
+    const recipients = room.members
+      .filter((m) => !m.isBot && room.engine!.snapshotFor(m.playerId).you?.alive)
+      .map((m) => m.playerId);
+    return { ok: true, channel: "day", recipients };
   }
 
   return { ok: false, error: "Hiện tại không thể trò chuyện" };
