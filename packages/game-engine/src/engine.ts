@@ -8,6 +8,7 @@ import {
   type HunterShotRecap,
   type HunterShotView,
   type NightRecap,
+  type PublicVoteChoice,
   type RecapPlayer,
   type Role,
   type RoomConfig,
@@ -114,6 +115,9 @@ export class GameEngine {
   constructor(state: GameState) {
     this.state = state;
     this.state.nightHistory ??= [];
+    this.state.phaseStartedAt ??= this.state.phaseEndsAt ?? Date.now();
+    this.state.voteMutations ??= [];
+    this.state.dayVoteHistory ??= [];
     this.state.hunterReaction ??= null;
     this.state.hunterShots ??= [];
     // State lưu trước khi có phiên toà không có hai trường này.
@@ -144,6 +148,7 @@ export class GameEngine {
       phase: "ROLE_REVEAL",
       round: 0,
       phaseEndsAt: now + ROLE_REVEAL_MS,
+      phaseStartedAt: now,
       players: players.map((p) => ({
         ...p,
         role: roles[p.id],
@@ -154,6 +159,8 @@ export class GameEngine {
       winner: null,
       night: emptyNight(),
       votes: {},
+      voteMutations: [],
+      dayVoteHistory: [],
       guardPrevious: null,
       healUsed: false,
       poisonUsed: false,
@@ -207,6 +214,7 @@ export class GameEngine {
 
   setPhase(phase: GamePhase, durationMs: number, now = Date.now()) {
     this.state.phase = phase;
+    this.state.phaseStartedAt = now;
     this.state.phaseEndsAt = now + durationMs;
     if (phase === "NIGHT") {
       this.state.round += 1;
@@ -219,6 +227,7 @@ export class GameEngine {
     }
     if (phase === "VOTING") {
       this.state.votes = {};
+      this.state.voteMutations = [];
     }
     // Một phiên toà không bao giờ được sống sót sang ngày kế tiếp: mỗi ngày
     // đúng một phiên, và phiên đó bắt đầu từ vote sơ bộ.
@@ -491,19 +500,33 @@ export class GameEngine {
   // ---- Bình chọn ban ngày ----
 
   /** targetId null nghĩa là chọn "Không treo ai", không phải bỏ trống phiếu. */
-  submitVote(voterId: string, targetId: string | null): void {
+  submitVote(voterId: string, targetId: string | null, now = Date.now()): void {
     const st = this.state;
     if (st.phase !== "VOTING") throw new GameError("Chỉ được bỏ phiếu trong pha bỏ phiếu");
     const voter = this.mustPlayer(voterId);
     if (!voter.alive) throw new GameError("Người chết không được bỏ phiếu");
-    // So với undefined, không dùng truthiness: một phiếu không treo đã lưu là
-    // null, và coi nó như chưa vote sẽ cho phép đổi phiếu vòng qua luật này.
-    if (st.votes[voterId] !== undefined) throw new GameError("Bạn đã bỏ phiếu");
     if (targetId !== null) {
       const target = this.player(targetId);
       if (!target) throw new GameError("Mục tiêu không tồn tại");
       if (!target.alive) throw new GameError("Không thể bỏ phiếu cho người đã chết");
     }
+    const previousTarget = st.votes[voterId];
+    if (previousTarget !== undefined && previousTarget === targetId) return;
+
+    const toChoice = (id: string | null): PublicVoteChoice =>
+      id === null ? { type: "NO_ELIMINATION" } : { type: "PLAYER", targetId: id };
+    const sequence = st.voteMutations.length + 1;
+    st.voteMutations.push({
+      id: `${st.round}:nomination:${sequence}`,
+      round: st.round,
+      voterId,
+      previousChoice: previousTarget === undefined ? null : toChoice(previousTarget),
+      choice: toChoice(targetId),
+      castAt: now,
+      phaseStartedAt: st.phaseStartedAt,
+      phaseEndsAt: st.phaseEndsAt ?? now,
+      sequence,
+    });
     st.votes[voterId] = targetId;
   }
 

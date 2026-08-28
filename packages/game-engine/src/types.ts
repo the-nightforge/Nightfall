@@ -1,4 +1,12 @@
-import type { GamePhase, HunterShotRecap, NightRecap, RoomConfig, Winner } from "@masoi/shared";
+import type {
+  DayVoteRecap,
+  GamePhase,
+  HunterShotRecap,
+  NightRecap,
+  RoomConfig,
+  VoteMutation,
+  Winner,
+} from "@masoi/shared";
 import type { Role } from "@masoi/shared";
 
 export interface EnginePlayer {
@@ -101,6 +109,7 @@ export interface GameState {
   phase: GamePhase;
   round: number;
   phaseEndsAt: number | null;
+  phaseStartedAt: number;
   players: EnginePlayer[];
   config: RoomConfig;
   winner: Winner;
@@ -117,6 +126,8 @@ export interface GameState {
    * undefined chứ không được dùng truthiness.
    */
   votes: Record<string, string | null>;
+  voteMutations: VoteMutation[];
+  dayVoteHistory: DayVoteRecap[];
   guardPrevious: string | null;
   healUsed: boolean;
   poisonUsed: boolean;

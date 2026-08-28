@@ -26,6 +26,13 @@ function makeEngine(playerCount = 6, config = CONFIG) {
   return engine;
 }
 
+function votingEngine() {
+  const engine = makeEngine();
+  engine.setPhase("DAY_DISCUSSION", 60_000, 0);
+  engine.setPhase("VOTING", 30_000, 0);
+  return engine;
+}
+
 /** Đưa phiên toà đi hết một lượt với mọi cử tri hợp lệ bỏ phiếu Treo. */
 function convict(engine: GameEngine) {
   engine.beginFinalVote(20_000);
@@ -524,6 +531,28 @@ describe("Bỏ phiếu", () => {
     engine.setPhase("VOTING", 30_000);
   }
 
+  it("cho phép đổi phiếu và chỉ tính lựa chọn mới nhất", () => {
+    const e = votingEngine();
+    const started = e.state.phaseStartedAt;
+
+    e.submitVote("p1", "p2", started + 1_000);
+    e.submitVote("p1", "p3", started + 8_000);
+
+    expect(e.voteTally().players).toEqual({ p3: 1 });
+    expect(e.state.voteMutations).toMatchObject([
+      { id: "1:nomination:1", voterId: "p1", previousChoice: null, choice: { type: "PLAYER", targetId: "p2" }, sequence: 1 },
+      { id: "1:nomination:2", voterId: "p1", previousChoice: { type: "PLAYER", targetId: "p2" }, choice: { type: "PLAYER", targetId: "p3" }, sequence: 2 },
+    ]);
+  });
+
+  it("gửi lại cùng lựa chọn là no-op", () => {
+    const e = votingEngine();
+    e.submitVote("p1", null, 1_000);
+    e.submitVote("p1", null, 2_000);
+    expect(e.state.voteMutations).toHaveLength(1);
+    expect(e.voteTally().noElimination).toBe(1);
+  });
+
   it("người có nhiều phiếu nhất bị đưa ra toà chứ chưa chết", () => {
     const e = makeEngine(6);
     toVoting(e);
@@ -617,16 +646,18 @@ describe("Bỏ phiếu", () => {
     expect(e.state.phase).toBe("ELIMINATION");
   });
 
-  it("không cho người chết vote không treo hoặc người sống đổi phiếu", () => {
+  it("không cho người chết vote không treo và cho người sống đổi phiếu", () => {
     const e = makeEngine(6);
     toVoting(e);
     e.state.players[5].alive = false;
     expect(() => e.submitVote("p6", null)).toThrow(/chết/);
 
     e.submitVote("p1", null);
-    expect(() => e.submitVote("p1", "p2")).toThrow(/đã bỏ phiếu/);
+    e.submitVote("p1", "p2");
+    expect(e.voteTally()).toEqual({ players: { p2: 1 }, noElimination: 0 });
     e.submitVote("p2", "p3");
-    expect(() => e.submitVote("p2", null)).toThrow(/đã bỏ phiếu/);
+    e.submitVote("p2", null);
+    expect(e.voteTally()).toEqual({ players: { p2: 1 }, noElimination: 1 });
   });
 
   it("snapshot phân biệt chưa vote và đã chọn không treo", () => {

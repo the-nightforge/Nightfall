@@ -63,6 +63,42 @@ export interface RecapPlayer {
   name: string;
 }
 
+export type PublicVoteChoice =
+  | { type: "PLAYER"; targetId: string }
+  | { type: "NO_ELIMINATION" };
+
+export interface VoteMutation {
+  id: string;
+  round: number;
+  voterId: string;
+  previousChoice: PublicVoteChoice | null;
+  choice: PublicVoteChoice;
+  castAt: number;
+  phaseStartedAt: number;
+  phaseEndsAt: number;
+  sequence: number;
+}
+
+export type NominationRecap =
+  | { kind: "TRIAL"; accusedId: string }
+  | { kind: "NONE"; reason: "no-elimination" | "tie" | "no-votes" };
+
+export interface FinalJudgmentRecap {
+  ballots: Array<{ voterId: string; guilty: boolean }>;
+  guilty: number;
+  innocent: number;
+  abstain: number;
+  lynched: boolean;
+}
+
+export interface DayVoteRecap {
+  round: number;
+  mutations: VoteMutation[];
+  finalBallots: Array<{ voterId: string; choice: PublicVoteChoice }>;
+  nomination: NominationRecap;
+  finalJudgment: FinalJudgmentRecap | null;
+}
+
 /** Phiên toà đang diễn ra; chỉ có dữ liệu trong DEFENSE và FINAL_VOTE. */
 export interface TrialView {
   accusedId: string;
