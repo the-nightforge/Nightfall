@@ -127,8 +127,13 @@ export interface BotWeights {
     memoryDecayPerRound: number;
     staleAfterRounds: number;
   };
-  readonly selfPreservation: { guardSelfHostilityThreshold: number; guardSelfBonus: number };
-  readonly teammateProtection: { voteBiasPenalty: number; base: number; loyaltySpan: number };
+  readonly selfPreservation: {
+    guardSelfHostilityThreshold: number;
+    guardSelfBonusBase: number;
+    guardSelfBonusSpan: number;
+    guardSuspicionPenalty: number;
+  };
+  readonly teammateProtection: { voteBiasPenalty: number; penaltyBase: number; loyaltySpan: number };
   /** Sói dám lộ tới đâu. `bussingSuspicionFloor` là mức bằng chứng mà trên đó
    *  hy sinh đồng đội rẻ hơn bảo vệ nó. */
   readonly deceptionRisk: {
@@ -153,7 +158,14 @@ export interface BotWeights {
 }
 ```
 
-`validateWeights` từ chối: `NaN`, `Infinity`, xác suất/tỉ lệ ngoài `[0,1]`, `version` rỗng. Nó chạy trong constructor của `BotRuntime` — một cấu hình hỏng phải đỏ ngay tại điểm cấu hình, không phải đỏ ở vòng 7 của ván thứ 214.
+Ngoài các nhóm trên còn có `memoryImportance`, `nightConfidence`, `personalityRange` và `limits`. Interface thật trong `config/weights.ts` là hợp đồng đầy đủ; đoạn trên là bản rút gọn cho dễ đọc.
+
+`validateWeights` từ chối: `NaN`, `Infinity`, xác suất/tỉ lệ ngoài `[0,1]`, `version` rỗng, và nhóm bắt buộc bị thiếu. Nó chạy trong constructor của `BotRuntime` — một cấu hình hỏng phải đỏ ngay tại điểm cấu hình, không phải đỏ ở vòng 7 của ván thứ 214. Khi hình dạng đã sai, nó trả về danh sách nhóm thiếu chứ **không** ném: đầu vào có khả năng thiếu nhóm nhất là một file JSON do CLI nạp, tức đúng lúc người dùng cần thông báo đọc được nhất.
+
+**Hai điểm bất biến có test riêng:**
+
+- `Object.freeze` là nông. Mọi nhóm đều phẳng trừ `evidence`; bảng đó được đóng băng tới từng ô, nếu không thì một dòng `DEFAULT_BOT_WEIGHTS.evidence.ACCUSE.weight = 999` ở bất kỳ đâu trong process cũng làm hỏng vĩnh viễn cấu hình dùng chung — đúng kiểu hỏng mà quy tắc "đọc-chỉ" tuyên bố đã loại trừ.
+- `resolveWeights` gắn hậu tố `+custom` vào `version` khi có giá trị bị chỉnh mà caller không tự đặt version. Không có nó, một cấu hình chỉnh tay vẫn tự xưng `"1.0.0"` và report sẽ gán số liệu của nó cho v1.
 
 ### 4.2 Cách luồn qua hệ thống
 

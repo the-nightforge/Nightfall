@@ -133,10 +133,24 @@ describe("validateWeights", () => {
   });
 
   it("bắt confidence của evidence nằm ngoài [0, 1]", () => {
-    const broken = resolveWeights({
-      evidence: { ...BOT_WEIGHTS_V1.evidence, ACCUSE: { weight: 4, confidence: 3 } },
-    });
+    const broken = resolveWeights({ evidence: { ACCUSE: { weight: 4, confidence: 3 } } });
     expect(validateWeights(broken).join(" ")).toContain("evidence.ACCUSE.confidence");
+  });
+
+  it("bắt nightConfidence ngoài [0, 1]", () => {
+    // `nightConfidence` được gán THẲNG vào intention không qua clamp, nên 1.5 ở
+    // đây sinh ra một xác suất > 1 và chỉ bị phát hiện ở tận tầng invariant.
+    const broken = resolveWeights({ nightConfidence: { seer: 1.5 } });
+    expect(validateWeights(broken).join(" ")).toContain("nightConfidence.seer");
+  });
+
+  it("báo thiếu nhóm thay vì ném khi cấu hình sai hình dạng", () => {
+    // Đầu vào có khả năng thiếu nhóm nhất là một file JSON do CLI nạp - đúng
+    // lúc người dùng cần một danh sách đọc được nhất, không phải một TypeError.
+    const shapeless = { version: "x" } as unknown as BotWeights;
+    const problems = validateWeights(shapeless);
+    expect(problems.join(" ")).toContain("thiếu nhóm bắt buộc");
+    expect(problems.some((item) => item.includes("roleThresholds"))).toBe(true);
   });
 
   it("bắt version rỗng", () => {
@@ -168,6 +182,57 @@ describe("resolveWeights", () => {
     const resolved = resolveWeights({ confidence: { hunterMargin: 99 } });
     expect(resolved.confidence.hunterMargin).toBe(99);
     expect(resolved.confidence.jitterSpan).toBe(BOT_WEIGHTS_V1.confidence.jitterSpan);
+  });
+
+  it("vá một phần bảng evidence giữ nguyên tám kind còn lại", () => {
+    // Đây là cách dùng thật của Task 8. Trải cả bảng ra trước khi vá sẽ khiến
+    // test xanh dù `resolveWeights` THAY THẾ cả nhóm thay vì merge.
+    const resolved = resolveWeights({ evidence: { ACCUSE: { weight: 9, confidence: 0.9 } } });
+    expect(resolved.evidence.ACCUSE).toEqual({ weight: 9, confidence: 0.9 });
+    expect(resolved.evidence.TIE_BREAK).toEqual(BOT_WEIGHTS_V1.evidence.TIE_BREAK);
+    expect(Object.keys(resolved.evidence).sort()).toEqual(
+      Object.keys(BOT_WEIGHTS_V1.evidence).sort(),
+    );
+  });
+
+  it("đánh dấu version khi giá trị bị chỉnh, để report không gán nhầm cho v1", () => {
+    // Một con số win-rate không truy được về cấu hình sinh ra nó là vô dụng.
+    expect(resolveWeights({ trust: { damping: 0.9 } }).version).toBe("1.0.0+custom");
+    // Đặt version tường minh thì tôn trọng caller.
+    expect(resolveWeights({ version: "2.0.0", trust: { damping: 0.9 } }).version).toBe("2.0.0");
+    // Không đổi giá trị nào thì không gắn nhãn.
+    expect(resolveWeights({}).version).toBe("1.0.0");
+  });
+});
+
+describe("cấu hình thật sự bất biến", () => {
+  it("không ghi được vào một ô của bảng evidence", () => {
+    // `Object.freeze` là NÔNG. Mọi nhóm khác đều phẳng nên một lần freeze là đủ;
+    // `evidence` là ngoại lệ, và không bịt thì một dòng ở bất kỳ đâu trong
+    // process cũng làm hỏng vĩnh viễn cấu hình dùng chung.
+    expect(Object.isFrozen(BOT_WEIGHTS_V1.evidence)).toBe(true);
+    expect(Object.isFrozen(BOT_WEIGHTS_V1.evidence.ACCUSE)).toBe(true);
+
+    const before = BOT_WEIGHTS_V1.evidence.ACCUSE.weight;
+    expect(() => {
+      (BOT_WEIGHTS_V1.evidence.ACCUSE as { weight: number }).weight = 999;
+    }).toThrow();
+    expect(BOT_WEIGHTS_V1.evidence.ACCUSE.weight).toBe(before);
+  });
+
+  it("không ghi được vào một nhóm phẳng", () => {
+    expect(() => {
+      (BOT_WEIGHTS_V1.trust as { damping: number }).damping = 999;
+    }).toThrow();
+    expect(BOT_WEIGHTS_V1.trust.damping).toBe(0.2);
+  });
+
+  it("nhóm không bị vá vẫn dùng CHUNG tham chiếu, nên phải bất biến", () => {
+    // `resolveWeights` chia sẻ tham chiếu cho nhóm không đổi. Đó là lý do freeze
+    // phải đúng: sửa qua cấu hình dẫn xuất sẽ sửa luôn bản gốc.
+    const derived = resolveWeights({ trust: { damping: 0.9 } });
+    expect(derived.evidence).toBe(BOT_WEIGHTS_V1.evidence);
+    expect(Object.isFrozen(derived.evidence.DEFEND)).toBe(true);
   });
 });
 

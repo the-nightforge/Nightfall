@@ -22,9 +22,9 @@ import type { PublicEvidenceKind } from "../types";
 
 export interface EvidenceWeight {
   /** Điểm suspicion cộng vào trước khi nhân confidence và inertia. */
-  weight: number;
+  readonly weight: number;
   /** `0..1`. Vừa nhân vào delta, vừa là đầu vào của bonus tin cậy khi chấm phiếu. */
-  confidence: number;
+  readonly confidence: number;
 }
 
 /**
@@ -33,7 +33,21 @@ export interface EvidenceWeight {
  * Đây là bảng DUY NHẤT; `chat-analysis` và `BotRuntime` trước đây giữ bản sao
  * riêng của cùng những con số này, và ba bản sao đã trôi lệch khỏi nhau.
  */
-export type EvidenceWeightTable = Record<PublicEvidenceKind, EvidenceWeight>;
+export type EvidenceWeightTable = Readonly<Record<PublicEvidenceKind, EvidenceWeight>>;
+
+/**
+ * Đóng băng cả bảng lẫn từng ô.
+ *
+ * `Object.freeze` là NÔNG. Mọi nhóm khác trong `BotWeights` đều phẳng nên một
+ * lần freeze là đủ, `evidence` là ngoại lệ duy nhất: freeze bảng chỉ chặn việc
+ * thay cả ô, không chặn `table.ACCUSE.weight = 999`. Không có hàm này thì một
+ * dòng ở bất kỳ đâu trong process cũng làm hỏng vĩnh viễn `DEFAULT_BOT_WEIGHTS`
+ * - đúng kiểu hỏng mà quy tắc 1 ở đầu file tuyên bố đã loại trừ.
+ */
+function freezeEvidenceTable(table: Record<PublicEvidenceKind, EvidenceWeight>): EvidenceWeightTable {
+  for (const entry of Object.values(table)) Object.freeze(entry);
+  return Object.freeze(table);
+}
 
 /** Độ quan trọng của memory. Quyết định cái gì bị quên trước khi cắt ngân sách. */
 export interface MemoryImportanceWeights {
@@ -191,6 +205,14 @@ export interface RoleThresholdWeights {
   /** Thiên Thần chỉ có hai lượt cả ván nên ngưỡng cao hơn Bảo Vệ. */
   guardianAngelWorthACharge: number;
   guardianAngelHostilityBonus: number;
+  /**
+   * Trường RIÊNG dù trùng giá trị với `selfPreservation.guardSuspicionPenalty`.
+   *
+   * Hai vai đỡ đòn theo hai kinh tế khác nhau: Bảo Vệ đỡ mỗi đêm, Thiên Thần
+   * chỉ có hai lượt. Dùng chung một khoá sẽ khiến việc hiệu chỉnh Bảo Vệ ở
+   * Task 8 lặng lẽ dịch cả Thiên Thần.
+   */
+  guardianAngelSuspicionPenalty: number;
   /** Giá trị thông tin cao nhất nằm ở giữa, không ở hai đầu. */
   seerMostInformativeSuspicion: number;
   seerUncertaintySlope: number;
@@ -234,6 +256,14 @@ export interface MemoryLimits {
   seenEvents: number;
   /** Số evidence tối đa mang theo một intention. */
   intentionEvidence: number;
+  /**
+   * Số nghi phạm đầu bảng ghi vào tóm tắt vòng.
+   *
+   * Trường riêng dù trùng giá trị với `intentionEvidence`: "bao nhiêu nghi phạm
+   * vào bản tóm tắt" và "bao nhiêu bằng chứng đi kèm một nước đi" là hai câu
+   * hỏi khác nhau, và gộp chúng khiến chỉnh cái này đổi luôn cái kia.
+   */
+  topSuspects: number;
 }
 
 export interface BotWeights {
@@ -288,8 +318,42 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   ["selfPreservation", "guardSuspicionPenalty"],
   ["deceptionRisk", "abstainPressureCeiling"],
   ["roleThresholds", "guardianAngelWorthACharge"],
+  ["roleThresholds", "guardianAngelSuspicionPenalty"],
   ["personalityRange", "min"],
   ["personalityRange", "max"],
+  // `nightConfidence` được gán THẲNG vào `BotNightIntention.confidence` mà không
+  // qua clamp nào. Một giá trị 1.5 ở đây sinh ra một intention có xác suất > 1,
+  // và invariant `NUMERIC_SANITY` sẽ bắt nó ở tận vòng mô phỏng thứ n.
+  ["nightConfidence", "seer"],
+  ["nightConfidence", "detective"],
+  ["nightConfidence", "guard"],
+  ["nightConfidence", "guardianAngel"],
+  ["nightConfidence", "witchHeal"],
+  ["nightConfidence", "witchPoison"],
+  ["nightConfidence", "witchSkip"],
+  ["nightConfidence", "priest"],
+  ["nightConfidence", "nightEvidence"],
+];
+
+/** Nhóm mà mọi kiểm tra sâu bên dưới giả định là có mặt. */
+const REQUIRED_GROUPS: ReadonlyArray<keyof BotWeights> = [
+  "evidence",
+  "memoryImportance",
+  "privateInfo",
+  "suspicion",
+  "trust",
+  "voteHistory",
+  "social",
+  "recency",
+  "selfPreservation",
+  "teammateProtection",
+  "deceptionRisk",
+  "aggression",
+  "confidence",
+  "roleThresholds",
+  "nightConfidence",
+  "personalityRange",
+  "limits",
 ];
 
 function isFiniteNumber(value: unknown): value is number {
@@ -325,6 +389,24 @@ export function validateWeights(weights: BotWeights): string[] {
   };
   for (const [group, value] of Object.entries(weights)) walk(value, group);
 
+  // Dừng sớm khi HÌNH DẠNG đã sai.
+  //
+  // Các kiểm tra dưới đây truy cập thẳng vào nhóm con, nên một nhóm thiếu sẽ
+  // ném `TypeError` thay vì trả về danh sách vấn đề - và đầu vào có khả năng
+  // thiếu nhóm nhất chính là một file JSON do CLI nạp, tức đúng lúc người dùng
+  // cần một thông báo đọc được nhất.
+  const missingGroup = REQUIRED_GROUPS.some(
+    (group) => weights[group] === null || typeof weights[group] !== "object",
+  );
+  if (missingGroup) {
+    for (const group of REQUIRED_GROUPS) {
+      if (weights[group] === null || typeof weights[group] !== "object") {
+        problems.push(`thiếu nhóm bắt buộc "${String(group)}"`);
+      }
+    }
+    return problems;
+  }
+
   for (const [group, field] of UNIT_INTERVAL_FIELDS) {
     const value = (weights[group] as Record<string, unknown>)[field];
     if (!isFiniteNumber(value)) continue;
@@ -357,14 +439,29 @@ export function resolveWeights(
   base: BotWeights = DEFAULT_BOT_WEIGHTS,
 ): BotWeights {
   const merged = { ...base } as Record<string, unknown>;
+  let changedValues = false;
+
   for (const [group, patch] of Object.entries(over)) {
     if (patch === undefined) continue;
     if (typeof patch === "string") {
       merged[group] = patch;
       continue;
     }
+    changedValues = true;
     merged[group] = { ...(base[group as keyof BotWeights] as object), ...patch };
   }
+
+  // Đánh dấu cấu hình đã bị chỉnh, trừ khi caller tự đặt version.
+  //
+  // Quy tắc 3 của module là "đổi một giá trị là đổi version", và §4.3 của spec
+  // giải thích vì sao: một con số win-rate không truy được về cấu hình sinh ra
+  // nó là một con số vô dụng. Không có dòng này, `resolveWeights({trust:{...}})`
+  // trả về một cấu hình vẫn tự xưng "1.0.0", và report của Task 7 - vốn khoá
+  // theo `version` - sẽ gán số liệu của một bản chỉnh tay cho v1.
+  if (changedValues && over.version === undefined) {
+    merged.version = `${base.version}+custom`;
+  }
+
   return merged as unknown as BotWeights;
 }
 
@@ -378,7 +475,7 @@ export function resolveWeights(
 export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
   version: "1.0.0",
 
-  evidence: Object.freeze({
+  evidence: freezeEvidenceTable({
     TIE_BREAK: { weight: 10, confidence: 0.7 },
     SAVE_VOTE: { weight: 9, confidence: 0.65 },
     LATE_SWITCH: { weight: 7, confidence: 0.6 },
@@ -388,7 +485,7 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     COUNTER_CLAIM: { weight: 6, confidence: 0.5 },
     ACCUSE: { weight: 4, confidence: 0.45 },
     DEFEND: { weight: 3, confidence: 0.4 },
-  }) as EvidenceWeightTable,
+  }),
 
   memoryImportance: Object.freeze({
     roleClaim: 8,
@@ -483,6 +580,7 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     priestTrustVeto: 30,
     guardianAngelWorthACharge: 0.35,
     guardianAngelHostilityBonus: 80,
+    guardianAngelSuspicionPenalty: 0.5,
     seerMostInformativeSuspicion: 50,
     seerUncertaintySlope: 2,
     wolfClaimedPowerScore: 100,
@@ -514,6 +612,7 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     memory: 120,
     seenEvents: 2_000,
     intentionEvidence: 3,
+    topSuspects: 3,
   }),
 }) as BotWeights;
 

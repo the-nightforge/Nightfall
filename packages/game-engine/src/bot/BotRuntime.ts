@@ -301,9 +301,7 @@ export class BotRuntime {
         pinned: true,
         data: {
           theory: this.state.currentTheory?.summary ?? null,
-          topSuspects: ranked
-            .slice(0, this.weights.limits.intentionEvidence)
-            .map(([id]) => id),
+          topSuspects: ranked.slice(0, this.weights.limits.topSuspects).map(([id]) => id),
         },
       },
       this.weights,

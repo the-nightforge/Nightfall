@@ -37,7 +37,7 @@ export function guardianAngelStrategy(
             hostility,
             score:
               trust -
-              suspicion * weights.selfPreservation.guardSuspicionPenalty +
+              suspicion * weights.roleThresholds.guardianAngelSuspicionPenalty +
               hostility * weights.roleThresholds.guardianAngelHostilityBonus +
               (rng() - 0.5) * weights.confidence.jitterSpan,
           };

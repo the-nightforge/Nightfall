@@ -135,7 +135,11 @@ export function analyzeVoteRecap(
           mutation.voterId,
           target,
           recap.round,
-          "Đổi phiếu trong 20% thời gian cuối của vòng đề cử.",
+          // Nội suy từ chính trọng số: đây là lý do BOT nói ra cho người chơi
+          // nghe, nên nó không được mâu thuẫn với ngưỡng đã dùng để kết luận.
+          `Đổi phiếu trong ${Math.round(
+            (1 - weights.voteHistory.lateSwitchRatio) * 100,
+          )}% thời gian cuối của vòng đề cử.`,
         ),
       );
     }
