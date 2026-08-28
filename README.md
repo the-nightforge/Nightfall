@@ -191,8 +191,11 @@ Kết nối: `io(SERVER_URL, { auth: { playerId, token } })`.
 - Bảo Vệ bảo vệ 1 người, không lặp lại mục tiêu đêm liền trước.
 - Phù Thủy: 1 bình cứu (cứu nạn nhân của sói) + 1 bình độc, mỗi bình dùng 1 lần cả ván.
 - Ban ngày: thảo luận → bỏ phiếu; nhiều phiếu nhất bị loại; **hoà phiếu không ai bị loại**.
+- **Đổi phiếu được tới hết hạn**: phiếu đề cử ban ngày sửa lại bao nhiêu lần cũng được, chỉ lựa chọn cuối cùng được tính. Vì thế pha bỏ phiếu **không** kết thúc sớm dù mọi người đã bỏ phiếu — kết thúc sớm sẽ khoá phiếu ngay lúc người cuối cùng bấm.
+- **Danh tính phiếu công khai sau khi vòng đề cử chốt**: trong lúc đang bỏ phiếu chỉ thấy số đếm, chốt xong mới thấy ai bỏ cho ai và ai đã đổi phiếu lúc nào. Phiếu Treo/Tha ở phiên toà cũng được công khai sau khi tuyên án.
+- **Vai của người chết vẫn ẩn tới `GAME_OVER`**: chết không lật bài, kể cả với người đang sống lẫn với BOT.
 - Sói thắng khi số Sói ≥ số phe làng còn sống; làng thắng khi hết Sói.
-- Server giữ trọn thời gian ban đêm đã cấu hình để mọi vai trò có cơ hội hành động; pha bỏ phiếu có thể kết thúc sớm khi mọi người còn sống đã bỏ phiếu.
+- Server giữ trọn thời gian ban đêm đã cấu hình để mọi vai trò có cơ hội hành động.
 
 ## Reconnect
 
@@ -203,6 +206,6 @@ socket reconnect với cùng auth → server xác thực token (SHA-256 lookup),
 
 - Single-instance server: trạng thái phòng chính nằm trong RAM, Redis là bản sao phục vụ khôi phục phòng (phòng đang giữa trận khi restart sẽ được trả về LOBBY an toàn).
 - Chưa có voice/video, chưa có lịch sử ván chi tiết trong UI.
-- Bot dùng Gemini để chọn mục tiêu và thảo luận; thiếu `GEMINI_API_KEY`, hết quota, hoặc API lỗi thì tự rơi về bot ngẫu nhiên.
+- Ban ngày BOT dùng decision engine deterministic có memory/belief để thảo luận và đề cử; LLM chỉ diễn đạt lời nói. Hành động đêm và các role strategy nâng cao đang được migrate theo phase, với provider fallback hiện tại vẫn hoạt động cho phần chưa migrate.
 - Chưa có persistence cho chat/khôi phục trận dở sau khi server chết giữa chừng.
 - Rate limit chống spam dựa trên bộ nhớ đơn giản.
