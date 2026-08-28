@@ -61,7 +61,13 @@ describe("30 ván", () => {
   });
 
   it("không BOT nào biết vai người khác ngoài phần được phép", () => {
-    // simulateGame đã kiểm điều này trong lúc chạy và đẩy vào violations.
-    expect(metrics.violations.filter((v) => v.includes("biết vai"))).toEqual([]);
+    // Auditor kiểm điều này TRONG LÚC chạy và đẩy vào violations. Từ Phase 3
+    // vi phạm là object có cấu trúc, nên lọc theo `id` chứ không dò chuỗi -
+    // một phép dò chuỗi sẽ lặng lẽ ngừng khớp khi thông điệp được sửa lại.
+    expect(
+      metrics.violations.filter(
+        (v) => v.id === "ROLE_LEAK" || v.id === "DEAD_ROLE_REVEALED",
+      ),
+    ).toEqual([]);
   });
 });

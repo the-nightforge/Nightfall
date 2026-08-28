@@ -123,7 +123,7 @@ describe("giới hạn số vòng", () => {
   it("chạm trần thì ghi vi phạm chứ không ném", () => {
     const game = runSelfPlay({ seed: "cap", maxRounds: 1 });
     expect(game.rounds).toBe(1);
-    expect(game.violations.some((item) => item.includes("không kết thúc"))).toBe(true);
+    expect(game.violations.map((item) => item.id)).toEqual(["ROUND_LIMIT"]);
   });
 
   it("ván bình thường kết thúc trong trần mặc định", () => {

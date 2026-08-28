@@ -6,6 +6,11 @@ import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { createSeededRng } from "../rng";
 import type { BotDecisionTrace, BotTraceSink } from "../trace/trace";
 import { createTraceCollector } from "../trace/trace";
+import {
+  createInvariantAuditor,
+  type GroundTruth,
+  type InvariantViolation,
+} from "./invariants";
 import type {
   BotChatObservation,
   BotDecisionContext,
@@ -103,7 +108,12 @@ export interface SelfPlayGame {
   rejected: number;
   skipped: number;
   events: SelfPlayEvent[];
-  violations: string[];
+  /**
+   * Vi phạm bất biến phát hiện TRONG LÚC chạy; rỗng là đạt.
+   *
+   * Mỗi phần tử mang đủ `record` để chạy lại đúng ván đã sinh ra nó.
+   */
+  violations: InvariantViolation[];
   traces: BotDecisionTrace[];
   /**
    * Sự thật về vai, chụp sau khi ván kết thúc.
@@ -174,7 +184,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   };
 
   const config = record.config;
-  const violations: string[] = [];
+  const auditor = createInvariantAuditor(record);
   const log: SelfPlayEvent[] = [];
   const collector = input.trace ? createTraceCollector() : undefined;
   let actions = 0;
@@ -216,6 +226,23 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   const chat: BotChatObservation[] = [];
   let chatSequence = 0;
 
+  /**
+   * Sự thật, chụp lại mỗi lần cần kiểm.
+   *
+   * CHỈ tầng kiểm bất biến đọc nó. Không đường nào đưa nó ngược vào một
+   * `BotDecisionContext`: nếu có, harness sẽ tự chứng minh rằng BOT không rò rỉ
+   * bằng cách chính nó rò rỉ.
+   */
+  const groundTruth = (): GroundTruth => {
+    const roles: Record<string, Role> = {};
+    const alive: Record<string, boolean> = {};
+    for (const player of engine.state.players) {
+      roles[player.id] = player.role;
+      alive[player.id] = player.alive;
+    }
+    return { roles, alive };
+  };
+
   const contextFor = (playerId: string): BotDecisionContext => ({
     knowledge: engine.botKnowledgeFor(playerId),
     // Bản sao: runtime không được giữ tham chiếu sống vào lịch sử chung.
@@ -223,9 +250,14 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   });
 
   const observeAll = (): void => {
+    const truth = groundTruth();
     for (const player of engine.state.players) {
       if (!player.alive) continue;
-      runtimes.get(player.id)!.observe(contextFor(player.id));
+      const runtime = runtimes.get(player.id)!;
+      const context = contextFor(player.id);
+      auditor.checkKnowledge(context.knowledge, runtime.state, truth);
+      runtime.observe(context);
+      auditor.checkKnowledge(context.knowledge, runtime.state, truth);
     }
   };
 
@@ -236,6 +268,26 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   const enterPhase = (phase: GamePhase, durationMs: number): void => {
     engine.setPhase(phase, durationMs, tick(1_000));
     log.push({ kind: "PHASE", round: engine.state.round, phase });
+  };
+
+  /**
+   * Một nước đi bị engine từ chối.
+   *
+   * Ghi thành vi phạm CÓ CẤU TRÚC chứ không phải một chuỗi: một dòng text không
+   * cho biết seed nào tái hiện được nó, và đó đúng là thứ duy nhất cần khi đọc
+   * báo cáo của một batch 300 ván.
+   */
+  const reportRejected = (actorId: string, detail: string): void => {
+    rejected += 1;
+    log.push({ kind: "REJECTED", round: engine.state.round, actorId, detail });
+    auditor.note(`REJECTED ${actorId}: ${detail}`);
+    auditor.report("ILLEGAL_ACTION", {
+      round: engine.state.round,
+      phase: engine.state.phase,
+      playerId: actorId,
+      expected: "mọi nước đi lõi sinh ra đều phải hợp lệ với engine",
+      actual: detail,
+    });
   };
 
   const recordDeaths = (deaths: ReadonlyArray<{ playerId: string; cause?: string }>): void => {
@@ -267,12 +319,14 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     for (const player of engine.state.players) {
       if (!player.alive) continue;
       const runtime = runtimes.get(player.id)!;
-      const decision = runtime.decideNight(contextFor(player.id));
+      const nightContext = contextFor(player.id);
+      const decision = runtime.decideNight(nightContext);
       if (!decision) {
         skipped += 1;
         log.push({ kind: "SKIP", round: engine.state.round, actorId: player.id, at: "NIGHT" });
         continue;
       }
+      auditor.checkNightAction(nightContext.knowledge, decision, groundTruth());
 
       try {
         // `secondaryTargetId` là BẮT BUỘC với Thám Tử: engine đòi đúng hai người.
@@ -293,10 +347,10 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
           targetId: decision.targetId,
         });
       } catch (error) {
-        rejected += 1;
-        const detail = `nước đi đêm bất hợp lệ (${decision.action}): ${String(error)}`;
-        violations.push(`${player.id}: ${detail}`);
-        log.push({ kind: "REJECTED", round: engine.state.round, actorId: player.id, detail });
+        reportRejected(
+          player.id,
+          `nước đi đêm bất hợp lệ (${decision.action}): ${String(error)}`,
+        );
       }
     }
 
@@ -323,15 +377,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
               targetId: decision.targetId,
             });
           } catch (error) {
-            rejected += 1;
-            const detail = `nước đi Phù Thuỷ bất hợp lệ: ${String(error)}`;
-            violations.push(`${witch.id}: ${detail}`);
-            log.push({
-              kind: "REJECTED",
-              round: engine.state.round,
-              actorId: witch.id,
-              detail,
-            });
+            reportRejected(witch.id, `nước đi Phù Thuỷ bất hợp lệ: ${String(error)}`);
           }
         } else {
           skipped += 1;
@@ -378,15 +424,30 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
           evidence: vote.evidence.map((item) => ({ round: item.round, kind: item.kind })),
         });
       } catch (error) {
-        rejected += 1;
-        const detail = `phiếu bất hợp lệ: ${String(error)}`;
-        violations.push(`${player.id}: ${detail}`);
-        log.push({ kind: "REJECTED", round: engine.state.round, actorId: player.id, detail });
+        reportRejected(player.id, `phiếu bất hợp lệ: ${String(error)}`);
       }
 
       if (!record.speech) continue;
 
+      // Chụp nước đi TRƯỚC khi sinh lời nói, rồi so lại sau khi render.
+      //
+      // Đây là bất biến trung tâm của cả hai phase trước: provider chỉ diễn đạt,
+      // không quyết định. Kiểm nó bằng cách so sánh chứ không bằng cách tin vào
+      // chữ ký hàm - một `readonly` trong TypeScript biến mất lúc chạy.
+      const sealed = JSON.stringify(vote.choice);
       const speech = runtime.decideSpeech(context, vote);
+      if (speech) {
+        const text = renderIntentionText(speech, nameOf);
+        if (JSON.stringify(vote.choice) !== sealed) {
+          auditor.report("SPEECH_CHANGED_ACTION", {
+            round: engine.state.round,
+            phase: engine.state.phase,
+            playerId: player.id,
+            expected: `lá phiếu vẫn là ${sealed} sau khi sinh lời nói`,
+            actual: `${JSON.stringify(vote.choice)} (câu nói: "${text}")`,
+          });
+        }
+      }
       if (!speech) continue;
       runtime.recordSpeech(speech, engine.state.round);
       log.push({
@@ -433,10 +494,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
             guilty: verdict.guilty,
           });
         } catch (error) {
-          rejected += 1;
-          const detail = `phiếu xác nhận bất hợp lệ: ${String(error)}`;
-          violations.push(`${voter.id}: ${detail}`);
-          log.push({ kind: "REJECTED", round: engine.state.round, actorId: voter.id, detail });
+          reportRejected(voter.id, `phiếu xác nhận bất hợp lệ: ${String(error)}`);
         }
       }
 
@@ -456,11 +514,19 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   }
 
   if (engine.state.winner === null) {
-    violations.push(`ván không kết thúc trong ${record.maxRounds} vòng`);
+    auditor.report("ROUND_LIMIT", {
+      round: rounds,
+      phase: engine.state.phase,
+      playerId: null,
+      expected: `ván phải kết thúc trong ${record.maxRounds} vòng`,
+      actual: `còn ${engine.alivePlayers().length} người sống, chưa có phe thắng`,
+    });
   }
 
-  const roles: Record<string, Role> = {};
-  for (const player of engine.state.players) roles[player.id] = player.role;
+  // Trace được kiểm SAU cùng: nó là bản ghi của những gì đã xảy ra, nên kiểm nó
+  // trong lúc chạy chỉ lặp lại đúng khẳng định mà `checkKnowledge` vừa làm.
+  const finalTruth = groundTruth();
+  for (const trace of collector?.traces ?? []) auditor.checkTrace(trace, finalTruth);
 
   return {
     record,
@@ -470,9 +536,9 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     rejected,
     skipped,
     events: log,
-    violations,
+    violations: auditor.violations,
     traces: collector?.traces ?? [],
-    roles,
+    roles: finalTruth.roles,
   };
 
   // ---- helpers đóng gói engine/log ----
@@ -513,15 +579,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
             skipped += 1;
           }
         } catch (error) {
-          rejected += 1;
-          const detail = `phát bắn bất hợp lệ: ${String(error)}`;
-          violations.push(`${reaction.hunterId}: ${detail}`);
-          log.push({
-            kind: "REJECTED",
-            round: engine.state.round,
-            actorId: reaction.hunterId,
-            detail,
-          });
+          reportRejected(reaction.hunterId, `phát bắn bất hợp lệ: ${String(error)}`);
         }
       }
     }

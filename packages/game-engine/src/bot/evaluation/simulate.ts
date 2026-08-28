@@ -1,5 +1,6 @@
 import type { RoomConfig, Winner } from "@masoi/shared";
 import type { BotWeights } from "../config/weights";
+import type { InvariantViolation } from "./invariants";
 import { runSelfPlay, MAX_ROUNDS } from "./selfplay";
 
 export { MAX_ROUNDS };
@@ -30,7 +31,7 @@ export interface SimulationResult {
   /** Số hành động đêm và phiếu đã nộp thành công. */
   actions: number;
   /** Vi phạm phát hiện TRONG LÚC chạy; rỗng là đạt. */
-  violations: string[];
+  violations: InvariantViolation[];
 }
 
 export interface SimulationMetrics {
@@ -39,7 +40,7 @@ export interface SimulationMetrics {
   wolfWins: number;
   unfinished: number;
   averageRounds: number;
-  violations: string[];
+  violations: InvariantViolation[];
 }
 
 export function simulateGame(input: SimulationInput): SimulationResult {
