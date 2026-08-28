@@ -61,6 +61,11 @@ Bản đang chạy:
 - Frontend: <https://ma-soi-online-nu.vercel.app>
 - Backend health: <https://ma-soi-server-xzhv.onrender.com/api/health>
 
+`/api/health` trả về `version` (7 ký tự đầu của commit đang chạy, lấy từ
+`RENDER_GIT_COMMIT`) và `startedAt`. Đối chiếu `version` với `git rev-parse --short HEAD`
+để biết Render đã build commit mới hay chưa; chạy ngoài môi trường deploy thì
+`version` là `dev`.
+
 ### 1. Neon PostgreSQL
 
 1. Tạo project và database PostgreSQL trên Neon.

@@ -3,9 +3,12 @@ import { prisma } from "./db";
 import { newToken, sha256 } from "./util";
 import { nicknameSchema } from "@masoi/shared";
 import { redis } from "./redis";
-import { healthHttpStatus, redisConnectionHealthy } from "./health";
+import { buildVersion, healthHttpStatus, redisConnectionHealthy } from "./health";
 
 export const apiRouter = Router();
+
+/** Mốc khởi động, để phân biệt "đã deploy lại" với "chỉ restart". */
+const STARTED_AT = Date.now();
 
 /**
  * Đăng ký người chơi khách: nhận playerId + session token.
@@ -40,5 +43,10 @@ apiRouter.get("/health", async (_req, res) => {
   }
   const redisOk = redisConnectionHealthy(redis.status);
   const health = { db: dbOk, redis: redisOk };
-  res.status(healthHttpStatus(health)).json({ ok: dbOk, ...health });
+  res.status(healthHttpStatus(health)).json({
+    ok: dbOk,
+    ...health,
+    version: buildVersion(process.env),
+    startedAt: new Date(STARTED_AT).toISOString(),
+  });
 });

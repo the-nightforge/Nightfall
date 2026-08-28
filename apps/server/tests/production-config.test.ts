@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { healthHttpStatus, redisConnectionHealthy } from "../src/health";
+import { buildVersion, healthHttpStatus, redisConnectionHealthy } from "../src/health";
 import { resolveBotAiMaxCallsPerGame, resolvePort } from "../src/config";
 
 describe("resolvePort", () => {
@@ -63,5 +63,24 @@ describe("redisConnectionHealthy", () => {
     expect(redisConnectionHealthy("ready")).toBe(true);
     expect(redisConnectionHealthy("reconnecting")).toBe(false);
     expect(redisConnectionHealthy("end")).toBe(false);
+  });
+});
+
+describe("buildVersion", () => {
+  it("rút gọn SHA của Render thành 7 ký tự", () => {
+    expect(buildVersion({ RENDER_GIT_COMMIT: "05f3d3812ab4c9d0e1f2" })).toBe("05f3d38");
+  });
+
+  it("ưu tiên GIT_COMMIT đặt tay hơn biến của Render", () => {
+    expect(buildVersion({ GIT_COMMIT: "abcdef1234", RENDER_GIT_COMMIT: "9999999" })).toBe("abcdef1");
+  });
+
+  it.each(["", "   "])("coi giá trị rỗng như không khai báo: %s", (value) => {
+    expect(buildVersion({ GIT_COMMIT: value, RENDER_GIT_COMMIT: "05f3d38" })).toBe("05f3d38");
+    expect(buildVersion({ GIT_COMMIT: value })).toBe("dev");
+  });
+
+  it("trả về dev khi chạy ngoài môi trường deploy", () => {
+    expect(buildVersion({})).toBe("dev");
   });
 });
