@@ -76,6 +76,11 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
                 ? "Bạn đã chết - không được bỏ phiếu"
                 : `Treo cổ ${trial.accusedName}?`}
           </h3>
+          {snapshot.you?.role === "MAYOR" && (
+            <p className="mb-2 inline-block rounded-full border border-amber-500/40 bg-amber-950/40 px-3 py-1 text-xs font-bold text-amber-300">
+              👑 Bạn là Thị Trưởng (Phiếu của bạn có trọng số x2)
+            </p>
+          )}
           <p className="mb-3 text-xs text-mist/60">
             Cần {trial.guiltyRequired} phiếu Treo để kết án. Không bỏ phiếu tính là Tha.
           </p>

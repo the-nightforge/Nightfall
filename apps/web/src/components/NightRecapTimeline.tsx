@@ -1,8 +1,20 @@
 import type { NightRecap } from "@masoi/shared";
 import { cursedTurnedText } from "@/lib/cursed";
 
-const causeLabel = (cause: "wolf" | "poison") =>
-  cause === "wolf" ? "bị Sói cắn" : "trúng độc của Phù Thủy";
+const causeLabel = (cause: "wolf" | "poison" | "priest" | "priest_backfire") => {
+  switch (cause) {
+    case "wolf":
+      return "bị Sói cắn";
+    case "poison":
+      return "trúng độc của Phù Thủy";
+    case "priest":
+      return "bị Linh Mục thanh tẩy bằng Nước thánh";
+    case "priest_backfire":
+      return "chết do phản phệ Nước thánh";
+    default:
+      return "tử vong trong đêm";
+  }
+};
 
 /** Màu chip theo vai, dùng đúng bảng màu phe đang dùng ở mọi chỗ khác. */
 const ACTOR_STYLE: Record<string, string> = {

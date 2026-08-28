@@ -20,6 +20,7 @@ import { HunterShotPanel } from "@/components/HunterShotPanel";
 import { TrialPanel } from "@/components/TrialPanel";
 import { Lobby } from "@/components/Lobby";
 import { SoundControl } from "@/components/SoundControl";
+import { EventBanner } from "@/components/EventBanner";
 
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
@@ -60,7 +61,18 @@ export default function RoomPage() {
       case "ROLE_REVEAL":
         return <RoleRevealView snapshot={snapshot} />;
       case "NIGHT":
-        return <NightPanel snapshot={snapshot} onAction={(type, targetId) => room.emit("game:action", { type, targetId: targetId ?? null })} />;
+        return (
+          <NightPanel
+            snapshot={snapshot}
+            onAction={(type, targetId, secondaryTargetId) =>
+              room.emit("game:action", {
+                type,
+                targetId: targetId ?? null,
+                targetId2: secondaryTargetId ?? null,
+              })
+            }
+          />
+        );
       case "NIGHT_RESULT":
       case "DAY_DISCUSSION":
       case "VOTING":
@@ -173,6 +185,7 @@ export default function RoomPage() {
               snapshot?.phase === "LOBBY" ? "order-2" : "order-1"
             } flex min-w-0 flex-col gap-3 lg:order-none`}
           >
+            {snapshot && <EventBanner event={snapshot.activeEvent} />}
             {snapshot && <PhaseBanner snapshot={snapshot} />}
 
             {/*

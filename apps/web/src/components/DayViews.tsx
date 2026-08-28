@@ -53,6 +53,11 @@ export function DayView({ snapshot, onVote, onSkipDiscussion }: Props) {
           <h3 className="mb-1 font-display text-2xl font-bold text-white">
             {dead ? "Bạn đã chết" : "Ai là Ma Sói?"}
           </h3>
+          {snapshot.you?.role === "MAYOR" && (
+            <p className="mb-2 inline-block rounded-full border border-amber-500/40 bg-amber-950/40 px-3 py-1 text-xs font-bold text-amber-300">
+              👑 Bạn là Thị Trưởng (Phiếu của bạn có trọng số x2)
+            </p>
+          )}
           <p className="mb-3 text-sm text-mist/60">
             {dead
               ? "Bạn theo dõi được nhưng không bỏ phiếu."

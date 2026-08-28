@@ -6,8 +6,21 @@ describe("canActAtNight", () => {
     expect(canActAtNight("GUARD")).toBe(true);
   });
 
-  it("keeps Villager asleep", () => {
+  it("handles Apprentice Seer awakening state", () => {
+    expect(canActAtNight("APPRENTICE_SEER", false)).toBe(false);
+    expect(canActAtNight("APPRENTICE_SEER", true)).toBe(true);
+  });
+
+  it("recognizes new night roles Detective, Guardian Angel, Priest, Wolf Cub", () => {
+    expect(canActAtNight("DETECTIVE")).toBe(true);
+    expect(canActAtNight("GUARDIAN_ANGEL")).toBe(true);
+    expect(canActAtNight("PRIEST")).toBe(true);
+    expect(canActAtNight("WOLF_CUB")).toBe(true);
+  });
+
+  it("keeps Villager and Mayor asleep", () => {
     expect(canActAtNight("VILLAGER")).toBe(false);
+    expect(canActAtNight("MAYOR")).toBe(false);
   });
 
   it("returns false before a role is known", () => {
