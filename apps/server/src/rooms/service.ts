@@ -207,7 +207,7 @@ export const roomService = {
     const botId = `bot-${newId()}`;
     room.members.push({
       playerId: botId,
-      name: botName(room.members.filter((m) => m.isBot).length),
+      name: botName(room.members.map((m) => m.name)),
       ready: true,
       connected: false,
       isBot: true,

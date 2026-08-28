@@ -22,9 +22,37 @@ export function generateRoomCode(): string {
   return out;
 }
 
-const BOT_NAMES = ["Bạc", "Sói Con", "Lúa", "Sương", "Gió", "Mưa", "Trăng", "Đom Đóm"];
+const BOT_NAMES = [
+  "MTP",
+  "Phú Lê",
+  "Jack",
+  "Thanh Tú",
+  "ChiPu",
+  "Thầy Giáo Ba",
+  "Độ Mixi",
+  "Gia Huy",
+  "Ngọc Lan",
+  "Phương Linh",
+  "Đức Thắng",
+  "Khánh Vy",
+  "Trung Hiếu",
+  "Diệu Linh",
+  "Thùy Dương",
+  "Đăng Khoa",
+  "Mai Chi",
+  "Việt Hưng",
+  "Hải Yến",
+  "Nhật Minh",
+];
 
-export function botName(existingCount: number): string {
-  const base = BOT_NAMES[existingCount % BOT_NAMES.length];
-  return `${base} (Bot)`;
+export function botName(takenNames: string[]): string {
+  const taken = new Set(takenNames.map((n) => n.trim().toLowerCase()));
+  const free = BOT_NAMES.filter((n) => !taken.has(n.toLowerCase()));
+  if (free.length > 0) {
+    return free[Math.floor(Math.random() * free.length)];
+  }
+  for (let i = 2; ; i++) {
+    const candidate = `${BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)]} ${i}`;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+  }
 }
