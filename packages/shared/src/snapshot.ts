@@ -37,6 +37,31 @@ export interface DiscussionSkipView {
   canVote: boolean;
 }
 
+export interface RecapPlayer {
+  id: string;
+  name: string;
+}
+
+export interface NightRecap {
+  round: number;
+  wolfTarget: RecapPlayer | null;
+  guardTarget: RecapPlayer | null;
+  seerChecks: Array<{
+    seer: RecapPlayer;
+    target: RecapPlayer;
+    isWolf: boolean;
+  }>;
+  witch: {
+    usedHeal: boolean;
+    healedTarget: RecapPlayer | null;
+    poisonTarget: RecapPlayer | null;
+  };
+  deaths: Array<{
+    player: RecapPlayer;
+    cause: "wolf" | "poison";
+  }>;
+}
+
 /** Snapshot toàn bộ trạng thái phòng + trận đấu dành cho MỘT người chơi cụ thể. */
 export interface RoomSnapshot {
   code: string;
@@ -68,6 +93,8 @@ export interface RoomSnapshot {
   /** Đồng thuận kết thúc thảo luận sớm; chỉ có trong DAY_DISCUSSION. */
   discussionSkip: DiscussionSkipView | null;
   votesRevealed: boolean;
+  /** Toàn bộ diễn biến đêm; chỉ có dữ liệu ở GAME_OVER. */
+  nightHistory: NightRecap[];
   lastNightDeaths: { playerId: string; name: string }[];
   lastEliminated: { playerId: string; name: string } | null;
   winner: Winner;

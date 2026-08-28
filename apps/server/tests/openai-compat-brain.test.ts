@@ -24,6 +24,7 @@ function dayView(): RoomSnapshot {
     noEliminationVoteCount: 0,
     discussionSkip: null,
     votesRevealed: false,
+    nightHistory: [],
     lastNightDeaths: [],
     lastEliminated: null,
     winner: null,
