@@ -92,6 +92,9 @@ export interface BotKnowledgeInput {
   seerResult: BotKnowledgeView["seerResult"];
   /** Engine đã quyết định vai này có được thấy gì; ở đây chỉ sao chép. */
   night: NightKnowledge | null;
+  trialAccusedId: string | null;
+  canFinalVote: boolean;
+  hunterShot: { canAct: boolean; legalTargets: string[] } | null;
   publicVoteHistory: readonly DayVoteRecap[];
   currentVoteCounts: BotKnowledgeView["currentVoteCounts"];
   /** `undefined` là chưa bầu; engine đã quyết định người chết không có phiếu. */
@@ -114,6 +117,11 @@ export function buildBotKnowledgeView(input: BotKnowledgeInput): BotKnowledgeVie
     knownRoles: { ...input.knownRoles },
     seerResult: input.seerResult ? { ...input.seerResult } : null,
     night: input.night ? copyNightKnowledge(input.night) : null,
+    trialAccusedId: input.trialAccusedId,
+    canFinalVote: input.canFinalVote,
+    hunterShot: input.hunterShot
+      ? { canAct: input.hunterShot.canAct, legalTargets: [...input.hunterShot.legalTargets] }
+      : null,
     publicVoteHistory: input.publicVoteHistory.map(copyDayVoteRecap),
     currentVoteCounts: {
       players: { ...input.currentVoteCounts.players },

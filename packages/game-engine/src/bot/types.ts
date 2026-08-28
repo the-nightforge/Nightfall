@@ -176,6 +176,17 @@ export interface BotKnowledgeView {
   seerResult: { targetId: string; targetName: string; isWolf: boolean } | null;
   /** `null` ngoài pha đêm, khi bot đã chết, hoặc khi vai không hành động đêm. */
   night: NightKnowledge | null;
+  /**
+   * Ai đang bị đưa ra xử. `null` ngoài `DEFENSE`/`FINAL_VOTE`.
+   *
+   * Cố tình là field PHẲNG chứ không phải object `trial`: `GameState.trial` chứa
+   * `finalVotes`, tức ai đã bỏ phiếu Treo/Tha, và đó là bí mật khi phiên toà
+   * còn mở. Một object cùng tên là lời mời để ai đó spread cả cụm vào view.
+   */
+  trialAccusedId: string | null;
+  canFinalVote: boolean;
+  /** `null` khi bot không phải Thợ Săn đang có lượt phản kích. */
+  hunterShot: { canAct: boolean; legalTargets: string[] } | null;
   publicVoteHistory: DayVoteRecap[];
   currentVoteCounts: { players: Record<string, number>; noElimination: number };
   hasVoted: boolean;

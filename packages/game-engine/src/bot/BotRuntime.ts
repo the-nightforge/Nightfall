@@ -5,6 +5,13 @@ import { analyzeVoteRecap } from "./analysis/vote-analysis";
 import { applyEvidence, applyTrustEvidence, decayBeliefs } from "./belief/belief-state";
 import { applyPrivateInformation } from "./belief/private-info";
 import { selectVote } from "./decision/vote-decision";
+import {
+  decideFinalVote,
+  decideHunterShot,
+  type BotFinalVoteIntention,
+  type BotHunterShotIntention,
+} from "./decision/trial-decision";
+import { strategyFor } from "./roles/registry";
 import { decayAndPrune } from "./memory/memory-decay";
 import { createBotBrainState, remember } from "./memory/memory-store";
 import { createBotPersonality } from "./personality/personality";
@@ -15,6 +22,7 @@ import type {
   BotKnowledgeView,
   BotMemory,
   BotMemoryType,
+  BotNightIntention,
   BotPersonality,
   BotRng,
   BotSpeechIntention,
@@ -189,6 +197,27 @@ export class BotRuntime {
       confidence: vote.confidence,
       evidence: fresh,
     };
+  }
+
+  /**
+   * Nước đi đêm, uỷ quyền cho chiến lược của đúng vai.
+   *
+   * `null` là chủ động bỏ lượt và là kết quả hợp lệ. Runtime KHÔNG có đường lui
+   * ngẫu nhiên ở đây: một nước đi ngẫu nhiên không tái lập được, và đó chính là
+   * thứ Phase 1 đã bỏ công gỡ khỏi ban ngày.
+   */
+  decideNight(context: BotDecisionContext): BotNightIntention | null {
+    return strategyFor(context.knowledge.selfRole).decideNight(context, this.state, this.rng);
+  }
+
+  /** Phán quyết Treo/Tha ở phiên toà. */
+  decideFinalVote(context: BotDecisionContext): BotFinalVoteIntention {
+    return decideFinalVote(context, this.state, this.rng);
+  }
+
+  /** Phát bắn cuối của Thợ Săn; `targetId: null` là không bắn. */
+  decideHunterShot(context: BotDecisionContext): BotHunterShotIntention {
+    return decideHunterShot(context, this.state, this.rng);
   }
 
   /** Ghi lại các source đã dùng để lần sau BOT không nói lại đúng luận điểm. */

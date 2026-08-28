@@ -243,6 +243,12 @@ describe("bot knowledge security boundary", () => {
         // Các vai có hành động đêm được thấy một tập con đã lọc - phần đó có
         // bộ test riêng ở bot-night-knowledge.test.ts.
         "night",
+        // Ba trường phiên toà/Thợ Săn, cố tình PHẲNG. `trial` và `hunterReaction`
+        // vẫn nằm trong FORBIDDEN_KEYS: state thô của chúng chứa `finalVotes`,
+        // tức ai bỏ phiếu Treo/Tha, và đó là bí mật khi phiên toà còn mở.
+        "trialAccusedId",
+        "canFinalVote",
+        "hunterShot",
         "phase",
         "phaseEndsAt",
         "phaseStartedAt",

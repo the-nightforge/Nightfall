@@ -1044,6 +1044,20 @@ export class GameEngine {
       knownRoles,
       seerResult,
       night: this.botNightKnowledgeFor(viewer),
+      // Danh tính bị cáo là công khai ở hai pha này - cả phòng đang nhìn vào
+      // đúng người đó. Thứ KHÔNG công khai là ai đã bỏ phiếu Treo hay Tha, và
+      // nó không có mặt ở đây.
+      trialAccusedId:
+        (st.phase === "DEFENSE" || st.phase === "FINAL_VOTE") && st.trial
+          ? st.trial.accusedId
+          : null,
+      canFinalVote:
+        st.phase === "FINAL_VOTE" &&
+        viewer.alive &&
+        st.trial !== null &&
+        st.trial.accusedId !== viewer.id &&
+        st.trial.finalVotes[viewer.id] === undefined,
+      hunterShot: this.botHunterShotKnowledgeFor(viewer),
       publicVoteHistory: st.dayVoteHistory,
       currentVoteCounts: this.voteTally(),
       // Phiếu của chính mình vẫn hiển thị sau khi pha bỏ phiếu đóng, đúng như
@@ -1126,6 +1140,27 @@ export class GameEngine {
       healUsed: isWitch ? st.healUsed : false,
       poisonUsed: isWitch ? st.poisonUsed : false,
       wolvesLocked: st.night.wolvesLocked,
+    };
+  }
+
+  /**
+   * Lượt phản kích của Thợ Săn, chỉ cho đúng người đang có lượt.
+   *
+   * Không dùng tên `hunterReaction` (state thô) để một lần spread nhầm không
+   * kéo theo trường nội bộ nào.
+   */
+  private botHunterShotKnowledgeFor(
+    viewer: EnginePlayer,
+  ): { canAct: boolean; legalTargets: string[] } | null {
+    const reaction = this.state.hunterReaction;
+    if (this.state.phase !== "HUNTER_SHOT" || !reaction) return null;
+    if (reaction.hunterId !== viewer.id || reaction.resolved) return null;
+
+    return {
+      canAct: true,
+      legalTargets: this.alivePlayers()
+        .filter((player) => player.id !== viewer.id)
+        .map((player) => player.id),
     };
   }
 
