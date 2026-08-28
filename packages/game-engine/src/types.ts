@@ -14,6 +14,8 @@ export interface NightState {
   killTarget: string | null;
   /** Sói đã hành động trong đêm này */
   actedWolves: string[];
+  /** Sói đã chọn không cắn trong đêm này */
+  skippedWolves: string[];
   guardTarget: string | null;
   /** Bảo Vệ đã chọn save nạn nhân đêm nay chưa (Phù Thủy) */
   healTonight: boolean;

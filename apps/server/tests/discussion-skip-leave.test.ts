@@ -54,6 +54,7 @@ function discussionRoom(): Room {
     night: {
       killTarget: null,
       actedWolves: [],
+      skippedWolves: [],
       guardTarget: null,
       healTonight: false,
       poisonTarget: null,

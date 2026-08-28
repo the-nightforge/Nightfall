@@ -67,6 +67,11 @@ export function NightPanel({ snapshot, onAction }: Props) {
                 <b>{snapshot.players.find((p) => p.id === night.wolfTarget)?.name ?? "?"}</b>
               </p>
             )}
+            {(night?.wolfSkipVotes ?? 0) > 0 && (
+              <p className="mb-2 text-sm text-mist/70">
+                {night?.wolfSkipVotes}/{night?.wolfSkipRequired} Sói đã chọn không cắn.
+              </p>
+            )}
             {aliveOthers()}
             <button
               className="btn-primary mt-3 w-full"
@@ -74,6 +79,13 @@ export function NightPanel({ snapshot, onAction }: Props) {
               onClick={() => selected && onAction("KILL", selected)}
             >
               Cắn mục tiêu
+            </button>
+            <button
+              className="btn-secondary mt-2 w-full"
+              disabled={acted}
+              onClick={() => onAction("SKIP", null)}
+            >
+              Không cắn đêm nay
             </button>
           </>
         )}

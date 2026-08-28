@@ -18,6 +18,7 @@ function recapRoom(phase: GameState["phase"]): Room {
     night: {
       killTarget: "b",
       actedWolves: [],
+      skippedWolves: [],
       guardTarget: null,
       healTonight: false,
       poisonTarget: null,

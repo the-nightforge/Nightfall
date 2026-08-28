@@ -39,6 +39,8 @@ export interface PlayerGameView {
     canAct: boolean;
     acted: boolean;
     wolfTarget: string | null;
+    wolfSkipVotes?: number;
+    wolfSkipRequired?: number;
     guardPrevious?: string | null;
     seerResult: { targetId: string; targetName: string; isWolf: boolean } | null;
     healUsed: boolean;
@@ -66,6 +68,7 @@ function emptyNight(): GameState["night"] {
   return {
     killTarget: null,
     actedWolves: [],
+    skippedWolves: [],
     guardTarget: null,
     healTonight: false,
     poisonTarget: null,
@@ -84,6 +87,7 @@ export class GameEngine {
   constructor(state: GameState) {
     this.state = state;
     this.state.nightHistory ??= [];
+    this.state.night.skippedWolves ??= [];
     this.state.night.witchSkipped ??= false;
   }
 
@@ -177,12 +181,15 @@ export class GameEngine {
     if (targetId && !target) throw new GameError("Mục tiêu không tồn tại");
     if (target && !target.alive) throw new GameError("Mục tiêu đã chết");
 
-    const isWitchAction = type === "HEAL" || type === "POISON" || type === "SKIP";
-    if (isWitchAction && p.role !== "WITCH") {
-      throw new GameError("Chỉ Phù Thủy mới được dùng hoặc bỏ qua thuốc");
+    const isWitchMedicine = type === "HEAL" || type === "POISON";
+    if (isWitchMedicine && p.role !== "WITCH") {
+      throw new GameError("Chỉ Phù Thủy mới được dùng thuốc");
     }
-    if (isWitchAction && st.night.witchSkipped) {
+    if ((isWitchMedicine || (type === "SKIP" && p.role === "WITCH")) && st.night.witchSkipped) {
       throw new GameError("Phù Thủy đã bỏ qua dùng thuốc đêm nay");
+    }
+    if ((type === "KILL" || (type === "SKIP" && roleTeam(p.role) === "wolves")) && st.night.actedWolves.includes(playerId)) {
+      throw new GameError("Ma Sói đã hành động đêm nay");
     }
 
     switch (type) {
@@ -223,8 +230,15 @@ export class GameEngine {
         break;
       }
       case "SKIP": {
-        if (targetId !== null) throw new GameError("Bỏ qua dùng thuốc không cần mục tiêu");
-        st.night.witchSkipped = true;
+        if (targetId !== null) throw new GameError("Bỏ qua hành động không cần mục tiêu");
+        if (p.role === "WITCH") {
+          st.night.witchSkipped = true;
+        } else if (roleTeam(p.role) === "wolves") {
+          st.night.actedWolves.push(playerId);
+          st.night.skippedWolves.push(playerId);
+        } else {
+          throw new GameError("Chỉ Phù Thủy hoặc Ma Sói mới được bỏ qua hành động");
+        }
         break;
       }
       default:
@@ -477,6 +491,10 @@ export class GameEngine {
                       : st.night.witchSkipped || st.night.healTonight || st.night.poisonTarget !== null,
               wolfTarget:
                 roleTeam(viewer.role) === "wolves" ? st.night.killTarget : null,
+              wolfSkipVotes:
+                roleTeam(viewer.role) === "wolves" ? st.night.skippedWolves.length : undefined,
+              wolfSkipRequired:
+                roleTeam(viewer.role) === "wolves" ? this.aliveWolves().length : undefined,
               guardPrevious: viewer.role === "GUARD" ? st.guardPrevious : undefined,
               seerResult,
               healUsed: st.healUsed,

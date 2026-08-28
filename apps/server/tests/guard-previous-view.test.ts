@@ -17,6 +17,7 @@ function nightState(guardPrevious: string | null): GameState {
     night: {
       killTarget: null,
       actedWolves: [],
+      skippedWolves: [],
       guardTarget: null,
       healTonight: false,
       poisonTarget: null,

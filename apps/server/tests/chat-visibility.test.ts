@@ -26,6 +26,7 @@ function gameState(phase: GameState["phase"]): GameState {
     night: {
       killTarget: null,
       actedWolves: [],
+      skippedWolves: [],
       guardTarget: null,
       healTonight: false,
       poisonTarget: null,
