@@ -2,6 +2,7 @@ import {
   ROLE_META,
   roleTeam,
   type GamePhase,
+  type HunterShotRecap,
   type NightRecap,
   type RecapPlayer,
   type Role,
@@ -69,6 +70,13 @@ export interface PlayerGameView {
   lastNightDeaths: PublicDeath[];
   nightHistory: NightRecap[];
   lastEliminated: PublicDeath | null;
+  hunterShotInfo: {
+    hunterId: string;
+    hunterName: string;
+    canAct: boolean;
+    resolved: boolean;
+  } | null;
+  hunterShots: HunterShotRecap[];
   log: string[];
 }
 
@@ -98,6 +106,8 @@ export class GameEngine {
   constructor(state: GameState) {
     this.state = state;
     this.state.nightHistory ??= [];
+    this.state.hunterReaction ??= null;
+    this.state.hunterShots ??= [];
     this.state.night.wolfVotes ??= {};
     this.state.night.wolvesLocked ??= false;
     this.state.night.witchSkipped ??= false;
@@ -133,6 +143,8 @@ export class GameEngine {
       lastNightDeaths: [],
       nightHistory: [],
       lastEliminated: null,
+      hunterReaction: null,
+      hunterShots: [],
       log: [],
     };
     return new GameEngine(state);
@@ -162,6 +174,16 @@ export class GameEngine {
     return this.alivePlayers()
       .filter((p) => roleTeam(p.role) === "wolves")
       .map((p) => p.id);
+  }
+
+  private queueHunterReaction(deaths: Array<{ playerId: string }>, source: "night" | "vote"): void {
+    if (this.state.hunterReaction) return;
+    const hunter = deaths
+      .map((death) => this.player(death.playerId))
+      .find((player) => player?.role === "HUNTER");
+    if (hunter) {
+      this.state.hunterReaction = { hunterId: hunter.id, source, resolved: false };
+    }
   }
 
   setPhase(phase: GamePhase, durationMs: number, now = Date.now()) {
@@ -385,6 +407,7 @@ export class GameEngine {
       const p = this.player(d.playerId);
       if (p) p.alive = false;
     }
+    this.queueHunterReaction(deaths, "night");
     st.log.push(
       deaths.length === 0
         ? `Đêm ${st.round}: bình yên vô sự.`
@@ -488,6 +511,7 @@ export class GameEngine {
     }
 
     st.lastEliminated = eliminated;
+    if (eliminated) this.queueHunterReaction([eliminated], "vote");
     // Ba kết cục khác nhau về ý nghĩa nên log phải phân biệt được, dù UI gộp
     // hai nhánh không có nạn nhân vào cùng một câu.
     if (eliminated) st.log.push(`Dân làng đã loại ${eliminated.name}.`);
@@ -499,10 +523,65 @@ export class GameEngine {
     return eliminated;
   }
 
+  // ---- Phản ứng của Thợ Săn ----
+
+  hasPendingHunterShot(): boolean {
+    return !!this.state.hunterReaction && !this.state.hunterReaction.resolved;
+  }
+
+  beginHunterShot(durationMs: number, now = Date.now()): void {
+    if (!this.hasPendingHunterShot()) throw new GameError("Không có lượt bắn của Thợ Săn");
+    this.state.phase = "HUNTER_SHOT";
+    this.state.phaseEndsAt = now + durationMs;
+  }
+
+  submitHunterShot(playerId: string, targetId: string | null): PublicDeath | null {
+    const st = this.state;
+    if (st.phase !== "HUNTER_SHOT") throw new GameError("Chỉ được bắn trong lượt của Thợ Săn");
+    if (!this.hasPendingHunterShot()) throw new GameError("Lượt bắn của Thợ Săn đã được giải quyết");
+
+    const reaction = st.hunterReaction!;
+    if (playerId !== reaction.hunterId) throw new GameError("Chỉ Thợ Săn được bắn");
+    const hunter = this.mustPlayer(playerId);
+    if (hunter.role !== "HUNTER" || hunter.alive) throw new GameError("Thợ Săn phải đã chết mới được bắn");
+
+    let target: EnginePlayer | null = null;
+    if (targetId !== null) {
+      if (targetId === hunter.id) throw new GameError("Thợ Săn không thể tự bắn mình");
+      target = this.mustPlayer(targetId);
+      if (!target.alive) throw new GameError("Không thể bắn người đã chết");
+      target.alive = false;
+    }
+
+    reaction.resolved = true;
+    st.hunterShots.push({
+      round: st.round,
+      hunter: { id: hunter.id, name: hunter.name },
+      target: target ? { id: target.id, name: target.name } : null,
+      source: reaction.source,
+    });
+    st.log.push(
+      target
+        ? `Thợ Săn ${hunter.name} đã bắn ${target.name}.`
+        : `Thợ Săn ${hunter.name} quyết định không bắn ai.`,
+    );
+    return target ? { playerId: target.id, name: target.name } : null;
+  }
+
+  completeHunterReaction(): "night" | "vote" {
+    const reaction = this.state.hunterReaction;
+    if (!reaction || !reaction.resolved) {
+      throw new GameError("Phản ứng của Thợ Săn chưa được giải quyết");
+    }
+    this.state.hunterReaction = null;
+    return reaction.source;
+  }
+
   // ---- Điều kiện thắng ----
 
   checkWin(): Winner {
     const st = this.state;
+    if (st.hunterReaction && !st.hunterReaction.resolved) return null;
     const wolvesAlive = this.aliveWolves().length;
     const othersAlive = this.alivePlayers().length - wolvesAlive;
     if (wolvesAlive === 0) return "village";
@@ -599,6 +678,15 @@ export class GameEngine {
         st.phase === "NIGHT" && viewer && viewer.alive && this.hasNightAction(viewer.role)
           ? this.nightInfoFor(viewer, seerResult)
           : null,
+      hunterShotInfo:
+        st.phase === "HUNTER_SHOT" && st.hunterReaction
+          ? {
+              hunterId: st.hunterReaction.hunterId,
+              hunterName: this.player(st.hunterReaction.hunterId)?.name ?? "?",
+              canAct: !st.hunterReaction.resolved && viewerId === st.hunterReaction.hunterId,
+              resolved: st.hunterReaction.resolved,
+            }
+          : null,
       hasVoted,
       // ?? null ở đây an toàn vì đã gác bằng hasVoted: chỉ đọc khi thật sự có
       // phiếu, nên null trả về là phiếu không treo chứ không phải "chưa vote".
@@ -607,6 +695,7 @@ export class GameEngine {
       votesRevealed: st.phase === "ELIMINATION" || st.phase === "GAME_OVER" || st.phase === "CHECK_WIN",
       lastNightDeaths: st.phase === "NIGHT_RESULT" || st.phase === "DAY_DISCUSSION" ? st.lastNightDeaths : [],
       nightHistory: st.phase === "GAME_OVER" ? st.nightHistory : [],
+      hunterShots: st.phase === "GAME_OVER" ? st.hunterShots : [],
       lastEliminated: st.phase === "ELIMINATION" || st.phase === "CHECK_WIN" ? st.lastEliminated : null,
       log: st.log.slice(-10),
     };

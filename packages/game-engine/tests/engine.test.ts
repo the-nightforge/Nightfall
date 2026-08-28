@@ -42,6 +42,48 @@ function lockWolves(engine: GameEngine, pick = 0) {
   return engine.lockWolves(() => pick);
 }
 
+function makeHunterEngine(phase: GameState["phase"] = "NIGHT") {
+  const state: GameState = {
+    phase,
+    round: 1,
+    phaseEndsAt: 30_000,
+    players: [
+      { id: "hunter", name: "Thợ Săn", role: "HUNTER", alive: true, isBot: false },
+      { id: "wolf", name: "Sói", role: "WEREWOLF", alive: true, isBot: false },
+      { id: "villager", name: "Dân", role: "VILLAGER", alive: true, isBot: false },
+    ],
+    config: { ...CONFIG, werewolves: 1, hunter: true },
+    winner: null,
+    night: {
+      wolfVotes: {},
+      killTarget: null,
+      wolvesLocked: false,
+      guardTarget: null,
+      healTonight: false,
+      poisonTarget: null,
+      witchSkipped: false,
+      seerResults: {},
+    },
+    votes: {},
+    guardPrevious: null,
+    healUsed: false,
+    poisonUsed: false,
+    lastNightDeaths: [],
+    nightHistory: [],
+    lastEliminated: null,
+    hunterReaction: null,
+    hunterShots: [],
+    log: [],
+  };
+  return new GameEngine(state);
+}
+
+function prepareHunterShot(engine: GameEngine, source: "night" | "vote" = "night") {
+  engine.state.players.find((player) => player.id === "hunter")!.alive = false;
+  engine.state.hunterReaction = { hunterId: "hunter", source, resolved: false };
+  engine.beginHunterShot(15_000, 1_000);
+}
+
 describe("Chia vai trò", () => {
   it("chia đúng số lượng vai trò theo cấu hình", () => {
     const deck = buildRoleDeck(CONFIG, 8);
@@ -866,5 +908,194 @@ describe("Lịch sử diễn biến ban đêm", () => {
     const legacy = { ...source, nightHistory: undefined } as unknown as GameState;
 
     expect(new GameEngine(legacy).state.nightHistory).toEqual([]);
+  });
+});
+
+describe("Thợ Săn", () => {
+  it("xếp phản ứng khi Thợ Săn bị Sói cắn", () => {
+    const e = makeHunterEngine();
+    e.state.night.killTarget = "hunter";
+    e.state.night.wolvesLocked = true;
+
+    e.resolveNight(1_000);
+
+    expect(e.state.hunterReaction).toEqual({
+      hunterId: "hunter",
+      source: "night",
+      resolved: false,
+    });
+  });
+
+  it("xếp phản ứng khi Thợ Săn bị đầu độc", () => {
+    const e = makeHunterEngine();
+    e.state.night.poisonTarget = "hunter";
+    e.state.night.wolvesLocked = true;
+
+    e.resolveNight(1_000);
+
+    expect(e.state.hunterReaction).toEqual({
+      hunterId: "hunter",
+      source: "night",
+      resolved: false,
+    });
+  });
+
+  it("xếp phản ứng khi Thợ Săn bị treo", () => {
+    const e = makeHunterEngine("VOTING");
+    e.state.votes = { wolf: "hunter", villager: "hunter" };
+
+    e.resolveVote(1_000);
+
+    expect(e.state.hunterReaction).toEqual({
+      hunterId: "hunter",
+      source: "vote",
+      resolved: false,
+    });
+  });
+
+  it("không xếp phản ứng khi Dân bị chết", () => {
+    const e = makeHunterEngine();
+    e.state.night.killTarget = "villager";
+    e.state.night.wolvesLocked = true;
+
+    e.resolveNight(1_000);
+
+    expect(e.state.hunterReaction).toBeNull();
+  });
+
+  it("mở lượt bắn với thời hạn được truyền vào", () => {
+    const e = makeHunterEngine("NIGHT_RESULT");
+    e.state.players.find((player) => player.id === "hunter")!.alive = false;
+    e.state.hunterReaction = { hunterId: "hunter", source: "night", resolved: false };
+
+    e.beginHunterShot(15_000, 1_000);
+
+    expect(e.state.phase).toBe("HUNTER_SHOT");
+    expect(e.state.phaseEndsAt).toBe(16_000);
+  });
+
+  it("chặn kiểm tra thắng khi phản ứng chưa được giải quyết", () => {
+    const e = makeHunterEngine();
+    e.state.players.find((player) => player.id === "wolf")!.alive = false;
+    e.state.hunterReaction = { hunterId: "hunter", source: "night", resolved: false };
+
+    expect(e.checkWin()).toBeNull();
+  });
+
+  it("bắn Sói hợp lệ, ghi recap và đem chiến thắng cho phe làng", () => {
+    const e = makeHunterEngine("NIGHT_RESULT");
+    prepareHunterShot(e);
+
+    expect(e.submitHunterShot("hunter", "wolf")).toEqual({
+      playerId: "wolf",
+      name: "Sói",
+    });
+    expect(e.state.players.find((player) => player.id === "wolf")!.alive).toBe(false);
+    expect(e.state.hunterShots).toHaveLength(1);
+    expect(e.state.hunterShots.at(-1)?.target?.id).toBe("wolf");
+    expect(e.checkWin()).toBe("village");
+  });
+
+  it("cho phép Thợ Săn bỏ qua và ghi recap không có mục tiêu", () => {
+    const e = makeHunterEngine("NIGHT_RESULT");
+    prepareHunterShot(e);
+
+    expect(e.submitHunterShot("hunter", null)).toBeNull();
+    expect(e.state.hunterShots).toEqual([
+      {
+        round: 1,
+        hunter: { id: "hunter", name: "Thợ Săn" },
+        target: null,
+        source: "night",
+      },
+    ]);
+  });
+
+  it("từ chối người bắn không phải Thợ Săn", () => {
+    const e = makeHunterEngine("NIGHT_RESULT");
+    prepareHunterShot(e);
+
+    expect(() => e.submitHunterShot("wolf", "villager")).toThrow(GameError);
+  });
+
+  it("từ chối bắn ngoài pha HUNTER_SHOT", () => {
+    const e = makeHunterEngine("NIGHT_RESULT");
+    e.state.players.find((player) => player.id === "hunter")!.alive = false;
+    e.state.hunterReaction = { hunterId: "hunter", source: "night", resolved: false };
+
+    expect(() => e.submitHunterShot("hunter", "wolf")).toThrow(GameError);
+  });
+
+  it("từ chối Thợ Săn còn sống bắn", () => {
+    const e = makeHunterEngine("NIGHT_RESULT");
+    e.state.hunterReaction = { hunterId: "hunter", source: "night", resolved: false };
+    e.beginHunterShot(15_000, 1_000);
+
+    expect(() => e.submitHunterShot("hunter", "wolf")).toThrow(GameError);
+  });
+
+  it("từ chối tự bắn, mục tiêu đã chết, và gửi lượt bắn lần hai", () => {
+    const selfShot = makeHunterEngine("NIGHT_RESULT");
+    prepareHunterShot(selfShot);
+    expect(() => selfShot.submitHunterShot("hunter", "hunter")).toThrow(GameError);
+
+    const deadTarget = makeHunterEngine("NIGHT_RESULT");
+    prepareHunterShot(deadTarget);
+    deadTarget.state.players.find((player) => player.id === "wolf")!.alive = false;
+    expect(() => deadTarget.submitHunterShot("hunter", "wolf")).toThrow(GameError);
+
+    const doubleSubmit = makeHunterEngine("NIGHT_RESULT");
+    prepareHunterShot(doubleSubmit);
+    doubleSubmit.submitHunterShot("hunter", null);
+    expect(() => doubleSubmit.submitHunterShot("hunter", "villager")).toThrow(GameError);
+  });
+
+  it("để Sói thắng khi Thợ Săn bắn Dân và tạo parity", () => {
+    const e = makeHunterEngine("NIGHT_RESULT");
+    prepareHunterShot(e);
+
+    e.submitHunterShot("hunter", "villager");
+
+    expect(e.checkWin()).toBe("wolves");
+  });
+
+  it("chỉ hiển thị quyền bắn trong pha HUNTER_SHOT và chỉ công khai recap khi GAME_OVER", () => {
+    const e = makeHunterEngine("NIGHT_RESULT");
+    prepareHunterShot(e, "vote");
+
+    expect(e.snapshotFor("hunter").hunterShotInfo).toEqual({
+      hunterId: "hunter",
+      hunterName: "Thợ Săn",
+      canAct: true,
+      resolved: false,
+    });
+    expect(e.snapshotFor("wolf").hunterShotInfo).toEqual({
+      hunterId: "hunter",
+      hunterName: "Thợ Săn",
+      canAct: false,
+      resolved: false,
+    });
+    e.submitHunterShot("hunter", null);
+    expect(e.completeHunterReaction()).toBe("vote");
+    e.finishGame("wolves");
+    expect(e.snapshotFor("wolf").hunterShots).toEqual(e.state.hunterShots);
+  });
+
+  it("xóa phản ứng đã giải quyết và chuẩn hóa state cũ", () => {
+    const e = makeHunterEngine("NIGHT_RESULT");
+    prepareHunterShot(e);
+    e.submitHunterShot("hunter", null);
+
+    expect(e.completeHunterReaction()).toBe("night");
+    expect(e.state.hunterReaction).toBeNull();
+
+    const legacy = GameEngine.create(ids(6), CONFIG).getState();
+    const legacyEngine = new GameEngine({
+      ...legacy,
+      hunterReaction: undefined,
+      hunterShots: undefined,
+    } as unknown as GameState);
+    expect(legacyEngine.state.hunterReaction).toBeNull();
+    expect(legacyEngine.state.hunterShots).toEqual([]);
   });
 });

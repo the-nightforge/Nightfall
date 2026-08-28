@@ -1,4 +1,4 @@
-import type { GamePhase, NightRecap, RoomConfig, Winner } from "@masoi/shared";
+import type { GamePhase, HunterShotRecap, NightRecap, RoomConfig, Winner } from "@masoi/shared";
 import type { Role } from "@masoi/shared";
 
 export interface EnginePlayer {
@@ -44,6 +44,12 @@ export interface PublicDeath {
   name: string;
 }
 
+export interface HunterReactionState {
+  hunterId: string;
+  source: "night" | "vote";
+  resolved: boolean;
+}
+
 export interface GameState {
   phase: GamePhase;
   round: number;
@@ -70,6 +76,8 @@ export interface GameState {
   lastNightDeaths: PublicDeath[];
   nightHistory: NightRecap[];
   lastEliminated: PublicDeath | null;
+  hunterReaction: HunterReactionState | null;
+  hunterShots: HunterShotRecap[];
   log: string[];
 }
 
