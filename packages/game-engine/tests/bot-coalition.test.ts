@@ -86,7 +86,10 @@ describe("detectCoalitions", () => {
     state.relationships["a->b"] = edge({ voteAlignment: 1, hostility: 1 });
     state.relationships["b->a"] = edge({ voteAlignment: 1, hostility: 1 });
 
-    expect(detectCoalitions(state)).toEqual([]);
+    // Nêu ngưỡng tường minh thay vì mượn mặc định: `social.minCohesion` là một
+    // trọng số có thể hiệu chỉnh, và test này nói về CÔNG THỨC (thù địch trừ đi
+    // đồng thuận), không nói về giá trị ngưỡng đang dùng cho production.
+    expect(detectCoalitions(state, 0.15)).toEqual([]);
   });
 
   it("deterministic: không phụ thuộc thứ tự chèn khoá", () => {

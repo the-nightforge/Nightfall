@@ -164,14 +164,27 @@ export interface TeammateProtectionWeights {
 
 export interface DeceptionRiskWeights {
   /**
-   * Mức nghi ngờ mà trên đó hy sinh đồng đội RẺ HƠN bảo vệ nó.
+   * Tỉ lệ phiếu đang dồn vào một đồng đội mà trên đó hy sinh nó RẺ HƠN bảo vệ.
    *
-   * Bảo vệ một đồng đội mà cả làng đã chắc chắn là hành vi tự tố cáo: nó không
-   * cứu được ai và làm lộ chính mình. Đặt `> MAX_BELIEF_SCORE` để tắt hoàn toàn.
+   * Đo bằng ÁP LỰC CÔNG KHAI (`currentVoteCounts`), không phải bằng nghi ngờ của
+   * chính con Sói. Đó là chỗ bản đầu tiên sai: `applyPrivateInformation` ghim
+   * suspicion của đồng đội về 0, nên một cổng dựa trên belief riêng KHÔNG BAO
+   * GIỜ mở - hành vi tồn tại trên giấy và không lần nào chạy.
+   *
+   * Đặt `> 1` để tắt hoàn toàn.
    */
-  bussingSuspicionFloor: number;
+  bussingVoteShare: number;
   /** Sói có `deceptionSkill` cao mới dám bán đồng đội. */
   bussingDeceptionScale: number;
+  /**
+   * Điểm cộng khi nhảy lên chuyến xe đang lăn.
+   *
+   * Bỏ phạt bảo vệ đồng đội là CHƯA ĐỦ: đồng đội có suspicion bằng 0 trong mắt
+   * chính con Sói (bị ghim), nên nếu chỉ gỡ phạt thì nó vẫn không bao giờ được
+   * chọn. Hành vi thật của bussing là *bỏ phiếu cùng đa số*, nên nó cần một số
+   * hạng DƯƠNG tỉ lệ với số phiếu đang dồn vào.
+   */
+  bussingJoinBonus: number;
   /**
    * Vòng sớm nhất mà Tiên Tri chịu đính kết quả soi vào lời nói.
    *
@@ -575,9 +588,10 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
   deceptionRisk: Object.freeze({
     // Bốn giá trị dưới đây TẮT bốn hành vi mới của Phase 3. v1 phải tái lập
     // Phase 2 từng bit, nên chúng phải trung tính ở đây; v2 bật chúng lên.
-    // `> MAX_BELIEF_SCORE` là cách tắt bussing mà không cần một cờ boolean riêng.
-    bussingSuspicionFloor: 101,
+    // `> 1` là cách tắt bussing mà không cần một cờ boolean riêng.
+    bussingVoteShare: 2,
     bussingDeceptionScale: 0,
+    bussingJoinBonus: 0,
     seerRevealRound: 0,
     allyLostThresholdBonus: 0,
     abstainPressureCeiling: 0.3,
@@ -642,10 +656,114 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
 }) as BotWeights;
 
 /**
+ * Cấu hình v2 — kết quả hiệu chỉnh từ 300 ván, kiểm chéo trên ba seed base.
+ *
+ * v1 để Sói thắng **87%**. Chẩn đoán bằng đo đạc chứ không bằng phỏng đoán, và
+ * phát hiện gốc là: **thang belief mà mọi ngưỡng dựa vào không bao giờ được
+ * chạm tới.** Suspicion thật có p50 = 0, p90 = 1.8, p99 = 8.6 - trong khi
+ * `voteThreshold` là 58, bình độc 85, Nước thánh 90. Mọi ngưỡng đó là chữ chết.
+ *
+ * Bốn thay đổi, mỗi thay đổi có số đo riêng (xem `docs/bot-ai-phase-3-verification.md`):
+ *
+ * 1. **Ngưỡng khớp thang thật.** `thresholdBase` 58 → 6, `spareTrustMargin`
+ *    15 → 3, `hysteresis` 5/8 → 2/3. Ngưỡng của quyền năng thì GIỮ CAO (95):
+ *    chỉ mục tiêu Tiên Tri đã ghim 100 mới kích hoạt được bình độc và Nước
+ *    thánh, nên chúng chỉ bắn vào Sói đã xác nhận.
+ * 2. **Bussing hoạt động** (`bussingVoteShare`, `bussingJoinBonus`). Riêng nó
+ *    đưa làng từ 10% lên 20%.
+ * 3. **Sói không còn bỏ phiếu trắng** (`abstainPressureCeiling` 0.3 → 0). Đây
+ *    là đòn bẩy lớn nhất: 27% → 48%.
+ * 4. **Tín hiệu xã hội nặng hơn** (`hostilityBonus` 6 → 20) và
+ *    `social.minCohesion` 0.15 → 0.02 để chỉ số coalition có dữ liệu.
+ *
+ * Kết quả: làng thắng 38.7% / 45.0% / 48.0% trên ba seed base độc lập, độ chính
+ * xác phiếu 35% → 45–49%.
+ */
+export const BOT_WEIGHTS_V2: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V1,
+  version: "2.0.0",
+
+  suspicion: Object.freeze({
+    ...BOT_WEIGHTS_V1.suspicion,
+    // Bị cả làng công kích là tín hiệu mạnh hơn nhiều so với đánh giá của v1,
+    // vì các bằng chứng hành vi khác gần như không phân biệt được Sói.
+    hostilityBonus: 20,
+  }),
+
+  aggression: Object.freeze({
+    // Ngưỡng phải nằm trong tầm với của thang belief thật, nếu không thì nhánh
+    // "đủ căn cứ để đề cử" không bao giờ chạy và mọi lá phiếu chỉ là jitter.
+    thresholdBase: 6,
+    aggressivenessSpan: 2,
+    riskSpan: 1,
+  }),
+
+  confidence: Object.freeze({
+    ...BOT_WEIGHTS_V1.confidence,
+    // Giữ CAO có chủ đích: chỉ mục tiêu Tiên Tri đã ghim 100 mới đáng một phát
+    // bắn không ai kiểm lại được.
+    hunterMargin: 80,
+    spareTrustMargin: 3,
+    hysteresisBase: 2,
+    hysteresisStubbornSpan: 3,
+  }),
+
+  roleThresholds: Object.freeze({
+    ...BOT_WEIGHTS_V1.roleThresholds,
+    // 95 nghĩa là "chỉ Sói do Tiên Tri xác nhận". Hai bình dùng một lần cả ván
+    // nên đây đúng là điều kiện để tiêu chúng.
+    witchPoisonSuspicion: 95,
+    priestSuspicion: 95,
+  }),
+
+  deceptionRisk: Object.freeze({
+    bussingVoteShare: 0.2,
+    bussingDeceptionScale: 3,
+    bussingJoinBonus: 120,
+    /**
+     * `0` = Tiên Tri nói ngay.
+     *
+     * Trực giác nói nên giấu, và hành vi giấu ĐÃ được cài đặt và có test. Nhưng
+     * số liệu bác bỏ nó: hoãn tới vòng 2 làm làng mất 4 điểm win-rate, tới vòng
+     * 3 mất 9 điểm. Trong quần thể BOT này, thông tin của Tiên Tri lan quá chậm
+     * để việc sống thêm một đêm bù lại được. Giữ cơ chế, tắt mặc định.
+     */
+    seerRevealRound: 0,
+    allyLostThresholdBonus: 6,
+    /**
+     * `0` = Sói không bao giờ chọn "không treo ai".
+     *
+     * Đây là đòn bẩy đơn lẻ lớn nhất trong cả đợt hiệu chỉnh (27% → 48%), và lý
+     * do cần nói thẳng: bỏ phiếu trắng là một nước MẠNH QUÁ MỨC ở đây, không
+     * phải vì nó hay, mà vì đòn đối trọng tự nhiên của nó chưa được mô hình hoá.
+     * Ngoài đời, kẻ luôn bỏ phiếu trắng sẽ bị để ý ngay; ở đây lõi belief không
+     * sinh ra nghi ngờ nào từ hành vi né tránh, nên Sói tiêu được một ngày của
+     * làng mà không trả giá gì.
+     *
+     * Bật lại khi có bằng chứng "né tránh" trong `vote-analysis`.
+     */
+    abstainPressureCeiling: 0,
+  }),
+
+  selfPreservation: Object.freeze({
+    ...BOT_WEIGHTS_V1.selfPreservation,
+    // Không đo được lợi ích về win-rate, nhưng cũng không tốn gì, và nó bịt một
+    // mẫu hành vi mà người chơi thật đọc ra được sau hai vòng.
+    guardRepeatPenalty: 20,
+  }),
+
+  social: Object.freeze({
+    ...BOT_WEIGHTS_V1.social,
+    // 0.15 là ngưỡng KHÔNG BAO GIỜ với tới: điểm ghép cặp thật tối đa ~0.03,
+    // nên `detectCoalitions` chưa từng trả về một nhóm nào trong ván thật.
+    minCohesion: 0.02,
+  }),
+}) as BotWeights;
+
+/**
  * Cấu hình đang dùng cho production.
  *
- * Trỏ tới v1 cho tới khi Task 8 có dữ liệu thật để hiệu chỉnh. Mọi API nhận
- * `weights` đều mặc định về hằng số này, nên không call site nào phải thay đổi
- * chỉ vì cấu hình tồn tại.
+ * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
+ * phải thay đổi chỉ vì cấu hình tồn tại.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V1;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V2;

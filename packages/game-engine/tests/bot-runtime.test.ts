@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DayVoteRecap, PublicVoteChoice, Role } from "@masoi/shared";
 import { BotRuntime } from "../src/bot/BotRuntime";
+import { BOT_WEIGHTS_V1 } from "../src/bot/config/weights";
 import { selectVote } from "../src/bot/decision/vote-decision";
 import { createSeededRng } from "../src/bot/rng";
 import type {
@@ -89,6 +90,7 @@ function runtimeWithEvidence(
     rng,
     playerIds: ["me", ...Object.keys(scores)],
     personality: { ...BALANCED, ...overrides },
+    weights: BOT_WEIGHTS_V1,
   });
   for (const [playerId, score] of Object.entries(scores)) {
     runtime.state.seenEventIds.push(`1:nomination:${playerId}`);
@@ -107,6 +109,7 @@ function neutralRuntime(rng = noJitter): BotRuntime {
     rng,
     playerIds: ["me", "b", "c"],
     personality: BALANCED,
+    weights: BOT_WEIGHTS_V1,
   });
 }
 
@@ -190,6 +193,7 @@ describe("deterministic vote decision", () => {
       rng: () => 1,
       playerIds: ["me", "b", "c"],
       personality: BALANCED,
+      weights: BOT_WEIGHTS_V1,
     });
     runtime.state.suspicion.b = { score: 99, reasons: [], lastUpdatedRound: 1 };
 
@@ -283,6 +287,7 @@ describe("bot runtime observation pipeline", () => {
       rng: createSeededRng("observe"),
       playerIds: ["me", "b", "c", "d"],
       personality: BALANCED,
+      weights: BOT_WEIGHTS_V1,
     });
   }
 
@@ -411,6 +416,7 @@ describe("bot speech intention", () => {
       rng: () => 0.1,
       playerIds: ["me", "b", "c"],
       personality: BALANCED,
+      weights: BOT_WEIGHTS_V1,
     });
     // Phải là Sói: từ Phase 2, chỉ phe Sói mới chọn "không treo ai" khi bằng
     // chứng mỏng, nên đó là cách duy nhất để dựng một phiếu NO_ELIMINATION thật.

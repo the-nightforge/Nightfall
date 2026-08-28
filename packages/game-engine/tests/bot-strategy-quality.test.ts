@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PublicVoteChoice, Role } from "@masoi/shared";
 import { BotRuntime } from "../src/bot/BotRuntime";
-import { resolveWeights, type BotWeights } from "../src/bot/config/weights";
+import { BOT_WEIGHTS_V1, resolveWeights, type BotWeights } from "../src/bot/config/weights";
 import { createSeededRng } from "../src/bot/rng";
 import { createBotBrainState } from "../src/bot/memory/memory-store";
 import { createBotPersonality } from "../src/bot/personality/personality";
@@ -31,25 +31,35 @@ import type {
 
 const PLAYERS = ["me", "ally", "a", "b", "c"];
 
-/** Bật cả bốn hành vi mới; đây là hình dạng mà v2 sẽ mang. */
+/**
+ * Bật cả bốn hành vi mới, trên NỀN v1.
+ *
+ * Neo vào `BOT_WEIGHTS_V1` chứ không vào `DEFAULT_BOT_WEIGHTS`: các scenario ở
+ * đây kiểm từng HÀNH VI một cách cô lập, nên chúng không được đổi ý nghĩa mỗi
+ * lần production đổi cấu hình. Cân bằng tổng thể là việc của batch self-play.
+ */
 function tuned(over: Parameters<typeof resolveWeights>[0] = {}): BotWeights {
-  return resolveWeights({
-    deceptionRisk: {
-      bussingSuspicionFloor: 80,
-      bussingDeceptionScale: 2,
-      seerRevealRound: 2,
-      allyLostThresholdBonus: 25,
-      abstainPressureCeiling: 0.3,
+  return resolveWeights(
+    {
+      deceptionRisk: {
+        bussingVoteShare: 0.3,
+        bussingDeceptionScale: 2,
+        bussingJoinBonus: 120,
+        seerRevealRound: 2,
+        allyLostThresholdBonus: 25,
+        abstainPressureCeiling: 0.3,
+      },
+      selfPreservation: {
+        guardSelfHostilityThreshold: 0.5,
+        guardSelfBonusBase: 60,
+        guardSelfBonusSpan: 60,
+        guardSuspicionPenalty: 0.5,
+        guardRepeatPenalty: 40,
+      },
+      ...over,
     },
-    selfPreservation: {
-      guardSelfHostilityThreshold: 0.5,
-      guardSelfBonusBase: 60,
-      guardSelfBonusSpan: 60,
-      guardSuspicionPenalty: 0.5,
-      guardRepeatPenalty: 40,
-    },
-    ...over,
-  });
+    BOT_WEIGHTS_V1,
+  );
 }
 
 function personality(over: Partial<BotPersonality> = {}): BotPersonality {
@@ -192,48 +202,49 @@ describe("2. Sói tránh bảo vệ đồng đội quá lộ liễu", () => {
 });
 
 describe("3. Sói hy sinh đồng đội khi bằng chứng quá mạnh", () => {
-  it("bỏ phiếu cho đồng bọn khi cả làng đã chắc chắn", () => {
-    // Che một người mà mọi người đã kết luận thì không cứu được ai - một lá
-    // phiếu không lật được đa số - và nó ghép tên mình vào tên người sắp bị treo.
-    const state = stateFor("me", { deceptionSkill: 0.9 });
-    believe(state, "ally", 95);
-    believe(state, "a", 20);
+  /**
+   * Cổng bussing đo ÁP LỰC CÔNG KHAI, không phải nghi ngờ của chính con Sói.
+   *
+   * Bản đầu tiên gate trên `state.suspicion[ally]`, và `applyPrivateInformation`
+   * ghim đúng giá trị đó về 0 cho mọi đồng đội - nên hành vi tồn tại trên giấy
+   * và không lần nào chạy. Chỉ một batch 200 ván với `bus=0.0%` mới lộ ra điều
+   * đó; không test đơn lẻ nào bắt được, vì mỗi test tự dựng state của nó.
+   */
+  const wolfSees = (votesOnAlly: number) =>
+    context({
+      selfRole: "WEREWOLF",
+      knownRoles: { me: "WEREWOLF", ally: "WEREWOLF" },
+      currentVoteCounts: { players: { ally: votesOnAlly }, noElimination: 0 },
+    });
 
-    const vote = selectVote(
-      context({ selfRole: "WEREWOLF", knownRoles: { me: "WEREWOLF", ally: "WEREWOLF" } }),
-      state,
-      createSeededRng("s3"),
-      tuned(),
-    );
+  /**
+   * Trong ván thật, `applyPrivateInformation` ghim suspicion của đồng đội về 0
+   * NHƯNG vẫn để lại một `reasons` (bằng chứng `KNOWN_ALLY`). Fixture tái hiện
+   * đúng hình dạng đó: điểm 0, lý do khác rỗng.
+   */
+  const wolfState = (deceptionSkill: number): BotBrainState => {
+    const state = stateFor("me", { deceptionSkill });
+    believe(state, "a", 20);
+    believe(state, "ally", 0, [evidence({ actorId: "ally", kind: "KNOWN_ALLY" })]);
+    return state;
+  };
+
+  it("bỏ phiếu cho đồng bọn khi cả làng đã dồn phiếu vào người đó", () => {
+    // Che một người mà đa số đã chỉ vào thì không cứu được ai - một lá phiếu
+    // không lật được đa số - và nó ghép tên mình vào tên người sắp bị treo.
+    const vote = selectVote(wolfSees(3), wolfState(0.9), createSeededRng("s3"), tuned());
     expect(chosen(vote)).toBe("ally");
   });
 
-  it("Sói vụng thì KHÔNG dám bán, dù bằng chứng y hệt", () => {
+  it("Sói vụng thì KHÔNG dám bán, dù áp lực y hệt", () => {
     // `deceptionSkill` là hệ số vì đây là nước đi cần diễn.
-    const state = stateFor("me", { deceptionSkill: 0.3 });
-    believe(state, "ally", 95);
-    believe(state, "a", 20);
-
-    const vote = selectVote(
-      context({ selfRole: "WEREWOLF", knownRoles: { me: "WEREWOLF", ally: "WEREWOLF" } }),
-      state,
-      createSeededRng("s3"),
-      tuned(),
-    );
+    const vote = selectVote(wolfSees(3), wolfState(0.3), createSeededRng("s3"), tuned());
     expect(chosen(vote)).not.toBe("ally");
   });
 
-  it("bằng chứng dưới ngưỡng thì vẫn bảo vệ, dù rất khéo", () => {
-    const state = stateFor("me", { deceptionSkill: 0.9 });
-    believe(state, "ally", 70);
-    believe(state, "a", 20);
-
-    const vote = selectVote(
-      context({ selfRole: "WEREWOLF", knownRoles: { me: "WEREWOLF", ally: "WEREWOLF" } }),
-      state,
-      createSeededRng("s3"),
-      tuned(),
-    );
+  it("áp lực dưới ngưỡng thì vẫn bảo vệ, dù rất khéo", () => {
+    // 1/5 chưa phải là đa số đang dồn vào.
+    const vote = selectVote(wolfSees(1), wolfState(0.9), createSeededRng("s3"), tuned());
     expect(chosen(vote)).not.toBe("ally");
   });
 });

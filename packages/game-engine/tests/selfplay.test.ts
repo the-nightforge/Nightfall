@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { GameEngine } from "../src/engine";
 import { createSeededRng } from "../src/bot/rng";
-import { BOT_WEIGHTS_V1, resolveWeights } from "../src/bot/config/weights";
+import {
+  BOT_WEIGHTS_V1,
+  DEFAULT_BOT_WEIGHTS,
+  resolveWeights,
+} from "../src/bot/config/weights";
 import {
   MAX_ROUNDS,
   renderIntentionText,
@@ -167,7 +171,9 @@ describe("replay độc lập", () => {
     expect(command).toContain("--seed boom");
     expect(command).toContain("--players 9");
     expect(command).toContain("--events");
-    expect(command).toContain("--weights 1.0.0");
+    // Nêu theo cấu hình đang dùng, không hard-code một phiên bản: lệnh replay
+    // phải trỏ đúng bộ trọng số đã sinh ra ván, kể cả sau khi default đổi.
+    expect(command).toContain(`--weights ${DEFAULT_BOT_WEIGHTS.version}`);
   });
 });
 

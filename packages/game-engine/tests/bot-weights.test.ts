@@ -19,6 +19,7 @@ import { decideFinalVote, decideHunterShot } from "../src/bot/decision/trial-dec
 import { strategyFor } from "../src/bot/roles/registry";
 import { applyPrivateInformation } from "../src/bot/belief/private-info";
 import { simulateGame } from "../src/bot/evaluation/simulate";
+import { runSelfPlay } from "../src/bot/evaluation/selfplay";
 import type {
   BotBrainState,
   BotDecisionContext,
@@ -164,8 +165,11 @@ describe("validateWeights", () => {
 });
 
 describe("resolveWeights", () => {
+  // Các test dưới đây nêu NỀN tường minh (`BOT_WEIGHTS_V1`) thay vì mượn
+  // `DEFAULT_BOT_WEIGHTS`: chúng nói về CƠ CHẾ merge, không về cấu hình đang
+  // dùng cho production, nên chúng không được đổi ý nghĩa mỗi lần default đổi.
   it("giữ nguyên mọi trường không được nêu", () => {
-    const resolved = resolveWeights({ trust: { damping: 0.9 } });
+    const resolved = resolveWeights({ trust: { damping: 0.9 } }, BOT_WEIGHTS_V1);
     expect(resolved.trust.damping).toBe(0.9);
     expect(resolved.suspicion).toEqual(BOT_WEIGHTS_V1.suspicion);
     expect(resolved.evidence.TIE_BREAK).toEqual(BOT_WEIGHTS_V1.evidence.TIE_BREAK);
@@ -174,12 +178,13 @@ describe("resolveWeights", () => {
   it("không mutate bản gốc", () => {
     // DEFAULT_BOT_WEIGHTS là hằng số dùng chung của cả process. Một lần mutate ở
     // đây rò cấu hình của ván này sang mọi ván sau, và bug đó không tái lập được.
+    const before = DEFAULT_BOT_WEIGHTS.trust.damping;
     resolveWeights({ trust: { damping: 0.9 } });
-    expect(DEFAULT_BOT_WEIGHTS.trust.damping).toBe(BOT_WEIGHTS_V1.trust.damping);
+    expect(DEFAULT_BOT_WEIGHTS.trust.damping).toBe(before);
   });
 
   it("merge nông trong một nhóm: trường cùng nhóm không bị xoá", () => {
-    const resolved = resolveWeights({ confidence: { hunterMargin: 99 } });
+    const resolved = resolveWeights({ confidence: { hunterMargin: 99 } }, BOT_WEIGHTS_V1);
     expect(resolved.confidence.hunterMargin).toBe(99);
     expect(resolved.confidence.jitterSpan).toBe(BOT_WEIGHTS_V1.confidence.jitterSpan);
   });
@@ -187,7 +192,10 @@ describe("resolveWeights", () => {
   it("vá một phần bảng evidence giữ nguyên tám kind còn lại", () => {
     // Đây là cách dùng thật của Task 8. Trải cả bảng ra trước khi vá sẽ khiến
     // test xanh dù `resolveWeights` THAY THẾ cả nhóm thay vì merge.
-    const resolved = resolveWeights({ evidence: { ACCUSE: { weight: 9, confidence: 0.9 } } });
+    const resolved = resolveWeights(
+      { evidence: { ACCUSE: { weight: 9, confidence: 0.9 } } },
+      BOT_WEIGHTS_V1,
+    );
     expect(resolved.evidence.ACCUSE).toEqual({ weight: 9, confidence: 0.9 });
     expect(resolved.evidence.TIE_BREAK).toEqual(BOT_WEIGHTS_V1.evidence.TIE_BREAK);
     expect(Object.keys(resolved.evidence).sort()).toEqual(
@@ -195,13 +203,17 @@ describe("resolveWeights", () => {
     );
   });
 
-  it("đánh dấu version khi giá trị bị chỉnh, để report không gán nhầm cho v1", () => {
+  it("đánh dấu version khi giá trị bị chỉnh, để report không gán nhầm cho preset", () => {
     // Một con số win-rate không truy được về cấu hình sinh ra nó là vô dụng.
-    expect(resolveWeights({ trust: { damping: 0.9 } }).version).toBe("1.0.0+custom");
+    expect(resolveWeights({ trust: { damping: 0.9 } }, BOT_WEIGHTS_V1).version).toBe(
+      "1.0.0+custom",
+    );
     // Đặt version tường minh thì tôn trọng caller.
-    expect(resolveWeights({ version: "2.0.0", trust: { damping: 0.9 } }).version).toBe("2.0.0");
+    expect(
+      resolveWeights({ version: "9.9.9", trust: { damping: 0.9 } }, BOT_WEIGHTS_V1).version,
+    ).toBe("9.9.9");
     // Không đổi giá trị nào thì không gắn nhãn.
-    expect(resolveWeights({}).version).toBe("1.0.0");
+    expect(resolveWeights({}, BOT_WEIGHTS_V1).version).toBe("1.0.0");
   });
 });
 
@@ -267,8 +279,12 @@ describe("presets", () => {
 describe("trọng số được nối vào quyết định", () => {
   it("aggression đổi ngưỡng đề cử", () => {
     const personality = createBotPersonality(createSeededRng("p"));
-    const low = voteThreshold(personality, resolveWeights({ aggression: { thresholdBase: 10 } }));
-    expect(low).toBeLessThan(voteThreshold(personality));
+    const base = voteThreshold(personality, BOT_WEIGHTS_V1);
+    const low = voteThreshold(
+      personality,
+      resolveWeights({ aggression: { thresholdBase: 10 } }, BOT_WEIGHTS_V1),
+    );
+    expect(low).toBeLessThan(base);
   });
 
   it("confidence.hysteresis đổi độ dính của phiếu hiện tại", () => {
@@ -381,7 +397,7 @@ describe("trọng số được nối vào quyết định", () => {
     state.suspicion.a = { score: 40, reasons: [evidence()], lastUpdatedRound: 1 };
     state.trust.a = { score: 50, reasons: [], lastUpdatedRound: 1 };
 
-    const verdict = (weights?: BotWeights): boolean =>
+    const verdict = (weights: BotWeights): boolean =>
       decideFinalVote(
         context({ phase: "FINAL_VOTE", trialAccusedId: "a", canFinalVote: true }),
         state,
@@ -389,10 +405,12 @@ describe("trọng số được nối vào quyết định", () => {
         weights,
       ).guilty;
 
-    // trust 50 vượt suspicion 40 + margin 15? Không -> TREO ở mặc định.
-    expect(verdict()).toBe(true);
+    // trust 50 vượt suspicion 40 + margin 15? Không -> TREO.
+    expect(verdict(BOT_WEIGHTS_V1)).toBe(true);
     // Hạ margin xuống 0 thì trust 50 > suspicion 40 -> THA.
-    expect(verdict(resolveWeights({ confidence: { spareTrustMargin: 0 } }))).toBe(false);
+    expect(
+      verdict(resolveWeights({ confidence: { spareTrustMargin: 0 } }, BOT_WEIGHTS_V1)),
+    ).toBe(false);
   });
 
   it("roleThresholds.witchPoisonSuspicion đổi ngưỡng dùng bình độc", () => {
@@ -579,6 +597,80 @@ describe("v1 là mốc so sánh đóng băng", () => {
   });
 });
 
+describe("v2 là cấu hình production", () => {
+  /**
+   * 200 ván, không phải 60.
+   *
+   * Sai số chuẩn của một tỉ lệ quanh 0.4 với n=60 là ~6.3%, tức khoảng tin cậy
+   * 95% rộng ±12% - đủ để một lát seed kém may mắn làm đỏ một ngưỡng đặt đúng.
+   * Đã đo: cùng cấu hình cho 28.3% ở n=60 và 40.5% ở n=200. Ngưỡng dưới đây vì
+   * thế chừa biên cho sai số lấy mẫu (SE ≈ 3.5% ở n=200) chứ không bám sát giá
+   * trị đo được. Chạy hết ~0.8s.
+   */
+  const SEEDS = Array.from({ length: 200 }, (_, i) => `v2-accept-${i}`);
+
+  /**
+   * Dùng `runSelfPlay` chứ không `simulateGame`.
+   *
+   * `simulateGame` là mặt tiền tương thích của Phase 2 và nó tắt lời nói, nên
+   * số liệu của nó KHÔNG phải số liệu của hành vi đang chạy ở production. Đo
+   * bằng một cấu hình không ai chơi là cách chắc chắn nhất để hiệu chỉnh nhầm.
+   */
+  function winRates(weights: BotWeights): { village: number; wolves: number } {
+    const results = SEEDS.map((seed) => runSelfPlay({ seed, weights }));
+    const finished = results.filter((item) => item.winner !== null).length;
+    return {
+      village: results.filter((item) => item.winner === "village").length / finished,
+      wolves: results.filter((item) => item.winner === "wolves").length / finished,
+    };
+  }
+
+  it("mặc định trỏ tới v2", () => {
+    expect(DEFAULT_BOT_WEIGHTS.version).toBe("2.0.0");
+    expect(weightsPreset("2.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+  });
+
+  it("không phe nào thắng quá áp đảo", () => {
+    // Ngưỡng thật, không phải "mỗi phe thắng ít nhất một ván" như Phase 2 - một
+    // tiêu chí mà 96% Sói thắng vẫn lọt qua.
+    // Đo được 40.5%; ngưỡng đặt ở 0.28/0.68 để chừa biên sai số lấy mẫu.
+    const rates = winRates(DEFAULT_BOT_WEIGHTS);
+    expect(rates.village).toBeGreaterThan(0.28);
+    expect(rates.village).toBeLessThan(0.68);
+    expect(rates.wolves).toBeGreaterThan(0.28);
+    expect(rates.wolves).toBeLessThan(0.68);
+  });
+
+  it("cải thiện thật so với v1 trên cùng bộ seed", () => {
+    // Cùng seed, cùng engine, chỉ khác cấu hình: chênh lệch không thể là nhiễu
+    // seed. Đo được 11.5% (v1) so với 40.5% (v2).
+    expect(winRates(DEFAULT_BOT_WEIGHTS).village).toBeGreaterThan(
+      winRates(BOT_WEIGHTS_V1).village + 0.15,
+    );
+  });
+
+  it("v1 vẫn đóng băng và vẫn tái lập được", () => {
+    // Mốc so sánh chỉ có giá trị nếu nó không trôi. Đây là điều khiến câu
+    // "v2 tốt hơn v1 hai lần rưỡi" còn kiểm chứng được ở tương lai.
+    expect(BOT_WEIGHTS_V1.version).toBe("1.0.0");
+    expect(BOT_WEIGHTS_V1.deceptionRisk.abstainPressureCeiling).toBe(0.3);
+    expect(BOT_WEIGHTS_V1.aggression.thresholdBase).toBe(58);
+    expect(BOT_WEIGHTS_V1.deceptionRisk.bussingVoteShare).toBeGreaterThan(1);
+  });
+
+  it("v2 không thắng bằng cách nới ranh giới hiểu biết", () => {
+    // Điều kiện quan trọng nhất của cả đợt hiệu chỉnh: cải thiện phải đến từ
+    // chơi hay hơn, không phải từ việc cho BOT thấy nhiều hơn.
+    for (const seed of SEEDS.slice(0, 20)) {
+      const result = runSelfPlay({ seed, weights: DEFAULT_BOT_WEIGHTS });
+      expect({ seed, violations: result.violations.map((item) => item.id) }).toEqual({
+        seed,
+        violations: [],
+      });
+    }
+  });
+});
+
 describe("BotRuntime nhận weights", () => {
   it("mặc định dùng DEFAULT_BOT_WEIGHTS", () => {
     const runtime = new BotRuntime({
@@ -604,7 +696,7 @@ describe("BotRuntime nhận weights", () => {
   });
 
   it("weights khác nhau cho ra quyết định khác nhau với cùng seed", () => {
-    const decide = (weights?: BotWeights): PublicVoteChoice => {
+    const decide = (weights: BotWeights): PublicVoteChoice => {
       const runtime = new BotRuntime({
         playerId: "me",
         rng: createSeededRng("same-seed"),
@@ -618,11 +710,12 @@ describe("BotRuntime nhận weights", () => {
       return runtime.decideVote(ctx).choice;
     };
 
-    // Chưa ai chết nên áp lực bằng 0, dưới trần 0.3 -> Sói bỏ trắng.
+    // v1: chưa ai chết nên áp lực bằng 0, dưới trần 0.3 -> Sói bỏ trắng.
     // Hạ trần về 0 thì cùng seed, cùng state, nhưng buộc phải nêu tên.
-    expect(decide().type).toBe("NO_ELIMINATION");
+    expect(decide(BOT_WEIGHTS_V1).type).toBe("NO_ELIMINATION");
     expect(
-      decide(resolveWeights({ deceptionRisk: { abstainPressureCeiling: 0 } })).type,
+      decide(resolveWeights({ deceptionRisk: { abstainPressureCeiling: 0 } }, BOT_WEIGHTS_V1))
+        .type,
     ).toBe("PLAYER");
   });
 });

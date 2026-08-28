@@ -185,23 +185,27 @@ export function selectVote(
     const targetIsWolf = targetRole === "WEREWOLF" || targetRole === "WOLF_CUB";
 
     /**
-     * Bảo vệ đồng đội, TRỪ KHI cả làng đã chắc chắn về người đó.
+     * Bảo vệ đồng đội, TRỪ KHI cả làng đã dồn phiếu vào người đó.
      *
-     * Đứng ra che một đồng bọn mà mọi người đều đã kết luận là hành vi tự tố
-     * cáo: nó không cứu được ai - phiếu của một mình mình không lật được đa số -
-     * và nó ghép tên mình vào tên người sắp bị treo. Khi bằng chứng công khai đã
-     * vượt `bussingSuspicionFloor`, nước rẻ nhất là bỏ phiếu cùng cả làng và
+     * Đứng ra che một đồng bọn mà đa số đã chỉ vào là hành vi tự tố cáo: nó
+     * không cứu được ai - một lá phiếu không lật được đa số - và nó ghép tên
+     * mình vào tên người sắp bị treo. Nước rẻ nhất là bỏ phiếu cùng cả làng và
      * giữ lấy vỏ bọc.
+     *
+     * Đo bằng ÁP LỰC CÔNG KHAI chứ không phải nghi ngờ của chính con Sói:
+     * `applyPrivateInformation` ghim suspicion của đồng đội về 0, nên một cổng
+     * dựa trên belief riêng không bao giờ mở.
      *
      * `deceptionSkill` là hệ số vì đây là một nước đi CẦN DIỄN: Sói vụng sẽ lộ
      * ra là đang tính toán. Trước Phase 3, trait này được sinh ra rồi không file
      * nào đọc.
      */
+    const votesAgainstTarget = knowledge.currentVoteCounts.players[targetId] ?? 0;
+    const voteShare = votesAgainstTarget / Math.max(1, aliveIds.length);
     const willBus =
       selfIsWolf &&
       targetIsWolf &&
-      (state.suspicion[targetId]?.score ?? 0) >=
-        weights.deceptionRisk.bussingSuspicionFloor &&
+      voteShare >= weights.deceptionRisk.bussingVoteShare &&
       personality.deceptionSkill * weights.deceptionRisk.bussingDeceptionScale >= 1;
 
     // Điểm được cộng theo TỪNG SỐ HẠNG chứ không phải một biểu thức dài. Thứ tự
@@ -237,14 +241,21 @@ export function selectVote(
       },
     ];
 
-    if (selfIsWolf && targetIsWolf && !willBus) {
-      terms.push({
-        name: "teammateProtection",
-        value: -(
-          weights.teammateProtection.penaltyBase +
-          personality.loyalty * weights.teammateProtection.loyaltySpan
-        ),
-      });
+    if (selfIsWolf && targetIsWolf) {
+      terms.push(
+        willBus
+          ? // Nhảy lên chuyến xe đang lăn. Gỡ phạt thôi là chưa đủ: đồng đội có
+            // suspicion bằng 0 trong mắt chính con Sói, nên không gì đẩy nó lên
+            // đầu bảng. Bussing thật là *bỏ phiếu cùng đa số*.
+            { name: "bussingJoin", value: voteShare * weights.deceptionRisk.bussingJoinBonus }
+          : {
+              name: "teammateProtection",
+              value: -(
+                weights.teammateProtection.penaltyBase +
+                personality.loyalty * weights.teammateProtection.loyaltySpan
+              ),
+            },
+      );
     }
 
     terms.push({ name: "jitter", value: (rng() - 0.5) * weights.confidence.jitterSpan });
