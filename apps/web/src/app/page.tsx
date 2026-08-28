@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getIdentity, saveIdentity, clearIdentity } from "@/lib/identity";
+import { runWhenSocketConnected } from "@/lib/room-socket-session";
 import { disconnectSocket } from "@/lib/socket";
 import type { Identity } from "@/lib/identity";
 
@@ -50,17 +51,18 @@ function HomeInner() {
       disconnectSocket();
       const { getSocket } = await import("@/lib/socket");
       const socket = getSocket(identity);
-      socket.once("connect", () => {
-        socket.emit("room:create", {});
-        socket.once("room:snapshot", (snap) => {
-          router.push(`/room/${snap.code}`);
-        });
-        socket.once("error", (e) => {
-          setError(e.message);
-          setBusy(false);
-        });
-      });
-      if (socket.connected) socket.emit("room:create", {});
+      const onError = (e: { message: string }) => {
+        socket.off("room:snapshot", onSnapshot);
+        setError(e.message);
+        setBusy(false);
+      };
+      const onSnapshot = (snap: { code: string }) => {
+        socket.off("error", onError);
+        router.push(`/room/${snap.code}`);
+      };
+      socket.once("room:snapshot", onSnapshot);
+      socket.once("error", onError);
+      runWhenSocketConnected(socket, () => socket.emit("room:create", {}));
     } catch {
       setError("Không kết nối được server");
       setBusy(false);
@@ -81,14 +83,18 @@ function HomeInner() {
       disconnectSocket();
       const { getSocket } = await import("@/lib/socket");
       const socket = getSocket(identity);
-      socket.once("error", function onErr(e) {
-        socket.off("error", onErr);
+      const onError = (e: { message: string }) => {
+        socket.off("room:snapshot", onSnapshot);
         setError(e.message);
         setBusy(false);
-      });
-      socket.once("room:snapshot", () => router.push(`/room/${code}`));
-      socket.on("connect", () => socket.emit("room:join", { code }));
-      if (socket.connected) socket.emit("room:join", { code });
+      };
+      const onSnapshot = () => {
+        socket.off("error", onError);
+        router.push(`/room/${code}`);
+      };
+      socket.once("error", onError);
+      socket.once("room:snapshot", onSnapshot);
+      runWhenSocketConnected(socket, () => socket.emit("room:join", { code }));
     } catch {
       setError("Không kết nối được server");
       setBusy(false);

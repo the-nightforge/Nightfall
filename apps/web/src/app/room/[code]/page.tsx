@@ -17,7 +17,7 @@ export default function RoomPage() {
   const params = useParams<{ code: string }>();
   const router = useRouter();
   const code = (params.code ?? "").toUpperCase();
-  const room = useRoomSocket();
+  const room = useRoomSocket(code);
   const snapshot = room.snapshot;
 
   // Chưa đăng nhập -> về trang chủ kèm mã phòng

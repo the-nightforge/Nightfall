@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ChatMessage, RoomSnapshot, SocketError } from "@masoi/shared";
-import { CLIENT_EVENTS, SERVER_EVENTS } from "@masoi/shared";
+import { CLIENT_EVENTS } from "@masoi/shared";
 import { getIdentity, type Identity } from "./identity";
+import { attachRoomSocketSession } from "./room-socket-session";
 import { getSocket } from "./socket";
 
 interface State {
@@ -14,7 +15,7 @@ interface State {
   identityMissing: boolean;
 }
 
-export function useRoomSocket() {
+export function useRoomSocket(code: string) {
   const [state, setState] = useState<State>({
     snapshot: null,
     messages: [],
@@ -51,22 +52,14 @@ export function useRoomSocket() {
       );
     };
 
-    socket.on("connect", onConnect);
-    socket.on("disconnect", onDisconnect);
-    socket.on(SERVER_EVENTS.ERROR, onError);
-    socket.on(SERVER_EVENTS.SNAPSHOT, onSnapshot);
-    socket.on(SERVER_EVENTS.CHAT_NEW, onChat);
-
-    if (!socket.connected) socket.connect();
-
-    return () => {
-      socket.off("connect", onConnect);
-      socket.off("disconnect", onDisconnect);
-      socket.off(SERVER_EVENTS.ERROR, onError);
-      socket.off(SERVER_EVENTS.SNAPSHOT, onSnapshot);
-      socket.off(SERVER_EVENTS.CHAT_NEW, onChat);
-    };
-  }, []);
+    return attachRoomSocketSession(socket, code, {
+      onConnect,
+      onDisconnect,
+      onError,
+      onSnapshot,
+      onChat,
+    });
+  }, [code]);
 
   const emit = (event: string, payload?: unknown) => {
     const identity = getIdentity();
