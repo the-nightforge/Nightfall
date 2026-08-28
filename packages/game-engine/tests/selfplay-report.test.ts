@@ -9,6 +9,7 @@ import {
   type SelfPlayBatchInput,
 } from "../src/bot/evaluation/report";
 import { BOT_WEIGHTS_V1 } from "../src/bot/config/weights";
+import { weightsPreset } from "../src/bot/config/presets";
 
 const BATCH: SelfPlayBatchInput = {
   seedBase: "report",
@@ -138,11 +139,15 @@ describe("fixture mẫu", () => {
   it("khớp schema hiện hành và tái lập được", () => {
     // Fixture pin SCHEMA, không pin số liệu của một lần chạy may mắn: nó được
     // sinh lại từ chính cùng batch, nên nó không thể trôi lệch âm thầm.
+    //
+    // Bộ trọng số lấy từ CHÍNH fixture, không hard-code: một fixture ghi
+    // `weightsVersion: "2.0.0"` rồi được dựng lại bằng v1 sẽ đỏ vì đúng lý do
+    // sai, và che mất việc schema có thật sự khớp hay không.
     const fixture = JSON.parse(readFileSync(path, "utf8")) as ReturnType<typeof buildReport>;
     const input: SelfPlayBatchInput = {
       seedBase: fixture.seedBase,
       games: fixture.games,
-      weights: BOT_WEIGHTS_V1,
+      weights: weightsPreset(fixture.weightsVersion),
     };
     const rebuilt = buildReport(input, runBatch(input));
 
