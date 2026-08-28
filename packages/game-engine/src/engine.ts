@@ -3,6 +3,7 @@ import {
   roleTeam,
   type GamePhase,
   type HunterShotRecap,
+  type HunterShotView,
   type NightRecap,
   type RecapPlayer,
   type Role,
@@ -70,12 +71,7 @@ export interface PlayerGameView {
   lastNightDeaths: PublicDeath[];
   nightHistory: NightRecap[];
   lastEliminated: PublicDeath | null;
-  hunterShotInfo: {
-    hunterId: string;
-    hunterName: string;
-    canAct: boolean;
-    resolved: boolean;
-  } | null;
+  hunterShotInfo: HunterShotView | null;
   hunterShots: HunterShotRecap[];
   log: string[];
 }
@@ -687,6 +683,9 @@ export class GameEngine {
               hunterName: this.player(st.hunterReaction.hunterId)?.name ?? "?",
               canAct: !st.hunterReaction.resolved && viewerId === st.hunterReaction.hunterId,
               resolved: st.hunterReaction.resolved,
+              target: st.hunterReaction.resolved
+                ? st.hunterShots.at(-1)?.target ?? null
+                : null,
             }
           : null,
       hasVoted,

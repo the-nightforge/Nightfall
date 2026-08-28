@@ -62,6 +62,8 @@ export interface HunterShotView {
   hunterName: string;
   canAct: boolean;
   resolved: boolean;
+  /** null khi chưa xử lý hoặc khi Thợ Săn chọn không bắn ai. */
+  target: RecapPlayer | null;
 }
 
 export interface HunterShotRecap {

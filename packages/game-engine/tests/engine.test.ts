@@ -1068,17 +1068,34 @@ describe("Thợ Săn", () => {
       hunterName: "Thợ Săn",
       canAct: true,
       resolved: false,
+      target: null,
     });
     expect(e.snapshotFor("wolf").hunterShotInfo).toEqual({
       hunterId: "hunter",
       hunterName: "Thợ Săn",
       canAct: false,
       resolved: false,
+      target: null,
     });
     e.submitHunterShot("hunter", null);
     expect(e.completeHunterReaction()).toBe("vote");
     e.finishGame("wolves");
     expect(e.snapshotFor("wolf").hunterShots).toEqual(e.state.hunterShots);
+  });
+
+  it("công khai mục tiêu trong snapshot khi lượt bắn đã được giải quyết", () => {
+    const e = makeHunterEngine("NIGHT_RESULT");
+    prepareHunterShot(e);
+
+    e.submitHunterShot("hunter", "wolf");
+
+    expect(e.snapshotFor("villager").hunterShotInfo).toEqual({
+      hunterId: "hunter",
+      hunterName: "Thợ Săn",
+      canAct: false,
+      resolved: true,
+      target: { id: "wolf", name: "Sói" },
+    });
   });
 
   it("không tiết lộ vai trò bí mật cho Thợ Săn đã chết trong lượt bắn", () => {

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
-import { legalHunterShotTargets } from "@/lib/hunter-shot";
+import { hunterShotOutcomeText, legalHunterShotTargets } from "@/lib/hunter-shot";
 import { PlayerGrid } from "./PlayerGrid";
 
 interface Props {
@@ -24,12 +24,14 @@ export function HunterShotPanel({ snapshot, onShoot }: Props) {
   }
 
   if (reaction.resolved) {
+    const outcome = hunterShotOutcomeText(reaction);
     return (
       <div className="card text-center">
         <p className="text-3xl">🔫</p>
         <p className="mt-2 font-semibold text-amber-200">
-          Thợ Săn đã lựa chọn. Đang xử lý kết quả…
+          {outcome}
         </p>
+        <p className="mt-1 text-sm text-mist/60">Đang xử lý kết quả…</p>
       </div>
     );
   }

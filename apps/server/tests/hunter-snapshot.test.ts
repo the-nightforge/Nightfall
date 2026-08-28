@@ -106,11 +106,29 @@ describe("Hunter snapshot privacy", () => {
       hunterName: "Thợ Săn",
       canAct: true,
       resolved: false,
+      target: null,
     });
     expect(observer.hunterShot?.canAct).toBe(false);
     expect(hunter.players.find((player) => player.id === "wolf")?.role).toBeUndefined();
     expect(observer.players.find((player) => player.id === "seer")?.role).toBeUndefined();
     expect(hunter.hunterShots).toEqual([]);
+    expect(observer.hunterShots).toEqual([]);
+  });
+
+  it("publishes the resolved shot target without revealing secret roles", () => {
+    const room = snapshotRoom("HUNTER_SHOT");
+    room.engine!.submitHunterShot("hunter", "wolf");
+
+    const observer = buildSnapshot(room, "villager");
+
+    expect(observer.hunterShot).toEqual({
+      hunterId: "hunter",
+      hunterName: "Thợ Săn",
+      canAct: false,
+      resolved: true,
+      target: { id: "wolf", name: "Sói" },
+    });
+    expect(observer.players.find((player) => player.id === "seer")?.role).toBeUndefined();
     expect(observer.hunterShots).toEqual([]);
   });
 

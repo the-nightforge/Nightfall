@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { DEFAULT_ROOM_CONFIG, type RoomSnapshot } from "@masoi/shared";
-import { legalHunterShotTargets } from "./hunter-shot";
+import { hunterShotOutcomeText, legalHunterShotTargets } from "./hunter-shot";
 
 function snapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
   return {
@@ -31,6 +31,7 @@ function snapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
       hunterName: "Thợ Săn",
       canAct: true,
       resolved: false,
+      target: null,
     },
     hasVoted: false,
     myVote: null,
@@ -71,6 +72,7 @@ describe("legalHunterShotTargets", () => {
         hunterName: "Thợ Săn",
         canAct: false,
         resolved: false,
+        target: null,
       },
     });
 
@@ -84,9 +86,38 @@ describe("legalHunterShotTargets", () => {
         hunterName: "Thợ Săn",
         canAct: false,
         resolved: true,
+        target: null,
       },
     });
 
     assert.deepEqual(legalHunterShotTargets(view), []);
+  });
+});
+
+describe("hunterShotOutcomeText", () => {
+  it("hiển thị công khai người bị Thợ Săn bắn", () => {
+    assert.equal(
+      hunterShotOutcomeText({
+        hunterId: "hunter",
+        hunterName: "An",
+        canAct: false,
+        resolved: true,
+        target: { id: "wolf", name: "Bình" },
+      }),
+      "Thợ Săn An đã bắn Bình.",
+    );
+  });
+
+  it("hiển thị rõ khi Thợ Săn không bắn ai", () => {
+    assert.equal(
+      hunterShotOutcomeText({
+        hunterId: "hunter",
+        hunterName: "An",
+        canAct: false,
+        resolved: true,
+        target: null,
+      }),
+      "Thợ Săn An đã không bắn ai.",
+    );
   });
 });
