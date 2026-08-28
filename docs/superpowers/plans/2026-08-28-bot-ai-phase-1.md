@@ -1,6 +1,6 @@
 # Deterministic BOT AI Phase 1 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Thay nomination vote ban ngày của BOT bằng lõi deterministic có memory, belief, social graph, seeded RNG và speech-only LLM, đồng thời cho phép đổi phiếu và công khai lịch sử ai vote ai sau khi chốt vòng.
 
@@ -9,6 +9,9 @@
 **Tech Stack:** TypeScript 5.5, Vitest 4, Zod 3, Socket.IO 4, Next.js 16/React 19, npm workspaces.
 
 **Spec:** `docs/superpowers/specs/2026-08-28-bot-ai-phase-1-design.md`
+
+> **Ghi chú 2026-08-29.** Toàn bộ checkbox dưới đây được tick lại trong Phase 2. Chúng chưa từng được tick lúc thực thi dù code đã merge và đã verify — xem `docs/bot-ai-phase-1-verification.md` và `docs/bot-ai-phase-2-verification.md`.
+
 
 ## Global Constraints
 
@@ -96,7 +99,7 @@
 - Produces: `GameState.phaseStartedAt`, `GameState.voteMutations`, `GameState.dayVoteHistory`.
 - Changes: `GameEngine.submitVote(voterId, targetId, now?)` cho phép thay lựa chọn hiện tại.
 
-- [ ] **Step 1: Viết test đỏ cho vote mutation và current tally**
+- [x] **Step 1: Viết test đỏ cho vote mutation và current tally**
 
 Thêm vào `packages/game-engine/tests/engine.test.ts`:
 
@@ -135,13 +138,13 @@ function votingEngine() {
 }
 ```
 
-- [ ] **Step 2: Chạy test để xác nhận đỏ**
+- [x] **Step 2: Chạy test để xác nhận đỏ**
 
 Run: `npm test --workspace @masoi/game-engine -- --run -t "cho phép đổi phiếu|gửi lại cùng lựa chọn"`
 
 Expected: FAIL vì `phaseStartedAt`, `voteMutations` chưa tồn tại và lần vote thứ hai đang ném `Bạn đã bỏ phiếu`.
 
-- [ ] **Step 3: Thêm shared vote contracts**
+- [x] **Step 3: Thêm shared vote contracts**
 
 Trong `packages/shared/src/snapshot.ts`, thêm:
 
@@ -183,7 +186,7 @@ export interface DayVoteRecap {
 }
 ```
 
-- [ ] **Step 4: Thêm state defaults và mutation journal**
+- [x] **Step 4: Thêm state defaults và mutation journal**
 
 Trong `packages/game-engine/src/types.ts`, import shared types và thêm:
 
@@ -229,13 +232,13 @@ submitVote(voterId: string, targetId: string | null, now = Date.now()): void {
 }
 ```
 
-- [ ] **Step 5: Chạy test task và toàn bộ engine tests**
+- [x] **Step 5: Chạy test task và toàn bộ engine tests**
 
 Run: `npm test --workspace @masoi/game-engine -- --run`
 
 Expected: 120 test trở lên PASS; test cũ “không được vote hai lần” phải được thay bằng assertion cho no-op/đổi phiếu mới.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/shared/src/snapshot.ts packages/game-engine/src/types.ts packages/game-engine/src/engine.ts packages/game-engine/tests/engine.test.ts
@@ -256,7 +259,7 @@ git commit -m "feat: record reversible nomination votes"
 - Produces: `PlayerGameView.dayVoteHistory` và `RoomSnapshot.dayVoteHistory` contract.
 - Guarantees: current-round identities không xuất hiện trong `VOTING`; recap xuất hiện từ `DEFENSE`/`ELIMINATION` trở đi.
 
-- [ ] **Step 1: Viết test đỏ cho recap và role privacy**
+- [x] **Step 1: Viết test đỏ cho recap và role privacy**
 
 ```ts
 it("ẩn danh tính phiếu khi đang vote và công khai recap sau khi chốt", () => {
@@ -300,13 +303,13 @@ function trialEngine() {
 }
 ```
 
-- [ ] **Step 2: Chạy test để xác nhận đỏ**
+- [x] **Step 2: Chạy test để xác nhận đỏ**
 
 Run: `npm test --workspace @masoi/game-engine -- --run -t "công khai recap|danh tính phiếu Treo"`
 
 Expected: FAIL vì snapshot chưa có `dayVoteHistory` và `resolveNomination` chưa tạo recap.
 
-- [ ] **Step 3: Tạo recap ở `resolveNomination`**
+- [x] **Step 3: Tạo recap ở `resolveNomination`**
 
 Sau khi tính kết quả, dựng final ballots từ current `state.votes` và push đúng một recap:
 
@@ -329,7 +332,7 @@ st.dayVoteHistory.push({
 
 Refactor `resolveNomination` để tạo biến `outcome` ở cả nhánh `TRIAL` và `NONE`, push recap trước `return`, nhưng không đổi phase/timer semantics.
 
-- [ ] **Step 4: Gắn final judgment vào recap cùng round**
+- [x] **Step 4: Gắn final judgment vào recap cùng round**
 
 Trong `resolveFinalVote`, sau khi có tally:
 
@@ -354,7 +357,7 @@ Thêm `dayVoteHistory: DayVoteRecap[]` vào cả `PlayerGameView` trong engine v
 `snapshotFor`. Vì recap chỉ được tạo sau `resolveNomination`, không cần nhánh
 đặc biệt để che current-round mutation.
 
-- [ ] **Step 5: Chạy engine tests và lint engine**
+- [x] **Step 5: Chạy engine tests và lint engine**
 
 Run: `npm test --workspace @masoi/game-engine -- --run`
 
@@ -362,7 +365,7 @@ Run: `npm run lint --workspace @masoi/game-engine`
 
 Expected: PASS cả hai lệnh.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/game-engine/src/engine.ts packages/shared/src/snapshot.ts packages/game-engine/tests/engine.test.ts
@@ -390,7 +393,7 @@ git commit -m "feat: publish completed day vote recaps"
 - Produces: `RoomSnapshot.dayVoteHistory` cho người thật và BOT.
 - Changes: nomination phase không kết thúc sớm ngay khi mọi người có phiếu; người sống được đổi vote tới deadline.
 
-- [ ] **Step 1: Viết server snapshot test đỏ**
+- [x] **Step 1: Viết server snapshot test đỏ**
 
 Test dựng room ở `VOTING`, submit rồi đổi phiếu, xác nhận `buildSnapshot` chưa lộ history; sau `resolveNomination`, xác nhận cả viewer người và BOT nhận cùng recap, không có role:
 
@@ -403,13 +406,13 @@ expect(buildSnapshot(room, "human").dayVoteHistory).toEqual(
 expect(JSON.stringify(buildSnapshot(room, "human").dayVoteHistory)).not.toContain("WEREWOLF");
 ```
 
-- [ ] **Step 2: Chạy server test để xác nhận đỏ**
+- [x] **Step 2: Chạy server test để xác nhận đỏ**
 
 Run: `npm test --workspace @masoi/server -- --run apps/server/tests/day-vote-history-snapshot.test.ts`
 
 Expected: FAIL vì `buildSnapshot` chưa map `dayVoteHistory`.
 
-- [ ] **Step 3: Map recap và bỏ early-end nomination**
+- [x] **Step 3: Map recap và bỏ early-end nomination**
 
 Trong `buildSnapshot`, thêm:
 
@@ -419,7 +422,7 @@ dayVoteHistory: gameView?.dayVoteHistory ?? [],
 
 Trong `ws.ts`, sau `submitVote` chỉ broadcast/persist; bỏ `maybeEndVotingEarly(room)`. Trong `machine.ts`, không gọi early-end sau phiếu BOT. Xóa `pendingEndVote` và `maybeEndVotingEarly`; giữ `pendingEndFinalVote` vì final judgment chưa cho đổi phiếu trong Phase 1.
 
-- [ ] **Step 4: Viết formatter test đỏ trên web**
+- [x] **Step 4: Viết formatter test đỏ trên web**
 
 Trong `apps/web/src/lib/vote-history.test.ts`:
 
@@ -434,7 +437,7 @@ Run: `npm test --workspace @masoi/web`
 
 Expected: FAIL vì `formatVoteMutations` chưa tồn tại.
 
-- [ ] **Step 5: Implement formatter và history component**
+- [x] **Step 5: Implement formatter và history component**
 
 `vote-history.ts` chỉ nhận recap + player-name map và trả strings; unknown ID hiển thị `Người chơi đã rời phòng`, không ném lỗi. `VoteHistoryPanel.tsx` render mutation sequence và final `HANG/SPARE` ballots khi có.
 
@@ -448,7 +451,7 @@ Trong `DayViews.tsx`:
 
 Trong `TrialPanel.tsx`, render `VoteHistoryPanel` với recap mới nhất ngay dưới thẻ bị cáo. Trong `EliminationView`, render cùng panel để thấy final judgment sau khi chốt.
 
-- [ ] **Step 6: Chạy server/web tests và typecheck**
+- [x] **Step 6: Chạy server/web tests và typecheck**
 
 Run: `npm test --workspace @masoi/server -- --run apps/server/tests/day-vote-history-snapshot.test.ts`
 
@@ -458,7 +461,7 @@ Run: `npm run lint --workspace @masoi/web`
 
 Expected: PASS cả ba lệnh.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/server/src/rooms/snapshot.ts apps/server/src/ws.ts apps/server/src/game/machine.ts apps/server/src/game/bot-room-state.ts apps/server/tests/day-vote-history-snapshot.test.ts apps/web/src/lib/vote-history.ts apps/web/src/lib/vote-history.test.ts apps/web/src/components/VoteHistoryPanel.tsx apps/web/src/components/DayViews.tsx apps/web/src/components/TrialPanel.tsx
@@ -480,7 +483,7 @@ git commit -m "feat: let players change and inspect day votes"
 - Produces: `BotRng = () => number`, `createSeededRng(seed)`, `createBotPersonality(rng)`.
 - Produces: `BotBrainState`, `BotDecisionContext`, `BotEvidence`, `BotVoteIntention`, `BotSpeechIntention` contracts used by Tasks 5–12.
 
-- [ ] **Step 1: Viết RNG/personality test đỏ**
+- [x] **Step 1: Viết RNG/personality test đỏ**
 
 ```ts
 it("replays the same sequence from the same seed", () => {
@@ -498,13 +501,13 @@ it("creates bounded personality values", () => {
 });
 ```
 
-- [ ] **Step 2: Chạy test để xác nhận đỏ**
+- [x] **Step 2: Chạy test để xác nhận đỏ**
 
 Run: `npm test --workspace @masoi/game-engine -- --run packages/game-engine/tests/bot-rng-personality.test.ts`
 
 Expected: FAIL vì module chưa tồn tại.
 
-- [ ] **Step 3: Khai báo bot contracts**
+- [x] **Step 3: Khai báo bot contracts**
 
 Trong `bot/types.ts`, định nghĩa đầy đủ các union dùng xuyên plan:
 
@@ -638,11 +641,11 @@ Import `Phase`, `Role`, `DayVoteRecap` và `PublicVoteChoice` từ `@masoi/share
 Các property names trên được dùng nguyên vẹn trong mọi task sau; server không tạo
 bản sao cạnh tranh của các contracts này.
 
-- [ ] **Step 4: Implement seeded RNG và personality**
+- [x] **Step 4: Implement seeded RNG và personality**
 
 Dùng FNV-1a 32-bit cho string seed và Mulberry32 cho sequence. `createBotPersonality` gọi RNG đúng bảy lần, map từng giá trị vào `[0.25, 0.9]`, và không dùng global random.
 
-- [ ] **Step 5: Chạy test và engine lint**
+- [x] **Step 5: Chạy test và engine lint**
 
 Run: `npm test --workspace @masoi/game-engine -- --run packages/game-engine/tests/bot-rng-personality.test.ts`
 
@@ -650,7 +653,7 @@ Run: `npm run lint --workspace @masoi/game-engine`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/game-engine/src/bot packages/game-engine/src/index.ts packages/game-engine/tests/bot-rng-personality.test.ts
@@ -672,7 +675,7 @@ git commit -m "feat: add seeded bot brain contracts"
 - Produces: `GameEngine.botKnowledgeFor(botId): BotKnowledgeView`.
 - Produces: `legalVoteChoicesFor(viewerId)` returning player/no-elimination choices without hidden state.
 
-- [ ] **Step 1: Viết security tests đỏ**
+- [x] **Step 1: Viết security tests đỏ**
 
 ```ts
 it("does not expose living or dead hidden roles to a villager", () => {
@@ -695,13 +698,13 @@ it("exposes only the viewer seer result", () => {
 });
 ```
 
-- [ ] **Step 2: Chạy test để xác nhận đỏ**
+- [x] **Step 2: Chạy test để xác nhận đỏ**
 
 Run: `npm test --workspace @masoi/game-engine -- --run packages/game-engine/tests/bot-knowledge.test.ts`
 
 Expected: FAIL vì `botKnowledgeFor` chưa tồn tại.
 
-- [ ] **Step 3: Implement knowledge mapper**
+- [x] **Step 3: Implement knowledge mapper**
 
 `bot/knowledge.ts` nhận các giá trị đã lọc, không export helper nhận raw state. `GameEngine.botKnowledgeFor` là entry point duy nhất có quyền đọc state và trả:
 
@@ -758,7 +761,7 @@ export function copyDayVoteRecap(recap: DayVoteRecap): DayVoteRecap {
 
 `knownRoles` chỉ chứa self và known wolf teammates. Không thêm role người chết chỉ vì `alive === false`.
 
-- [ ] **Step 4: Chạy security tests, engine tests và lint**
+- [x] **Step 4: Chạy security tests, engine tests và lint**
 
 Run: `npm test --workspace @masoi/game-engine -- --run packages/game-engine/tests/bot-knowledge.test.ts`
 
@@ -768,7 +771,7 @@ Run: `npm run lint --workspace @masoi/game-engine`
 
 Expected: PASS cả ba.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/game-engine/src/engine.ts packages/game-engine/src/bot/types.ts packages/game-engine/src/bot/knowledge.ts packages/game-engine/tests/bot-knowledge.test.ts
@@ -791,7 +794,7 @@ git commit -m "feat: add filtered bot knowledge views"
 - Produces: `remember(state, memory)`, `decayAndPrune(state, round, limit?)`.
 - Produces: `applyEvidence(state, evidence)` và `validateEvidence(evidence, sourceIds)`.
 
-- [ ] **Step 1: Viết tests đỏ cho dedupe, pin, prune và clamp**
+- [x] **Step 1: Viết tests đỏ cho dedupe, pin, prune và clamp**
 
 ```ts
 it("deduplicates memories by source and type", () => {
@@ -816,17 +819,17 @@ it("rejects evidence without an existing source and clamps suspicion", () => {
 });
 ```
 
-- [ ] **Step 2: Chạy test để xác nhận đỏ**
+- [x] **Step 2: Chạy test để xác nhận đỏ**
 
 Run: `npm test --workspace @masoi/game-engine -- --run packages/game-engine/tests/bot-memory-belief.test.ts`
 
 Expected: FAIL vì modules chưa tồn tại.
 
-- [ ] **Step 3: Implement memory store**
+- [x] **Step 3: Implement memory store**
 
 Identity key là `${memory.type}:${memory.sourceId}:${memory.actorId}:${memory.targetId ?? ""}`. `remember` không copy raw chat. `decayAndPrune` nhân importance của memory thường với `0.88 ** age`, sắp xếp pinned trước rồi importance giảm dần, và giữ tối đa limit.
 
-- [ ] **Step 4: Implement evidence validation và belief update**
+- [x] **Step 4: Implement evidence validation và belief update**
 
 `validateEvidence` yêu cầu `sourceId` nằm trong `seenEventIds` hoặc source IDs của current context. `applyEvidence`:
 
@@ -840,7 +843,7 @@ entry.lastUpdatedRound = evidence.round;
 
 Trust dùng evidence weight ngược dấu qua một helper riêng; không suy ra `trust = 100 - suspicion` vì hai khái niệm có thể khác nhau.
 
-- [ ] **Step 5: Chạy test task và engine lint**
+- [x] **Step 5: Chạy test task và engine lint**
 
 Run: `npm test --workspace @masoi/game-engine -- --run packages/game-engine/tests/bot-memory-belief.test.ts`
 
@@ -848,7 +851,7 @@ Run: `npm run lint --workspace @masoi/game-engine`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/game-engine/src/bot/memory packages/game-engine/src/bot/belief packages/game-engine/tests/bot-memory-belief.test.ts
@@ -871,7 +874,7 @@ git commit -m "feat: add structured bot memory and beliefs"
 - Produces: `possibleWolfPairScore(state, leftId, rightId): number` trả score mềm `0–1`.
 - Produces: `analyzeChat(messages, players): BotMemory[]`.
 
-- [ ] **Step 1: Viết vote-analysis tests đỏ**
+- [x] **Step 1: Viết vote-analysis tests đỏ**
 
 Dựng một recap có tally `A=3, B=3`, rồi C đổi từ D sang B ở 90% thời gian:
 
@@ -886,7 +889,7 @@ expect(evidence.every((item) => item.sourceId.startsWith("2:nomination:"))).toBe
 
 Thêm test bandwagon có weight thấp hơn tie-break, save vote và cùng seed/analytical skill thấp bỏ sót cùng candidate.
 
-- [ ] **Step 2: Viết chat/social tests đỏ**
+- [x] **Step 2: Viết chat/social tests đỏ**
 
 ```ts
 expect(analyzeChat([
@@ -899,13 +902,13 @@ expect(analyzeChat([
 
 Câu `"Tôi thấy An hơi lạ"` bị bỏ vì không phải accuse rõ. Thêm case hai player trùng tên rút gọn để parser bỏ thay vì chọn bừa.
 
-- [ ] **Step 3: Chạy tests để xác nhận đỏ**
+- [x] **Step 3: Chạy tests để xác nhận đỏ**
 
 Run: `npm test --workspace @masoi/game-engine -- --run packages/game-engine/tests/bot-analysis.test.ts`
 
 Expected: FAIL vì analyzers chưa tồn tại.
 
-- [ ] **Step 4: Implement vote analyzer**
+- [x] **Step 4: Implement vote analyzer**
 
 Replay mutations theo sequence với một tally tạm. Trước mỗi mutation, ghi leader/tie; sau mutation, so sánh để tạo:
 
@@ -921,7 +924,7 @@ hợp vote alignment/support nhưng luôn trả score mềm, không ghi known ro
 
 Mỗi candidate đi qua `rng() <= analyticalSkill`; hard facts như source/actor không bao giờ bị biến đổi.
 
-- [ ] **Step 5: Implement chat/social analyzers**
+- [x] **Step 5: Implement chat/social analyzers**
 
 Chat parser dùng danh sách tên normalize Unicode/lowercase và các mẫu explicit:
 
@@ -932,7 +935,7 @@ Chat parser dùng danh sách tên normalize Unicode/lowercase và các mẫu exp
 
 Social edge values clamp `0–1`; mỗi evidence giữ tối đa tám reasons gần nhất.
 
-- [ ] **Step 6: Chạy analysis tests và full engine tests**
+- [x] **Step 6: Chạy analysis tests và full engine tests**
 
 Run: `npm test --workspace @masoi/game-engine -- --run packages/game-engine/tests/bot-analysis.test.ts`
 
@@ -940,7 +943,7 @@ Run: `npm test --workspace @masoi/game-engine -- --run`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/game-engine/src/bot/analysis packages/game-engine/tests/bot-analysis.test.ts
@@ -965,7 +968,7 @@ git commit -m "feat: analyze bot vote and social evidence"
 - Produces methods: `observe(context)`, `decideVote(context)`, `decideSpeech(context, vote)` và readonly `state`.
 - Produces: `runBotScenario(input): BotScenarioResult`.
 
-- [ ] **Step 1: Viết decision tests đỏ**
+- [x] **Step 1: Viết decision tests đỏ**
 
 ```ts
 it("votes the strongest evidenced target", () => {
@@ -1001,19 +1004,19 @@ it("applies a loyalty penalty to a known wolf teammate", () => {
 });
 ```
 
-- [ ] **Step 2: Chạy test để xác nhận đỏ**
+- [x] **Step 2: Chạy test để xác nhận đỏ**
 
 Run: `npm test --workspace @masoi/game-engine -- --run packages/game-engine/tests/bot-runtime.test.ts`
 
 Expected: FAIL vì runtime/decision chưa tồn tại.
 
-- [ ] **Step 3: Implement score và hysteresis**
+- [x] **Step 3: Implement score và hysteresis**
 
 Score mỗi player từ belief score, top evidence confidence, social hostility và jitter `((rng() - 0.5) * 6)`. Trừ teammate penalty `25 + loyalty * 30`. Threshold mặc định `58 - aggressiveness * 6 - riskTolerance * 4`; hysteresis `5 + stubbornness * 8`.
 
 Không dùng một score không có reason làm speech evidence. Nếu target thắng chỉ nhờ jitter nhưng không có evidence, intention có confidence thấp và chọn `NO_ELIMINATION`.
 
-- [ ] **Step 4: Implement BotRuntime pipeline**
+- [x] **Step 4: Implement BotRuntime pipeline**
 
 `observe` dedupe public recaps/chat IDs, gọi analyzers, remember rồi apply evidence.
 Nó chuyển `lastNightDeaths` thành `PLAYER_DIED` với source ID
@@ -1026,7 +1029,7 @@ các memory còn lại đi qua decay/prune bình thường. `decideSpeech` trả
 `speechMemory`, hoặc `WITHHOLD` khi vote là no-elimination và không có evidence
 đủ mạnh.
 
-- [ ] **Step 5: Viết và implement scenario runner**
+- [x] **Step 5: Viết và implement scenario runner**
 
 `runBotScenario` nhận seed, initial contexts và checkpoints, chạy runtime thuần rồi trả decisions + final state. Test 100 seed:
 
@@ -1039,7 +1042,7 @@ for (let seed = 0; seed < 100; seed++) {
 expect(runBotScenario(scenario("same"))).toEqual(runBotScenario(scenario("same")));
 ```
 
-- [ ] **Step 6: Chạy runtime/scenario/full engine tests**
+- [x] **Step 6: Chạy runtime/scenario/full engine tests**
 
 Run: `npm test --workspace @masoi/game-engine -- --run packages/game-engine/tests/bot-runtime.test.ts packages/game-engine/tests/bot-scenario.test.ts`
 
@@ -1049,7 +1052,7 @@ Run: `npm run lint --workspace @masoi/game-engine`
 
 Expected: PASS cả ba.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/game-engine/src/bot/decision packages/game-engine/src/bot/BotRuntime.ts packages/game-engine/src/bot/scenario.ts packages/game-engine/src/index.ts packages/game-engine/tests/bot-runtime.test.ts packages/game-engine/tests/bot-scenario.test.ts
@@ -1074,7 +1077,7 @@ git commit -m "feat: add deterministic bot vote runtime"
 - Produces: `startBotSession(room)`, `botSessionFor(room)`, `clearBotSession(roomCode)`.
 - `BotSession.runtimeFor(botId)` returns stable runtime; `BotSession.rngFor(botId, channel)` returns stable channel RNG.
 
-- [ ] **Step 1: Viết context security test đỏ**
+- [x] **Step 1: Viết context security test đỏ**
 
 ```ts
 it("combines only engine knowledge and visible chat", () => {
@@ -1086,7 +1089,7 @@ it("combines only engine knowledge and visible chat", () => {
 });
 ```
 
-- [ ] **Step 2: Viết lifecycle test đỏ**
+- [x] **Step 2: Viết lifecycle test đỏ**
 
 ```ts
 const first = botSessionFor(room).runtimeFor("bot-a");
@@ -1095,21 +1098,21 @@ cleanupRoomBotState(room.code);
 expect(botSessionFor(room).runtimeFor("bot-a")).not.toBe(first);
 ```
 
-- [ ] **Step 3: Chạy tests để xác nhận đỏ**
+- [x] **Step 3: Chạy tests để xác nhận đỏ**
 
 Run: `npm test --workspace @masoi/server -- --run apps/server/tests/bot-context.test.ts apps/server/tests/bot-session.test.ts`
 
 Expected: FAIL vì adapters chưa tồn tại.
 
-- [ ] **Step 4: Implement context adapter**
+- [x] **Step 4: Implement context adapter**
 
 Gọi đúng hai nguồn: `room.engine.botKnowledgeFor(botId)` và `visibleChatLog(room, botId)`. Map chat thành `{ id, actorId: playerId, text, at }`; không đọc `room.engine.state.players[].role` trong file này.
 
-- [ ] **Step 5: Implement session registry và lifecycle cleanup**
+- [x] **Step 5: Implement session registry và lifecycle cleanup**
 
 Seed session bằng `${room.code}:${room.createdAt}`; seed runtime bằng `${sessionSeed}:${botId}:brain`; seed scheduler channels bằng `${sessionSeed}:${botId}:${channel}`. `startGame` gọi `startBotSession`; reset/game over/remove gọi `clearBotSession`. `botSessionFor` lazy-create để test fixture và room legacy không crash.
 
-- [ ] **Step 6: Chạy tests, server lint và leak regression tests**
+- [x] **Step 6: Chạy tests, server lint và leak regression tests**
 
 Run: `npm test --workspace @masoi/server -- --run apps/server/tests/bot-context.test.ts apps/server/tests/bot-session.test.ts apps/server/tests/game-lifecycle.test.ts`
 
@@ -1117,7 +1120,7 @@ Run: `npm run lint --workspace @masoi/server`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/server/src/bots/context.ts apps/server/src/bots/session-registry.ts apps/server/src/game/bot-room-state.ts apps/server/src/game/machine.ts apps/server/src/rooms/store.ts apps/server/tests/bot-context.test.ts apps/server/tests/bot-session.test.ts
@@ -1148,7 +1151,7 @@ git commit -m "feat: manage deterministic bot sessions"
 - Changes: `BotBrain.renderDaySpeech(request): Promise<Attempt<DaySpeechDecision>>` thay `decideDay(view)`.
 - Produces: `renderBotSpeech(request): Promise<string | null>` với template fallback.
 
-- [ ] **Step 1: Viết prompt/schema tests đỏ**
+- [x] **Step 1: Viết prompt/schema tests đỏ**
 
 ```ts
 const spec = buildDaySpeechPrompt(speechRequest());
@@ -1160,7 +1163,7 @@ expect(spec.user).toContain("Không được thêm sự kiện hoặc đổi m�
 
 Thêm interpreter test: raw response có `voteTargetId` bị Zod `.strict()` từ chối hoặc field bị cấm bởi schema; output type không có target.
 
-- [ ] **Step 2: Viết fallback preservation test đỏ**
+- [x] **Step 2: Viết fallback preservation test đỏ**
 
 ```ts
 it("keeps the deterministic target when every provider fails", async () => {
@@ -1170,13 +1173,13 @@ it("keeps the deterministic target when every provider fails", async () => {
 });
 ```
 
-- [ ] **Step 3: Chạy tests để xác nhận đỏ**
+- [x] **Step 3: Chạy tests để xác nhận đỏ**
 
 Run: `npm test --workspace @masoi/server -- --run apps/server/tests/bot-prompt.test.ts apps/server/tests/bot-speech-renderer.test.ts`
 
 Expected: FAIL vì speech-only APIs chưa tồn tại.
 
-- [ ] **Step 4: Thay day provider contract**
+- [x] **Step 4: Thay day provider contract**
 
 `SpeechRequest` chứa speaker name/style, `BotSpeechIntention`, renderable evidence `{ sourceId, summary }`, target display name và recent speech source IDs. Không chứa `RoomSnapshot`, raw role map hoặc legal targets.
 
@@ -1191,7 +1194,7 @@ export const daySpeechSchema = z.object({
 
 Đổi Gemini/OpenAI/Fallback methods sang `renderDaySpeech`. Giữ nguyên methods legacy đêm/Hunter/defense/final vote.
 
-- [ ] **Step 5: Implement safe prompt và template renderer**
+- [x] **Step 5: Implement safe prompt và template renderer**
 
 Prompt liệt kê duy nhất target/evidence trong request, chỉ thị tối đa hai câu và cấm thêm sự kiện. Template fallback chọn mẫu theo intention nhưng không dùng RNG:
 
@@ -1205,7 +1208,7 @@ return null;
 
 Sau provider response, renderer cắt theo chat max; target/evidence không được parse từ output.
 
-- [ ] **Step 6: Chạy toàn bộ bot provider tests và server lint**
+- [x] **Step 6: Chạy toàn bộ bot provider tests và server lint**
 
 Run: `npm test --workspace @masoi/server -- --run apps/server/tests/bot-prompt.test.ts apps/server/tests/gemini-brain.test.ts apps/server/tests/openai-compat-brain.test.ts apps/server/tests/fallback-brain.test.ts apps/server/tests/bot-speech-renderer.test.ts`
 
@@ -1213,7 +1216,7 @@ Run: `npm run lint --workspace @masoi/server`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/server/src/bots apps/server/tests/bot-prompt.test.ts apps/server/tests/gemini-brain.test.ts apps/server/tests/openai-compat-brain.test.ts apps/server/tests/fallback-brain.test.ts apps/server/tests/bot-speech-renderer.test.ts
@@ -1236,7 +1239,7 @@ git commit -m "refactor: restrict day bot providers to speech"
 - Consumes: `BotSession`, `buildBotDecisionContext`, `BotRuntime`, `renderBotSpeech`.
 - Guarantees: discussion uses deterministic intention; VOTING has at most three checkpoints per BOT; no random fallback; stale results do not submit.
 
-- [ ] **Step 1: Viết scheduler tests đỏ**
+- [x] **Step 1: Viết scheduler tests đỏ**
 
 Test fake timers với seeded room/session:
 
@@ -1264,13 +1267,13 @@ it("can change once at a later checkpoint and never duplicates the same choice",
 
 Giữ regression test “skip discussion bỏ kết quả speech đang chạy”.
 
-- [ ] **Step 2: Chạy scheduler tests để xác nhận đỏ**
+- [x] **Step 2: Chạy scheduler tests để xác nhận đỏ**
 
 Run: `npm test --workspace @masoi/server -- --run apps/server/tests/day-bot-scheduling.test.ts apps/server/tests/deterministic-vote-scheduling.test.ts`
 
 Expected: FAIL vì machine còn dùng provider `decideDay` và `pendingVote`.
 
-- [ ] **Step 3: Chuyển `scheduleDayBots` sang runtime + speech renderer**
+- [x] **Step 3: Chuyển `scheduleDayBots` sang runtime + speech renderer**
 
 Tại callback của từng BOT:
 
@@ -1287,7 +1290,7 @@ const chat = await renderBotSpeech(toSpeechRequest(member, runtime.state, speech
 
 Giữ engine identity/phase/round/phaseEndsAt checks trước khi push chat. Sau push, gọi `runtime.recordSpeech(speech)` bằng source IDs đã dùng.
 
-- [ ] **Step 4: Chuyển `scheduleVoteBots` sang ba seeded checkpoints**
+- [x] **Step 4: Chuyển `scheduleVoteBots` sang ba seeded checkpoints**
 
 Với mỗi BOT dùng channel RNG `vote-schedule` để tính ratios:
 
@@ -1297,11 +1300,11 @@ const ratios = [0.12 + rng() * 0.12, 0.52 + rng() * 0.08, 0.84 + rng() * 0.08];
 
 Ở mỗi timer: dựng context mới, `runtime.observe`, `runtime.decideVote`; convert `PublicVoteChoice` thành engine target `string | null`; submit. Engine no-op cùng choice. Không gọi `randomBrain`, `botBrain` hoặc provider trong path này.
 
-- [ ] **Step 5: Xóa pending day vote state và cập nhật cleanup**
+- [x] **Step 5: Xóa pending day vote state và cập nhật cleanup**
 
 Xóa `pendingVote` map/imports. Giữ `pendingEndFinalVote` cho legacy final judgment. Đổi comments/tests nhắc “planned vote” thành runtime state.
 
-- [ ] **Step 6: Chạy scheduler tests và toàn bộ server tests**
+- [x] **Step 6: Chạy scheduler tests và toàn bộ server tests**
 
 Run: `npm test --workspace @masoi/server -- --run apps/server/tests/day-bot-scheduling.test.ts apps/server/tests/deterministic-vote-scheduling.test.ts apps/server/tests/bot-vote.test.ts`
 
@@ -1311,13 +1314,13 @@ Run: `npm run lint --workspace @masoi/server`
 
 Expected: PASS; server test count lớn hơn baseline 273.
 
-- [ ] **Step 7: Kiểm tra không còn global random trong migrated day path**
+- [x] **Step 7: Kiểm tra không còn global random trong migrated day path**
 
 Run: `rg -n "Math\.random" apps/server/src/game/machine.ts packages/game-engine/src/bot`
 
 Expected: Không có match trong `packages/game-engine/src/bot`; mọi match còn lại trong `machine.ts` chỉ thuộc night/Hunter/final legacy path. Nếu một match nằm trong `scheduleDayBots` hoặc `scheduleVoteBots`, chuyển nó sang session RNG trước khi commit.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/server/src/game/machine.ts apps/server/src/game/bot-room-state.ts apps/server/src/bots/targets.ts apps/server/tests/day-bot-scheduling.test.ts apps/server/tests/bot-vote.test.ts apps/server/tests/deterministic-vote-scheduling.test.ts
@@ -1337,7 +1340,7 @@ git commit -m "feat: schedule deterministic bot day votes"
 - Produces: documented behavior, commands, test counts và known Phase 2 boundary.
 - Does not add: difficulty controls, role strategies hoặc 1.000-game balance claims.
 
-- [ ] **Step 1: Cập nhật README**
+- [x] **Step 1: Cập nhật README**
 
 Thay hạn chế “BOT dùng Gemini để chọn mục tiêu và thảo luận” bằng mô tả chính xác:
 
@@ -1347,7 +1350,7 @@ Thay hạn chế “BOT dùng Gemini để chọn mục tiêu và thảo luận�
 
 Thêm ghi chú luật: người chơi được đổi nomination vote tới deadline; danh tính vote công khai sau khi chốt; role người chết vẫn ẩn tới cuối ván.
 
-- [ ] **Step 2: Chạy verification đầy đủ từ workspace root**
+- [x] **Step 2: Chạy verification đầy đủ từ workspace root**
 
 Run: `npm test --workspace @masoi/game-engine -- --run`
 
@@ -1361,7 +1364,7 @@ Run: `npm run build`
 
 Expected: tất cả PASS. Không dùng số test ước lượng trong báo cáo; ghi đúng số từ output thực tế.
 
-- [ ] **Step 3: Chạy invariant/privacy checks**
+- [x] **Step 3: Chạy invariant/privacy checks**
 
 Run: `rg -n "Math\.random" packages/game-engine/src/bot`
 
@@ -1375,7 +1378,7 @@ Run: `rg -n "voteTargetId" apps/server/src/bots/prompt.ts apps/server/src/bots/d
 
 Expected: không có output trong day speech path. Night target fields khác tên và vẫn hợp lệ.
 
-- [ ] **Step 4: Viết verification report bằng số liệu thật**
+- [x] **Step 4: Viết verification report bằng số liệu thật**
 
 `docs/bot-ai-phase-1-verification.md` phải ghi:
 
@@ -1387,7 +1390,7 @@ Expected: không có output trong day speech path. Night target fields khác tê
 - Xác nhận LLM day schema không có target.
 - Phần còn legacy: night, Hunter, defense, final judgment.
 
-- [ ] **Step 5: Kiểm tra secrets và diff**
+- [x] **Step 5: Kiểm tra secrets và diff**
 
 Run: `git status --short`
 
@@ -1397,14 +1400,14 @@ Run: `git diff -- . ':!package-lock.json'`
 
 Expected: chỉ có README/report hoặc factual spec correction chưa commit; không có `.env`, API key, prompt log hoặc file build output.
 
-- [ ] **Step 6: Commit tài liệu hoàn tất Phase 1**
+- [x] **Step 6: Commit tài liệu hoàn tất Phase 1**
 
 ```bash
 git add README.md docs/bot-ai-phase-1-verification.md docs/superpowers/specs/2026-08-28-bot-ai-phase-1-design.md
 git commit -m "docs: record bot AI phase one verification"
 ```
 
-- [ ] **Step 7: Ghi handoff cho Phase 2**
+- [x] **Step 7: Ghi handoff cho Phase 2**
 
 Trong final implementation response, nêu:
 

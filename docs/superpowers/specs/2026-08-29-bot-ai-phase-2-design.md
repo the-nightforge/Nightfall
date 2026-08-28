@@ -230,7 +230,11 @@ export function decideFinalVote(context, state, rng): BotFinalVoteIntention;
 export function decideHunterShot(context, state, rng): BotHunterShotIntention;
 ```
 
-- **Treo/Tha:** Treo khi `suspicion[accused] >= voteThreshold(personality)`. Sói **không bao giờ** Treo đồng bọn đã biết. Người vừa bị chính BOT đề cử thì nghiêng về Treo, nhưng vẫn phải qua ngưỡng — nếu bằng chứng đã nguội thì đổi ý là đúng.
+- **Treo/Tha:** mặc định **TREO**, trừ khi có lý do tích cực tin bị cáo vô tội (Tiên Tri soi sạch, hoặc đồng đội). Sói **không bao giờ** Treo đồng bọn đã biết.
+
+  > **Sửa sau khi có dữ liệu (Task 9).** Bản đầu của spec này chọn mặc định **THA**, lập luận rằng mặc định Treo biến mỗi phiên toà thành một vụ hành quyết. Harness bác bỏ: phe làng thua **30/30** ván. Nguyên nhân là một vòng lặp chết — không ai bị kết án nên không có lịch sử phiếu, nên nghi ngờ mãi bằng 0, nên không ai bị kết án. Điều bị bỏ sót là tới được phiên toà nghĩa là đa số làng **đã** chỉ vào người đó; tha vì bản thân chưa có bằng chứng riêng là vứt bỏ phán đoán tập thể và tiêu một ngày, trong khi mỗi đêm làng vẫn mất một người.
+  >
+  > Cùng lý do, `selectVote` chỉ cho **phe Sói** chọn "không treo ai" khi bằng chứng mỏng: nước đó tiêu một ngày của làng và không tốn gì của Sói.
 - **Thợ Săn:** bắn người suspicion cao nhất vượt ngưỡng; không ai vượt thì **không bắn**. Bắn bừa lúc chết là cách nhanh nhất để phe làng tự sát.
 
 ---

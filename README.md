@@ -209,6 +209,8 @@ socket reconnect với cùng auth → server xác thực token (SHA-256 lookup),
 
 - Single-instance server: trạng thái phòng chính nằm trong RAM, Redis là bản sao phục vụ khôi phục phòng (phòng đang giữa trận khi restart sẽ được trả về LOBBY an toàn).
 - Chưa có voice/video, chưa có lịch sử ván chi tiết trong UI.
-- Ban ngày BOT dùng decision engine deterministic có memory/belief để thảo luận và đề cử; LLM chỉ diễn đạt lời nói. Hành động đêm và các role strategy nâng cao đang được migrate theo phase, với provider fallback hiện tại vẫn hoạt động cho phần chưa migrate.
+- **Toàn bộ** quyết định của BOT — hành động đêm, đề cử, phiếu Treo/Tha, phát bắn Thợ Săn — do decision engine deterministic có memory/belief/chiến lược theo vai quyết định, tái lập được từ seed. LLM **chỉ** diễn đạt lời nói: `BotBrain` không còn chữ ký nào trả về một nước đi. Thiếu `GEMINI_API_KEY` hay hết quota chỉ làm BOT nói bằng câu mẫu, không đổi một nước đi nào.
+- BOT chưa biết tự nhận vai trong chat, nên phe làng chưa truyền được thông tin của Tiên Tri cho nhau; đo bằng harness thì phe làng thắng khoảng 17% (xem `docs/bot-ai-phase-2-verification.md`).
+- `BotBrainState` không được lưu: server restart giữa ván thì BOT mất trí nhớ của ván đó.
 - Chưa có persistence cho chat/khôi phục trận dở sau khi server chết giữa chừng.
 - Rate limit chống spam dựa trên bộ nhớ đơn giản.
