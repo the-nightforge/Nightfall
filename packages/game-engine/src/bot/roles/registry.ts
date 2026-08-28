@@ -1,6 +1,9 @@
 import type { Role } from "@masoi/shared";
+import { guardStrategy } from "./guard";
+import { seerStrategy } from "./seer";
 import { passiveStrategy, type BotRoleStrategy } from "./strategy";
 import { werewolfStrategy } from "./werewolf";
+import { witchStrategy } from "./witch";
 
 /**
  * Bảng tra chiến lược theo vai.
@@ -12,6 +15,9 @@ import { werewolfStrategy } from "./werewolf";
  */
 const REGISTRY: Partial<Record<Role, () => BotRoleStrategy>> = {
   WEREWOLF: werewolfStrategy,
+  SEER: seerStrategy,
+  GUARD: guardStrategy,
+  WITCH: witchStrategy,
 };
 
 export function strategyFor(role: Role): BotRoleStrategy {

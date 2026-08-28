@@ -1,0 +1,324 @@
+import { describe, expect, it } from "vitest";
+import { strategyFor } from "../src/bot/roles/registry";
+import { createSeededRng } from "../src/bot/rng";
+import { createBotPersonality } from "../src/bot/personality/personality";
+import { createBotBrainState } from "../src/bot/memory/memory-store";
+import type {
+  BotBrainState,
+  BotDecisionContext,
+  BotKnowledgeView,
+  NightKnowledge,
+} from "../src/bot/types";
+
+const PLAYERS = ["me", "a", "b", "c", "d"];
+
+function stateFor(seed = "night"): BotBrainState {
+  return createBotBrainState("me", createBotPersonality(createSeededRng(seed)), PLAYERS);
+}
+
+function emptyTargets(): NightKnowledge["legalTargets"] {
+  return { KILL: [], SEE: [], GUARD: [], HEAL: [], POISON: [], SKIP: [] };
+}
+
+function context(
+  night: Partial<NightKnowledge>,
+  over: Partial<BotKnowledgeView> = {},
+): BotDecisionContext {
+  return {
+    knowledge: {
+      botId: "me",
+      round: 2,
+      phase: "NIGHT",
+      phaseStartedAt: 0,
+      phaseEndsAt: 30_000,
+      selfRole: "VILLAGER",
+      players: PLAYERS.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
+      knownRoles: {},
+      seerResult: null,
+      night: {
+        canAct: true,
+        legalActions: [],
+        legalTargets: emptyTargets(),
+        wolfTarget: null,
+        guardPrevious: null,
+        healUsed: false,
+        poisonUsed: false,
+        wolvesLocked: false,
+        ...night,
+      },
+      publicVoteHistory: [],
+      currentVoteCounts: { players: {}, noElimination: 0 },
+      hasVoted: false,
+      myVote: null,
+      legalVoteChoices: [],
+      lastNightDeaths: [],
+      ...over,
+    },
+    visibleChat: [],
+  };
+}
+
+const rng = () => createSeededRng("fixed");
+
+describe("Tiên Tri", () => {
+  const seer = () => strategyFor("SEER");
+
+  it("soi trong danh sách hợp lệ và trả về hành động SEE", () => {
+    const decision = seer().decideNight(
+      context({ legalActions: ["SEE"], legalTargets: { ...emptyTargets(), SEE: ["a", "b"] } }),
+      stateFor(),
+      rng(),
+    );
+
+    expect(decision!.action).toBe("SEE");
+    expect(["a", "b"]).toContain(decision!.targetId);
+  });
+
+  it("không soi lại người đã soi rồi", () => {
+    // Lượt soi là tài nguyên khan hiếm nhất của phe làng; soi lại là mất trắng.
+    const state = stateFor();
+    state.seenEventIds.push("seer:a");
+    state.knownInformation.seerResults.push({
+      id: "SEER_RESULT:seer:a:me",
+      sourceId: "seer:a",
+      round: 1,
+      phase: "NIGHT",
+      type: "SEER_RESULT",
+      actorId: "me",
+      targetId: "a",
+      importance: 10,
+      pinned: true,
+      data: { isWolf: false },
+    });
+
+    const decision = seer().decideNight(
+      context({ legalActions: ["SEE"], legalTargets: { ...emptyTargets(), SEE: ["a", "b"] } }),
+      state,
+      rng(),
+    );
+
+    expect(decision!.targetId).toBe("b");
+  });
+
+  it("bỏ lượt khi mọi người đều đã soi rồi", () => {
+    const state = stateFor();
+    state.seenEventIds.push("seer:a");
+    state.knownInformation.seerResults.push({
+      id: "SEER_RESULT:seer:a:me",
+      sourceId: "seer:a",
+      round: 1,
+      phase: "NIGHT",
+      type: "SEER_RESULT",
+      actorId: "me",
+      targetId: "a",
+      importance: 10,
+      pinned: true,
+      data: { isWolf: false },
+    });
+
+    const decision = seer().decideNight(
+      context({ legalActions: ["SEE"], legalTargets: { ...emptyTargets(), SEE: ["a"] } }),
+      state,
+      rng(),
+    );
+
+    expect(decision).toBeNull();
+  });
+});
+
+describe("Bảo Vệ", () => {
+  const guard = () => strategyFor("GUARD");
+
+  it("không bao giờ chọn mục tiêu của đêm trước", () => {
+    const decision = guard().decideNight(
+      context({
+        legalActions: ["GUARD"],
+        legalTargets: { ...emptyTargets(), GUARD: ["a", "b"] },
+        guardPrevious: "a",
+      }),
+      stateFor(),
+      rng(),
+    );
+
+    expect(decision!.targetId).not.toBe("a");
+  });
+
+  it("ưu tiên đỡ người mình tin nhất", () => {
+    const state = stateFor();
+    state.trust.b = { score: 90, reasons: [], lastUpdatedRound: 2 };
+    state.trust.a = { score: 5, reasons: [], lastUpdatedRound: 2 };
+
+    const decision = guard().decideNight(
+      context({
+        legalActions: ["GUARD"],
+        legalTargets: { ...emptyTargets(), GUARD: ["a", "b"] },
+      }),
+      state,
+      rng(),
+    );
+
+    expect(decision!.targetId).toBe("b");
+  });
+
+  it("tự đỡ mình khi đang bị nhắm nhiều nhất", () => {
+    const state = stateFor();
+    for (const from of ["a", "b", "c"]) {
+      state.relationships[`${from}->me`] = {
+        support: 0,
+        hostility: 1,
+        voteAlignment: 0,
+        samples: 3,
+        reasons: [],
+        lastUpdatedRound: 2,
+      };
+    }
+
+    const decision = guard().decideNight(
+      context({
+        legalActions: ["GUARD"],
+        legalTargets: { ...emptyTargets(), GUARD: ["me", "a", "b"] },
+      }),
+      state,
+      rng(),
+    );
+
+    expect(decision!.targetId).toBe("me");
+  });
+});
+
+describe("Phù Thuỷ", () => {
+  const witch = () => strategyFor("WITCH");
+
+  it("cứu nạn nhân mình tin tưởng khi bình cứu còn", () => {
+    const state = stateFor();
+    state.trust.c = { score: 80, reasons: [], lastUpdatedRound: 2 };
+
+    const decision = witch().decideNight(
+      context({
+        legalActions: ["HEAL", "POISON", "SKIP"],
+        legalTargets: { ...emptyTargets(), POISON: ["a", "b", "c"] },
+        wolfTarget: "c",
+        wolvesLocked: true,
+      }),
+      state,
+      rng(),
+    );
+
+    expect(decision!.action).toBe("HEAL");
+    // Engine không nhận mục tiêu cho bình cứu.
+    expect(decision!.targetId).toBeNull();
+  });
+
+  it("không cứu khi HEAL không được chào", () => {
+    const state = stateFor();
+    state.trust.c = { score: 80, reasons: [], lastUpdatedRound: 2 };
+
+    const decision = witch().decideNight(
+      context({
+        legalActions: ["POISON", "SKIP"],
+        legalTargets: { ...emptyTargets(), POISON: ["a", "b"] },
+        wolfTarget: "c",
+        wolvesLocked: true,
+        healUsed: true,
+      }),
+      state,
+      rng(),
+    );
+
+    expect(decision!.action).not.toBe("HEAL");
+  });
+
+  it("dùng bình độc lên người bị nghi rất nặng", () => {
+    const state = stateFor();
+    state.suspicion.a = { score: 100, reasons: [], lastUpdatedRound: 2 };
+
+    const decision = witch().decideNight(
+      context({
+        legalActions: ["POISON", "SKIP"],
+        legalTargets: { ...emptyTargets(), POISON: ["a", "b"] },
+      }),
+      state,
+      rng(),
+    );
+
+    expect(decision!.action).toBe("POISON");
+    expect(decision!.targetId).toBe("a");
+  });
+
+  it("SKIP khi không có lý do dùng bình nào", () => {
+    // Bình thuốc dùng một lần cả ván. Tiêu nó vì không nghĩ ra việc gì hay hơn
+    // là cách chắc chắn để không còn nó lúc thật sự cần.
+    const decision = witch().decideNight(
+      context({
+        legalActions: ["POISON", "SKIP"],
+        legalTargets: { ...emptyTargets(), POISON: ["a", "b"] },
+      }),
+      stateFor(),
+      rng(),
+    );
+
+    expect(decision!.action).toBe("SKIP");
+    expect(decision!.targetId).toBeNull();
+  });
+
+  it("không bao giờ độc người mình tin", () => {
+    const state = stateFor();
+    state.suspicion.a = { score: 100, reasons: [], lastUpdatedRound: 2 };
+    state.trust.a = { score: 100, reasons: [], lastUpdatedRound: 2 };
+
+    const decision = witch().decideNight(
+      context({
+        legalActions: ["POISON", "SKIP"],
+        legalTargets: { ...emptyTargets(), POISON: ["a"] },
+      }),
+      state,
+      rng(),
+    );
+
+    expect(decision!.action).toBe("SKIP");
+  });
+});
+
+describe("chung cho mọi chiến lược đêm", () => {
+  it("mục tiêu luôn nằm trong legalTargets của đúng hành động", () => {
+    const cases = [
+      { role: "SEER" as const, action: "SEE" as const, targets: ["a", "b", "c"] },
+      { role: "GUARD" as const, action: "GUARD" as const, targets: ["a", "b", "c"] },
+    ];
+
+    for (const item of cases) {
+      const decision = strategyFor(item.role).decideNight(
+        context({
+          legalActions: [item.action],
+          legalTargets: { ...emptyTargets(), [item.action]: item.targets },
+        }),
+        stateFor(),
+        rng(),
+      );
+      expect(item.targets).toContain(decision!.targetId);
+    }
+  });
+
+  it("cùng seed cho cùng quyết định", () => {
+    const run = (role: "SEER" | "GUARD" | "WITCH") =>
+      JSON.stringify(
+        strategyFor(role).decideNight(
+          context({
+            legalActions: ["SEE", "GUARD", "POISON", "SKIP"],
+            legalTargets: {
+              ...emptyTargets(),
+              SEE: ["a", "b"],
+              GUARD: ["a", "b"],
+              POISON: ["a", "b"],
+            },
+          }),
+          stateFor("determinism"),
+          createSeededRng("same"),
+        ),
+      );
+
+    for (const role of ["SEER", "GUARD", "WITCH"] as const) {
+      expect(run(role)).toBe(run(role));
+    }
+  });
+});
