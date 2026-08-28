@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import type { RoomSnapshot } from "@masoi/shared";
 import { getIdentity } from "@/lib/identity";
 import { useRoomSocket } from "@/lib/useRoomSocket";
+import { useGameAudio } from "@/lib/useGameAudio";
 import { PhaseBanner } from "@/components/PhaseBanner";
 import { PlayerGrid } from "@/components/PlayerGrid";
 import { ChatBox } from "@/components/ChatBox";
@@ -13,6 +14,7 @@ import { NightPanel } from "@/components/NightPanel";
 import { DayView, EliminationView, GameOverView } from "@/components/DayViews";
 import { HunterShotPanel } from "@/components/HunterShotPanel";
 import { Lobby } from "@/components/Lobby";
+import { SoundControl } from "@/components/SoundControl";
 
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
@@ -20,6 +22,7 @@ export default function RoomPage() {
   const code = (params.code ?? "").toUpperCase();
   const room = useRoomSocket(code);
   const snapshot = room.snapshot;
+  useGameAudio(snapshot);
 
   // Chưa đăng nhập -> về trang chủ kèm mã phòng
   useEffect(() => {
@@ -111,6 +114,7 @@ export default function RoomPage() {
           >
             {code}
           </button>
+          <SoundControl />
           {!room.connected && (
             <span className="rounded bg-blood-600/30 px-2 py-0.5 text-xs text-blood-400">Mất kết nối...</span>
           )}
