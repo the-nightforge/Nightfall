@@ -7,4 +7,7 @@ export * from "./bot/memory/memory-store";
 export * from "./bot/memory/memory-decay";
 export * from "./bot/belief/evidence";
 export * from "./bot/belief/belief-state";
+export * from "./bot/analysis/vote-analysis";
+export * from "./bot/analysis/social-analysis";
+export * from "./bot/analysis/chat-analysis";
 export * from "./bot/personality/personality";
