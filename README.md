@@ -133,14 +133,17 @@ Các gói miễn phí có giới hạn tài nguyên và có thể thay đổi. R
 |---|---|
 | `npm run dev:server` | Server dev (tsx watch, cổng 4100) |
 | `npm run dev:web` | Next.js dev (cổng 3000) |
-| `npm run test` | Unit test game engine (Vitest) |
-| `npm test --workspace @masoi/server` | Unit test bảo mật và quy tắc backend |
-| `npm run lint` | Typecheck toàn bộ |
+| `npm test` | Toàn bộ test: engine (Vitest) + server (Vitest) + web (node:test). Tự build `shared`/`engine` trước qua `pretest` |
+| `npm test --workspace @masoi/server` | Chỉ test backend. Cần `npm run build:deps` trước nếu `dist/` chưa có |
+| `npm run lint` | Typecheck toàn bộ; tự build `shared`/`engine` trước qua `prelint` |
 | `npm run build` | Build shared → engine → server → web |
+| `npm run build:deps` | Chỉ build `shared` → `engine`, đủ cho test/lint |
 | `npm run db:generate` | Prisma generate client |
 | `npm run db:migrate` | Prisma migrate deploy |
 | `npm run test:e2e` | E2E smoke test qua Socket.IO; cần server local và hiện chưa dùng làm release gate cho tới khi luồng sẵn sàng được tự động hoá |
 | `npm run bot:probe` | Gọi Gemini một lần với ván giả để kiểm tra key và prompt (cần `GEMINI_API_KEY`) |
+
+`@masoi/shared` và `@masoi/game-engine` trỏ `main`/`types` vào `dist/`, mà `dist/` nằm trong `.gitignore`. Vì thế trên một bản clone sạch, hai package đó chưa tồn tại dưới dạng mà workspace khác import được, và bất kỳ lệnh nào chạy thẳng vào một workspace (`npm test --workspace @masoi/server`) sẽ đỏ hàng loạt với `has no exported member` — lỗi build artifact, không phải lỗi code. `npm test` và `npm run lint` ở thư mục gốc tự lo việc này; chạy thẳng workspace thì cần `npm run build:deps` trước.
 
 ## REST API
 
