@@ -1,5 +1,7 @@
 import type { PublicVoteChoice } from "@masoi/shared";
+import { isolationScore } from "../analysis/coalition";
 import { incomingHostilityOf, possibleWolfPairScore } from "../analysis/social-analysis";
+import { strategyFor } from "../roles/registry";
 import type {
   BotBrainState,
   BotDecisionContext,
@@ -19,6 +21,8 @@ const PAIR_BONUS = 8;
 const TRUST_DAMPING = 0.2;
 /** Biên độ nhiễu người-hoá: tối đa ±3 điểm, luôn từ RNG được inject. */
 const JITTER_SPAN = 6;
+/** Nhỏ có chủ đích: cô lập là gợi ý, không được tự mình đẩy ai qua ngưỡng. */
+const ISOLATION_BONUS = 8;
 
 /** Số evidence tối đa mang theo một intention. */
 const MAX_INTENTION_EVIDENCE = 3;
@@ -89,6 +93,11 @@ export function selectVote(
   const selfIsWolf = knowledge.knownRoles[state.playerId] === "WEREWOLF";
   const threshold = voteThreshold(personality);
 
+  // Hiểu biết riêng của vai, do chính strategy của vai đó cấp. Tách khỏi vòng
+  // lặp chấm điểm để `selectVote` không phải biết vai nào tồn tại.
+  const bias = strategyFor(knowledge.selfRole).voteBias(context, state);
+  const aliveIds = knowledge.players.filter((p) => p.alive).map((p) => p.id);
+
   const scored: ScoredTarget[] = [];
   for (const choice of knowledge.legalVoteChoices) {
     if (choice.type !== "PLAYER") continue;
@@ -105,7 +114,12 @@ export function selectVote(
       topConfidence * EVIDENCE_CONFIDENCE_BONUS +
       incomingHostilityOf(state, choice.targetId) * HOSTILITY_BONUS +
       pairPressure(state, choice.targetId) * PAIR_BONUS -
-      (state.trust[choice.targetId]?.score ?? 0) * TRUST_DAMPING;
+      (state.trust[choice.targetId]?.score ?? 0) * TRUST_DAMPING +
+      (bias[choice.targetId] ?? 0) +
+      // Người bị cả làng dồn vào mà không ai bênh thì dễ bị treo; đó vừa là tín
+      // hiệu (có thể họ đã lộ), vừa là cái bẫy (đám đông có khi đang sai).
+      // Trọng số nhỏ có chủ đích: nó không được tự mình đẩy ai qua ngưỡng.
+      isolationScore(state, choice.targetId, aliveIds) * ISOLATION_BONUS;
 
     // Phase 1 chỉ có teammate-safety penalty đơn giản; bussing thuộc Phase 3.
     if (selfIsWolf && knowledge.knownRoles[choice.targetId] === "WEREWOLF") {

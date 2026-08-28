@@ -158,6 +158,22 @@ export interface NightKnowledge {
   wolvesLocked: boolean;
 }
 
+/**
+ * Một nhóm người chơi hành xử như một phe.
+ *
+ * Là TÍN HIỆU chấm điểm, không phải kết luận về vai: ba người dân cùng tin nhau
+ * cũng tạo ra một coalition rất chặt. Vì vậy không chỗ nào được biến nó thành
+ * `knownRoles`.
+ */
+export interface Coalition {
+  /** Ít nhất hai người, sắp xếp ổn định để so sánh được. */
+  memberIds: string[];
+  /** Độ gắn kết trung bình trong nhóm, 0..1. */
+  cohesion: number;
+  /** Tổng số quan sát đứng sau nhóm này; ít mẫu thì đừng tin nhiều. */
+  sampleCount: number;
+}
+
 export interface BotPlayerKnowledge {
   id: string;
   name: string;
