@@ -8,11 +8,21 @@ export interface NightDecision {
   targetId: string | null;
 }
 
+/**
+ * Lá phiếu bot định bỏ. Là union chứ không phải một string nullable vì
+ * "không treo ai" là một lựa chọn có chủ ý, ngang hàng với việc chọn một
+ * người - gộp nó vào null sẽ lẫn với "chưa quyết được", và chỗ gọi phải xử
+ * lý hai thứ đó khác nhau.
+ */
+export type PlannedVote =
+  | { type: "PLAYER"; targetId: string }
+  | { type: "NO_ELIMINATION" };
+
 export interface DayDecision {
   /** null nghĩa là bot không nói gì vòng này */
   chat: string | null;
   /** null nghĩa là chưa quyết, chỗ gọi sẽ tự chốt hộ */
-  voteTargetId: string | null;
+  vote: PlannedVote | null;
 }
 
 /**

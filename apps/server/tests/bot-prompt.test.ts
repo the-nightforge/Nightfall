@@ -97,6 +97,13 @@ describe("ranh giới bảo mật của prompt", () => {
     expect(spec!.user).toContain("</chat>");
     expect(spec!.user).toContain("Tôi nghi Wolf");
   });
+
+  it("nói rõ cách bỏ phiếu không treo ai, tách khỏi việc bỏ trống", () => {
+    const spec = buildDayPrompt(villagerView());
+    expect(spec!.user).toContain("không nên treo ai, điền voteTargetId là NO_ELIMINATION");
+    expect(spec!.user).toContain("chưa quyết được thì bỏ trống voteTargetId");
+  });
+
 });
 
 describe("chống lặp lời", () => {
@@ -154,7 +161,7 @@ describe("responseSchema", () => {
       nullable?: boolean;
     };
     expect(vote.type).toBe("string");
-    expect(vote.enum).toEqual(["w", "s"]);
+    expect(vote.enum).toEqual(["w", "s", "NO_ELIMINATION"]);
     expect(vote.nullable).toBeUndefined();
     expect(spec!.schema.required).not.toContain("voteTargetId");
   });

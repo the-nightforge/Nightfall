@@ -234,19 +234,28 @@ describe("GeminiBrain.decideDay", () => {
     const v = { ...wolfNightView(), phase: "DAY_DISCUSSION" as const, night: null };
     expect(await b.decideDay(v)).toEqual({
       ok: true,
-      value: { chat: "a".repeat(300), voteTargetId: "v" },
+      value: { chat: "a".repeat(300), vote: { type: "PLAYER", targetId: "v" } },
     });
   });
 
   it("chấp nhận voteTargetId null", async () => {
     const b = brain(async () => reply({ think: "x", chat: "ừ", voteTargetId: null }));
     const v = { ...wolfNightView(), phase: "DAY_DISCUSSION" as const, night: null };
-    expect(await b.decideDay(v)).toEqual({ ok: true, value: { chat: "ừ", voteTargetId: null } });
+    expect(await b.decideDay(v)).toEqual({ ok: true, value: { chat: "ừ", vote: null } });
+  });
+
+  it("hiểu NO_ELIMINATION là cố ý không treo ai, khác với chưa quyết", async () => {
+    const b = brain(async () => reply({ think: "x", chat: "ừ", voteTargetId: "NO_ELIMINATION" }));
+    const v = { ...wolfNightView(), phase: "DAY_DISCUSSION" as const, night: null };
+    expect(await b.decideDay(v)).toEqual({
+      ok: true,
+      value: { chat: "ừ", vote: { type: "NO_ELIMINATION" } },
+    });
   });
 
   it("bỏ phiếu ngoài danh sách hợp lệ nhưng vẫn giữ lời thoại", async () => {
     const b = brain(async () => reply({ think: "x", chat: "ừ", voteTargetId: "khong-ton-tai" }));
     const v = { ...wolfNightView(), phase: "DAY_DISCUSSION" as const, night: null };
-    expect(await b.decideDay(v)).toEqual({ ok: true, value: { chat: "ừ", voteTargetId: null } });
+    expect(await b.decideDay(v)).toEqual({ ok: true, value: { chat: "ừ", vote: null } });
   });
 });

@@ -51,7 +51,7 @@ function stub(name: string, result: () => Attempt<DayDecision>) {
 
 const ok = (chat: string): Attempt<DayDecision> => ({
   ok: true,
-  value: { chat, voteTargetId: null },
+  value: { chat, vote: null },
 });
 
 describe("FallbackBrain", () => {
@@ -60,7 +60,7 @@ describe("FallbackBrain", () => {
     const b = stub("b", () => ok("khong nen goi"));
 
     const r = await new FallbackBrain([a.brain, b.brain]).decideDay(view());
-    expect(r).toEqual({ ok: true, value: { chat: "xong", voteTargetId: null } });
+    expect(r).toEqual({ ok: true, value: { chat: "xong", vote: null } });
     expect(a.calls.n).toBe(1);
     expect(b.calls.n).toBe(0);
   });
@@ -70,7 +70,7 @@ describe("FallbackBrain", () => {
     const b = stub("b", () => ok("cuu duoc"));
 
     const r = await new FallbackBrain([a.brain, b.brain]).decideDay(view());
-    expect(r).toEqual({ ok: true, value: { chat: "cuu duoc", voteTargetId: null } });
+    expect(r).toEqual({ ok: true, value: { chat: "cuu duoc", vote: null } });
     expect(b.calls.n).toBe(1);
   });
 
@@ -97,7 +97,7 @@ describe("FallbackBrain", () => {
     const b = stub("b", () => ok("van chay"));
 
     const r = await new FallbackBrain([a, b.brain]).decideDay(view());
-    expect(r).toEqual({ ok: true, value: { chat: "van chay", voteTargetId: null } });
+    expect(r).toEqual({ ok: true, value: { chat: "van chay", vote: null } });
   });
 
   it("mọi não đều hỏng thì báo hỏng", async () => {

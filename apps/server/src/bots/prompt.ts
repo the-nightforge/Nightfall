@@ -1,5 +1,12 @@
 import type { RoomSnapshot } from "@masoi/shared";
-import { legalNightTargets, legalVoteTargets, soloNightAction, witchActions } from "./targets";
+import {
+  NO_ELIMINATION_VOTE,
+  legalNightTargets,
+  legalVoteChoices,
+  legalVoteTargets,
+  soloNightAction,
+  witchActions,
+} from "./targets";
 
 export interface GeminiSchema {
   type: string;
@@ -177,6 +184,7 @@ export function buildDayPrompt(view: RoomSnapshot): PromptSpec | null {
       chatBlock(view),
       "",
       "Nói một câu góp vào cuộc thảo luận, và chọn người bạn định bỏ phiếu.",
+      `Nếu bạn thấy hôm nay không nên treo ai, điền voteTargetId là ${NO_ELIMINATION_VOTE}.`,
       "Nếu chưa quyết được thì bỏ trống voteTargetId, đừng điền bừa.",
     ].join("\n"),
     schema: {
@@ -184,7 +192,7 @@ export function buildDayPrompt(view: RoomSnapshot): PromptSpec | null {
       properties: {
         think: THINK,
         chat: { type: "string", description: "Lời thoại, tối đa 300 ký tự" },
-        voteTargetId: { type: "string", enum: targets },
+        voteTargetId: { type: "string", enum: legalVoteChoices(view) },
       },
       required: ["think", "chat"],
     },

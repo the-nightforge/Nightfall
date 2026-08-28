@@ -80,7 +80,7 @@ describe("OpenAiCompatBrain", () => {
     const b = brain(async () => reply('{"think":"x","chat":"chào","voteTargetId":"w"}'));
     expect(await b.decideDay(dayView())).toEqual({
       ok: true,
-      value: { chat: "chào", voteTargetId: "w" },
+      value: { chat: "chào", vote: { type: "PLAYER", targetId: "w" } },
     });
   });
 
@@ -88,7 +88,7 @@ describe("OpenAiCompatBrain", () => {
     const b = brain(async () => reply('{"think":"x","chat":"ừ","voteTargetId":"khong-ton-tai"}'));
     expect(await b.decideDay(dayView())).toEqual({
       ok: true,
-      value: { chat: "ừ", voteTargetId: null },
+      value: { chat: "ừ", vote: null },
     });
   });
 

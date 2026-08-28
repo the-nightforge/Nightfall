@@ -6,9 +6,9 @@ import { broadcastRoom, emitToPlayers } from "../rooms/broadcast";
 import { prisma } from "../db";
 import { buildSnapshot, pushChat, resolveChat } from "../rooms/snapshot";
 import { botBrain, randomBrain, resetBotBudget } from "../bots";
-import { usablePlannedVote } from "../bots/targets";
+import { engineVote, usablePlannedVote } from "../bots/targets";
 import { newId } from "../util";
-import type { NightDecision } from "../bots/types";
+import type { NightDecision, PlannedVote } from "../bots/types";
 import { pendingEndVote, pendingVote } from "./bot-room-state";
 import {
   clearDiscussionSkipVotes,
@@ -267,7 +267,7 @@ export function scheduleNightBots(room: Room): void {
 export function scheduleDayBots(room: Room): void {
   const bots = room.members.filter((m) => m.isBot);
   const window = room.config.discussionSeconds * 1_000;
-  const votes = new Map<string, string>();
+  const votes = new Map<string, PlannedVote>();
   pendingVote.set(room.code, votes);
 
   bots.forEach((member, i) => {
@@ -290,7 +290,7 @@ export function scheduleDayBots(room: Room): void {
           ) return;
           if (!attempt.ok || !attempt.value) return;
           const decision = attempt.value;
-          if (decision.voteTargetId) votes.set(member.playerId, decision.voteTargetId);
+          if (decision.vote) votes.set(member.playerId, decision.vote);
           if (decision.chat) {
             const resolved = resolveChat(room, member.playerId);
             if (resolved.ok) {
@@ -327,13 +327,13 @@ function scheduleVoteBots(room: Room): void {
           if (!room.engine || room.engine.state.phase !== "VOTING") return;
           const view = buildSnapshot(room, member.playerId);
 
-          const target =
+          const vote =
             usablePlannedVote(view, votes?.get(member.playerId)) ??
-            (await randomBrain.decideDay(view)).value?.voteTargetId;
+            (await randomBrain.decideDay(view)).value?.vote;
 
-          if (!target) return;
+          if (!vote) return;
           try {
-            room.engine.submitVote(member.playerId, target);
+            room.engine.submitVote(member.playerId, engineVote(vote));
             // Phiếu của người thật được broadcast ngay trong handler socket, còn
             // phiếu bot thì không: client giữ nguyên snapshot cũ nên mọi voteCount
             // đứng yên ở 0 tới tận lúc pha kết thúc. Trong phòng toàn bot, bộ đếm

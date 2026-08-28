@@ -77,7 +77,7 @@ describe("RandomBrain.decideDay", () => {
 
   it("chọn phiếu trong danh sách hợp lệ", async () => {
     const d = await randomBrain.decideDay(view({ phase: "VOTING" }));
-    expect(["b", "c"]).toContain(d.value?.voteTargetId);
+    expect(d.value?.vote).toEqual({ type: "PLAYER", targetId: expect.stringMatching(/^[bc]$/) });
   });
 
   it("trả null khi đã chết", async () => {

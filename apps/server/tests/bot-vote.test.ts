@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { RoomSnapshot } from "@masoi/shared";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
-import { usablePlannedVote } from "../src/bots/targets";
+import { engineVote, usablePlannedVote } from "../src/bots/targets";
+import type { PlannedVote } from "../src/bots/types";
+
+const forPlayer = (targetId: string): PlannedVote => ({ type: "PLAYER", targetId });
 
 function votingView(): RoomSnapshot {
   return {
@@ -34,22 +37,38 @@ function votingView(): RoomSnapshot {
 
 describe("usablePlannedVote", () => {
   it("giữ phiếu đã định khi mục tiêu còn sống", () => {
-    expect(usablePlannedVote(votingView(), "b")).toBe("b");
+    expect(usablePlannedVote(votingView(), forPlayer("b"))).toEqual(forPlayer("b"));
   });
 
   it("bỏ phiếu đã định khi mục tiêu đã chết giữa chừng", () => {
-    expect(usablePlannedVote(votingView(), "c")).toBeNull();
+    expect(usablePlannedVote(votingView(), forPlayer("c"))).toBeNull();
   });
 
   it("bỏ phiếu đã định trỏ vào người không tồn tại", () => {
-    expect(usablePlannedVote(votingView(), "khong-co")).toBeNull();
+    expect(usablePlannedVote(votingView(), forPlayer("khong-co"))).toBeNull();
   });
 
   it("bỏ phiếu tự bầu chính mình", () => {
-    expect(usablePlannedVote(votingView(), "a")).toBeNull();
+    expect(usablePlannedVote(votingView(), forPlayer("a"))).toBeNull();
   });
 
   it("trả null khi bot chưa định phiếu nào", () => {
     expect(usablePlannedVote(votingView(), undefined)).toBeNull();
+  });
+
+  it("giữ phiếu không treo ai: không có mục tiêu để mà hết hợp lệ", () => {
+    expect(usablePlannedVote(votingView(), { type: "NO_ELIMINATION" })).toEqual({
+      type: "NO_ELIMINATION",
+    });
+  });
+});
+
+describe("engineVote", () => {
+  it("phiếu cho người chơi giữ nguyên id", () => {
+    expect(engineVote(forPlayer("b"))).toBe("b");
+  });
+
+  it("phiếu không treo ai thành null, đúng cách engine mã hoá lựa chọn đó", () => {
+    expect(engineVote({ type: "NO_ELIMINATION" })).toBeNull();
   });
 });

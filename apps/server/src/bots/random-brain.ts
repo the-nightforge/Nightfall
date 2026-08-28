@@ -35,8 +35,10 @@ export class RandomBrain implements BotBrain {
 
   async decideDay(view: RoomSnapshot): Promise<Always<DayDecision>> {
     if (!view.you?.alive) return nothingToDo();
-    const voteTargetId = randomOf(legalVoteTargets(view)) ?? null;
-    return decided({ chat: null, voteTargetId });
+    // Não chót: luôn chọn một người. "Không treo ai" là một phán đoán về ván
+    // đấu, không phải nước đi mặc định khi bí - để dành cho não thật quyết.
+    const targetId = randomOf(legalVoteTargets(view));
+    return decided({ chat: null, vote: targetId ? { type: "PLAYER", targetId } : null });
   }
 }
 

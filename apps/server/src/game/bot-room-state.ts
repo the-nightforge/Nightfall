@@ -1,7 +1,8 @@
 import { resetBotBudget } from "../bots";
+import type { PlannedVote } from "../bots/types";
 
 /** Phiếu bot đã định trong pha thảo luận, dùng lại ở pha bỏ phiếu. */
-export const pendingVote = new Map<string, Map<string, string>>();
+export const pendingVote = new Map<string, Map<string, PlannedVote>>();
 
 /** Cờ đang chờ mốc kết thúc bỏ phiếu sớm (mọi người còn sống đã bỏ phiếu). */
 export const pendingEndVote = new Map<string, boolean>();

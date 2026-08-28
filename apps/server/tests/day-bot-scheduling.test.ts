@@ -117,7 +117,7 @@ describe("scheduleDayBots", () => {
 
     brainControl.resolveDay?.({
       ok: true,
-      value: { chat: "Tin thảo luận đã lỗi thời", voteTargetId: "human1" },
+      value: { chat: "Tin thảo luận đã lỗi thời", vote: { type: "PLAYER", targetId: "human1" } },
     });
     await vi.advanceTimersByTimeAsync(0);
 

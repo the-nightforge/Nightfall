@@ -1,8 +1,14 @@
 import { z } from "zod";
 import type { RoomSnapshot } from "@masoi/shared";
-import type { Attempt, DayDecision, NightDecision } from "./types";
+import type { Attempt, DayDecision, NightDecision, PlannedVote } from "./types";
 import { decided, failed, nothingToDo } from "./types";
-import { legalNightTargets, legalVoteTargets, soloNightAction, witchActions } from "./targets";
+import {
+  NO_ELIMINATION_VOTE,
+  legalNightTargets,
+  legalVoteTargets,
+  soloNightAction,
+  witchActions,
+} from "./targets";
 
 export const nightSchema = z.object({
   think: z.string(),
@@ -105,9 +111,14 @@ export function interpretDay(
 
   // Phiếu ngoài danh sách hợp lệ bị bỏ, nhưng lời thoại vẫn dùng được: đây là
   // một lượt nói thành công, không phải lượt hỏng cần nhà cung cấp khác nói lại.
-  const vote = parsed.data.voteTargetId ?? null;
-  const legal = vote && legalVoteTargets(view).includes(vote) ? vote : null;
+  const choice = parsed.data.voteTargetId ?? null;
+  const vote: PlannedVote | null =
+    choice === NO_ELIMINATION_VOTE
+      ? { type: "NO_ELIMINATION" }
+      : choice && legalVoteTargets(view).includes(choice)
+        ? { type: "PLAYER", targetId: choice }
+        : null;
 
   log("ok");
-  return decided({ chat: parsed.data.chat.slice(0, chatMaxLength), voteTargetId: legal });
+  return decided({ chat: parsed.data.chat.slice(0, chatMaxLength), vote });
 }
