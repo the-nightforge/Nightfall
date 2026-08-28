@@ -10,4 +10,7 @@ export * from "./bot/belief/belief-state";
 export * from "./bot/analysis/vote-analysis";
 export * from "./bot/analysis/social-analysis";
 export * from "./bot/analysis/chat-analysis";
+export * from "./bot/decision/vote-decision";
+export * from "./bot/BotRuntime";
+export * from "./bot/scenario";
 export * from "./bot/personality/personality";
