@@ -60,7 +60,7 @@ export const updateConfigPayload = z.object({ config: roomConfigSchema }).strict
 export const startGamePayload = z.object({}).strict();
 export const resetGamePayload = z.object({}).strict();
 
-export const nightActionTypeSchema = z.enum(["KILL", "SEE", "GUARD", "HEAL", "POISON"]);
+export const nightActionTypeSchema = z.enum(["KILL", "SEE", "GUARD", "HEAL", "POISON", "SKIP"]);
 export const gameActionPayload = z
   .object({
     type: nightActionTypeSchema,

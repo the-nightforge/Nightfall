@@ -20,6 +20,7 @@ function nightState(guardPrevious: string | null): GameState {
       guardTarget: null,
       healTonight: false,
       poisonTarget: null,
+      witchSkipped: false,
       seerResults: {},
     },
     votes: {},

@@ -29,6 +29,7 @@ function gameState(phase: GameState["phase"]): GameState {
       guardTarget: null,
       healTonight: false,
       poisonTarget: null,
+      witchSkipped: false,
       seerResults: {},
     },
     votes: {},

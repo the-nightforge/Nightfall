@@ -69,6 +69,7 @@ function emptyNight(): GameState["night"] {
     guardTarget: null,
     healTonight: false,
     poisonTarget: null,
+    witchSkipped: false,
     seerResults: {},
   };
 }
@@ -83,6 +84,7 @@ export class GameEngine {
   constructor(state: GameState) {
     this.state = state;
     this.state.nightHistory ??= [];
+    this.state.night.witchSkipped ??= false;
   }
 
   /** Trạng thái thô (plain object, dùng để serialize qua Redis). */
@@ -165,7 +167,7 @@ export class GameEngine {
 
   // ---- Hành động ban đêm ----
 
-  submitNightAction(playerId: string, type: "KILL" | "SEE" | "GUARD" | "HEAL" | "POISON", targetId: string | null): void {
+  submitNightAction(playerId: string, type: "KILL" | "SEE" | "GUARD" | "HEAL" | "POISON" | "SKIP", targetId: string | null): void {
     const st = this.state;
     if (st.phase !== "NIGHT") throw new GameError("Chỉ được hành động vào ban đêm");
     const p = this.mustPlayer(playerId);
@@ -174,6 +176,14 @@ export class GameEngine {
     const target = targetId ? this.player(targetId) : undefined;
     if (targetId && !target) throw new GameError("Mục tiêu không tồn tại");
     if (target && !target.alive) throw new GameError("Mục tiêu đã chết");
+
+    const isWitchAction = type === "HEAL" || type === "POISON" || type === "SKIP";
+    if (isWitchAction && p.role !== "WITCH") {
+      throw new GameError("Chỉ Phù Thủy mới được dùng hoặc bỏ qua thuốc");
+    }
+    if (isWitchAction && st.night.witchSkipped) {
+      throw new GameError("Phù Thủy đã bỏ qua dùng thuốc đêm nay");
+    }
 
     switch (type) {
       case "KILL": {
@@ -201,17 +211,20 @@ export class GameEngine {
         break;
       }
       case "HEAL": {
-        if (p.role !== "WITCH") throw new GameError("Chỉ Phù Thủy mới có bình cứu");
         if (st.healUsed) throw new GameError("Bình cứu đã được sử dụng");
         // HEAL là quyết định cứu nạn nhân đêm nay, không cần chỉ định mục tiêu
         st.night.healTonight = true;
         break;
       }
       case "POISON": {
-        if (p.role !== "WITCH") throw new GameError("Chỉ Phù Thủy mới có bình độc");
         if (st.poisonUsed) throw new GameError("Bình độc đã được sử dụng");
         if (!targetId || !target) throw new GameError("Hãy chọn một người để đầu độc");
         st.night.poisonTarget = targetId;
+        break;
+      }
+      case "SKIP": {
+        if (targetId !== null) throw new GameError("Bỏ qua dùng thuốc không cần mục tiêu");
+        st.night.witchSkipped = true;
         break;
       }
       default:
@@ -461,7 +474,7 @@ export class GameEngine {
                     ? st.night.seerResults[viewerId] !== undefined
                     : viewer.role === "GUARD"
                       ? st.night.guardTarget !== null
-                      : st.night.healTonight || st.night.poisonTarget !== null,
+                      : st.night.witchSkipped || st.night.healTonight || st.night.poisonTarget !== null,
               wolfTarget:
                 roleTeam(viewer.role) === "wolves" ? st.night.killTarget : null,
               guardPrevious: viewer.role === "GUARD" ? st.guardPrevious : undefined,

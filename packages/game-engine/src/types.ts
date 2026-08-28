@@ -18,6 +18,8 @@ export interface NightState {
   /** Bảo Vệ đã chọn save nạn nhân đêm nay chưa (Phù Thủy) */
   healTonight: boolean;
   poisonTarget: string | null;
+  /** Phù Thủy đã chủ động bỏ qua cả hai bình trong đêm này */
+  witchSkipped: boolean;
   seerResults: Record<string, { targetId: string; isWolf: boolean }>;
 }
 

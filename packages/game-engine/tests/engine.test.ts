@@ -182,6 +182,44 @@ describe("Tiên Tri", () => {
   });
 });
 
+describe("Phù Thủy bỏ qua dùng thuốc", () => {
+  it("đánh dấu đã hành động nhưng không tiêu hao bình", () => {
+    const e = makeEngine(7);
+    const witch = findPlayersByRole(e, "WITCH")[0];
+
+    e.submitNightAction(witch.id, "SKIP", null);
+
+    expect(e.state.night.witchSkipped).toBe(true);
+    expect(e.state.healUsed).toBe(false);
+    expect(e.state.poisonUsed).toBe(false);
+    expect(e.snapshotFor(witch.id).nightInfo?.acted).toBe(true);
+  });
+
+  it("không cho dùng thuốc sau khi đã skip", () => {
+    const e = makeEngine(7);
+    const witch = findPlayersByRole(e, "WITCH")[0];
+    const target = e.state.players.find((player) => player.id !== witch.id)!;
+
+    e.submitNightAction(witch.id, "SKIP", null);
+
+    expect(() => e.submitNightAction(witch.id, "HEAL", null)).toThrow(/đã bỏ qua/);
+    expect(() => e.submitNightAction(witch.id, "POISON", target.id)).toThrow(/đã bỏ qua/);
+  });
+
+  it("không cho vai trò khác skip và reset trạng thái ở đêm mới", () => {
+    const e = makeEngine(7);
+    const witch = findPlayersByRole(e, "WITCH")[0];
+    const villager = findPlayersByRole(e, "VILLAGER")[0];
+
+    expect(() => e.submitNightAction(villager.id, "SKIP", null)).toThrow(/Phù Thủy/);
+    e.submitNightAction(witch.id, "SKIP", null);
+    e.setPhase("NIGHT", 30_000);
+
+    expect(e.state.night.witchSkipped).toBe(false);
+    expect(e.snapshotFor(witch.id).nightInfo?.acted).toBe(false);
+  });
+});
+
 describe("Bỏ phiếu", () => {
   function toVoting(engine: GameEngine) {
     engine.setPhase("DAY_DISCUSSION", 60_000);

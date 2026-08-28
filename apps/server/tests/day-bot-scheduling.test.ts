@@ -55,6 +55,7 @@ function discussionRoom(): Room {
       guardTarget: null,
       healTonight: false,
       poisonTarget: null,
+      witchSkipped: false,
       seerResults: {},
     },
     votes: {},

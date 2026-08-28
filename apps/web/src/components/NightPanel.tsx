@@ -144,6 +144,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
                 {!poisoning ? (
                   <button
                     className="btn-secondary w-full border border-blood-500/50"
+                    disabled={acted}
                     onClick={() => setPoisoning(true)}
                   >
                     ☠️ Chọn người để đầu độc
@@ -167,6 +168,14 @@ export function NightPanel({ snapshot, onAction }: Props) {
                 )}
               </>
             )}
+
+            <button
+              className="btn-secondary w-full"
+              disabled={acted}
+              onClick={() => onAction("SKIP", null)}
+            >
+              Không dùng thuốc đêm nay
+            </button>
           </div>
         )}
       </div>
