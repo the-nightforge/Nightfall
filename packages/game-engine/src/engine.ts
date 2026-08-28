@@ -19,7 +19,7 @@ import {
 } from "@masoi/shared";
 import { assignRoles, type AssignInput } from "./assignRoles";
 import { buildBotKnowledgeView, buildLegalVoteChoices } from "./bot/knowledge";
-import type { BotKnowledgeView } from "./bot/types";
+import type { BotKnowledgeView, NightActionKind, NightKnowledge } from "./bot/types";
 import {
   GameError,
   type DeathInfo,
@@ -1043,6 +1043,7 @@ export class GameEngine {
       players: st.players.map(({ id, name, alive }) => ({ id, name, alive })),
       knownRoles,
       seerResult,
+      night: this.botNightKnowledgeFor(viewer),
       publicVoteHistory: st.dayVoteHistory,
       currentVoteCounts: this.voteTally(),
       // Phiếu của chính mình vẫn hiển thị sau khi pha bỏ phiếu đóng, đúng như
@@ -1052,6 +1053,94 @@ export class GameEngine {
       legalVoteChoices: this.legalVoteChoicesFor(botId),
       lastNightDeaths: st.lastNightDeaths,
     });
+  }
+
+  /**
+   * Thông tin ban đêm cho ĐÚNG một vai.
+   *
+   * Đây là điểm mở rộng nhạy cảm nhất của Phase 2, nên nó theo cùng nguyên tắc
+   * với `botKnowledgeFor`: tất cả lọc xảy ra ở đây, và `bot/knowledge.ts` chỉ
+   * nhận giá trị đã sạch. Trả `null` là mặc định an toàn - mọi vai không có
+   * hành động đêm đều rơi vào nhánh đó mà không cần liệt kê tên vai.
+   */
+  private botNightKnowledgeFor(viewer: EnginePlayer): NightKnowledge | null {
+    const st = this.state;
+    if (st.phase !== "NIGHT" || !viewer.alive) return null;
+    if (!this.hasNightAction(viewer.role)) return null;
+
+    const isWolf = roleTeam(viewer.role) === "wolves";
+    const isWitch = viewer.role === "WITCH";
+    const alive = this.alivePlayers();
+
+    const legalActions: NightActionKind[] = [];
+    const legalTargets = {
+      KILL: [],
+      SEE: [],
+      GUARD: [],
+      HEAL: [],
+      POISON: [],
+      SKIP: [],
+    } as Record<NightActionKind, string[]>;
+
+    if (isWolf) {
+      legalActions.push("KILL");
+      // Khớp đúng điều kiện `submitNightAction` case "KILL": cả bầy Sói bị loại,
+      // theo PHE chứ không theo mã vai - Kẻ Nguyền Rủa đã hoá Sói cũng được
+      // miễn. (`aliveWolfsTargets` trả về chính bầy Sói, không phải mục tiêu
+      // của chúng; tên hàm dễ gây hiểu nhầm nên không dùng ở đây.)
+      legalTargets.KILL = alive
+        .filter((player) => roleTeam(player.role) !== "wolves")
+        .map((player) => player.id);
+    } else if (viewer.role === "SEER") {
+      legalActions.push("SEE");
+      legalTargets.SEE = alive
+        .filter((player) => player.id !== viewer.id)
+        .map((player) => player.id);
+    } else if (viewer.role === "GUARD") {
+      legalActions.push("GUARD");
+      // Không đỡ lại đúng người đêm trước - luật engine, chép ra đây một lần.
+      legalTargets.GUARD = alive
+        .filter((player) => player.id !== st.guardPrevious)
+        .map((player) => player.id);
+    } else if (isWitch) {
+      // Bình cứu chỉ dùng được khi thật sự có nạn nhân, và Phù Thuỷ chỉ biết
+      // nạn nhân sau khi bầy Sói khoá phiếu.
+      if (!st.healUsed && st.night.wolvesLocked && st.night.killTarget) {
+        legalActions.push("HEAL");
+      }
+      if (!st.poisonUsed) {
+        legalActions.push("POISON");
+        legalTargets.POISON = alive.map((player) => player.id);
+      }
+      // SKIP luôn hợp lệ: không dùng bình nào là một lựa chọn có chủ đích.
+      legalActions.push("SKIP");
+    }
+
+    return {
+      canAct: this.nightActionPending(viewer),
+      legalActions,
+      legalTargets,
+      wolfTarget:
+        (isWolf || isWitch) && st.night.wolvesLocked ? st.night.killTarget : null,
+      guardPrevious: viewer.role === "GUARD" ? st.guardPrevious : null,
+      healUsed: isWitch ? st.healUsed : false,
+      poisonUsed: isWitch ? st.poisonUsed : false,
+      wolvesLocked: st.night.wolvesLocked,
+    };
+  }
+
+  /** Vai này còn lượt đêm nay chưa. Cùng điều kiện `nightInfoFor` dùng cho UI. */
+  private nightActionPending(viewer: EnginePlayer): boolean {
+    const st = this.state;
+    if (roleTeam(viewer.role) === "wolves") {
+      return st.night.wolfVotes[viewer.id] === undefined;
+    }
+    if (viewer.role === "SEER") return st.night.seerResults[viewer.id] === undefined;
+    if (viewer.role === "GUARD") return st.night.guardTarget === null;
+    if (viewer.role === "WITCH") {
+      return !st.night.witchSkipped && !st.night.healTonight && st.night.poisonTarget === null;
+    }
+    return false;
   }
 
   /**

@@ -238,6 +238,11 @@ describe("bot knowledge security boundary", () => {
         "lastNightDeaths",
         "legalVoteChoices",
         "myVote",
+        // Phase 2 thêm trường này. Với Dân Làng nó LUÔN null, nên FORBIDDEN_KEYS
+        // ở trên vẫn không bị vi phạm: `collectKeys` không đi vào được null.
+        // Các vai có hành động đêm được thấy một tập con đã lọc - phần đó có
+        // bộ test riêng ở bot-night-knowledge.test.ts.
+        "night",
         "phase",
         "phaseEndsAt",
         "phaseStartedAt",

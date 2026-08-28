@@ -122,6 +122,7 @@ describe("bot seeded randomness and personality", () => {
         players: [{ id: "a", name: "An", alive: true }],
         knownRoles: { a: "VILLAGER" },
         seerResult: null,
+        night: null,
         publicVoteHistory: [],
         currentVoteCounts: { players: {}, noElimination: 0 },
         hasVoted: false,

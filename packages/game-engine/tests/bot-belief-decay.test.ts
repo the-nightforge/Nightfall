@@ -29,6 +29,7 @@ function knowledge(over: Partial<BotKnowledgeView> = {}): BotKnowledgeView {
     players: PLAYERS.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
     knownRoles: { me: "VILLAGER" },
     seerResult: null,
+    night: null,
     publicVoteHistory: [],
     currentVoteCounts: { players: {}, noElimination: 0 },
     hasVoted: false,

@@ -113,6 +113,36 @@ export interface SocialEdge {
   lastUpdatedRound: number;
 }
 
+/** Hành động đêm engine chấp nhận, đúng bằng union của `submitNightAction`. */
+export type NightActionKind = "KILL" | "SEE" | "GUARD" | "HEAL" | "POISON" | "SKIP";
+
+/**
+ * Thông tin ban đêm của ĐÚNG một vai.
+ *
+ * `null` ở `BotKnowledgeView.night` là trạng thái mặc định và là trạng thái an
+ * toàn: ngoài pha đêm, khi bot đã chết, hoặc khi vai không có hành động đêm.
+ * Dân Làng không bao giờ nhận object này - biết đêm nay ai đang được cân nhắc
+ * đã là một rò rỉ, kể cả khi không kèm vai.
+ *
+ * Mọi trường ở đây do engine tính. Lõi BOT không được suy lại luật hợp lệ, vì
+ * một bản sao luật ở tầng AI là thứ sẽ trôi lệch khỏi luật thật.
+ */
+export interface NightKnowledge {
+  /** Còn lượt hành động đêm nay hay đã dùng rồi. */
+  canAct: boolean;
+  legalActions: NightActionKind[];
+  /** Mục tiêu hợp lệ cho từng hành động được chào. */
+  legalTargets: Record<NightActionKind, string[]>;
+  /** Nạn nhân bầy Sói đã chốt. Chỉ Sói, và Phù Thuỷ sau khi khoá, được thấy. */
+  wolfTarget: string | null;
+  /** Chỉ Bảo Vệ thấy. */
+  guardPrevious: string | null;
+  /** Chỉ Phù Thuỷ thấy; false với mọi vai khác. */
+  healUsed: boolean;
+  poisonUsed: boolean;
+  wolvesLocked: boolean;
+}
+
 export interface BotPlayerKnowledge {
   id: string;
   name: string;
@@ -129,6 +159,8 @@ export interface BotKnowledgeView {
   players: BotPlayerKnowledge[];
   knownRoles: Record<string, Role>;
   seerResult: { targetId: string; targetName: string; isWolf: boolean } | null;
+  /** `null` ngoài pha đêm, khi bot đã chết, hoặc khi vai không hành động đêm. */
+  night: NightKnowledge | null;
   publicVoteHistory: DayVoteRecap[];
   currentVoteCounts: { players: Record<string, number>; noElimination: number };
   hasVoted: boolean;

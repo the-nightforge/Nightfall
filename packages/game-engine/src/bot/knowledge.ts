@@ -1,5 +1,23 @@
 import type { DayVoteRecap, PublicVoteChoice } from "@masoi/shared";
-import type { BotKnowledgeView, BotPlayerKnowledge } from "./types";
+import type {
+  BotKnowledgeView,
+  BotPlayerKnowledge,
+  NightActionKind,
+  NightKnowledge,
+} from "./types";
+
+/**
+ * Deep copy cho `NightKnowledge`, cùng lý do với `copyDayVoteRecap`: lõi BOT
+ * không được có tham chiếu sống vào state của engine. `legalTargets` là chỗ
+ * nguy hiểm nhất - nó là mảng lồng trong object, nên copy nông vẫn để lộ mảng.
+ */
+export function copyNightKnowledge(night: NightKnowledge): NightKnowledge {
+  const legalTargets = {} as Record<NightActionKind, string[]>;
+  for (const [action, targets] of Object.entries(night.legalTargets)) {
+    legalTargets[action as NightActionKind] = [...targets];
+  }
+  return { ...night, legalActions: [...night.legalActions], legalTargets };
+}
 
 /**
  * Ba trạng thái phiếu ban ngày được phân biệt bằng chính kiểu dữ liệu giống
@@ -72,6 +90,8 @@ export interface BotKnowledgeInput {
   players: readonly BotPlayerKnowledge[];
   knownRoles: BotKnowledgeView["knownRoles"];
   seerResult: BotKnowledgeView["seerResult"];
+  /** Engine đã quyết định vai này có được thấy gì; ở đây chỉ sao chép. */
+  night: NightKnowledge | null;
   publicVoteHistory: readonly DayVoteRecap[];
   currentVoteCounts: BotKnowledgeView["currentVoteCounts"];
   /** `undefined` là chưa bầu; engine đã quyết định người chết không có phiếu. */
@@ -93,6 +113,7 @@ export function buildBotKnowledgeView(input: BotKnowledgeInput): BotKnowledgeVie
     players: input.players.map((player) => ({ ...player })),
     knownRoles: { ...input.knownRoles },
     seerResult: input.seerResult ? { ...input.seerResult } : null,
+    night: input.night ? copyNightKnowledge(input.night) : null,
     publicVoteHistory: input.publicVoteHistory.map(copyDayVoteRecap),
     currentVoteCounts: {
       players: { ...input.currentVoteCounts.players },

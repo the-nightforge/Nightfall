@@ -18,6 +18,7 @@ function step(round: number, history: DayVoteRecap[], chatId: string): BotDecisi
       players: PLAYERS.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
       knownRoles: { me: "VILLAGER" },
       seerResult: null,
+      night: null,
       publicVoteHistory: history,
       currentVoteCounts: { players: {}, noElimination: 0 },
       hasVoted: false,
