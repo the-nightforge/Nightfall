@@ -1,4 +1,4 @@
-import type { DayVoteRecap, VoteMutation } from "@masoi/shared";
+import type { DayVoteRecap, Role, VoteMutation } from "@masoi/shared";
 import { analyzeChat } from "./analysis/chat-analysis";
 import { applySocialEvidence } from "./analysis/social-analysis";
 import { analyzeVoteRecap } from "./analysis/vote-analysis";
@@ -112,6 +112,11 @@ export class BotRuntime {
   observe(context: BotDecisionContext): void {
     const knowledge = context.knowledge;
 
+    // Chụp lại TRƯỚC khi ghi đè. Engine gỡ đồng bọn đã chết khỏi `knownRoles`,
+    // nên nếu đọc sau dòng dưới thì bot không bao giờ biết mình vừa mất ai -
+    // đúng cái nó cần biết nhất.
+    const previousKnownRoles = { ...this.state.knownInformation.knownRoles };
+
     // Self knowledge và đồng đội Sói nằm riêng, không trộn vào suspicion: đó là
     // sự thật, không phải suy đoán có bằng chứng.
     this.state.knownInformation.knownRoles = { ...knowledge.knownRoles };
@@ -133,6 +138,7 @@ export class BotRuntime {
     }
 
     applyPrivateInformation(this.state, knowledge);
+    this.adaptToDeaths(knowledge, previousKnownRoles);
   }
 
   /** Chốt phiếu deterministic từ belief hiện tại. */
@@ -218,6 +224,106 @@ export class BotRuntime {
   /** Phát bắn cuối của Thợ Săn; `targetId: null` là không bắn. */
   decideHunterShot(context: BotDecisionContext): BotHunterShotIntention {
     return decideHunterShot(context, this.state, this.rng);
+  }
+
+  /**
+   * Chốt lại một vòng: ghi tóm tắt và cập nhật giả thuyết đang giữ.
+   *
+   * Tách khỏi `observe` vì nó phải chạy đúng một lần khi vòng KẾT THÚC, còn
+   * `observe` chạy nhiều lần trong vòng. Gọi lại cùng một vòng là no-op.
+   */
+  summarizeRound(round: number): void {
+    const sourceId = `round-summary:${round}`;
+    if (this.state.memories.some((memory) => memory.sourceId === sourceId)) return;
+
+    const ranked = Object.entries(this.state.suspicion)
+      // Chỉ nghi ngờ CÓ BẰNG CHỨNG mới được vào giả thuyết. Một điểm số không
+      // có lý do là thứ không giải thích được cho ai, kể cả cho chính bot.
+      .filter(([, entry]) => entry.reasons.length > 0)
+      .sort(
+        (a, b) => b[1].score - a[1].score || a[0].localeCompare(b[0]),
+      );
+
+    if (ranked.length > 0) {
+      const [suspectId, entry] = ranked[0];
+      this.state.currentTheory = {
+        summary: `nghi ${suspectId} nhất sau vòng ${round}`,
+        evidenceIds: entry.reasons.slice(-3).map((reason) => reason.id),
+      };
+    }
+
+    remember(this.state, {
+      id: `ROUND_SUMMARY:${sourceId}:${this.state.playerId}`,
+      sourceId,
+      round,
+      phase: "DAY_DISCUSSION",
+      type: "ROUND_SUMMARY",
+      actorId: this.state.playerId,
+      importance: 9,
+      pinned: true,
+      data: {
+        theory: this.state.currentTheory?.summary ?? null,
+        topSuspects: ranked.slice(0, 3).map(([id]) => id),
+      },
+    });
+  }
+
+  /**
+   * Đổi cách chơi khi có người chết.
+   *
+   * Hai suy luận, cả hai đều rẻ và đều đúng thường xuyên:
+   * - Ai từng công kích nạn nhân thì đáng nghi hơn - "ai muốn người đó chết".
+   * - Sói mất đồng bọn thì phải chơi khác: ít đẩy phiếu lộ liễu hơn.
+   */
+  private adaptToDeaths(
+    knowledge: BotKnowledgeView,
+    previousKnownRoles: Record<string, Role>,
+  ): void {
+    for (const death of knowledge.lastNightDeaths) {
+      const sourceId = `night-death:${knowledge.round}:${death.playerId}`;
+
+      // Chỉ suy luận từ cái chết của người mình TIN. Một người ai cũng nghi bị
+      // giết không nói lên điều gì: cả làng đều có động cơ.
+      const victimTrust = this.state.trust[death.playerId]?.score ?? 0;
+      if (victimTrust > 0) {
+        for (const [key, edge] of Object.entries(this.state.relationships)) {
+          if (!key.endsWith(`->${death.playerId}`)) continue;
+          if (edge.hostility <= 0) continue;
+
+          const actorId = key.slice(0, key.indexOf("->"));
+          if (actorId === this.state.playerId) continue;
+
+          applyEvidence(this.state, {
+            id: `death-motive:${knowledge.round}:${actorId}:${death.playerId}`,
+            kind: "ACCUSE",
+            sourceId,
+            actorId,
+            targetId: death.playerId,
+            weight: 6 * edge.hostility,
+            confidence: 0.5,
+            round: knowledge.round,
+            summary: `từng công kích ${death.name} ngay trước khi người này chết`,
+          });
+        }
+      }
+
+      // Mất đồng đội Sói: chỉ ghi khi TRƯỚC ĐÓ thật sự biết người này là đồng bọn.
+      const wasAlly = previousKnownRoles[death.playerId] === "WEREWOLF";
+      if (wasAlly) {
+        remember(this.state, {
+          id: `ALLY_LOST:${sourceId}:${this.state.playerId}`,
+          sourceId,
+          round: knowledge.round,
+          phase: knowledge.phase,
+          type: "ALLY_LOST",
+          actorId: this.state.playerId,
+          targetId: death.playerId,
+          importance: 10,
+          pinned: true,
+          data: { name: death.name },
+        });
+      }
+    }
   }
 
   /** Ghi lại các source đã dùng để lần sau BOT không nói lại đúng luận điểm. */

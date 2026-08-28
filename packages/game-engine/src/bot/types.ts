@@ -14,7 +14,11 @@ export type BotMemoryType =
   | "ACCUSE"
   | "DEFEND"
   | "SEER_RESULT"
-  | "BOT_SPOKE";
+  | "BOT_SPOKE"
+  /** Đồng đội Sói đã chết; buộc phải đổi cách chơi phần còn lại của ván. */
+  | "ALLY_LOST"
+  /** Tóm tắt một vòng, để bot còn nhớ chuyện gì đã xảy ra chứ không chỉ nhớ điểm số. */
+  | "ROUND_SUMMARY";
 
 /**
  * Bằng chứng rút ra từ hành vi CÔNG KHAI: lịch sử phiếu và lời nói.
