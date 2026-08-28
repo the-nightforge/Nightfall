@@ -18,6 +18,8 @@ import {
   type Winner,
 } from "@masoi/shared";
 import { assignRoles, type AssignInput } from "./assignRoles";
+import { buildBotKnowledgeView } from "./bot/knowledge";
+import type { BotKnowledgeView } from "./bot/types";
 import {
   GameError,
   type DeathInfo,
@@ -991,4 +993,77 @@ export class GameEngine {
       log: st.log.slice(-10),
     };
   }
+
+  /**
+   * View đã lọc dành riêng cho lõi AI deterministic. Đây là entry point DUY
+   * NHẤT được đọc state để dựng knowledge của BOT: `bot/knowledge.ts` chỉ nhận
+   * giá trị đã lọc, nên không có đường vòng nào để một trường bí mật lọt ra.
+   *
+   * Quyền xem trùng đúng với `snapshotFor`: role người khác - kể cả người đã
+   * chết - vẫn ẩn tới `GAME_OVER`, nên BOT không bao giờ có lợi thế thông tin
+   * mà người thật không có.
+   */
+  botKnowledgeFor(botId: string): BotKnowledgeView {
+    const st = this.state;
+    const viewer = this.mustPlayer(botId);
+    // Sói chết mất liên lạc với bầy, giống hệt luật của snapshotFor.
+    const viewerIsWolf = viewer.alive && roleTeam(viewer.role) === "wolves";
+
+    const knownRoles: Record<string, Role> = { [viewer.id]: viewer.role };
+    if (viewerIsWolf) {
+      for (const player of st.players) {
+        if (player.id !== viewer.id && roleTeam(player.role) === "wolves") {
+          knownRoles[player.id] = player.role;
+        }
+      }
+    }
+
+    const seerResultEntry = st.night.seerResults[botId];
+    const seerResult = seerResultEntry
+      ? {
+          targetId: seerResultEntry.targetId,
+          targetName: this.player(seerResultEntry.targetId)?.name ?? "?",
+          isWolf: seerResultEntry.isWolf,
+        }
+      : null;
+
+    return buildBotKnowledgeView({
+      botId,
+      round: st.round,
+      phase: st.phase,
+      phaseStartedAt: st.phaseStartedAt,
+      phaseEndsAt: st.phaseEndsAt,
+      selfRole: viewer.role,
+      players: st.players.map(({ id, name, alive }) => ({ id, name, alive })),
+      knownRoles,
+      seerResult,
+      publicVoteHistory: st.dayVoteHistory,
+      currentVoteCounts: this.voteTally(),
+      currentVote: st.votes[botId],
+      canVote: this.canSubmitVote(botId),
+      aliveTargetIds: this.alivePlayers().map((player) => player.id),
+      lastNightDeaths: st.lastNightDeaths,
+    });
+  }
+
+  /**
+   * Lựa chọn hợp lệ cho vòng đề cử hiện tại. Trả mảng rỗng khi người xem không
+   * được bỏ phiếu, để lõi AI không phải tự suy ra luật pha.
+   */
+  legalVoteChoicesFor(viewerId: string): PublicVoteChoice[] {
+    if (!this.canSubmitVote(viewerId)) return [];
+    return [
+      ...this.alivePlayers().map((player): PublicVoteChoice => ({
+        type: "PLAYER",
+        targetId: player.id,
+      })),
+      { type: "NO_ELIMINATION" },
+    ];
+  }
+
+  /** Cùng điều kiện mà submitVote thực thi, tách ra để view không đoán lại luật. */
+  private canSubmitVote(viewerId: string): boolean {
+    return this.state.phase === "VOTING" && this.player(viewerId)?.alive === true;
+  }
+
 }

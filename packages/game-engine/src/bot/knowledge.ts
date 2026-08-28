@@ -1,0 +1,105 @@
+import type { DayVoteRecap, PublicVoteChoice } from "@masoi/shared";
+import type { BotKnowledgeView, BotPlayerKnowledge } from "./types";
+
+/**
+ * Ba trạng thái phiếu ban ngày được phân biệt bằng chính kiểu dữ liệu giống
+ * `GameState.votes`: `undefined` là chưa bỏ phiếu, `null` là chọn không treo,
+ * string là bỏ phiếu cho người đó. Gộp hai trạng thái đầu lại sẽ khiến BOT coi
+ * một lá phiếu "không treo" có chủ đích là một người chưa bầu.
+ */
+export function toPublicVoteChoice(
+  targetId: string | null | undefined,
+): PublicVoteChoice | null {
+  if (targetId === undefined) return null;
+  return targetId === null ? { type: "NO_ELIMINATION" } : { type: "PLAYER", targetId };
+}
+
+/**
+ * Deep copy để runtime của BOT không thể ghi ngược vào lịch sử authoritative
+ * của engine. Recap là bằng chứng công khai; một tham chiếu chung sẽ biến một
+ * bug trong lõi AI thành sửa đổi luật chơi.
+ */
+export function copyDayVoteRecap(recap: DayVoteRecap): DayVoteRecap {
+  return {
+    ...recap,
+    mutations: recap.mutations.map((mutation) => ({
+      ...mutation,
+      previousChoice: mutation.previousChoice ? { ...mutation.previousChoice } : null,
+      choice: { ...mutation.choice },
+    })),
+    finalBallots: recap.finalBallots.map((ballot) => ({
+      voterId: ballot.voterId,
+      choice: { ...ballot.choice },
+    })),
+    nomination: { ...recap.nomination },
+    finalJudgment: recap.finalJudgment
+      ? {
+          ...recap.finalJudgment,
+          ballots: recap.finalJudgment.ballots.map((ballot) => ({ ...ballot })),
+        }
+      : null,
+  };
+}
+
+/**
+ * Danh sách lựa chọn hợp lệ do engine cung cấp, không để BOT tự đoán luật.
+ * `canVote` đã được engine tính từ phase và trạng thái sống của người xem, nên
+ * hàm này không cần biết gì về state thật.
+ */
+export function buildLegalVoteChoices(
+  canVote: boolean,
+  aliveTargetIds: readonly string[],
+): PublicVoteChoice[] {
+  if (!canVote) return [];
+  return [
+    ...aliveTargetIds.map((targetId): PublicVoteChoice => ({ type: "PLAYER", targetId })),
+    { type: "NO_ELIMINATION" },
+  ];
+}
+
+/**
+ * Đầu vào của knowledge view: mọi trường bí mật đã được lọc trước ở engine.
+ * Module này cố tình không nhận `GameState`, nên không có đường nào để một
+ * trường ẩn lọt vào view chỉ vì quên lọc ở đây.
+ */
+export interface BotKnowledgeInput {
+  botId: string;
+  round: number;
+  phase: BotKnowledgeView["phase"];
+  phaseStartedAt: number;
+  phaseEndsAt: number | null;
+  selfRole: BotKnowledgeView["selfRole"];
+  players: readonly BotPlayerKnowledge[];
+  knownRoles: BotKnowledgeView["knownRoles"];
+  seerResult: BotKnowledgeView["seerResult"];
+  publicVoteHistory: readonly DayVoteRecap[];
+  currentVoteCounts: BotKnowledgeView["currentVoteCounts"];
+  currentVote: string | null | undefined;
+  canVote: boolean;
+  aliveTargetIds: readonly string[];
+  lastNightDeaths: readonly BotKnowledgeView["lastNightDeaths"][number][];
+}
+
+export function buildBotKnowledgeView(input: BotKnowledgeInput): BotKnowledgeView {
+  const myVote = input.canVote ? toPublicVoteChoice(input.currentVote) : null;
+  return {
+    botId: input.botId,
+    round: input.round,
+    phase: input.phase,
+    phaseStartedAt: input.phaseStartedAt,
+    phaseEndsAt: input.phaseEndsAt,
+    selfRole: input.selfRole,
+    players: input.players.map((player) => ({ ...player })),
+    knownRoles: { ...input.knownRoles },
+    seerResult: input.seerResult ? { ...input.seerResult } : null,
+    publicVoteHistory: input.publicVoteHistory.map(copyDayVoteRecap),
+    currentVoteCounts: {
+      players: { ...input.currentVoteCounts.players },
+      noElimination: input.currentVoteCounts.noElimination,
+    },
+    hasVoted: myVote !== null,
+    myVote,
+    legalVoteChoices: buildLegalVoteChoices(input.canVote, input.aliveTargetIds),
+    lastNightDeaths: input.lastNightDeaths.map((death) => ({ ...death })),
+  };
+}
