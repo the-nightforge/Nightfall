@@ -21,7 +21,7 @@ export function RoleCard({ role }: { role: Role | undefined }) {
       }`}
     >
       <div className="text-4xl">{isWolf ? "🐺" : "🌾"}</div>
-      <h2 className={`mt-2 text-2xl font-bold ${isWolf ? "text-blood-400" : "text-emerald-300"}`}>
+      <h2 className={`mt-2 font-display text-3xl font-bold ${isWolf ? "text-blood-400" : "text-emerald-300"}`}>
         {meta.name}
       </h2>
       <p className="mt-1 text-sm text-mist/80">{meta.description}</p>

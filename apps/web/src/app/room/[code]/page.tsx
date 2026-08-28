@@ -6,6 +6,8 @@ import type { RoomSnapshot } from "@masoi/shared";
 import { getIdentity } from "@/lib/identity";
 import { useRoomSocket } from "@/lib/useRoomSocket";
 import { useGameAudio } from "@/lib/useGameAudio";
+import { moodFor } from "@/lib/mood";
+import { Backdrop } from "@/components/Backdrop";
 import { PhaseBanner } from "@/components/PhaseBanner";
 import { PlayerGrid } from "@/components/PlayerGrid";
 import { ChatBox } from "@/components/ChatBox";
@@ -109,50 +111,54 @@ export default function RoomPage() {
   const chatPlaceholder = chatChannelHint(snapshot);
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-lg flex-col gap-3 px-3 py-4">
-      <header className="flex items-center justify-between">
-        <button className="text-sm text-mist/60 hover:text-white" onClick={leaveRoom}>
-          ← Rời phòng
-        </button>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-mist/50">Mã phòng:</span>
-          <button
-            className="rounded-lg border border-night-600 bg-night-800 px-3 py-1 font-mono text-sm font-bold tracking-widest text-white"
-            onClick={() => navigator.clipboard?.writeText(code)}
-            title="Bấm để sao chép"
-          >
-            {code}
+    <>
+      {/* Phòng chờ chưa có snapshot thì vẫn là buổi chiều, không nhảy thẳng vào đêm. */}
+      <Backdrop mood={snapshot ? moodFor(snapshot.phase) : "dusk"} />
+      <main className="mx-auto flex min-h-screen w-full max-w-lg flex-col gap-3 px-3 py-4">
+        <header className="flex items-center justify-between">
+          <button className="text-sm text-mist/60 hover:text-white" onClick={leaveRoom}>
+            ← Rời phòng
           </button>
-          <SoundControl />
-          {!room.connected && (
-            <span className="rounded bg-blood-600/30 px-2 py-0.5 text-xs text-blood-400">Mất kết nối...</span>
-          )}
-        </div>
-      </header>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-mist/50">Mã phòng:</span>
+            <button
+              className="rounded-lg border border-night-600 bg-night-800 px-3 py-1 font-mono text-sm font-bold tracking-widest text-white"
+              onClick={() => navigator.clipboard?.writeText(code)}
+              title="Bấm để sao chép"
+            >
+              {code}
+            </button>
+            <SoundControl />
+            {!room.connected && (
+              <span className="rounded bg-blood-600/30 px-2 py-0.5 text-xs text-blood-400">Mất kết nối...</span>
+            )}
+          </div>
+        </header>
 
-      {snapshot && <PhaseBanner snapshot={snapshot} />}
-      {snapshot?.phase === "LOBBY" && (
-        <p className="text-center text-xs text-mist/50">
-          Gửi mã phòng cho bạn bè để họ tham gia cùng bạn.
-        </p>
-      )}
+        {snapshot && <PhaseBanner snapshot={snapshot} />}
+        {snapshot?.phase === "LOBBY" && (
+          <p className="text-center text-xs text-mist/50">
+            Gửi mã phòng cho bạn bè để họ tham gia cùng bạn.
+          </p>
+        )}
 
-      {content}
+        {content}
 
-      {/* Chat hiển thị mọi lúc; server tự quyết định kênh & quyền xem */}
-      <ChatBox messages={room.messages} onSend={(text) => room.emit("chat:send", { text })} placeholder={chatPlaceholder} />
+        {/* Chat hiển thị mọi lúc; server tự quyết định kênh & quyền xem */}
+        <ChatBox messages={room.messages} onSend={(text) => room.emit("chat:send", { text })} placeholder={chatPlaceholder} />
 
-      {room.error && (
-        <p className="rounded-lg bg-blood-600/20 px-3 py-2 text-center text-sm text-blood-400">{room.error}</p>
-      )}
+        {room.error && (
+          <p className="rounded-lg bg-blood-600/20 px-3 py-2 text-center text-sm text-blood-400">{room.error}</p>
+        )}
 
-      {snapshot && snapshot.phase !== "LOBBY" && (
-        <section>
-          <h3 className="mb-2 text-sm font-semibold text-mist/70">Người chơi</h3>
-          <PlayerGrid snapshot={snapshot} />
-        </section>
-      )}
-    </main>
+        {snapshot && snapshot.phase !== "LOBBY" && (
+          <section>
+            <h3 className="mb-2 text-sm font-semibold text-mist/70">Người chơi</h3>
+            <PlayerGrid snapshot={snapshot} />
+          </section>
+        )}
+      </main>
+    </>
   );
 }
 

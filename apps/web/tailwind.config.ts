@@ -20,7 +20,10 @@ const config: Config = {
         mist: "#9db2d5",
       },
       fontFamily: {
-        display: ["system-ui", "sans-serif"],
+        // Tailwind preflight gán fontFamily.sans cho <html>, nên khai báo ở đây
+        // là đủ để cả trang đổi font, không cần chạm vào component nào.
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "Georgia", "serif"],
       },
       animation: {
         pulseSlow: "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",

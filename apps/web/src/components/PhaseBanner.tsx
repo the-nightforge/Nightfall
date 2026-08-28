@@ -1,37 +1,50 @@
 "use client";
 
-import type { RoomSnapshot } from "@masoi/shared";
+import type { Phase, RoomSnapshot } from "@masoi/shared";
+import { moodFor } from "@/lib/mood";
 import { Timer } from "./Timer";
 
-const PHASE_LABEL: Record<string, { label: string; cls: string }> = {
-  LOBBY: { label: "Phòng chờ", cls: "bg-night-700 text-mist" },
-  ROLE_REVEAL: { label: "Xem vai trò", cls: "bg-indigo-900 text-indigo-200" },
-  NIGHT: { label: "Ban đêm", cls: "bg-night-800 text-indigo-300 border border-indigo-500/40" },
-  NIGHT_RESULT: { label: "Kết quả đêm", cls: "bg-night-800 text-mist" },
-  DAY_DISCUSSION: { label: "Thảo luận", cls: "bg-amber-900/60 text-amber-200" },
-  VOTING: {
-    label: "Bỏ phiếu sơ bộ",
-    cls: "bg-blood-600/40 text-blood-400 border border-blood-500/40",
-  },
-  DEFENSE: { label: "Biện hộ", cls: "bg-amber-900/60 text-amber-200 border border-amber-500/40" },
-  FINAL_VOTE: {
-    label: "Bỏ phiếu xác nhận",
-    cls: "bg-blood-600/40 text-blood-400 border border-blood-500/40",
-  },
-  ELIMINATION: { label: "Công bố loại", cls: "bg-blood-600/40 text-blood-400" },
-  HUNTER_SHOT: { label: "Thợ Săn phản kích", cls: "bg-amber-900 text-amber-200" },
-  CHECK_WIN: { label: "Kiểm tra thắng", cls: "bg-night-700 text-mist" },
-  GAME_OVER: { label: "Kết thúc", cls: "bg-emerald-900/50 text-emerald-300" },
+interface PhaseMeta {
+  label: string;
+  /** Màu nhấn cho chấm và tên pha. Nền đã do Backdrop lo, ở đây chỉ cần một điểm nhấn. */
+  accent: string;
+  dot: string;
+}
+
+const PHASE_META: Record<Phase, PhaseMeta> = {
+  LOBBY: { label: "Phòng chờ", accent: "text-mist", dot: "bg-mist/60" },
+  ROLE_REVEAL: { label: "Xem vai trò", accent: "text-indigo-200", dot: "bg-indigo-400" },
+  NIGHT: { label: "Ban đêm", accent: "text-indigo-200", dot: "bg-indigo-400" },
+  NIGHT_RESULT: { label: "Trời sáng", accent: "text-amber-200", dot: "bg-amber-400" },
+  DAY_DISCUSSION: { label: "Thảo luận", accent: "text-amber-100", dot: "bg-amber-300" },
+  VOTING: { label: "Bỏ phiếu sơ bộ", accent: "text-blood-400", dot: "bg-blood-500" },
+  DEFENSE: { label: "Biện hộ", accent: "text-amber-200", dot: "bg-amber-400" },
+  FINAL_VOTE: { label: "Bỏ phiếu xác nhận", accent: "text-blood-400", dot: "bg-blood-500" },
+  ELIMINATION: { label: "Công bố loại", accent: "text-blood-400", dot: "bg-blood-500" },
+  HUNTER_SHOT: { label: "Thợ Săn phản kích", accent: "text-amber-200", dot: "bg-amber-400" },
+  CHECK_WIN: { label: "Kiểm tra thắng", accent: "text-mist", dot: "bg-mist/60" },
+  GAME_OVER: { label: "Kết thúc", accent: "text-emerald-300", dot: "bg-emerald-400" },
 };
 
 export function PhaseBanner({ snapshot }: { snapshot: RoomSnapshot }) {
-  const meta = PHASE_LABEL[snapshot.phase] ?? PHASE_LABEL.LOBBY;
+  const meta = PHASE_META[snapshot.phase];
+  // "Đêm thứ 2" đọc tự nhiên hơn "Ngày/Đêm thứ 2", và không khí đã biết đang là
+  // ban đêm hay ban ngày nên không cần thêm bảng tra thứ hai.
+  const unit = moodFor(snapshot.phase) === "night" ? "Đêm" : "Ngày";
+
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-night-600/60 bg-night-900/80 px-4 py-3">
-      <div>
-        <span className={`badge-phase ${meta.cls}`}>{meta.label}</span>
+    <div className="card flex items-center justify-between gap-3 py-3">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${meta.dot} animate-pulseSlow`} />
+          <h2 className={`truncate font-display text-2xl font-bold leading-tight ${meta.accent}`}>
+            {meta.label}
+          </h2>
+        </div>
         {snapshot.round > 0 && (
-          <span className="ml-2 text-sm text-mist/70">Ngày/Đêm thứ {snapshot.round}</span>
+          <p className="mt-0.5 pl-3.5 text-xs uppercase tracking-[0.2em] text-mist/50">
+            {unit} thứ {snapshot.round}
+          </p>
         )}
       </div>
       <Timer endsAt={snapshot.phaseEndsAt} />
