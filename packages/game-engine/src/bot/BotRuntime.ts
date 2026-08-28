@@ -279,8 +279,25 @@ export class BotRuntime {
     }
 
     const spoken = new Set(this.state.speechMemory.flatMap((entry) => entry.sourceIds));
+
+    /**
+     * Tiên Tri giữ kín kết quả soi trong những vòng đầu.
+     *
+     * Soi trúng Sói ngay đêm đầu rồi hô lên ở vòng 1 là cách nhanh nhất để chết
+     * ở đêm 2: bầy Sói biết ngay ai là Tiên Tri, và một Tiên Tri chết mang theo
+     * mọi thông tin nó sẽ có. Lá phiếu vẫn nhắm đúng người - thứ bị giữ lại là
+     * LÝ DO, không phải hành động.
+     */
+    const revealRound = this.weights.deceptionRisk.seerRevealRound;
+    const holdSeerEvidence = context.knowledge.round < revealRound;
+
     const fresh = vote.evidence
       .filter((item) => !spoken.has(item.sourceId))
+      .filter(
+        (item) =>
+          !holdSeerEvidence ||
+          (item.kind !== "SEER_RESULT_WOLF" && item.kind !== "SEER_RESULT_CLEAR"),
+      )
       .slice(0, this.weights.limits.intentionEvidence)
       .map((item) => ({ ...item }));
 
@@ -322,6 +339,24 @@ export class BotRuntime {
       run.probe,
     );
     run.finish(context, "NIGHT", night?.targetId ?? null, night?.action ?? "bỏ lượt");
+
+    if (night) {
+      const round = context.knowledge.round;
+      // Chỉ ghi một lần mỗi vòng: `decideNight` có thể được gọi lại khi lượt
+      // của Phù Thuỷ mở ra sau lúc bầy Sói khoá phiếu.
+      const last = this.state.previousNightActions.at(-1);
+      if (!last || last.round !== round || last.action !== night.action) {
+        this.state.previousNightActions.push({
+          round,
+          action: night.action,
+          targetId: night.targetId,
+        });
+        if (this.state.previousNightActions.length > this.weights.limits.history) {
+          this.state.previousNightActions.shift();
+        }
+      }
+    }
+
     return night;
   }
 

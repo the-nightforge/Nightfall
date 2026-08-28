@@ -38,6 +38,15 @@ export function guardStrategy(
       const selfHostility = incomingHostilityOf(state, me);
       const tuning = weights.selfPreservation;
 
+      // Ai đã được đỡ gần đây. Bảo Vệ luôn chọn "người đáng tin nhất" sẽ đỡ đúng
+      // một người gần như mọi đêm, và bầy Sói đọc được mẫu đó sau hai vòng -
+      // lúc đó vai Bảo Vệ tự chỉ vào mình bằng chính lịch trình của nó.
+      const guardedBefore = new Set(
+        state.previousNightActions
+          .filter((entry) => entry.action === "GUARD" && entry.targetId !== null)
+          .map((entry) => entry.targetId as string),
+      );
+
       const scored = candidates
         .map((targetId) => {
           const trust = state.trust[targetId]?.score ?? 0;
@@ -51,6 +60,10 @@ export function guardStrategy(
             { name: "trust", value: trust },
             { name: "suspicionPenalty", value: -(suspicion * tuning.guardSuspicionPenalty) },
             { name: "selfPreservation", value: selfBonus },
+            {
+              name: "repeatPenalty",
+              value: guardedBefore.has(targetId) ? -tuning.guardRepeatPenalty : 0,
+            },
             { name: "jitter", value: (rng() - 0.5) * weights.confidence.jitterSpan },
           ];
           const score = sumTerms(terms);

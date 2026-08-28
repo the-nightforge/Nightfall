@@ -54,6 +54,7 @@ export function createBotBrainState(
     currentTargets: [],
     confidence: 0,
     previousVotes: [],
+    previousNightActions: [],
     speechMemory: [],
     seenEventIds: [],
   };

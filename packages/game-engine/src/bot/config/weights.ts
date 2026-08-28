@@ -145,6 +145,13 @@ export interface SelfPreservationWeights {
   guardSelfBonusSpan: number;
   /** Đỡ người mình nghi là Sói thì vừa phí lượt vừa cứu nhầm phe. */
   guardSuspicionPenalty: number;
+  /**
+   * Phạt điểm khi đỡ lại một người đã từng đỡ.
+   *
+   * Bảo Vệ luôn chọn "người đáng tin nhất" sẽ đỡ đúng một người gần như mọi
+   * đêm, và bầy Sói đọc được mẫu đó sau hai vòng. `0` để tắt.
+   */
+  guardRepeatPenalty: number;
 }
 
 export interface TeammateProtectionWeights {
@@ -165,6 +172,19 @@ export interface DeceptionRiskWeights {
   bussingSuspicionFloor: number;
   /** Sói có `deceptionSkill` cao mới dám bán đồng đội. */
   bussingDeceptionScale: number;
+  /**
+   * Vòng sớm nhất mà Tiên Tri chịu đính kết quả soi vào lời nói.
+   *
+   * Soi trúng Sói ngay đêm đầu rồi hô lên ở vòng 1 là cách nhanh nhất để chết ở
+   * đêm 2: bầy Sói biết ngay ai là Tiên Tri. Đặt `0` để tắt (luôn nói ngay).
+   */
+  seerRevealRound: number;
+  /**
+   * Ngưỡng vote hiệu dụng tăng thêm sau khi một Sói mất đồng đội.
+   *
+   * Mất đồng bọn thì đẩy phiếu lộ liễu là tự chỉ vào mình. `0` để tắt.
+   */
+  allyLostThresholdBonus: number;
   /**
    * Tỉ lệ người đã chết mà trên đó "không treo ai" trở thành nước thua.
    *
@@ -542,6 +562,8 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     guardSelfBonusBase: 60,
     guardSelfBonusSpan: 60,
     guardSuspicionPenalty: 0.5,
+    // Tắt ở v1: Phase 2 không có hành vi này và v1 phải tái lập Phase 2 từng bit.
+    guardRepeatPenalty: 0,
   }),
 
   teammateProtection: Object.freeze({
@@ -551,10 +573,13 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
   }),
 
   deceptionRisk: Object.freeze({
-    // > MAX_BELIEF_SCORE nên bussing TẮT ở v1: Phase 2 không có hành vi này, và
-    // v1 phải tái lập Phase 2 từng bit. Task 6 bật nó ở v2.
+    // Bốn giá trị dưới đây TẮT bốn hành vi mới của Phase 3. v1 phải tái lập
+    // Phase 2 từng bit, nên chúng phải trung tính ở đây; v2 bật chúng lên.
+    // `> MAX_BELIEF_SCORE` là cách tắt bussing mà không cần một cờ boolean riêng.
     bussingSuspicionFloor: 101,
     bussingDeceptionScale: 0,
+    seerRevealRound: 0,
+    allyLostThresholdBonus: 0,
     abstainPressureCeiling: 0.3,
   }),
 

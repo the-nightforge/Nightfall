@@ -251,6 +251,18 @@ export interface BotBrainState {
   currentTargets: string[];
   confidence: number;
   previousVotes: Array<{ round: number; choice: PublicVoteChoice }>;
+  /**
+   * Nước đi đêm BOT đã thật sự chọn.
+   *
+   * Không suy ra được từ `memories`: memory ghi những gì BOT quan sát được từ
+   * bên ngoài, còn đây là những gì chính nó đã làm. Bảo Vệ cần nó để không đỡ
+   * cùng một người mọi đêm - một mẫu mà bầy Sói đọc ra sau hai vòng.
+   */
+  previousNightActions: Array<{
+    round: number;
+    action: NightActionKind;
+    targetId: string | null;
+  }>;
   speechMemory: Array<{ sourceIds: string[]; round: number }>;
   seenEventIds: string[];
 }

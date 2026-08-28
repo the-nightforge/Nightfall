@@ -154,7 +154,17 @@ export function selectVote(
   const selfIsWolf =
     knowledge.knownRoles[state.playerId] === "WEREWOLF" ||
     knowledge.knownRoles[state.playerId] === "WOLF_CUB";
-  const threshold = voteThreshold(personality, weights);
+  /**
+   * Mất đồng đội thì bớt đẩy phiếu lộ liễu.
+   *
+   * Một con Sói vừa mất bạn mà vẫn hăng hái chỉ mặt người khác là con Sói dễ bị
+   * để ý nhất trên bàn: cả làng vừa treo đúng một người, và ai lớn tiếng nhất
+   * ngay sau đó sẽ được soi kỹ. Nâng ngưỡng lên tức là im lặng nhiều hơn.
+   */
+  const lostAlly = state.memories.some((memory) => memory.type === "ALLY_LOST");
+  const threshold =
+    voteThreshold(personality, weights) +
+    (lostAlly && selfIsWolf ? weights.deceptionRisk.allyLostThresholdBonus : 0);
 
   // Hiểu biết riêng của vai, do chính strategy của vai đó cấp. Tách khỏi vòng
   // lặp chấm điểm để `selectVote` không phải biết vai nào tồn tại.
@@ -170,6 +180,29 @@ export function selectVote(
     const belief = state.suspicion[targetId];
     const reasons = belief?.reasons ?? [];
     const topConfidence = reasons.reduce((max, item) => Math.max(max, item.confidence), 0);
+
+    const targetRole = knowledge.knownRoles[targetId];
+    const targetIsWolf = targetRole === "WEREWOLF" || targetRole === "WOLF_CUB";
+
+    /**
+     * Bảo vệ đồng đội, TRỪ KHI cả làng đã chắc chắn về người đó.
+     *
+     * Đứng ra che một đồng bọn mà mọi người đều đã kết luận là hành vi tự tố
+     * cáo: nó không cứu được ai - phiếu của một mình mình không lật được đa số -
+     * và nó ghép tên mình vào tên người sắp bị treo. Khi bằng chứng công khai đã
+     * vượt `bussingSuspicionFloor`, nước rẻ nhất là bỏ phiếu cùng cả làng và
+     * giữ lấy vỏ bọc.
+     *
+     * `deceptionSkill` là hệ số vì đây là một nước đi CẦN DIỄN: Sói vụng sẽ lộ
+     * ra là đang tính toán. Trước Phase 3, trait này được sinh ra rồi không file
+     * nào đọc.
+     */
+    const willBus =
+      selfIsWolf &&
+      targetIsWolf &&
+      (state.suspicion[targetId]?.score ?? 0) >=
+        weights.deceptionRisk.bussingSuspicionFloor &&
+      personality.deceptionSkill * weights.deceptionRisk.bussingDeceptionScale >= 1;
 
     // Điểm được cộng theo TỪNG SỐ HẠNG chứ không phải một biểu thức dài. Thứ tự
     // cộng giữ nguyên nên kết quả giống hệt từng bit (xem `sumTerms`), nhưng giờ
@@ -192,7 +225,9 @@ export function selectVote(
         name: "trustDamping",
         value: -((state.trust[targetId]?.score ?? 0) * weights.trust.damping),
       },
-      { name: "roleBias", value: bias[targetId] ?? 0 },
+      // Bỏ luôn bias của vai khi đã quyết hy sinh: `voteBias` của Sói đẩy -100
+      // vào mỗi đồng bọn, và một số hạng lớn thế sẽ nuốt chửng mọi thứ khác.
+      { name: "roleBias", value: willBus ? 0 : bias[targetId] ?? 0 },
       // Người bị cả làng dồn vào mà không ai bênh thì dễ bị treo; đó vừa là tín
       // hiệu (có thể họ đã lộ), vừa là cái bẫy (đám đông có khi đang sai).
       // Trọng số nhỏ có chủ đích: nó không được tự mình đẩy ai qua ngưỡng.
@@ -202,9 +237,7 @@ export function selectVote(
       },
     ];
 
-    const targetRole = knowledge.knownRoles[targetId];
-    const targetIsWolf = targetRole === "WEREWOLF" || targetRole === "WOLF_CUB";
-    if (selfIsWolf && targetIsWolf) {
+    if (selfIsWolf && targetIsWolf && !willBus) {
       terms.push({
         name: "teammateProtection",
         value: -(
