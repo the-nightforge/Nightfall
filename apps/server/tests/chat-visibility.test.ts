@@ -252,13 +252,13 @@ describe("resolveChat", () => {
   );
 
   it.each(reactionCases)(
-    "preserves ordinary dead-player visibility during the $source Hunter reaction",
+    "preserves ordinary dead-player chat visibility but hides roles during the $source Hunter reaction",
     ({ source }) => {
       const hunterRoom = pendingHunterRoom(source);
       const engine = hunterRoom.engine!;
       const assertOrdinaryDeadAccess = () => {
         const ordinaryDeadView = buildSnapshot(hunterRoom, "dead");
-        expect(ordinaryDeadView.players.find((player) => player.id === "wolf")?.role).toBe("WEREWOLF");
+        expect(ordinaryDeadView.players.find((player) => player.id === "wolf")?.role).toBeUndefined();
         expect(channels(ordinaryDeadView.chatLog)).toEqual(["day", "wolves", "dead"]);
       };
 
@@ -269,7 +269,7 @@ describe("resolveChat", () => {
   );
 
   it.each(reactionCases)(
-    "restores normal dead-player rules after the $source Hunter reaction completes",
+    "restores ordinary dead-player chat rules while roles stay hidden after the $source Hunter reaction completes",
     ({ source, nextPhase }) => {
       const hunterRoom = pendingHunterRoom(source);
       const engine = hunterRoom.engine!;
@@ -278,7 +278,7 @@ describe("resolveChat", () => {
 
       expect(engine.completeHunterReaction()).toBe(source);
       engine.setPhase(nextPhase, 30_000, 3_000);
-      expect(buildSnapshot(hunterRoom, "hunter").players.find((player) => player.id === "wolf")?.role).toBe("WEREWOLF");
+      expect(buildSnapshot(hunterRoom, "hunter").players.find((player) => player.id === "wolf")?.role).toBeUndefined();
       expect(channels(visibleChatLog(hunterRoom, "hunter"))).toEqual(["day", "wolves", "dead"]);
       expect(resolveChat(hunterRoom, "hunter")).toEqual({
         ok: true,
