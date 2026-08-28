@@ -12,6 +12,8 @@ export const roomCodeSchema = z.string().trim().toUpperCase().length(5);
 
 const bool = z.boolean();
 
+export const roomModeSchema = z.enum(["ranked", "chaos"]);
+
 export const roomConfigSchema = z
   .object({
     werewolves: z.number().int().min(1).max(4),
@@ -20,6 +22,7 @@ export const roomConfigSchema = z
     witch: bool,
     hunter: bool,
     cursed: bool,
+    mode: roomModeSchema.optional(),
     nightSeconds: z.number().int().min(15).max(120),
     discussionSeconds: z.number().int().min(30).max(300),
     voteSeconds: z.number().int().min(15).max(120),
@@ -70,11 +73,23 @@ export const updateConfigPayload = z.object({ config: roomConfigSchema }).strict
 export const startGamePayload = z.object({}).strict();
 export const resetGamePayload = z.object({}).strict();
 
-export const nightActionTypeSchema = z.enum(["KILL", "SEE", "GUARD", "HEAL", "POISON", "SKIP"]);
+export const nightActionTypeSchema = z.enum([
+  "KILL",
+  "SEE",
+  "GUARD",
+  "HEAL",
+  "POISON",
+  "SKIP",
+  "DETECTIVE_CHECK",
+  "GUARDIAN_PROTECT",
+  "HOLY_WATER",
+]);
 export const gameActionPayload = z
   .object({
     type: nightActionTypeSchema,
     targetId: z.string().min(1).nullable().optional(),
+    targetId1: z.string().min(1).nullable().optional(),
+    targetId2: z.string().min(1).nullable().optional(),
   })
   .strict();
 

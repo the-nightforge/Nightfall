@@ -1,5 +1,16 @@
 import type { Phase, RoomConfig, Winner } from "./phases";
 import type { Role } from "./roles";
+import type { GameEventId } from "./events";
+
+export interface GameEventView {
+  id: GameEventId;
+  name: string;
+  description: string;
+  targetPhase: "NIGHT" | "DAY";
+  round: number;
+  beneficiary: "wolves" | "village" | "neutral";
+  power: number;
+}
 
 /** Snapshot người chơi mà client được nhìn thấy (đã làm sạch thông tin bí mật). */
 export interface PlayerView {
@@ -35,6 +46,8 @@ export interface NightActionView {
    * null nghĩa là đêm nay bầy Sói không cắn ai.
    */
   wolfTarget?: string | null;
+  /** Mục tiêu phụ của Sói (nếu Sói Con chết vòng trước hoặc do Event Cuộc săn đẫm máu) */
+  wolfSecondaryTarget?: string | null;
   /** Với Sói: số phiếu cắn theo từng mục tiêu */
   wolfVoteCounts?: Record<string, number>;
   /** Với Sói: số phiếu "không cắn" và tổng số Sói còn sống cần bầu */
@@ -44,8 +57,24 @@ export interface NightActionView {
   myWolfVote?: string | null;
   /** Với Bảo Vệ: mục tiêu đêm trước, không được đỡ lại */
   guardPrevious?: string | null;
+  /** Với Thiên Thần Hộ Mệnh: số lượt khiên còn lại (tối đa 2) */
+  guardianAngelCharges?: number;
+  /** Với Thiên Thần Hộ Mệnh: mục tiêu đêm trước, không được đỡ lại */
+  guardianAngelPrevious?: string | null;
   /** Với Tiên Tri: kết quả soi gần nhất */
   seerResult?: { targetId: string; targetName: string; isWolf: boolean } | null;
+  /** Với Tiên Tri Tập Sự: cờ đánh dấu đã thức tỉnh thừa kế kỹ năng soi */
+  apprenticeAwakened?: boolean;
+  /** Với Thám Tử: kết quả kiểm tra 2 mục tiêu */
+  detectiveResult?: {
+    target1: { id: string; name: string };
+    target2: { id: string; name: string };
+    sameTeam: boolean;
+  } | null;
+  /** Với Linh Mục: cờ đánh dấu đã dùng bình Nước thánh chưa */
+  priestHolyWaterUsed?: boolean;
+  /** Với Linh Mục: kết quả dùng Nước thánh gần nhất */
+  priestResult?: { target: { id: string; name: string }; isWolf: boolean } | null;
   /** Với Phù Thủy */
   healUsed?: boolean;
   poisonUsed?: boolean;
@@ -61,6 +90,11 @@ export interface DiscussionSkipView {
 export interface RecapPlayer {
   id: string;
   name: string;
+}
+
+export interface PublicVoteChoiceChoice {
+  type: "PLAYER";
+  targetId: string;
 }
 
 export type PublicVoteChoice =
@@ -161,7 +195,7 @@ export interface NightRecap {
   };
   deaths: Array<{
     player: RecapPlayer;
-    cause: "wolf" | "poison";
+    cause: "wolf" | "poison" | "priest" | "priest_backfire";
   }>;
   /**
    * Kẻ Nguyền Rủa đã bị nguyền và hoá Sói trong đêm này; null khi không có.
@@ -177,6 +211,10 @@ export interface RoomSnapshot {
   phase: Phase;
   config: RoomConfig;
   round: number;
+  /** Sự kiện đang hoạt động tại round / phase hiện tại */
+  activeEvent?: GameEventView | null;
+  /** Cờ đánh dấu Tiên Tri Tập Sự đã thức tỉnh */
+  apprenticeAwakened?: boolean;
   /** epoch ms - client đếm ngược từ đây */
   phaseEndsAt: number | null;
   /**
