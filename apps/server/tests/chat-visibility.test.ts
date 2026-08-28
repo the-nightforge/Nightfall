@@ -141,8 +141,8 @@ describe("visibleChatLog", () => {
     expect(channels(visibleChatLog(room("NIGHT"), "villager"))).toEqual([]);
   });
 
-  it("only returns dead chat to a dead player", () => {
-    expect(channels(visibleChatLog(room("NIGHT"), "dead"))).toEqual(["dead"]);
+  it("returns every in-game channel to a dead player", () => {
+    expect(channels(visibleChatLog(room("NIGHT"), "dead"))).toEqual(["day", "wolves", "dead"]);
   });
 
   it("only returns day chat to a living player during the day", () => {
@@ -155,13 +155,29 @@ describe("visibleChatLog", () => {
 });
 
 describe("resolveChat", () => {
-  it("does not send living-player daytime chat to dead players", () => {
+  it("also sends living-player daytime chat to dead spectators", () => {
     const result = resolveChat(room("DAY_DISCUSSION"), "villager");
 
     expect(result).toEqual({
       ok: true,
       channel: "day",
-      recipients: ["wolf", "villager"],
+      recipients: ["wolf", "villager", "dead"],
+    });
+  });
+
+  it("also sends wolf chat to dead spectators", () => {
+    expect(resolveChat(room("NIGHT"), "wolf")).toEqual({
+      ok: true,
+      channel: "wolves",
+      recipients: ["wolf", "dead"],
+    });
+  });
+
+  it("still refuses to let a dead player talk to the living", () => {
+    expect(resolveChat(room("DAY_DISCUSSION"), "dead")).toEqual({
+      ok: true,
+      channel: "dead",
+      recipients: ["dead"],
     });
   });
 
@@ -239,7 +255,7 @@ describe("resolveChat", () => {
       const assertOrdinaryDeadAccess = () => {
         const ordinaryDeadView = buildSnapshot(hunterRoom, "dead");
         expect(ordinaryDeadView.players.find((player) => player.id === "wolf")?.role).toBe("WEREWOLF");
-        expect(channels(ordinaryDeadView.chatLog)).toEqual(["dead"]);
+        expect(channels(ordinaryDeadView.chatLog)).toEqual(["day", "wolves", "dead"]);
       };
 
       assertOrdinaryDeadAccess();
@@ -259,7 +275,7 @@ describe("resolveChat", () => {
       expect(engine.completeHunterReaction()).toBe(source);
       engine.setPhase(nextPhase, 30_000, 3_000);
       expect(buildSnapshot(hunterRoom, "hunter").players.find((player) => player.id === "wolf")?.role).toBe("WEREWOLF");
-      expect(channels(visibleChatLog(hunterRoom, "hunter"))).toEqual(["dead"]);
+      expect(channels(visibleChatLog(hunterRoom, "hunter"))).toEqual(["day", "wolves", "dead"]);
       expect(resolveChat(hunterRoom, "hunter")).toEqual({
         ok: true,
         channel: "dead",

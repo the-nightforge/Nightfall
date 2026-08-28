@@ -6,6 +6,25 @@ function isHunterReactionParticipant(room: Room, playerId: string): boolean {
   return room.engine?.state.hunterReaction?.hunterId === playerId;
 }
 
+/** Kênh chat trong trận mà người chết được theo dõi với tư cách khán giả. */
+const SPECTATOR_CHANNELS = ["day", "wolves", "dead"];
+
+/**
+ * Người chết xem được mọi kênh trong trận nhưng chỉ gửi được ở kênh người chết.
+ * Thợ Săn đang chờ bắn chưa tính là người chết - họ vẫn phải bắn "mù".
+ */
+function deadSpectators(room: Room): string[] {
+  if (!room.engine) return [];
+  return room.members
+    .filter(
+      (member) =>
+        !member.isBot &&
+        !room.engine!.snapshotFor(member.playerId).you?.alive &&
+        !isHunterReactionParticipant(room, member.playerId),
+    )
+    .map((member) => member.playerId);
+}
+
 /**
  * Xác định kênh chat của người gửi và ai được nhận tin nhắn.
  * Server là nơi duy nhất quyết định quyền - client không gửi channel.
@@ -32,15 +51,7 @@ export function resolveChat(room: Room, senderId: string):
       return { ok: false, error: "Thợ Săn chưa thể dùng kênh chat người chết" };
     }
     // Người chết chỉ chat với người chết
-    const recipients = room.members
-      .filter(
-        (m) =>
-          !room.engine!.snapshotFor(m.playerId).you?.alive &&
-          !m.isBot &&
-          !isHunterReactionParticipant(room, m.playerId),
-      )
-      .map((m) => m.playerId);
-    return { ok: true, channel: "dead", recipients };
+    return { ok: true, channel: "dead", recipients: deadSpectators(room) };
   }
 
   if (view.phase === "NIGHT") {
@@ -54,7 +65,7 @@ export function resolveChat(room: Room, senderId: string):
             room.engine!.snapshotFor(m.playerId).you?.alive,
         )
         .map((m) => m.playerId);
-      return { ok: true, channel: "wolves", recipients };
+      return { ok: true, channel: "wolves", recipients: [...recipients, ...deadSpectators(room)] };
     }
     return { ok: false, error: "Ban đêm bạn không thể trò chuyện" };
   }
@@ -63,7 +74,7 @@ export function resolveChat(room: Room, senderId: string):
     const recipients = room.members
       .filter((m) => !m.isBot && room.engine!.snapshotFor(m.playerId).you?.alive)
       .map((m) => m.playerId);
-    return { ok: true, channel: "day", recipients };
+    return { ok: true, channel: "day", recipients: [...recipients, ...deadSpectators(room)] };
   }
 
   return { ok: false, error: "Hiện tại không thể trò chuyện" };
@@ -79,8 +90,8 @@ export function visibleChatLog(room: Room, viewerId: string): ChatMessage[] {
   const member = room.members.find((candidate) => candidate.playerId === viewerId);
   if (!member) return [];
 
-  const messagesFor = (channel: string) =>
-    room.chatLog.filter((message) => message.channel === channel).slice(-60);
+  const messagesFor = (...channels: string[]) =>
+    room.chatLog.filter((message) => channels.includes(message.channel)).slice(-60);
 
   if (room.status === "LOBBY" || !room.engine) return messagesFor("lobby");
 
@@ -88,7 +99,8 @@ export function visibleChatLog(room: Room, viewerId: string): ChatMessage[] {
   if (!view.you) return [];
   if (view.phase === "GAME_OVER") return messagesFor("lobby");
   if (!view.you.alive) {
-    return isHunterReactionParticipant(room, viewerId) ? [] : messagesFor("dead");
+    // Người chết theo dõi được cả trận, chỉ mất quyền nói với người sống.
+    return isHunterReactionParticipant(room, viewerId) ? [] : messagesFor(...SPECTATOR_CHANNELS);
   }
 
   if (view.phase === "NIGHT") {
