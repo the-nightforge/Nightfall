@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
 import { PlayerGrid } from "./PlayerGrid";
+import { NightRecapTimeline } from "./NightRecapTimeline";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -179,6 +180,8 @@ export function GameOverView({
           ))}
         </ul>
       </div>
+
+      <NightRecapTimeline nights={snapshot.nightHistory} />
 
       <div className="flex gap-2">
         {isHost && <button className="btn-primary flex-1" onClick={onReset}>Chơi lại (về phòng chờ)</button>}
