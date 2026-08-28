@@ -1454,6 +1454,44 @@ describe("Phiên toà: biện hộ và bỏ phiếu xác nhận", () => {
     expect(acquitted.hasPendingHunterShot()).toBe(false);
   });
 
+  it("phiếu đề cử lộ danh tính ngay trong lúc còn mở", () => {
+    const e = votingEngine();
+    expect(e.snapshotFor("p1").openBallots).toEqual([]);
+
+    e.submitVote("p1", "p3", 10_000);
+    e.submitVote("p2", null, 11_000);
+    // Mọi người nhìn thấy cùng một bảng, kể cả người chưa bỏ phiếu.
+    for (const viewer of ["p1", "p2", "p5"]) {
+      expect(e.snapshotFor(viewer).openBallots).toEqual([
+        { voterId: "p1", choice: { type: "PLAYER", targetId: "p3" } },
+        { voterId: "p2", choice: { type: "NO_ELIMINATION" } },
+      ]);
+    }
+
+    // Đổi phiếu thì bảng đổi theo, không đẻ thêm dòng.
+    e.submitVote("p1", "p4", 12_000);
+    expect(e.snapshotFor("p5").openBallots).toEqual([
+      { voterId: "p1", choice: { type: "PLAYER", targetId: "p4" } },
+      { voterId: "p2", choice: { type: "NO_ELIMINATION" } },
+    ]);
+  });
+
+  it("hết vòng đề cử thì openBallots im, dayVoteHistory tiếp quản", () => {
+    const e = trialEngine();
+    // Ở DEFENSE vòng đã chốt: hai nguồn cùng lúc là hai bản của một sự thật.
+    expect(e.state.phase).toBe("DEFENSE");
+    expect(e.snapshotFor("p1").openBallots).toEqual([]);
+    expect(e.snapshotFor("p1").dayVoteHistory.at(-1)!.finalBallots.length).toBe(2);
+  });
+
+  it("phiếu phán quyết Treo/Tha KHÔNG lộ qua openBallots", () => {
+    const e = trialEngine();
+    e.beginFinalVote(20_000);
+    e.submitFinalVote("p1", true);
+    // Vòng phán quyết phải đồng thời; lộ trực tiếp thì thành đua ai bấm sau cùng.
+    expect(e.snapshotFor("p2").openBallots).toEqual([]);
+  });
+
   it("snapshot chỉ cho bị cáo nói và chỉ cho người khác bỏ phiếu", () => {
     const e = makeEngine(6);
     nominate(e, "p2");

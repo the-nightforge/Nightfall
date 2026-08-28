@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { DayVoteRecap } from "@masoi/shared";
-import { formatVoteMutations } from "./vote-history";
+import { formatOpenBallots, formatVoteMutations } from "./vote-history";
 
 const recap: DayVoteRecap = {
   round: 1,
@@ -55,5 +55,36 @@ describe("formatVoteMutations", () => {
       "Người chơi đã rời phòng → Người chơi đã rời phòng",
       "Người chơi đã rời phòng: Người chơi đã rời phòng → Người chơi đã rời phòng",
     ]);
+  });
+});
+
+describe("formatOpenBallots", () => {
+  const names = new Map([
+    ["a", "An"],
+    ["b", "Bình"],
+  ]);
+
+  it("đọc giống hệt lịch sử đã chốt: người bỏ → lựa chọn", () => {
+    assert.deepEqual(
+      formatOpenBallots(
+        [
+          { voterId: "a", choice: { type: "PLAYER", targetId: "b" } },
+          { voterId: "b", choice: { type: "NO_ELIMINATION" } },
+        ],
+        names,
+      ),
+      ["An → Bình", "Bình → Không treo ai"],
+    );
+  });
+
+  it("server cũ không gửi trường này thì bảng rỗng chứ không nổ", () => {
+    assert.deepEqual(formatOpenBallots(undefined, names), []);
+  });
+
+  it("người đã rời phòng vẫn đọc được", () => {
+    assert.deepEqual(
+      formatOpenBallots([{ voterId: "z", choice: { type: "PLAYER", targetId: "a" } }], names),
+      ["Người chơi đã rời phòng → An"],
+    );
   });
 });

@@ -106,6 +106,8 @@ export interface PlayerGameView {
   myVote: string | null;
   /** Số phiếu "Không treo ai", tách khỏi PlayerView.voteCount. */
   noEliminationVoteCount: number;
+  /** Danh tính phiếu đang mở; rỗng ngoài pha VOTING. Xem RoomSnapshot.openBallots. */
+  openBallots: Array<{ voterId: string; choice: PublicVoteChoice }>;
   votesRevealed: boolean;
   lastNightDeaths: PublicDeath[];
   nightHistory: NightRecap[];
@@ -1327,6 +1329,19 @@ export class GameEngine {
       // phiếu, nên null trả về là phiếu không treo chứ không phải "chưa vote".
       myVote: hasVoted ? st.votes[viewerId] ?? null : null,
       noEliminationVoteCount: showVoteCounts ? tally.noElimination : 0,
+      // Danh tính phiếu ĐANG MỞ. Chỉ ở VOTING: từ DEFENSE trở đi vòng đã chốt
+      // và recap trong dayVoteHistory là nguồn duy nhất, gửi cả hai thì client
+      // có hai bản của cùng một sự thật.
+      openBallots:
+        st.phase === "VOTING"
+          ? Object.entries(st.votes).map(([voterId, targetId]) => ({
+              voterId,
+              choice:
+                targetId === null
+                  ? ({ type: "NO_ELIMINATION" } as const)
+                  : ({ type: "PLAYER", targetId } as const),
+            }))
+          : [],
       votesRevealed:
         inTrialPhase ||
         st.phase === "ELIMINATION" ||

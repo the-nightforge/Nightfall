@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
+import { OpenVotePanel } from "./OpenVotePanel";
 import { PlayerGrid } from "./PlayerGrid";
 import { VoteHistoryPanel } from "./VoteHistoryPanel";
 
@@ -96,6 +97,7 @@ export function DayView({ snapshot, onVote, onSkipDiscussion }: Props) {
               Không treo ai: {snapshot.noEliminationVoteCount} phiếu
             </p>
           )}
+          <OpenVotePanel snapshot={snapshot} />
         </div>
       )}
 

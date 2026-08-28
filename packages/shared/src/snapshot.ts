@@ -6,6 +6,8 @@ export interface GameEventView {
   id: GameEventId;
   name: string;
   description: string;
+  /** Kết quả công khai phát sinh khi event kích hoạt, nếu event có kết quả động. */
+  announcement?: string;
   targetPhase: "NIGHT" | "DAY";
   round: number;
   beneficiary: "wolves" | "village" | "neutral";
@@ -77,7 +79,8 @@ export interface NightActionView {
   detectiveResult?: {
     target1: { id: string; name: string };
     target2: { id: string; name: string };
-    sameTeam: boolean;
+    sameTeam?: boolean;
+    unknown?: boolean;
   } | null;
   /** Với Linh Mục: cờ đánh dấu đã dùng bình Nước thánh chưa */
   priestHolyWaterUsed?: boolean;
@@ -260,6 +263,19 @@ export interface RoomSnapshot {
   myVote: string | null;
   /** Số phiếu "Không treo ai"; tách khỏi PlayerView.voteCount */
   noEliminationVoteCount: number;
+  /**
+   * Ai đang bỏ phiếu cho ai, ngay trong lúc phiếu còn mở. Chỉ có dữ liệu ở pha
+   * VOTING; từ DEFENSE trở đi vòng đã chốt và nằm trong dayVoteHistory.
+   *
+   * Vòng đề cử là vòng TRANH LUẬN, nên hành vi bỏ phiếu phải công khai đúng lúc
+   * còn cãi được: ai châm ngòi, ai hùa theo, ai rút phiếu khi gió đổi. Vòng
+   * phán quyết Treo/Tha thì ngược lại - nó nằm trong FinalJudgmentRecap và chỉ
+   * lộ khi công bố, để không thành cuộc đua ai bấm sau cùng.
+   *
+   * Không bắt buộc vì web và server deploy rời nhau: client mới chạy với server
+   * cũ thì trường này undefined, chỗ đọc phải chịu được điều đó.
+   */
+  openBallots?: Array<{ voterId: string; choice: PublicVoteChoice }>;
   /** Đồng thuận kết thúc thảo luận sớm; chỉ có trong DAY_DISCUSSION. */
   discussionSkip: DiscussionSkipView | null;
   votesRevealed: boolean;

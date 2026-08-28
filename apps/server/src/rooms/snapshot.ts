@@ -201,6 +201,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
     hasVoted: gameView?.hasVoted ?? false,
     myVote: gameView?.myVote ?? null,
     noEliminationVoteCount: gameView?.noEliminationVoteCount ?? 0,
+    openBallots: gameView?.openBallots ?? [],
     discussionSkip: getDiscussionSkipView(room, viewerId),
     votesRevealed: gameView?.votesRevealed ?? false,
     dayVoteHistory: gameView?.dayVoteHistory ?? [],
