@@ -148,7 +148,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
     noEliminationVoteCount: gameView?.noEliminationVoteCount ?? 0,
     discussionSkip: getDiscussionSkipView(room, viewerId),
     votesRevealed: gameView?.votesRevealed ?? false,
-    nightHistory: [],
+    nightHistory: gameView?.nightHistory ?? [],
     lastNightDeaths: gameView?.lastNightDeaths ?? [],
     lastEliminated: gameView?.lastEliminated ?? null,
     winner: gameView?.winner ?? null,
