@@ -13,4 +13,5 @@ prisma/migrations/dev.db*
 
 # Scratch cua worktree va subagent-driven development
 .claude/worktrees/
+.worktrees/
 .superpowers/
