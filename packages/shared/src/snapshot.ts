@@ -57,6 +57,20 @@ export interface RecapPlayer {
   name: string;
 }
 
+export interface HunterShotView {
+  hunterId: string;
+  hunterName: string;
+  canAct: boolean;
+  resolved: boolean;
+}
+
+export interface HunterShotRecap {
+  round: number;
+  hunter: RecapPlayer;
+  target: RecapPlayer | null;
+  source: "night" | "vote";
+}
+
 export interface NightRecap {
   round: number;
   wolfTarget: RecapPlayer | null;
@@ -96,6 +110,7 @@ export interface RoomSnapshot {
   } | null;
   players: PlayerView[];
   night: NightActionView | null;
+  hunterShot: HunterShotView | null;
   /**
    * Viewer đã gửi phiếu chưa. Cần cờ riêng vì myVote === null vừa có thể là
    * chưa vote, vừa có thể là đã chọn "Không treo ai".
@@ -110,6 +125,7 @@ export interface RoomSnapshot {
   votesRevealed: boolean;
   /** Toàn bộ diễn biến đêm; chỉ có dữ liệu ở GAME_OVER. */
   nightHistory: NightRecap[];
+  hunterShots: HunterShotRecap[];
   lastNightDeaths: { playerId: string; name: string }[];
   lastEliminated: { playerId: string; name: string } | null;
   winner: Winner;

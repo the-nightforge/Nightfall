@@ -21,6 +21,7 @@ export function buildRoleDeck(config: RoomConfig, playerCount: number): Role[] {
   if (config.seer) deck.push("SEER");
   if (config.guard) deck.push("GUARD");
   if (config.witch) deck.push("WITCH");
+  if (config.hunter) deck.push("HUNTER");
   while (deck.length < playerCount) deck.push("VILLAGER");
   if (deck.length !== playerCount) throw new Error("Cấu hình vai trò không khớp số người chơi");
   return shuffle(deck);

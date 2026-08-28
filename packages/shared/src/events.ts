@@ -14,6 +14,7 @@ export const CLIENT_EVENTS = {
   ROOM_RESET: "room:reset",
   GAME_ACTION: "game:action",
   GAME_VOTE: "game:vote",
+  GAME_HUNTER_SHOT: "game:hunter-shot",
   GAME_SKIP_DISCUSSION: "game:skip-discussion",
   CHAT_SEND: "chat:send",
 } as const;

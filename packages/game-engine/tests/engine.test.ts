@@ -9,6 +9,7 @@ const CONFIG: RoomConfig = {
   seer: true,
   guard: true,
   witch: true,
+  hunter: false,
   nightSeconds: 30,
   discussionSeconds: 90,
   voteSeconds: 30,
@@ -50,6 +51,12 @@ describe("Chia vai trò", () => {
     expect(deck.filter((r) => r === "WITCH")).toHaveLength(1);
     expect(deck.filter((r) => r === "VILLAGER")).toHaveLength(3);
     expect(deck).toHaveLength(8);
+  });
+
+  it("thêm đúng một Thợ Săn khi cấu hình bật", () => {
+    const deck = buildRoleDeck({ ...CONFIG, hunter: true }, 8);
+    expect(deck.filter((role) => role === "HUNTER")).toHaveLength(1);
+    expect(deck.filter((role) => role === "VILLAGER").length).toBeGreaterThan(0);
   });
 
   it("mỗi người nhận đúng một vai trò từ bộ bài", () => {

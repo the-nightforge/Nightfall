@@ -18,6 +18,7 @@ export const roomConfigSchema = z
     seer: bool,
     guard: bool,
     witch: bool,
+    hunter: bool,
     nightSeconds: z.number().int().min(15).max(120),
     discussionSeconds: z.number().int().min(30).max(300),
     voteSeconds: z.number().int().min(15).max(120),
@@ -36,7 +37,7 @@ export function validateRoomConfig(config: RoomConfig, playerCount: number): str
     return `Tối đa ${MAX_PLAYERS_PER_ROOM} người mỗi phòng`;
   }
   const specials =
-    (config.seer ? 1 : 0) + (config.guard ? 1 : 0) + (config.witch ? 1 : 0);
+    (config.seer ? 1 : 0) + (config.guard ? 1 : 0) + (config.witch ? 1 : 0) + (config.hunter ? 1 : 0);
   const totalRoles = config.werewolves + specials;
   if (totalRoles > playerCount) {
     return "Tổng số vai trò đặc biệt vượt quá số người chơi";
@@ -71,6 +72,7 @@ export const gameActionPayload = z
 // targetId null nghĩa là "Không treo ai" - một lựa chọn có chủ đích, không phải
 // phiếu trống. Vẫn strict và vẫn chặn chuỗi rỗng: chỉ nới đúng chỗ null.
 export const votePayload = z.object({ targetId: z.string().min(1).nullable() }).strict();
+export const hunterShotPayload = z.object({ targetId: z.string().min(1).nullable() }).strict();
 export const skipDiscussionPayload = z.object({ skip: z.boolean() }).strict();
 export const chatSendPayload = z.object({ text: z.string().trim().min(1).max(300) }).strict();
 

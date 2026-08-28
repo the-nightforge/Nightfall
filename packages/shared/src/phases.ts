@@ -6,6 +6,7 @@ export const PHASES = [
   "DAY_DISCUSSION",
   "VOTING",
   "ELIMINATION",
+  "HUNTER_SHOT",
   "CHECK_WIN",
   "GAME_OVER",
 ] as const;
@@ -21,6 +22,7 @@ export interface RoomConfig {
   seer: boolean;
   guard: boolean;
   witch: boolean;
+  hunter: boolean;
   /** giây */
   nightSeconds: number;
   discussionSeconds: number;
@@ -32,6 +34,7 @@ export const DEFAULT_ROOM_CONFIG: RoomConfig = {
   seer: true,
   guard: true,
   witch: true,
+  hunter: false,
   nightSeconds: 30,
   discussionSeconds: 90,
   voteSeconds: 30,
