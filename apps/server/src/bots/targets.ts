@@ -64,6 +64,28 @@ export function legalHunterTargets(view: RoomSnapshot): string[] {
 }
 
 /**
+ * Phiếu xác nhận suy ra tại chỗ, không gọi mạng.
+ *
+ * Chỉ là ĐƯỜNG LUI khi chuỗi não hỏng hoặc lỡ hạn - quyết định thật đi qua
+ * decideFinalVote, vốn có đọc lời biện hộ.
+ */
+export function derivedFinalVote(
+  view: RoomSnapshot,
+  myNomination: PlannedVote | undefined,
+): boolean {
+  const accusedId = view.trial?.accusedId;
+  if (!accusedId) return false;
+  const accused = view.players.find((p) => p.id === accusedId);
+  // Sói thấy vai đồng bọn trong snapshot của chính mình, đúng như legalNightTargets dùng.
+  if (view.you?.role === "WEREWOLF" && accused?.role === "WEREWOLF") return false;
+  if (myNomination?.type === "NO_ELIMINATION") return false;
+  // Mặc định Treo. Nếu đường lui chỉ treo người mà chính bot đã đề cử, một làng
+  // bot rải phiếu sẽ không bao giờ đạt đa số tuyệt đối, không ai bị treo, và Sói
+  // thắng bằng bào mòn mỗi lần nhà cung cấp gặp sự cố.
+  return true;
+}
+
+/**
  * Giá trị model dùng để nói "không treo ai". Phải nằm cùng trường với id người
  * chơi vì responseSchema của Gemini chỉ nhận một enum string duy nhất; id là
  * UUID (hoặc bot-<uuid>) nên không bao giờ đụng chuỗi này.

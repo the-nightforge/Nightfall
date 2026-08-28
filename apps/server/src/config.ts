@@ -22,7 +22,11 @@ export function resolvePort(env: NodeJS.ProcessEnv): number {
  * trị hợp lệ duy nhất là số nguyên dương, cùng kiểu chặn với resolvePort ở trên.
  */
 export function resolveBotAiMaxCallsPerGame(env: NodeJS.ProcessEnv): number {
-  if (env.BOT_AI_MAX_CALLS_PER_GAME === undefined) return 60;
+  // 180 chứ không phải 60 kể từ khi có phiên toà. Ước lượng phòng 8 bot × 6
+  // vòng: ~24 lượt đêm + ~48 lời thoại ngày + ~48 phiếu xác nhận + ~6 lời biện
+  // hộ ≈ 126. Giữ 60 thì governor ngắt mạch từ giữa ván và bot hoá câm ở đúng
+  // những vòng quan trọng nhất.
+  if (env.BOT_AI_MAX_CALLS_PER_GAME === undefined) return 180;
 
   const value = Number(env.BOT_AI_MAX_CALLS_PER_GAME);
   if (!Number.isInteger(value) || value <= 0) {

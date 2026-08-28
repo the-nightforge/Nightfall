@@ -189,7 +189,11 @@ describe("Kẻ Nguyền Rủa không bị nguyền", () => {
     engine.submitVote("witch", "villager");
     engine.submitVote("villager", "witch");
     engine.submitVote("cursed", "wolf");
-    engine.resolveVote();
+    // Vote sơ bộ chỉ đề cử; cái chết nằm ở vòng xác nhận.
+    expect(engine.resolveNomination(25_000)).toEqual({ kind: "TRIAL", accusedId: "cursed" });
+    engine.beginFinalVote(20_000);
+    for (const voter of engine.finalVoters()) engine.submitFinalVote(voter.id, true);
+    engine.resolveFinalVote();
 
     const cursed = playerOf(engine, "cursed");
     expect(cursed.alive).toBe(false);

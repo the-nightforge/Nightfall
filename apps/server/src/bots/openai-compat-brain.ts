@@ -1,11 +1,28 @@
 import type { RoomSnapshot } from "@masoi/shared";
-import type { Attempt, BotBrain, DayDecision, HunterShotDecision, NightDecision } from "./types";
+import type {
+  Attempt,
+  BotBrain,
+  DayDecision,
+  DefenseDecision,
+  FinalVoteDecision,
+  HunterShotDecision,
+  NightDecision,
+} from "./types";
 import { failed, nothingToDo } from "./types";
-import { buildDayPrompt, buildHunterPrompt, buildNightPrompt, type PromptSpec } from "./prompt";
+import {
+  buildDayPrompt,
+  buildDefensePrompt,
+  buildFinalVotePrompt,
+  buildHunterPrompt,
+  buildNightPrompt,
+  type PromptSpec,
+} from "./prompt";
 import { BotGovernor, Cooldown, withTimeout } from "./governor";
 import {
   DEFAULT_CHAT_MAX,
   interpretDay,
+  interpretDefense,
+  interpretFinalVote,
   interpretHunterShot,
   interpretNight,
   type CallOutcome,
@@ -232,6 +249,36 @@ export class OpenAiCompatBrain implements BotBrain {
       return failed();
     }
     return interpretHunterShot(view, result.raw, log);
+  }
+
+  async decideDefense(view: RoomSnapshot): Promise<Attempt<DefenseDecision>> {
+    const spec = buildDefensePrompt(view);
+    if (!spec) return nothingToDo();
+
+    const result = await this.call(view.code, spec);
+    if (!result) return failed();
+
+    const log = this.logger(result.startedAt);
+    if (result.raw === null) {
+      log(result.reason, result.detail);
+      return failed();
+    }
+    return interpretDefense(view, result.raw, this.opts.chatMaxLength ?? DEFAULT_CHAT_MAX, log);
+  }
+
+  async decideFinalVote(view: RoomSnapshot): Promise<Attempt<FinalVoteDecision>> {
+    const spec = buildFinalVotePrompt(view);
+    if (!spec) return nothingToDo();
+
+    const result = await this.call(view.code, spec);
+    if (!result) return failed();
+
+    const log = this.logger(result.startedAt);
+    if (result.raw === null) {
+      log(result.reason, result.detail);
+      return failed();
+    }
+    return interpretFinalVote(view, result.raw, log);
   }
 }
 

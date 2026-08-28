@@ -13,6 +13,7 @@ import { RoleRevealView } from "@/components/RoleViews";
 import { NightPanel } from "@/components/NightPanel";
 import { DayView, EliminationView, GameOverView } from "@/components/DayViews";
 import { HunterShotPanel } from "@/components/HunterShotPanel";
+import { TrialPanel } from "@/components/TrialPanel";
 import { Lobby } from "@/components/Lobby";
 import { SoundControl } from "@/components/SoundControl";
 
@@ -65,6 +66,14 @@ export default function RoomPage() {
             snapshot={snapshot}
             onVote={(targetId: string | null) => room.emit("game:vote", { targetId })}
             onSkipDiscussion={(skip) => room.emit("game:skip-discussion", { skip })}
+          />
+        );
+      case "DEFENSE":
+      case "FINAL_VOTE":
+        return (
+          <TrialPanel
+            snapshot={snapshot}
+            onFinalVote={(guilty) => room.emit("game:final-vote", { guilty })}
           />
         );
       case "ELIMINATION":

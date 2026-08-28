@@ -28,8 +28,9 @@ describe("resolvePort", () => {
 });
 
 describe("resolveBotAiMaxCallsPerGame", () => {
-  it("mặc định 60 khi không cấu hình", () => {
-    expect(resolveBotAiMaxCallsPerGame({})).toBe(60);
+  it("mặc định 180 khi không cấu hình", () => {
+    // Nâng từ 60 khi thêm phiên toà: một ván 8 bot × 6 vòng tốn ~126 lượt gọi.
+    expect(resolveBotAiMaxCallsPerGame({})).toBe(180);
   });
 
   it("dùng giá trị hợp lệ do vận hành đặt", () => {

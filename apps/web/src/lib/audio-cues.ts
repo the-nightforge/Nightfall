@@ -27,7 +27,11 @@ export function cuesFor(prev: RoomSnapshot | null, next: RoomSnapshot): Cue[] {
   // không vai nào cần nhánh riêng.
   if (myTurnStarted(prev, next)) cues.push("turn");
   if (changed && diedThisPhase(next)) cues.push("death");
-  if (!prev.hasVoted && next.hasVoted) cues.push("ballot");
+  // Hai vòng phiếu là hai cạnh khác nhau: hasVoted của vòng sơ bộ vẫn đúng
+  // suốt phiên toà, nên riêng nó không bao giờ bắt được lá phiếu xác nhận.
+  if ((!prev.hasVoted && next.hasVoted) || (!prev.trial?.hasVoted && next.trial?.hasVoted)) {
+    cues.push("ballot");
+  }
 
   const role = next.you?.role;
   if (changed && next.phase === "GAME_OVER" && next.winner && role) {
@@ -43,7 +47,9 @@ function myTurnStarted(prev: RoomSnapshot, next: RoomSnapshot): boolean {
     was !== true && now === true;
   return (
     started(prev.night?.canAct, next.night?.canAct) ||
-    started(prev.hunterShot?.canAct, next.hunterShot?.canAct)
+    started(prev.hunterShot?.canAct, next.hunterShot?.canAct) ||
+    // Bị cáo được trao lượt nói độc quyền cũng là tới lượt mình.
+    started(prev.trial?.canSpeak, next.trial?.canSpeak)
   );
 }
 

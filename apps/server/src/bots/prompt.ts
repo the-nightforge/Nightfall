@@ -206,6 +206,74 @@ export function buildHunterPrompt(view: RoomSnapshot): PromptSpec | null {
   };
 }
 
+export function buildDefensePrompt(view: RoomSnapshot): PromptSpec | null {
+  if (!view.trial?.canSpeak) return null;
+
+  // voteCount đã lộ ở pha này, nên bị cáo biết chính xác ai đẩy mình lên.
+  const accusers = view.players
+    .filter((p) => p.alive && (p.voteCount ?? 0) > 0 && p.id !== view.you?.id)
+    .map((p) => p.name);
+  const myVotes = view.players.find((p) => p.id === view.you?.id)?.voteCount ?? 0;
+
+  return {
+    system: systemFor(view),
+    user: [
+      roleContext(view),
+      "",
+      playerLines(view),
+      "",
+      chatBlock(view),
+      "",
+      `Bạn vừa bị vote sơ bộ đưa ra treo cổ với ${myVotes} phiếu.`,
+      ...(accusers.length > 0 ? [`Những người cũng bị nhắm tới: ${accusers.join(", ")}.`] : []),
+      "Đây là lượt tự bào chữa của riêng bạn, không ai khác được nói.",
+      "Nói một hoặc hai câu để thuyết phục làng đừng treo bạn.",
+    ].join("\n"),
+    schema: {
+      type: "object",
+      properties: {
+        think: THINK,
+        defense: { type: "string", description: "Lời bào chữa, tối đa 300 ký tự" },
+      },
+      required: ["think", "defense"],
+    },
+  };
+}
+
+export function buildFinalVotePrompt(view: RoomSnapshot): PromptSpec | null {
+  if (!view.trial?.canVote) return null;
+  const accused = view.players.find((p) => p.id === view.trial!.accusedId);
+  if (!accused) return null;
+
+  return {
+    system: systemFor(view),
+    user: [
+      roleContext(view),
+      "",
+      playerLines(view),
+      "",
+      chatBlock(view),
+      "",
+      // chatBlock đã kèm lời biện hộ (kênh day, 20 dòng gần nhất). Phải chỉ đích
+      // danh nó, nếu không model đọc lướt như một dòng chat thường và cả pha
+      // biện hộ trở thành vô nghĩa.
+      `${accused.name} đang bị đưa ra treo cổ và vừa tự bào chữa ở cuối đoạn chat trên.`,
+      `${accused.name} nhận ${accused.voteCount ?? 0} phiếu ở vòng sơ bộ.`,
+      `Cần ${view.trial.guiltyRequired} phiếu Treo mới kết án được.`,
+      "Cân nhắc lời bào chữa đó cùng số phiếu sơ bộ rồi quyết:",
+      "guilty true là treo cổ, guilty false là tha.",
+    ].join("\n"),
+    schema: {
+      type: "object",
+      properties: {
+        think: THINK,
+        guilty: { type: "boolean", description: "true là treo, false là tha" },
+      },
+      required: ["think", "guilty"],
+    },
+  };
+}
+
 function verbFor(action: string): string {
   if (action === "KILL") return "cắn";
   if (action === "SEE") return "soi";

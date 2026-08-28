@@ -3,6 +3,8 @@ import type { RoomSnapshot } from "@masoi/shared";
 import type {
   Attempt,
   DayDecision,
+  DefenseDecision,
+  FinalVoteDecision,
   HunterShotDecision,
   NightDecision,
   PlannedVote,
@@ -32,6 +34,17 @@ export const daySchema = z.object({
 export const hunterSchema = z.object({
   think: z.string(),
   targetId: z.string().nullable().optional(),
+});
+
+export const defenseSchema = z.object({
+  think: z.string(),
+  defense: z.string(),
+});
+
+// guilty bắt buộc và phải đúng kiểu boolean: xem interpretFinalVote.
+export const finalVoteSchema = z.object({
+  think: z.string(),
+  guilty: z.boolean(),
 });
 
 export const DEFAULT_CHAT_MAX = 300;
@@ -133,6 +146,50 @@ export function interpretDay(
 
   log("ok");
   return decided({ chat: parsed.data.chat.slice(0, chatMaxLength), vote });
+}
+
+export function interpretDefense(
+  view: RoomSnapshot,
+  raw: unknown,
+  chatMaxLength: number,
+  log: LogOutcome,
+): Attempt<DefenseDecision> {
+  const parsed = defenseSchema.safeParse(raw);
+  if (!parsed.success) {
+    log("bad_shape");
+    return failed();
+  }
+
+  // Im lặng KHÔNG phải một lời bào chữa hợp lệ: đó là thứ đường lui tạo ra, và
+  // nếu nó chiếm nhánh thành công thì chuỗi dự phòng không bao giờ được gọi.
+  const defense = parsed.data.defense.trim();
+  if (defense.length === 0) {
+    log("bad_shape");
+    return failed();
+  }
+
+  void view;
+  log("ok");
+  return decided({ chat: defense.slice(0, chatMaxLength) });
+}
+
+export function interpretFinalVote(
+  view: RoomSnapshot,
+  raw: unknown,
+  log: LogOutcome,
+): Attempt<FinalVoteDecision> {
+  const parsed = finalVoteSchema.safeParse(raw);
+  // Thiếu guilty hoặc guilty không phải boolean là lượt HỎNG, không được ép về
+  // false: làm thế sẽ biến một lời gọi lỗi thành một phiếu Tha thật, và chuỗi
+  // dự phòng không bao giờ chạy.
+  if (!parsed.success) {
+    log("bad_shape");
+    return failed();
+  }
+
+  void view;
+  log("ok");
+  return decided({ guilty: parsed.data.guilty });
 }
 
 export function interpretHunterShot(

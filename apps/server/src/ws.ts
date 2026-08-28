@@ -15,6 +15,7 @@ import {
   resetGamePayload,
   gameActionPayload,
   votePayload,
+  finalVotePayload,
   skipDiscussionPayload,
   addBotPayload,
   hunterShotPayload,
@@ -26,6 +27,7 @@ import { getRoomSyncByPlayer } from "./rooms/index-helpers";
 import { getRoom, loadRoomFromRedis, persistRoom } from "./rooms/store";
 import { trackSocket, untrackSocket, broadcastRoom, hasConnection } from "./rooms/broadcast";
 import {
+  maybeEndFinalVoteEarly,
   maybeEndVotingEarly,
   maybeEndWitchWindow,
   scheduleDiscussionSkipRecheck,
@@ -196,6 +198,20 @@ export function setupSocket(io: SocketServer): void {
 
       room.engine.submitVote(playerId, targetId);
       maybeEndVotingEarly(room);
+      broadcastRoom(roomCode);
+      void import("./rooms/store").then((m) => m.persistRoom(room));
+    });
+
+    handler(CLIENT_EVENTS.GAME_FINAL_VOTE, async (payload) => {
+      const { guilty } = finalVotePayload.parse(payload);
+      if (!allowAction(`final-vote:${playerId}`, 10, 3_000)) throw new RoomError("Thao tác quá nhanh");
+      const roomCode = getRoomSyncByPlayer(playerId);
+      if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
+      const room = getRoom(roomCode);
+      if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
+
+      room.engine.submitFinalVote(playerId, guilty);
+      maybeEndFinalVoteEarly(room);
       broadcastRoom(roomCode);
       void import("./rooms/store").then((m) => m.persistRoom(room));
     });

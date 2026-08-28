@@ -157,18 +157,22 @@ function HostConfig({ config, onSave }: { config: RoomConfig; onSave: (c: RoomCo
         ))}
         {(
           [
-            ["nightSeconds", "Thời gian đêm (giây)"],
-            ["discussionSeconds", "Thời gian thảo luận (giây)"],
-            ["voteSeconds", "Thời gian bỏ phiếu (giây)"],
+            // Khoảng hợp lệ phải khớp roomConfigSchema; đặc biệt finalVoteSeconds
+            // có cận dưới 15 vì chuỗi não bot mất tới 13 giây.
+            ["nightSeconds", "Thời gian đêm (giây)", 15, 120],
+            ["discussionSeconds", "Thời gian thảo luận (giây)", 30, 300],
+            ["voteSeconds", "Thời gian bỏ phiếu sơ bộ (giây)", 15, 120],
+            ["defenseSeconds", "Thời gian biện hộ (giây)", 10, 60],
+            ["finalVoteSeconds", "Thời gian bỏ phiếu xác nhận (giây)", 15, 60],
           ] as const
-        ).map(([key, label]) => (
+        ).map(([key, label, min, max]) => (
           <label key={key} className="block">
             <span className="text-mist/80">{label}</span>
             <input
               type="number"
               className="input mt-1"
-              min={15}
-              max={300}
+              min={min}
+              max={max}
               value={draft[key]}
               onChange={(e) => set({ [key]: Number(e.target.value) } as Partial<RoomConfig>)}
             />

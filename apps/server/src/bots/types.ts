@@ -33,6 +33,20 @@ export interface HunterShotDecision {
   targetId: string | null;
 }
 
+/** Lời tự bào chữa của bị cáo, phát vào kênh day. */
+export interface DefenseDecision {
+  chat: string;
+}
+
+/**
+ * Lá phiếu xác nhận. Object chứ không phải boolean trần vì cùng lý do với
+ * HunterShotDecision: Attempt<boolean> không phân biệt được "chọn Tha" với
+ * "không quyết được", và hai thứ đó phải đi hai đường khác nhau.
+ */
+export interface FinalVoteDecision {
+  guilty: boolean;
+}
+
 /**
  * Kết quả một lượt hỏi não bot.
  *
@@ -71,4 +85,6 @@ export interface BotBrain {
   decideNight(view: RoomSnapshot): Promise<Attempt<NightDecision>>;
   decideDay(view: RoomSnapshot): Promise<Attempt<DayDecision>>;
   decideHunterShot(view: RoomSnapshot): Promise<Attempt<HunterShotDecision>>;
+  decideDefense(view: RoomSnapshot): Promise<Attempt<DefenseDecision>>;
+  decideFinalVote(view: RoomSnapshot): Promise<Attempt<FinalVoteDecision>>;
 }

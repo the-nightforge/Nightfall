@@ -26,6 +26,23 @@ function makeEngine(playerCount = 6, config = CONFIG) {
   return engine;
 }
 
+/** Đưa phiên toà đi hết một lượt với mọi cử tri hợp lệ bỏ phiếu Treo. */
+function convict(engine: GameEngine) {
+  engine.beginFinalVote(20_000);
+  for (const voter of engine.finalVoters()) engine.submitFinalVote(voter.id, true);
+  return engine.resolveFinalVote();
+}
+
+/** Đề cử targetId rồi chạy hết vòng biện hộ, dừng ngay trước phiếu xác nhận. */
+function nominate(engine: GameEngine, targetId: string) {
+  engine.setPhase("DAY_DISCUSSION", 60_000);
+  engine.setPhase("VOTING", 30_000);
+  for (const voter of engine.alivePlayers()) {
+    if (voter.id !== targetId) engine.submitVote(voter.id, targetId);
+  }
+  return engine.resolveNomination(25_000);
+}
+
 function roleOf(engine: GameEngine, playerId: string) {
   return engine.state.players.find((p) => p.id === playerId)!.role;
 }
@@ -507,19 +524,21 @@ describe("Bỏ phiếu", () => {
     engine.setPhase("VOTING", 30_000);
   }
 
-  it("người có nhiều phiếu nhất bị loại", () => {
+  it("người có nhiều phiếu nhất bị đưa ra toà chứ chưa chết", () => {
     const e = makeEngine(6);
     toVoting(e);
     const target = e.state.players[0];
     e.submitVote("p2", target.id);
     e.submitVote("p3", target.id);
     e.submitVote("p4", "p5");
-    const eliminated = e.resolveVote();
-    expect(eliminated?.playerId).toBe(target.id);
+    expect(e.resolveNomination(25_000)).toEqual({ kind: "TRIAL", accusedId: target.id });
+    // Vote sơ bộ chỉ đề cử: cái chết nằm ở vòng xác nhận.
+    expect(target.alive).toBe(true);
+    expect(convict(e)?.playerId).toBe(target.id);
     expect(target.alive).toBe(false);
   });
 
-  it("hoà phiếu thì không ai bị loại", () => {
+  it("hoà phiếu thì không mở phiên toà", () => {
     const e = makeEngine(6);
     toVoting(e);
     e.submitVote("p1", "p2");
@@ -528,8 +547,9 @@ describe("Bỏ phiếu", () => {
     e.submitVote("p4", "p3");
     e.submitVote("p5", "p6");
     e.submitVote("p6", "p5");
-    const eliminated = e.resolveVote();
-    expect(eliminated).toBeNull();
+    expect(e.resolveNomination(25_000)).toEqual({ kind: "NONE", reason: "tie" });
+    expect(e.state.phase).toBe("ELIMINATION");
+    expect(e.state.trial).toBeNull();
     expect(e.state.players.every((p) => p.alive)).toBe(true);
   });
 
@@ -548,11 +568,11 @@ describe("Bỏ phiếu", () => {
 
     expect(e.allAliveVoted()).toBe(true);
     expect(e.voteTally()).toEqual({ players: {}, noElimination: 6 });
-    expect(e.resolveVote()).toBeNull();
+    expect(e.resolveNomination(25_000)).toEqual({ kind: "NONE", reason: "no-elimination" });
     expect(e.state.players.every((player) => player.alive)).toBe(true);
   });
 
-  it("loại player chỉ khi player cao nhất duy nhất và hơn không treo", () => {
+  it("đề cử player chỉ khi player cao nhất duy nhất và hơn không treo", () => {
     const e = makeEngine(6);
     toVoting(e);
     e.submitVote("p1", "p3");
@@ -562,10 +582,10 @@ describe("Bỏ phiếu", () => {
     e.submitVote("p5", null);
     e.submitVote("p6", "p1");
 
-    expect(e.resolveVote()?.playerId).toBe("p3");
+    expect(e.resolveNomination(25_000)).toEqual({ kind: "TRIAL", accusedId: "p3" });
   });
 
-  it("không loại ai khi không treo cao nhất hoặc hòa cao nhất", () => {
+  it("không mở phiên toà khi không treo cao nhất hoặc hòa cao nhất", () => {
     const noEliminationWins = makeEngine(6);
     toVoting(noEliminationWins);
     noEliminationWins.submitVote("p1", null);
@@ -574,7 +594,10 @@ describe("Bỏ phiếu", () => {
     noEliminationWins.submitVote("p4", "p5");
     noEliminationWins.submitVote("p5", "p5");
     noEliminationWins.submitVote("p6", "p1");
-    expect(noEliminationWins.resolveVote()).toBeNull();
+    expect(noEliminationWins.resolveNomination(25_000)).toEqual({
+      kind: "NONE",
+      reason: "no-elimination",
+    });
 
     const tied = makeEngine(6);
     toVoting(tied);
@@ -584,7 +607,14 @@ describe("Bỏ phiếu", () => {
     tied.submitVote("p4", "p5");
     tied.submitVote("p5", "p1");
     tied.submitVote("p6", "p2");
-    expect(tied.resolveVote()).toBeNull();
+    expect(tied.resolveNomination(25_000)).toEqual({ kind: "NONE", reason: "tie" });
+  });
+
+  it("không ai bỏ phiếu thì không mở phiên toà", () => {
+    const e = makeEngine(6);
+    toVoting(e);
+    expect(e.resolveNomination(25_000)).toEqual({ kind: "NONE", reason: "no-votes" });
+    expect(e.state.phase).toBe("ELIMINATION");
   });
 
   it("không cho người chết vote không treo hoặc người sống đổi phiếu", () => {
@@ -958,7 +988,8 @@ describe("Thợ Săn", () => {
     const e = makeHunterEngine("VOTING");
     e.state.votes = { wolf: "hunter", villager: "hunter" };
 
-    e.resolveVote(1_000);
+    expect(e.resolveNomination(25_000, 1_000)).toEqual({ kind: "TRIAL", accusedId: "hunter" });
+    convict(e);
 
     expect(e.state.hunterReaction).toEqual({
       hunterId: "hunter",
@@ -1135,7 +1166,8 @@ describe("Thợ Săn", () => {
         e.resolveNight(1_000);
       } else {
         e.state.votes = { hunter: "wolf", wolf: "hunter", villager: "hunter" };
-        e.resolveVote(1_000);
+        e.resolveNomination(25_000, 1_000);
+        convict(e);
       }
 
       expect(e.state.phase).toBe(resultPhase);
@@ -1181,5 +1213,172 @@ describe("Thợ Săn", () => {
     } as unknown as GameState);
     expect(legacyEngine.state.hunterReaction).toBeNull();
     expect(legacyEngine.state.hunterShots).toEqual([]);
+  });
+});
+
+describe("Phiên toà: biện hộ và bỏ phiếu xác nhận", () => {
+  it("mở phiên toà đặt bị cáo và bảng phiếu rỗng", () => {
+    const e = makeEngine(6);
+    expect(nominate(e, "p2")).toEqual({ kind: "TRIAL", accusedId: "p2" });
+    expect(e.state.phase).toBe("DEFENSE");
+    expect(e.state.trial).toEqual({ accusedId: "p2", finalVotes: {} });
+    expect(e.state.lastEliminated).toBeNull();
+    expect(e.state.lastTrial).toBeNull();
+  });
+
+  it("bị cáo không được bỏ phiếu cho chính mình", () => {
+    const e = makeEngine(6);
+    nominate(e, "p2");
+    e.beginFinalVote(20_000);
+    expect(() => e.submitFinalVote("p2", false)).toThrow(GameError);
+  });
+
+  it("người chết không được bỏ phiếu và không ai được đổi phiếu", () => {
+    const e = makeEngine(6);
+    nominate(e, "p2");
+    e.beginFinalVote(20_000);
+    e.state.players.find((p) => p.id === "p6")!.alive = false;
+    expect(() => e.submitFinalVote("p6", true)).toThrow(/chết/);
+    e.submitFinalVote("p1", false);
+    expect(() => e.submitFinalVote("p1", true)).toThrow(/đã bỏ phiếu/);
+  });
+
+  it("treo khi đạt đa số tuyệt đối trên số cử tri hợp lệ", () => {
+    const e = makeEngine(6);
+    nominate(e, "p2");
+    e.beginFinalVote(20_000);
+    // 6 sống, bị cáo p2 -> 5 cử tri -> cần 3 phiếu Treo
+    expect(e.guiltyRequired()).toBe(3);
+    e.submitFinalVote("p1", true);
+    e.submitFinalVote("p3", true);
+    e.submitFinalVote("p4", true);
+    e.submitFinalVote("p5", false);
+    e.submitFinalVote("p6", false);
+
+    expect(e.resolveFinalVote()?.playerId).toBe("p2");
+    expect(e.player("p2")!.alive).toBe(false);
+    expect(e.state.lastTrial).toMatchObject({ guilty: 3, innocent: 2, abstain: 0, lynched: true });
+    expect(e.state.phase).toBe("ELIMINATION");
+    expect(e.state.trial).toBeNull();
+  });
+
+  it("phiếu trắng tính là tha", () => {
+    const e = makeEngine(6);
+    nominate(e, "p2");
+    e.beginFinalVote(20_000);
+    e.submitFinalVote("p1", true);
+    e.submitFinalVote("p3", true);
+
+    expect(e.resolveFinalVote()).toBeNull();
+    expect(e.player("p2")!.alive).toBe(true);
+    expect(e.state.lastTrial).toMatchObject({ guilty: 2, innocent: 0, abstain: 3, lynched: false });
+  });
+
+  it("hoà phiếu xác nhận là tha", () => {
+    const e = makeEngine(6);
+    e.player("p6")!.alive = false;
+    nominate(e, "p2");
+    e.beginFinalVote(20_000);
+    // 5 sống, bị cáo p2 -> 4 cử tri -> 2-2 không vượt được 4/2
+    e.submitFinalVote("p1", true);
+    e.submitFinalVote("p3", true);
+    e.submitFinalVote("p4", false);
+    e.submitFinalVote("p5", false);
+
+    expect(e.resolveFinalVote()).toBeNull();
+    expect(e.state.lastTrial).toMatchObject({ guilty: 2, innocent: 2, lynched: false });
+  });
+
+  it("bỏ qua phiếu của cử tri đã chết giữa phiên toà", () => {
+    const e = makeEngine(6);
+    nominate(e, "p2");
+    e.beginFinalVote(20_000);
+    e.submitFinalVote("p1", true);
+    e.submitFinalVote("p3", true);
+    e.submitFinalVote("p4", true);
+    // Một phát bắn của Thợ Săn giết một cử tri sau khi họ đã bỏ phiếu.
+    e.player("p4")!.alive = false;
+
+    expect(e.finalVoteTally()).toEqual({ guilty: 2, innocent: 0, abstain: 2, eligible: 4 });
+    expect(e.resolveFinalVote()).toBeNull();
+  });
+
+  it("mọi cử tri đã bỏ phiếu thì allFinalVotersVoted đúng", () => {
+    const e = makeEngine(6);
+    nominate(e, "p2");
+    e.beginFinalVote(20_000);
+    for (const voter of e.finalVoters()) {
+      expect(e.allFinalVotersVoted()).toBe(false);
+      e.submitFinalVote(voter.id, false);
+    }
+    expect(e.allFinalVotersVoted()).toBe(true);
+  });
+
+  it("treo Thợ Săn xếp hàng lượt bắn, tha thì không", () => {
+    const lynched = makeEngine(6);
+    lynched.player("p2")!.role = "HUNTER";
+    nominate(lynched, "p2");
+    convict(lynched);
+    expect(lynched.hasPendingHunterShot()).toBe(true);
+
+    const acquitted = makeEngine(6);
+    acquitted.player("p2")!.role = "HUNTER";
+    nominate(acquitted, "p2");
+    acquitted.beginFinalVote(20_000);
+    acquitted.resolveFinalVote();
+    expect(acquitted.hasPendingHunterShot()).toBe(false);
+  });
+
+  it("snapshot chỉ cho bị cáo nói và chỉ cho người khác bỏ phiếu", () => {
+    const e = makeEngine(6);
+    nominate(e, "p2");
+
+    const accusedInDefense = e.snapshotFor("p2").trialInfo!;
+    expect(accusedInDefense.canSpeak).toBe(true);
+    expect(accusedInDefense.canVote).toBe(false);
+    expect(e.snapshotFor("p1").trialInfo!.canSpeak).toBe(false);
+    // Số phiếu sơ bộ phải còn hiện trong lúc biện hộ.
+    expect(e.snapshotFor("p1").votesRevealed).toBe(true);
+    expect(e.snapshotFor("p1").players.find((p) => p.id === "p2")!.voteCount).toBe(5);
+
+    e.beginFinalVote(20_000);
+    expect(e.snapshotFor("p2").trialInfo!.canVote).toBe(false);
+    expect(e.snapshotFor("p1").trialInfo!.canVote).toBe(true);
+    expect(e.snapshotFor("p1").trialInfo!.canSpeak).toBe(false);
+
+    e.submitFinalVote("p1", false);
+    const voted = e.snapshotFor("p1").trialInfo!;
+    // myVote false là một phiếu Tha thật, không phải "chưa bỏ phiếu".
+    expect(voted.hasVoted).toBe(true);
+    expect(voted.myVote).toBe(false);
+    expect(voted.canVote).toBe(false);
+    expect(voted.innocentVotes).toBe(1);
+  });
+
+  it("trialInfo biến mất và lastTrial xuất hiện sau khi xử xong", () => {
+    const e = makeEngine(6);
+    nominate(e, "p2");
+    convict(e);
+    const view = e.snapshotFor("p1");
+    expect(view.trialInfo).toBeNull();
+    expect(view.lastTrial).toMatchObject({ accused: { id: "p2" }, lynched: true });
+  });
+
+  it("phiên toà không sống sót sang ngày kế tiếp", () => {
+    const e = makeEngine(6);
+    nominate(e, "p2");
+    e.setPhase("NIGHT", 30_000);
+    expect(e.state.trial).toBeNull();
+  });
+
+  it("chuẩn hoá state lưu từ trước khi có phiên toà", () => {
+    const legacy = GameEngine.create(ids(6), CONFIG).getState();
+    const engine = new GameEngine({
+      ...legacy,
+      trial: undefined,
+      lastTrial: undefined,
+    } as unknown as GameState);
+    expect(engine.state.trial).toBeNull();
+    expect(engine.state.lastTrial).toBeNull();
   });
 });

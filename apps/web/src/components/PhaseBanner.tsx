@@ -9,7 +9,15 @@ const PHASE_LABEL: Record<string, { label: string; cls: string }> = {
   NIGHT: { label: "Ban đêm", cls: "bg-night-800 text-indigo-300 border border-indigo-500/40" },
   NIGHT_RESULT: { label: "Kết quả đêm", cls: "bg-night-800 text-mist" },
   DAY_DISCUSSION: { label: "Thảo luận", cls: "bg-amber-900/60 text-amber-200" },
-  VOTING: { label: "Bỏ phiếu", cls: "bg-blood-600/40 text-blood-400 border border-blood-500/40" },
+  VOTING: {
+    label: "Bỏ phiếu sơ bộ",
+    cls: "bg-blood-600/40 text-blood-400 border border-blood-500/40",
+  },
+  DEFENSE: { label: "Biện hộ", cls: "bg-amber-900/60 text-amber-200 border border-amber-500/40" },
+  FINAL_VOTE: {
+    label: "Bỏ phiếu xác nhận",
+    cls: "bg-blood-600/40 text-blood-400 border border-blood-500/40",
+  },
   ELIMINATION: { label: "Công bố loại", cls: "bg-blood-600/40 text-blood-400" },
   HUNTER_SHOT: { label: "Thợ Săn phản kích", cls: "bg-amber-900 text-amber-200" },
   CHECK_WIN: { label: "Kiểm tra thắng", cls: "bg-night-700 text-mist" },

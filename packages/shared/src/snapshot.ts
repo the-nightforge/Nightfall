@@ -63,6 +63,36 @@ export interface RecapPlayer {
   name: string;
 }
 
+/** Phiên toà đang diễn ra; chỉ có dữ liệu trong DEFENSE và FINAL_VOTE. */
+export interface TrialView {
+  accusedId: string;
+  accusedName: string;
+  /** Chỉ có nghĩa trong FINAL_VOTE. */
+  guiltyVotes: number;
+  innocentVotes: number;
+  /** Số phiếu Treo tối thiểu để kết án, để UI khỏi tự tính lại ngưỡng. */
+  guiltyRequired: number;
+  /** Viewer còn sống, không phải bị cáo, và chưa bỏ phiếu. */
+  canVote: boolean;
+  hasVoted: boolean;
+  /**
+   * Lá phiếu của viewer. null nghĩa là CHƯA bỏ, không phải phiếu Tha - mọi chỗ
+   * kiểm tra "đã bỏ phiếu chưa" phải đọc hasVoted chứ không dùng truthiness.
+   */
+  myVote: boolean | null;
+  /** Chỉ đúng trong DEFENSE, và chỉ với bị cáo. */
+  canSpeak: boolean;
+}
+
+/** Kết quả một phiên toà đã xử xong; cần để phân biệt "được tha" với "hoà phiếu". */
+export interface TrialRecap {
+  accused: RecapPlayer;
+  guilty: number;
+  innocent: number;
+  abstain: number;
+  lynched: boolean;
+}
+
 export interface HunterShotView {
   hunterId: string;
   hunterName: string;
@@ -126,6 +156,10 @@ export interface RoomSnapshot {
   players: PlayerView[];
   night: NightActionView | null;
   hunterShot: HunterShotView | null;
+  /** Phiên toà đang diễn ra; chỉ có dữ liệu trong DEFENSE và FINAL_VOTE. */
+  trial: TrialView | null;
+  /** Phiên toà vừa xử xong; chỉ có dữ liệu ở ELIMINATION, CHECK_WIN, GAME_OVER. */
+  lastTrial: TrialRecap | null;
   /**
    * Viewer đã gửi phiếu chưa. Cần cờ riêng vì myVote === null vừa có thể là
    * chưa vote, vừa có thể là đã chọn "Không treo ai".

@@ -1,7 +1,17 @@
 import type { RoomSnapshot } from "@masoi/shared";
-import type { Always, BotBrain, DayDecision, HunterShotDecision, NightDecision } from "./types";
+import type {
+  Always,
+  BotBrain,
+  DayDecision,
+  DefenseDecision,
+  FinalVoteDecision,
+  HunterShotDecision,
+  NightDecision,
+  PlannedVote,
+} from "./types";
 import { decided, nothingToDo } from "./types";
 import {
+  derivedFinalVote,
   legalHunterTargets,
   legalNightTargets,
   legalVoteTargets,
@@ -15,6 +25,16 @@ function randomOf<T>(items: T[]): T | undefined {
 
 /** Thợ Săn bot đôi khi chủ động giữ súng để tránh phát bắn bất lợi cho phe làng. */
 const HUNTER_SKIP_CHANCE = 0.1;
+
+/**
+ * Lời bào chữa dự phòng. Một bị cáo im lặng trông như màn hình hỏng, mà đây lại
+ * là não duy nhất chắc chắn trả lời được.
+ */
+const DEFENSE_LINES = [
+  "Tôi là dân thường, treo tôi là mất một phiếu của làng.",
+  "Các bạn đang nhắm nhầm người, tối nay sẽ rõ thôi.",
+  "Tôi không có gì để giấu, ai đẩy phiếu tôi mới là đáng ngờ.",
+];
 
 /**
  * Não dự phòng cuối cùng: chọn ngẫu nhiên trong các nước đi hợp lệ, không gọi
@@ -48,6 +68,24 @@ export class RandomBrain implements BotBrain {
     // đấu, không phải nước đi mặc định khi bí - để dành cho não thật quyết.
     const targetId = randomOf(legalVoteTargets(view));
     return decided({ chat: null, vote: targetId ? { type: "PLAYER", targetId } : null });
+  }
+
+  async decideDefense(view: RoomSnapshot): Promise<Always<DefenseDecision>> {
+    if (!view.trial?.canSpeak) return nothingToDo();
+    return decided({ chat: randomOf(DEFENSE_LINES)! });
+  }
+
+  /**
+   * Đường lui của phiếu xác nhận. Nhận thêm phiếu sơ bộ đã định của chính bot
+   * qua tham số vì snapshot không mang nó: myVote chỉ có id, còn lựa chọn "không
+   * treo ai" thì trùng với "chưa vote" ở mức snapshot.
+   */
+  async decideFinalVote(
+    view: RoomSnapshot,
+    myNomination?: PlannedVote,
+  ): Promise<Always<FinalVoteDecision>> {
+    if (!view.trial?.canVote) return nothingToDo();
+    return decided({ guilty: derivedFinalVote(view, myNomination) });
   }
 
   async decideHunterShot(view: RoomSnapshot): Promise<Always<HunterShotDecision>> {

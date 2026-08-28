@@ -9,7 +9,7 @@ import { botBrain, randomBrain, resetBotBudget } from "../bots";
 import { engineVote, legalHunterTargets, usablePlannedVote } from "../bots/targets";
 import { newId } from "../util";
 import type { NightDecision, PlannedVote } from "../bots/types";
-import { pendingEndVote, pendingVote } from "./bot-room-state";
+import { pendingEndFinalVote, pendingEndVote, pendingVote } from "./bot-room-state";
 import {
   DISCONNECT_GRACE_MS,
   clearDiscussionSkipVotes,
@@ -22,6 +22,8 @@ const RESULT_MS = 8_000;
 const HUNTER_SHOT_MS = 15_000;
 /** Chừa một giây để engine nhận fallback trước khi phase hết hạn. */
 const HUNTER_BOT_DEADLINE_BUFFER_MS = 1_000;
+/** Cùng mục đích, cho vòng bỏ phiếu xác nhận. */
+const FINAL_VOTE_BOT_DEADLINE_BUFFER_MS = 1_500;
 const GAME_OVER_MS = 30_000;
 /** Cửa sổ riêng cho Phù Thuỷ sau khi bầy Sói chốt nạn nhân. */
 const WITCH_WINDOW_MS = 15_000;
@@ -58,6 +60,7 @@ export function startGame(room: Room): void {
   room.engine = GameEngine.create(players, room.config);
   room.status = "IN_GAME";
   pendingEndVote.set(room.code, false);
+  pendingEndFinalVote.set(room.code, false);
 
   // ROLE_REVEAL rồi tự vào đêm
   setRoomTimer(room.code, () => beginNight(room), ROLE_REVEAL_MS);
@@ -177,10 +180,51 @@ export function maybeEndVotingEarly(room: Room): void {
   setRoomTimer(room.code, () => endVoting(room), 800);
 }
 
+/**
+ * Chốt vote sơ bộ. Không ai chết ở đây: hoặc mở phiên toà, hoặc kết thúc ngày.
+ */
 function endVoting(room: Room): void {
   clearRoomTimers(room.code);
   if (!room.engine || room.engine.state.phase !== "VOTING") return;
-  engine(room).resolveVote();
+  const defenseMs = room.config.defenseSeconds * 1000;
+  const outcome = engine(room).resolveNomination(defenseMs);
+  sync(room);
+
+  if (outcome.kind === "NONE") {
+    setRoomTimer(room.code, () => {
+      continueAfterDeathResult(room, "vote");
+    }, RESULT_MS);
+    return;
+  }
+
+  // resolveNomination đã đặt pha và hạn chót; ở đây chỉ còn xếp lịch.
+  scheduleDefenseBot(room, outcome.accusedId);
+  setRoomTimer(room.code, () => beginFinalVote(room), defenseMs + 500);
+}
+
+function beginFinalVote(room: Room): void {
+  if (!room.engine || room.engine.state.phase !== "DEFENSE") return;
+  clearRoomTimers(room.code);
+  pendingEndFinalVote.set(room.code, false);
+  engine(room).beginFinalVote(room.config.finalVoteSeconds * 1000);
+  scheduleFinalVoteBots(room);
+  setRoomTimer(room.code, () => endFinalVote(room), room.config.finalVoteSeconds * 1000 + 500);
+  sync(room);
+}
+
+/** Cùng cách làm với maybeEndVotingEarly, kể cả cờ chặn hẹn giờ trùng. */
+export function maybeEndFinalVoteEarly(room: Room): void {
+  if (!room.engine || room.engine.state.phase !== "FINAL_VOTE") return;
+  if (!room.engine.allFinalVotersVoted()) return;
+  if (pendingEndFinalVote.get(room.code)) return;
+  pendingEndFinalVote.set(room.code, true);
+  setRoomTimer(room.code, () => endFinalVote(room), 800);
+}
+
+function endFinalVote(room: Room): void {
+  clearRoomTimers(room.code);
+  if (!room.engine || room.engine.state.phase !== "FINAL_VOTE") return;
+  engine(room).resolveFinalVote();
   sync(room);
 
   setRoomTimer(room.code, () => {
@@ -235,6 +279,7 @@ export function resetToLobby(room: Room): void {
   room.status = "LOBBY";
   for (const m of room.members) m.ready = false;
   pendingVote.delete(room.code);
+  pendingEndFinalVote.delete(room.code);
   resetBotBudget(room.code);
   sync(room);
 }
@@ -455,6 +500,128 @@ export function scheduleDayBots(room: Room): void {
       })();
     }, delay);
   });
+}
+
+/**
+ * Bot bị cáo tự bào chữa. Tối đa một lượt gọi mỗi ngày, và chỉ khi bị cáo là
+ * bot: người thật tự gõ trong khung chat.
+ */
+function scheduleDefenseBot(room: Room, accusedId: string): void {
+  const member = room.members.find((m) => m.playerId === accusedId && m.isBot);
+  if (!member) return;
+
+  const scheduledEngine = room.engine;
+  if (!scheduledEngine) return;
+  const scheduledRound = scheduledEngine.state.round;
+
+  const stillDefending = (): boolean =>
+    room.engine === scheduledEngine &&
+    scheduledEngine.state.phase === "DEFENSE" &&
+    scheduledEngine.state.round === scheduledRound &&
+    scheduledEngine.state.trial?.accusedId === accusedId;
+
+  const view = buildSnapshot(room, member.playerId);
+  if (!view.trial?.canSpeak) return;
+
+  void (async () => {
+    try {
+      const attempt = await botBrain().decideDefense(view);
+      // Chỉ lượt HỎNG mới đáng để đường lui nói thay: bot chủ động im lặng
+      // (đã chết, không còn là bị cáo) phải được tôn trọng.
+      const decision = attempt.ok ? attempt : await randomBrain.decideDefense(view);
+      if (!decision.ok || !decision.value) return;
+      // Kết quả về muộn không được lọt sang pha sau.
+      if (!stillDefending()) return;
+
+      const resolved = resolveChat(room, member.playerId);
+      if (!resolved.ok) return;
+      const message = {
+        id: newId(),
+        channel: resolved.channel,
+        playerId: member.playerId,
+        playerName: member.name,
+        text: decision.value.chat,
+        at: Date.now(),
+      };
+      pushChat(room, message);
+      emitToPlayers(resolved.recipients, SERVER_EVENTS.CHAT_NEW, message);
+      void persistRoom(room);
+    } catch {
+      /* não bot lỗi (mạng, JSON hỏng,...) không được kéo sập cả tiến trình */
+    }
+  })();
+}
+
+/**
+ * Phiếu Treo/Tha của bot. Gọi ngay ở t=0 để lời biện hộ vừa nghe kịp vào prompt,
+ * nộp ở max(delay, lúc kết quả về), và một hạn chót cứng nộp phiếu đường lui.
+ * Cùng khuôn với scheduleNightBots.
+ */
+function scheduleFinalVoteBots(room: Room): void {
+  const scheduledEngine = room.engine;
+  if (!scheduledEngine) return;
+  const votes = pendingVote.get(room.code);
+  const accusedId = scheduledEngine.state.trial?.accusedId;
+  if (!accusedId) return;
+
+  const windowMs = room.config.finalVoteSeconds * 1_000;
+  const deadlineMs = Math.max(0, windowMs - FINAL_VOTE_BOT_DEADLINE_BUFFER_MS);
+
+  for (const member of room.members) {
+    if (!member.isBot) continue;
+    const view = buildSnapshot(room, member.playerId);
+    if (!view.trial?.canVote) continue;
+
+    const planned = votes?.get(member.playerId);
+    const delay = 2_000 + Math.floor(Math.random() * 4_000);
+    const pending = botBrain().decideFinalVote(view);
+    const earliest = new Promise<void>((r) => setTimeout(r, delay));
+    // Không có cờ này thì kết quả nhà cung cấp và hạn chót cùng nộp một phiếu;
+    // engine từ chối lá thứ hai, nhưng dựa vào đó là biến lỗi xếp lịch thành
+    // một exception bị nuốt.
+    let settled = false;
+
+    const submit = (guilty: boolean): void => {
+      if (!room.engine || room.engine.state.phase !== "FINAL_VOTE") return;
+      try {
+        room.engine.submitFinalVote(member.playerId, guilty);
+        // Phiếu bot không đi qua handler socket nào nên không tự được broadcast:
+        // thiếu sync thì bộ đếm Treo/Tha đứng yên tới tận lúc pha kết thúc.
+        sync(room);
+        maybeEndFinalVoteEarly(room);
+      } catch {
+        /* state đổi sát lúc nộp */
+      }
+    };
+
+    void (async () => {
+      try {
+        const attempt = await pending;
+        await earliest;
+        if (settled) return;
+        settled = true;
+        const decision = attempt.ok ? attempt : await randomBrain.decideFinalVote(view, planned);
+        if (!decision.ok || !decision.value) return;
+        submit(decision.value.guilty);
+      } catch {
+        /* não bot lỗi (mạng, JSON hỏng,...) không được kéo sập cả tiến trình */
+      }
+    })();
+
+    setRoomTimer(room.code, () => {
+      void (async () => {
+        try {
+          if (settled) return;
+          settled = true;
+          const fallback = await randomBrain.decideFinalVote(view, planned);
+          if (!fallback.value) return;
+          submit(fallback.value.guilty);
+        } catch {
+          /* não bot lỗi (mạng, JSON hỏng,...) không được kéo sập cả tiến trình */
+        }
+      })();
+    }, deadlineMs);
+  }
 }
 
 function scheduleVoteBots(room: Room): void {

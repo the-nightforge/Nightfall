@@ -8,6 +8,8 @@ import {
   type RecapPlayer,
   type Role,
   type RoomConfig,
+  type TrialRecap,
+  type TrialView,
   type Winner,
 } from "@masoi/shared";
 import { assignRoles, type AssignInput } from "./assignRoles";
@@ -16,7 +18,9 @@ import {
   type DeathInfo,
   type EnginePlayer,
   type GameState,
+  type NominationOutcome,
   type PublicDeath,
+  type TrialState,
 } from "./types";
 
 export interface SeerResultView {
@@ -74,6 +78,8 @@ export interface PlayerGameView {
   lastNightDeaths: PublicDeath[];
   nightHistory: NightRecap[];
   lastEliminated: PublicDeath | null;
+  trialInfo: TrialView | null;
+  lastTrial: TrialRecap | null;
   hunterShotInfo: HunterShotView | null;
   hunterShots: HunterShotRecap[];
   log: string[];
@@ -107,6 +113,9 @@ export class GameEngine {
     this.state.nightHistory ??= [];
     this.state.hunterReaction ??= null;
     this.state.hunterShots ??= [];
+    // State lưu trước khi có phiên toà không có hai trường này.
+    this.state.trial ??= null;
+    this.state.lastTrial ??= null;
     this.state.night.wolfVotes ??= {};
     this.state.night.wolvesLocked ??= false;
     this.state.night.witchSkipped ??= false;
@@ -148,6 +157,8 @@ export class GameEngine {
       lastNightDeaths: [],
       nightHistory: [],
       lastEliminated: null,
+      trial: null,
+      lastTrial: null,
       hunterReaction: null,
       hunterShots: [],
       log: [],
@@ -205,6 +216,11 @@ export class GameEngine {
     }
     if (phase === "VOTING") {
       this.state.votes = {};
+    }
+    // Một phiên toà không bao giờ được sống sót sang ngày kế tiếp: mỗi ngày
+    // đúng một phiên, và phiên đó bắt đầu từ vote sơ bộ.
+    if (phase === "NIGHT" || phase === "DAY_DISCUSSION" || phase === "VOTING") {
+      this.state.trial = null;
     }
   }
 
@@ -506,8 +522,14 @@ export class GameEngine {
     return { players, noElimination };
   }
 
-  /** Trả về người bị loại; hoà phiếu trả về null (không ai bị loại). */
-  resolveVote(now = Date.now()): PublicDeath | null {
+  /**
+   * Kiểm phiếu sơ bộ và chọn bị cáo. KHÔNG giết ai - mọi cái chết ban ngày đi
+   * qua resolveFinalVote.
+   *
+   * defenseMs là tham số chứ không đọc từ config: machine đã sở hữu toàn bộ
+   * lịch trình pha, engine không nên có hai nguồn sự thật cho cùng một mốc.
+   */
+  resolveNomination(defenseMs: number, now = Date.now()): NominationOutcome {
     const st = this.state;
     if (st.phase !== "VOTING") throw new GameError("Chỉ xử lý phiếu khi đang bỏ phiếu");
     // "Không treo ai" là một ứng viên ngang hàng với người chơi, không phải
@@ -527,24 +549,133 @@ export class GameEngine {
     const leader = candidates[0];
     const secondCount = candidates[1]?.count ?? -1;
     const uniqueLeader = leader !== undefined && leader.count > secondCount;
-    let eliminated: PublicDeath | null = null;
+
+    // Mỗi lần kiểm phiếu sơ bộ mở một trang mới: kết quả phiên toà hôm trước
+    // không được rơi lại vào màn hình kết quả hôm nay.
+    st.lastEliminated = null;
+    st.lastTrial = null;
 
     if (uniqueLeader && leader.type === "PLAYER") {
-      const p = this.player(leader.targetId);
-      if (p && p.alive) {
-        p.alive = false;
-        eliminated = { playerId: p.id, name: p.name };
+      const accused = this.player(leader.targetId);
+      if (accused && accused.alive) {
+        st.trial = { accusedId: accused.id, finalVotes: {} };
+        st.log.push(`${accused.name} bị đưa ra biện hộ.`);
+        st.phase = "DEFENSE";
+        st.phaseEndsAt = now + defenseMs;
+        return { kind: "TRIAL", accusedId: accused.id };
       }
     }
 
-    st.lastEliminated = eliminated;
-    if (eliminated) this.queueHunterReaction([eliminated], "vote");
+    st.trial = null;
     // Ba kết cục khác nhau về ý nghĩa nên log phải phân biệt được, dù UI gộp
     // hai nhánh không có nạn nhân vào cùng một câu.
-    if (eliminated) st.log.push(`Dân làng đã loại ${eliminated.name}.`);
-    else if (uniqueLeader && leader.type === "NO_ELIMINATION") {
-      st.log.push("Dân làng quyết định không treo ai.");
-    } else st.log.push("Hoà phiếu, không ai bị loại.");
+    const reason =
+      leader === undefined ? "no-votes" : uniqueLeader ? "no-elimination" : "tie";
+    st.log.push(
+      reason === "no-elimination"
+        ? "Dân làng quyết định không treo ai."
+        : "Hoà phiếu, không ai bị loại.",
+    );
+    st.phase = "ELIMINATION";
+    st.phaseEndsAt = now + 8_000;
+    return { kind: "NONE", reason };
+  }
+
+  // ---- Phiên toà: biện hộ và bỏ phiếu xác nhận ----
+
+  private mustTrial(): TrialState {
+    const trial = this.state.trial;
+    if (!trial) throw new GameError("Không có phiên toà đang diễn ra");
+    return trial;
+  }
+
+  /** Cử tri hợp lệ của vòng xác nhận: người còn sống, trừ chính bị cáo. */
+  finalVoters(): EnginePlayer[] {
+    const trial = this.mustTrial();
+    return this.alivePlayers().filter((p) => p.id !== trial.accusedId);
+  }
+
+  beginFinalVote(durationMs: number, now = Date.now()): void {
+    this.mustTrial();
+    this.state.phase = "FINAL_VOTE";
+    this.state.phaseEndsAt = now + durationMs;
+  }
+
+  /** guilty true là Treo, false là Tha. Cả hai đều là phiếu thật. */
+  submitFinalVote(voterId: string, guilty: boolean): void {
+    const st = this.state;
+    if (st.phase !== "FINAL_VOTE") throw new GameError("Chỉ được bỏ phiếu trong pha xác nhận");
+    const trial = this.mustTrial();
+    const voter = this.mustPlayer(voterId);
+    if (!voter.alive) throw new GameError("Người chết không được bỏ phiếu");
+    // Bị cáo tự tha mình thì lá phiếu đó vô nghĩa mà vẫn làm lệch ngưỡng.
+    if (voterId === trial.accusedId) throw new GameError("Bị cáo không được bỏ phiếu cho chính mình");
+    // So với undefined chứ không dùng truthiness: một phiếu Tha đã lưu là false.
+    if (trial.finalVotes[voterId] !== undefined) throw new GameError("Bạn đã bỏ phiếu");
+    trial.finalVotes[voterId] = guilty;
+  }
+
+  allFinalVotersVoted(): boolean {
+    const trial = this.mustTrial();
+    return this.finalVoters().every((p) => trial.finalVotes[p.id] !== undefined);
+  }
+
+  /**
+   * Kiểm phiếu xác nhận. Bỏ qua phiếu của người không còn sống: một phát bắn
+   * của Thợ Săn có thể giết một cử tri giữa phiên toà.
+   */
+  finalVoteTally(): { guilty: number; innocent: number; abstain: number; eligible: number } {
+    const trial = this.mustTrial();
+    const voters = this.finalVoters();
+    let guilty = 0;
+    let innocent = 0;
+    for (const voter of voters) {
+      const vote = trial.finalVotes[voter.id];
+      if (vote === undefined) continue;
+      if (vote) guilty += 1;
+      else innocent += 1;
+    }
+    return { guilty, innocent, abstain: voters.length - guilty - innocent, eligible: voters.length };
+  }
+
+  /** Số phiếu Treo tối thiểu để kết án. */
+  guiltyRequired(): number {
+    return Math.floor(this.finalVoteTally().eligible / 2) + 1;
+  }
+
+  /** Trả về người bị treo; tha hoặc không đủ phiếu trả về null. */
+  resolveFinalVote(now = Date.now()): PublicDeath | null {
+    const st = this.state;
+    if (st.phase !== "FINAL_VOTE") throw new GameError("Chỉ xử lý phiếu khi đang bỏ phiếu xác nhận");
+    const trial = this.mustTrial();
+    const { guilty, innocent, abstain, eligible } = this.finalVoteTally();
+    const accused = this.mustPlayer(trial.accusedId);
+
+    // Nhân đôi thay vì chia đôi: eligible lẻ sẽ đưa số thực vào một phép so sánh
+    // quyết định ai sống ai chết. Phiếu trắng vì thế tính là Tha.
+    const lynched = eligible > 0 && guilty * 2 > eligible && accused.alive;
+
+    let eliminated: PublicDeath | null = null;
+    if (lynched) {
+      accused.alive = false;
+      eliminated = { playerId: accused.id, name: accused.name };
+      this.queueHunterReaction([eliminated], "vote");
+    }
+
+    st.lastEliminated = eliminated;
+    st.lastTrial = {
+      accused: { id: accused.id, name: accused.name },
+      guilty,
+      innocent,
+      abstain,
+      lynched,
+    };
+    st.trial = null;
+    st.log.push(
+      lynched
+        ? `Dân làng đã treo ${accused.name} (${guilty}-${innocent}).`
+        : `Dân làng đã tha ${accused.name} (${guilty}-${innocent}).`,
+    );
     st.phase = "ELIMINATION";
     st.phaseEndsAt = now + 8_000;
     return eliminated;
@@ -658,6 +789,34 @@ export class GameEngine {
     };
   }
 
+  /** Khối phiên toà của một người xem. Chỉ gọi khi state.trial khác null. */
+  private trialViewFor(viewerId: string, viewer: EnginePlayer | undefined): TrialView {
+    const st = this.state;
+    const trial = st.trial!;
+    const accused = this.player(trial.accusedId);
+    const { guilty, innocent } = this.finalVoteTally();
+    // Đọc trực tiếp finalVotes chứ không qua finalVoters(): người xem có thể đã
+    // chết giữa phiên toà, và khi đó họ không còn là cử tri nhưng vẫn phải thấy
+    // đúng lá phiếu mình đã bỏ.
+    const myVote = trial.finalVotes[viewerId];
+
+    return {
+      accusedId: trial.accusedId,
+      accusedName: accused?.name ?? "?",
+      guiltyVotes: guilty,
+      innocentVotes: innocent,
+      guiltyRequired: this.guiltyRequired(),
+      canVote:
+        st.phase === "FINAL_VOTE" &&
+        viewer?.alive === true &&
+        viewerId !== trial.accusedId &&
+        myVote === undefined,
+      hasVoted: myVote !== undefined,
+      myVote: myVote ?? null,
+      canSpeak: st.phase === "DEFENSE" && viewerId === trial.accusedId && viewer?.alive === true,
+    };
+  }
+
   snapshotFor(viewerId: string): PlayerGameView {
     const st = this.state;
     const viewer = this.player(viewerId);
@@ -669,7 +828,10 @@ export class GameEngine {
     const viewerIsWolf = viewer !== undefined && viewer.alive && roleTeam(viewer.role) === "wolves";
 
     const tally = this.voteTally();
-    const showVoteCounts = st.phase === "VOTING" || revealAll;
+    // Số phiếu sơ bộ là bối cảnh của cả phiên toà: giấu đi trong lúc biện hộ thì
+    // bị cáo không có gì để phản biện.
+    const inTrialPhase = st.phase === "DEFENSE" || st.phase === "FINAL_VOTE";
+    const showVoteCounts = st.phase === "VOTING" || inTrialPhase || revealAll;
     // Người chết không có phiếu nào để mà "đã bỏ", nên hasVoted của họ luôn false.
     const hasVoted = viewer?.alive === true && st.votes[viewerId] !== undefined;
     const playersView = st.players.map((p) => ({
@@ -728,12 +890,21 @@ export class GameEngine {
                 : null,
             }
           : null,
+      trialInfo: inTrialPhase && st.trial ? this.trialViewFor(viewerId, viewer) : null,
+      lastTrial:
+        st.phase === "ELIMINATION" || st.phase === "CHECK_WIN" || st.phase === "GAME_OVER"
+          ? st.lastTrial
+          : null,
       hasVoted,
       // ?? null ở đây an toàn vì đã gác bằng hasVoted: chỉ đọc khi thật sự có
       // phiếu, nên null trả về là phiếu không treo chứ không phải "chưa vote".
       myVote: hasVoted ? st.votes[viewerId] ?? null : null,
       noEliminationVoteCount: showVoteCounts ? tally.noElimination : 0,
-      votesRevealed: st.phase === "ELIMINATION" || st.phase === "GAME_OVER" || st.phase === "CHECK_WIN",
+      votesRevealed:
+        inTrialPhase ||
+        st.phase === "ELIMINATION" ||
+        st.phase === "GAME_OVER" ||
+        st.phase === "CHECK_WIN",
       lastNightDeaths: st.phase === "NIGHT_RESULT" || st.phase === "DAY_DISCUSSION" ? st.lastNightDeaths : [],
       nightHistory: st.phase === "GAME_OVER" ? st.nightHistory : [],
       hunterShots: st.phase === "GAME_OVER" ? st.hunterShots : [],

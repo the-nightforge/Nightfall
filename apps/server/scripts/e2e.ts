@@ -150,6 +150,8 @@ async function main() {
       nightSeconds: 20,
       discussionSeconds: 30,
       voteSeconds: 20,
+      defenseSeconds: 10,
+      finalVoteSeconds: 15,
     },
   });
   host.last = await cfgSnapP;
@@ -210,6 +212,17 @@ async function main() {
         const t = targets[Math.floor(Math.random() * targets.length)];
         sockets[i].emit("game:vote", { targetId: t.id });
       }
+    } else if (current.phase === "FINAL_VOTE") {
+      // Không bỏ phiếu tính là Tha, nên bỏ qua nhánh này sẽ khiến không ai bị
+      // treo suốt ván và e2e không bao giờ chạm tới đường chết ban ngày.
+      for (let i = 0; i < PLAYER_COUNT; i++) {
+        const s = watchers[i].last;
+        if (s?.phase !== "FINAL_VOTE" || !s.trial?.canVote) continue;
+        sockets[i].emit("game:final-vote", { guilty: Math.random() < 0.7 });
+      }
+    } else if (current.phase === "DEFENSE") {
+      const s = watchers[0].last;
+      if (s?.trial?.canSpeak) sockets[0].emit("chat:send", { text: "Tôi là dân, đừng treo tôi!" });
     } else if (current.phase === "DAY_DISCUSSION" && Math.random() < 0.05) {
       sockets[0].emit("chat:send", { text: "Tôi nghi ngờ ai đó..." });
     }

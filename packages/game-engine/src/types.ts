@@ -59,6 +59,44 @@ export interface HunterReactionState {
   resolved: boolean;
 }
 
+/**
+ * Phiên toà đang diễn ra: một người đã bị vote sơ bộ đẩy lên, đang biện hộ hoặc
+ * đang bị bỏ phiếu Treo/Tha.
+ *
+ * Gói vào một object nullable thay vì hai trường phẳng để "đang có phiên toà" là
+ * đúng một phép kiểm tra, và để không tồn tại trạng thái nửa vời (có bị cáo mà
+ * thiếu bảng phiếu). Cùng hình dạng với hunterReaction.
+ */
+export interface TrialState {
+  accusedId: string;
+  /**
+   * voterId -> true là Treo, false là Tha.
+   *
+   * boolean chứ không phải string|null như votes: lá phiếu này chỉ có hai giá
+   * trị và cả hai đều là lựa chọn có chủ đích. "Chưa bỏ phiếu" vẫn phân biệt
+   * bằng key vắng mặt, nên mọi kiểm tra phải so với undefined chứ không dùng
+   * truthiness - false là một phiếu Tha hợp lệ.
+   */
+  finalVotes: Record<string, boolean>;
+}
+
+/** Kết quả một phiên toà đã xử xong. */
+export interface TrialRecapState {
+  accused: { id: string; name: string };
+  guilty: number;
+  innocent: number;
+  abstain: number;
+  lynched: boolean;
+}
+
+/**
+ * Kết quả kiểm phiếu sơ bộ. Vote sơ bộ KHÔNG giết ai: nó chỉ nói có mở phiên
+ * toà hay không.
+ */
+export type NominationOutcome =
+  | { kind: "TRIAL"; accusedId: string }
+  | { kind: "NONE"; reason: "no-elimination" | "tie" | "no-votes" };
+
 export interface GameState {
   phase: GamePhase;
   round: number;
@@ -85,6 +123,10 @@ export interface GameState {
   lastNightDeaths: PublicDeath[];
   nightHistory: NightRecap[];
   lastEliminated: PublicDeath | null;
+  /** Phiên toà đang diễn ra; null ngoài DEFENSE/FINAL_VOTE. */
+  trial: TrialState | null;
+  /** Phiên toà vừa xử xong, để màn hình kết quả phân biệt "được tha" với "hoà phiếu". */
+  lastTrial: TrialRecapState | null;
   hunterReaction: HunterReactionState | null;
   hunterShots: HunterShotRecap[];
   log: string[];

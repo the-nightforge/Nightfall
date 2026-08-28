@@ -15,6 +15,8 @@ function snapshot(over: Partial<RoomSnapshot> = {}): RoomSnapshot {
     players: [],
     night: null,
     hunterShot: null,
+    trial: null,
+    lastTrial: null,
     hasVoted: false,
     myVote: null,
     noEliminationVoteCount: 0,

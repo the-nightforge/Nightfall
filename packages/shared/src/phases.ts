@@ -4,7 +4,11 @@ export const PHASES = [
   "NIGHT",
   "NIGHT_RESULT",
   "DAY_DISCUSSION",
+  // VOTING giữ nguyên tên nhưng đổi nghĩa: nó ĐỀ CỬ bị cáo chứ không còn giết
+  // ai. Mọi cái chết ban ngày đi qua FINAL_VOTE.
   "VOTING",
+  "DEFENSE",
+  "FINAL_VOTE",
   "ELIMINATION",
   "HUNTER_SHOT",
   "CHECK_WIN",
@@ -27,7 +31,16 @@ export interface RoomConfig {
   /** giây */
   nightSeconds: number;
   discussionSeconds: number;
+  /** Vòng bỏ phiếu sơ bộ - chỉ chọn ra bị cáo, không loại ai. */
   voteSeconds: number;
+  /** Cửa sổ bị cáo tự bào chữa. */
+  defenseSeconds: number;
+  /**
+   * Vòng bỏ phiếu Treo/Tha. Cận dưới 15 giây là bắt buộc: chuỗi não bot mất tới
+   * 13 giây ở trường hợp xấu nhất, cửa sổ ngắn hơn thì mọi bot đều rơi về
+   * đường lui cục bộ.
+   */
+  finalVoteSeconds: number;
 }
 
 export const DEFAULT_ROOM_CONFIG: RoomConfig = {
@@ -38,8 +51,12 @@ export const DEFAULT_ROOM_CONFIG: RoomConfig = {
   hunter: false,
   cursed: false,
   nightSeconds: 30,
-  discussionSeconds: 90,
+  // Hạ từ 90 khi thêm phiên toà: vote sơ bộ giờ đã đóng vai trò vòng thảo luận
+  // thứ hai, giữ 90 thì một ngày kéo dài gần ba phút.
+  discussionSeconds: 60,
   voteSeconds: 30,
+  defenseSeconds: 25,
+  finalVoteSeconds: 20,
 };
 
 export const MIN_PLAYERS_TO_START = 6;

@@ -39,6 +39,8 @@ function snapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
     discussionSkip: null,
     votesRevealed: false,
     nightHistory: [],
+    trial: null,
+    lastTrial: null,
     hunterShots: [],
     lastNightDeaths: [],
     lastEliminated: null,

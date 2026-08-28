@@ -107,7 +107,11 @@ function pendingHunterRoom(source: "night" | "vote"): Room {
     engine.resolveNight(1_000);
   } else {
     engine.state.votes = { hunter: "wolf", wolf: "hunter", villager: "hunter" };
-    engine.resolveVote(1_000);
+    // Cái chết ban ngày giờ nằm ở vòng xác nhận, không còn ở vote sơ bộ.
+    engine.resolveNomination(25_000, 1_000);
+    engine.beginFinalVote(20_000, 1_000);
+    for (const voter of engine.finalVoters()) engine.submitFinalVote(voter.id, true);
+    engine.resolveFinalVote(1_000);
   }
 
   return {

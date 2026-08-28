@@ -23,6 +23,10 @@ export const roomConfigSchema = z
     nightSeconds: z.number().int().min(15).max(120),
     discussionSeconds: z.number().int().min(30).max(300),
     voteSeconds: z.number().int().min(15).max(120),
+    defenseSeconds: z.number().int().min(10).max(60),
+    // Cận dưới 15 chứ không phải 10: chuỗi não bot mất tới 13s ở trường hợp xấu
+    // nhất, nên cửa sổ 10s chỉ bày ra một lựa chọn chắc chắn hỏng.
+    finalVoteSeconds: z.number().int().min(15).max(60),
   })
   .strict();
 
@@ -77,6 +81,11 @@ export const gameActionPayload = z
 // targetId null nghĩa là "Không treo ai" - một lựa chọn có chủ đích, không phải
 // phiếu trống. Vẫn strict và vẫn chặn chuỗi rỗng: chỉ nới đúng chỗ null.
 export const votePayload = z.object({ targetId: z.string().min(1).nullable() }).strict();
+
+// Phiếu xác nhận là nhị phân thật: true là Treo, false là Tha. Không gộp vào
+// votePayload - một schema nhận cả id nullable lẫn boolean sẽ phải phân giải
+// theo phase ở server, đúng chỗ để lọt một phiếu gửi nhầm pha.
+export const finalVotePayload = z.object({ guilty: z.boolean() }).strict();
 export const hunterShotPayload = z.object({ targetId: z.string().min(1).nullable() }).strict();
 export const skipDiscussionPayload = z.object({ skip: z.boolean() }).strict();
 export const chatSendPayload = z.object({ text: z.string().trim().min(1).max(300) }).strict();

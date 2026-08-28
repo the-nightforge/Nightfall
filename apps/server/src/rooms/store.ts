@@ -122,11 +122,20 @@ export async function loadRoomFromRedis(code: string): Promise<Room | null> {
     const data = JSON.parse(raw) as SerializedRoom;
     // Phòng lưu trước khi có một role mới thiếu hẳn khoá của role đó. Mặc định
     // false: một ván cũ không bao giờ tự dưng bật thêm vai khi được nạp lại.
-    const storedConfig = data.config as RoomConfig & { hunter?: boolean; cursed?: boolean };
+    const storedConfig = data.config as RoomConfig & {
+      hunter?: boolean;
+      cursed?: boolean;
+      defenseSeconds?: number;
+      finalVoteSeconds?: number;
+    };
     const normalizedConfig: RoomConfig = {
       ...storedConfig,
       hunter: storedConfig.hunter ?? false,
       cursed: storedConfig.cursed ?? false,
+      // Phòng lưu trước khi có phiên toà thiếu hẳn hai mốc này. roomConfigSchema
+      // là .strict() nên thiếu trường là lần cập nhật cấu hình kế tiếp sẽ hỏng.
+      defenseSeconds: storedConfig.defenseSeconds ?? DEFAULT_ROOM_CONFIG.defenseSeconds,
+      finalVoteSeconds: storedConfig.finalVoteSeconds ?? DEFAULT_ROOM_CONFIG.finalVoteSeconds,
     };
     const normalizedEngineState = data.engineState
       ? { ...data.engineState, config: normalizedConfig }

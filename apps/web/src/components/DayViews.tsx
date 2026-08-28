@@ -138,6 +138,18 @@ export function EliminationView({ snapshot }: { snapshot: RoomSnapshot }) {
             return null;
           })()}
         </>
+      ) : snapshot.lastTrial ? (
+        // Được tha là một kết cục riêng: lastEliminated === null không phân biệt
+        // được nó với hoà phiếu hay "không treo ai" thắng.
+        <>
+          <p className="mt-1 font-semibold text-white">
+            Làng đã tha <span className="text-emerald-300">{snapshot.lastTrial.accused.name}</span>.
+          </p>
+          <p className="mt-1 text-sm text-mist/70">
+            {snapshot.lastTrial.guilty} phiếu treo - {snapshot.lastTrial.innocent} phiếu tha
+            {snapshot.lastTrial.abstain > 0 && `, ${snapshot.lastTrial.abstain} không bỏ phiếu`}.
+          </p>
+        </>
       ) : (
         // Không còn khẳng định hoà phiếu: không ai bị loại giờ có hai lý do
         // (hoà, hoặc "Không treo ai" thắng) mà snapshot không phân biệt.
