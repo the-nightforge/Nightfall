@@ -56,10 +56,41 @@ describe("decideFinalVote", () => {
     expect(decideFinalVote(context(), state, rng()).guilty).toBe(true);
   });
 
-  it("Tha khi nghi ngờ dưới ngưỡng", () => {
-    // Không có bằng chứng thì tha. Mặc định Treo sẽ biến mỗi phiên toà thành
-    // một vụ hành quyết, và phe làng tự diệt mình nhanh hơn Sói làm được.
-    expect(decideFinalVote(context(), stateFor(), rng()).guilty).toBe(false);
+  it("TREO khi không biết gì, vì tới được phiên toà nghĩa là làng đã chỉ vào người này", () => {
+    // Test này từng khẳng định điều NGƯỢC LẠI ("không biết gì thì tha"), với lý
+    // do mặc định Treo sẽ biến phiên toà thành một vụ hành quyết.
+    //
+    // Harness ở Task 9 bác bỏ: với mặc định Tha, phe làng thua 30/30 ván. Không
+    // ai bị kết án nên không có lịch sử phiếu, nên nghi ngờ mãi bằng 0, nên
+    // không ai bị kết án - một vòng lặp chết. Điều bị bỏ sót là đa số làng ĐÃ
+    // chỉ vào bị cáo trước khi tới đây; tha vì bản thân chưa có bằng chứng
+    // riêng là vứt bỏ phán đoán tập thể và tiêu một ngày.
+    expect(decideFinalVote(context(), stateFor(), rng()).guilty).toBe(true);
+  });
+
+  it("THA khi có lý do TÍCH CỰC tin bị cáo vô tội", () => {
+    const state = stateFor();
+    state.trust.a = { score: 100, reasons: [], lastUpdatedRound: 2 };
+
+    expect(decideFinalVote(context(), state, rng()).guilty).toBe(false);
+  });
+
+  it("Tiên Tri soi sạch thì tha, dù cả làng đã đề cử", () => {
+    const bot = new BotRuntime({
+      playerId: "me",
+      rng: createSeededRng("clear"),
+      playerIds: PLAYERS,
+    });
+    bot.observe(
+      context({
+        selfRole: "SEER",
+        seerResult: { targetId: "a", targetName: "A", isWolf: false },
+      }),
+    );
+
+    expect(decideFinalVote(context({ selfRole: "SEER" }), bot.state, rng()).guilty).toBe(
+      false,
+    );
   });
 
   it("Sói KHÔNG BAO GIỜ treo đồng bọn, kể cả khi đồng bọn bị nghi kịch trần", () => {

@@ -35,11 +35,30 @@ function isKnownAlly(context: BotDecisionContext, playerId: string): boolean {
 }
 
 /**
+ * Biên tin tưởng cần có để THA một người mà cả làng vừa đưa ra xử.
+ *
+ * Phải vượt nghi ngờ một khoảng rõ ràng: "không biết gì" không phải lý do để
+ * tha, vì lá phiếu trắng ở đây tốn đúng một ngày của làng.
+ */
+const SPARE_TRUST_MARGIN = 15;
+
+/**
  * Treo hay Tha.
  *
- * Mặc định là THA. Mặc định Treo sẽ biến mỗi phiên toà thành một vụ hành quyết:
- * phe làng đông hơn nên chính họ chịu thiệt, và Sói thắng bằng bào mòn mà không
- * cần làm gì. Chỉ bằng chứng đủ mạnh mới lật được mặc định đó.
+ * Mặc định là TREO, và mặc định đó được đổi lại sau khi có dữ liệu.
+ *
+ * Thiết kế ban đầu của Phase 2 chọn mặc định THA, với lý do "mặc định Treo biến
+ * mỗi phiên toà thành một vụ hành quyết". Harness ở Task 9 bác bỏ điều đó: với
+ * mặc định THA, phe làng thua 30/30 ván. Lý do là một vòng lặp chết - không ai
+ * bị kết án, nên không có lịch sử phiếu để sinh bằng chứng, nên nghi ngờ mãi
+ * bằng 0, nên không ai bị kết án.
+ *
+ * Điều bị bỏ sót: tới được phiên toà nghĩa là đa số làng ĐÃ chỉ vào người này.
+ * Tha vì bản thân mình chưa có bằng chứng riêng là vứt bỏ phán đoán tập thể và
+ * tiêu một ngày, trong khi mỗi đêm làng vẫn mất một người.
+ *
+ * Nên luật đúng là: TREO, trừ khi có lý do TÍCH CỰC để tin người này vô tội -
+ * Tiên Tri đã soi sạch, hoặc đó là đồng đội mình.
  */
 export function decideFinalVote(
   context: BotDecisionContext,
@@ -59,14 +78,17 @@ export function decideFinalVote(
   }
 
   const entry = state.suspicion[accusedId];
-  const score = entry?.score ?? 0;
-  const threshold = voteThreshold(state.personality);
-  const guilty = score >= threshold;
+  const suspicion = entry?.score ?? 0;
+  const trust = state.trust[accusedId]?.score ?? 0;
+
+  // Chỉ tin tưởng CÓ CƠ SỞ mới cứu được bị cáo. `trust` chỉ lên cao khi có
+  // nguồn thật: kết quả soi, hoặc nhiều lần được người khác bênh.
+  const guilty = trust < suspicion + SPARE_TRUST_MARGIN;
 
   return {
     kind: "FINAL_VOTE",
     guilty,
-    confidence: Math.min(1, Math.abs(score - threshold) / Math.max(1, threshold)),
+    confidence: Math.min(1, Math.abs(trust - suspicion) / 100),
     // Chỉ mang theo lý do khi thật sự kết tội; một phiếu Tha không cần bằng chứng.
     evidence: guilty ? (entry?.reasons ?? []).slice(-3).map((item) => ({ ...item })) : [],
   };

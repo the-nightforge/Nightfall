@@ -123,8 +123,23 @@ describe("deterministic vote decision", () => {
     expect(result.confidence).toBeGreaterThan(0);
   });
 
-  it("chooses no elimination below the confidence threshold", () => {
-    expect(neutralRuntime().decideVote(context()).choice).toEqual({ type: "NO_ELIMINATION" });
+  // "Không treo ai" tiêu một ngày của làng và không tốn gì của Sói, nên từ
+  // Phase 2 chỉ phe Sói được chọn nó khi bằng chứng còn mỏng. Harness ở Task 9
+  // là thứ buộc phải đổi: với luật cũ, phe làng bỏ phiếu trắng mọi vòng và thua
+  // 30/30 ván.
+  const wolfContext = () =>
+    context({ selfRole: "WEREWOLF", knownRoles: { me: "WEREWOLF" } });
+
+  it("chooses no elimination below the confidence threshold, as a wolf", () => {
+    expect(neutralRuntime().decideVote(wolfContext()).choice).toEqual({
+      type: "NO_ELIMINATION",
+    });
+  });
+
+  it("a villager still nominates someone when evidence is thin", () => {
+    // Treo một người đáng ngờ nhất có xác suất trúng Sói khác 0; bỏ phiếu trắng
+    // thì bằng 0, và làng vẫn mất một người mỗi đêm.
+    expect(neutralRuntime().decideVote(context()).choice.type).toBe("PLAYER");
   });
 
   it("does not switch without enough hysteresis", () => {
@@ -166,7 +181,10 @@ describe("deterministic vote decision", () => {
     expect(result.choice).not.toEqual({ type: "PLAYER", targetId: "me" });
   });
 
-  it("refuses to vote a target whose only lead is jitter", () => {
+  it("a wolf refuses to vote a target whose only lead is jitter", () => {
+    // Điểm cao mà không có `reasons` là điểm không giải thích được cho ai. Phe
+    // Sói được phép bỏ trắng trong tình huống đó; phe làng thì không, vì bỏ
+    // trắng là nước có lợi cho Sói.
     const runtime = new BotRuntime({
       playerId: "me",
       rng: () => 1,
@@ -175,7 +193,10 @@ describe("deterministic vote decision", () => {
     });
     runtime.state.suspicion.b = { score: 99, reasons: [], lastUpdatedRound: 1 };
 
-    expect(runtime.decideVote(context()).choice).toEqual({ type: "NO_ELIMINATION" });
+    expect(
+      runtime.decideVote(context({ selfRole: "WEREWOLF", knownRoles: { me: "WEREWOLF" } }))
+        .choice,
+    ).toEqual({ type: "NO_ELIMINATION" });
   });
 
   it("only offers choices the engine said are legal", () => {
@@ -391,8 +412,11 @@ describe("bot speech intention", () => {
       playerIds: ["me", "b", "c"],
       personality: BALANCED,
     });
+    // Phải là Sói: từ Phase 2, chỉ phe Sói mới chọn "không treo ai" khi bằng
+    // chứng mỏng, nên đó là cách duy nhất để dựng một phiếu NO_ELIMINATION thật.
+    const ctx = context({ selfRole: "WEREWOLF", knownRoles: { me: "WEREWOLF" } });
 
-    const speech = runtime.decideSpeech(context(), runtime.decideVote(context()))!;
+    const speech = runtime.decideSpeech(ctx, runtime.decideVote(ctx))!;
 
     expect(speech.kind).toBe("WITHHOLD");
     expect(speech.evidence).toEqual([]);

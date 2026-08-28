@@ -198,21 +198,32 @@ describe("NightKnowledge · nội dung", () => {
     expect(e.botKnowledgeFor(idOf(e, "GUARD")).night!.legalActions).toEqual(["GUARD"]);
   });
 
-  it("Phù Thuỷ được chào SKIP, và chỉ được chào HEAL khi có nạn nhân", () => {
+  it("Phù Thuỷ chưa được chào hành động nào TRƯỚC khi bầy Sói khoá phiếu", () => {
+    // Engine ném "Chưa tới lượt Phù Thuỷ" cho MỌI hành động, kể cả SKIP, khi
+    // `wolvesLocked === false`. Chào một hành động trong lúc engine sẽ từ chối
+    // là nói dối với lõi AI, và lượt đêm mất trắng vì một nước đi hợp lệ trên
+    // giấy. Lỗ hổng này do harness mô phỏng ở Task 9 phát hiện.
+    const e = nightEngine();
+
+    expect(e.botKnowledgeFor(idOf(e, "WITCH")).night!.legalActions).toEqual([]);
+  });
+
+  it("sau khi khoá phiếu, Phù Thuỷ được chào SKIP và HEAL khi có nạn nhân", () => {
     const e = nightEngine();
     const witch = idOf(e, "WITCH");
+    e.state.night.wolvesLocked = true;
 
     expect(e.botKnowledgeFor(witch).night!.legalActions).toContain("SKIP");
     expect(e.botKnowledgeFor(witch).night!.legalActions).not.toContain("HEAL");
 
     e.state.night.killTarget = idOf(e, "VILLAGER");
-    e.state.night.wolvesLocked = true;
     expect(e.botKnowledgeFor(witch).night!.legalActions).toContain("HEAL");
   });
 
   it("hết bình thì hành động tương ứng không còn được chào", () => {
     const e = nightEngine();
     const witch = idOf(e, "WITCH");
+    e.state.night.wolvesLocked = true;
     e.state.poisonUsed = true;
 
     expect(e.botKnowledgeFor(witch).night!.legalActions).not.toContain("POISON");

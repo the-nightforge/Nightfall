@@ -24,6 +24,34 @@ const JITTER_SPAN = 6;
 /** Nhỏ có chủ đích: cô lập là gợi ý, không được tự mình đẩy ai qua ngưỡng. */
 const ISOLATION_BONUS = 8;
 
+/**
+ * Tỉ lệ người đã chết mà trên đó "không treo ai" trở thành nước thua.
+ *
+ * Ma Sói không có trạng thái hoà: mỗi đêm phe làng mất một người, nên một ngày
+ * không treo ai là một người mất trắng. Treo bừa có xác suất trúng Sói bằng
+ * `số Sói / số người còn sống`; không treo có xác suất bằng 0. Vì vậy khi làng
+ * đã mỏng, treo một người đáng ngờ nhất - dù bằng chứng yếu - là nước ĐÚNG chứ
+ * không phải nước liều.
+ *
+ * Harness mô phỏng ở Task 9 là thứ phát hiện điều này: không có quy tắc dưới
+ * đây, Sói thắng 30/30 vì cả làng bỏ phiếu trắng mọi vòng, và vì không ai bị
+ * treo nên không có lịch sử phiếu nào để sinh ra bằng chứng - một vòng lặp chết.
+ */
+const DESPERATION_PRESSURE = 0.3;
+
+/**
+ * Mức cấp bách, 0 khi chưa ai chết và tiến tới 1 khi làng gần hết.
+ *
+ * Dùng `players` (gồm cả người chết) làm mẫu số nên BOT không cần biết sĩ số
+ * ban đầu từ đâu khác.
+ */
+function survivalPressure(knowledge: BotDecisionContext["knowledge"]): number {
+  const total = knowledge.players.length;
+  if (total === 0) return 0;
+  const alive = knowledge.players.filter((player) => player.alive).length;
+  return clampUnit(1 - alive / total);
+}
+
 /** Số evidence tối đa mang theo một intention. */
 const MAX_INTENTION_EVIDENCE = 3;
 
@@ -164,7 +192,21 @@ export function selectVote(
 
   // Một mục tiêu dẫn đầu chỉ nhờ jitter mà không có lý do nào thì không đáng
   // để treo: BOT chọn không treo thay vì bịa một cáo buộc không nguồn.
-  if (winner.score < threshold || winner.evidence.length === 0) {
+  //
+  // NHƯNG chỉ trong lúc làng còn đủ người để chịu đựng một ngày không treo ai.
+  // Xem `survivalPressure`: không treo ai mỗi ngày là thua chắc chắn, nên quy
+  // tắc "không có bằng chứng thì không treo" phải nhường chỗ khi làng đã mỏng.
+  // "Không treo ai" KHÔNG phải một nước trung lập: nó tiêu một ngày của làng và
+  // không tốn gì của Sói, trong khi mỗi đêm làng vẫn mất một người. Treo một
+  // người đáng ngờ nhất có xác suất trúng Sói bằng `số Sói / số còn sống`;
+  // không treo có xác suất bằng 0.
+  //
+  // Vì vậy chỉ phe Sói mới được phép chọn nó khi bằng chứng còn mỏng, và cũng
+  // chỉ khi làng còn đủ đông để chưa ai thấy sốt ruột.
+  const pressure = survivalPressure(knowledge);
+  const abstainHelpsMyTeam = selfIsWolf && pressure < DESPERATION_PRESSURE;
+
+  if (abstainHelpsMyTeam && (winner.score < threshold || winner.evidence.length === 0)) {
     return noEliminationIntention((threshold - best.score) / Math.max(1, threshold));
   }
 

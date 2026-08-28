@@ -1116,17 +1116,17 @@ export class GameEngine {
       legalTargets.GUARD = alive
         .filter((player) => player.id !== st.guardPrevious)
         .map((player) => player.id);
-    } else if (isWitch) {
-      // Bình cứu chỉ dùng được khi thật sự có nạn nhân, và Phù Thuỷ chỉ biết
-      // nạn nhân sau khi bầy Sói khoá phiếu.
-      if (!st.healUsed && st.night.wolvesLocked && st.night.killTarget) {
-        legalActions.push("HEAL");
-      }
+    } else if (isWitch && st.night.wolvesLocked) {
+      // Phù Thuỷ đi SAU bầy Sói: trước khi khoá phiếu, engine từ chối MỌI hành
+      // động của cô ta - kể cả SKIP. Chào một hành động ở đây trong lúc engine
+      // sẽ ném là nói dối với lõi AI, và lượt đêm mất trắng vì một nước đi hợp
+      // lệ trên giấy.
+      if (!st.healUsed && st.night.killTarget) legalActions.push("HEAL");
       if (!st.poisonUsed) {
         legalActions.push("POISON");
         legalTargets.POISON = alive.map((player) => player.id);
       }
-      // SKIP luôn hợp lệ: không dùng bình nào là một lựa chọn có chủ đích.
+      // SKIP luôn hợp lệ SAU khi khoá: không dùng bình nào là lựa chọn có chủ đích.
       legalActions.push("SKIP");
     }
 
@@ -1173,6 +1173,9 @@ export class GameEngine {
     if (viewer.role === "SEER") return st.night.seerResults[viewer.id] === undefined;
     if (viewer.role === "GUARD") return st.night.guardTarget === null;
     if (viewer.role === "WITCH") {
+      // Chưa khoá phiếu Sói thì chưa tới lượt, nên `canAct` phải là false dù
+      // cô ta chưa dùng bình nào.
+      if (!st.night.wolvesLocked) return false;
       return !st.night.witchSkipped && !st.night.healTonight && st.night.poisonTarget === null;
     }
     return false;
