@@ -45,6 +45,7 @@ function botView(over: Partial<RoomSnapshot> = {}): RoomSnapshot {
     hasVoted: false,
     myVote: null,
     noEliminationVoteCount: 0,
+    serverNow: 0,
     discussionSkip: null,
     votesRevealed: false,
     nightHistory: [],

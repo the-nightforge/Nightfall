@@ -59,6 +59,17 @@ export const DEFAULT_ROOM_CONFIG: RoomConfig = {
   finalVoteSeconds: 20,
 };
 
+/**
+ * Thời lượng các pha mà engine tự đặt hạn chót, không lấy từ RoomConfig.
+ *
+ * Engine đặt phaseEndsAt còn machine hẹn giờ chuyển pha từ CÙNG con số này.
+ * Khai báo tách đôi thì sửa một bên là đồng hồ client và lịch server lệch nhau,
+ * và người chơi thấy đồng hồ về 0 trong khi pha vẫn chưa đổi.
+ */
+export const ROLE_REVEAL_MS = 10_000;
+export const RESULT_MS = 8_000;
+export const GAME_OVER_MS = 30_000;
+
 export const MIN_PLAYERS_TO_START = 6;
 export const MAX_PLAYERS_PER_ROOM = 15;
 

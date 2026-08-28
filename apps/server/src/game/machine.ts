@@ -1,5 +1,5 @@
 import { GameEngine } from "@masoi/game-engine";
-import { SERVER_EVENTS } from "@masoi/shared";
+import { GAME_OVER_MS, RESULT_MS, ROLE_REVEAL_MS, SERVER_EVENTS } from "@masoi/shared";
 import type { Room } from "../rooms/store";
 import { clearRoomTimers, persistRoom, setRoomTimer } from "../rooms/store";
 import { broadcastRoom, emitToPlayers } from "../rooms/broadcast";
@@ -17,14 +17,11 @@ import {
   updateDiscussionSkipVote,
 } from "./discussion-skip";
 
-const ROLE_REVEAL_MS = 10_000;
-const RESULT_MS = 8_000;
 const HUNTER_SHOT_MS = 15_000;
 /** Chừa một giây để engine nhận fallback trước khi phase hết hạn. */
 const HUNTER_BOT_DEADLINE_BUFFER_MS = 1_000;
 /** Cùng mục đích, cho vòng bỏ phiếu xác nhận. */
 const FINAL_VOTE_BOT_DEADLINE_BUFFER_MS = 1_500;
-const GAME_OVER_MS = 30_000;
 /** Cửa sổ riêng cho Phù Thuỷ sau khi bầy Sói chốt nạn nhân. */
 const WITCH_WINDOW_MS = 15_000;
 

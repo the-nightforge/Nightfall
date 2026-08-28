@@ -1,4 +1,7 @@
 import {
+  GAME_OVER_MS,
+  RESULT_MS,
+  ROLE_REVEAL_MS,
   ROLE_META,
   roleTeam,
   type GamePhase,
@@ -140,7 +143,7 @@ export class GameEngine {
     const state: GameState = {
       phase: "ROLE_REVEAL",
       round: 0,
-      phaseEndsAt: now + 10_000,
+      phaseEndsAt: now + ROLE_REVEAL_MS,
       players: players.map((p) => ({
         ...p,
         role: roles[p.id],
@@ -481,7 +484,7 @@ export class GameEngine {
     st.nightHistory.push(recap);
 
     st.phase = "NIGHT_RESULT";
-    st.phaseEndsAt = now + 8_000;
+    st.phaseEndsAt = now + RESULT_MS;
     return deaths;
   }
 
@@ -577,7 +580,7 @@ export class GameEngine {
         : "Hoà phiếu, không ai bị loại.",
     );
     st.phase = "ELIMINATION";
-    st.phaseEndsAt = now + 8_000;
+    st.phaseEndsAt = now + RESULT_MS;
     return { kind: "NONE", reason };
   }
 
@@ -677,7 +680,7 @@ export class GameEngine {
         : `Dân làng đã tha ${accused.name} (${guilty}-${innocent}).`,
     );
     st.phase = "ELIMINATION";
-    st.phaseEndsAt = now + 8_000;
+    st.phaseEndsAt = now + RESULT_MS;
     return eliminated;
   }
 
@@ -750,7 +753,7 @@ export class GameEngine {
   finishGame(winner: Exclude<Winner, null>, now = Date.now()) {
     this.state.winner = winner;
     this.state.phase = "GAME_OVER";
-    this.state.phaseEndsAt = now + 30_000;
+    this.state.phaseEndsAt = now + GAME_OVER_MS;
     this.state.log.push(winner === "wolves" ? "Phe Ma Sói chiến thắng!" : "Phe Dân Làng chiến thắng!");
   }
 

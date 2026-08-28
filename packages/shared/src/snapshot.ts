@@ -143,6 +143,15 @@ export interface RoomSnapshot {
   round: number;
   /** epoch ms - client đếm ngược từ đây */
   phaseEndsAt: number | null;
+  /**
+   * epoch ms của SERVER lúc dựng snapshot này.
+   *
+   * phaseEndsAt cũng là giờ server, nên client trừ thẳng vào Date.now() của
+   * máy mình là sai đúng bằng độ lệch đồng hồ máy đó. Trên điện thoại không bật
+   * giờ tự động, lệch vài chục giây là chuyện thường. Có mốc này thì client tự
+   * ước lượng được độ lệch thay vì tin đồng hồ máy.
+   */
+  serverNow: number;
   you: {
     id: string;
     name: string;

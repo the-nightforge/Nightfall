@@ -33,6 +33,7 @@ const view: RoomSnapshot = {
   hasVoted: false,
   myVote: null,
   noEliminationVoteCount: 0,
+  serverNow: 0,
   votesRevealed: false,
   nightHistory: [],
   lastNightDeaths: [{ playerId: "x", name: "Bình" }],

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChatMessage, RoomSnapshot, SocketError } from "@masoi/shared";
 import { CLIENT_EVENTS } from "@masoi/shared";
+import { recordServerTime } from "./clock";
 import { getIdentity, type Identity } from "./identity";
 import { attachRoomSocketSession } from "./room-socket-session";
 import { getSocket } from "./socket";
@@ -41,6 +42,9 @@ export function useRoomSocket(code: string) {
       setState((s) => ({ ...s, error: e.message }));
 
     const onSnapshot = (snap: RoomSnapshot) => {
+      // Đo độ lệch đồng hồ ngay khi gói vừa tới, trước cả setState: mọi ms trôi
+      // qua sau đó đều bị tính nhầm thành độ lệch.
+      recordServerTime(snap.serverNow);
       setState((s) => ({ ...s, snapshot: snap, messages: snap.chatLog, error: null }));
     };
 

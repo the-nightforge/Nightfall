@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { serverNow } from "@/lib/clock";
 
 function fmt(msLeft: number): string {
   const s = Math.max(0, Math.ceil(msLeft / 1000));
@@ -8,12 +9,17 @@ function fmt(msLeft: number): string {
   return `${String(m).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
-/** Đồng hồ đếm ngược từ timestamp server, không tự tính logic game. */
+/**
+ * Đồng hồ đếm ngược từ timestamp server, không tự tính logic game.
+ *
+ * Mốc so sánh là serverNow() chứ không phải Date.now(): endsAt là giờ server,
+ * còn đồng hồ máy người chơi có thể lệch hàng chục giây.
+ */
 export function Timer({ endsAt }: { endsAt: number | null }) {
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => serverNow());
 
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 500);
+    const t = setInterval(() => setNow(serverNow()), 500);
     return () => clearInterval(t);
   }, []);
 

@@ -39,6 +39,7 @@ function trialView(over: Partial<RoomSnapshot> = {}): RoomSnapshot {
     hasVoted: true,
     myVote: "s",
     noEliminationVoteCount: 0,
+    serverNow: 0,
     discussionSkip: null,
     votesRevealed: true,
     nightHistory: [],

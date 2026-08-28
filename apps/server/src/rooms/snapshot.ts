@@ -148,6 +148,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
     config: room.config,
     round: gameView?.round ?? 0,
     phaseEndsAt: gameView ? gameView.phaseEndsAt : null,
+    serverNow: Date.now(),
     you: member
       ? {
           id: member.playerId,
