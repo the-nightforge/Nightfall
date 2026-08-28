@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { MAX_PLAYERS_PER_ROOM } from "@masoi/shared";
 import { AVATAR_IDS, AVATAR_PATHS } from "./avatar-art";
-import { assignAvatars, tintFor } from "./avatar";
+import { assignAvatars, breathOffsetFor, tintFor } from "./avatar";
 
 const ids = (count: number) => Array.from({ length: count }, (_, i) => `player-${i}`);
 
@@ -61,5 +61,29 @@ describe("tintFor", () => {
 
   it("không phải ai cũng chung một sắc nền", () => {
     assert.ok(new Set(ids(12).map(tintFor)).size > 1);
+  });
+});
+
+describe("breathOffsetFor", () => {
+  it("luôn nằm trong 0..1 vì CSS nhân thẳng với một chu kỳ", () => {
+    for (const id of ids(MAX_PLAYERS_PER_ROOM)) {
+      const offset = breathOffsetFor(id);
+      assert.ok(offset >= 0 && offset < 1, `${id}: ${offset}`);
+    }
+  });
+
+  it("cùng id luôn ra cùng nhịp, nên nhịp thở không nhảy khi render lại", () => {
+    assert.equal(breathOffsetFor("player-3"), breathOffsetFor("player-3"));
+  });
+
+  it("cả phòng đầy không ai trùng nhịp: trùng là thấy rõ hai ô phập phồng y hệt", () => {
+    const offsets = ids(MAX_PLAYERS_PER_ROOM).map(breathOffsetFor);
+    assert.equal(new Set(offsets).size, MAX_PLAYERS_PER_ROOM);
+  });
+
+  it("trải đều chứ không dồn một góc chu kỳ", () => {
+    const offsets = ids(MAX_PLAYERS_PER_ROOM).map(breathOffsetFor);
+    assert.ok(Math.min(...offsets) < 0.35, `min ${Math.min(...offsets)}`);
+    assert.ok(Math.max(...offsets) > 0.65, `max ${Math.max(...offsets)}`);
   });
 });

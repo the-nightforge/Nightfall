@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { MIN_PLAYERS_TO_START, ROLE_META, type RoomSnapshot } from "@masoi/shared";
-import { assignAvatars, tintFor } from "@/lib/avatar";
+import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { roleLabel } from "@/lib/cursed";
 import { Avatar } from "./Avatar";
 
@@ -57,6 +57,7 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                   avatar={avatars[player.id]}
                   tint={tintFor(player.id)}
                   alive={player.alive}
+                  breathOffset={breathOffsetFor(player.id)}
                   className="h-8 w-8"
                 />
                 {!player.alive && (

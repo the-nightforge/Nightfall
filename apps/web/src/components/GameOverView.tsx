@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { m } from "motion/react";
 import { ROLE_META, type PlayerView, type RoomSnapshot, type Team } from "@masoi/shared";
 import type { AvatarId } from "@/lib/avatar-art";
-import { assignAvatars, tintFor } from "@/lib/avatar";
+import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { roleLabel } from "@/lib/cursed";
 import { Avatar } from "./Avatar";
 import { HunterShotTimeline } from "./HunterShotTimeline";
@@ -71,6 +71,7 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
                 avatar={avatars[player.id]}
                 tint={tintFor(player.id)}
                 alive
+                breathOffset={breathOffsetFor(player.id)}
                 className={`mx-auto h-12 w-12 ring-1 ${
                   wolvesWin ? "ring-blood-500/50" : "ring-emerald-500/50"
                 }`}
@@ -173,6 +174,7 @@ function TeamPanel({
                 avatar={avatars[player.id]}
                 tint={tintFor(player.id)}
                 alive={player.alive}
+                breathOffset={breathOffsetFor(player.id)}
                 className="h-9 w-9"
               />
               {!player.alive && (

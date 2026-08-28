@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { m } from "motion/react";
 import { ROLE_META, type Role, type RoomSnapshot } from "@masoi/shared";
 import { myCursedNote } from "@/lib/cursed";
 
@@ -49,18 +50,45 @@ export function RoleRevealView({ snapshot }: { snapshot: RoomSnapshot }) {
 
   return (
     <div className="space-y-4">
-      {!revealed ? (
-        <button
-          onClick={() => setRevealed(true)}
-          className="w-full rounded-2xl border-2 border-night-600 bg-night-800 py-16 text-center transition hover:border-blood-500"
+      {/*
+        * Lật thẻ chứ không đổi thẻ.
+        *
+        * Hai mặt xếp chồng trong cùng MỘT ô lưới, nên khung cao bằng mặt cao
+        * hơn và không nhảy giữa chừng lúc lật. Đây là khoảnh khắc duy nhất
+        * trong ván mà người chơi nhận thông tin không ai khác có, nên nó đáng
+        * một nhịp riêng thay vì thay nội dung phắt một cái.
+        */}
+      <div className="grid [perspective:1200px]">
+        <m.div
+          className="col-start-1 row-start-1 grid [transform-style:preserve-3d]"
+          initial={false}
+          animate={{ rotateY: revealed ? 180 : 0 }}
+          transition={{ duration: 0.62, ease: [0.32, 0.72, 0.24, 1] }}
         >
-          <div className="text-5xl">🌙</div>
-          <p className="mt-3 font-semibold text-white">Chạm để xem vai trò của bạn</p>
-          <p className="text-sm text-mist/60">Không ai khác được nhìn thấy</p>
-        </button>
-      ) : (
+          <button
+            onClick={() => setRevealed(true)}
+            // pointer-events phải tắt tay: mặt quay lưng vẫn ăn click ở một số
+            // trình duyệt, và khi đó thẻ đã lật vẫn bị mặt úp chặn mất.
+            className={`col-start-1 row-start-1 w-full rounded-2xl border-2 border-night-600 bg-night-800 py-16 text-center transition [backface-visibility:hidden] hover:border-blood-500 ${
+              revealed ? "pointer-events-none" : ""
+            }`}
+          >
+            <div className="text-5xl">🌙</div>
+            <p className="mt-3 font-semibold text-white">Chạm để xem vai trò của bạn</p>
+            <p className="text-sm text-mist/60">Không ai khác được nhìn thấy</p>
+          </button>
+          <div
+            className={`col-start-1 row-start-1 [backface-visibility:hidden] [transform:rotateY(180deg)] ${
+              revealed ? "" : "pointer-events-none"
+            }`}
+          >
+            <RoleCard role={role} />
+          </div>
+        </m.div>
+      </div>
+
+      {revealed && (
         <>
-          <RoleCard role={role} />
           <CursedNote snapshot={snapshot} />
           {role === "WEREWOLF" && (
             <div className="card">

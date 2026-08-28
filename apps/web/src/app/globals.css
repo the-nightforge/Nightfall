@@ -33,10 +33,99 @@ body {
   opacity: 1;
 }
 
+/*
+ * Màn quét khi đổi không khí.
+ *
+ * Dải sáng chạy ngang một lần rồi tự gỡ. Nằm trên các lớp nền nhưng vẫn dưới
+ * nội dung, nên nó lướt qua SAU lưng thẻ bài - card đang backdrop-blur nên ánh
+ * sáng vẫn thấm qua, đủ để mắt bắt được là sân khấu vừa đổi.
+ */
+.backdrop-sweep {
+  position: absolute;
+  /* Tràn ra ngoài khung để hai đầu dải không bao giờ lộ mép. */
+  inset: -25% -60%;
+  z-index: 1;
+  opacity: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    var(--sweep-color, rgba(157, 178, 213, 0.16)) 50%,
+    transparent 62%
+  );
+  animation: backdrop-sweep 1000ms cubic-bezier(0.36, 0, 0.18, 1);
+}
+
+@keyframes backdrop-sweep {
+  from {
+    transform: translate3d(-85%, 0, 0);
+    opacity: 0;
+  }
+  22% {
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(85%, 0, 0);
+    opacity: 0;
+  }
+}
+
+/* Màu dải lấy theo không khí SẮP tới, không phải cái vừa rời đi. */
+.backdrop-sweep-dusk {
+  --sweep-color: rgba(180, 108, 60, 0.16);
+}
+.backdrop-sweep-night {
+  --sweep-color: rgba(120, 150, 220, 0.2);
+}
+.backdrop-sweep-dawn {
+  --sweep-color: rgba(226, 132, 74, 0.24);
+}
+.backdrop-sweep-day {
+  --sweep-color: rgba(226, 214, 180, 0.22);
+}
+.backdrop-sweep-trial {
+  --sweep-color: rgba(185, 28, 51, 0.24);
+}
+.backdrop-sweep-over {
+  --sweep-color: rgba(56, 92, 104, 0.18);
+}
+
+/*
+ * Nhịp thở của ảnh đại diện người còn sống.
+ *
+ * Biên độ cố ý nhỏ tới mức không nhìn thẳng thì không thấy: nó chỉ để cả bàn
+ * không đứng chết cứng. To hơn là lộ ngay ra rằng đây là icon phẳng chứ không
+ * phải nhân vật.
+ *
+ * --breath-offset là một số 0..1 riêng của từng người; nhân với âm một chu kỳ
+ * thì mỗi ảnh vào giữa nhịp ở một chỗ khác nhau. Thiếu nó thì cả 15 ô phồng
+ * xẹp cùng lúc - đúng cái nhịp máy móc mà nó định tránh.
+ */
+.avatar-breathe {
+  animation: avatar-breathe 4.2s ease-in-out infinite;
+  animation-delay: calc(var(--breath-offset, 0) * -4.2s);
+}
+
+@keyframes avatar-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-1.5px) scale(1.022);
+  }
+}
+
 /* Chuyển pha là thông tin, không phải trang trí: mất hiệu ứng thì đổi ngay. */
 @media (prefers-reduced-motion: reduce) {
   .backdrop-layer {
     transition: none;
+  }
+
+  /* Nhịp thở không mang tin gì cả, tắt là xong. Màn quét thì Backdrop tự chặn
+   * từ đầu chứ không dựng rồi giấu - dựng rồi giấu thì animationend không bao
+   * giờ chạy và phần tử nằm lại vĩnh viễn. */
+  .avatar-breathe {
+    animation: none;
   }
 }
 

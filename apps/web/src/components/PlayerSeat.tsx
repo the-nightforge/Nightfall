@@ -3,6 +3,7 @@
 import { AnimatePresence, m } from "motion/react";
 import { ROLE_META, type PlayerView } from "@masoi/shared";
 import { roleLabel } from "@/lib/cursed";
+import { breathOffsetFor } from "@/lib/avatar";
 import type { AvatarId } from "@/lib/avatar-art";
 import { Avatar } from "./Avatar";
 
@@ -54,10 +55,19 @@ export function PlayerSeat({
       type="button"
       disabled={disabled}
       onClick={onSelect}
-      // Chỉ scale, không layout: lưới này render lại theo từng lá phiếu, và
+      /*
+       * initial={false} nên ô vào thẳng tư thế của mình, không diễn lại cú đổ.
+       * Mở phòng giữa ván thì người đã chết từ vòng trước phải nằm sẵn nghiêng
+       * ở đó, chỉ ai chết NGAY BÂY GIỜ mới đổ xuống trước mắt.
+       */
+      initial={false}
+      animate={{ rotate: dead ? -6 : 0, y: dead ? 5 : 0, scale: dead ? 0.97 : 1 }}
+      // Chỉ transform, không layout: lưới này render lại theo từng lá phiếu, và
       // layout animation trên 15 ô cùng lúc là chỗ giật đầu tiên trên máy yếu.
       whileTap={disabled ? undefined : { scale: 0.96 }}
-      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+      // Damping thấp hơn phần còn lại để có một nhịp nảy nhẹ lúc chạm đáy: chết
+      // là biến cố nặng nhất trong lưới này, nó được phép chiếm lấy con mắt.
+      transition={{ type: "spring", stiffness: 260, damping: 17 }}
       className={`relative flex flex-col items-center gap-1.5 rounded-xl border px-1.5 pb-2 pt-2.5 transition-colors
         ${frame}
         ${!disabled ? "cursor-pointer hover:border-blood-500/80" : "cursor-default"}`}
@@ -78,12 +88,29 @@ export function PlayerSeat({
       </AnimatePresence>
 
       <span className="relative">
-        <Avatar avatar={avatar} tint={tint} alive={player.alive} className="h-12 w-12" />
+        <Avatar
+          avatar={avatar}
+          tint={tint}
+          alive={player.alive}
+          breathOffset={breathOffsetFor(player.id)}
+          className="h-12 w-12"
+        />
         {dead && (
           // Gạch chéo vắt qua chân dung: chỉ làm mờ thì ở lưới 3 cột trên điện
           // thoại rất dễ nhìn nhầm thành ô chưa tải xong.
           <span className="pointer-events-none absolute inset-0 grid place-items-center">
-            <span className="h-[1.5px] w-10 rotate-45 rounded bg-blood-500/70" />
+            {/* Vạch kẻ từ trái sang, hơi trễ hơn cú đổ để đọc ra thành hai
+              * nhịp: ô đổ xuống trước, dấu gạch đóng lại sau.
+              *
+              * initial phải khai tường minh: nút cha đặt initial={false} và
+              * MotionContext truyền cờ đó xuống mọi con, kể cả con mới gắn vào
+              * sau - thiếu dòng này thì vạch kẻ hiện phắt ra, không kẻ. */}
+            <m.span
+              className="h-[1.5px] w-10 origin-left rotate-45 rounded bg-blood-500/70"
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: 1 }}
+              transition={{ duration: 0.24, delay: 0.12, ease: "easeOut" }}
+            />
           </span>
         )}
       </span>

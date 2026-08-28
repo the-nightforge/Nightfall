@@ -7,6 +7,8 @@ interface Props {
   tint: string;
   alive: boolean;
   className?: string;
+  /** Độ lệch nhịp thở 0..1, lấy từ breathOffsetFor. Xem .avatar-breathe. */
+  breathOffset?: number;
 }
 
 /**

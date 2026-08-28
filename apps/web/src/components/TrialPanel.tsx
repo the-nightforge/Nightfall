@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
-import { assignAvatars, tintFor } from "@/lib/avatar";
+import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { Avatar } from "./Avatar";
 import { VoteHistoryPanel } from "./VoteHistoryPanel";
 
@@ -42,6 +42,7 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
             avatar={avatars[trial.accusedId]}
             tint={tintFor(trial.accusedId)}
             alive
+            breathOffset={breathOffsetFor(trial.accusedId)}
             className="h-20 w-20 ring-2 ring-amber-500/50"
           />
           <h3 className="font-display text-3xl font-bold text-white">{trial.accusedName}</h3>

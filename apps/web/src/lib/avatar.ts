@@ -72,3 +72,16 @@ export function tintFor(playerId: string): string {
   // người trùng hình rất dễ trùng luôn cả sắc nền.
   return TINTS[(hash(playerId) >>> 8) % TINTS.length];
 }
+
+/**
+ * Độ lệch nhịp thở của từng người, 0..1.
+ *
+ * Trả về phân số chứ không trả về mili giây: chu kỳ khai báo trong .avatar-breathe
+ * và chỉ ở đó, nên đổi chu kỳ không kéo theo phải sửa file này.
+ *
+ * Xoay bit khác hai hàm trên: trùng hình đã hiếm, mà trùng cả hình lẫn nhịp thở
+ * thì hai ô cạnh nhau phập phồng y hệt nhau, nhìn ra ngay.
+ */
+export function breathOffsetFor(playerId: string): number {
+  return ((hash(playerId) >>> 16) % 1000) / 1000;
+}
