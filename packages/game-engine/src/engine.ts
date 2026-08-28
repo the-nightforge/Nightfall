@@ -4,6 +4,7 @@ import {
   ROLE_REVEAL_MS,
   ROLE_META,
   roleTeam,
+  type DayVoteRecap,
   type GamePhase,
   type HunterShotRecap,
   type HunterShotView,
@@ -86,6 +87,7 @@ export interface PlayerGameView {
   lastTrial: TrialRecap | null;
   hunterShotInfo: HunterShotView | null;
   hunterShots: HunterShotRecap[];
+  dayVoteHistory: DayVoteRecap[];
   log: string[];
 }
 
@@ -581,6 +583,7 @@ export class GameEngine {
     st.lastEliminated = null;
     st.lastTrial = null;
 
+    let outcome: NominationOutcome;
     if (uniqueLeader && leader.type === "PLAYER") {
       const accused = this.player(leader.targetId);
       if (accused && accused.alive) {
@@ -588,7 +591,9 @@ export class GameEngine {
         st.log.push(`${accused.name} bị đưa ra biện hộ.`);
         st.phase = "DEFENSE";
         st.phaseEndsAt = now + defenseMs;
-        return { kind: "TRIAL", accusedId: accused.id };
+        outcome = { kind: "TRIAL", accusedId: accused.id };
+        this.recordDayVoteRecap(outcome);
+        return outcome;
       }
     }
 
@@ -604,7 +609,27 @@ export class GameEngine {
     );
     st.phase = "ELIMINATION";
     st.phaseEndsAt = now + RESULT_MS;
-    return { kind: "NONE", reason };
+    outcome = { kind: "NONE", reason };
+    this.recordDayVoteRecap(outcome);
+    return outcome;
+  }
+
+  private recordDayVoteRecap(outcome: NominationOutcome): void {
+    const st = this.state;
+    st.dayVoteHistory.push({
+      round: st.round,
+      mutations: st.voteMutations.map((mutation) => ({
+        ...mutation,
+        previousChoice: mutation.previousChoice && { ...mutation.previousChoice },
+        choice: { ...mutation.choice },
+      })),
+      finalBallots: Object.entries(st.votes).map(([voterId, targetId]) => ({
+        voterId,
+        choice: targetId === null ? { type: "NO_ELIMINATION" } : { type: "PLAYER", targetId },
+      })),
+      nomination: { ...outcome },
+      finalJudgment: null,
+    });
   }
 
   // ---- Phiên toà: biện hộ và bỏ phiếu xác nhận ----
@@ -680,6 +705,20 @@ export class GameEngine {
     // Nhân đôi thay vì chia đôi: eligible lẻ sẽ đưa số thực vào một phép so sánh
     // quyết định ai sống ai chết. Phiếu trắng vì thế tính là Tha.
     const lynched = eligible > 0 && guilty * 2 > eligible && accused.alive;
+
+    const recap = [...st.dayVoteHistory].reverse().find((item) => item.round === st.round);
+    if (recap) {
+      recap.finalJudgment = {
+        ballots: this.finalVoters().flatMap((voter) => {
+          const guiltyVote = trial.finalVotes[voter.id];
+          return guiltyVote === undefined ? [] : [{ voterId: voter.id, guilty: guiltyVote }];
+        }),
+        guilty,
+        innocent,
+        abstain,
+        lynched,
+      };
+    }
 
     let eliminated: PublicDeath | null = null;
     if (lynched) {
@@ -931,6 +970,23 @@ export class GameEngine {
       lastNightDeaths: st.phase === "NIGHT_RESULT" || st.phase === "DAY_DISCUSSION" ? st.lastNightDeaths : [],
       nightHistory: st.phase === "GAME_OVER" ? st.nightHistory : [],
       hunterShots: st.phase === "GAME_OVER" ? st.hunterShots : [],
+      dayVoteHistory: st.dayVoteHistory.map((recap) => ({
+        ...recap,
+        mutations: recap.mutations.map((mutation) => ({
+          ...mutation,
+          previousChoice: mutation.previousChoice && { ...mutation.previousChoice },
+          choice: { ...mutation.choice },
+        })),
+        finalBallots: recap.finalBallots.map((ballot) => ({
+          ...ballot,
+          choice: { ...ballot.choice },
+        })),
+        nomination: { ...recap.nomination },
+        finalJudgment: recap.finalJudgment && {
+          ...recap.finalJudgment,
+          ballots: recap.finalJudgment.ballots.map((ballot) => ({ ...ballot })),
+        },
+      })),
       lastEliminated: st.phase === "ELIMINATION" || st.phase === "CHECK_WIN" ? st.lastEliminated : null,
       log: st.log.slice(-10),
     };

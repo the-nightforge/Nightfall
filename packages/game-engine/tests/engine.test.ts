@@ -33,6 +33,14 @@ function votingEngine() {
   return engine;
 }
 
+function trialEngine() {
+  const engine = votingEngine();
+  engine.submitVote("p1", "p3", 10_000);
+  engine.submitVote("p2", "p3", 11_000);
+  engine.resolveNomination(25_000, 30_000);
+  return engine;
+}
+
 /** Đưa phiên toà đi hết một lượt với mọi cử tri hợp lệ bỏ phiếu Treo. */
 function convict(engine: GameEngine) {
   engine.beginFinalVote(20_000);
@@ -703,6 +711,45 @@ describe("Bỏ phiếu", () => {
     const view = e.snapshotFor("p1");
     expect(view.players.every((player) => player.voteCount === 0)).toBe(true);
     expect(view.noEliminationVoteCount).toBe(2);
+  });
+
+  it("ẩn danh tính phiếu khi đang vote và công khai recap sau khi chốt", () => {
+    const e = votingEngine();
+    e.submitVote("p1", "p3", 10_000);
+    e.submitVote("p2", "p3", 11_000);
+    expect(e.snapshotFor("p1").dayVoteHistory).toEqual([]);
+
+    e.resolveNomination(25_000, 30_000);
+    const recap = e.snapshotFor("p1").dayVoteHistory.at(-1)!;
+    expect(recap.finalBallots).toEqual([
+      { voterId: "p1", choice: { type: "PLAYER", targetId: "p3" } },
+      { voterId: "p2", choice: { type: "PLAYER", targetId: "p3" } },
+    ]);
+    expect(JSON.stringify(recap)).not.toContain("WEREWOLF");
+    expect(JSON.stringify(recap)).not.toContain("VILLAGER");
+  });
+
+  it("bổ sung danh tính phiếu Treo/Tha sau final judgment", () => {
+    const e = trialEngine();
+    e.beginFinalVote(20_000, 40_000);
+    e.submitFinalVote("p1", true);
+    e.submitFinalVote("p2", false);
+    e.resolveFinalVote(60_000);
+    expect(e.snapshotFor("p1").dayVoteHistory.at(-1)?.finalJudgment?.ballots).toEqual([
+      { voterId: "p1", guilty: true },
+      { voterId: "p2", guilty: false },
+    ]);
+  });
+
+  it("snapshot trả bản sao sâu của recap để client không sửa state authoritative", () => {
+    const e = trialEngine();
+    const snapshot = e.snapshotFor("p1");
+    snapshot.dayVoteHistory[0]!.finalBallots[0]!.choice = { type: "NO_ELIMINATION" };
+
+    expect(e.snapshotFor("p1").dayVoteHistory[0]!.finalBallots[0]).toEqual({
+      voterId: "p1",
+      choice: { type: "PLAYER", targetId: "p3" },
+    });
   });
 });
 

@@ -217,6 +217,8 @@ export interface RoomSnapshot {
   /** Đồng thuận kết thúc thảo luận sớm; chỉ có trong DAY_DISCUSSION. */
   discussionSkip: DiscussionSkipView | null;
   votesRevealed: boolean;
+  /** Lịch sử phiếu ban ngày đã chốt; không bao giờ chứa danh tính phiếu đang mở. */
+  dayVoteHistory: DayVoteRecap[];
   /** Toàn bộ diễn biến đêm; chỉ có dữ liệu ở GAME_OVER. */
   nightHistory: NightRecap[];
   hunterShots: HunterShotRecap[];
