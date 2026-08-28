@@ -188,17 +188,26 @@ describe("lời nói", () => {
     const spoken = runSelfPlay({ seed: "no-influence", speech: true });
     const silent = runSelfPlay({ seed: "no-influence", speech: false });
 
-    const votesOf = (game: SelfPlayGame) =>
-      game.events
-        .filter((item) => item.kind === "VOTE")
-        .map((item) => `${item.round}:${item.voterId}:${item.targetId}`);
+    /**
+     * Lá phiếu ĐẦU TIÊN của mỗi người ở vòng 1.
+     *
+     * Đó là lúc chưa ai kịp nghe ai, nên nó phải trùng khít bất kể có lời nói
+     * hay không. Từ lượt cân nhắc lại trở đi, lời nói ĐƯỢC PHÉP ảnh hưởng -
+     * nhưng qua `chat-analysis`, tức qua BẰNG CHỨNG được ghi vào belief, chứ
+     * không phải qua việc ghi đè một nước đi đã chốt. Hai đường đó khác nhau về
+     * bản chất, và chỉ đường thứ hai mới là vi phạm.
+     */
+    const firstBallots = (game: SelfPlayGame) => {
+      const seen = new Map<string, string>();
+      for (const item of game.events) {
+        if (item.kind !== "VOTE" || item.round !== 1) continue;
+        if (seen.has(item.voterId)) continue;
+        seen.set(item.voterId, `${item.voterId}:${item.targetId}`);
+      }
+      return [...seen.values()].sort();
+    };
 
-    // Vòng ĐẦU TIÊN chưa ai kịp nghe ai, nên phiếu phải trùng khít. Từ vòng sau
-    // thì lời nói được phép ảnh hưởng - qua chat-analysis, tức qua BẰNG CHỨNG,
-    // chứ không phải qua việc ghi đè một nước đi đã chốt.
-    const firstRound = (game: SelfPlayGame) =>
-      votesOf(game).filter((item) => item.startsWith("1:"));
-    expect(firstRound(spoken)).toEqual(firstRound(silent));
+    expect(firstBallots(spoken)).toEqual(firstBallots(silent));
   });
 
   it("template chỉ nêu lại ý định, không thêm thông tin", () => {

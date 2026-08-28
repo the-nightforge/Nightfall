@@ -505,42 +505,48 @@ describe("v1 là mốc so sánh đóng băng", () => {
    * "sai giống hệt nhau ở cả hai lần chạy". Đó là thứ đã chứng minh việc gom
    * trọng số ở Task 1 là refactor thuần (0 dòng khác biệt trước/sau).
    *
-   * **Đã ghim lại một lần ở Task 3, có chủ đích.** Task 3 cho `GameEngine.create`
-   * nhận `rng`, nên harness bỏ được mẹo "sort rồi xáo lại" và ánh xạ
-   * seed → phân vai thay đổi. Đổi ở đây là ở tầng DỰNG VÁN, không phải ở lõi
-   * quyết định: không dòng nào trong `bot/decision`, `bot/roles` hay `bot/belief`
-   * bị chạm, và 480 test còn lại - gồm 100 seed của `bot-scenario` - vẫn xanh
-   * qua đúng lần đổi đó. Tỉ lệ Sói thắng giữ nguyên 23/24.
+   * **Đã ghim lại hai lần, cả hai đều ở tầng HARNESS chứ không phải lõi quyết
+   * định.** Không lần nào chạm vào `bot/decision`, `bot/roles` hay `bot/belief`,
+   * và mỗi lần đều có ~500 test còn lại - gồm 100 seed của `bot-scenario` - xanh
+   * xuyên qua để chứng minh lõi không đổi:
+   *
+   * 1. Task 3 cho `GameEngine.create` nhận `rng`, nên harness bỏ được mẹo "sort
+   *    rồi xáo lại"; ánh xạ seed → phân vai vì thế thay đổi.
+   * 2. Task 5 thêm LƯỢT CÂN NHẮC LẠI. Không có nó, mỗi BOT bỏ đúng một lá phiếu
+   *    mỗi vòng và không bao giờ đổi ý - tức `myVote`, `voteHysteresis` và nhánh
+   *    "giữ mục tiêu cũ" chưa từng chạy trong mô phỏng. Phase 1 dựng quyền đổi
+   *    phiếu rồi không ván nào kiểm nó, và chỉ số "tỉ lệ đổi phiếu" luôn bằng 0
+   *    vì lý do cấu trúc chứ không phải vì hành vi.
    *
    * Task 8 sẽ đổi `DEFAULT_BOT_WEIGHTS` sang v2. Khẳng định dưới đây neo vào
    * `BOT_WEIGHTS_V1` một cách tường minh, nên nó vẫn phải xanh sau lần đổi đó.
    * Nếu nó đỏ, nghĩa là một thay đổi đã âm thầm chạm vào cái mốc.
    */
   const V1_FINGERPRINT = [
-    "golden-0 wolves 5 50",
-    "golden-1 wolves 5 48",
-    "golden-2 wolves 4 48",
-    "golden-3 wolves 3 31",
-    "golden-4 wolves 6 72",
-    "golden-5 wolves 3 37",
-    "golden-6 wolves 3 36",
-    "golden-7 wolves 4 50",
-    "golden-8 wolves 3 35",
-    "golden-9 wolves 4 46",
-    "golden-10 wolves 5 52",
-    "golden-11 wolves 4 41",
-    "golden-12 wolves 4 48",
-    "golden-13 wolves 4 36",
-    "golden-14 wolves 7 63",
-    "golden-15 wolves 4 48",
-    "golden-16 village 4 48",
-    "golden-17 wolves 4 50",
-    "golden-18 wolves 4 55",
-    "golden-19 wolves 3 34",
-    "golden-20 wolves 5 55",
-    "golden-21 wolves 5 59",
-    "golden-22 wolves 3 35",
-    "golden-23 wolves 3 35",
+    "golden-0 village 5 66",
+    "golden-1 wolves 5 58",
+    "golden-2 wolves 4 46",
+    "golden-3 wolves 4 65",
+    "golden-4 wolves 5 67",
+    "golden-5 wolves 3 40",
+    "golden-6 wolves 3 49",
+    "golden-7 wolves 4 64",
+    "golden-8 wolves 3 45",
+    "golden-9 wolves 3 44",
+    "golden-10 wolves 3 39",
+    "golden-11 wolves 4 63",
+    "golden-12 wolves 4 59",
+    "golden-13 village 3 44",
+    "golden-14 wolves 2 35",
+    "golden-15 village 5 69",
+    "golden-16 wolves 3 41",
+    "golden-17 wolves 4 66",
+    "golden-18 wolves 3 55",
+    "golden-19 wolves 4 50",
+    "golden-20 wolves 3 42",
+    "golden-21 wolves 3 51",
+    "golden-22 wolves 4 51",
+    "golden-23 wolves 4 44",
   ];
 
   it("tái lập chính xác cấu hình v1 trên 24 ván", () => {
@@ -563,9 +569,13 @@ describe("v1 là mốc so sánh đóng băng", () => {
 
   it("v1 để Sói thắng áp đảo — đây là mốc mà Task 8 phải cải thiện", () => {
     // Ghi lại như một SỰ THẬT ĐO ĐƯỢC, không phải một mục tiêu. Test cân bằng
-    // của Phase 2 chỉ đòi mỗi phe thắng ít nhất một ván, nên 23/24 vẫn lọt qua.
+    // của Phase 2 chỉ đòi mỗi phe thắng ít nhất một ván, nên 21/24 vẫn lọt qua.
+    //
+    // Lượt cân nhắc lại (Task 5) đã kéo từ 23/24 xuống 21/24: cho làng nhìn
+    // bảng kiểm phiếu rồi quyết lại giúp được một chút, nhưng không giải quyết
+    // được vấn đề. Đó là việc của Task 8.
     const wolfWins = V1_FINGERPRINT.filter((line) => line.includes("wolves")).length;
-    expect(wolfWins).toBe(23);
+    expect(wolfWins).toBe(21);
   });
 });
 

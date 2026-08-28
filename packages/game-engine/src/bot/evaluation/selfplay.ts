@@ -290,6 +290,36 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     });
   };
 
+  /**
+   * Nộp một lá phiếu, ghi lại việc nó có phải là một lần ĐỔI Ý hay không.
+   *
+   * `engine.submitVote` là no-op khi gửi lại đúng lựa chọn cũ, nên chỗ này lọc
+   * trước để log không đầy những "lá phiếu" chưa từng tồn tại.
+   */
+  const castVote = (
+    playerId: string,
+    vote: { choice: { type: string; targetId?: string }; evidence: BotEvidence[] },
+  ): void => {
+    const targetId = vote.choice.type === "PLAYER" ? vote.choice.targetId ?? null : null;
+    const previous = engine.state.votes[playerId];
+    if (previous !== undefined && previous === targetId) return;
+
+    try {
+      engine.submitVote(playerId, targetId, tick(10));
+      actions += 1;
+      log.push({
+        kind: "VOTE",
+        round: engine.state.round,
+        voterId: playerId,
+        targetId,
+        changed: previous !== undefined,
+        evidence: vote.evidence.map((item) => ({ round: item.round, kind: item.kind })),
+      });
+    } catch (error) {
+      reportRejected(playerId, `phiếu bất hợp lệ: ${String(error)}`);
+    }
+  };
+
   const recordDeaths = (deaths: ReadonlyArray<{ playerId: string; cause?: string }>): void => {
     for (const death of deaths) {
       log.push({
@@ -407,25 +437,9 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       const context = contextFor(player.id);
       const before = engine.state.votes[player.id];
       const vote = runtime.decideVote(context);
+      void before;
 
-      try {
-        engine.submitVote(
-          player.id,
-          vote.choice.type === "PLAYER" ? vote.choice.targetId : null,
-          tick(10),
-        );
-        actions += 1;
-        log.push({
-          kind: "VOTE",
-          round: engine.state.round,
-          voterId: player.id,
-          targetId: vote.choice.type === "PLAYER" ? vote.choice.targetId : null,
-          changed: before !== undefined,
-          evidence: vote.evidence.map((item) => ({ round: item.round, kind: item.kind })),
-        });
-      } catch (error) {
-        reportRejected(player.id, `phiếu bất hợp lệ: ${String(error)}`);
-      }
+      castVote(player.id, vote);
 
       if (!record.speech) continue;
 
@@ -469,6 +483,22 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     // Đẩy vào chat chung SAU vòng lặp: trong một pha thảo luận thật, không ai
     // nghe được câu của người nói sau mình rồi mới quyết định.
     chat.push(...spoken);
+
+    // ---- LƯỢT CÂN NHẮC LẠI ----
+    //
+    // Không có lượt này, mỗi BOT bỏ đúng một lá phiếu mỗi vòng và KHÔNG BAO GIỜ
+    // đổi ý. Hậu quả không chỉ là một chỉ số bằng 0: cả `myVote`, `voteHysteresis`
+    // và nhánh "giữ mục tiêu cũ" trong `selectVote` chưa từng chạy trong mô
+    // phỏng, tức Phase 1 đã dựng quyền đổi phiếu rồi không ván nào kiểm nó.
+    //
+    // Ở đây BOT thấy bảng kiểm phiếu sơ bộ và những câu vừa nói, rồi quyết lại.
+    // Đổi phiếu là hành vi THẬT của người chơi, không phải nhiễu thêm vào.
+    for (const player of engine.alivePlayers()) {
+      const runtime = runtimes.get(player.id)!;
+      const context = contextFor(player.id);
+      runtime.observe(context);
+      castVote(player.id, runtime.decideVote(context));
+    }
 
     const outcome = engine.resolveNomination(config.defenseSeconds * 1_000, tick(1_000));
     log.push({
