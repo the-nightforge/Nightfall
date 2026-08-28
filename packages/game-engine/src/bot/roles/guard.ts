@@ -1,15 +1,18 @@
+import type { Role } from "@masoi/shared";
 import { incomingHostilityOf } from "../analysis/social-analysis";
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
 
 /**
- * Ngưỡng thù địch mà trên đó Bảo Vệ coi chính mình là mục tiêu đêm nay.
+ * Bảo Vệ đỡ người đáng tin nhất, và tự đỡ khi chính mình đang bị nhắm.
  *
  * Người bị cả làng công kích ban ngày là người bầy Sói cũng muốn loại - hoặc vì
  * họ nguy hiểm, hoặc vì giết họ dễ đổ tội. Khi đó tự đỡ là nước đúng.
  */
-const SELF_GUARD_HOSTILITY = 0.5;
-
-export function guardStrategy(): BotRoleStrategy {
+export function guardStrategy(
+  _role: Role = "GUARD",
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): BotRoleStrategy {
   return {
     role: "GUARD",
 
@@ -26,19 +29,24 @@ export function guardStrategy(): BotRoleStrategy {
 
       const me = context.knowledge.botId;
       const selfHostility = incomingHostilityOf(state, me);
+      const tuning = weights.selfPreservation;
 
       const scored = candidates
         .map((targetId) => {
           const trust = state.trust[targetId]?.score ?? 0;
           const suspicion = state.suspicion[targetId]?.score ?? 0;
           const selfBonus =
-            targetId === me && selfHostility >= SELF_GUARD_HOSTILITY
-              ? 60 + selfHostility * 60
+            targetId === me && selfHostility >= tuning.guardSelfHostilityThreshold
+              ? tuning.guardSelfBonusBase + selfHostility * tuning.guardSelfBonusSpan
               : 0;
           // Đỡ người mình nghi là Sói thì vừa phí lượt vừa cứu nhầm phe.
           return {
             targetId,
-            score: trust - suspicion * 0.5 + selfBonus + (rng() - 0.5) * 6,
+            score:
+              trust -
+              suspicion * tuning.guardSuspicionPenalty +
+              selfBonus +
+              (rng() - 0.5) * weights.confidence.jitterSpan,
           };
         })
         .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));
@@ -48,13 +56,15 @@ export function guardStrategy(): BotRoleStrategy {
         kind: "NIGHT_ACTION",
         action: "GUARD",
         targetId: winner.targetId,
-        confidence: 0.6,
+        confidence: weights.nightConfidence.guard,
         evidence: [
           nightEvidence(
             "DEFEND",
             context.knowledge.round,
             winner.targetId,
             winner.targetId === me ? "tự đỡ vì đang bị nhắm" : "đỡ người đáng tin nhất",
+            0,
+            weights,
           ),
         ],
       };

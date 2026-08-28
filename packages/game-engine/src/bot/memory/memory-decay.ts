@@ -1,10 +1,8 @@
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { BotBrainState } from "../types";
 
 /** Ngân sách memory thường mỗi BOT, theo giới hạn tài nguyên trong spec. */
-export const MEMORY_LIMIT = 120;
-
-/** Hệ số giảm ảnh hưởng mỗi round tuổi của một memory thường. */
-const DECAY_PER_ROUND = 0.88;
+export const MEMORY_LIMIT = DEFAULT_BOT_WEIGHTS.limits.memory;
 
 /**
  * Giảm ảnh hưởng của memory cũ rồi cắt bớt theo ngân sách.
@@ -16,12 +14,14 @@ const DECAY_PER_ROUND = 0.88;
 export function decayAndPrune(
   state: BotBrainState,
   round: number,
-  limit = MEMORY_LIMIT,
+  limit?: number,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
 ): void {
+  const budget = limit ?? weights.limits.memory;
   for (const memory of state.memories) {
     if (memory.pinned) continue;
     const age = Math.max(0, round - memory.round);
-    memory.importance = memory.importance * DECAY_PER_ROUND ** age;
+    memory.importance = memory.importance * weights.recency.memoryDecayPerRound ** age;
   }
 
   state.memories.sort((left, right) => {
@@ -34,6 +34,6 @@ export function decayAndPrune(
   // chúng không bao giờ bị bỏ - quên một lời claim là BOT tự mâu thuẫn với
   // chính điều nó đã nói.
   const pinnedCount = state.memories.filter((memory) => memory.pinned).length;
-  const keep = Math.max(pinnedCount, limit);
+  const keep = Math.max(pinnedCount, budget);
   if (state.memories.length > keep) state.memories.length = keep;
 }

@@ -1,3 +1,5 @@
+import { MAX_BELIEF_SCORE } from "../belief/evidence";
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type {
   BotBrainState,
   BotDecisionContext,
@@ -20,27 +22,11 @@ export interface BotHunterShotIntention {
   evidence: BotEvidence[];
 }
 
-/**
- * Phát bắn của Thợ Săn phải chắc hơn một lá phiếu thường.
- *
- * Phiếu đề cử còn qua được một vòng biện hộ và một phiên toà; phát bắn thì giết
- * ngay lập tức, không ai kiểm tra lại. Vì vậy ngưỡng cao hơn hẳn.
- */
-const HUNTER_MARGIN = 20;
-
 function isKnownAlly(context: BotDecisionContext, playerId: string): boolean {
   const knowledge = context.knowledge;
   const selfIsWolf = knowledge.knownRoles[knowledge.botId] === "WEREWOLF";
   return selfIsWolf && knowledge.knownRoles[playerId] === "WEREWOLF";
 }
-
-/**
- * Biên tin tưởng cần có để THA một người mà cả làng vừa đưa ra xử.
- *
- * Phải vượt nghi ngờ một khoảng rõ ràng: "không biết gì" không phải lý do để
- * tha, vì lá phiếu trắng ở đây tốn đúng một ngày của làng.
- */
-const SPARE_TRUST_MARGIN = 15;
 
 /**
  * Treo hay Tha.
@@ -64,6 +50,7 @@ export function decideFinalVote(
   context: BotDecisionContext,
   state: BotBrainState,
   rng: BotRng,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
 ): BotFinalVoteIntention {
   const accusedId = context.knowledge.trialAccusedId;
   void rng;
@@ -83,14 +70,18 @@ export function decideFinalVote(
 
   // Chỉ tin tưởng CÓ CƠ SỞ mới cứu được bị cáo. `trust` chỉ lên cao khi có
   // nguồn thật: kết quả soi, hoặc nhiều lần được người khác bênh.
-  const guilty = trust < suspicion + SPARE_TRUST_MARGIN;
+  const guilty = trust < suspicion + weights.confidence.spareTrustMargin;
 
   return {
     kind: "FINAL_VOTE",
     guilty,
-    confidence: Math.min(1, Math.abs(trust - suspicion) / 100),
+    confidence: Math.min(1, Math.abs(trust - suspicion) / MAX_BELIEF_SCORE),
     // Chỉ mang theo lý do khi thật sự kết tội; một phiếu Tha không cần bằng chứng.
-    evidence: guilty ? (entry?.reasons ?? []).slice(-3).map((item) => ({ ...item })) : [],
+    evidence: guilty
+      ? (entry?.reasons ?? [])
+          .slice(-weights.limits.intentionEvidence)
+          .map((item) => ({ ...item }))
+      : [],
   };
 }
 
@@ -105,6 +96,7 @@ export function decideHunterShot(
   context: BotDecisionContext,
   state: BotBrainState,
   rng: BotRng,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
 ): BotHunterShotIntention {
   const shot = context.knowledge.hunterShot;
   void rng;
@@ -113,7 +105,8 @@ export function decideHunterShot(
     return { kind: "HUNTER_SHOT", targetId: null, confidence: 1, evidence: [] };
   }
 
-  const threshold = voteThreshold(state.personality) + HUNTER_MARGIN;
+  const threshold =
+    voteThreshold(state.personality, weights) + weights.confidence.hunterMargin;
 
   const scored = shot.legalTargets
     .filter((id) => id !== context.knowledge.botId && !isKnownAlly(context, id))
@@ -129,9 +122,9 @@ export function decideHunterShot(
   return {
     kind: "HUNTER_SHOT",
     targetId: winner.targetId,
-    confidence: Math.min(1, winner.score / 100),
+    confidence: Math.min(1, winner.score / MAX_BELIEF_SCORE),
     evidence: (state.suspicion[winner.targetId]?.reasons ?? [])
-      .slice(-3)
+      .slice(-weights.limits.intentionEvidence)
       .map((item) => ({ ...item })),
   };
 }

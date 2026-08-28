@@ -1,8 +1,6 @@
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { BotBrainState, Coalition } from "../types";
 import { possibleWolfPairScore, socialEdgeKey } from "./social-analysis";
-
-/** Dưới mức này thì hai người chỉ là tình cờ trùng ý, không phải một phe. */
-const DEFAULT_MIN_COHESION = 0.15;
 
 function playersIn(state: BotBrainState): string[] {
   const ids = new Set<string>();
@@ -30,15 +28,17 @@ function playersIn(state: BotBrainState): string[] {
  */
 export function detectCoalitions(
   state: BotBrainState,
-  minCohesion = DEFAULT_MIN_COHESION,
+  minCohesion?: number,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
 ): Coalition[] {
+  const floor = minCohesion ?? weights.social.minCohesion;
   const players = playersIn(state);
   const pairs: Array<{ left: string; right: string; score: number }> = [];
 
   for (let i = 0; i < players.length; i += 1) {
     for (let j = i + 1; j < players.length; j += 1) {
-      const score = possibleWolfPairScore(state, players[i], players[j]);
-      if (score >= minCohesion) {
+      const score = possibleWolfPairScore(state, players[i], players[j], weights);
+      if (score >= floor) {
         pairs.push({ left: players[i], right: players[j], score });
       }
     }
@@ -60,10 +60,10 @@ export function detectCoalitions(
       if (members.includes(candidate) || assigned.has(candidate)) continue;
 
       const scores = members.map((member) =>
-        possibleWolfPairScore(state, member, candidate),
+        possibleWolfPairScore(state, member, candidate, weights),
       );
       const average = scores.reduce((sum, value) => sum + value, 0) / scores.length;
-      if (average >= minCohesion) members.push(candidate);
+      if (average >= floor) members.push(candidate);
     }
 
     members.sort();
@@ -73,7 +73,7 @@ export function detectCoalitions(
     let samples = 0;
     for (let i = 0; i < members.length; i += 1) {
       for (let j = i + 1; j < members.length; j += 1) {
-        cohesionScores.push(possibleWolfPairScore(state, members[i], members[j]));
+        cohesionScores.push(possibleWolfPairScore(state, members[i], members[j], weights));
         samples +=
           (state.relationships[socialEdgeKey(members[i], members[j])]?.samples ?? 0) +
           (state.relationships[socialEdgeKey(members[j], members[i])]?.samples ?? 0);

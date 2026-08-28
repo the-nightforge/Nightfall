@@ -1,3 +1,5 @@
+import type { Role } from "@masoi/shared";
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
 
 /**
@@ -8,11 +10,12 @@ import { nightEvidence, type BotRoleStrategy } from "./strategy";
  * nhầm thì mất một người; Linh Mục ném nhầm thì mất luôn chính mình VÀ người
  * bị ném vẫn sống. Dùng bừa là tự sát, nên mặc định là GIỮ BÌNH.
  */
-const HOLY_WATER_SUSPICION_THRESHOLD = 90;
-/** Trên mức này thì dù nghi tới đâu cũng không ném: rủi ro phản đòn quá lớn. */
-const HOLY_WATER_TRUST_VETO = 30;
+export function priestStrategy(
+  _role: Role = "PRIEST",
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): BotRoleStrategy {
+  const tuning = weights.roleThresholds;
 
-export function priestStrategy(): BotRoleStrategy {
   return {
     role: "PRIEST",
 
@@ -30,8 +33,8 @@ export function priestStrategy(): BotRoleStrategy {
         }))
         .filter(
           (item) =>
-            item.suspicion >= HOLY_WATER_SUSPICION_THRESHOLD &&
-            item.trust < HOLY_WATER_TRUST_VETO,
+            item.suspicion >= tuning.priestSuspicion &&
+            item.trust < tuning.priestTrustVeto,
         )
         .sort((a, b) => b.suspicion - a.suspicion || a.targetId.localeCompare(b.targetId));
 
@@ -42,13 +45,15 @@ export function priestStrategy(): BotRoleStrategy {
         kind: "NIGHT_ACTION",
         action: "HOLY_WATER",
         targetId: ranked[0].targetId,
-        confidence: 0.8,
+        confidence: weights.nightConfidence.priest,
         evidence: [
           nightEvidence(
             "ACCUSE",
             context.knowledge.round,
             ranked[0].targetId,
             "gần như chắc chắn là Sói nên đáng để ném Nước thánh",
+            0,
+            weights,
           ),
         ],
       };

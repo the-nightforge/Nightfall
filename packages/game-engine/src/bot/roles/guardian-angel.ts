@@ -1,4 +1,6 @@
+import type { Role } from "@masoi/shared";
 import { incomingHostilityOf } from "../analysis/social-analysis";
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
 
 /**
@@ -8,9 +10,10 @@ import { nightEvidence, type BotRoleStrategy } from "./strategy";
  * số lượt mình có. Vì vậy ngưỡng ở đây cao hơn: chỉ đỡ khi có người rõ ràng
  * đang là mục tiêu, chứ không đỡ "người đáng tin nhất" một cách chung chung.
  */
-const WORTH_A_CHARGE = 0.35;
-
-export function guardianAngelStrategy(): BotRoleStrategy {
+export function guardianAngelStrategy(
+  _role: Role = "GUARDIAN_ANGEL",
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): BotRoleStrategy {
   return {
     role: "GUARDIAN_ANGEL",
 
@@ -32,7 +35,11 @@ export function guardianAngelStrategy(): BotRoleStrategy {
           return {
             targetId,
             hostility,
-            score: trust - suspicion * 0.5 + hostility * 80 + (rng() - 0.5) * 6,
+            score:
+              trust -
+              suspicion * weights.selfPreservation.guardSuspicionPenalty +
+              hostility * weights.roleThresholds.guardianAngelHostilityBonus +
+              (rng() - 0.5) * weights.confidence.jitterSpan,
           };
         })
         .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));
@@ -41,7 +48,7 @@ export function guardianAngelStrategy(): BotRoleStrategy {
       // Không có ai đáng để tiêu một lượt thì giữ lại. Một lượt còn nguyên ở
       // đêm sau đáng giá hơn một lượt đỡ bừa đêm nay.
       const worthIt =
-        best.hostility >= WORTH_A_CHARGE ||
+        best.hostility >= weights.roleThresholds.guardianAngelWorthACharge ||
         (state.trust[best.targetId]?.score ?? 0) > 0;
       if (!worthIt) return null;
 
@@ -49,13 +56,15 @@ export function guardianAngelStrategy(): BotRoleStrategy {
         kind: "NIGHT_ACTION",
         action: "GUARDIAN_PROTECT",
         targetId: best.targetId,
-        confidence: 0.6,
+        confidence: weights.nightConfidence.guardianAngel,
         evidence: [
           nightEvidence(
             "DEFEND",
             context.knowledge.round,
             best.targetId,
             "đang bị nhắm nên đáng để tiêu một lượt hộ mệnh",
+            0,
+            weights,
           ),
         ],
       };

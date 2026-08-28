@@ -1,8 +1,6 @@
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { BeliefEntry, BotBrainState, BotEvidence, BotPersonality } from "../types";
 import { clampBeliefScore, clampConfidence, validateEvidence } from "./evidence";
-
-/** Số lý do gần nhất được giữ cho mỗi belief entry. */
-const REASON_LIMIT = 12;
 
 function neutralBelief(): BeliefEntry {
   return { score: 0, reasons: [], lastUpdatedRound: 0 };
@@ -10,27 +8,37 @@ function neutralBelief(): BeliefEntry {
 
 /**
  * Người bướng bỉnh đổi ý chậm hơn. Inertia nằm trong `[0.4625, 0.755]` với dải
- * personality hiện tại, nên nó luôn làm chậm chứ không bao giờ đảo dấu một
+ * personality mặc định, nên nó luôn làm chậm chứ không bao giờ đảo dấu một
  * update.
  */
-export function beliefInertia(personality: BotPersonality): number {
-  return 0.35 + personality.stubbornness * 0.45;
+export function beliefInertia(
+  personality: BotPersonality,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): number {
+  return (
+    weights.suspicion.inertiaBase +
+    personality.stubbornness * weights.suspicion.inertiaStubbornSpan
+  );
 }
 
 function updateBelief(
   entries: Record<string, BeliefEntry>,
   evidence: BotEvidence,
   personality: BotPersonality,
+  weights: BotWeights,
 ): void {
   const entry = entries[evidence.actorId] ?? neutralBelief();
-  const inertia = beliefInertia(personality);
-  const delta = evidence.weight * clampConfidence(evidence.confidence) * (1 - inertia * 0.5);
+  const inertia = beliefInertia(personality, weights);
+  const delta =
+    evidence.weight *
+    clampConfidence(evidence.confidence) *
+    (1 - inertia * weights.suspicion.inertiaScale);
 
   entry.score = clampBeliefScore(entry.score + delta);
   entry.reasons = [
     ...entry.reasons.filter((reason) => reason.id !== evidence.id),
     { ...evidence },
-  ].slice(-REASON_LIMIT);
+  ].slice(-weights.limits.beliefReasons);
   entry.lastUpdatedRound = evidence.round;
 
   entries[evidence.actorId] = entry;
@@ -42,11 +50,15 @@ function updateBelief(
  * Nguồn được kiểm tra trước khi chạm vào belief: một evidence hỏng phải dừng ở
  * biên chứ không được để lại nửa cập nhật.
  */
-export function applyEvidence(state: BotBrainState, evidence: BotEvidence): void {
+export function applyEvidence(
+  state: BotBrainState,
+  evidence: BotEvidence,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): void {
   validateEvidence(evidence, state.seenEventIds);
   // BOT không tự nghi chính mình; self-knowledge nằm ở knownInformation.
   if (evidence.actorId === state.playerId) return;
-  updateBelief(state.suspicion, evidence, state.personality);
+  updateBelief(state.suspicion, evidence, state.personality, weights);
 }
 
 /**
@@ -59,14 +71,28 @@ export function applyEvidence(state: BotBrainState, evidence: BotEvidence): void
  * một bằng chứng gỡ tội (weight âm) làm điều ngược lại - caller chỉ cần chọn
  * đúng dấu một lần, thay vì phải nhớ đảo dấu ở từng chỗ gọi.
  */
-export function applyTrustEvidence(state: BotBrainState, evidence: BotEvidence): void {
+export function applyTrustEvidence(
+  state: BotBrainState,
+  evidence: BotEvidence,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): void {
   validateEvidence(evidence, state.seenEventIds);
   if (evidence.actorId === state.playerId) return;
-  updateBelief(state.trust, { ...evidence, weight: -evidence.weight }, state.personality);
+  updateBelief(
+    state.trust,
+    { ...evidence, weight: -evidence.weight },
+    state.personality,
+    weights,
+  );
 }
 
-/** Mỗi vòng trôi qua, một niềm tin không được củng cố giữ lại 85% sức nặng. */
-export const BELIEF_DECAY_PER_ROUND = 0.85;
+/**
+ * Mỗi vòng trôi qua, một niềm tin không được củng cố giữ lại 85% sức nặng.
+ *
+ * Giữ lại như một hằng số đọc-chỉ vì test và tài liệu Phase 2 tham chiếu tới
+ * nó; nguồn sự thật giờ là `BotWeights.recency.beliefDecayPerRound`.
+ */
+export const BELIEF_DECAY_PER_ROUND = DEFAULT_BOT_WEIGHTS.recency.beliefDecayPerRound;
 
 /**
  * Bằng chứng KHÔNG bao giờ nguội đi.
@@ -85,13 +111,13 @@ function isPermanent(entry: BeliefEntry): boolean {
   return entry.reasons.some((reason) => PERMANENT_KINDS.has(reason.kind));
 }
 
-function decayEntry(entry: BeliefEntry, round: number): void {
+function decayEntry(entry: BeliefEntry, round: number, rate: number): void {
   if (isPermanent(entry)) return;
 
   const age = Math.max(0, round - entry.lastUpdatedRound);
   if (age === 0) return;
 
-  entry.score = clampBeliefScore(entry.score * BELIEF_DECAY_PER_ROUND ** age);
+  entry.score = clampBeliefScore(entry.score * rate ** age);
   // Ghi lại mốc để lần gọi sau không nhân tiếp phần vừa nhân. Không có dòng này
   // thì gọi decay hai lần trong cùng một vòng sẽ nguội gấp đôi, và số vòng bot
   // "quên" một nghi ngờ phụ thuộc vào việc observe được gọi mấy lần.
@@ -105,15 +131,20 @@ function decayEntry(entry: BeliefEntry, round: number): void {
  * nghi ngờ vừa có ở vòng 5, kể cả khi người bị nghi đã chứng minh điều ngược
  * lại suốt bốn vòng. Decay là thứ cho phép bot đổi ý.
  */
-export function decayBeliefs(state: BotBrainState, round: number): void {
-  for (const entry of Object.values(state.suspicion)) decayEntry(entry, round);
-  for (const entry of Object.values(state.trust)) decayEntry(entry, round);
+export function decayBeliefs(
+  state: BotBrainState,
+  round: number,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): void {
+  const rate = weights.recency.beliefDecayPerRound;
+  for (const entry of Object.values(state.suspicion)) decayEntry(entry, round, rate);
+  for (const entry of Object.values(state.trust)) decayEntry(entry, round, rate);
 
   for (const edge of Object.values(state.relationships)) {
     const age = Math.max(0, round - edge.lastUpdatedRound);
     if (age === 0) continue;
 
-    const factor = BELIEF_DECAY_PER_ROUND ** age;
+    const factor = rate ** age;
     edge.support *= factor;
     edge.hostility *= factor;
     edge.voteAlignment *= factor;

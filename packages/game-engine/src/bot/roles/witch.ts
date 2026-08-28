@@ -1,3 +1,5 @@
+import type { Role } from "@masoi/shared";
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
 
 /**
@@ -5,14 +7,14 @@ import { nightEvidence, type BotRoleStrategy } from "./strategy";
  *
  * Tiêu một bình vì không nghĩ ra việc gì hay hơn là cách chắc chắn nhất để
  * không còn nó vào lúc thật sự cần. Vì vậy mặc định của Phù Thuỷ là SKIP, và
- * hai hằng số dưới đây là điều kiện để phá lệ.
+ * ba ngưỡng trong `roleThresholds` là điều kiện để phá lệ.
  */
-const HEAL_TRUST_THRESHOLD = 40;
-const POISON_SUSPICION_THRESHOLD = 85;
-/** Trên mức này thì dù nghi tới đâu cũng không độc: rủi ro giết nhầm quá lớn. */
-const POISON_TRUST_VETO = 50;
+export function witchStrategy(
+  _role: Role = "WITCH",
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): BotRoleStrategy {
+  const tuning = weights.roleThresholds;
 
-export function witchStrategy(): BotRoleStrategy {
   return {
     role: "WITCH",
 
@@ -31,15 +33,22 @@ export function witchStrategy(): BotRoleStrategy {
         // Cứu chính mình luôn đáng, kể cả khi chưa có dữ liệu về ai.
         const isSelf = victim === context.knowledge.botId;
 
-        if (isSelf || (trust >= HEAL_TRUST_THRESHOLD && trust > suspicion)) {
+        if (isSelf || (trust >= tuning.witchHealTrust && trust > suspicion)) {
           return {
             kind: "NIGHT_ACTION",
             action: "HEAL",
             // Engine không nhận mục tiêu cho bình cứu: nó luôn cứu nạn nhân đêm đó.
             targetId: null,
-            confidence: 0.8,
+            confidence: weights.nightConfidence.witchHeal,
             evidence: [
-              nightEvidence("DEFEND", round, victim, "cứu nạn nhân đáng tin của đêm nay"),
+              nightEvidence(
+                "DEFEND",
+                round,
+                victim,
+                "cứu nạn nhân đáng tin của đêm nay",
+                0,
+                weights,
+              ),
             ],
           };
         }
@@ -57,8 +66,8 @@ export function witchStrategy(): BotRoleStrategy {
           }))
           .filter(
             (item) =>
-              item.suspicion >= POISON_SUSPICION_THRESHOLD &&
-              item.trust < POISON_TRUST_VETO,
+              item.suspicion >= tuning.witchPoisonSuspicion &&
+              item.trust < tuning.witchPoisonTrustVeto,
           )
           .sort(
             (a, b) => b.suspicion - a.suspicion || a.targetId.localeCompare(b.targetId),
@@ -69,13 +78,15 @@ export function witchStrategy(): BotRoleStrategy {
             kind: "NIGHT_ACTION",
             action: "POISON",
             targetId: scored[0].targetId,
-            confidence: 0.75,
+            confidence: weights.nightConfidence.witchPoison,
             evidence: [
               nightEvidence(
                 "ACCUSE",
                 round,
                 scored[0].targetId,
                 "gần như chắc chắn là Sói nên dùng bình độc",
+                0,
+                weights,
               ),
             ],
           };
@@ -87,7 +98,7 @@ export function witchStrategy(): BotRoleStrategy {
         kind: "NIGHT_ACTION",
         action: "SKIP",
         targetId: null,
-        confidence: 0.5,
+        confidence: weights.nightConfidence.witchSkip,
         evidence: [],
       };
     },

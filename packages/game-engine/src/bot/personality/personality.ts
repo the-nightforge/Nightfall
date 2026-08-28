@@ -1,20 +1,22 @@
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { BotPersonality, BotRng } from "../types";
 
-const MIN_PERSONALITY_VALUE = 0.25;
-const MAX_PERSONALITY_VALUE = 0.9;
-
-function personalityValue(rng: BotRng): number {
-  return MIN_PERSONALITY_VALUE + rng() * (MAX_PERSONALITY_VALUE - MIN_PERSONALITY_VALUE);
+function personalityValue(rng: BotRng, min: number, max: number): number {
+  return min + rng() * (max - min);
 }
 
-export function createBotPersonality(rng: BotRng): BotPersonality {
+export function createBotPersonality(
+  rng: BotRng,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): BotPersonality {
+  const { min, max } = weights.personalityRange;
   return {
-    aggressiveness: personalityValue(rng),
-    talkativeness: personalityValue(rng),
-    riskTolerance: personalityValue(rng),
-    deceptionSkill: personalityValue(rng),
-    analyticalSkill: personalityValue(rng),
-    loyalty: personalityValue(rng),
-    stubbornness: personalityValue(rng),
+    aggressiveness: personalityValue(rng, min, max),
+    talkativeness: personalityValue(rng, min, max),
+    riskTolerance: personalityValue(rng, min, max),
+    deceptionSkill: personalityValue(rng, min, max),
+    analyticalSkill: personalityValue(rng, min, max),
+    loyalty: personalityValue(rng, min, max),
+    stubbornness: personalityValue(rng, min, max),
   };
 }

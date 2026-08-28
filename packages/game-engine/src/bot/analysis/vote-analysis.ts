@@ -1,4 +1,5 @@
 import type { DayVoteRecap, PublicVoteChoice, VoteMutation } from "@masoi/shared";
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { BotEvidence, BotRng, PublicEvidenceKind } from "../types";
 
 /**
@@ -10,37 +11,6 @@ import type { BotEvidence, BotRng, PublicEvidenceKind } from "../types";
  * git coi cả file là binary và mọi diff sau đó biến mất khỏi code review.
  */
 const NO_ELIMINATION_KEY = "\u0000no-elimination";
-
-/** Đổi phiếu trong 20% thời gian cuối được coi là muộn. */
-const LATE_SWITCH_RATIO = 0.8;
-
-/**
- * Một wagon phải có sẵn ít nhất hai phiếu thì việc nhảy vào mới là "theo đuôi".
- * Người thứ hai bỏ phiếu cho một mục tiêu mới chỉ đơn giản là đang đồng ý.
- */
-const MIN_BANDWAGON_LEAD = 2;
-
-interface EvidenceWeight {
-  weight: number;
-  confidence: number;
-}
-
-/**
- * Bandwagon cố tình nhẹ nhất: nó là tín hiệu yếu và không bao giờ được tự đủ
- * để kết tội. Phá hoà nặng nhất vì nó là hành động một mình quyết định ai bị
- * đưa ra xử.
- */
-const WEIGHTS: Record<PublicEvidenceKind, EvidenceWeight> = {
-  TIE_BREAK: { weight: 10, confidence: 0.7 },
-  SAVE_VOTE: { weight: 9, confidence: 0.65 },
-  LATE_SWITCH: { weight: 7, confidence: 0.6 },
-  BANDWAGON: { weight: 4, confidence: 0.35 },
-  VOTE_ALIGNMENT: { weight: 3, confidence: 0.4 },
-  ROLE_CLAIM: { weight: 5, confidence: 0.5 },
-  COUNTER_CLAIM: { weight: 6, confidence: 0.5 },
-  ACCUSE: { weight: 4, confidence: 0.45 },
-  DEFEND: { weight: 3, confidence: 0.4 },
-};
 
 function choiceKey(choice: PublicVoteChoice): string {
   return choice.type === "PLAYER" ? choice.targetId : NO_ELIMINATION_KEY;
@@ -79,6 +49,7 @@ function elapsedRatio(mutation: VoteMutation): number {
 }
 
 function evidenceOf(
+  weights: BotWeights,
   kind: PublicEvidenceKind,
   sourceId: string,
   actorId: string,
@@ -87,7 +58,7 @@ function evidenceOf(
   summary: string,
   idSuffix = "",
 ): BotEvidence {
-  const { weight, confidence } = WEIGHTS[kind];
+  const { weight, confidence } = weights.evidence[kind];
   return {
     id: `${sourceId}:${kind}${idSuffix}`,
     kind,
@@ -125,6 +96,7 @@ export function analyzeVoteRecap(
   recap: DayVoteRecap,
   analyticalSkill: number,
   rng: BotRng,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
 ): BotEvidence[] {
   const found: BotEvidence[] = [];
   const notice = (candidate: BotEvidence) => {
@@ -154,9 +126,10 @@ export function analyzeVoteRecap(
       after.top.length === 1 &&
       after.top[0] === newKey;
 
-    if (previousKey !== null && elapsedRatio(mutation) >= LATE_SWITCH_RATIO) {
+    if (previousKey !== null && elapsedRatio(mutation) >= weights.voteHistory.lateSwitchRatio) {
       notice(
         evidenceOf(
+          weights,
           "LATE_SWITCH",
           mutation.id,
           mutation.voterId,
@@ -170,6 +143,7 @@ export function analyzeVoteRecap(
     if (brokeTie) {
       notice(
         evidenceOf(
+          weights,
           "TIE_BREAK",
           mutation.id,
           mutation.voterId,
@@ -188,6 +162,7 @@ export function analyzeVoteRecap(
     if (leftLeader && after.top.length === 1 && after.top[0] !== previousKey) {
       notice(
         evidenceOf(
+          weights,
           "SAVE_VOTE",
           mutation.id,
           mutation.voterId,
@@ -203,10 +178,11 @@ export function analyzeVoteRecap(
       !brokeTie &&
       before.top.length === 1 &&
       before.top[0] === newKey &&
-      before.count >= MIN_BANDWAGON_LEAD
+      before.count >= weights.voteHistory.minBandwagonLead
     ) {
       notice(
         evidenceOf(
+          weights,
           "BANDWAGON",
           mutation.id,
           mutation.voterId,
@@ -233,6 +209,7 @@ export function analyzeVoteRecap(
         leftMutation.sequence >= rightMutation.sequence ? leftMutation : rightMutation;
       notice(
         evidenceOf(
+          weights,
           "VOTE_ALIGNMENT",
           source.id,
           left.voterId,

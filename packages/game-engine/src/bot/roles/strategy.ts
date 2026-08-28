@@ -1,4 +1,5 @@
 import type { Role } from "@masoi/shared";
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type {
   BotBrainState,
   BotDecisionContext,
@@ -66,6 +67,7 @@ export function nightEvidence(
   actorId: string,
   summary: string,
   weight = 0,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
 ): BotEvidence {
   return {
     id: `night:${round}:${actorId}:${kind}`,
@@ -73,7 +75,7 @@ export function nightEvidence(
     sourceId: `night-plan:${round}:${actorId}`,
     actorId,
     weight,
-    confidence: 0.5,
+    confidence: weights.nightConfidence.nightEvidence,
     round,
     summary,
   };

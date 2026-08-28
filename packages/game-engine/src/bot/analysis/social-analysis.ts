@@ -1,14 +1,6 @@
 import { clampConfidence, validateEvidence } from "../belief/evidence";
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { BotBrainState, BotEvidence, SocialEdge } from "../types";
-
-/** Số lý do gần nhất giữ lại trên mỗi cạnh. */
-const EDGE_REASON_LIMIT = 8;
-
-/**
- * Một evidence "nặng" cỡ 20 điểm suspicion là đủ để kéo một cạnh xã hội từ 0
- * lên kịch trần. Cạnh chỉ đo cường độ quan hệ trong `[0, 1]`, không đo tội.
- */
-const EDGE_STEP_DIVISOR = 20;
 
 function clampUnit(value: number): number {
   return Math.min(1, Math.max(0, value));
@@ -36,7 +28,11 @@ function emptyEdge(): SocialEdge {
  * Graph chỉ gợi ý mức độ phối hợp; nó không bao giờ ghi role. Đó là lý do hàm
  * này không chạm vào `knownInformation`.
  */
-export function applySocialEvidence(state: BotBrainState, evidence: BotEvidence): void {
+export function applySocialEvidence(
+  state: BotBrainState,
+  evidence: BotEvidence,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): void {
   validateEvidence(evidence, state.seenEventIds);
   // Một cạnh cần hai đầu. Bằng chứng không có target (ví dụ phiếu không treo)
   // vẫn có ý nghĩa cho suspicion nhưng không mô tả được quan hệ nào.
@@ -45,7 +41,8 @@ export function applySocialEvidence(state: BotBrainState, evidence: BotEvidence)
   const key = socialEdgeKey(evidence.actorId, evidence.targetId);
   const edge = state.relationships[key] ?? emptyEdge();
   const step = clampUnit(
-    (Math.abs(evidence.weight) * clampConfidence(evidence.confidence)) / EDGE_STEP_DIVISOR,
+    (Math.abs(evidence.weight) * clampConfidence(evidence.confidence)) /
+      weights.social.edgeStepDivisor,
   );
 
   switch (evidence.kind) {
@@ -73,7 +70,7 @@ export function applySocialEvidence(state: BotBrainState, evidence: BotEvidence)
   edge.reasons = [
     ...edge.reasons.filter((reason) => reason.id !== evidence.id),
     { ...evidence },
-  ].slice(-EDGE_REASON_LIMIT);
+  ].slice(-weights.limits.edgeReasons);
 
   state.relationships[key] = edge;
 }
@@ -107,6 +104,7 @@ export function possibleWolfPairScore(
   state: BotBrainState,
   leftId: string,
   rightId: string,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
 ): number {
   const forward = state.relationships[socialEdgeKey(leftId, rightId)];
   const backward = state.relationships[socialEdgeKey(rightId, leftId)];
@@ -119,9 +117,14 @@ export function possibleWolfPairScore(
   const alignment = average((edge) => edge.voteAlignment);
   const support = average((edge) => edge.support);
   const hostility = average((edge) => edge.hostility);
-  // Quan sát càng nhiều thì score càng được phép tiến gần trần; bốn mẫu đầu
+  // Quan sát càng nhiều thì score càng được phép tiến gần trần; những mẫu đầu
   // tiên cố tình bị chiết khấu mạnh.
-  const observationWeight = samples / (samples + 4);
+  const observationWeight = samples / (samples + weights.social.priorStrength);
 
-  return clampUnit((alignment * 0.6 + support * 0.4 - hostility * 0.5) * observationWeight);
+  return clampUnit(
+    (alignment * weights.social.alignmentMix +
+      support * weights.social.supportMix -
+      hostility * weights.social.hostilityMix) *
+      observationWeight,
+  );
 }

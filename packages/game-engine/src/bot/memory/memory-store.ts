@@ -1,11 +1,5 @@
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { BeliefEntry, BotBrainState, BotMemory, BotPersonality } from "../types";
-
-/**
- * Trần cho kho pinned. Role claim, counter-claim và Seer result bị giới hạn bởi
- * số người chơi thật (tối đa 15 người), nên trần này chỉ là chốt chặn cuối để
- * một parser lỗi không thể làm state phình vô hạn.
- */
-const PINNED_LIMIT = 60;
 
 /**
  * Ba loại này LUÔN là pinned fact, bất kể caller truyền gì. Ghim theo type chứ
@@ -13,12 +7,6 @@ const PINNED_LIMIT = 60;
  * prune cùng dựa trên một tiêu chí, nên hai bên không thể lệch nhau.
  */
 const PINNED_TYPES = new Set<BotMemory["type"]>(["ROLE_CLAIM", "COUNTER_CLAIM", "SEER_RESULT"]);
-
-/**
- * Trần cho con trỏ sự kiện đã xử lý. Một ván dài nhất cũng chỉ tạo vài trăm ID,
- * nên trần này chỉ chặn trường hợp spam chat; ID cũ nhất bị bỏ trước.
- */
-const SEEN_EVENT_LIMIT = 2_000;
 
 /**
  * Hai memory là một khi cùng loại, cùng nguồn, cùng người làm và cùng mục tiêu.
@@ -75,7 +63,11 @@ export function createBotBrainState(
  * Ghi một memory đã cấu trúc. Không nhận raw chat: caller (analyzer) chịu trách
  * nhiệm rút gọn nội dung thành `data` tối thiểu trước khi tới đây.
  */
-export function remember(state: BotBrainState, memory: BotMemory): void {
+export function remember(
+  state: BotBrainState,
+  memory: BotMemory,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): void {
   const key = memoryKey(memory);
   if (state.memories.some((existing) => memoryKey(existing) === key)) return;
 
@@ -90,7 +82,7 @@ export function remember(state: BotBrainState, memory: BotMemory): void {
 
   if (!state.seenEventIds.includes(stored.sourceId)) {
     state.seenEventIds.push(stored.sourceId);
-    if (state.seenEventIds.length > SEEN_EVENT_LIMIT) state.seenEventIds.shift();
+    if (state.seenEventIds.length > weights.limits.seenEvents) state.seenEventIds.shift();
   }
 
   if (stored.type === "ROLE_CLAIM" || stored.type === "COUNTER_CLAIM") {
@@ -100,7 +92,7 @@ export function remember(state: BotBrainState, memory: BotMemory): void {
     state.knownInformation.seerResults.push(stored);
   }
 
-  enforcePinnedBudget(state);
+  enforcePinnedBudget(state, weights.limits.pinned);
 }
 
 /**
@@ -111,11 +103,11 @@ export function remember(state: BotBrainState, memory: BotMemory): void {
  * chỉ tồn tại để một người chơi spam "tôi là dân" không thể chiếm hết ngân sách
  * memory của BOT. Bỏ cái CŨ nhất, vì cái mới nhất là cái đang được tranh luận.
  */
-function enforcePinnedBudget(state: BotBrainState): void {
+function enforcePinnedBudget(state: BotBrainState, limit: number): void {
   const pinned = state.memories.filter((memory) => memory.pinned);
-  if (pinned.length <= PINNED_LIMIT) return;
+  if (pinned.length <= limit) return;
 
-  const evicted = new Set(pinned.slice(0, pinned.length - PINNED_LIMIT));
+  const evicted = new Set(pinned.slice(0, pinned.length - limit));
   state.memories = state.memories.filter((memory) => !evicted.has(memory));
   state.claims = state.claims.filter((memory) => !evicted.has(memory));
   state.knownInformation.seerResults = state.knownInformation.seerResults.filter(

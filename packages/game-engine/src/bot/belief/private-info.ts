@@ -1,3 +1,4 @@
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { BotBrainState, BotEvidence, BotKnowledgeView } from "../types";
 import { applyEvidence, applyTrustEvidence } from "./belief-state";
 import { MAX_BELIEF_SCORE } from "./evidence";
@@ -13,18 +14,6 @@ import { MAX_BELIEF_SCORE } from "./evidence";
  * theo quyền của chính bot. Không có đường nào để một claim trong chat đi vào
  * đây: claim là lời nói, và nó được xử lý ở chat-analysis với sức nặng rất khác.
  */
-
-/**
- * Đủ lớn để một mình nó vượt mọi ngưỡng vote, kể cả khi bị inertia làm chậm.
- *
- * Dấu ÂM cho hai hằng số dưới là có chủ đích: `applyTrustEvidence` đảo dấu
- * weight trước khi cộng, nên một bằng chứng "gỡ tội" phải mang weight âm thì
- * mới làm TĂNG tin tưởng. Truyền số dương ở đây sẽ kéo trust về 0 - đúng
- * ngược lại ý định.
- */
-const SEER_WOLF_WEIGHT = 400;
-const SEER_CLEAR_WEIGHT = -120;
-const ALLY_WEIGHT = -80;
 
 /**
  * Ghim điểm thay vì để nó cộng dồn.
@@ -81,6 +70,7 @@ function evidenceFor(
 export function applyPrivateInformation(
   state: BotBrainState,
   knowledge: BotKnowledgeView,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
 ): void {
   const round = knowledge.round;
   const result = knowledge.seerResult;
@@ -101,11 +91,12 @@ export function applyPrivateInformation(
             kind: "SEER_RESULT_WOLF",
             sourceId,
             actorId: result.targetId,
-            weight: SEER_WOLF_WEIGHT,
+            weight: weights.privateInfo.seerWolf,
             summary: `soi ra ${result.targetName} là Sói`,
           },
           round,
         ),
+        weights,
       );
       pinScore(state.suspicion, result.targetId, MAX_BELIEF_SCORE, round);
     } else {
@@ -117,11 +108,12 @@ export function applyPrivateInformation(
             kind: "SEER_RESULT_CLEAR",
             sourceId,
             actorId: result.targetId,
-            weight: SEER_CLEAR_WEIGHT,
+            weight: weights.privateInfo.seerClear,
             summary: `soi ra ${result.targetName} không phải Sói`,
           },
           round,
         ),
+        weights,
       );
       // Đã biết chắc không phải Sói thì mọi nghi ngờ tích trước đó là rác.
       pinScore(state.trust, result.targetId, MAX_BELIEF_SCORE, round);
@@ -143,11 +135,12 @@ export function applyPrivateInformation(
           kind: "KNOWN_ALLY",
           sourceId,
           actorId: playerId,
-          weight: ALLY_WEIGHT,
+          weight: weights.privateInfo.knownAlly,
           summary: "đồng đội Sói do engine xác nhận",
         },
         round,
       ),
+      weights,
     );
     pinScore(state.trust, playerId, MAX_BELIEF_SCORE, round);
     pinScore(state.suspicion, playerId, 0, round);

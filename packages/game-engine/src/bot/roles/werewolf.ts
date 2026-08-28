@@ -6,6 +6,8 @@ import type {
 } from "../types";
 import type { Role } from "@masoi/shared";
 import { incomingHostilityOf } from "../analysis/social-analysis";
+import { MAX_BELIEF_SCORE } from "../belief/evidence";
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
 
 /** Vai có thể lật ngược ván đấu nếu sống thêm một đêm. */
@@ -23,7 +25,9 @@ function threatScore(
   state: BotBrainState,
   context: BotDecisionContext,
   targetId: string,
+  weights: BotWeights,
 ): { score: number; reason: string } {
+  const tuning = weights.roleThresholds;
   const claim = state.claims.find(
     (memory) =>
       memory.actorId === targetId &&
@@ -32,7 +36,7 @@ function threatScore(
   );
   if (claim) {
     return {
-      score: 100,
+      score: tuning.wolfClaimedPowerScore,
       reason: `tự nhận là ${String(claim.data.role)} nên phải chết trước`,
     };
   }
@@ -44,7 +48,11 @@ function threatScore(
 
   return {
     // Trừ suspicion: làng đang nghi sẵn thì để làng tự xử.
-    score: 40 + trust * 0.4 + influence * 20 - suspicion * 0.35,
+    score:
+      tuning.wolfThreatBase +
+      trust * tuning.wolfTrustWeight +
+      influence * tuning.wolfHostilityWeight -
+      suspicion * tuning.wolfSuspicionDiscount,
     reason: "được làng tin nên nguy hiểm với phe Sói",
   };
 }
@@ -54,7 +62,10 @@ function threatScore(
  * cơ chế "chết thì bầy được cắn hai" nằm ở engine chứ không ở lựa chọn của nó.
  * Truyền vai vào thay vì hard-code giữ cho `strategyFor(r).role === r` luôn đúng.
  */
-export function werewolfStrategy(role: Role = "WEREWOLF"): BotRoleStrategy {
+export function werewolfStrategy(
+  role: Role = "WEREWOLF",
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): BotRoleStrategy {
   return {
     role,
 
@@ -75,8 +86,12 @@ export function werewolfStrategy(role: Role = "WEREWOLF"): BotRoleStrategy {
 
       const scored = candidates
         .map((targetId) => {
-          const { score, reason } = threatScore(state, context, targetId);
-          return { targetId, score: score + (rng() - 0.5) * 6, reason };
+          const { score, reason } = threatScore(state, context, targetId, weights);
+          return {
+            targetId,
+            score: score + (rng() - 0.5) * weights.confidence.jitterSpan,
+            reason,
+          };
         })
         // Tie-break theo id để hai lần chạy cùng seed không đảo thứ tự.
         .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));
@@ -86,13 +101,15 @@ export function werewolfStrategy(role: Role = "WEREWOLF"): BotRoleStrategy {
         kind: "NIGHT_ACTION",
         action: "KILL",
         targetId: winner.targetId,
-        confidence: Math.min(1, Math.max(0, winner.score / 100)),
+        confidence: Math.min(1, Math.max(0, winner.score / MAX_BELIEF_SCORE)),
         evidence: [
           nightEvidence(
             "ACCUSE",
             context.knowledge.round,
             winner.targetId,
             winner.reason,
+            0,
+            weights,
           ),
         ],
       };
@@ -102,7 +119,7 @@ export function werewolfStrategy(role: Role = "WEREWOLF"): BotRoleStrategy {
       const bias: Record<string, number> = {};
       for (const [playerId, role] of Object.entries(context.knowledge.knownRoles)) {
         if (playerId === context.knowledge.botId) continue;
-        if (role === "WEREWOLF") bias[playerId] = -100;
+        if (role === "WEREWOLF") bias[playerId] = weights.teammateProtection.voteBiasPenalty;
       }
       return bias;
     },

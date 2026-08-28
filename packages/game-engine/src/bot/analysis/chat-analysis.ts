@@ -1,4 +1,5 @@
 import type { Phase, Role } from "@masoi/shared";
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { BotChatObservation, BotMemory, BotMemoryType, BotPlayerKnowledge } from "../types";
 
 /**
@@ -54,12 +55,15 @@ const ROLE_PHRASES: Array<[string, Role]> = [
  */
 const NEGATIONS = ["không", "chưa", "chẳng", "chả", "đâu có", "làm gì"];
 
-const IMPORTANCE: Partial<Record<BotMemoryType, number>> = {
-  ROLE_CLAIM: 8,
-  COUNTER_CLAIM: 8,
-  ACCUSE: 4,
-  DEFEND: 3,
-};
+function importanceTable(weights: BotWeights): Partial<Record<BotMemoryType, number>> {
+  const table = weights.memoryImportance;
+  return {
+    ROLE_CLAIM: table.roleClaim,
+    COUNTER_CLAIM: table.counterClaim,
+    ACCUSE: table.accuse,
+    DEFEND: table.defend,
+  };
+}
 
 /** Hai dạng của cùng một mệnh đề, dùng song song trong toàn bộ parser. */
 interface Clause {
@@ -228,6 +232,7 @@ function parseClause(
 export interface ChatAnalysisOptions {
   round?: number;
   phase?: Phase;
+  weights?: BotWeights;
 }
 
 /**
@@ -244,7 +249,8 @@ export function analyzeChat(
   players: readonly BotPlayerKnowledge[],
   options: ChatAnalysisOptions = {},
 ): BotMemory[] {
-  const { round = 0, phase = "DAY_DISCUSSION" } = options;
+  const { round = 0, phase = "DAY_DISCUSSION", weights = DEFAULT_BOT_WEIGHTS } = options;
+  const importance = importanceTable(weights);
   const memories: BotMemory[] = [];
 
   const push = (message: BotChatObservation, parsed: ParsedSpeech) => {
@@ -256,7 +262,7 @@ export function analyzeChat(
       type: parsed.type,
       actorId: message.actorId,
       targetId: parsed.targetId,
-      importance: IMPORTANCE[parsed.type] ?? 3,
+      importance: importance[parsed.type] ?? weights.memoryImportance.fallback,
       pinned: parsed.type === "ROLE_CLAIM" || parsed.type === "COUNTER_CLAIM",
       data: parsed.data,
     });

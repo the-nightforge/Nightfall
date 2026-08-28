@@ -1,18 +1,20 @@
+import type { Role } from "@masoi/shared";
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
+import { informationValue } from "./uncertainty";
 
 /**
  * Thám Tử so hai người và chỉ biết họ CÙNG phe hay KHÁC phe.
  *
  * Thông tin đó chỉ có giá trị khi cả hai đều còn mơ hồ. So một người gần chắc
  * là Sói với một người gần chắc trong sạch thì kết quả đã đoán được trước, và
- * lượt điều tra thành vô nghĩa. Vì vậy chọn hai ứng viên KHÔNG CHẮC NHẤT.
- *
- * Cặp "cùng phe" cũng đáng giá gấp đôi khi hai người đó đã dính nhau trong
- * social graph: nó biến một nghi ngờ về quan hệ thành một sự thật về phe.
+ * lượt điều tra thành vô nghĩa. Vì vậy chọn hai ứng viên KHÔNG CHẮC NHẤT, theo
+ * đúng thang giá trị thông tin mà Tiên Tri dùng.
  */
-const MOST_INFORMATIVE_SUSPICION = 50;
-
-export function detectiveStrategy(): BotRoleStrategy {
+export function detectiveStrategy(
+  _role: Role = "DETECTIVE",
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): BotRoleStrategy {
   return {
     role: "DETECTIVE",
 
@@ -28,11 +30,12 @@ export function detectiveStrategy(): BotRoleStrategy {
       if (candidates.length < 2) return null;
 
       const ranked = candidates
-        .map((targetId) => {
-          const suspicion = state.suspicion[targetId]?.score ?? 0;
-          const uncertainty = 100 - Math.abs(suspicion - MOST_INFORMATIVE_SUSPICION) * 2;
-          return { targetId, score: uncertainty + (rng() - 0.5) * 6 };
-        })
+        .map((targetId) => ({
+          targetId,
+          score:
+            informationValue(state.suspicion[targetId]?.score ?? 0, weights) +
+            (rng() - 0.5) * weights.confidence.jitterSpan,
+        }))
         .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));
 
       return {
@@ -40,13 +43,15 @@ export function detectiveStrategy(): BotRoleStrategy {
         action: "DETECTIVE_CHECK",
         targetId: ranked[0].targetId,
         secondaryTargetId: ranked[1].targetId,
-        confidence: 0.65,
+        confidence: weights.nightConfidence.detective,
         evidence: [
           nightEvidence(
             "ACCUSE",
             context.knowledge.round,
             ranked[0].targetId,
             `so phe với ${ranked[1].targetId} vì cả hai đều chưa rõ`,
+            0,
+            weights,
           ),
         ],
       };

@@ -11,6 +11,11 @@ import {
   type BotFinalVoteIntention,
   type BotHunterShotIntention,
 } from "./decision/trial-decision";
+import {
+  DEFAULT_BOT_WEIGHTS,
+  validateWeights,
+  type BotWeights,
+} from "./config/weights";
 import { strategyFor } from "./roles/registry";
 import { decayAndPrune } from "./memory/memory-decay";
 import { createBotBrainState, remember } from "./memory/memory-store";
@@ -28,12 +33,8 @@ import type {
   BotSpeechIntention,
   BotVoteIntention,
   EvidenceKind,
+  PublicEvidenceKind,
 } from "./types";
-
-/** Đổi phiếu trong 20% cuối được ghi thành một memory riêng. */
-const LATE_VOTE_RATIO = 0.8;
-/** Trần lịch sử phiếu và lịch sử phát ngôn giữ trong state. */
-const HISTORY_LIMIT = 60;
 
 export interface BotRuntimeOptions {
   playerId: string;
@@ -41,6 +42,8 @@ export interface BotRuntimeOptions {
   playerIds: readonly string[];
   /** Bỏ trống thì personality được sinh từ chính RNG đã seed. */
   personality?: BotPersonality;
+  /** Bỏ trống thì dùng cấu hình production hiện hành. */
+  weights?: BotWeights;
 }
 
 interface MemoryDraft {
@@ -53,24 +56,36 @@ interface MemoryDraft {
   data?: Record<string, unknown>;
 }
 
+/**
+ * Bằng chứng rút ra từ một câu nói.
+ *
+ * `weight` và `confidence` KHÔNG còn là tham số: chúng đến từ bảng
+ * `weights.evidence`, cùng bảng mà `vote-analysis` dùng. Trước Phase 3 các cặp
+ * số này bị chép lại ngay tại chỗ gọi, nên `ACCUSE (4, 0.45)` tồn tại hai bản
+ * và không có gì buộc chúng phải bằng nhau.
+ *
+ * `sign` là thứ duy nhất chỗ gọi còn quyết định: `-1` biến một bằng chứng thành
+ * bằng chứng GỠ TỘI, và `applyTrustEvidence` đảo dấu lần nữa nên tin tưởng tăng.
+ */
 function evidenceOf(
-  kind: EvidenceKind,
+  weights: BotWeights,
+  kind: EvidenceKind & PublicEvidenceKind,
   idSuffix: string,
   sourceId: string,
   actorId: string,
   targetId: string,
   round: number,
-  weight: number,
-  confidence: number,
   summary: string,
+  sign: 1 | -1 = 1,
 ): BotEvidence {
+  const { weight, confidence } = weights.evidence[kind];
   return {
     id: `${sourceId}:${kind}:${idSuffix}`,
     kind,
     sourceId,
     actorId,
     targetId,
-    weight,
+    weight: weight * sign,
     confidence,
     round,
     summary,
@@ -93,6 +108,8 @@ function lateRatio(mutation: VoteMutation): number {
  */
 export class BotRuntime {
   readonly state: BotBrainState;
+  /** Cấu hình đã kiểm; mọi module quyết định nhận đúng đối tượng này. */
+  readonly weights: BotWeights;
 
   private readonly rng: BotRng;
   /**
@@ -104,7 +121,18 @@ export class BotRuntime {
 
   constructor(options: BotRuntimeOptions) {
     this.rng = options.rng;
-    const personality = options.personality ?? createBotPersonality(options.rng);
+    this.weights = options.weights ?? DEFAULT_BOT_WEIGHTS;
+
+    // Kiểm ngay tại constructor, không phải ở vòng 7 của ván thứ 214. Một NaN
+    // lọt qua sẽ không ném - nó chỉ làm mọi phép so sánh trả về false, và BOT
+    // bỏ lượt suốt ván mà không có lỗi nào để lần theo.
+    const problems = validateWeights(this.weights);
+    if (problems.length > 0) {
+      throw new Error(`Cấu hình trọng số BOT không hợp lệ: ${problems.join("; ")}`);
+    }
+
+    const personality =
+      options.personality ?? createBotPersonality(options.rng, this.weights);
     this.state = createBotBrainState(options.playerId, personality, options.playerIds);
   }
 
@@ -132,18 +160,18 @@ export class BotRuntime {
     // soi vừa ghi ở chính vòng này sẽ bị nguội ngay trong cùng một lượt observe.
     // Decay chỉ được phép chạm vào những gì đã cũ.
     if (this.lastDecayRound !== knowledge.round) {
-      decayAndPrune(this.state, knowledge.round);
-      decayBeliefs(this.state, knowledge.round);
+      decayAndPrune(this.state, knowledge.round, undefined, this.weights);
+      decayBeliefs(this.state, knowledge.round, this.weights);
       this.lastDecayRound = knowledge.round;
     }
 
-    applyPrivateInformation(this.state, knowledge);
+    applyPrivateInformation(this.state, knowledge, this.weights);
     this.adaptToDeaths(knowledge, previousKnownRoles);
   }
 
   /** Chốt phiếu deterministic từ belief hiện tại. */
   decideVote(context: BotDecisionContext): BotVoteIntention {
-    const vote = selectVote(context, this.state, this.rng);
+    const vote = selectVote(context, this.state, this.rng, this.weights);
 
     this.state.currentTargets =
       vote.choice.type === "PLAYER" ? [vote.choice.targetId] : [];
@@ -160,7 +188,9 @@ export class BotRuntime {
         last.choice.targetId !== vote.choice.targetId);
     if (changed) {
       this.state.previousVotes.push({ round, choice: { ...vote.choice } });
-      if (this.state.previousVotes.length > HISTORY_LIMIT) this.state.previousVotes.shift();
+      if (this.state.previousVotes.length > this.weights.limits.history) {
+        this.state.previousVotes.shift();
+      }
     }
 
     return vote;
@@ -182,7 +212,7 @@ export class BotRuntime {
     const spoken = new Set(this.state.speechMemory.flatMap((entry) => entry.sourceIds));
     const fresh = vote.evidence
       .filter((item) => !spoken.has(item.sourceId))
-      .slice(0, 3)
+      .slice(0, this.weights.limits.intentionEvidence)
       .map((item) => ({ ...item }));
 
     if (vote.choice.type !== "PLAYER") {
@@ -213,17 +243,21 @@ export class BotRuntime {
    * thứ Phase 1 đã bỏ công gỡ khỏi ban ngày.
    */
   decideNight(context: BotDecisionContext): BotNightIntention | null {
-    return strategyFor(context.knowledge.selfRole).decideNight(context, this.state, this.rng);
+    return strategyFor(context.knowledge.selfRole, this.weights).decideNight(
+      context,
+      this.state,
+      this.rng,
+    );
   }
 
   /** Phán quyết Treo/Tha ở phiên toà. */
   decideFinalVote(context: BotDecisionContext): BotFinalVoteIntention {
-    return decideFinalVote(context, this.state, this.rng);
+    return decideFinalVote(context, this.state, this.rng, this.weights);
   }
 
   /** Phát bắn cuối của Thợ Săn; `targetId: null` là không bắn. */
   decideHunterShot(context: BotDecisionContext): BotHunterShotIntention {
-    return decideHunterShot(context, this.state, this.rng);
+    return decideHunterShot(context, this.state, this.rng, this.weights);
   }
 
   /**
@@ -248,24 +282,32 @@ export class BotRuntime {
       const [suspectId, entry] = ranked[0];
       this.state.currentTheory = {
         summary: `nghi ${suspectId} nhất sau vòng ${round}`,
-        evidenceIds: entry.reasons.slice(-3).map((reason) => reason.id),
+        evidenceIds: entry.reasons
+          .slice(-this.weights.limits.intentionEvidence)
+          .map((reason) => reason.id),
       };
     }
 
-    remember(this.state, {
-      id: `ROUND_SUMMARY:${sourceId}:${this.state.playerId}`,
-      sourceId,
-      round,
-      phase: "DAY_DISCUSSION",
-      type: "ROUND_SUMMARY",
-      actorId: this.state.playerId,
-      importance: 9,
-      pinned: true,
-      data: {
-        theory: this.state.currentTheory?.summary ?? null,
-        topSuspects: ranked.slice(0, 3).map(([id]) => id),
+    remember(
+      this.state,
+      {
+        id: `ROUND_SUMMARY:${sourceId}:${this.state.playerId}`,
+        sourceId,
+        round,
+        phase: "DAY_DISCUSSION",
+        type: "ROUND_SUMMARY",
+        actorId: this.state.playerId,
+        importance: this.weights.memoryImportance.roundSummary,
+        pinned: true,
+        data: {
+          theory: this.state.currentTheory?.summary ?? null,
+          topSuspects: ranked
+            .slice(0, this.weights.limits.intentionEvidence)
+            .map(([id]) => id),
+        },
       },
-    });
+      this.weights,
+    );
   }
 
   /**
@@ -293,35 +335,43 @@ export class BotRuntime {
           const actorId = key.slice(0, key.indexOf("->"));
           if (actorId === this.state.playerId) continue;
 
-          applyEvidence(this.state, {
-            id: `death-motive:${knowledge.round}:${actorId}:${death.playerId}`,
-            kind: "ACCUSE",
-            sourceId,
-            actorId,
-            targetId: death.playerId,
-            weight: 6 * edge.hostility,
-            confidence: 0.5,
-            round: knowledge.round,
-            summary: `từng công kích ${death.name} ngay trước khi người này chết`,
-          });
+          applyEvidence(
+            this.state,
+            {
+              id: `death-motive:${knowledge.round}:${actorId}:${death.playerId}`,
+              kind: "ACCUSE",
+              sourceId,
+              actorId,
+              targetId: death.playerId,
+              weight: this.weights.social.deathMotiveWeight * edge.hostility,
+              confidence: this.weights.social.deathMotiveConfidence,
+              round: knowledge.round,
+              summary: `từng công kích ${death.name} ngay trước khi người này chết`,
+            },
+            this.weights,
+          );
         }
       }
 
       // Mất đồng đội Sói: chỉ ghi khi TRƯỚC ĐÓ thật sự biết người này là đồng bọn.
       const wasAlly = previousKnownRoles[death.playerId] === "WEREWOLF";
       if (wasAlly) {
-        remember(this.state, {
-          id: `ALLY_LOST:${sourceId}:${this.state.playerId}`,
-          sourceId,
-          round: knowledge.round,
-          phase: knowledge.phase,
-          type: "ALLY_LOST",
-          actorId: this.state.playerId,
-          targetId: death.playerId,
-          importance: 10,
-          pinned: true,
-          data: { name: death.name },
-        });
+        remember(
+          this.state,
+          {
+            id: `ALLY_LOST:${sourceId}:${this.state.playerId}`,
+            sourceId,
+            round: knowledge.round,
+            phase: knowledge.phase,
+            type: "ALLY_LOST",
+            actorId: this.state.playerId,
+            targetId: death.playerId,
+            importance: this.weights.memoryImportance.allyLost,
+            pinned: true,
+            data: { name: death.name },
+          },
+          this.weights,
+        );
       }
     }
   }
@@ -332,7 +382,9 @@ export class BotRuntime {
       sourceIds: speech.evidence.map((item) => item.sourceId),
       round,
     });
-    if (this.state.speechMemory.length > HISTORY_LIMIT) this.state.speechMemory.shift();
+    if (this.state.speechMemory.length > this.weights.limits.history) {
+      this.state.speechMemory.shift();
+    }
   }
 
   // ---- Ingest helpers ----
@@ -350,7 +402,7 @@ export class BotRuntime {
       pinned: draft.pinned ?? false,
       data: draft.data ?? {},
     };
-    remember(this.state, memory);
+    remember(this.state, memory, this.weights);
   }
 
   private ingestDeaths(knowledge: BotKnowledgeView): void {
@@ -360,7 +412,7 @@ export class BotRuntime {
           type: "PLAYER_DIED",
           sourceId: `night-death:${knowledge.round}:${death.playerId}`,
           actorId: death.playerId,
-          importance: 6,
+          importance: this.weights.memoryImportance.playerDied,
           data: { name: death.name },
         },
         knowledge,
@@ -379,7 +431,7 @@ export class BotRuntime {
         sourceId: `seer:${result.targetId}`,
         actorId: knowledge.botId,
         targetId: result.targetId,
-        importance: 10,
+        importance: this.weights.memoryImportance.seerResult,
         pinned: true,
         data: { isWolf: result.isWolf },
       },
@@ -401,13 +453,14 @@ export class BotRuntime {
         recap,
         this.state.personality.analyticalSkill,
         this.rng,
+        this.weights,
       )) {
         if (item.kind === "VOTE_ALIGNMENT") {
-          applySocialEvidence(this.state, item);
+          applySocialEvidence(this.state, item, this.weights);
           continue;
         }
-        applyEvidence(this.state, item);
-        if (item.targetId) applySocialEvidence(this.state, item);
+        applyEvidence(this.state, item, this.weights);
+        if (item.targetId) applySocialEvidence(this.state, item, this.weights);
       }
     }
   }
@@ -421,11 +474,17 @@ export class BotRuntime {
           actorId: mutation.voterId,
           targetId:
             mutation.choice.type === "PLAYER" ? mutation.choice.targetId : undefined,
-          importance: mutation.previousChoice === null ? 4 : 6,
+          importance:
+            mutation.previousChoice === null
+              ? this.weights.memoryImportance.voteCast
+              : this.weights.memoryImportance.voteChanged,
         },
         knowledge,
       );
-      if (mutation.previousChoice !== null && lateRatio(mutation) >= LATE_VOTE_RATIO) {
+      if (
+        mutation.previousChoice !== null &&
+        lateRatio(mutation) >= this.weights.voteHistory.lateSwitchRatio
+      ) {
         this.write(
           {
             type: "LATE_VOTE",
@@ -433,7 +492,7 @@ export class BotRuntime {
             actorId: mutation.voterId,
             targetId:
               mutation.choice.type === "PLAYER" ? mutation.choice.targetId : undefined,
-            importance: 7,
+            importance: this.weights.memoryImportance.lateVote,
           },
           knowledge,
         );
@@ -446,7 +505,7 @@ export class BotRuntime {
           type: "NOMINATED",
           sourceId: `${recap.round}:nomination:result`,
           actorId: recap.nomination.accusedId,
-          importance: 7,
+          importance: this.weights.memoryImportance.nominated,
         },
         knowledge,
       );
@@ -458,7 +517,7 @@ export class BotRuntime {
           type: "FINAL_JUDGMENT",
           sourceId: `${recap.round}:final:${ballot.voterId}`,
           actorId: ballot.voterId,
-          importance: 6,
+          importance: this.weights.memoryImportance.finalJudgment,
           data: { guilty: ballot.guilty },
         },
         knowledge,
@@ -477,8 +536,9 @@ export class BotRuntime {
     const memories = analyzeChat(fresh, knowledge.players, {
       round: knowledge.round,
       phase: knowledge.phase,
+      weights: this.weights,
     });
-    for (const memory of memories) remember(this.state, memory);
+    for (const memory of memories) remember(this.state, memory, this.weights);
 
     // Kể cả câu bị parser bỏ qua cũng được đánh dấu đã đọc, để lần observe sau
     // không phân tích lại cùng một tin nhắn.
@@ -497,32 +557,32 @@ export class BotRuntime {
         applySocialEvidence(
           this.state,
           evidenceOf(
+            this.weights,
             "ACCUSE",
             "social",
             memory.sourceId,
             memory.actorId,
             memory.targetId,
             round,
-            4,
-            0.45,
             "Công khai buộc tội người này.",
           ),
+          this.weights,
         );
         // Bị buộc tội là tín hiệu yếu về người bị nêu tên, không phải bằng
         // chứng cứng: weight thấp và luôn có nguồn là message ID thật.
         applyEvidence(
           this.state,
           evidenceOf(
+            this.weights,
             "ACCUSE",
             "belief",
             memory.sourceId,
             memory.targetId,
             memory.actorId,
             round,
-            4,
-            0.45,
             "Bị một người chơi khác công khai buộc tội.",
           ),
+          this.weights,
         );
         continue;
       }
@@ -531,32 +591,32 @@ export class BotRuntime {
         applySocialEvidence(
           this.state,
           evidenceOf(
+            this.weights,
             "DEFEND",
             "social",
             memory.sourceId,
             memory.actorId,
             memory.targetId,
             round,
-            3,
-            0.4,
             "Công khai bênh vực người này.",
           ),
+          this.weights,
         );
         // Weight ÂM vì đây là bằng chứng gỡ tội: applyEvidence hạ nghi ngờ của
         // người được bênh, còn applyTrustEvidence đảo dấu nên tin tưởng tăng.
         const exculpatory = evidenceOf(
+          this.weights,
           "DEFEND",
           "belief",
           memory.sourceId,
           memory.targetId,
           memory.actorId,
           round,
-          -3,
-          0.4,
           "Được một người chơi khác công khai bênh vực.",
+          -1,
         );
-        applyEvidence(this.state, exculpatory);
-        applyTrustEvidence(this.state, exculpatory);
+        applyEvidence(this.state, exculpatory, this.weights);
+        applyTrustEvidence(this.state, exculpatory, this.weights);
         continue;
       }
 
@@ -564,30 +624,30 @@ export class BotRuntime {
         applySocialEvidence(
           this.state,
           evidenceOf(
+            this.weights,
             "COUNTER_CLAIM",
             "social",
             memory.sourceId,
             memory.actorId,
             memory.targetId,
             round,
-            6,
-            0.5,
             "Phản bác lời nhận vai của người này.",
           ),
+          this.weights,
         );
         applyEvidence(
           this.state,
           evidenceOf(
+            this.weights,
             "COUNTER_CLAIM",
             "belief",
             memory.sourceId,
             memory.targetId,
             memory.actorId,
             round,
-            6,
-            0.5,
             "Lời nhận vai bị người khác phản bác.",
           ),
+          this.weights,
         );
       }
     }

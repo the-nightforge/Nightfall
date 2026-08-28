@@ -1,6 +1,8 @@
 import type { PublicVoteChoice } from "@masoi/shared";
 import { isolationScore } from "../analysis/coalition";
 import { incomingHostilityOf, possibleWolfPairScore } from "../analysis/social-analysis";
+import { MAX_BELIEF_SCORE } from "../belief/evidence";
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { strategyFor } from "../roles/registry";
 import type {
   BotBrainState,
@@ -10,34 +12,6 @@ import type {
   BotRng,
   BotVoteIntention,
 } from "../types";
-
-/** Bằng chứng chắc chắn đáng giá hơn cùng một điểm nghi ngờ không có lý do. */
-const EVIDENCE_CONFIDENCE_BONUS = 8;
-/** Bị nhiều người công kích là tín hiệu xã hội, không phải bằng chứng cứng. */
-const HOSTILITY_BONUS = 6;
-/** Đóng góp tối đa của social graph khi cặp đôi trông như đang phối hợp. */
-const PAIR_BONUS = 8;
-/** Trust kéo ngược suspicion nhưng không bao giờ triệt tiêu được nó. */
-const TRUST_DAMPING = 0.2;
-/** Biên độ nhiễu người-hoá: tối đa ±3 điểm, luôn từ RNG được inject. */
-const JITTER_SPAN = 6;
-/** Nhỏ có chủ đích: cô lập là gợi ý, không được tự mình đẩy ai qua ngưỡng. */
-const ISOLATION_BONUS = 8;
-
-/**
- * Tỉ lệ người đã chết mà trên đó "không treo ai" trở thành nước thua.
- *
- * Ma Sói không có trạng thái hoà: mỗi đêm phe làng mất một người, nên một ngày
- * không treo ai là một người mất trắng. Treo bừa có xác suất trúng Sói bằng
- * `số Sói / số người còn sống`; không treo có xác suất bằng 0. Vì vậy khi làng
- * đã mỏng, treo một người đáng ngờ nhất - dù bằng chứng yếu - là nước ĐÚNG chứ
- * không phải nước liều.
- *
- * Harness mô phỏng ở Task 9 là thứ phát hiện điều này: không có quy tắc dưới
- * đây, Sói thắng 30/30 vì cả làng bỏ phiếu trắng mọi vòng, và vì không ai bị
- * treo nên không có lịch sử phiếu nào để sinh ra bằng chứng - một vòng lặp chết.
- */
-const DESPERATION_PRESSURE = 0.3;
 
 /**
  * Mức cấp bách, 0 khi chưa ai chết và tiến tới 1 khi làng gần hết.
@@ -90,24 +64,34 @@ function survivalPressure(knowledge: BotDecisionContext["knowledge"]): number {
   return clampUnit(1 - alive / total);
 }
 
-/** Số evidence tối đa mang theo một intention. */
-const MAX_INTENTION_EVIDENCE = 3;
-
 function clampUnit(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
 /**
  * Ngưỡng tối thiểu để dám đề cử ai đó. Người hung hăng và người chịu rủi ro
- * cao hạ ngưỡng này xuống, nhưng không ai xuống dưới ~48.
+ * cao hạ ngưỡng này xuống, nhưng không ai xuống dưới ~48 ở cấu hình mặc định.
  */
-export function voteThreshold(personality: BotPersonality): number {
-  return 58 - personality.aggressiveness * 6 - personality.riskTolerance * 4;
+export function voteThreshold(
+  personality: BotPersonality,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): number {
+  return (
+    weights.aggression.thresholdBase -
+    personality.aggressiveness * weights.aggression.aggressivenessSpan -
+    personality.riskTolerance * weights.aggression.riskSpan
+  );
 }
 
 /** Khoảng cách tối thiểu để bỏ mục tiêu đang bầu và chuyển sang người khác. */
-export function voteHysteresis(personality: BotPersonality): number {
-  return 5 + personality.stubbornness * 8;
+export function voteHysteresis(
+  personality: BotPersonality,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): number {
+  return (
+    weights.confidence.hysteresisBase +
+    personality.stubbornness * weights.confidence.hysteresisStubbornSpan
+  );
 }
 
 /**
@@ -115,13 +99,21 @@ export function voteHysteresis(personality: BotPersonality): number {
  * đôi được nhân với mức nghi ngờ đã có bằng chứng của người kia, nên một cặp
  * mà cả hai đều sạch sẽ không tự sinh ra nghi ngờ.
  */
-function pairPressure(state: BotBrainState, targetId: string): number {
+function pairPressure(
+  state: BotBrainState,
+  targetId: string,
+  weights: BotWeights,
+): number {
   let best = 0;
   for (const otherId of Object.keys(state.suspicion).sort()) {
     if (otherId === targetId) continue;
     const other = state.suspicion[otherId];
     if (!other || other.reasons.length === 0) continue;
-    best = Math.max(best, possibleWolfPairScore(state, targetId, otherId) * (other.score / 100));
+    best = Math.max(
+      best,
+      possibleWolfPairScore(state, targetId, otherId, weights) *
+        (other.score / MAX_BELIEF_SCORE),
+    );
   }
   return best;
 }
@@ -153,17 +145,18 @@ export function selectVote(
   context: BotDecisionContext,
   state: BotBrainState,
   rng: BotRng,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
 ): BotVoteIntention {
   const knowledge = context.knowledge;
   const personality = state.personality;
   const selfIsWolf =
     knowledge.knownRoles[state.playerId] === "WEREWOLF" ||
     knowledge.knownRoles[state.playerId] === "WOLF_CUB";
-  const threshold = voteThreshold(personality);
+  const threshold = voteThreshold(personality, weights);
 
   // Hiểu biết riêng của vai, do chính strategy của vai đó cấp. Tách khỏi vòng
   // lặp chấm điểm để `selectVote` không phải biết vai nào tồn tại.
-  const bias = strategyFor(knowledge.selfRole).voteBias(context, state);
+  const bias = strategyFor(knowledge.selfRole, weights).voteBias(context, state);
   const aliveIds = knowledge.players.filter((p) => p.alive).map((p) => p.id);
 
   const scored: ScoredTarget[] = [];
@@ -178,29 +171,30 @@ export function selectVote(
 
     let score =
       (belief?.score ?? 0) +
-      topConfidence * EVIDENCE_CONFIDENCE_BONUS +
-      incomingHostilityOf(state, targetId) * HOSTILITY_BONUS +
-      pairPressure(state, targetId) * PAIR_BONUS -
-      (state.trust[targetId]?.score ?? 0) * TRUST_DAMPING +
+      topConfidence * weights.suspicion.evidenceConfidenceBonus +
+      incomingHostilityOf(state, targetId) * weights.suspicion.hostilityBonus +
+      pairPressure(state, targetId, weights) * weights.suspicion.pairBonus -
+      (state.trust[targetId]?.score ?? 0) * weights.trust.damping +
       (bias[targetId] ?? 0) +
       // Người bị cả làng dồn vào mà không ai bênh thì dễ bị treo; đó vừa là tín
       // hiệu (có thể họ đã lộ), vừa là cái bẫy (đám đông có khi đang sai).
       // Trọng số nhỏ có chủ đích: nó không được tự mình đẩy ai qua ngưỡng.
-      isolationScore(state, targetId, aliveIds) * ISOLATION_BONUS;
+      isolationScore(state, targetId, aliveIds) * weights.suspicion.isolationBonus;
 
-    // Phase 1 chỉ có teammate-safety penalty đơn giản; bussing thuộc Phase 3.
     const targetRole = knowledge.knownRoles[targetId];
     const targetIsWolf = targetRole === "WEREWOLF" || targetRole === "WOLF_CUB";
     if (selfIsWolf && targetIsWolf) {
-      score -= 25 + personality.loyalty * 30;
+      score -=
+        weights.teammateProtection.penaltyBase +
+        personality.loyalty * weights.teammateProtection.loyaltySpan;
     }
 
-    score += (rng() - 0.5) * JITTER_SPAN;
+    score += (rng() - 0.5) * weights.confidence.jitterSpan;
 
     scored.push({
       targetId,
       score,
-      evidence: reasons.slice(-MAX_INTENTION_EVIDENCE),
+      evidence: reasons.slice(-weights.limits.intentionEvidence),
       topConfidence,
     });
   }
@@ -225,7 +219,7 @@ export function selectVote(
     if (
       currentQualifies &&
       winner.targetId !== current.targetId &&
-      winner.score < current.score + voteHysteresis(personality)
+      winner.score < current.score + voteHysteresis(personality, weights)
     ) {
       winner = current;
     }
@@ -245,13 +239,16 @@ export function selectVote(
   // Vì vậy chỉ phe Sói mới được phép chọn nó khi bằng chứng còn mỏng, và cũng
   // chỉ khi làng còn đủ đông để chưa ai thấy sốt ruột.
   const pressure = survivalPressure(knowledge);
-  const abstainHelpsMyTeam = selfIsWolf && pressure < DESPERATION_PRESSURE;
+  const abstainHelpsMyTeam =
+    selfIsWolf && pressure < weights.deceptionRisk.abstainPressureCeiling;
 
   if (abstainHelpsMyTeam && (winner.score < threshold || winner.evidence.length === 0)) {
     return noEliminationIntention((threshold - best.score) / Math.max(1, threshold));
   }
 
-  const normalized = clampUnit((winner.score - threshold) / Math.max(1, 100 - threshold));
+  const normalized = clampUnit(
+    (winner.score - threshold) / Math.max(1, MAX_BELIEF_SCORE - threshold),
+  );
   const choice: PublicVoteChoice = { type: "PLAYER", targetId: winner.targetId };
   return {
     kind: "VOTE",

@@ -1,6 +1,7 @@
 import type { RoomConfig, Winner } from "@masoi/shared";
 import { GameEngine } from "../../engine";
 import { BotRuntime } from "../BotRuntime";
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { createSeededRng } from "../rng";
 import type { BotDecisionContext } from "../types";
 
@@ -17,6 +18,8 @@ export interface SimulationInput {
   seed: string;
   playerCount?: number;
   config?: Partial<RoomConfig>;
+  /** Bỏ trống thì dùng cấu hình production; chỉ định để so hai bộ trọng số. */
+  weights?: BotWeights;
 }
 
 export interface SimulationResult {
@@ -66,6 +69,7 @@ function baseConfig(over: Partial<RoomConfig> = {}): RoomConfig {
 export function simulateGame(input: SimulationInput): SimulationResult {
   const playerCount = input.playerCount ?? 8;
   const config = baseConfig(input.config);
+  const weights = input.weights ?? DEFAULT_BOT_WEIGHTS;
   const violations: string[] = [];
   let actions = 0;
 
@@ -100,6 +104,7 @@ export function simulateGame(input: SimulationInput): SimulationResult {
         playerId: player.id,
         rng: createSeededRng(`${input.seed}:${player.id}`),
         playerIds: engine.state.players.map((p) => p.id),
+        weights,
       }),
     );
   }
