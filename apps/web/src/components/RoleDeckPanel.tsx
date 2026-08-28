@@ -9,15 +9,34 @@ import {
 import { ROLE_ICON_PATHS } from "@/lib/role-art";
 
 /** Thứ tự hiển thị, không phải thứ tự hành động ban đêm. Dân Làng luôn đứng cuối. */
-const VILLAGE_ROLES: Role[] = ["SEER", "GUARD", "WITCH", "HUNTER", "CURSED"];
+const VILLAGE_ROLES: Role[] = [
+  "SEER",
+  "APPRENTICE_SEER",
+  "DETECTIVE",
+  "GUARD",
+  "GUARDIAN_ANGEL",
+  "PRIEST",
+  "WITCH",
+  "HUNTER",
+  "MAYOR",
+  "CURSED",
+];
+
+const WOLF_SPECIAL_ROLES: Role[] = ["WOLF_CUB"];
 
 /** Khoá cấu hình tương ứng với từng vai bật/tắt được. */
 const CONFIG_KEY: Record<string, keyof RoomConfig> = {
   SEER: "seer",
+  APPRENTICE_SEER: "apprenticeSeer",
+  DETECTIVE: "detective",
   GUARD: "guard",
+  GUARDIAN_ANGEL: "guardianAngel",
+  PRIEST: "priest",
   WITCH: "witch",
   HUNTER: "hunter",
+  MAYOR: "mayor",
   CURSED: "cursed",
+  WOLF_CUB: "wolfCub",
 };
 
 interface Props {
@@ -28,11 +47,6 @@ interface Props {
 
 /**
  * Bộ bài của ván sắp tới.
- *
- * Đây KHÔNG phải chỗ chọn vai cho mình: vai được chia ngẫu nhiên ở server và
- * đó là thứ giữ cho ván công bằng. Bảng này chỉ nói ván này có những vai nào,
- * và chủ phòng bật/tắt được - cùng dữ liệu với hộp cấu hình cũ, chỉ trình bày
- * để cả phòng cùng đọc được thay vì giấu trong một thẻ details của riêng chủ.
  */
 export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
   const config = snapshot.config;
@@ -40,12 +54,18 @@ export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
 
   const specials =
     (config.seer ? 1 : 0) +
+    (config.apprenticeSeer ? 1 : 0) +
+    (config.detective ? 1 : 0) +
     (config.guard ? 1 : 0) +
+    (config.guardianAngel ? 1 : 0) +
+    (config.priest ? 1 : 0) +
     (config.witch ? 1 : 0) +
     (config.hunter ? 1 : 0) +
+    (config.mayor ? 1 : 0) +
     (config.cursed ? 1 : 0);
+  const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0);
   // Dân Làng lấp phần còn lại, đúng như buildRoleDeck làm ở engine.
-  const villagers = Math.max(0, playerCount - config.werewolves - specials);
+  const villagers = Math.max(0, playerCount - wolfCount - specials);
 
   const toggle = (role: Role) => {
     if (!isHost) return;
@@ -58,13 +78,52 @@ export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
     onUpdateConfig({ ...config, werewolves: n });
   };
 
+  const setMode = (mode: "ranked" | "chaos") => {
+    if (!isHost) return;
+    onUpdateConfig({ ...config, mode });
+  };
+
+  const currentMode = config.mode ?? "ranked";
+
   return (
     <div className="card">
-      <div className="mb-4 flex items-baseline justify-between gap-3">
-        <h3 className="font-display text-xl font-bold text-white">Bộ bài của ván này</h3>
-        <span className="text-xs text-mist/50">
-          {isHost ? "Bấm để bật/tắt vai" : "Chủ phòng quyết định"}
-        </span>
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <h3 className="font-display text-xl font-bold text-white">Bộ bài của ván này</h3>
+          <p className="text-xs text-mist/60">
+            {isHost ? "Bấm để bật/tắt vai & chế độ chơi" : "Chủ phòng quyết định"}
+          </p>
+        </div>
+
+        {/* Chế độ chơi: Ranked / Chaos */}
+        <div className="flex items-center gap-1 rounded-xl border border-night-600/60 bg-night-800/60 p-1">
+          <button
+            type="button"
+            disabled={!isHost}
+            onClick={() => setMode("ranked")}
+            className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+              currentMode === "ranked"
+                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                : "text-mist/60 hover:text-white"
+            } ${!isHost ? "cursor-default" : "cursor-pointer"}`}
+            title="Sự kiện chỉ kích hoạt khi một phe bị lấn lướt mạnh"
+          >
+            🛡️ Ranked
+          </button>
+          <button
+            type="button"
+            disabled={!isHost}
+            onClick={() => setMode("chaos")}
+            className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+              currentMode === "chaos"
+                ? "bg-purple-500/20 text-purple-300 border border-purple-500/40"
+                : "text-mist/60 hover:text-white"
+            } ${!isHost ? "cursor-default" : "cursor-pointer"}`}
+            title="Sự kiện bất ngờ ngẫu nhiên kích hoạt mỗi vòng"
+          >
+            🌀 Chaos
+          </button>
+        </div>
       </div>
 
       <Section label="Phe Dân Làng" tone="village">
@@ -95,6 +154,16 @@ export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
           locked
           onToggle={() => undefined}
         />
+        {WOLF_SPECIAL_ROLES.map((role) => (
+          <RoleCard
+            key={role}
+            role={role}
+            count={config[CONFIG_KEY[role]] ? 1 : 0}
+            enabled={!!config[CONFIG_KEY[role]]}
+            locked={!isHost}
+            onToggle={() => toggle(role)}
+          />
+        ))}
         {isHost && (
           <div className="flex flex-col justify-center gap-1 rounded-xl border border-night-600/60 bg-night-800/40 px-3 py-2">
             <span className="text-[10px] uppercase tracking-wider text-mist/50">Số Ma Sói</span>

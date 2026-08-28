@@ -1,5 +1,6 @@
 import type {
   DayVoteRecap,
+  GameEventView,
   GamePhase,
   HunterShotRecap,
   NightRecap,
@@ -36,24 +37,33 @@ export interface NightState {
   wolfVotes: Record<string, string | null>;
   /** Mục tiêu đã chốt sau khi khoá phiếu Sói; null nghĩa là đêm nay không cắn */
   killTarget: string | null;
+  /** Mục tiêu cắn thứ 2 của bầy Sói (khi có cắn kép từ Wolf Cub rage) */
+  wolfSecondaryTarget: string | null;
+  /** Đêm nay bầy Sói có được cắn 2 mục tiêu hay không */
+  wolfCubRageTonight: boolean;
   /**
    * Phiếu Sói đã khoá chưa. Trước khi khoá, Sói còn đổi được phiếu và
    * Phù Thuỷ chưa được biết nạn nhân; sau khi khoá thì ngược lại.
    */
   wolvesLocked: boolean;
   guardTarget: string | null;
-/** Phù Thuỷ đã quyết định dùng bình cứu cho nạn nhân đêm nay chưa */
+  guardianAngelTarget: string | null;
+  /** Phù Thuỷ đã quyết định dùng bình cứu cho nạn nhân đêm nay chưa */
   healTonight: boolean;
   poisonTarget: string | null;
   /** Phù Thủy đã chủ động bỏ qua cả hai bình trong đêm này */
   witchSkipped: boolean;
-  seerResults: Record<string, { targetId: string; isWolf: boolean }>;
+  seerResults: Record<string, { targetId: string; isWolf: boolean; secondaryTargetId?: string; secondaryIsWolf?: boolean; unknown?: boolean }>;
+  priestTarget: string | null;
+  detectiveTargets: { target1: string; target2: string } | null;
+  detectiveResults: Record<string, { target1Id: string; target2Id: string; sameTeam: boolean }>;
+  priestResults: Record<string, { targetId: string; isWolf: boolean }>;
 }
 
 export interface DeathInfo {
   playerId: string;
   name: string;
-  cause: "wolf" | "poison";
+  cause: "wolf" | "poison" | "priest" | "priest_backfire";
 }
 
 export interface PublicDeath {
@@ -129,6 +139,11 @@ export interface GameState {
   voteMutations: VoteMutation[];
   dayVoteHistory: DayVoteRecap[];
   guardPrevious: string | null;
+  guardianAngelPrevious: string | null;
+  guardianAngelCharges: Record<string, number>;
+  priestHolyWaterUsed: Record<string, boolean>;
+  apprenticeAwakened: boolean;
+  wolfCubRageNextNight: boolean;
   healUsed: boolean;
   poisonUsed: boolean;
   lastNightDeaths: PublicDeath[];
@@ -140,6 +155,8 @@ export interface GameState {
   lastTrial: TrialRecapState | null;
   hunterReaction: HunterReactionState | null;
   hunterShots: HunterShotRecap[];
+  activeEvent: GameEventView | null;
+  eventHistory: GameEventView[];
   log: string[];
 }
 

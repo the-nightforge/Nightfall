@@ -80,7 +80,7 @@ jobs:
           node-version: 20.19.x
 
       - name: Install Vercel CLI
-        run: npm i -g vercel@48
+        run: npm i -g vercel@59
 
       - name: Deploy preview
         # --archive=tgz gửi một file nén thay vì vài nghìn file lẻ; monorepo này
@@ -106,7 +106,7 @@ jobs:
           node-version: 20.19.x
 
       - name: Install Vercel CLI
-        run: npm i -g vercel@48
+        run: npm i -g vercel@59
 
       - name: Deploy production
         run: |

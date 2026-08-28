@@ -1,3 +1,4 @@
+import type { Role } from "@masoi/shared";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
 
 /**
@@ -9,9 +10,14 @@ import { nightEvidence, type BotRoleStrategy } from "./strategy";
  */
 const MOST_INFORMATIVE_SUSPICION = 50;
 
-export function seerStrategy(): BotRoleStrategy {
+/**
+ * `role` là tham số để Tiên Tri Tập Sự đã thức tỉnh dùng lại nguyên chiến lược
+ * này - lúc đó kỹ năng của hai vai là một. Trước khi thức tỉnh, engine trả
+ * `night: null` nên strategy không bao giờ được hỏi.
+ */
+export function seerStrategy(role: Role = "SEER"): BotRoleStrategy {
   return {
-    role: "SEER",
+    role,
 
     decideNight(context, state, rng) {
       const night = context.knowledge.night;

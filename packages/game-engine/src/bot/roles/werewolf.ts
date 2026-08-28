@@ -4,6 +4,7 @@ import type {
   BotNightIntention,
   BotRng,
 } from "../types";
+import type { Role } from "@masoi/shared";
 import { incomingHostilityOf } from "../analysis/social-analysis";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
 
@@ -48,9 +49,14 @@ function threatScore(
   };
 }
 
-export function werewolfStrategy(): BotRoleStrategy {
+/**
+ * `role` là tham số vì Sói Con dùng ĐÚNG chiến lược này: nó cắn cùng bầy, và
+ * cơ chế "chết thì bầy được cắn hai" nằm ở engine chứ không ở lựa chọn của nó.
+ * Truyền vai vào thay vì hard-code giữ cho `strategyFor(r).role === r` luôn đúng.
+ */
+export function werewolfStrategy(role: Role = "WEREWOLF"): BotRoleStrategy {
   return {
-    role: "WEREWOLF",
+    role,
 
     decideNight(context, state, rng): BotNightIntention | null {
       const night = context.knowledge.night;

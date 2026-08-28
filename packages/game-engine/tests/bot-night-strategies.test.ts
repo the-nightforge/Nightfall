@@ -17,7 +17,17 @@ function stateFor(seed = "night"): BotBrainState {
 }
 
 function emptyTargets(): NightKnowledge["legalTargets"] {
-  return { KILL: [], SEE: [], GUARD: [], HEAL: [], POISON: [], SKIP: [] };
+  return {
+    KILL: [],
+    SEE: [],
+    GUARD: [],
+    HEAL: [],
+    POISON: [],
+    SKIP: [],
+    DETECTIVE_CHECK: [],
+    GUARDIAN_PROTECT: [],
+    HOLY_WATER: [],
+  };
 }
 
 function context(

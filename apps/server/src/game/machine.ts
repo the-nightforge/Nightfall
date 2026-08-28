@@ -76,7 +76,7 @@ export function startGame(room: Room): void {
 function beginNight(room: Room): void {
   clearRoomTimers(room.code);
   const e = engine(room);
-  e.setPhase("NIGHT", room.config.nightSeconds * 1000);
+  e.startNight(room.config.nightSeconds * 1000);
   scheduleNightBots(room);
   setRoomTimer(room.code, () => lockWolves(room), room.config.nightSeconds * 1000 + 500);
   sync(room);
@@ -130,8 +130,16 @@ function endNight(room: Room): void {
 function beginDiscussion(room: Room): void {
   clearRoomTimers(room.code);
   clearDiscussionSkipVotes(room.code);
-  engine(room).setPhase("DAY_DISCUSSION", room.config.discussionSeconds * 1000);
-  setRoomTimer(room.code, () => beginVoting(room), room.config.discussionSeconds * 1000 + 500);
+  const e = engine(room);
+  const event = e.startDay(room.config.discussionSeconds * 1000);
+  const durationMs = (e.state.phaseEndsAt ?? (Date.now() + room.config.discussionSeconds * 1000)) - Date.now();
+
+  if (event?.id === "AMNESTY_DAY") {
+    // Ngày Hòa Hoãn: sau thảo luận chuyển thẳng sang Đêm
+    setRoomTimer(room.code, () => beginNight(room), durationMs + 500);
+  } else {
+    setRoomTimer(room.code, () => beginVoting(room), durationMs + 500);
+  }
   scheduleDayBots(room);
   sync(room);
 }
@@ -150,8 +158,15 @@ function beginVoting(room: Room): void {
 export function submitDiscussionSkip(room: Room, playerId: string, skip: boolean): string | null {
   const result = updateDiscussionSkipVote(room, playerId, skip);
   if (!result.ok) return result.error;
-  if (result.unanimous) beginVoting(room);
-  else sync(room);
+  if (result.unanimous) {
+    if (room.engine?.state.activeEvent?.id === "AMNESTY_DAY") {
+      beginNight(room);
+    } else {
+      beginVoting(room);
+    }
+  } else {
+    sync(room);
+  }
   return null;
 }
 
@@ -173,6 +188,10 @@ export function scheduleDiscussionSkipRecheck(room: Room): void {
 
 export function reconcileDiscussionSkip(room: Room): boolean {
   if (!hasUnanimousDiscussionSkip(room)) return false;
+  if (room.engine?.state.activeEvent?.id === "AMNESTY_DAY") {
+    beginNight(room);
+    return room.engine?.state.phase === "NIGHT";
+  }
   beginVoting(room);
   return room.engine?.state.phase === "VOTING";
 }
@@ -351,7 +370,11 @@ export function scheduleHunterBot(room: Room): void {
 function applyNight(room: Room, botId: string, decision: NightDecision | null): void {
   if (!decision) return;
   try {
-    engine(room).submitNightAction(botId, decision.action, decision.targetId);
+    if (decision.secondaryTargetId !== undefined) {
+      engine(room).submitNightAction(botId, decision.action, decision.targetId, decision.secondaryTargetId);
+    } else {
+      engine(room).submitNightAction(botId, decision.action, decision.targetId);
+    }
   } catch {
     /* engine là trọng tài cuối; sai luật thì bot bỏ lượt */
   }
@@ -396,6 +419,9 @@ export function scheduleNightBots(room: Room): void {
         applyNight(room, member.playerId, {
           action: decision.action,
           targetId: decision.targetId,
+          // Thám Tử so hai người; bỏ trường này thì engine ném "cần đủ 2 người"
+          // và lượt điều tra mất trắng.
+          secondaryTargetId: decision.secondaryTargetId,
         });
       } catch {
         /* lõi bot lỗi không được kéo sập cả tiến trình */

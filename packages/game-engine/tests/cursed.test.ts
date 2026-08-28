@@ -21,6 +21,13 @@ function emptyNight(): NightState {
     poisonTarget: null,
     witchSkipped: false,
     seerResults: {},
+    wolfSecondaryTarget: null,
+    wolfCubRageTonight: false,
+    guardianAngelTarget: null,
+    priestTarget: null,
+    detectiveTargets: null,
+    detectiveResults: {},
+    priestResults: {},
   };
 }
 
@@ -55,6 +62,13 @@ function cursedState(over: Partial<GameState> = {}): GameState {
     lastEliminated: null,
     hunterReaction: null,
     hunterShots: [],
+    guardianAngelPrevious: null,
+    guardianAngelCharges: {},
+    priestHolyWaterUsed: {},
+    apprenticeAwakened: false,
+    wolfCubRageNextNight: false,
+    activeEvent: null,
+    eventHistory: [],
     log: [],
     ...over,
   };

@@ -82,6 +82,8 @@ export interface BotNightIntention {
   kind: "NIGHT_ACTION";
   action: NightActionKind;
   targetId: string | null;
+  /** Chỉ `DETECTIVE_CHECK` dùng (so hai người); các hành động khác để trống. */
+  secondaryTargetId?: string | null;
   confidence: number;
   evidence: BotEvidence[];
 }
@@ -133,7 +135,16 @@ export interface SocialEdge {
 }
 
 /** Hành động đêm engine chấp nhận, đúng bằng union của `submitNightAction`. */
-export type NightActionKind = "KILL" | "SEE" | "GUARD" | "HEAL" | "POISON" | "SKIP";
+export type NightActionKind =
+  | "KILL"
+  | "SEE"
+  | "GUARD"
+  | "HEAL"
+  | "POISON"
+  | "SKIP"
+  | "DETECTIVE_CHECK"
+  | "GUARDIAN_PROTECT"
+  | "HOLY_WATER";
 
 /**
  * Thông tin ban đêm của ĐÚNG một vai.

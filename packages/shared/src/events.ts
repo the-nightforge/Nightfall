@@ -30,3 +30,14 @@ export interface SocketError {
   message: string;
   code?: string;
 }
+
+export type GameEventId =
+  | "CURFEW"
+  | "SILENT_NIGHT"
+  | "AMNESTY_DAY"
+  | "CLEARING_MIST"
+  | "PEACEFUL_NIGHT"
+  | "JUDGMENT_DAY"
+  | "MOONLESS_NIGHT"
+  | "BLOODY_HUNT"
+  | "SHROUDED_ECLIPSE";

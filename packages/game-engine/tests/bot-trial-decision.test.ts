@@ -206,7 +206,17 @@ describe("BotRuntime · phương thức mới", () => {
         night: {
           canAct: true,
           legalActions: ["SEE"],
-          legalTargets: { KILL: [], SEE: ["a", "b"], GUARD: [], HEAL: [], POISON: [], SKIP: [] },
+          legalTargets: {
+            KILL: [],
+            SEE: ["a", "b"],
+            GUARD: [],
+            HEAL: [],
+            POISON: [],
+            SKIP: [],
+            DETECTIVE_CHECK: [],
+            GUARDIAN_PROTECT: [],
+            HOLY_WATER: [],
+          },
           wolfTarget: null,
           guardPrevious: null,
           healUsed: false,

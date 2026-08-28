@@ -177,10 +177,14 @@ export function setupSocket(io: SocketServer): void {
       const room = getRoom(roomCode);
       if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
 
+      const primaryTarget = parsed.targetId ?? parsed.targetId1 ?? null;
+      const secondaryTarget = parsed.targetId2 ?? null;
+
       room.engine.submitNightAction(
         playerId,
         parsed.type,
-        parsed.targetId ?? null,
+        primaryTarget,
+        secondaryTarget,
       );
       maybeEndWitchWindow(room);
       broadcastRoom(roomCode);

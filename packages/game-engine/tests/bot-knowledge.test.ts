@@ -39,6 +39,17 @@ function knowledgeFixture(phase: GamePhase = "VOTING") {
       poisonTarget: "wolf-b",
       witchSkipped: false,
       seerResults: { witch: { targetId: "wolf-b", isWolf: true } },
+      // Bí mật của các vai mở rộng. Fixture này cố tình nhồi giá trị THẬT vào
+      // mọi trường bí mật để các assert "không lộ" ở dưới có thứ để lộ.
+      wolfSecondaryTarget: "villager",
+      wolfCubRageTonight: true,
+      guardianAngelTarget: "witch",
+      priestTarget: "wolf-a",
+      detectiveTargets: { target1: "wolf-a", target2: "witch" },
+      detectiveResults: {
+        witch: { target1Id: "wolf-a", target2Id: "witch", sameTeam: false },
+      },
+      priestResults: { witch: { targetId: "wolf-a", isWolf: true } },
     },
     votes: {},
     voteMutations: [],
@@ -53,6 +64,15 @@ function knowledgeFixture(phase: GamePhase = "VOTING") {
     lastTrial: null,
     hunterReaction: null,
     hunterShots: [],
+    // Cùng lý do với `night` ở trên: nhồi giá trị thật vào state của các vai mở
+    // rộng để assert "không lộ" có thứ để lộ.
+    guardianAngelPrevious: "villager",
+    guardianAngelCharges: { villager: 1 },
+    priestHolyWaterUsed: { witch: true },
+    apprenticeAwakened: true,
+    wolfCubRageNextNight: true,
+    activeEvent: null,
+    eventHistory: [],
     log: ["Sói đã cắn Dân."],
   };
   return new GameEngine(state);

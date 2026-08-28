@@ -4,16 +4,29 @@ import type { RoomSnapshot } from "@masoi/shared";
 /**
  * Hành động đêm engine chấp nhận.
  *
- * `SKIP` có mặt vì engine nhận nó và vì Phù Thuỷ chủ động bỏ lượt là một nước
- * đi thật. Trước Phase 2 union này thiếu `SKIP` — an toàn khi chỉ có provider
- * sinh hành động, nhưng sai ngay khi lõi deterministic tiếp quản.
+ * Phải khớp ĐÚNG union của `GameEngine.submitNightAction`. Union này từng thiếu
+ * `SKIP` — vô hại khi chỉ có provider sinh hành động, nhưng sai ngay khi lõi
+ * deterministic tiếp quản, vì Phù Thuỷ chủ động bỏ lượt là một nước đi thật.
+ *
+ * Ba giá trị cuối đến từ các vai mở rộng (Thám Tử, Thiên Thần Hộ Mệnh, Linh Mục).
  */
-export type NightActionType = "KILL" | "SEE" | "GUARD" | "HEAL" | "POISON" | "SKIP";
+export type NightActionType =
+  | "KILL"
+  | "SEE"
+  | "GUARD"
+  | "HEAL"
+  | "POISON"
+  | "SKIP"
+  | "DETECTIVE_CHECK"
+  | "GUARDIAN_PROTECT"
+  | "HOLY_WATER";
 
 export interface NightDecision {
   action: NightActionType;
   /** null với HEAL và SKIP, vì engine không nhận mục tiêu cho hai cái đó */
   targetId: string | null;
+  /** Chỉ Thám Tử dùng (soi hai người); các hành động khác để trống. */
+  secondaryTargetId?: string | null;
 }
 
 /**

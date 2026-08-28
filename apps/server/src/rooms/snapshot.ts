@@ -56,12 +56,16 @@ export function resolveChat(room: Room, senderId: string):
 
   if (view.phase === "NIGHT") {
     const role = view.you?.role;
-    if (role === "WEREWOLF") {
+    if (role === "WEREWOLF" || role === "WOLF_CUB") {
+      if (room.engine?.state.activeEvent?.id === "SILENT_NIGHT") {
+        return { ok: false, error: "Đêm Tĩnh Lặng: Kênh chat phe Sói bị vô hiệu hóa" };
+      }
       const recipients = room.members
         .filter(
           (m) =>
             !m.isBot &&
-            room.engine!.snapshotFor(m.playerId).you?.role === "WEREWOLF" &&
+            (room.engine!.snapshotFor(m.playerId).you?.role === "WEREWOLF" ||
+             room.engine!.snapshotFor(m.playerId).you?.role === "WOLF_CUB") &&
             room.engine!.snapshotFor(m.playerId).you?.alive,
         )
         .map((m) => m.playerId);
@@ -118,7 +122,8 @@ export function visibleChatLog(room: Room, viewerId: string): ChatMessage[] {
   }
 
   if (view.phase === "NIGHT") {
-    return view.you.role === "WEREWOLF" ? messagesFor("wolves") : [];
+    if (room.engine?.state.activeEvent?.id === "SILENT_NIGHT") return [];
+    return (view.you.role === "WEREWOLF" || view.you.role === "WOLF_CUB") ? messagesFor("wolves") : [];
   }
 
   if (
@@ -147,6 +152,8 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
     phase: gameView ? gameView.phase : "LOBBY",
     config: room.config,
     round: gameView?.round ?? 0,
+    activeEvent: gameView?.activeEvent ?? null,
+    apprenticeAwakened: gameView?.nightInfo?.apprenticeAwakened ?? room.engine?.state.apprenticeAwakened,
     phaseEndsAt: gameView ? gameView.phaseEndsAt : null,
     serverNow: Date.now(),
     you: member
