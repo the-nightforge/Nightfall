@@ -1,11 +1,12 @@
 import type { RoomSnapshot } from "@masoi/shared";
-import type { Attempt, BotBrain, DayDecision, NightDecision } from "./types";
+import type { Attempt, BotBrain, DayDecision, HunterShotDecision, NightDecision } from "./types";
 import { failed, nothingToDo } from "./types";
-import { buildDayPrompt, buildNightPrompt, type PromptSpec } from "./prompt";
+import { buildDayPrompt, buildHunterPrompt, buildNightPrompt, type PromptSpec } from "./prompt";
 import { BotGovernor, Cooldown, withTimeout } from "./governor";
 import {
   DEFAULT_CHAT_MAX,
   interpretDay,
+  interpretHunterShot,
   interpretNight,
   type CallOutcome,
   type LogOutcome,
@@ -207,5 +208,20 @@ export class GeminiBrain implements BotBrain {
       return failed();
     }
     return interpretDay(view, result.raw, this.opts.chatMaxLength ?? DEFAULT_CHAT_MAX, log);
+  }
+
+  async decideHunterShot(view: RoomSnapshot): Promise<Attempt<HunterShotDecision>> {
+    const spec = buildHunterPrompt(view);
+    if (!spec) return nothingToDo();
+
+    const result = await this.call(view.code, spec);
+    if (!result) return failed();
+
+    const log = this.logger(result.startedAt);
+    if (result.raw === null) {
+      log(result.reason, result.detail);
+      return failed();
+    }
+    return interpretHunterShot(view, result.raw, log);
   }
 }

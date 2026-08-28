@@ -53,6 +53,16 @@ export function legalVoteTargets(view: RoomSnapshot): string[] {
   return view.players.filter((p) => p.alive && p.id !== me).map((p) => p.id);
 }
 
+/** Mục tiêu phản kích hợp lệ của đúng bot Thợ Săn đang có quyền hành động. */
+export function legalHunterTargets(view: RoomSnapshot): string[] {
+  if (!view.hunterShot?.canAct || view.hunterShot.resolved || view.you?.role !== "HUNTER") {
+    return [];
+  }
+  return view.players
+    .filter((player) => player.alive && player.id !== view.you?.id)
+    .map((player) => player.id);
+}
+
 /**
  * Giá trị model dùng để nói "không treo ai". Phải nằm cùng trường với id người
  * chơi vì responseSchema của Gemini chỉ nhận một enum string duy nhất; id là

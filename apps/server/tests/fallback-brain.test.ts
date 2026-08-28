@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { RoomSnapshot } from "@masoi/shared";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import { FallbackBrain } from "../src/bots/fallback-brain";
-import type { Attempt, BotBrain, DayDecision, NightDecision } from "../src/bots/types";
+import type {
+  Attempt,
+  BotBrain,
+  DayDecision,
+  HunterShotDecision,
+  NightDecision,
+} from "../src/bots/types";
 
 function view(): RoomSnapshot {
   return {
@@ -44,6 +50,10 @@ function stub(name: string, result: () => Attempt<DayDecision>) {
     async decideDay(): Promise<Attempt<DayDecision>> {
       calls.n += 1;
       return result();
+    },
+    async decideHunterShot(): Promise<Attempt<HunterShotDecision>> {
+      calls.n += 1;
+      return { ok: false };
     },
   };
   return { brain, calls };
@@ -93,6 +103,7 @@ describe("FallbackBrain", () => {
       decideDay: async () => {
         throw new Error("mang hong");
       },
+      decideHunterShot: async () => ({ ok: false }),
     };
     const b = stub("b", () => ok("van chay"));
 

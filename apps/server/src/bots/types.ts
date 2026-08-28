@@ -26,6 +26,14 @@ export interface DayDecision {
 }
 
 /**
+ * Quyết định phản kích của Thợ Săn. targetId null là lựa chọn không bắn có
+ * chủ ý, nên phải nằm trong object thay vì dùng Attempt.value null.
+ */
+export interface HunterShotDecision {
+  targetId: string | null;
+}
+
+/**
  * Kết quả một lượt hỏi não bot.
  *
  * Trước đây cả hai tình huống dưới đây đều trả null, nên chỗ gọi không phân biệt
@@ -62,4 +70,5 @@ export interface BotBrain {
   readonly name: string;
   decideNight(view: RoomSnapshot): Promise<Attempt<NightDecision>>;
   decideDay(view: RoomSnapshot): Promise<Attempt<DayDecision>>;
+  decideHunterShot(view: RoomSnapshot): Promise<Attempt<HunterShotDecision>>;
 }

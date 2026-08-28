@@ -6,7 +6,7 @@ import { broadcastRoom, emitToPlayers } from "../rooms/broadcast";
 import { prisma } from "../db";
 import { buildSnapshot, pushChat, resolveChat } from "../rooms/snapshot";
 import { botBrain, randomBrain, resetBotBudget } from "../bots";
-import { engineVote, usablePlannedVote } from "../bots/targets";
+import { engineVote, legalHunterTargets, usablePlannedVote } from "../bots/targets";
 import { newId } from "../util";
 import type { NightDecision, PlannedVote } from "../bots/types";
 import { pendingEndVote, pendingVote } from "./bot-room-state";
@@ -19,6 +19,8 @@ import {
 const ROLE_REVEAL_MS = 10_000;
 const RESULT_MS = 8_000;
 const HUNTER_SHOT_MS = 15_000;
+/** Chừa một giây để engine nhận fallback trước khi phase hết hạn. */
+const HUNTER_BOT_DEADLINE_BUFFER_MS = 1_000;
 const GAME_OVER_MS = 30_000;
 /** Cửa sổ riêng cho Phù Thuỷ sau khi bầy Sói chốt nạn nhân. */
 const WITCH_WINDOW_MS = 15_000;
@@ -178,6 +180,7 @@ export function continueAfterDeathResult(room: Room, source: "night" | "vote"): 
 
   clearRoomTimers(room.code);
   e.beginHunterShot(HUNTER_SHOT_MS);
+  scheduleHunterBot(room);
   setRoomTimer(room.code, () => timeoutHunterShot(room), HUNTER_SHOT_MS + 500);
   sync(room);
 }
@@ -242,6 +245,87 @@ function onGameOver(room: Room): void {
 }
 
 // ---- Bot ----
+
+export function scheduleHunterBot(room: Room): void {
+  const scheduledEngine = room.engine;
+  if (!scheduledEngine || scheduledEngine.state.phase !== "HUNTER_SHOT") return;
+  const scheduledReaction = scheduledEngine.state.hunterReaction;
+  if (!scheduledReaction || scheduledReaction.resolved) return;
+
+  const member = room.members.find(
+    (candidate) => candidate.playerId === scheduledReaction.hunterId && candidate.isBot,
+  );
+  if (!member) return;
+
+  const initialView = buildSnapshot(room, member.playerId);
+  if (!initialView.hunterShot?.canAct) return;
+
+  let settled = false;
+  const stillPending = (): boolean =>
+    room.engine === scheduledEngine &&
+    scheduledEngine.state.phase === "HUNTER_SHOT" &&
+    scheduledEngine.state.hunterReaction === scheduledReaction &&
+    scheduledReaction.hunterId === member.playerId &&
+    !scheduledReaction.resolved;
+
+  const randomFallback = async () => {
+    if (!stillPending()) return null;
+    const currentView = buildSnapshot(room, member.playerId);
+    return (await randomBrain.decideHunterShot(currentView)).value;
+  };
+
+  const applyDecision = async (decision: { targetId: string | null } | null): Promise<void> => {
+    if (settled || !stillPending()) return;
+
+    const currentView = buildSnapshot(room, member.playerId);
+    const legalTargets = legalHunterTargets(currentView);
+    const valid =
+      decision !== null &&
+      (decision.targetId === null || legalTargets.includes(decision.targetId));
+    const finalDecision = valid ? decision : await randomFallback();
+    if (!finalDecision || settled || !stillPending()) return;
+
+    settled = true;
+    try {
+      // Dùng đúng luồng submit chung; engine tiếp tục là trọng tài cuối.
+      submitHunterShot(room, member.playerId, finalDecision.targetId);
+    } catch {
+      /* state đổi sát lúc nộp thì để timeout toàn cục xử lý như một lượt skip */
+    }
+  };
+
+  // Không còn ai để bắn: RandomBrain tạo quyết định skip ngay, không tốn một
+  // lượt gọi provider vốn chắc chắn không có prompt hợp lệ.
+  if (legalHunterTargets(initialView).length === 0) {
+    void randomFallback().then(applyDecision).catch(() => undefined);
+    return;
+  }
+
+  const pending = botBrain().decideHunterShot(initialView);
+  void (async () => {
+    try {
+      const attempt = await pending;
+      await applyDecision(attempt.ok ? attempt.value : null);
+    } catch {
+      await applyDecision(null);
+    }
+  })();
+
+  const remainingMs = Math.max(
+    0,
+    (scheduledEngine.state.phaseEndsAt ?? Date.now() + HUNTER_SHOT_MS) - Date.now(),
+  );
+  const deadlineMs = Math.max(
+    0,
+    Math.min(
+      HUNTER_SHOT_MS - HUNTER_BOT_DEADLINE_BUFFER_MS,
+      remainingMs - HUNTER_BOT_DEADLINE_BUFFER_MS,
+    ),
+  );
+  setRoomTimer(room.code, () => {
+    void applyDecision(null);
+  }, deadlineMs);
+}
 
 function applyNight(room: Room, botId: string, decision: NightDecision | null): void {
   if (!decision) return;
