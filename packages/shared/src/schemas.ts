@@ -22,6 +22,12 @@ export const roomConfigSchema = z
     witch: bool,
     hunter: bool,
     cursed: bool,
+    wolfCub: bool.optional(),
+    apprenticeSeer: bool.optional(),
+    detective: bool.optional(),
+    guardianAngel: bool.optional(),
+    priest: bool.optional(),
+    mayor: bool.optional(),
     mode: roomModeSchema.optional(),
     nightSeconds: z.number().int().min(15).max(120),
     discussionSeconds: z.number().int().min(30).max(300),
@@ -49,15 +55,21 @@ export function validateRoomConfig(config: RoomConfig, playerCount: number): str
     (config.guard ? 1 : 0) +
     (config.witch ? 1 : 0) +
     (config.hunter ? 1 : 0) +
-    (config.cursed ? 1 : 0);
-  const totalRoles = config.werewolves + specials;
+    (config.cursed ? 1 : 0) +
+    (config.apprenticeSeer ? 1 : 0) +
+    (config.detective ? 1 : 0) +
+    (config.guardianAngel ? 1 : 0) +
+    (config.priest ? 1 : 0) +
+    (config.mayor ? 1 : 0);
+  const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0);
+  const totalRoles = wolfCount + specials;
   if (totalRoles > playerCount) {
     return "Tổng số vai trò đặc biệt vượt quá số người chơi";
   }
   if (totalRoles === playerCount) {
     return "Phải còn chỗ cho Dân Làng";
   }
-  if (config.werewolves >= playerCount - config.werewolves) {
+  if (wolfCount >= playerCount - wolfCount) {
     return "Số Ma Sói phải ít hơn phe làng";
   }
   return null;

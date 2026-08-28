@@ -18,10 +18,16 @@ export function buildRoleDeck(config: RoomConfig, playerCount: number): Role[] {
   if (playerCount < 6) throw new Error("Cần ít nhất 6 người chơi");
   const deck: Role[] = [];
   for (let i = 0; i < config.werewolves; i++) deck.push("WEREWOLF");
+  if (config.wolfCub) deck.push("WOLF_CUB");
   if (config.seer) deck.push("SEER");
+  if (config.apprenticeSeer) deck.push("APPRENTICE_SEER");
+  if (config.detective) deck.push("DETECTIVE");
   if (config.guard) deck.push("GUARD");
+  if (config.guardianAngel) deck.push("GUARDIAN_ANGEL");
+  if (config.priest) deck.push("PRIEST");
   if (config.witch) deck.push("WITCH");
   if (config.hunter) deck.push("HUNTER");
+  if (config.mayor) deck.push("MAYOR");
   // Tối đa một Kẻ Nguyền Rủa mỗi ván: một lá duy nhất trong bộ bài.
   if (config.cursed) deck.push("CURSED");
   while (deck.length < playerCount) deck.push("VILLAGER");

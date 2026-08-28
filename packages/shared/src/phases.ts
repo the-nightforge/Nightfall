@@ -30,6 +30,12 @@ export interface RoomConfig {
   witch: boolean;
   hunter: boolean;
   cursed: boolean;
+  wolfCub?: boolean;
+  apprenticeSeer?: boolean;
+  detective?: boolean;
+  guardianAngel?: boolean;
+  priest?: boolean;
+  mayor?: boolean;
   mode?: RoomMode;
   /** giây */
   nightSeconds: number;
