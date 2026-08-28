@@ -1,10 +1,4 @@
 import type { RoomSnapshot } from "@masoi/shared";
-import {
-  legalHunterTargets,
-  legalNightTargets,
-  soloNightAction,
-  witchActions,
-} from "./targets";
 import type { SpeechRequest } from "./types";
 
 export interface GeminiSchema {
@@ -142,68 +136,6 @@ function vietnameseRole(view: RoomSnapshot): string {
 
 const THINK = { type: "string", description: "Suy luận ngắn, tối đa 200 ký tự" };
 
-export function buildNightPrompt(view: RoomSnapshot): PromptSpec | null {
-  if (!view.night?.canAct || !view.you?.alive) return null;
-
-  const isWitch = view.you.role === "WITCH";
-  const action = soloNightAction(view.you.role);
-  if (!isWitch && !action) return null;
-
-  const targets = isWitch ? legalNightTargets(view, "POISON") : legalNightTargets(view, action!);
-  if (!isWitch && targets.length === 0) return null;
-
-  const properties: Record<string, unknown> = { think: THINK };
-  const required = ["think"];
-
-  if (isWitch) {
-    properties.action = { type: "string", enum: witchActions(view) };
-    // responseSchema chỉ nhận tập con OpenAPI 3.0: "type" phải là giá trị đơn.
-    // Mảng ["string","null"] là cú pháp JSON Schema, chỉ hợp lệ ở responseJsonSchema
-    // - gửi vào đây là 400 INVALID_ARGUMENT. Cờ "nullable" cũng có tiền lệ bị từ
-    // chối, nên không mã hoá nullable ở đâu cả: targetId nằm ngoài "required",
-    // Phù Thuỷ không nhắm ai thì bỏ trống, và nightSchema đã .optional().
-    properties.targetId = { type: "string", enum: targets };
-    required.push("action");
-  } else {
-    properties.targetId = { type: "string", enum: targets };
-    required.push("targetId");
-  }
-
-  const task = isWitch
-    ? "Chọn hành động đêm nay. HEAL cứu đúng nạn nhân bầy Sói vừa chốt và không cần mục tiêu. POISON cần chọn một người. SKIP là không làm gì."
-    : `Chọn một người để ${verbFor(action!)}.`;
-
-  return {
-    system: systemFor(view),
-    user: [roleContext(view), "", playerLines(view), "", task].join("\n"),
-    schema: { type: "object", properties, required },
-  };
-}
-
-export function buildHunterPrompt(view: RoomSnapshot): PromptSpec | null {
-  const targets = legalHunterTargets(view);
-  if (targets.length === 0) return null;
-
-  return {
-    system: systemFor(view),
-    user: [
-      roleContext(view),
-      "",
-      playerLines(view),
-      "",
-      "Bạn vừa chết. Chọn một người còn sống để bắn, hoặc bỏ trống targetId để không bắn.",
-    ].join("\n"),
-    schema: {
-      type: "object",
-      properties: {
-        think: THINK,
-        targetId: { type: "string", enum: targets },
-      },
-      required: ["think"],
-    },
-  };
-}
-
 export function buildDefensePrompt(view: RoomSnapshot): PromptSpec | null {
   if (!view.trial?.canSpeak) return null;
 
@@ -236,46 +168,6 @@ export function buildDefensePrompt(view: RoomSnapshot): PromptSpec | null {
       required: ["think", "defense"],
     },
   };
-}
-
-export function buildFinalVotePrompt(view: RoomSnapshot): PromptSpec | null {
-  if (!view.trial?.canVote) return null;
-  const accused = view.players.find((p) => p.id === view.trial!.accusedId);
-  if (!accused) return null;
-
-  return {
-    system: systemFor(view),
-    user: [
-      roleContext(view),
-      "",
-      playerLines(view),
-      "",
-      chatBlock(view),
-      "",
-      // chatBlock đã kèm lời biện hộ (kênh day, 20 dòng gần nhất). Phải chỉ đích
-      // danh nó, nếu không model đọc lướt như một dòng chat thường và cả pha
-      // biện hộ trở thành vô nghĩa.
-      `${accused.name} đang bị đưa ra treo cổ và vừa tự bào chữa ở cuối đoạn chat trên.`,
-      `${accused.name} nhận ${accused.voteCount ?? 0} phiếu ở vòng sơ bộ.`,
-      `Cần ${view.trial.guiltyRequired} phiếu Treo mới kết án được.`,
-      "Cân nhắc lời bào chữa đó cùng số phiếu sơ bộ rồi quyết:",
-      "guilty true là treo cổ, guilty false là tha.",
-    ].join("\n"),
-    schema: {
-      type: "object",
-      properties: {
-        think: THINK,
-        guilty: { type: "boolean", description: "true là treo, false là tha" },
-      },
-      required: ["think", "guilty"],
-    },
-  };
-}
-
-function verbFor(action: string): string {
-  if (action === "KILL") return "cắn";
-  if (action === "SEE") return "soi";
-  return "bảo vệ";
 }
 
 /**

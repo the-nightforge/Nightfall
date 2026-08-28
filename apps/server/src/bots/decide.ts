@@ -1,26 +1,7 @@
 import { z } from "zod";
 import type { RoomSnapshot } from "@masoi/shared";
-import type {
-  Attempt,
-  DaySpeechDecision,
-  DefenseDecision,
-  FinalVoteDecision,
-  HunterShotDecision,
-  NightDecision,
-} from "./types";
-import { decided, failed, nothingToDo } from "./types";
-import {
-  legalHunterTargets,
-  legalNightTargets,
-  soloNightAction,
-  witchActions,
-} from "./targets";
-
-export const nightSchema = z.object({
-  think: z.string(),
-  action: z.enum(["HEAL", "POISON", "SKIP"]).optional(),
-  targetId: z.string().nullable().optional(),
-});
+import type { Attempt, DaySpeechDecision, DefenseDecision } from "./types";
+import { decided, failed } from "./types";
 
 /**
  * `.strict()` là hàng rào cuối: kể cả khi prompt bị sửa sai và model trả về
@@ -33,20 +14,9 @@ export const daySpeechSchema = z
   })
   .strict();
 
-export const hunterSchema = z.object({
-  think: z.string(),
-  targetId: z.string().nullable().optional(),
-});
-
 export const defenseSchema = z.object({
   think: z.string(),
   defense: z.string(),
-});
-
-// guilty bắt buộc và phải đúng kiểu boolean: xem interpretFinalVote.
-export const finalVoteSchema = z.object({
-  think: z.string(),
-  guilty: z.boolean(),
 });
 
 export const DEFAULT_CHAT_MAX = 300;
@@ -67,63 +37,12 @@ export type CallOutcome =
 export type LogOutcome = (outcome: CallOutcome, detail?: string) => void;
 
 /**
- * Diễn giải JSON thô thành quyết định đêm, dùng chung cho mọi nhà cung cấp.
+ * Diễn giải JSON thô thành lời thoại ban ngày, dùng chung cho mọi nhà cung cấp.
  *
  * Tách khỏi tầng transport có chủ đích: đây là nơi đặt các cổng kiểm tra tính
  * hợp lệ, và nhân đôi chúng cho từng nhà cung cấp là cách chắc chắn nhất để hai
  * bản trôi lệch nhau rồi một bên hở.
  */
-export function interpretNight(
-  view: RoomSnapshot,
-  raw: unknown,
-  log: LogOutcome,
-): Attempt<NightDecision> {
-  const parsed = nightSchema.safeParse(raw);
-  if (!parsed.success) {
-    log("bad_shape");
-    return failed();
-  }
-
-  if (view.you?.role === "WITCH") {
-    const action = parsed.data.action;
-    // Cổng hợp lệ thứ hai: xác nhận hành động Phù Thuỷ chọn còn dùng được
-    // (bình đã dùng thì engine sẽ từ chối) — không tin riêng Zod.
-    if (!action || !witchActions(view).includes(action)) {
-      log("illegal_target");
-      return failed();
-    }
-    if (action === "HEAL") {
-      log("ok");
-      return decided({ action: "HEAL", targetId: null });
-    }
-    if (action !== "POISON") {
-      // SKIP là lựa chọn có chủ đích, không phải lỗi: không được kéo sang não khác hỏi lại.
-      log("skip");
-      return nothingToDo();
-    }
-    const target = parsed.data.targetId ?? null;
-    if (!target || !legalNightTargets(view, "POISON").includes(target)) {
-      log("illegal_target");
-      return failed();
-    }
-    log("ok");
-    return decided({ action: "POISON", targetId: target });
-  }
-
-  const action = soloNightAction(view.you?.role);
-  if (!action) {
-    log("skip");
-    return nothingToDo();
-  }
-  const target = parsed.data.targetId ?? null;
-  if (!target || !legalNightTargets(view, action).includes(target)) {
-    log("illegal_target");
-    return failed();
-  }
-  log("ok");
-  return decided({ action, targetId: target });
-}
-
 export function interpretDaySpeech(
   raw: unknown,
   chatMaxLength: number,
@@ -165,48 +84,4 @@ export function interpretDefense(
   void view;
   log("ok");
   return decided({ chat: defense.slice(0, chatMaxLength) });
-}
-
-export function interpretFinalVote(
-  view: RoomSnapshot,
-  raw: unknown,
-  log: LogOutcome,
-): Attempt<FinalVoteDecision> {
-  const parsed = finalVoteSchema.safeParse(raw);
-  // Thiếu guilty hoặc guilty không phải boolean là lượt HỎNG, không được ép về
-  // false: làm thế sẽ biến một lời gọi lỗi thành một phiếu Tha thật, và chuỗi
-  // dự phòng không bao giờ chạy.
-  if (!parsed.success) {
-    log("bad_shape");
-    return failed();
-  }
-
-  void view;
-  log("ok");
-  return decided({ guilty: parsed.data.guilty });
-}
-
-export function interpretHunterShot(
-  view: RoomSnapshot,
-  raw: unknown,
-  log: LogOutcome,
-): Attempt<HunterShotDecision> {
-  const parsed = hunterSchema.safeParse(raw);
-  if (!parsed.success) {
-    log("bad_shape");
-    return failed();
-  }
-
-  const targetId = parsed.data.targetId ?? null;
-  if (targetId === null) {
-    log("skip");
-    return decided({ targetId: null });
-  }
-  if (!legalHunterTargets(view).includes(targetId)) {
-    log("illegal_target");
-    return failed();
-  }
-
-  log("ok");
-  return decided({ targetId });
 }

@@ -1,11 +1,18 @@
 import type { BotSpeechIntention } from "@masoi/game-engine";
 import type { RoomSnapshot } from "@masoi/shared";
 
-export type NightActionType = "KILL" | "SEE" | "GUARD" | "HEAL" | "POISON";
+/**
+ * Hành động đêm engine chấp nhận.
+ *
+ * `SKIP` có mặt vì engine nhận nó và vì Phù Thuỷ chủ động bỏ lượt là một nước
+ * đi thật. Trước Phase 2 union này thiếu `SKIP` — an toàn khi chỉ có provider
+ * sinh hành động, nhưng sai ngay khi lõi deterministic tiếp quản.
+ */
+export type NightActionType = "KILL" | "SEE" | "GUARD" | "HEAL" | "POISON" | "SKIP";
 
 export interface NightDecision {
   action: NightActionType;
-  /** null với HEAL, vì engine không nhận mục tiêu cho bình cứu */
+  /** null với HEAL và SKIP, vì engine không nhận mục tiêu cho hai cái đó */
   targetId: string | null;
 }
 
@@ -56,26 +63,9 @@ export interface DaySpeechDecision {
   chat: string | null;
 }
 
-/**
- * Quyết định phản kích của Thợ Săn. targetId null là lựa chọn không bắn có
- * chủ ý, nên phải nằm trong object thay vì dùng Attempt.value null.
- */
-export interface HunterShotDecision {
-  targetId: string | null;
-}
-
 /** Lời tự bào chữa của bị cáo, phát vào kênh day. */
 export interface DefenseDecision {
   chat: string;
-}
-
-/**
- * Lá phiếu xác nhận. Object chứ không phải boolean trần vì cùng lý do với
- * HunterShotDecision: Attempt<boolean> không phân biệt được "chọn Tha" với
- * "không quyết được", và hai thứ đó phải đi hai đường khác nhau.
- */
-export interface FinalVoteDecision {
-  guilty: boolean;
 }
 
 /**
@@ -108,18 +98,26 @@ export const decided = <T>(value: T): Always<T> => ({ ok: true, value });
 export const failed = <T>(): Attempt<T> => ({ ok: false });
 
 /**
- * Bộ não của bot. Đầu vào luôn là snapshot đã lọc theo quyền của chính bot đó,
+ * Bộ não của bot — CHỈ SINH LỜI NÓI.
+ *
+ * Từ Phase 2, interface này không còn method nào trả về một nước đi. Mọi quyết
+ * định gameplay (hành động đêm, phát bắn Thợ Săn, phiếu Treo/Tha, phiếu đề cử)
+ * do lõi deterministic trong `@masoi/game-engine` chốt trước, và nhà cung cấp
+ * chỉ được diễn đạt lại.
+ *
+ * Đây là một ràng buộc về KIỂU, không phải một quy ước: không có chữ ký nào để
+ * gọi, thì không có đường nào để một mô hình ngôn ngữ lái ván đấu.
+ *
+ * Đầu vào của `decideDefense` vẫn là snapshot đã lọc theo quyền của chính bot,
  * không bao giờ là state thô của engine.
  */
 export interface BotBrain {
   readonly name: string;
-  decideNight(view: RoomSnapshot): Promise<Attempt<NightDecision>>;
   /**
    * Diễn đạt một ý định ban ngày đã chốt. Thay cho `decideDay` cũ: nhà cung cấp
    * không còn được chọn mục tiêu hay lá phiếu nào nữa.
    */
   renderDaySpeech(request: SpeechRequest): Promise<Attempt<DaySpeechDecision>>;
-  decideHunterShot(view: RoomSnapshot): Promise<Attempt<HunterShotDecision>>;
+  /** Lời tự bào chữa của bị cáo. Là lời nói, không phải nước đi. */
   decideDefense(view: RoomSnapshot): Promise<Attempt<DefenseDecision>>;
-  decideFinalVote(view: RoomSnapshot): Promise<Attempt<FinalVoteDecision>>;
 }

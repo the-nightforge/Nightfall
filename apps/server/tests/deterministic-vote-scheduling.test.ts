@@ -55,11 +55,8 @@ vi.mock("../src/bots", async () => {
     ...actual,
     botBrain: () => ({
       name: "should-never-be-asked-for-a-target",
-      decideNight: vi.fn(),
       renderDaySpeech: brainControl.renderDaySpeech,
-      decideHunterShot: vi.fn(),
       decideDefense: vi.fn(),
-      decideFinalVote: vi.fn(),
     }),
   };
 });

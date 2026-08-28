@@ -5,27 +5,14 @@ import type {
   DaySpeechDecision,
   SpeechRequest,
   DefenseDecision,
-  FinalVoteDecision,
-  HunterShotDecision,
-  NightDecision,
 } from "./types";
 import { failed, nothingToDo } from "./types";
-import {
-  buildDaySpeechPrompt,
-  buildDefensePrompt,
-  buildFinalVotePrompt,
-  buildHunterPrompt,
-  buildNightPrompt,
-  type PromptSpec,
-} from "./prompt";
+import { buildDaySpeechPrompt, buildDefensePrompt, type PromptSpec } from "./prompt";
 import { BotGovernor, Cooldown, withTimeout } from "./governor";
 import {
   DEFAULT_CHAT_MAX,
   interpretDaySpeech,
   interpretDefense,
-  interpretFinalVote,
-  interpretHunterShot,
-  interpretNight,
   type CallOutcome,
   type LogOutcome,
 } from "./decide";
@@ -205,11 +192,10 @@ export class OpenAiCompatBrain implements BotBrain {
     };
   }
 
-  async decideNight(view: RoomSnapshot): Promise<Attempt<NightDecision>> {
-    const spec = buildNightPrompt(view);
-    if (!spec) return nothingToDo();
+  async renderDaySpeech(request: SpeechRequest): Promise<Attempt<DaySpeechDecision>> {
+    const spec = buildDaySpeechPrompt(request);
 
-    const result = await this.call(view.code, spec);
+    const result = await this.call(request.roomCode, spec);
     // Bị governor chặn trước khi gọi (hết ngân sách hoặc đang nghỉ vì 429) là
     // một lượt hỏng: đúng lúc cần thử nhà cung cấp khác nhất.
     if (!result) return failed();
@@ -219,36 +205,7 @@ export class OpenAiCompatBrain implements BotBrain {
       log(result.reason, result.detail);
       return failed();
     }
-    return interpretNight(view, result.raw, log);
-  }
-
-  async renderDaySpeech(request: SpeechRequest): Promise<Attempt<DaySpeechDecision>> {
-    const spec = buildDaySpeechPrompt(request);
-
-    const result = await this.call(request.roomCode, spec);
-    if (!result) return failed();
-
-    const log = this.logger(result.startedAt);
-    if (result.raw === null) {
-      log(result.reason, result.detail);
-      return failed();
-    }
     return interpretDaySpeech(result.raw, this.opts.chatMaxLength ?? DEFAULT_CHAT_MAX, log);
-  }
-
-  async decideHunterShot(view: RoomSnapshot): Promise<Attempt<HunterShotDecision>> {
-    const spec = buildHunterPrompt(view);
-    if (!spec) return nothingToDo();
-
-    const result = await this.call(view.code, spec);
-    if (!result) return failed();
-
-    const log = this.logger(result.startedAt);
-    if (result.raw === null) {
-      log(result.reason, result.detail);
-      return failed();
-    }
-    return interpretHunterShot(view, result.raw, log);
   }
 
   async decideDefense(view: RoomSnapshot): Promise<Attempt<DefenseDecision>> {
@@ -264,21 +221,6 @@ export class OpenAiCompatBrain implements BotBrain {
       return failed();
     }
     return interpretDefense(view, result.raw, this.opts.chatMaxLength ?? DEFAULT_CHAT_MAX, log);
-  }
-
-  async decideFinalVote(view: RoomSnapshot): Promise<Attempt<FinalVoteDecision>> {
-    const spec = buildFinalVotePrompt(view);
-    if (!spec) return nothingToDo();
-
-    const result = await this.call(view.code, spec);
-    if (!result) return failed();
-
-    const log = this.logger(result.startedAt);
-    if (result.raw === null) {
-      log(result.reason, result.detail);
-      return failed();
-    }
-    return interpretFinalVote(view, result.raw, log);
   }
 }
 

@@ -40,11 +40,8 @@ function requestForTarget(
 
 const failingBrain: BotBrain = {
   name: "always-fails",
-  decideNight: async () => failed(),
   renderDaySpeech: async () => failed(),
-  decideHunterShot: async () => failed(),
   decideDefense: async () => failed(),
-  decideFinalVote: async () => failed(),
 };
 
 const silentBrain: BotBrain = {

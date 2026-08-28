@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RoomSnapshot } from "@masoi/shared";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
-import {
-  buildDaySpeechPrompt,
-  buildDefensePrompt,
-  buildNightPrompt,
-  personaFor,
-} from "../src/bots/prompt";
+import { buildDaySpeechPrompt, buildDefensePrompt, personaFor } from "../src/bots/prompt";
 import { interpretDaySpeech } from "../src/bots/decide";
 import type { SpeechRequest } from "../src/bots/types";
 
@@ -45,38 +40,6 @@ function villagerView(): RoomSnapshot {
       { id: "1", channel: "day", playerId: "s", playerName: "Sang", text: "Tôi nghi Wolf", at: 1 },
     ],
     log: [],
-  };
-}
-
-/** Snapshot của Sói: thấy đồng bọn, không thấy vai phe làng */
-function wolfView(): RoomSnapshot {
-  return {
-    ...villagerView(),
-    phase: "NIGHT",
-    you: { id: "w", name: "Wolf", ready: true, connected: true, role: "WEREWOLF", alive: true },
-    players: [
-      { id: "v", name: "Vân", alive: true, isBot: false },
-      { id: "w", name: "Wolf", alive: true, isBot: true, role: "WEREWOLF" },
-      { id: "s", name: "Sang", alive: true, isBot: false, role: "WEREWOLF" },
-    ],
-    night: { canAct: true, acted: false, wolfTarget: null, seerResult: null },
-  };
-}
-
-/** Snapshot của Phù Thuỷ còn cả hai bình: nhánh duy nhất có targetId không bắt buộc */
-function witchView(): RoomSnapshot {
-  return {
-    ...villagerView(),
-    phase: "NIGHT",
-    you: { id: "v", name: "Vân", ready: true, connected: true, role: "WITCH", alive: true },
-    night: {
-      canAct: true,
-      acted: false,
-      wolfTarget: null,
-      seerResult: null,
-      healUsed: false,
-      poisonUsed: false,
-    },
   };
 }
 
@@ -166,15 +129,6 @@ describe("ranh giới bảo mật của prompt", () => {
     expect(spec.user).not.toContain("Tôi nghi Wolf");
   });
 
-  it("prompt của Sói nêu đồng bọn nhưng không nêu vai phe làng", () => {
-    const spec = buildNightPrompt(wolfView());
-    const text = `${spec!.system}\n${spec!.user}`;
-    expect(text).toContain("Sang");
-    expect(text).toContain("đồng bọn Sói");
-    expect(text).not.toContain("SEER");
-    expect(text).not.toContain("WITCH");
-  });
-
   it("chat của người chơi được bọc là dữ liệu, không phải chỉ thị", () => {
     // Các pha còn dùng snapshot (bào chữa, phiếu xác nhận) vẫn phải bọc chat.
     const spec = buildDefensePrompt(defenseView());
@@ -227,12 +181,6 @@ describe("chống lặp lời", () => {
 });
 
 describe("responseSchema", () => {
-  it("enum mục tiêu đêm của Sói chỉ gồm người ngoài phe Sói", () => {
-    const spec = buildNightPrompt(wolfView());
-    const target = spec!.schema.properties.targetId as { enum: string[] };
-    expect(target.enum).toEqual(["v"]);
-  });
-
   // Ban ngày nhà cung cấp chỉ được trả về CÂU CHỮ. Còn một trường mục tiêu nào
   // trong schema là còn một đường để nó lái gameplay.
   it("prompt ngày chỉ có think/chat, không còn trường mục tiêu nào", () => {
@@ -253,19 +201,6 @@ describe("responseSchema", () => {
     );
 
     expect(outcome).toEqual({ ok: false });
-  });
-
-  it("prompt đêm Phù Thuỷ: targetId là type đơn và nằm ngoài required", () => {
-    const spec = buildNightPrompt(witchView());
-    const target = spec!.schema.properties.targetId as { type: string; nullable?: boolean };
-    expect(target.type).toBe("string");
-    expect(target.nullable).toBeUndefined();
-    expect(spec!.schema.required).not.toContain("targetId");
-  });
-
-  it("Dân Làng không có prompt đêm", () => {
-    const v = { ...villagerView(), phase: "NIGHT" as const, night: null };
-    expect(buildNightPrompt(v)).toBeNull();
   });
 });
 

@@ -1,59 +1,23 @@
 import { describe, expect, it } from "vitest";
-import type { RoomSnapshot } from "@masoi/shared";
-import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import { FallbackBrain } from "../src/bots/fallback-brain";
 import type {
   Attempt,
   BotBrain,
   DaySpeechDecision,
+  DefenseDecision,
   SpeechRequest,
-  HunterShotDecision,
-  NightDecision,
 } from "../src/bots/types";
-
-function view(): RoomSnapshot {
-  return {
-    code: "ABCDE",
-    hostId: "v",
-    phase: "DAY_DISCUSSION",
-    config: { ...DEFAULT_ROOM_CONFIG },
-    round: 1,
-    phaseEndsAt: null,
-    you: { id: "v", name: "Vân", ready: true, connected: true, role: "VILLAGER", alive: true },
-    players: [
-      { id: "v", name: "Vân", alive: true, isBot: true },
-      { id: "s", name: "Sang", alive: true, isBot: false },
-    ],
-    night: null,
-    hasVoted: false,
-    myVote: null,
-    noEliminationVoteCount: 0,
-    serverNow: 0,
-    discussionSkip: null,
-    votesRevealed: false,
-    nightHistory: [],
-    lastNightDeaths: [],
-    lastEliminated: null,
-    winner: null,
-    chatLog: [],
-    log: [],
-  };
-}
 
 /** Não giả ghi lại số lần bị hỏi, để đếm xem chuỗi có đi tiếp hay không. */
 function stub(name: string, result: () => Attempt<DaySpeechDecision>) {
   const calls = { n: 0 };
   const brain: BotBrain = {
     name,
-    async decideNight(): Promise<Attempt<NightDecision>> {
-      calls.n += 1;
-      return { ok: false };
-    },
     async renderDaySpeech(): Promise<Attempt<DaySpeechDecision>> {
       calls.n += 1;
       return result();
     },
-    async decideHunterShot(): Promise<Attempt<HunterShotDecision>> {
+    async decideDefense(): Promise<Attempt<DefenseDecision>> {
       calls.n += 1;
       return { ok: false };
     },
@@ -98,11 +62,10 @@ describe("FallbackBrain", () => {
   it("não ném lỗi không chặn đường não còn lại", async () => {
     const a: BotBrain = {
       name: "no",
-      decideNight: async () => ({ ok: false }),
       renderDaySpeech: async () => {
         throw new Error("mang hong");
       },
-      decideHunterShot: async () => ({ ok: false }),
+      decideDefense: async () => ({ ok: false }),
     };
     const b = stub("b", () => ok("van chay"));
 
