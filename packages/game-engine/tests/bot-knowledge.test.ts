@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GameEngine } from "../src/engine";
+import { GameEngine, emptyNight } from "../src/engine";
 import type { GameState } from "../src/types";
 import { DEFAULT_ROOM_CONFIG, type GamePhase, type Role, type RoomConfig } from "@masoi/shared";
 
@@ -31,19 +31,24 @@ function knowledgeFixture(phase: GamePhase = "VOTING") {
     // định "không lộ" ở dưới trở thành vô nghĩa: chúng chỉ chứng minh được điều
     // gì khi thật sự có bí mật để lộ.
     night: {
+      ...emptyNight(),
       wolfVotes: { "wolf-a": "villager", "wolf-b": "witch" },
       killTarget: "villager",
       wolvesLocked: true,
       guardTarget: "witch",
       healTonight: true,
       poisonTarget: "wolf-b",
-      witchSkipped: false,
       seerResults: { witch: { targetId: "wolf-b", isWolf: true } },
     },
     votes: {},
     voteMutations: [],
     dayVoteHistory: [],
     guardPrevious: "witch",
+    guardianAngelPrevious: null,
+    guardianAngelCharges: {},
+    priestHolyWaterUsed: {},
+    apprenticeAwakened: false,
+    wolfCubRageNextNight: false,
     healUsed: true,
     poisonUsed: false,
     lastNightDeaths: [{ playerId: "ghost", name: "Ma" }],
@@ -53,6 +58,8 @@ function knowledgeFixture(phase: GamePhase = "VOTING") {
     lastTrial: null,
     hunterReaction: null,
     hunterShots: [],
+    activeEvent: null,
+    eventHistory: [],
     log: ["Sói đã cắn Dân."],
   };
   return new GameEngine(state);

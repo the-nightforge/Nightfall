@@ -121,7 +121,14 @@ export interface PlayerGameView {
 const recapPlayer = (player: EnginePlayer | undefined): RecapPlayer | null =>
   player ? { id: player.id, name: player.name } : null;
 
-function emptyNight(wolfCubRageTonight = false): GameState["night"] {
+/**
+ * Nguồn duy nhất định nghĩa hình dạng của NightState.
+ *
+ * Export ra ngoài để fixture test dựng đêm bằng chính hàm engine dùng. Trước
+ * đây mỗi file test chép tay object này, nên thêm một role mới là `tsc` đỏ ở
+ * bốn chỗ không liên quan gì đến role đó.
+ */
+export function emptyNight(wolfCubRageTonight = false): GameState["night"] {
   return {
     wolfVotes: {},
     killTarget: null,

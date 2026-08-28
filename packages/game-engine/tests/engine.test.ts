@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GameEngine } from "../src/engine";
+import { GameEngine, emptyNight } from "../src/engine";
 import { assignRoles, buildRoleDeck } from "../src/assignRoles";
 import { GameError, type GameState } from "../src/types";
 import { DEFAULT_ROOM_CONFIG, type RoomConfig } from "@masoi/shared";
@@ -92,18 +92,14 @@ function makeHunterEngine(phase: GameState["phase"] = "NIGHT") {
     ],
     config: { ...CONFIG, werewolves: 1, hunter: true },
     winner: null,
-    night: {
-      wolfVotes: {},
-      killTarget: null,
-      wolvesLocked: false,
-      guardTarget: null,
-      healTonight: false,
-      poisonTarget: null,
-      witchSkipped: false,
-      seerResults: {},
-    },
+    night: emptyNight(),
     votes: {},
     guardPrevious: null,
+    guardianAngelPrevious: null,
+    guardianAngelCharges: {},
+    priestHolyWaterUsed: {},
+    apprenticeAwakened: false,
+    wolfCubRageNextNight: false,
     healUsed: false,
     poisonUsed: false,
     lastNightDeaths: [],
@@ -111,6 +107,8 @@ function makeHunterEngine(phase: GameState["phase"] = "NIGHT") {
     lastEliminated: null,
     hunterReaction: null,
     hunterShots: [],
+    activeEvent: null,
+    eventHistory: [],
     log: [],
   };
   return new GameEngine(state);

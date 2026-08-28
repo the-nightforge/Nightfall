@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { GameEngine } from "../src/engine";
+import { GameEngine, emptyNight } from "../src/engine";
 import { buildRoleDeck } from "../src/assignRoles";
-import { GameError, type GameState, type NightState } from "../src/types";
+import { GameError, type GameState } from "../src/types";
 import { DEFAULT_ROOM_CONFIG, type RoomConfig } from "@masoi/shared";
 
 const CONFIG: RoomConfig = {
@@ -10,19 +10,6 @@ const CONFIG: RoomConfig = {
   hunter: false,
   cursed: true,
 };
-
-function emptyNight(): NightState {
-  return {
-    wolfVotes: {},
-    killTarget: null,
-    wolvesLocked: false,
-    guardTarget: null,
-    healTonight: false,
-    poisonTarget: null,
-    witchSkipped: false,
-    seerResults: {},
-  };
-}
 
 /** Bàn cờ cố định: một Sói, một Kẻ Nguyền Rủa và đủ vai để thử mọi lối chết. */
 function cursedState(over: Partial<GameState> = {}): GameState {
@@ -48,6 +35,11 @@ function cursedState(over: Partial<GameState> = {}): GameState {
     night: emptyNight(),
     votes: {},
     guardPrevious: null,
+    guardianAngelPrevious: null,
+    guardianAngelCharges: {},
+    priestHolyWaterUsed: {},
+    apprenticeAwakened: false,
+    wolfCubRageNextNight: false,
     healUsed: false,
     poisonUsed: false,
     lastNightDeaths: [],
@@ -55,6 +47,8 @@ function cursedState(over: Partial<GameState> = {}): GameState {
     lastEliminated: null,
     hunterReaction: null,
     hunterShots: [],
+    activeEvent: null,
+    eventHistory: [],
     log: [],
     ...over,
   };

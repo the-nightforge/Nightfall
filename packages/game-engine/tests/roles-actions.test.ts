@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { GameEngine } from "../src/engine";
+import { GameEngine, emptyNight } from "../src/engine";
 import { buildRoleDeck, assignRoles } from "../src/assignRoles";
 import { GameState, EnginePlayer } from "../src/types";
 import { DEFAULT_ROOM_CONFIG, RoomConfig } from "@masoi/shared";
@@ -32,23 +32,7 @@ function createTestState(players: Partial<EnginePlayer>[]): GameState {
       werewolves: 2,
     },
     winner: null,
-    night: {
-      wolfVotes: {},
-      killTarget: null,
-      wolfSecondaryTarget: null,
-      wolfCubRageTonight: false,
-      wolvesLocked: false,
-      guardTarget: null,
-      guardianAngelTarget: null,
-      healTonight: false,
-      poisonTarget: null,
-      witchSkipped: false,
-      seerResults: {},
-      priestTarget: null,
-      detectiveTargets: null,
-      detectiveResults: {},
-      priestResults: {},
-    },
+    night: emptyNight(),
     votes: {},
     voteMutations: [],
     dayVoteHistory: [],
@@ -67,6 +51,8 @@ function createTestState(players: Partial<EnginePlayer>[]): GameState {
     lastTrial: null,
     hunterReaction: null,
     hunterShots: [],
+    activeEvent: null,
+    eventHistory: [],
     log: [],
   };
 }
