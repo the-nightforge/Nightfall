@@ -15,7 +15,7 @@ export function NightRecapTimeline({ nights }: { nights: NightRecap[] }) {
         <div className="space-y-3">
           {nights.map((night) => (
             <section key={night.round} className="rounded-lg bg-night-800 px-3 py-3 text-sm">
-              <h4 className="mb-2 font-bold text-moon-300">Đêm {night.round}</h4>
+              <h4 className="mb-2 font-bold text-mist">Đêm {night.round}</h4>
               <ul className="space-y-1 text-mist/80">
                 <li>
                   🐺 {night.wolfTarget ? `Sói chọn cắn ${night.wolfTarget.name}.` : "Sói không chọn được mục tiêu."}
