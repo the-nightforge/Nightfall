@@ -15,6 +15,8 @@ interface Props {
   selected: boolean;
   disabled: boolean;
   onSelect?: () => void;
+  /** Lớp phiếu bay cần đo vị trí ô này để biết bay tới đâu. */
+  seatRef?: (el: HTMLButtonElement | null) => void;
 }
 
 /**
@@ -33,6 +35,7 @@ export function PlayerSeat({
   selected,
   disabled,
   onSelect,
+  seatRef,
 }: Props) {
   const dead = !player.alive;
   const votes = player.voteCount ?? 0;
@@ -47,6 +50,7 @@ export function PlayerSeat({
 
   return (
     <m.button
+      ref={seatRef}
       type="button"
       disabled={disabled}
       onClick={onSelect}
