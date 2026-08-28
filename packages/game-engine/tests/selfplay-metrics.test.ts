@@ -247,9 +247,12 @@ describe("từng chỉ số tính đúng trên ván dựng tay", () => {
     expect(overall.knowledgeBoundaryViolations).toBe(0);
   });
 
-  it("fallback gộp nước đi bị từ chối và lượt bỏ trống", () => {
+  it("nước đi bị từ chối tách khỏi lượt chủ động bỏ", () => {
+    // Gộp chúng lại thì Linh Mục giữ bình - nước đi ĐÚNG của vai đó - sẽ được
+    // đếm y như một bug của lõi.
     const { overall } = collectMetrics([game({ rejected: 2, skipped: 5 })]);
-    expect(overall.fallbackActions).toBe(7);
+    expect(overall.fallbackActions).toBe(2);
+    expect(overall.declinedTurns).toBe(5);
   });
 
   it("tỉ lệ chạm trần vòng", () => {

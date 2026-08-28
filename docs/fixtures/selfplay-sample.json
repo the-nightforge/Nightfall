@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "weightsVersion": "1.0.0",
+  "seedBase": "sample",
+  "seedRange": {
+    "first": "sample:0",
+    "last": "sample:11"
+  },
+  "games": 12,
+  "config": {
+    "playerCount": 8,
+    "maxRounds": 20,
+    "events": false,
+    "speech": true,
+    "room": {
+      "werewolves": 2,
+      "seer": true,
+      "guard": true,
+      "witch": true,
+      "hunter": false,
+      "cursed": false,
+      "nightSeconds": 30,
+      "discussionSeconds": 60,
+      "voteSeconds": 30,
+      "defenseSeconds": 20,
+      "finalVoteSeconds": 20
+    }
+  },
+  "metrics": {
+    "games": 12,
+    "finished": 12,
+    "winRate": {
+      "village": {
+        "value": 0.08333333333333333,
+        "numerator": 1,
+        "denominator": 12
+      },
+      "wolves": {
+        "value": 0.9166666666666666,
+        "numerator": 11,
+        "denominator": 12
+      }
+    },
+    "averageRounds": 3.6666666666666665,
+    "villageVoteAccuracy": {
+      "value": 0.3333333333333333,
+      "numerator": 56,
+      "denominator": 168
+    },
+    "wolfSelfSabotage": {
+      "value": 0,
+      "numerator": 0,
+      "denominator": 30
+    },
+    "voteChangeRate": {
+      "value": 0.28023598820059,
+      "numerator": 95,
+      "denominator": 339
+    },
+    "consensus": 0.43405923344947744,
+    "coalitionCohesion": null,
+    "staleEvidenceRate": {
+      "value": 0,
+      "numerator": 0,
+      "denominator": 121
+    },
+    "knowledgeBoundaryViolations": 0,
+    "fallbackActions": 0,
+    "declinedTurns": 40,
+    "speechRepetitionRate": {
+      "value": 0.14864864864864866,
+      "numerator": 22,
+      "denominator": 148
+    },
+    "roundLimitRate": {
+      "value": 0,
+      "numerator": 0,
+      "denominator": 12
+    }
+  },
+  "metricsByTeam": {
+    "village": {
+      "team": "village",
+      "wins": {
+        "value": 0.08333333333333333,
+        "numerator": 1,
+        "denominator": 12
+      },
+      "voteAccuracy": {
+        "value": 0.3333333333333333,
+        "numerator": 56,
+        "denominator": 168
+      }
+    },
+    "wolves": {
+      "team": "wolves",
+      "wins": {
+        "value": 0.9166666666666666,
+        "numerator": 11,
+        "denominator": 12
+      },
+      "voteAccuracy": {
+        "value": 0,
+        "numerator": 0,
+        "denominator": 22
+      }
+    }
+  },
+  "metricsByRole": [
+    {
+      "role": "GUARD",
+      "games": 12,
+      "wins": {
+        "value": 0.08333333333333333,
+        "numerator": 1,
+        "denominator": 12
+      }
+    },
+    {
+      "role": "SEER",
+      "games": 12,
+      "wins": {
+        "value": 0.08333333333333333,
+        "numerator": 1,
+        "denominator": 12
+      }
+    },
+    {
+      "role": "VILLAGER",
+      "games": 12,
+      "wins": {
+        "value": 0.08333333333333333,
+        "numerator": 1,
+        "denominator": 12
+      }
+    },
+    {
+      "role": "WEREWOLF",
+      "games": 12,
+      "wins": {
+        "value": 0.9166666666666666,
+        "numerator": 11,
+        "denominator": 12
+      }
+    },
+    {
+      "role": "WITCH",
+      "games": 12,
+      "wins": {
+        "value": 0.08333333333333333,
+        "numerator": 1,
+        "denominator": 12
+      }
+    }
+  ],
+  "violations": [],
+  "failedSeeds": [],
+  "timing": null,
+  "commit": null
+}

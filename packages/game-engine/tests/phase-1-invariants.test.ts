@@ -287,6 +287,13 @@ describe("Phase 1 · engine thuần", () => {
       "node:fs",
       "node:net",
       "node:http",
+      // Phase 3 thêm ba cái dưới. Nhân self-play sống trong package này và rất
+      // dễ cám dỗ để nó tự ghi report hoặc tự hỏi Git về commit; nếu vậy thì nó
+      // không còn chạy được bên trong test của engine nữa. I/O ở
+      // `apps/server/scripts/selfplay.ts`.
+      "node:child_process",
+      "node:process",
+      "node:os",
     ];
 
     const offenders: string[] = [];

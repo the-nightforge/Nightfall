@@ -51,8 +51,16 @@ export interface SelfPlayMetrics {
   staleEvidenceRate: Ratio;
   /** PHẢI bằng 0. */
   knowledgeBoundaryViolations: number;
-  /** Nước đi bị engine từ chối, cộng lượt bỏ vì không có mục tiêu hợp lệ. */
+  /**
+   * Nước đi lõi sinh ra mà engine TỪ CHỐI. Phải bằng 0.
+   *
+   * Tách khỏi `declinedTurns`: một lượt bị từ chối là lỗi của lõi, còn một lượt
+   * chủ động bỏ là một quyết định. Gộp chúng lại thì Linh Mục giữ bình - nước đi
+   * đúng của vai đó - sẽ được đếm y như một bug.
+   */
   fallbackActions: number;
+  /** Lượt mà vai CÓ hành động nhưng chủ động không dùng. Không phải lỗi. */
+  declinedTurns: number;
   /** Nói lại đúng `(kiểu, mục tiêu)` của lần mình nói liền trước. */
   speechRepetitionRate: Ratio;
   roundLimitRate: Ratio;
@@ -125,6 +133,7 @@ export function collectMetrics(
   let evidenceTotal = 0;
   let boundaryViolations = 0;
   let fallbackActions = 0;
+  let declinedTurns = 0;
   let speechRepeats = 0;
   let speechTotal = 0;
   let roundLimited = 0;
@@ -155,7 +164,8 @@ export function collectMetrics(
         item.id === "WOLF_ALLY_SCOPE" ||
         item.id === "SEER_RESULT_SCOPE",
     ).length;
-    fallbackActions += game.rejected + game.skipped;
+    fallbackActions += game.rejected;
+    declinedTurns += game.skipped;
 
     // --- Vai và phe thắng ---
     //
@@ -257,6 +267,7 @@ export function collectMetrics(
     staleEvidenceRate: ratio(staleEvidence, evidenceTotal),
     knowledgeBoundaryViolations: boundaryViolations,
     fallbackActions,
+    declinedTurns,
     speechRepetitionRate: ratio(speechRepeats, speechTotal),
     roundLimitRate: ratio(roundLimited, games.length),
   };

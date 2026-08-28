@@ -352,8 +352,21 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       const nightContext = contextFor(player.id);
       const decision = runtime.decideNight(nightContext);
       if (!decision) {
-        skipped += 1;
-        log.push({ kind: "SKIP", round: engine.state.round, actorId: player.id, at: "NIGHT" });
+        // Chỉ tính là BỎ LƯỢT khi vai đó THẬT SỰ có lượt.
+        //
+        // Engine trả `night: null` cho mọi vai không hành động đêm, và Dân Làng
+        // chiếm phần lớn bàn. Đếm họ vào đây khiến chỉ số "action fallback"
+        // phình lên theo sĩ số ván chứ không theo chất lượng chơi - nó sẽ báo
+        // ~13 lượt hỏng mỗi ván trong khi con số thật là gần 0.
+        if (nightContext.knowledge.night !== null) {
+          skipped += 1;
+          log.push({
+            kind: "SKIP",
+            round: engine.state.round,
+            actorId: player.id,
+            at: "NIGHT",
+          });
+        }
         continue;
       }
       auditor.checkNightAction(nightContext.knowledge, decision, groundTruth());
