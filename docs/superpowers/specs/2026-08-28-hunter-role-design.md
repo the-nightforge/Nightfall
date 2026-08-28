@@ -6,7 +6,7 @@ Ngày: 2026-08-28
 
 Thêm vai trò `HUNTER` thuộc phe làng. Khi Thợ Săn chết bởi bất kỳ nguyên nhân nào trong ván hiện tại — Sói cắn, Phù Thuỷ đầu độc hoặc bị treo cổ — người đó có một lượt phản ứng để bắn một người còn sống hoặc chủ động không bắn.
 
-Phát bắn diễn ra trước lần kiểm tra thắng kế tiếp, vì nó có thể thay đổi phe chiến thắng. Tính năng phải hoạt động cho cả người thật và bot, chịu được mất kết nối hoặc server khởi động lại, và xuất hiện trong diễn biến cuối ván.
+Phát bắn diễn ra trước lần kiểm tra thắng kế tiếp, vì nó có thể thay đổi phe chiến thắng. Tính năng phải hoạt động cho cả người thật và bot, chịu được người chơi mất kết nối rồi kết nối lại trong lúc server vẫn chạy, và xuất hiện trong diễn biến cuối ván.
 
 ## Luật đã chốt
 
@@ -61,7 +61,7 @@ interface HunterShotRecap {
 }
 ```
 
-`hunterReaction` đủ để server khôi phục phase sau reconnect/restart. `source` quyết định luồng tiếp theo sau phát bắn:
+`hunterReaction` đủ để client khôi phục đúng màn hình sau reconnect trong cùng process. `source` quyết định luồng tiếp theo sau phát bắn:
 
 - `night` → kiểm tra thắng → `DAY_DISCUSSION` nếu chưa thắng.
 - `vote` → kiểm tra thắng → `NIGHT` nếu chưa thắng.
@@ -103,7 +103,7 @@ Method kiểm tra:
 
 `targetId = null` là một lựa chọn bỏ qua hợp lệ. Cả bắn và bỏ qua đều thêm một record vào `hunterShots`, đánh dấu reaction resolved và không cho gửi lần hai.
 
-Nếu có mục tiêu, engine đặt `alive = false`, thêm log công khai và trả về `PublicDeath`. Nguyên nhân nội bộ/public recap dùng `hunter`; không đưa cái chết này vào `nightHistory.deaths` vì nó xảy ra ở phase phản ứng riêng.
+Nếu có mục tiêu, engine đặt `alive = false`, thêm log công khai và trả về `PublicDeath`. `HunterShotRecap` là nguồn diễn biến riêng thể hiện nguyên nhân phát bắn; không đưa cái chết này vào `nightHistory.deaths` vì nó xảy ra ở phase phản ứng riêng.
 
 ### Hoàn tất phase
 
@@ -139,7 +139,7 @@ hunterShot: {
 
 Trong phase `HUNTER_SHOT`, mọi người được biết ai là Thợ Săn vì kỹ năng đã công khai. Chỉ snapshot của đúng Thợ Săn có `canAct: true`; server vẫn validate target thay vì tin client. Không gửi role bí mật khác hoặc state thô qua snapshot.
 
-Reconnect dùng `phase`, `phaseEndsAt` và `hunterShot` từ snapshot để dựng lại đúng màn hình. Nếu server restart và khôi phục một room đang ở `HUNTER_SHOT`, timer phục hồi dùng thời gian còn lại; nếu đã quá hạn thì hoàn tất theo nhánh bỏ qua.
+Reconnect dùng `phase`, `phaseEndsAt` và `hunterShot` từ snapshot để dựng lại đúng màn hình. Server restart vẫn giữ hành vi hiện tại trong `rooms/store.ts`: trận đang chạy được đưa về lobby an toàn; việc khôi phục timer của toàn bộ game sau restart nằm ngoài phạm vi role này.
 
 ## Giao diện
 
@@ -214,7 +214,7 @@ Viết test trước production code.
 - Source `night` tiếp tục sang thảo luận, source `vote` tiếp tục sang đêm.
 - Race giữa timeout/action chỉ resolve một lần.
 - Bot AI treo hoặc lỗi vẫn được RandomBrain fallback trước deadline.
-- Reconnect và khôi phục timer giữ đúng phase/action.
+- Reconnect trong cùng process giữ đúng phase/action; load room sau server restart vẫn về lobby như hiện tại.
 
 ### Snapshot và frontend
 
@@ -234,3 +234,4 @@ Chạy toàn bộ test engine, server và web; lint và production build. Đặc
 - Thợ Săn bắn trước khi kết quả cái chết được hiển thị.
 - Role mới khác, cặp tình nhân hoặc hiệu ứng hồi sinh.
 - Thay đổi công thức cân bằng số Sói ngoài validation role hiện có.
+- Khôi phục trận đang chạy và timer sau khi server process restart.
