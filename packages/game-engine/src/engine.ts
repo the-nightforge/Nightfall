@@ -630,9 +630,10 @@ export class GameEngine {
   snapshotFor(viewerId: string): PlayerGameView {
     const st = this.state;
     const viewer = this.player(viewerId);
-    const revealAll = st.phase === "GAME_OVER" || (
-      st.phase !== "HUNTER_SHOT" && viewer !== undefined && !viewer.alive
-    );
+    const isReactingHunter = st.hunterReaction?.hunterId === viewerId;
+    const revealAll =
+      st.phase === "GAME_OVER" ||
+      (viewer !== undefined && !viewer.alive && !isReactingHunter);
     // Sói luôn biết đồng bọn của mình
     const viewerIsWolf = viewer !== undefined && viewer.alive && roleTeam(viewer.role) === "wolves";
 

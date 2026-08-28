@@ -1108,6 +1108,49 @@ describe("Thợ Săn", () => {
     expect(view.players.filter((player) => player.id !== "hunter").every((player) => player.role === undefined)).toBe(true);
   });
 
+  it.each([
+    { source: "night" as const, resultPhase: "NIGHT_RESULT" as const, nextPhase: "DAY_DISCUSSION" as const },
+    { source: "vote" as const, resultPhase: "ELIMINATION" as const, nextPhase: "NIGHT" as const },
+  ])(
+    "giữ kín vai trò từ kết quả $source đến khi phản ứng hoàn tất",
+    ({ source, resultPhase, nextPhase }) => {
+      const e = makeHunterEngine(source === "night" ? "NIGHT" : "VOTING");
+      if (source === "night") {
+        e.state.night.killTarget = "hunter";
+        e.state.night.wolvesLocked = true;
+        e.resolveNight(1_000);
+      } else {
+        e.state.votes = { hunter: "wolf", wolf: "hunter", villager: "hunter" };
+        e.resolveVote(1_000);
+      }
+
+      expect(e.state.phase).toBe(resultPhase);
+      expect(
+        e.snapshotFor("hunter").players
+          .filter((player) => player.id !== "hunter")
+          .every((player) => player.role === undefined),
+      ).toBe(true);
+
+      e.beginHunterShot(15_000, 2_000);
+      expect(
+        e.snapshotFor("hunter").players
+          .filter((player) => player.id !== "hunter")
+          .every((player) => player.role === undefined),
+      ).toBe(true);
+
+      e.submitHunterShot("hunter", null);
+      expect(
+        e.snapshotFor("hunter").players
+          .filter((player) => player.id !== "hunter")
+          .every((player) => player.role === undefined),
+      ).toBe(true);
+
+      expect(e.completeHunterReaction()).toBe(source);
+      e.setPhase(nextPhase, 30_000, 3_000);
+      expect(e.snapshotFor("hunter").players.find((player) => player.id === "wolf")?.role).toBe("WEREWOLF");
+    },
+  );
+
   it("xóa phản ứng đã giải quyết và chuẩn hóa state cũ", () => {
     const e = makeHunterEngine("NIGHT_RESULT");
     prepareHunterShot(e);
