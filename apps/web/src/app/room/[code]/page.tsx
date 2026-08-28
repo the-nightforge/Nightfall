@@ -11,6 +11,7 @@ import { ChatBox } from "@/components/ChatBox";
 import { RoleRevealView } from "@/components/RoleViews";
 import { NightPanel } from "@/components/NightPanel";
 import { DayView, EliminationView, GameOverView } from "@/components/DayViews";
+import { HunterShotPanel } from "@/components/HunterShotPanel";
 import { Lobby } from "@/components/Lobby";
 
 export default function RoomPage() {
@@ -66,6 +67,13 @@ export default function RoomPage() {
       case "ELIMINATION":
       case "CHECK_WIN":
         return <EliminationView snapshot={snapshot} />;
+      case "HUNTER_SHOT":
+        return (
+          <HunterShotPanel
+            snapshot={snapshot}
+            onShoot={(targetId) => room.emit("game:hunter-shot", { targetId })}
+          />
+        );
       case "GAME_OVER":
         return (
           <GameOverView

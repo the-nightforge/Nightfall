@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import type { RoomSnapshot } from "@masoi/shared";
+import { ROLE_META, type RoomSnapshot } from "@masoi/shared";
 import { PlayerGrid } from "./PlayerGrid";
+import { HunterShotTimeline } from "./HunterShotTimeline";
 import { NightRecapTimeline } from "./NightRecapTimeline";
 
 interface Props {
@@ -173,7 +174,7 @@ export function GameOverView({
             <li key={p.id} className="flex items-center justify-between rounded-lg bg-night-800 px-3 py-2">
               <span className={p.alive ? "text-white" : "text-mist/50 line-through"}>{p.name}</span>
               <span className={p.role === "WEREWOLF" ? "font-semibold text-blood-400" : "text-emerald-300"}>
-                {p.role === "WEREWOLF" ? "Ma Sói" : p.role === "SEER" ? "Tiên Tri" : p.role === "GUARD" ? "Bảo Vệ" : p.role === "WITCH" ? "Phù Thủy" : "Dân Làng"}
+                {p.role ? ROLE_META[p.role].name : "Chưa rõ"}
                 {!p.alive && " (đã chết)"}
               </span>
             </li>
@@ -182,6 +183,7 @@ export function GameOverView({
       </div>
 
       <NightRecapTimeline nights={snapshot.nightHistory} />
+      <HunterShotTimeline shots={snapshot.hunterShots} />
 
       <div className="flex gap-2">
         {isHost && <button className="btn-primary flex-1" onClick={onReset}>Chơi lại (về phòng chờ)</button>}
