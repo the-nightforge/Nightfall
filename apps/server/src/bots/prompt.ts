@@ -84,7 +84,9 @@ function roleContext(view: RoomSnapshot): string {
   }
   if (view.night?.wolfTarget) {
     const name = view.players.find((p) => p.id === view.night?.wolfTarget)?.name;
-    if (name) bits.push(`Phe Sói đang nhắm ${name}.`);
+    if (name) bits.push(`Phe Sói đã chốt cắn ${name} đêm nay.`);
+  } else if (view.you?.role === "WITCH" && view.night?.wolvesLocked) {
+    bits.push("Đêm nay phe Sói không cắn ai.");
   }
   // Chỉ Phù Thuỷ mới thấy trạng thái bình: engine.snapshotFor gán healUsed/poisonUsed
   // cho MỌI vai có hành động đêm, nên phải tự lọc theo vai ở đây thay vì theo field.
@@ -144,7 +146,7 @@ export function buildNightPrompt(view: RoomSnapshot): PromptSpec | null {
   }
 
   const task = isWitch
-    ? "Chọn hành động đêm nay. HEAL cứu nạn nhân đêm nay và không cần mục tiêu. POISON cần chọn một người. SKIP là không làm gì."
+    ? "Chọn hành động đêm nay. HEAL cứu đúng nạn nhân bầy Sói vừa chốt và không cần mục tiêu. POISON cần chọn một người. SKIP là không làm gì."
     : `Chọn một người để ${verbFor(action!)}.`;
 
   return {

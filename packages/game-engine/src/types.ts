@@ -10,14 +10,22 @@ export interface EnginePlayer {
 }
 
 export interface NightState {
-  /** Mục tiêu Sói chọn chung cho cả bọn */
+  /**
+   * Phiếu cắn của từng Sói: wolfId -> mục tiêu, null nghĩa là "không cắn".
+   *
+   * Ba trạng thái phân biệt bằng chính kiểu dữ liệu như votes ban ngày:
+   * key vắng mặt = chưa bầu, string = bầu người đó, null = chọn không cắn.
+   */
+  wolfVotes: Record<string, string | null>;
+  /** Mục tiêu đã chốt sau khi khoá phiếu Sói; null nghĩa là đêm nay không cắn */
   killTarget: string | null;
-  /** Sói đã hành động trong đêm này */
-  actedWolves: string[];
-  /** Sói đã chọn không cắn trong đêm này */
-  skippedWolves: string[];
+  /**
+   * Phiếu Sói đã khoá chưa. Trước khi khoá, Sói còn đổi được phiếu và
+   * Phù Thuỷ chưa được biết nạn nhân; sau khi khoá thì ngược lại.
+   */
+  wolvesLocked: boolean;
   guardTarget: string | null;
-  /** Bảo Vệ đã chọn save nạn nhân đêm nay chưa (Phù Thủy) */
+/** Phù Thuỷ đã quyết định dùng bình cứu cho nạn nhân đêm nay chưa */
   healTonight: boolean;
   poisonTarget: string | null;
   /** Phù Thủy đã chủ động bỏ qua cả hai bình trong đêm này */

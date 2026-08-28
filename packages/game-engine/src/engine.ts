@@ -17,6 +17,27 @@ import {
   type PublicDeath,
 } from "./types";
 
+export interface SeerResultView {
+  targetId: string;
+  targetName: string;
+  isWolf: boolean;
+}
+
+export interface NightInfoView {
+  canAct: boolean;
+  acted: boolean;
+  wolvesLocked: boolean;
+  wolfTarget: string | null;
+  wolfVoteCounts?: Record<string, number>;
+  wolfSkipVotes?: number;
+  wolfVotesRequired?: number;
+  myWolfVote?: string | null;
+  guardPrevious?: string | null;
+  seerResult: SeerResultView | null;
+  healUsed: boolean;
+  poisonUsed: boolean;
+}
+
 export interface PlayerGameView {
   phase: GamePhase;
   round: number;
@@ -35,17 +56,7 @@ export interface PlayerGameView {
     role?: Role;
     voteCount: number;
   }[];
-  nightInfo: {
-    canAct: boolean;
-    acted: boolean;
-    wolfTarget: string | null;
-    wolfSkipVotes?: number;
-    wolfSkipRequired?: number;
-    guardPrevious?: string | null;
-    seerResult: { targetId: string; targetName: string; isWolf: boolean } | null;
-    healUsed: boolean;
-    poisonUsed: boolean;
-  } | null;
+  nightInfo: NightInfoView | null;
   /**
    * Đã gửi phiếu hay chưa. Cần cờ riêng vì myVote === null có hai nghĩa:
    * chưa vote, hoặc đã chọn "Không treo ai".
@@ -66,9 +77,9 @@ const recapPlayer = (player: EnginePlayer | undefined): RecapPlayer | null =>
 
 function emptyNight(): GameState["night"] {
   return {
+    wolfVotes: {},
     killTarget: null,
-    actedWolves: [],
-    skippedWolves: [],
+    wolvesLocked: false,
     guardTarget: null,
     healTonight: false,
     poisonTarget: null,
@@ -87,7 +98,8 @@ export class GameEngine {
   constructor(state: GameState) {
     this.state = state;
     this.state.nightHistory ??= [];
-    this.state.night.skippedWolves ??= [];
+    this.state.night.wolfVotes ??= {};
+    this.state.night.wolvesLocked ??= false;
     this.state.night.witchSkipped ??= false;
   }
 
@@ -185,11 +197,15 @@ export class GameEngine {
     if (isWitchMedicine && p.role !== "WITCH") {
       throw new GameError("Chỉ Phù Thủy mới được dùng thuốc");
     }
+    // Phù Thuỷ đi sau bầy Sói: chỉ hành động khi đã biết nạn nhân đêm nay.
+    if (p.role === "WITCH" && !st.night.wolvesLocked) {
+      throw new GameError("Chưa tới lượt Phù Thủy");
+    }
     if ((isWitchMedicine || (type === "SKIP" && p.role === "WITCH")) && st.night.witchSkipped) {
       throw new GameError("Phù Thủy đã bỏ qua dùng thuốc đêm nay");
     }
-    if ((type === "KILL" || (type === "SKIP" && roleTeam(p.role) === "wolves")) && st.night.actedWolves.includes(playerId)) {
-      throw new GameError("Ma Sói đã hành động đêm nay");
+    if ((type === "KILL" || (type === "SKIP" && roleTeam(p.role) === "wolves")) && st.night.wolvesLocked) {
+      throw new GameError("Bầy Sói đã chốt mục tiêu đêm nay");
     }
 
     switch (type) {
@@ -197,8 +213,8 @@ export class GameEngine {
         if (roleTeam(p.role) !== "wolves") throw new GameError("Chỉ Ma Sói mới được cắn");
         if (!targetId || !target) throw new GameError("Hãy chọn một mục tiêu để cắn");
         if (roleTeam(target.role) === "wolves") throw new GameError("Không thể cắn đồng bọn");
-        st.night.killTarget = targetId;
-        if (!st.night.actedWolves.includes(playerId)) st.night.actedWolves.push(playerId);
+        // Một phiếu, không phải quyết định cuối: Sói được đổi ý tới lúc khoá phiếu.
+        st.night.wolfVotes[playerId] = targetId;
         break;
       }
       case "SEE": {
@@ -219,6 +235,7 @@ export class GameEngine {
       }
       case "HEAL": {
         if (st.healUsed) throw new GameError("Bình cứu đã được sử dụng");
+        if (!st.night.killTarget) throw new GameError("Đêm nay không có ai bị cắn để cứu");
         // HEAL là quyết định cứu nạn nhân đêm nay, không cần chỉ định mục tiêu
         st.night.healTonight = true;
         break;
@@ -234,8 +251,7 @@ export class GameEngine {
         if (p.role === "WITCH") {
           st.night.witchSkipped = true;
         } else if (roleTeam(p.role) === "wolves") {
-          st.night.actedWolves.push(playerId);
-          st.night.skippedWolves.push(playerId);
+          st.night.wolfVotes[playerId] = null;
         } else {
           throw new GameError("Chỉ Phù Thủy hoặc Ma Sói mới được bỏ qua hành động");
         }
@@ -250,17 +266,83 @@ export class GameEngine {
     return ROLE_META[role].nightOrder !== undefined;
   }
 
-  /** Đêm kết thúc khi mọi Sói còn sống đã chọn mục tiêu cắn. */
-  isNightComplete(): boolean {
+  /** Mọi Sói còn sống đã bỏ phiếu cắn (kể cả phiếu "không cắn"). */
+  allWolvesVoted(): boolean {
     const wolves = this.aliveWolves();
     if (wolves.length === 0) return true;
-    return wolves.every((w) => this.state.night.actedWolves.includes(w.id));
+    return wolves.every((w) => this.state.night.wolfVotes[w.id] !== undefined);
+  }
+
+  /**
+   * Kiểm phiếu cắn của bầy Sói. Phiếu "không cắn" là một ứng viên ngang hàng
+   * với người chơi chứ không phải phiếu trắng, đúng như luật bỏ phiếu ban ngày.
+   */
+  wolfVoteTally(): { players: Record<string, number>; skip: number } {
+    const players: Record<string, number> = {};
+    let skip = 0;
+    const alive = new Set(this.aliveWolves().map((w) => w.id));
+    for (const [wolfId, targetId] of Object.entries(this.state.night.wolfVotes)) {
+      if (!alive.has(wolfId)) continue;
+      if (targetId === null) skip += 1;
+      else players[targetId] = (players[targetId] ?? 0) + 1;
+    }
+    return { players, skip };
+  }
+
+  /**
+   * Chốt nạn nhân của bầy Sói. Hoà phiếu bốc ngẫu nhiên trong nhóm dẫn đầu:
+   * với cấu hình mặc định hai Sói, hoà 1-1 xảy ra liên tục và nếu hoà đồng
+   * nghĩa với không cắn thì một Sói bất đồng phủ quyết được cả đêm.
+   */
+  lockWolves(rng: () => number = Math.random): string | null {
+    const st = this.state;
+    st.night.wolvesLocked = true;
+    const tally = this.wolfVoteTally();
+    const alive = new Set(this.alivePlayers().map((p) => p.id));
+    const candidates: (string | null)[] = [];
+    let best = 0;
+    const consider = (choice: string | null, count: number) => {
+      if (count < best || count === 0) return;
+      if (count > best) {
+        best = count;
+        candidates.length = 0;
+      }
+      candidates.push(choice);
+    };
+    for (const [targetId, count] of Object.entries(tally.players)) {
+      if (alive.has(targetId)) consider(targetId, count);
+    }
+    consider(null, tally.skip);
+
+    st.night.killTarget =
+      candidates.length === 0 ? null : candidates[Math.floor(rng() * candidates.length)];
+    return st.night.killTarget;
+  }
+
+  /** Phù Thuỷ còn lượt đi sau khi bầy Sói chốt hay không. */
+  witchPending(): boolean {
+    const witch = this.alivePlayers().find((p) => p.role === "WITCH");
+    if (!witch) return false;
+    const st = this.state;
+    if (st.night.witchSkipped || st.night.healTonight || st.night.poisonTarget) return false;
+    // Bình cứu chỉ dùng được khi đêm nay thật sự có nạn nhân bị cắn.
+    const canHeal = !st.healUsed && st.night.killTarget !== null;
+    return canHeal || !st.poisonUsed;
+  }
+
+  /** Nới hạn của pha hiện tại; dùng để mở cửa sổ riêng cho Phù Thuỷ. */
+  extendPhase(durationMs: number, now = Date.now()): void {
+    this.state.phaseEndsAt = now + durationMs;
   }
 
   /** Xử lý toàn bộ hành động ban đêm theo thứ tự: Bảo Vệ -> Sói -> Phù Thủy. */
   resolveNight(now = Date.now()): DeathInfo[] {
     const st = this.state;
     if (st.phase !== "NIGHT") throw new GameError("Chỉ xử lý đêm khi đang trong pha NIGHT");
+
+    // Đêm kết thúc mà chưa ai khoá phiếu Sói thì chốt ngay tại đây: mọi lối vào
+    // resolveNight đều phải thấy cùng một killTarget đã kiểm phiếu.
+    if (!st.night.wolvesLocked) this.lockWolves();
 
     const deaths: DeathInfo[] = [];
     const addDeath = (death: DeathInfo): void => {
@@ -270,19 +352,22 @@ export class GameEngine {
     };
 
     // 1. Xác định nạn nhân bị cắn
+    let healApplied = false;
     if (st.night.killTarget) {
       const victim = this.player(st.night.killTarget);
       if (victim && victim.alive) {
         const guarded = st.night.guardTarget === victim.id;
-        const healed = st.night.healTonight && !st.healUsed;
-        if (!guarded && !healed) {
+        healApplied = st.night.healTonight && !st.healUsed;
+        if (!guarded && !healApplied) {
           addDeath({ playerId: victim.id, name: victim.name, cause: "wolf" });
         }
       }
     }
 
-    // Tiêu hao bình cứu nếu đã quyết định dùng
-    if (st.night.healTonight && !st.healUsed) st.healUsed = true;
+    // Bình cứu chỉ mất khi có nạn nhân thật để cứu. Tiêu hao cả khi Bảo Vệ đã
+    // đỡ sẵn là có chủ ý: nếu không, việc bình còn nguyên sẽ tố cho Phù Thuỷ
+    // biết đêm đó ai được Bảo Vệ chọn.
+    if (healApplied) st.healUsed = true;
 
     // 2. Bình độc: đâm xuyên mọi protection
     if (st.night.poisonTarget && !st.poisonUsed) {
@@ -307,7 +392,7 @@ export class GameEngine {
     );
 
     const wolfTarget = recapPlayer(st.night.killTarget ? this.player(st.night.killTarget) : undefined);
-    const usedHeal = st.night.healTonight;
+    const usedHeal = healApplied;
     const recap: NightRecap = {
       round: st.round,
       wolfTarget,
@@ -434,6 +519,39 @@ export class GameEngine {
 
   // ---- View ----
 
+  /**
+   * Khối hành động đêm của một vai. Chỉ Sói và Phù Thuỷ được biết nạn nhân, và
+   * Phù Thuỷ chỉ biết sau khi bầy Sói khoá phiếu - trước đó cô ta còn đang chờ lượt.
+   */
+  private nightInfoFor(viewer: EnginePlayer, seerResult: SeerResultView | null): NightInfoView {
+    const st = this.state;
+    const locked = st.night.wolvesLocked;
+    const isWolf = roleTeam(viewer.role) === "wolves";
+    const isWitch = viewer.role === "WITCH";
+    const tally = isWolf ? this.wolfVoteTally() : null;
+
+    return {
+      canAct: isWitch ? locked : isWolf ? !locked : true,
+      acted: isWolf
+        ? st.night.wolfVotes[viewer.id] !== undefined
+        : viewer.role === "SEER"
+          ? st.night.seerResults[viewer.id] !== undefined
+          : viewer.role === "GUARD"
+            ? st.night.guardTarget !== null
+            : st.night.witchSkipped || st.night.healTonight || st.night.poisonTarget !== null,
+      wolvesLocked: locked,
+      wolfTarget: (isWolf || isWitch) && locked ? st.night.killTarget : null,
+      wolfVoteCounts: tally ? tally.players : undefined,
+      wolfSkipVotes: tally ? tally.skip : undefined,
+      wolfVotesRequired: isWolf ? this.aliveWolves().length : undefined,
+      myWolfVote: isWolf ? st.night.wolfVotes[viewer.id] ?? null : undefined,
+      guardPrevious: viewer.role === "GUARD" ? st.guardPrevious : undefined,
+      seerResult,
+      healUsed: st.healUsed,
+      poisonUsed: st.poisonUsed,
+    };
+  }
+
   snapshotFor(viewerId: string): PlayerGameView {
     const st = this.state;
     const viewer = this.player(viewerId);
@@ -479,27 +597,7 @@ export class GameEngine {
       players: playersView,
       nightInfo:
         st.phase === "NIGHT" && viewer && viewer.alive && this.hasNightAction(viewer.role)
-          ? {
-              canAct: true,
-              acted:
-                roleTeam(viewer.role) === "wolves"
-                  ? st.night.actedWolves.includes(viewerId)
-                  : viewer.role === "SEER"
-                    ? st.night.seerResults[viewerId] !== undefined
-                    : viewer.role === "GUARD"
-                      ? st.night.guardTarget !== null
-                      : st.night.witchSkipped || st.night.healTonight || st.night.poisonTarget !== null,
-              wolfTarget:
-                roleTeam(viewer.role) === "wolves" ? st.night.killTarget : null,
-              wolfSkipVotes:
-                roleTeam(viewer.role) === "wolves" ? st.night.skippedWolves.length : undefined,
-              wolfSkipRequired:
-                roleTeam(viewer.role) === "wolves" ? this.aliveWolves().length : undefined,
-              guardPrevious: viewer.role === "GUARD" ? st.guardPrevious : undefined,
-              seerResult,
-              healUsed: st.healUsed,
-              poisonUsed: st.poisonUsed,
-            }
+          ? this.nightInfoFor(viewer, seerResult)
           : null,
       hasVoted,
       // ?? null ở đây an toàn vì đã gác bằng hasVoted: chỉ đọc khi thật sự có

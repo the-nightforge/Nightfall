@@ -100,8 +100,17 @@ describe("legalNightTargets", () => {
 
 describe("witchActions", () => {
   it("còn cả hai bình thì có đủ ba lựa chọn", () => {
-    const v = view({ night: { canAct: true, acted: false, healUsed: false, poisonUsed: false } });
+    const v = view({
+      night: { canAct: true, acted: false, wolfTarget: "c", healUsed: false, poisonUsed: false },
+    });
     expect(witchActions(v)).toEqual(["HEAL", "POISON", "SKIP"]);
+  });
+
+  it("đêm không ai bị cắn thì không chào HEAL dù bình còn", () => {
+    const v = view({
+      night: { canAct: true, acted: false, wolfTarget: null, healUsed: false, poisonUsed: false },
+    });
+    expect(witchActions(v)).toEqual(["POISON", "SKIP"]);
   });
 
   it("dùng hết bình cứu thì HEAL biến mất", () => {

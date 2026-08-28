@@ -24,7 +24,7 @@ import { roomService, RoomError } from "./rooms/service";
 import { getRoomSyncByPlayer } from "./rooms/index-helpers";
 import { getRoom, loadRoomFromRedis, persistRoom } from "./rooms/store";
 import { trackSocket, untrackSocket, broadcastRoom } from "./rooms/broadcast";
-import { maybeEndVotingEarly, submitDiscussionSkip } from "./game/machine";
+import { maybeEndVotingEarly, maybeEndWitchWindow, submitDiscussionSkip } from "./game/machine";
 import { getPlayerRoom, updateSessionRoom } from "./redis";
 import { reconnectPlayer } from "./rooms/reconnect";
 
@@ -174,6 +174,7 @@ export function setupSocket(io: SocketServer): void {
         parsed.type,
         parsed.targetId ?? null,
       );
+      maybeEndWitchWindow(room);
       broadcastRoom(roomCode);
       void import("./rooms/store").then((m) => m.persistRoom(room));
     });

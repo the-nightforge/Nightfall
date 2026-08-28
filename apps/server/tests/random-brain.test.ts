@@ -55,7 +55,7 @@ describe("RandomBrain.decideNight", () => {
   it("Phù Thuỷ dùng bình cứu khi còn và không nhận mục tiêu", async () => {
     const v = view({
       you: { id: "a", name: "A", ready: true, connected: true, role: "WITCH", alive: true },
-      night: { canAct: true, acted: false, healUsed: false, poisonUsed: false },
+      night: { canAct: true, acted: false, wolvesLocked: true, wolfTarget: "c", healUsed: false, poisonUsed: false },
     });
     expect(await randomBrain.decideNight(v)).toEqual({ ok: true, value: { action: "HEAL", targetId: null } });
   });

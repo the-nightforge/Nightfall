@@ -22,9 +22,9 @@ function nightRoom(night: Partial<GameState["night"]> = {}): Room {
     config: { ...DEFAULT_ROOM_CONFIG },
     winner: null,
     night: {
+      wolfVotes: {},
       killTarget: null,
-      actedWolves: [],
-      skippedWolves: [],
+      wolvesLocked: false,
       guardTarget: null,
       healTonight: false,
       poisonTarget: null,
@@ -67,43 +67,65 @@ describe("schema hành động Sói bỏ cắn", () => {
   });
 });
 
-describe("snapshot tiến độ Sói bỏ cắn", () => {
-  it("chỉ phe Sói thấy số lượt bỏ qua", () => {
-    const room = nightRoom({ actedWolves: ["w1"], skippedWolves: ["w1"] });
+describe("snapshot tiến độ bỏ phiếu của Sói", () => {
+  it("chỉ phe Sói thấy bảng phiếu", () => {
+    const room = nightRoom({ wolfVotes: { w1: null, w2: "v" } });
 
     expect(buildSnapshot(room, "w2").night).toMatchObject({
       wolfSkipVotes: 1,
-      wolfSkipRequired: 2,
-      acted: false,
+      wolfVoteCounts: { v: 1 },
+      wolfVotesRequired: 2,
+      myWolfVote: "v",
+      acted: true,
     });
-    expect(buildSnapshot(room, "w1").night?.acted).toBe(true);
+    expect(buildSnapshot(room, "w1").night).toMatchObject({ acted: true, myWolfVote: null });
 
     for (const viewerId of ["s", "g", "t"]) {
       const night = buildSnapshot(room, viewerId).night;
       expect(night?.wolfSkipVotes).toBeUndefined();
-      expect(night?.wolfSkipRequired).toBeUndefined();
+      expect(night?.wolfVotesRequired).toBeUndefined();
+      expect(night?.wolfVoteCounts).toBeUndefined();
       expect(night?.wolfTarget).toBeNull();
     }
     expect(buildSnapshot(room, "v").night).toBeNull();
   });
 
-  it("chỉ đếm Sói còn sống vào tổng số cần hành động", () => {
-    const room = nightRoom({ actedWolves: ["w1"], skippedWolves: ["w1"] });
+  it("chỉ đếm Sói còn sống vào tổng số phiếu cần có", () => {
+    const room = nightRoom({ wolfVotes: { w1: null } });
     room.engine!.state.players.find((p) => p.id === "w2")!.alive = false;
 
     expect(buildSnapshot(room, "w1").night).toMatchObject({
       wolfSkipVotes: 1,
-      wolfSkipRequired: 1,
+      wolfVotesRequired: 1,
     });
   });
 
-  it("state cũ thiếu skippedWolves vẫn dựng được snapshot", () => {
+  it("Phù Thuỷ chỉ thấy nạn nhân sau khi bầy Sói chốt", () => {
+    const pending = nightRoom({ wolfVotes: { w1: "v", w2: "v" } });
+    expect(buildSnapshot(pending, "t").night).toMatchObject({
+      canAct: false,
+      wolvesLocked: false,
+      wolfTarget: null,
+    });
+
+    const locked = nightRoom({ wolfVotes: { w1: "v", w2: "v" } });
+    locked.engine!.lockWolves();
+    expect(buildSnapshot(locked, "t").night).toMatchObject({
+      canAct: true,
+      wolvesLocked: true,
+      wolfTarget: "v",
+    });
+  });
+
+  it("state cũ thiếu wolfVotes vẫn dựng được snapshot", () => {
     const room = nightRoom();
-    const legacy = room.engine!.state as GameState & { night: { skippedWolves?: string[] } };
-    delete legacy.night.skippedWolves;
+    const legacy = room.engine!.state as GameState & {
+      night: { wolfVotes?: Record<string, string | null> };
+    };
+    delete legacy.night.wolfVotes;
     room.engine = new GameEngine(legacy as GameState);
 
-    expect(room.engine.state.night.skippedWolves).toEqual([]);
+    expect(room.engine.state.night.wolfVotes).toEqual({});
     expect(buildSnapshot(room, "w1").night).toMatchObject({ wolfSkipVotes: 0 });
   });
 });

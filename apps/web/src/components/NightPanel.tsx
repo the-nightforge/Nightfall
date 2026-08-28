@@ -39,14 +39,21 @@ export function NightPanel({ snapshot, onAction }: Props) {
   }
 
   const acted = night?.acted ?? false;
-  const aliveOthers = () => (
+  const locked = night?.wolvesLocked ?? false;
+  const nameOf = (id: string | null | undefined) =>
+    snapshot.players.find((p) => p.id === id)?.name ?? "?";
+  const aliveOthers = (opts?: { selectable?: boolean; disabledIds?: string[] }) => (
     <PlayerGrid
       snapshot={snapshot}
-      selectable={!acted}
+      selectable={opts?.selectable ?? !acted}
       selectedId={selected}
       onSelect={setSelected}
+      disabledIds={opts?.disabledIds}
     />
   );
+
+  // Sói bỏ phiếu chứ không chốt, nên nhãn "Đã hành động" của các vai khác sẽ nói sai.
+  const showActedBadge = acted && role !== "WEREWOLF";
 
   return (
     <div className="space-y-4">
@@ -55,38 +62,44 @@ export function NightPanel({ snapshot, onAction }: Props) {
           <h3 className={`font-bold ${meta.team === "wolves" ? "text-blood-400" : "text-indigo-300"}`}>
             Vai trò của bạn: {meta.name}
           </h3>
-          {acted && <span className="badge-phase bg-emerald-900/60 text-emerald-300">Đã hành động</span>}
+          {showActedBadge && <span className="badge-phase bg-emerald-900/60 text-emerald-300">Đã hành động</span>}
         </div>
 
         {/* MA SÓI */}
         {role === "WEREWOLF" && (
           <>
-            {night?.wolfTarget && (
-              <p className="mb-2 text-sm text-blood-400">
-                Cả bọn đang nhắm vào:{" "}
-                <b>{snapshot.players.find((p) => p.id === night.wolfTarget)?.name ?? "?"}</b>
+            <WolfTally snapshot={snapshot} nameOf={nameOf} />
+            {locked ? (
+              <p className="mb-2 rounded-lg bg-night-800 p-2 text-sm text-blood-400">
+                {night?.wolfTarget ? (
+                  <>
+                    Bầy sói đã chốt: <b>{nameOf(night.wolfTarget)}</b>.
+                  </>
+                ) : (
+                  "Bầy sói đã chốt: đêm nay không cắn ai."
+                )}
               </p>
+            ) : (
+              <>
+                {aliveOthers({
+                  selectable: true,
+                  disabledIds: snapshot.players.filter((p) => p.role === "WEREWOLF").map((p) => p.id),
+                })}
+                <button
+                  className="btn-primary mt-3 w-full"
+                  disabled={!selected}
+                  onClick={() => selected && onAction("KILL", selected)}
+                >
+                  {acted ? "Đổi phiếu cắn" : "Bầu cắn mục tiêu"}
+                </button>
+                <button className="btn-secondary mt-2 w-full" onClick={() => onAction("SKIP", null)}>
+                  Bầu không cắn đêm nay
+                </button>
+                <p className="mt-2 text-center text-xs text-mist/50">
+                  Phiếu chốt khi hết giờ. Hoà phiếu sẽ bốc ngẫu nhiên trong nhóm dẫn đầu.
+                </p>
+              </>
             )}
-            {(night?.wolfSkipVotes ?? 0) > 0 && (
-              <p className="mb-2 text-sm text-mist/70">
-                {night?.wolfSkipVotes}/{night?.wolfSkipRequired} Sói đã chọn không cắn.
-              </p>
-            )}
-            {aliveOthers()}
-            <button
-              className="btn-primary mt-3 w-full"
-              disabled={!selected || acted}
-              onClick={() => selected && onAction("KILL", selected)}
-            >
-              Cắn mục tiêu
-            </button>
-            <button
-              className="btn-secondary mt-2 w-full"
-              disabled={acted}
-              onClick={() => onAction("SKIP", null)}
-            >
-              Không cắn đêm nay
-            </button>
           </>
         )}
 
@@ -133,64 +146,136 @@ export function NightPanel({ snapshot, onAction }: Props) {
         {role === "WITCH" && (
           <div className="space-y-3">
             <div className="flex gap-2 text-sm">
-              <span className={`rounded px-2 py-1 ${night?.healUsed ? "bg-night-700 text-mist/40 line-through" : "bg-emerald-900/50 text-emerald-300"}`}>
+              <span
+                className={`rounded px-2 py-1 ${night?.healUsed ? "bg-night-700 text-mist/40 line-through" : "bg-emerald-900/50 text-emerald-300"}`}
+              >
                 Bình cứu: {night?.healUsed ? "đã dùng" : "còn"}
               </span>
-              <span className={`rounded px-2 py-1 ${night?.poisonUsed ? "bg-night-700 text-mist/40 line-through" : "bg-blood-600/30 text-blood-400"}`}>
+              <span
+                className={`rounded px-2 py-1 ${night?.poisonUsed ? "bg-night-700 text-mist/40 line-through" : "bg-blood-600/30 text-blood-400"}`}
+              >
                 Bình độc: {night?.poisonUsed ? "đã dùng" : "còn"}
               </span>
             </div>
 
-            {!night?.healUsed && (
-              <button
-                className="btn-secondary w-full border border-emerald-600/50"
-                disabled={acted}
-                onClick={() => onAction("HEAL", null)}
-              >
-                🧪 Dùng bình cứu (cứu nạn nhân đêm nay)
-              </button>
-            )}
-
-            {!night?.poisonUsed && (
+            {!locked ? (
+              <p className="rounded-lg bg-night-800 p-3 text-center text-sm text-mist/70">
+                🌙 Bầy sói đang chọn con mồi. Chờ chúng ra tay xong bạn mới quyết định
+                có cứu hay không.
+              </p>
+            ) : (
               <>
-                {!poisoning ? (
+                <p className="rounded-lg bg-night-800 p-2 text-sm">
+                  {night?.wolfTarget ? (
+                    <>
+                      Đêm nay bầy sói cắn <b className="text-blood-400">{nameOf(night.wolfTarget)}</b>.
+                    </>
+                  ) : (
+                    "Đêm nay bầy sói không cắn ai."
+                  )}
+                </p>
+
+                {!night?.healUsed && night?.wolfTarget && (
                   <button
-                    className="btn-secondary w-full border border-blood-500/50"
+                    className="btn-secondary w-full border border-emerald-600/50"
                     disabled={acted}
-                    onClick={() => setPoisoning(true)}
+                    onClick={() => onAction("HEAL", null)}
                   >
-                    ☠️ Chọn người để đầu độc
+                    🧪 Cứu {nameOf(night.wolfTarget)}
                   </button>
-                ) : (
+                )}
+
+                {!night?.poisonUsed && (
                   <>
-                    {aliveOthers()}
-                    <div className="mt-3 flex gap-2">
+                    {!poisoning ? (
                       <button
-                        className="btn-primary flex-1"
-                        disabled={!selected || acted}
-                        onClick={() => selected && onAction("POISON", selected)}
+                        className="btn-secondary w-full border border-blood-500/50"
+                        disabled={acted}
+                        onClick={() => setPoisoning(true)}
                       >
-                        Đầu độc
+                        ☠️ Chọn người để đầu độc
                       </button>
-                      <button className="btn-secondary flex-1" onClick={() => setPoisoning(false)}>
-                        Huỷ
-                      </button>
-                    </div>
+                    ) : (
+                      <>
+                        {aliveOthers()}
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            className="btn-primary flex-1"
+                            disabled={!selected || acted}
+                            onClick={() => selected && onAction("POISON", selected)}
+                          >
+                            Đầu độc
+                          </button>
+                          <button className="btn-secondary flex-1" onClick={() => setPoisoning(false)}>
+                            Huỷ
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
+
+                <button
+                  className="btn-secondary w-full"
+                  disabled={acted}
+                  onClick={() => onAction("SKIP", null)}
+                >
+                  Không dùng thuốc đêm nay
+                </button>
               </>
             )}
-
-            <button
-              className="btn-secondary w-full"
-              disabled={acted}
-              onClick={() => onAction("SKIP", null)}
-            >
-              Không dùng thuốc đêm nay
-            </button>
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Bảng phiếu cắn của bầy sói: ai đang dẫn, còn bao nhiêu sói chưa bầu. */
+function WolfTally({
+  snapshot,
+  nameOf,
+}: {
+  snapshot: RoomSnapshot;
+  nameOf: (id: string | null | undefined) => string;
+}) {
+  const night = snapshot.night;
+  const counts = night?.wolfVoteCounts ?? {};
+  const skip = night?.wolfSkipVotes ?? 0;
+  const required = night?.wolfVotesRequired ?? 0;
+  const cast = Object.values(counts).reduce((sum, n) => sum + n, 0) + skip;
+  const voted = night?.acted === true;
+  const rows = [
+    ...Object.entries(counts).map(([id, count]) => ({
+      label: nameOf(id),
+      count,
+      mine: voted && night?.myWolfVote === id,
+    })),
+    ...(skip > 0
+      ? [{ label: "Không cắn", count: skip, mine: voted && night?.myWolfVote === null }]
+      : []),
+  ].sort((left, right) => right.count - left.count);
+
+  return (
+    <div className="mb-3 rounded-lg bg-night-800 p-2 text-sm">
+      <p className="mb-1 text-xs text-mist/60">
+        Phiếu cắn: {cast}/{required} sói đã bầu
+      </p>
+      {rows.length === 0 ? (
+        <p className="text-mist/50">Chưa sói nào bầu.</p>
+      ) : (
+        <ul className="space-y-0.5">
+          {rows.map((row) => (
+            <li key={row.label} className="flex justify-between gap-2">
+              <span className={row.mine ? "font-semibold text-blood-400" : "text-mist/80"}>
+                {row.label}
+                {row.mine && " (phiếu của bạn)"}
+              </span>
+              <span className="text-mist/60">{row.count}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

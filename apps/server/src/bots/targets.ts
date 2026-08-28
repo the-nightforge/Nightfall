@@ -41,7 +41,8 @@ export function legalNightTargets(view: RoomSnapshot, action: NightActionType): 
 
 export function witchActions(view: RoomSnapshot): ("HEAL" | "POISON" | "SKIP")[] {
   const out: ("HEAL" | "POISON" | "SKIP")[] = [];
-  if (!view.night?.healUsed) out.push("HEAL");
+  // Không có nạn nhân thì engine từ chối HEAL, nên đừng chào nó cho bot.
+  if (!view.night?.healUsed && view.night?.wolfTarget) out.push("HEAL");
   if (!view.night?.poisonUsed) out.push("POISON");
   out.push("SKIP");
   return out;

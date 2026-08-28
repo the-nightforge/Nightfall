@@ -19,11 +19,23 @@ export interface PlayerView {
 export interface NightActionView {
   canAct: boolean;
   acted: boolean;
-  /** Với Sói: mục tiêu hiện tại cả bọn đã chọn */
+  /**
+   * Bầy Sói đã chốt phiếu chưa. Trước khi chốt, Sói còn đổi phiếu được và
+   * Phù Thuỷ chưa tới lượt; sau khi chốt thì ngược lại.
+   */
+  wolvesLocked?: boolean;
+  /**
+   * Nạn nhân bầy Sói đã chốt, chỉ gửi cho Sói và Phù Thuỷ sau khi khoá phiếu.
+   * null nghĩa là đêm nay bầy Sói không cắn ai.
+   */
   wolfTarget?: string | null;
-  /** Với Sói: số Sói đã chọn bỏ qua và tổng số Sói cần hành động */
+  /** Với Sói: số phiếu cắn theo từng mục tiêu */
+  wolfVoteCounts?: Record<string, number>;
+  /** Với Sói: số phiếu "không cắn" và tổng số Sói còn sống cần bầu */
   wolfSkipVotes?: number;
-  wolfSkipRequired?: number;
+  wolfVotesRequired?: number;
+  /** Với Sói: phiếu của chính viewer; null là đã chọn "không cắn" */
+  myWolfVote?: string | null;
   /** Với Bảo Vệ: mục tiêu đêm trước, không được đỡ lại */
   guardPrevious?: string | null;
   /** Với Tiên Tri: kết quả soi gần nhất */

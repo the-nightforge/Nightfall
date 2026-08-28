@@ -89,7 +89,9 @@ function actNight(snap: any, socket: Socket) {
       socket.emit("game:action", { type: "GUARD", targetId: target.id });
       break;
     case "WITCH":
-      if (!snap.night.healUsed) socket.emit("game:action", { type: "HEAL", targetId: null });
+      // Phù Thuỷ chỉ hành động sau khi bầy Sói chốt, và chỉ cứu được nạn nhân thật
+      if (!snap.night.healUsed && snap.night.wolfTarget)
+        socket.emit("game:action", { type: "HEAL", targetId: null });
       else if (!snap.night.poisonUsed && Math.random() < 0.5)
         socket.emit("game:action", { type: "POISON", targetId: target.id });
       break;

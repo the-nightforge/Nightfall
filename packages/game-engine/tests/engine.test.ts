@@ -33,6 +33,14 @@ function findPlayersByRole(engine: GameEngine, role: string) {
   return engine.state.players.filter((p) => p.role === role);
 }
 
+/**
+ * Chốt phiếu cắn để tới lượt Phù Thuỷ. rng cố định để mọi khẳng định về nạn
+ * nhân là xác định, kể cả khi bầy Sói hoà phiếu.
+ */
+function lockWolves(engine: GameEngine, pick = 0) {
+  return engine.lockWolves(() => pick);
+}
+
 describe("Chia vai trò", () => {
   it("chia đúng số lượng vai trò theo cấu hình", () => {
     const deck = buildRoleDeck(CONFIG, 8);
@@ -97,6 +105,7 @@ describe("Thứ tự xử lý hành động ban đêm", () => {
     const victim = e.state.players.find((p) => p.role === "VILLAGER")!;
 
     e.submitNightAction(wolf.id, "KILL", victim.id);
+    lockWolves(e);
     e.submitNightAction(witch.id, "HEAL", null);
 
     const deaths = e.resolveNight();
@@ -116,6 +125,7 @@ describe("Thứ tự xử lý hành động ban đêm", () => {
     const poisoned = villagers[1];
 
     e.submitNightAction(wolf.id, "KILL", victim.id);
+    lockWolves(e);
     e.submitNightAction(witch.id, "HEAL", null);
     e.submitNightAction(witch.id, "POISON", poisoned.id);
 
@@ -135,6 +145,7 @@ describe("Thứ tự xử lý hành động ban đêm", () => {
     const target = e.state.players.find((p) => p.role === "VILLAGER")!;
 
     e.submitNightAction(wolf.id, "KILL", witch.id);
+    lockWolves(e);
     e.submitNightAction(witch.id, "POISON", target.id);
 
     const deaths = e.resolveNight();
@@ -153,6 +164,7 @@ describe("Thứ tự xử lý hành động ban đêm", () => {
     )!;
 
     e.submitNightAction(wolf.id, "KILL", target.id);
+    lockWolves(e);
     e.submitNightAction(witch.id, "POISON", target.id);
     const deaths = e.resolveNight();
 
@@ -208,6 +220,7 @@ describe("Phù Thủy bỏ qua dùng thuốc", () => {
     const e = makeEngine(7);
     const witch = findPlayersByRole(e, "WITCH")[0];
 
+    lockWolves(e);
     e.submitNightAction(witch.id, "SKIP", null);
 
     expect(e.state.night.witchSkipped).toBe(true);
@@ -221,6 +234,7 @@ describe("Phù Thủy bỏ qua dùng thuốc", () => {
     const witch = findPlayersByRole(e, "WITCH")[0];
     const target = e.state.players.find((player) => player.id !== witch.id)!;
 
+    lockWolves(e);
     e.submitNightAction(witch.id, "SKIP", null);
 
     expect(() => e.submitNightAction(witch.id, "HEAL", null)).toThrow(/đã bỏ qua/);
@@ -233,56 +247,105 @@ describe("Phù Thủy bỏ qua dùng thuốc", () => {
     const villager = findPlayersByRole(e, "VILLAGER")[0];
 
     expect(() => e.submitNightAction(villager.id, "SKIP", null)).toThrow(/Phù Thủy/);
+    lockWolves(e);
     e.submitNightAction(witch.id, "SKIP", null);
     e.setPhase("NIGHT", 30_000);
 
     expect(e.state.night.witchSkipped).toBe(false);
+    expect(e.state.night.wolvesLocked).toBe(false);
     expect(e.snapshotFor(witch.id).nightInfo?.acted).toBe(false);
   });
 });
 
-describe("Ma Sói bỏ qua cắn", () => {
-  it("chỉ hoàn tất lượt Sói khi tất cả Sói còn sống đã chọn bỏ qua", () => {
+describe("Bầy Sói bỏ phiếu cắn", () => {
+  it("chỉ hoàn tất lượt Sói khi tất cả Sói còn sống đã bỏ phiếu", () => {
     const e = makeEngine(7);
     const wolves = findPlayersByRole(e, "WEREWOLF");
 
     e.submitNightAction(wolves[0].id, "SKIP", null);
-    expect(e.isNightComplete()).toBe(false);
-    expect(e.state.night.skippedWolves).toEqual([wolves[0].id]);
+    expect(e.allWolvesVoted()).toBe(false);
+    expect(e.state.night.wolfVotes).toEqual({ [wolves[0].id]: null });
 
     e.submitNightAction(wolves[1].id, "SKIP", null);
-    expect(e.isNightComplete()).toBe(true);
+    expect(e.allWolvesVoted()).toBe(true);
+    expect(lockWolves(e)).toBeNull();
     expect(e.state.night.killTarget).toBeNull();
   });
 
-  it("vẫn cắn mục tiêu nếu một Sói chọn cắn và Sói còn lại bỏ qua", () => {
-    const e = makeEngine(7);
+  it("mục tiêu nhiều phiếu nhất bị cắn", () => {
+    const e = makeEngine(9, { ...CONFIG, werewolves: 3 });
     const wolves = findPlayersByRole(e, "WEREWOLF");
-    const target = e.state.players.find((player) => player.role === "VILLAGER")!;
+    const [popular, other] = findPlayersByRole(e, "VILLAGER");
 
-    e.submitNightAction(wolves[0].id, "KILL", target.id);
-    e.submitNightAction(wolves[1].id, "SKIP", null);
+    e.submitNightAction(wolves[0].id, "KILL", popular.id);
+    e.submitNightAction(wolves[1].id, "KILL", popular.id);
+    e.submitNightAction(wolves[2].id, "KILL", other.id);
 
-    expect(e.isNightComplete()).toBe(true);
+    // pick = 0.99 vẫn ra popular: đa số tuyệt đối thì không có gì để bốc.
+    expect(lockWolves(e, 0.99)).toBe(popular.id);
     expect(e.resolveNight()).toEqual([
-      expect.objectContaining({ playerId: target.id, cause: "wolf" }),
+      expect.objectContaining({ playerId: popular.id, cause: "wolf" }),
     ]);
   });
 
-  it("khóa lựa chọn sau khi Sói đã bỏ qua và reset ở đêm mới", () => {
+  it("hoà phiếu thì bốc ngẫu nhiên trong nhóm dẫn đầu", () => {
+    const pickFirst = makeEngine(7);
+    const firstPack = findPlayersByRole(pickFirst, "WEREWOLF");
+    const [a, b] = findPlayersByRole(pickFirst, "VILLAGER");
+    pickFirst.submitNightAction(firstPack[0].id, "KILL", a.id);
+    pickFirst.submitNightAction(firstPack[1].id, "KILL", b.id);
+    expect(lockWolves(pickFirst, 0)).toBe(a.id);
+
+    const pickLast = makeEngine(7);
+    const lastPack = findPlayersByRole(pickLast, "WEREWOLF");
+    const [c, d] = findPlayersByRole(pickLast, "VILLAGER");
+    pickLast.submitNightAction(lastPack[0].id, "KILL", c.id);
+    pickLast.submitNightAction(lastPack[1].id, "KILL", d.id);
+    expect(lockWolves(pickLast, 0.99)).toBe(d.id);
+  });
+
+  it("phiếu không cắn là ứng viên ngang hàng, thắng được và hoà được", () => {
+    const e = makeEngine(9, { ...CONFIG, werewolves: 3 });
+    const wolves = findPlayersByRole(e, "WEREWOLF");
+    const prey = findPlayersByRole(e, "VILLAGER")[0];
+
+    e.submitNightAction(wolves[0].id, "SKIP", null);
+    e.submitNightAction(wolves[1].id, "SKIP", null);
+    e.submitNightAction(wolves[2].id, "KILL", prey.id);
+
+    expect(lockWolves(e, 0.99)).toBeNull();
+    expect(e.resolveNight()).toEqual([]);
+  });
+
+  it("Sói đổi được phiếu tới khi chốt, sau khi chốt thì không", () => {
     const e = makeEngine(7);
     const wolf = findPlayersByRole(e, "WEREWOLF")[0];
-    const target = e.state.players.find((player) => player.role === "VILLAGER")!;
+    const [first, second] = findPlayersByRole(e, "VILLAGER");
 
     e.submitNightAction(wolf.id, "SKIP", null);
-    expect(() => e.submitNightAction(wolf.id, "KILL", target.id)).toThrow(/đã hành động/);
+    e.submitNightAction(wolf.id, "KILL", first.id);
+    e.submitNightAction(wolf.id, "KILL", second.id);
+    expect(e.state.night.wolfVotes[wolf.id]).toBe(second.id);
+
+    lockWolves(e);
+    expect(() => e.submitNightAction(wolf.id, "KILL", first.id)).toThrow(/đã chốt/);
+    expect(() => e.submitNightAction(wolf.id, "SKIP", null)).toThrow(/đã chốt/);
+  });
+
+  it("reset phiếu và trạng thái chốt ở đêm mới", () => {
+    const e = makeEngine(7);
+    const wolf = findPlayersByRole(e, "WEREWOLF")[0];
+
+    e.submitNightAction(wolf.id, "SKIP", null);
+    lockWolves(e);
 
     e.setPhase("NIGHT", 30_000);
-    expect(e.state.night.skippedWolves).toEqual([]);
+    expect(e.state.night.wolfVotes).toEqual({});
+    expect(e.state.night.wolvesLocked).toBe(false);
     expect(e.snapshotFor(wolf.id).nightInfo).toMatchObject({
       acted: false,
       wolfSkipVotes: 0,
-      wolfSkipRequired: 2,
+      wolfVotesRequired: 2,
     });
   });
 
@@ -291,6 +354,7 @@ describe("Ma Sói bỏ qua cắn", () => {
     const wolves = findPlayersByRole(e, "WEREWOLF");
 
     for (const wolf of wolves) e.submitNightAction(wolf.id, "SKIP", null);
+    lockWolves(e);
 
     expect(e.state.night.killTarget).toBeNull();
     const deaths = e.resolveNight();
@@ -308,22 +372,7 @@ describe("Ma Sói bỏ qua cắn", () => {
     expect(() => e.submitNightAction(wolf.id, "SKIP", villager.id)).toThrow(
       /không cần mục tiêu/,
     );
-    expect(e.state.night.skippedWolves).toEqual([]);
-    expect(e.state.night.actedWolves).toEqual([]);
-  });
-
-  it("Sói không thể bỏ qua hai lần và không thể bỏ qua sau khi đã cắn", () => {
-    const e = makeEngine(7);
-    const wolves = findPlayersByRole(e, "WEREWOLF");
-    const villager = findPlayersByRole(e, "VILLAGER")[0];
-
-    e.submitNightAction(wolves[0].id, "SKIP", null);
-    expect(() => e.submitNightAction(wolves[0].id, "SKIP", null)).toThrow(/đã hành động/);
-
-    e.submitNightAction(wolves[1].id, "KILL", villager.id);
-    expect(() => e.submitNightAction(wolves[1].id, "SKIP", null)).toThrow(/đã hành động/);
-    expect(e.state.night.skippedWolves).toEqual([wolves[0].id]);
-    expect(e.state.night.killTarget).toBe(villager.id);
+    expect(e.state.night.wolfVotes).toEqual({});
   });
 
   it("vai ngoài Sói và Phù Thủy không được gửi SKIP", () => {
@@ -334,7 +383,7 @@ describe("Ma Sói bỏ qua cắn", () => {
       expect(() => e.submitNightAction(player.id, "SKIP", null)).toThrow(GameError);
     }
 
-    expect(e.state.night.skippedWolves).toEqual([]);
+    expect(e.state.night.wolfVotes).toEqual({});
     expect(e.state.night.witchSkipped).toBe(false);
   });
 
@@ -352,6 +401,7 @@ describe("Ma Sói bỏ qua cắn", () => {
 
     e.submitNightAction(seer.id, "SEE", wolves[0].id);
     e.submitNightAction(guard.id, "GUARD", villager.id);
+    lockWolves(e);
     e.submitNightAction(witch.id, "POISON", villager.id);
 
     expect(e.snapshotFor(seer.id).nightInfo?.seerResult?.isWolf).toBe(true);
@@ -361,7 +411,7 @@ describe("Ma Sói bỏ qua cắn", () => {
     ]);
   });
 
-  it("chỉ phe Sói thấy tiến độ bỏ qua trong snapshot", () => {
+  it("chỉ phe Sói thấy tiến độ bỏ phiếu trong snapshot", () => {
     const e = makeEngine(7);
     const wolves = findPlayersByRole(e, "WEREWOLF");
 
@@ -369,14 +419,19 @@ describe("Ma Sói bỏ qua cắn", () => {
 
     expect(e.snapshotFor(wolves[1].id).nightInfo).toMatchObject({
       wolfSkipVotes: 1,
-      wolfSkipRequired: 2,
+      wolfVotesRequired: 2,
+      acted: false,
+    });
+    expect(e.snapshotFor(wolves[0].id).nightInfo).toMatchObject({
+      acted: true,
+      myWolfVote: null,
     });
 
     for (const role of ["SEER", "GUARD", "WITCH"]) {
       const view = e.snapshotFor(findPlayersByRole(e, role)[0].id).nightInfo;
-      expect(view?.canAct).toBe(true);
       expect(view?.wolfSkipVotes).toBeUndefined();
-      expect(view?.wolfSkipRequired).toBeUndefined();
+      expect(view?.wolfVotesRequired).toBeUndefined();
+      expect(view?.wolfVoteCounts).toBeUndefined();
       expect(view?.wolfTarget).toBeNull();
     }
 
@@ -563,7 +618,7 @@ describe("Hành động không hợp lệ & quyền hạn", () => {
     if (!aliveWolf.alive) throw new Error("test setup sai");
     const target = e.state.players.find((player) => player.alive && player.role !== "WEREWOLF")!;
     e.submitNightAction(aliveWolf.id, "KILL", target.id);
-    expect(e.isNightComplete()).toBe(true);
+    expect(e.allWolvesVoted()).toBe(true);
   });
 
   it("sói không thể cắn đồng bọn", () => {
@@ -602,17 +657,29 @@ describe("Snapshot không lộ thông tin bí mật", () => {
     }
   });
 
-  it("sói thấy mục tiêu chung nhưng dân không thấy gì về killTarget", () => {
+  it("sói thấy bảng phiếu rồi thấy nạn nhân đã chốt, dân không thấy gì", () => {
     const e = makeEngine(7);
     const wolves = findPlayersByRole(e, "WEREWOLF");
     const prey = findPlayersByRole(e, "VILLAGER")[0];
     e.submitNightAction(wolves[0].id, "KILL", prey.id);
 
-    const wolfView = e.snapshotFor(wolves[1].id);
-    expect(wolfView.nightInfo?.wolfTarget).toBe(prey.id);
+    // Trước khi chốt, đồng bọn thấy phiếu chứ chưa thấy nạn nhân cuối cùng
+    const beforeLock = e.snapshotFor(wolves[1].id).nightInfo;
+    expect(beforeLock?.wolfVoteCounts).toEqual({ [prey.id]: 1 });
+    expect(beforeLock?.wolfTarget).toBeNull();
 
-    const villagerView = e.snapshotFor("p2");
-    expect(JSON.stringify(villagerView)).not.toContain('"killTarget"');
+    lockWolves(e);
+    expect(e.snapshotFor(wolves[1].id).nightInfo?.wolfTarget).toBe(prey.id);
+
+    const villager = e.state.players.find(
+      (p) => p.role === "VILLAGER" && p.id !== prey.id,
+    )!;
+    const seer = findPlayersByRole(e, "SEER")[0];
+    expect(JSON.stringify(e.snapshotFor(villager.id))).not.toContain("wolfTarget");
+    expect(e.snapshotFor(seer.id).nightInfo).toMatchObject({
+      wolfTarget: null,
+      wolfVoteCounts: undefined,
+    });
   });
 
   it("phiếu chi tiết không lộ trước khi hết bỏ phiếu, chỉ lộ số phiếu", () => {
@@ -643,6 +710,7 @@ describe("Lịch sử diễn biến ban đêm", () => {
     e.submitNightAction(wolf.id, "KILL", wolfTarget.id);
     e.submitNightAction(guard.id, "GUARD", wolfTarget.id);
     e.submitNightAction(seer.id, "SEE", wolf.id);
+    lockWolves(e);
     e.submitNightAction(witch.id, "HEAL", null);
     e.submitNightAction(witch.id, "POISON", poisonTarget.id);
     e.resolveNight();
@@ -690,16 +758,82 @@ describe("Lịch sử diễn biến ban đêm", () => {
     expect(next.state.nightHistory).toEqual([]);
   });
 
-  it("ghi việc dùng bình cứu dù đêm đó không có mục tiêu của Sói", () => {
+  it("đêm không ai bị cắn thì không cứu được và bình cứu còn nguyên", () => {
     const e = makeEngine(7);
     const witch = findPlayersByRole(e, "WITCH")[0];
-    e.submitNightAction(witch.id, "HEAL", null);
+    lockWolves(e);
+
+    expect(() => e.submitNightAction(witch.id, "HEAL", null)).toThrow(/không có ai bị cắn/);
     e.resolveNight();
 
+    expect(e.state.healUsed).toBe(false);
     expect(e.state.nightHistory[0].witch).toMatchObject({
-      usedHeal: true,
+      usedHeal: false,
       healedTarget: null,
     });
+  });
+
+  it("Phù Thuỷ chưa được hành động khi bầy Sói chưa chốt", () => {
+    const e = makeEngine(7);
+    const witch = findPlayersByRole(e, "WITCH")[0];
+    const target = findPlayersByRole(e, "VILLAGER")[0];
+
+    expect(() => e.submitNightAction(witch.id, "SKIP", null)).toThrow(/Chưa tới lượt/);
+    expect(() => e.submitNightAction(witch.id, "POISON", target.id)).toThrow(/Chưa tới lượt/);
+    expect(e.snapshotFor(witch.id).nightInfo).toMatchObject({
+      canAct: false,
+      wolvesLocked: false,
+      wolfTarget: null,
+    });
+  });
+
+  it("Phù Thuỷ thấy đúng nạn nhân sau khi bầy Sói chốt", () => {
+    const e = makeEngine(7);
+    const wolves = findPlayersByRole(e, "WEREWOLF");
+    const witch = findPlayersByRole(e, "WITCH")[0];
+    const prey = findPlayersByRole(e, "VILLAGER")[0];
+
+    for (const wolf of wolves) e.submitNightAction(wolf.id, "KILL", prey.id);
+    lockWolves(e);
+
+    expect(e.snapshotFor(witch.id).nightInfo).toMatchObject({
+      canAct: true,
+      wolvesLocked: true,
+      wolfTarget: prey.id,
+    });
+    e.submitNightAction(witch.id, "HEAL", null);
+    expect(e.resolveNight()).toEqual([]);
+    expect(e.state.healUsed).toBe(true);
+  });
+
+  it("bình cứu vẫn tiêu hao khi Bảo Vệ đã đỡ sẵn, để không tố ai được bảo vệ", () => {
+    const e = makeEngine(7);
+    const wolves = findPlayersByRole(e, "WEREWOLF");
+    const witch = findPlayersByRole(e, "WITCH")[0];
+    const guard = findPlayersByRole(e, "GUARD")[0];
+    const prey = findPlayersByRole(e, "VILLAGER")[0];
+
+    for (const wolf of wolves) e.submitNightAction(wolf.id, "KILL", prey.id);
+    e.submitNightAction(guard.id, "GUARD", prey.id);
+    lockWolves(e);
+    e.submitNightAction(witch.id, "HEAL", null);
+
+    expect(e.resolveNight()).toEqual([]);
+    expect(e.state.healUsed).toBe(true);
+  });
+
+  it("resolveNight tự chốt phiếu nếu chưa ai chốt", () => {
+    const e = makeEngine(7);
+    const wolves = findPlayersByRole(e, "WEREWOLF");
+    const prey = findPlayersByRole(e, "VILLAGER")[0];
+
+    for (const wolf of wolves) e.submitNightAction(wolf.id, "KILL", prey.id);
+    expect(e.state.night.wolvesLocked).toBe(false);
+
+    expect(e.resolveNight()).toEqual([
+      expect.objectContaining({ playerId: prey.id, cause: "wolf" }),
+    ]);
+    expect(e.state.night.wolvesLocked).toBe(true);
   });
 
   it("ẩn toàn bộ lịch sử đêm trước GAME_OVER kể cả với người đã chết", () => {

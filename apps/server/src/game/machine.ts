@@ -19,6 +19,8 @@ import {
 const ROLE_REVEAL_MS = 10_000;
 const RESULT_MS = 8_000;
 const GAME_OVER_MS = 30_000;
+/** Cửa sổ riêng cho Phù Thuỷ sau khi bầy Sói chốt nạn nhân. */
+const WITCH_WINDOW_MS = 15_000;
 
 function engine(room: Room): GameEngine {
   if (!room.engine) throw new Error("Chưa có trận đấu");
@@ -63,8 +65,41 @@ function beginNight(room: Room): void {
   const e = engine(room);
   e.setPhase("NIGHT", room.config.nightSeconds * 1000);
   scheduleNightBots(room);
-  setRoomTimer(room.code, () => endNight(room), room.config.nightSeconds * 1000 + 500);
+  setRoomTimer(room.code, () => lockWolves(room), room.config.nightSeconds * 1000 + 500);
   sync(room);
+}
+
+/**
+ * Chốt phiếu cắn rồi mở cửa sổ riêng cho Phù Thuỷ.
+ *
+ * Đêm vẫn là một pha duy nhất; chia hai chặng ở đây vì Phù Thuỷ phải biết ai
+ * bị cắn mới quyết được có đốt bình cứu hay không.
+ */
+function lockWolves(room: Room): void {
+  clearRoomTimers(room.code);
+  if (!room.engine || room.engine.state.phase !== "NIGHT") return;
+  const e = engine(room);
+  e.lockWolves();
+
+  if (!e.witchPending()) {
+    endNight(room);
+    return;
+  }
+  e.extendPhase(WITCH_WINDOW_MS);
+  scheduleNightBots(room);
+  setRoomTimer(room.code, () => endNight(room), WITCH_WINDOW_MS + 500);
+  sync(room);
+}
+
+/**
+ * Đóng cửa sổ Phù Thuỷ ngay khi cô ta đã quyết, khỏi bắt cả phòng ngồi chờ hết
+ * 15 giây. Cùng cách làm với maybeEndVotingEarly ở pha bỏ phiếu.
+ */
+export function maybeEndWitchWindow(room: Room): void {
+  if (!room.engine || room.engine.state.phase !== "NIGHT") return;
+  if (!room.engine.state.night.wolvesLocked) return;
+  if (room.engine.witchPending()) return;
+  setRoomTimer(room.code, () => endNight(room), 800);
 }
 
 function endNight(room: Room): void {
@@ -180,12 +215,17 @@ function applyNight(room: Room, botId: string, decision: NightDecision | null): 
 export function scheduleNightBots(room: Room): void {
   // Trần thời gian nộp quyết định: nhanh hơn hẳn thời lượng đêm, để endNight()
   // không bao giờ phải chờ mạng — kể cả với nightSeconds ngắn nhất (15s = 6s trần).
-  const deadlineMs = Math.min(8_000, room.config.nightSeconds * 400);
+  const deadlineMs = Math.min(
+    8_000,
+    room.engine?.state.night.wolvesLocked ? WITCH_WINDOW_MS * 0.4 : room.config.nightSeconds * 400,
+  );
 
   for (const member of room.members) {
     if (!member.isBot) continue;
     const view = buildSnapshot(room, member.playerId);
-    if (!view.night?.canAct) continue;
+    // canAct đã loại Phù Thuỷ ở chặng một và loại Sói ở chặng hai; cờ acted
+    // chặn nốt việc gọi lại này hỏi một bot đã hành động rồi.
+    if (!view.night?.canAct || view.night.acted) continue;
 
     const delay = 2_000 + Math.floor(Math.random() * 3_000);
     // Gọi ngay ở t=0, nộp ở max(delay, lúc kết quả về)
