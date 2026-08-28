@@ -74,14 +74,15 @@ export interface BotKnowledgeInput {
   seerResult: BotKnowledgeView["seerResult"];
   publicVoteHistory: readonly DayVoteRecap[];
   currentVoteCounts: BotKnowledgeView["currentVoteCounts"];
+  /** `undefined` là chưa bầu; engine đã quyết định người chết không có phiếu. */
   currentVote: string | null | undefined;
-  canVote: boolean;
-  aliveTargetIds: readonly string[];
+  /** Do engine tính sẵn, để chỗ này không dựng lại luật pha lần thứ hai. */
+  legalVoteChoices: readonly PublicVoteChoice[];
   lastNightDeaths: readonly BotKnowledgeView["lastNightDeaths"][number][];
 }
 
 export function buildBotKnowledgeView(input: BotKnowledgeInput): BotKnowledgeView {
-  const myVote = input.canVote ? toPublicVoteChoice(input.currentVote) : null;
+  const myVote = toPublicVoteChoice(input.currentVote);
   return {
     botId: input.botId,
     round: input.round,
@@ -99,7 +100,7 @@ export function buildBotKnowledgeView(input: BotKnowledgeInput): BotKnowledgeVie
     },
     hasVoted: myVote !== null,
     myVote,
-    legalVoteChoices: buildLegalVoteChoices(input.canVote, input.aliveTargetIds),
+    legalVoteChoices: input.legalVoteChoices.map((choice) => ({ ...choice })),
     lastNightDeaths: input.lastNightDeaths.map((death) => ({ ...death })),
   };
 }

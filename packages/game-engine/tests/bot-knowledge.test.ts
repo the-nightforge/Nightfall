@@ -27,32 +27,78 @@ function knowledgeFixture(phase: GamePhase = "VOTING") {
     players: ROSTER.map((player) => ({ ...player, alive: true, isBot: true, cursedTurned: false })),
     config: CONFIG,
     winner: null,
+    // Fixture cố tình nạp ĐẦY hidden state. Một state rỗng sẽ khiến mọi khẳng
+    // định "không lộ" ở dưới trở thành vô nghĩa: chúng chỉ chứng minh được điều
+    // gì khi thật sự có bí mật để lộ.
     night: {
-      wolfVotes: {},
-      killTarget: null,
-      wolvesLocked: false,
-      guardTarget: null,
-      healTonight: false,
-      poisonTarget: null,
+      wolfVotes: { "wolf-a": "villager", "wolf-b": "witch" },
+      killTarget: "villager",
+      wolvesLocked: true,
+      guardTarget: "witch",
+      healTonight: true,
+      poisonTarget: "wolf-b",
       witchSkipped: false,
-      seerResults: {},
+      seerResults: { witch: { targetId: "wolf-b", isWolf: true } },
     },
     votes: {},
     voteMutations: [],
     dayVoteHistory: [],
-    guardPrevious: null,
-    healUsed: false,
+    guardPrevious: "witch",
+    healUsed: true,
     poisonUsed: false,
     lastNightDeaths: [{ playerId: "ghost", name: "Ma" }],
     nightHistory: [],
     lastEliminated: null,
-    trial: null,
+    trial: { accusedId: "witch", finalVotes: { "wolf-a": true, villager: false } },
     lastTrial: null,
     hunterReaction: null,
     hunterShots: [],
-    log: [],
+    log: ["Sói đã cắn Dân."],
   };
   return new GameEngine(state);
+}
+
+/** Mọi tên trường bí mật không được xuất hiện ở bất kỳ độ sâu nào của view. */
+const FORBIDDEN_KEYS = [
+  "wolfVotes",
+  "killTarget",
+  "guardTarget",
+  "poisonTarget",
+  "healTonight",
+  "healUsed",
+  "poisonUsed",
+  "wolvesLocked",
+  "witchSkipped",
+  "seerResults",
+  "guardPrevious",
+  "trial",
+  "finalVotes",
+  "hunterReaction",
+  "hunterShots",
+  "nightHistory",
+  "voteMutations",
+  "lastTrial",
+  "lastEliminated",
+  "config",
+  "winner",
+  "isBot",
+  "cursedTurned",
+  "role",
+  "log",
+];
+
+function collectKeys(value: unknown, found = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) {
+    for (const item of value) collectKeys(item, found);
+    return found;
+  }
+  if (value !== null && typeof value === "object") {
+    for (const [key, nested] of Object.entries(value)) {
+      found.add(key);
+      collectKeys(nested, found);
+    }
+  }
+  return found;
 }
 
 function seerFixture() {
@@ -164,7 +210,6 @@ describe("bot knowledge security boundary", () => {
       type: "PLAYER",
       targetId: "wolf-a",
     });
-    expect(JSON.stringify(view.publicVoteHistory)).not.toContain("WEREWOLF");
   });
 
   it("carries phase timing, round and public deaths for the runtime", () => {
@@ -177,6 +222,107 @@ describe("bot knowledge security boundary", () => {
     expect(view.phaseEndsAt).toBe(130_000);
     expect(view.selfRole).toBe("VILLAGER");
     expect(view.lastNightDeaths).toEqual([{ playerId: "ghost", name: "Ma" }]);
+  });
+
+  it("carries no hidden night, trial or wolf-plan field at any depth", () => {
+    const view = knowledgeFixture().botKnowledgeFor("villager");
+    const keys = collectKeys(view);
+
+    expect(FORBIDDEN_KEYS.filter((key) => keys.has(key))).toEqual([]);
+    expect(Object.keys(view).sort()).toEqual(
+      [
+        "botId",
+        "currentVoteCounts",
+        "hasVoted",
+        "knownRoles",
+        "lastNightDeaths",
+        "legalVoteChoices",
+        "myVote",
+        "phase",
+        "phaseEndsAt",
+        "phaseStartedAt",
+        "players",
+        "publicVoteHistory",
+        "round",
+        "seerResult",
+        "selfRole",
+      ].sort(),
+    );
+  });
+
+  it("hides another player's seer result even from a wolf", () => {
+    expect(knowledgeFixture().botKnowledgeFor("wolf-a").seerResult).toBeNull();
+    expect(knowledgeFixture().botKnowledgeFor("villager").seerResult).toBeNull();
+  });
+
+  it("never reveals who voted for whom while the vote is still open", () => {
+    const e = knowledgeFixture();
+    e.submitVote("villager", "wolf-a", 110_000);
+    e.submitVote("witch", "wolf-a", 111_000);
+    e.submitVote("wolf-b", null, 112_000);
+
+    const view = e.botKnowledgeFor("villager");
+
+    expect(view.publicVoteHistory).toEqual([]);
+    expect(JSON.stringify(view)).not.toContain("voterId");
+    expect(view.currentVoteCounts).toEqual({ players: { "wolf-a": 2 }, noElimination: 1 });
+  });
+
+  it("keeps showing the viewer their own vote after the vote closes", () => {
+    const e = knowledgeFixture();
+    e.submitVote("villager", "wolf-a", 110_000);
+    e.submitVote("witch", "wolf-a", 111_000);
+    e.resolveNomination(20_000, 130_000);
+
+    const view = e.botKnowledgeFor("villager");
+
+    expect(e.state.phase).toBe("DEFENSE");
+    expect(view.hasVoted).toBe(true);
+    expect(view.myVote).toEqual({ type: "PLAYER", targetId: "wolf-a" });
+    expect(view.legalVoteChoices).toEqual([]);
+  });
+
+  it("reports a dead viewer as not having voted", () => {
+    const e = knowledgeFixture();
+    e.submitVote("villager", "wolf-a", 110_000);
+    e.mustPlayer("villager").alive = false;
+
+    const view = e.botKnowledgeFor("villager");
+
+    expect(view.hasVoted).toBe(false);
+    expect(view.myVote).toBeNull();
+  });
+
+  it("deep-copies changed votes and the final judgment recap", () => {
+    const e = knowledgeFixture();
+    e.submitVote("villager", "wolf-b", 105_000);
+    e.submitVote("villager", "wolf-a", 110_000);
+    e.submitVote("witch", "wolf-a", 111_000);
+    e.resolveNomination(20_000, 130_000);
+    e.beginFinalVote(20_000);
+    for (const voter of e.finalVoters()) e.submitFinalVote(voter.id, true);
+    e.resolveFinalVote();
+
+    const recap = e.botKnowledgeFor("villager").publicVoteHistory[0]!;
+    const changed = recap.mutations.find((mutation) => mutation.previousChoice !== null)!;
+    const changedSequence = changed.sequence;
+    expect(changed.previousChoice).toEqual({ type: "PLAYER", targetId: "wolf-b" });
+    expect(recap.finalJudgment).not.toBeNull();
+
+    changed.previousChoice = null;
+    recap.finalBallots[0]!.choice = { type: "NO_ELIMINATION" };
+    recap.nomination = { kind: "NONE", reason: "tie" };
+    recap.finalJudgment!.ballots[0]!.guilty = false;
+    recap.finalJudgment!.lynched = false;
+
+    const stored = e.state.dayVoteHistory[0]!;
+    expect(
+      stored.mutations.find((mutation) => mutation.sequence === changedSequence)!.previousChoice,
+    ).toEqual({ type: "PLAYER", targetId: "wolf-b" });
+    expect(stored.finalBallots[0]!.choice).not.toEqual({ type: "NO_ELIMINATION" });
+    expect(stored.nomination).toEqual({ kind: "TRIAL", accusedId: "wolf-a" });
+    expect(stored.finalJudgment!.ballots[0]!.guilty).toBe(true);
+    expect(stored.finalJudgment!.lynched).toBe(true);
   });
 
   it("rejects an unknown viewer instead of inventing a view", () => {

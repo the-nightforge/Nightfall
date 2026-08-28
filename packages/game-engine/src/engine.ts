@@ -18,7 +18,7 @@ import {
   type Winner,
 } from "@masoi/shared";
 import { assignRoles, type AssignInput } from "./assignRoles";
-import { buildBotKnowledgeView } from "./bot/knowledge";
+import { buildBotKnowledgeView, buildLegalVoteChoices } from "./bot/knowledge";
 import type { BotKnowledgeView } from "./bot/types";
 import {
   GameError,
@@ -995,13 +995,19 @@ export class GameEngine {
   }
 
   /**
-   * View đã lọc dành riêng cho lõi AI deterministic. Đây là entry point DUY
-   * NHẤT được đọc state để dựng knowledge của BOT: `bot/knowledge.ts` chỉ nhận
+   * View đã lọc dành riêng cho lõi AI deterministic. Đây là entry point duy
+   * nhất được đọc state để dựng knowledge của BOT: `bot/knowledge.ts` chỉ nhận
    * giá trị đã lọc, nên không có đường vòng nào để một trường bí mật lọt ra.
    *
-   * Quyền xem trùng đúng với `snapshotFor`: role người khác - kể cả người đã
-   * chết - vẫn ẩn tới `GAME_OVER`, nên BOT không bao giờ có lợi thế thông tin
-   * mà người thật không có.
+   * Luật role trùng đúng với `snapshotFor` ở mọi pha đang chơi, và chặt hơn ở
+   * `GAME_OVER`: view này KHÔNG bao giờ reveal toàn bộ role, vì lõi AI không có
+   * việc gì phải làm sau khi ván kết thúc. BOT vì thế không bao giờ có lợi thế
+   * thông tin mà người thật không có.
+   *
+   * Hai chỗ rộng hơn snapshot một cách có chủ đích, cả hai đều là sự thật công
+   * khai không mang role: `currentVoteCounts` và `lastNightDeaths` không bị
+   * khoá theo pha, để runtime còn dựng được memory `PLAYER_DIED` trong pha bỏ
+   * phiếu - lúc snapshot của UI đã ngừng gửi danh sách đó.
    */
   botKnowledgeFor(botId: string): BotKnowledgeView {
     const st = this.state;
@@ -1039,9 +1045,11 @@ export class GameEngine {
       seerResult,
       publicVoteHistory: st.dayVoteHistory,
       currentVoteCounts: this.voteTally(),
-      currentVote: st.votes[botId],
-      canVote: this.canSubmitVote(botId),
-      aliveTargetIds: this.alivePlayers().map((player) => player.id),
+      // Phiếu của chính mình vẫn hiển thị sau khi pha bỏ phiếu đóng, đúng như
+      // snapshotFor: nói với BOT rằng nó "chưa bầu" trong lúc biện hộ là một
+      // lời khai sai, và lõi belief sẽ dựng memory từ lời khai đó.
+      currentVote: viewer.alive ? st.votes[botId] : undefined,
+      legalVoteChoices: this.legalVoteChoicesFor(botId),
       lastNightDeaths: st.lastNightDeaths,
     });
   }
@@ -1051,19 +1059,14 @@ export class GameEngine {
    * được bỏ phiếu, để lõi AI không phải tự suy ra luật pha.
    */
   legalVoteChoicesFor(viewerId: string): PublicVoteChoice[] {
-    if (!this.canSubmitVote(viewerId)) return [];
-    return [
-      ...this.alivePlayers().map((player): PublicVoteChoice => ({
-        type: "PLAYER",
-        targetId: player.id,
-      })),
-      { type: "NO_ELIMINATION" },
-    ];
+    return buildLegalVoteChoices(
+      this.canSubmitVote(viewerId),
+      this.alivePlayers().map((player) => player.id),
+    );
   }
 
   /** Cùng điều kiện mà submitVote thực thi, tách ra để view không đoán lại luật. */
   private canSubmitVote(viewerId: string): boolean {
     return this.state.phase === "VOTING" && this.player(viewerId)?.alive === true;
   }
-
 }
