@@ -8,6 +8,7 @@ import type { Role } from "@masoi/shared";
 import { incomingHostilityOf } from "../analysis/social-analysis";
 import { MAX_BELIEF_SCORE } from "../belief/evidence";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import { sumTerms, type TraceTerm } from "../trace/trace";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
 
 /** Vai có thể lật ngược ván đấu nếu sống thêm một đêm. */
@@ -69,9 +70,12 @@ export function werewolfStrategy(
   return {
     role,
 
-    decideNight(context, state, rng): BotNightIntention | null {
+    decideNight(context, state, rng, probe): BotNightIntention | null {
       const night = context.knowledge.night;
-      if (!night || !night.legalActions.includes("KILL")) return null;
+      if (!night || !night.legalActions.includes("KILL")) {
+        probe?.fallback("không có lượt cắn nào đang mở");
+        return null;
+      }
 
       const allies = new Set(
         Object.entries(context.knowledge.knownRoles)
@@ -82,16 +86,21 @@ export function werewolfStrategy(
       // Lọc đồng bọn lần nữa dù engine đã lọc. Hai lớp là có chủ đích: engine
       // bảo vệ luật, còn lớp này bảo vệ chiến thuật khỏi một thay đổi ở engine.
       const candidates = night.legalTargets.KILL.filter((id) => !allies.has(id));
-      if (candidates.length === 0) return null;
+      if (candidates.length === 0) {
+        probe?.fallback("không còn mục tiêu nào ngoài bầy Sói");
+        return null;
+      }
 
       const scored = candidates
         .map((targetId) => {
           const { score, reason } = threatScore(state, context, targetId, weights);
-          return {
-            targetId,
-            score: score + (rng() - 0.5) * weights.confidence.jitterSpan,
-            reason,
-          };
+          const terms: TraceTerm[] = [
+            { name: "threat", value: score },
+            { name: "jitter", value: (rng() - 0.5) * weights.confidence.jitterSpan },
+          ];
+          const total = sumTerms(terms);
+          probe?.candidate({ targetId, score: total, terms, evidenceIds: [] });
+          return { targetId, score: total, reason };
         })
         // Tie-break theo id để hai lần chạy cùng seed không đảo thứ tự.
         .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));

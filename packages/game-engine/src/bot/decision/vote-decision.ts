@@ -4,6 +4,7 @@ import { incomingHostilityOf, possibleWolfPairScore } from "../analysis/social-a
 import { MAX_BELIEF_SCORE } from "../belief/evidence";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { strategyFor } from "../roles/registry";
+import { sumTerms, type DecisionProbe, type TraceTerm } from "../trace/trace";
 import type {
   BotBrainState,
   BotDecisionContext,
@@ -146,6 +147,7 @@ export function selectVote(
   state: BotBrainState,
   rng: BotRng,
   weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+  probe?: DecisionProbe,
 ): BotVoteIntention {
   const knowledge = context.knowledge;
   const personality = state.personality;
@@ -169,34 +171,64 @@ export function selectVote(
     const reasons = belief?.reasons ?? [];
     const topConfidence = reasons.reduce((max, item) => Math.max(max, item.confidence), 0);
 
-    let score =
-      (belief?.score ?? 0) +
-      topConfidence * weights.suspicion.evidenceConfidenceBonus +
-      incomingHostilityOf(state, targetId) * weights.suspicion.hostilityBonus +
-      pairPressure(state, targetId, weights) * weights.suspicion.pairBonus -
-      (state.trust[targetId]?.score ?? 0) * weights.trust.damping +
-      (bias[targetId] ?? 0) +
+    // Điểm được cộng theo TỪNG SỐ HẠNG chứ không phải một biểu thức dài. Thứ tự
+    // cộng giữ nguyên nên kết quả giống hệt từng bit (xem `sumTerms`), nhưng giờ
+    // mỗi đóng góp có tên - và đó là toàn bộ nội dung của một lời giải thích.
+    const terms: TraceTerm[] = [
+      { name: "belief", value: belief?.score ?? 0 },
+      {
+        name: "evidenceConfidence",
+        value: topConfidence * weights.suspicion.evidenceConfidenceBonus,
+      },
+      {
+        name: "hostility",
+        value: incomingHostilityOf(state, targetId) * weights.suspicion.hostilityBonus,
+      },
+      {
+        name: "pairPressure",
+        value: pairPressure(state, targetId, weights) * weights.suspicion.pairBonus,
+      },
+      {
+        name: "trustDamping",
+        value: -((state.trust[targetId]?.score ?? 0) * weights.trust.damping),
+      },
+      { name: "roleBias", value: bias[targetId] ?? 0 },
       // Người bị cả làng dồn vào mà không ai bênh thì dễ bị treo; đó vừa là tín
       // hiệu (có thể họ đã lộ), vừa là cái bẫy (đám đông có khi đang sai).
       // Trọng số nhỏ có chủ đích: nó không được tự mình đẩy ai qua ngưỡng.
-      isolationScore(state, targetId, aliveIds) * weights.suspicion.isolationBonus;
+      {
+        name: "isolation",
+        value: isolationScore(state, targetId, aliveIds) * weights.suspicion.isolationBonus,
+      },
+    ];
 
     const targetRole = knowledge.knownRoles[targetId];
     const targetIsWolf = targetRole === "WEREWOLF" || targetRole === "WOLF_CUB";
     if (selfIsWolf && targetIsWolf) {
-      score -=
-        weights.teammateProtection.penaltyBase +
-        personality.loyalty * weights.teammateProtection.loyaltySpan;
+      terms.push({
+        name: "teammateProtection",
+        value: -(
+          weights.teammateProtection.penaltyBase +
+          personality.loyalty * weights.teammateProtection.loyaltySpan
+        ),
+      });
     }
 
-    score += (rng() - 0.5) * weights.confidence.jitterSpan;
+    terms.push({ name: "jitter", value: (rng() - 0.5) * weights.confidence.jitterSpan });
 
-    scored.push({
-      targetId,
-      score,
-      evidence: reasons.slice(-weights.limits.intentionEvidence),
-      topConfidence,
-    });
+    const score = sumTerms(terms);
+    const evidence = reasons.slice(-weights.limits.intentionEvidence);
+
+    if (probe) {
+      probe.candidate({
+        targetId,
+        score,
+        terms,
+        evidenceIds: evidence.map((item) => item.id),
+      });
+    }
+
+    scored.push({ targetId, score, evidence, topConfidence });
   }
 
   // Sắp xếp có tie-break theo id để hai lần chạy giống hệt nhau không phụ thuộc
@@ -208,7 +240,10 @@ export function selectVote(
   );
 
   const best = scored[0];
-  if (!best) return noEliminationIntention(1);
+  if (!best) {
+    probe?.fallback("không có ứng viên hợp lệ nào để chấm điểm");
+    return noEliminationIntention(1);
+  }
 
   let winner = best;
   const myVote = knowledge.myVote;
@@ -243,6 +278,11 @@ export function selectVote(
     selfIsWolf && pressure < weights.deceptionRisk.abstainPressureCeiling;
 
   if (abstainHelpsMyTeam && (winner.score < threshold || winner.evidence.length === 0)) {
+    probe?.fallback(
+      winner.evidence.length === 0
+        ? `dẫn đầu ${winner.targetId} không có bằng chứng nào và làng còn đủ đông`
+        : `điểm cao nhất ${winner.score.toFixed(2)} dưới ngưỡng ${threshold.toFixed(2)}`,
+    );
     return noEliminationIntention((threshold - best.score) / Math.max(1, threshold));
   }
 

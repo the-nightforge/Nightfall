@@ -1,6 +1,7 @@
 import type { Role } from "@masoi/shared";
 import { incomingHostilityOf } from "../analysis/social-analysis";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import { sumTerms, type TraceTerm } from "../trace/trace";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
 
 /**
@@ -16,16 +17,22 @@ export function guardStrategy(
   return {
     role: "GUARD",
 
-    decideNight(context, state, rng) {
+    decideNight(context, state, rng, probe) {
       const night = context.knowledge.night;
-      if (!night || !night.legalActions.includes("GUARD")) return null;
+      if (!night || !night.legalActions.includes("GUARD")) {
+        probe?.fallback("không có lượt đỡ nào đang mở");
+        return null;
+      }
 
       // `legalTargets.GUARD` đã loại `guardPrevious` ở engine; lọc lại để chiến
       // thuật không phụ thuộc vào việc engine nhớ làm điều đó.
       const candidates = night.legalTargets.GUARD.filter(
         (id) => id !== night.guardPrevious,
       );
-      if (candidates.length === 0) return null;
+      if (candidates.length === 0) {
+        probe?.fallback("không còn ai để đỡ ngoài mục tiêu của đêm trước");
+        return null;
+      }
 
       const me = context.knowledge.botId;
       const selfHostility = incomingHostilityOf(state, me);
@@ -40,14 +47,15 @@ export function guardStrategy(
               ? tuning.guardSelfBonusBase + selfHostility * tuning.guardSelfBonusSpan
               : 0;
           // Đỡ người mình nghi là Sói thì vừa phí lượt vừa cứu nhầm phe.
-          return {
-            targetId,
-            score:
-              trust -
-              suspicion * tuning.guardSuspicionPenalty +
-              selfBonus +
-              (rng() - 0.5) * weights.confidence.jitterSpan,
-          };
+          const terms: TraceTerm[] = [
+            { name: "trust", value: trust },
+            { name: "suspicionPenalty", value: -(suspicion * tuning.guardSuspicionPenalty) },
+            { name: "selfPreservation", value: selfBonus },
+            { name: "jitter", value: (rng() - 0.5) * weights.confidence.jitterSpan },
+          ];
+          const score = sumTerms(terms);
+          probe?.candidate({ targetId, score, terms, evidenceIds: [] });
+          return { targetId, score };
         })
         .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));
 

@@ -1,5 +1,6 @@
 import type { Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import { sumTerms, type TraceTerm } from "../trace/trace";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
 import { informationValue } from "./uncertainty";
 
@@ -18,24 +19,36 @@ export function detectiveStrategy(
   return {
     role: "DETECTIVE",
 
-    decideNight(context, state, rng) {
+    decideNight(context, state, rng, probe) {
       const night = context.knowledge.night;
-      if (!night || !night.legalActions.includes("DETECTIVE_CHECK")) return null;
+      if (!night || !night.legalActions.includes("DETECTIVE_CHECK")) {
+        probe?.fallback("không có lượt điều tra nào đang mở");
+        return null;
+      }
 
       const candidates = night.legalTargets.DETECTIVE_CHECK.filter(
         (id) => id !== context.knowledge.botId,
       );
       // Engine đòi đúng hai người khác nhau; ít hơn thì bỏ lượt thay vì gửi một
       // nước đi chắc chắn bị từ chối.
-      if (candidates.length < 2) return null;
+      if (candidates.length < 2) {
+        probe?.fallback("cần đúng hai mục tiêu hợp lệ, chỉ có ít hơn");
+        return null;
+      }
 
       const ranked = candidates
-        .map((targetId) => ({
-          targetId,
-          score:
-            informationValue(state.suspicion[targetId]?.score ?? 0, weights) +
-            (rng() - 0.5) * weights.confidence.jitterSpan,
-        }))
+        .map((targetId) => {
+          const terms: TraceTerm[] = [
+            {
+              name: "informationValue",
+              value: informationValue(state.suspicion[targetId]?.score ?? 0, weights),
+            },
+            { name: "jitter", value: (rng() - 0.5) * weights.confidence.jitterSpan },
+          ];
+          const score = sumTerms(terms);
+          probe?.candidate({ targetId, score, terms, evidenceIds: [] });
+          return { targetId, score };
+        })
         .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));
 
       return {

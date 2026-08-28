@@ -1,5 +1,6 @@
 import type { Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import type { DecisionProbe } from "../trace/trace";
 import type {
   BotBrainState,
   BotDecisionContext,
@@ -34,6 +35,8 @@ export interface BotRoleStrategy {
     context: BotDecisionContext,
     state: BotBrainState,
     rng: BotRng,
+    /** Chỉ có mặt khi trace bật; bỏ qua nó là hợp lệ. */
+    probe?: DecisionProbe,
   ): BotNightIntention | null;
 
   /**
@@ -49,7 +52,10 @@ export interface BotRoleStrategy {
 export function passiveStrategy(role: Role): BotRoleStrategy {
   return {
     role,
-    decideNight: () => null,
+    decideNight: (_context, _state, _rng, probe) => {
+      probe?.fallback(`vai ${role} không có hành động đêm`);
+      return null;
+    },
     voteBias: () => ({}),
   };
 }

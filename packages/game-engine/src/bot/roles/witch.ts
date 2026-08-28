@@ -18,9 +18,12 @@ export function witchStrategy(
   return {
     role: "WITCH",
 
-    decideNight(context, state) {
+    decideNight(context, state, _rng, probe) {
       const night = context.knowledge.night;
-      if (!night) return null;
+      if (!night) {
+        probe?.fallback("không có lượt đêm nào đang mở");
+        return null;
+      }
 
       const round = context.knowledge.round;
 
@@ -32,6 +35,16 @@ export function witchStrategy(
         const suspicion = state.suspicion[victim]?.score ?? 0;
         // Cứu chính mình luôn đáng, kể cả khi chưa có dữ liệu về ai.
         const isSelf = victim === context.knowledge.botId;
+
+        probe?.candidate({
+          targetId: victim,
+          score: trust - tuning.witchHealTrust,
+          terms: [
+            { name: "victimTrust", value: trust },
+            { name: "healTrustThreshold", value: -tuning.witchHealTrust },
+          ],
+          evidenceIds: [],
+        });
 
         if (isSelf || (trust >= tuning.witchHealTrust && trust > suspicion)) {
           return {
@@ -92,6 +105,10 @@ export function witchStrategy(
           };
         }
       }
+
+      probe?.fallback(
+        `không ai vượt ngưỡng độc ${tuning.witchPoisonSuspicion} và không có nạn nhân đáng cứu`,
+      );
 
       if (!night.legalActions.includes("SKIP")) return null;
       return {

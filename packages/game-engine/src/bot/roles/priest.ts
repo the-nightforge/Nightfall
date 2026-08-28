@@ -19,18 +19,30 @@ export function priestStrategy(
   return {
     role: "PRIEST",
 
-    decideNight(context, state) {
+    decideNight(context, state, _rng, probe) {
       const night = context.knowledge.night;
-      if (!night || !night.legalActions.includes("HOLY_WATER")) return null;
+      if (!night || !night.legalActions.includes("HOLY_WATER")) {
+        probe?.fallback("không có lượt Nước thánh nào đang mở");
+        return null;
+      }
 
       const ranked = night.legalTargets.HOLY_WATER.filter(
         (id) => id !== context.knowledge.botId,
       )
-        .map((targetId) => ({
-          targetId,
-          suspicion: state.suspicion[targetId]?.score ?? 0,
-          trust: state.trust[targetId]?.score ?? 0,
-        }))
+        .map((targetId) => {
+          const suspicion = state.suspicion[targetId]?.score ?? 0;
+          const trust = state.trust[targetId]?.score ?? 0;
+          probe?.candidate({
+            targetId,
+            score: suspicion - tuning.priestSuspicion,
+            terms: [
+              { name: "suspicion", value: suspicion },
+              { name: "holyWaterThreshold", value: -tuning.priestSuspicion },
+            ],
+            evidenceIds: (state.suspicion[targetId]?.reasons ?? []).map((item) => item.id),
+          });
+          return { targetId, suspicion, trust };
+        })
         .filter(
           (item) =>
             item.suspicion >= tuning.priestSuspicion &&
@@ -39,7 +51,12 @@ export function priestStrategy(
         .sort((a, b) => b.suspicion - a.suspicion || a.targetId.localeCompare(b.targetId));
 
       // Giữ bình. `null` ở đây là một quyết định, không phải một lượt hỏng.
-      if (ranked.length === 0) return null;
+      if (ranked.length === 0) {
+        probe?.fallback(
+          `không ai vượt ngưỡng ${tuning.priestSuspicion} với trust dưới ${tuning.priestTrustVeto}`,
+        );
+        return null;
+      }
 
       return {
         kind: "NIGHT_ACTION",

@@ -1,5 +1,6 @@
 import { MAX_BELIEF_SCORE } from "../belief/evidence";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import type { DecisionProbe } from "../trace/trace";
 import type {
   BotBrainState,
   BotDecisionContext,
@@ -51,16 +52,19 @@ export function decideFinalVote(
   state: BotBrainState,
   rng: BotRng,
   weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+  probe?: DecisionProbe,
 ): BotFinalVoteIntention {
   const accusedId = context.knowledge.trialAccusedId;
   void rng;
 
   if (!accusedId) {
+    probe?.fallback("không có bị cáo nào đang bị xử");
     return { kind: "FINAL_VOTE", guilty: false, confidence: 1, evidence: [] };
   }
 
   // Sói không bao giờ giúp treo đồng bọn, bất kể bằng chứng công khai nói gì.
   if (isKnownAlly(context, accusedId)) {
+    probe?.fallback("bị cáo là đồng đội Sói do engine xác nhận");
     return { kind: "FINAL_VOTE", guilty: false, confidence: 1, evidence: [] };
   }
 
@@ -71,6 +75,19 @@ export function decideFinalVote(
   // Chỉ tin tưởng CÓ CƠ SỞ mới cứu được bị cáo. `trust` chỉ lên cao khi có
   // nguồn thật: kết quả soi, hoặc nhiều lần được người khác bênh.
   const guilty = trust < suspicion + weights.confidence.spareTrustMargin;
+
+  if (probe) {
+    probe.candidate({
+      targetId: accusedId,
+      score: suspicion + weights.confidence.spareTrustMargin - trust,
+      terms: [
+        { name: "suspicion", value: suspicion },
+        { name: "spareTrustMargin", value: weights.confidence.spareTrustMargin },
+        { name: "trust", value: -trust },
+      ],
+      evidenceIds: (entry?.reasons ?? []).map((item) => item.id),
+    });
+  }
 
   return {
     kind: "FINAL_VOTE",
@@ -97,24 +114,43 @@ export function decideHunterShot(
   state: BotBrainState,
   rng: BotRng,
   weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+  probe?: DecisionProbe,
 ): BotHunterShotIntention {
   const shot = context.knowledge.hunterShot;
   void rng;
 
   if (!shot || !shot.canAct) {
+    probe?.fallback("không có lượt phản kích nào đang mở");
     return { kind: "HUNTER_SHOT", targetId: null, confidence: 1, evidence: [] };
   }
 
   const threshold =
     voteThreshold(state.personality, weights) + weights.confidence.hunterMargin;
 
-  const scored = shot.legalTargets
-    .filter((id) => id !== context.knowledge.botId && !isKnownAlly(context, id))
+  const eligible = shot.legalTargets.filter(
+    (id) => id !== context.knowledge.botId && !isKnownAlly(context, id),
+  );
+
+  if (probe) {
+    for (const targetId of eligible) {
+      const suspicion = state.suspicion[targetId]?.score ?? 0;
+      probe.candidate({
+        targetId,
+        score: suspicion,
+        terms: [{ name: "suspicion", value: suspicion }],
+        evidenceIds: (state.suspicion[targetId]?.reasons ?? []).map((item) => item.id),
+      });
+    }
+  }
+
+  const scored = eligible
     .map((targetId) => ({ targetId, score: state.suspicion[targetId]?.score ?? 0 }))
     .filter((item) => item.score >= threshold)
     .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));
 
   if (scored.length === 0) {
+    // Không bắn là kết quả TỐT và thường gặp, không phải một lượt hỏng.
+    probe?.fallback(`không ai vượt ngưỡng bắn ${threshold.toFixed(2)}`);
     return { kind: "HUNTER_SHOT", targetId: null, confidence: 1, evidence: [] };
   }
 

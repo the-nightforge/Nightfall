@@ -1,6 +1,7 @@
 import type { Role } from "@masoi/shared";
 import { incomingHostilityOf } from "../analysis/social-analysis";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import { sumTerms, type TraceTerm } from "../trace/trace";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
 
 /**
@@ -17,14 +18,20 @@ export function guardianAngelStrategy(
   return {
     role: "GUARDIAN_ANGEL",
 
-    decideNight(context, state, rng) {
+    decideNight(context, state, rng, probe) {
       const night = context.knowledge.night;
-      if (!night || !night.legalActions.includes("GUARDIAN_PROTECT")) return null;
+      if (!night || !night.legalActions.includes("GUARDIAN_PROTECT")) {
+        probe?.fallback("không có lượt hộ mệnh nào đang mở");
+        return null;
+      }
 
       const candidates = night.legalTargets.GUARDIAN_PROTECT.filter(
         (id) => id !== night.guardPrevious,
       );
-      if (candidates.length === 0) return null;
+      if (candidates.length === 0) {
+        probe?.fallback("không còn ai để đỡ ngoài mục tiêu của lượt trước");
+        return null;
+      }
 
       const ranked = candidates
         .map((targetId) => {
@@ -32,15 +39,21 @@ export function guardianAngelStrategy(
           const suspicion = state.suspicion[targetId]?.score ?? 0;
           // Ai đang bị cả làng công kích cũng là người bầy Sói muốn loại.
           const hostility = incomingHostilityOf(state, targetId);
-          return {
-            targetId,
-            hostility,
-            score:
-              trust -
-              suspicion * weights.roleThresholds.guardianAngelSuspicionPenalty +
-              hostility * weights.roleThresholds.guardianAngelHostilityBonus +
-              (rng() - 0.5) * weights.confidence.jitterSpan,
-          };
+          const terms: TraceTerm[] = [
+            { name: "trust", value: trust },
+            {
+              name: "suspicionPenalty",
+              value: -(suspicion * weights.roleThresholds.guardianAngelSuspicionPenalty),
+            },
+            {
+              name: "incomingHostility",
+              value: hostility * weights.roleThresholds.guardianAngelHostilityBonus,
+            },
+            { name: "jitter", value: (rng() - 0.5) * weights.confidence.jitterSpan },
+          ];
+          const score = sumTerms(terms);
+          probe?.candidate({ targetId, score, terms, evidenceIds: [] });
+          return { targetId, hostility, score };
         })
         .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));
 
@@ -50,7 +63,10 @@ export function guardianAngelStrategy(
       const worthIt =
         best.hostility >= weights.roleThresholds.guardianAngelWorthACharge ||
         (state.trust[best.targetId]?.score ?? 0) > 0;
-      if (!worthIt) return null;
+      if (!worthIt) {
+        probe?.fallback("không ai đủ nguy cấp để tiêu một trong hai lượt");
+        return null;
+      }
 
       return {
         kind: "NIGHT_ACTION",

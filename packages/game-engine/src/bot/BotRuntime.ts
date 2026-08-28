@@ -20,6 +20,15 @@ import { strategyFor } from "./roles/registry";
 import { decayAndPrune } from "./memory/memory-decay";
 import { createBotBrainState, remember } from "./memory/memory-store";
 import { createBotPersonality } from "./personality/personality";
+import {
+  createDecisionProbe,
+  wrapRngForTrace,
+  type BeliefSnapshot,
+  type BotTraceSink,
+  type DecisionProbeCollector,
+  type TraceDecisionKind,
+  type TraceKnowledgeSnapshot,
+} from "./trace/trace";
 import type {
   BotBrainState,
   BotDecisionContext,
@@ -44,6 +53,11 @@ export interface BotRuntimeOptions {
   personality?: BotPersonality;
   /** Bỏ trống thì dùng cấu hình production hiện hành. */
   weights?: BotWeights;
+  /**
+   * Bỏ trống là TẮT trace, và tắt nghĩa là không cấp phát gì và không bọc RNG.
+   * Production để trống; test và self-play truyền vào.
+   */
+  trace?: BotTraceSink;
 }
 
 interface MemoryDraft {
@@ -92,6 +106,27 @@ function evidenceOf(
   };
 }
 
+/**
+ * Ảnh chụp knowledge cho trace.
+ *
+ * Mọi trường là bản SAO của `BotKnowledgeView`, thứ engine đã lọc theo quyền của
+ * chính bot. Không trường nào được dựng lại từ nguồn khác, nên ràng buộc
+ * "trace ⊆ knowledge view" đúng theo kiến trúc chứ không theo kỷ luật: không có
+ * chỗ nào ở đây để một bí mật lọt vào, kể cả khi ai đó muốn.
+ */
+function snapshotKnowledge(knowledge: BotKnowledgeView): TraceKnowledgeSnapshot {
+  return {
+    aliveIds: knowledge.players.filter((player) => player.alive).map((player) => player.id),
+    legalChoices: knowledge.legalVoteChoices.map((choice) =>
+      choice.type === "PLAYER" ? choice.targetId : "NO_ELIMINATION",
+    ),
+    knownRoles: { ...knowledge.knownRoles },
+    seerResult: knowledge.seerResult
+      ? { targetId: knowledge.seerResult.targetId, isWolf: knowledge.seerResult.isWolf }
+      : null,
+  };
+}
+
 function lateRatio(mutation: VoteMutation): number {
   const span = mutation.phaseEndsAt - mutation.phaseStartedAt;
   if (span <= 0) return 0;
@@ -112,6 +147,16 @@ export class BotRuntime {
   readonly weights: BotWeights;
 
   private readonly rng: BotRng;
+  private readonly trace: BotTraceSink | undefined;
+  /**
+   * Belief trước và sau lần `observe` gần nhất.
+   *
+   * Chụp ở `observe` chứ không ở lúc quyết định, vì `selectVote` và các strategy
+   * chỉ ĐỌC belief - "trước và sau" của chúng luôn giống nhau và không nói lên
+   * điều gì. Thứ thật sự đổi belief là quan sát, nên đó mới là cặp ảnh đáng ghi.
+   */
+  private beliefBefore: BeliefSnapshot = {};
+  private beliefAfter: BeliefSnapshot = {};
   /**
    * Decay phải đúng một lần mỗi round. Nếu không, việc dựng lại context nhiều
    * lần trong cùng một pha sẽ bào mòn memory theo số lần scheduler chạy chứ
@@ -121,6 +166,7 @@ export class BotRuntime {
 
   constructor(options: BotRuntimeOptions) {
     this.rng = options.rng;
+    this.trace = options.trace;
     this.weights = options.weights ?? DEFAULT_BOT_WEIGHTS;
 
     // Kiểm ngay tại constructor, không phải ở vòng 7 của ván thứ 214. Một NaN
@@ -139,6 +185,7 @@ export class BotRuntime {
   /** Nạp mọi quan sát công khai chưa thấy vào memory, belief và social graph. */
   observe(context: BotDecisionContext): void {
     const knowledge = context.knowledge;
+    if (this.trace) this.beliefBefore = this.snapshotBelief();
 
     // Chụp lại TRƯỚC khi ghi đè. Engine gỡ đồng bọn đã chết khỏi `knownRoles`,
     // nên nếu đọc sau dòng dưới thì bot không bao giờ biết mình vừa mất ai -
@@ -167,11 +214,18 @@ export class BotRuntime {
 
     applyPrivateInformation(this.state, knowledge, this.weights);
     this.adaptToDeaths(knowledge, previousKnownRoles);
+
+    if (this.trace) this.beliefAfter = this.snapshotBelief();
   }
 
   /** Chốt phiếu deterministic từ belief hiện tại. */
   decideVote(context: BotDecisionContext): BotVoteIntention {
-    const vote = selectVote(context, this.state, this.rng, this.weights);
+    const run = this.beginTracedDecision();
+    const vote = selectVote(context, this.state, run.rng, this.weights, run.probe);
+    run.finish(context, "VOTE", vote.choice.type === "PLAYER" ? vote.choice.targetId : null, {
+      PLAYER: "bầu",
+      NO_ELIMINATION: "không treo ai",
+    }[vote.choice.type]);
 
     this.state.currentTargets =
       vote.choice.type === "PLAYER" ? [vote.choice.targetId] : [];
@@ -207,7 +261,22 @@ export class BotRuntime {
     context: BotDecisionContext,
     vote: BotVoteIntention,
   ): BotSpeechIntention | null {
-    if (this.rng() > this.state.personality.talkativeness) return null;
+    const run = this.beginTracedDecision();
+    const speech = this.speechFor(context, vote, run.rng, run.probe);
+    run.finish(context, "SPEECH", speech?.targetId ?? null, speech?.kind ?? "im lặng");
+    return speech;
+  }
+
+  private speechFor(
+    context: BotDecisionContext,
+    vote: BotVoteIntention,
+    rng: BotRng,
+    probe: DecisionProbeCollector | undefined,
+  ): BotSpeechIntention | null {
+    if (rng() > this.state.personality.talkativeness) {
+      probe?.fallback("không đủ hoạt ngôn để lên tiếng lượt này");
+      return null;
+    }
 
     const spoken = new Set(this.state.speechMemory.flatMap((entry) => entry.sourceIds));
     const fresh = vote.evidence
@@ -216,10 +285,12 @@ export class BotRuntime {
       .map((item) => ({ ...item }));
 
     if (vote.choice.type !== "PLAYER") {
+      probe?.fallback("phiếu không nhắm ai nên không có gì để cáo buộc");
       return { kind: "WITHHOLD", confidence: vote.confidence, evidence: [] };
     }
     if (fresh.length === 0) {
       // Không có ý mới thì hỏi một câu, chứ không lặp lại đúng cáo buộc cũ.
+      probe?.fallback("mọi luận điểm đã nói rồi; hỏi thay vì lặp lại");
       return {
         kind: "QUESTION",
         targetId: vote.choice.targetId,
@@ -243,21 +314,97 @@ export class BotRuntime {
    * thứ Phase 1 đã bỏ công gỡ khỏi ban ngày.
    */
   decideNight(context: BotDecisionContext): BotNightIntention | null {
-    return strategyFor(context.knowledge.selfRole, this.weights).decideNight(
+    const run = this.beginTracedDecision();
+    const night = strategyFor(context.knowledge.selfRole, this.weights).decideNight(
       context,
       this.state,
-      this.rng,
+      run.rng,
+      run.probe,
     );
+    run.finish(context, "NIGHT", night?.targetId ?? null, night?.action ?? "bỏ lượt");
+    return night;
   }
 
   /** Phán quyết Treo/Tha ở phiên toà. */
   decideFinalVote(context: BotDecisionContext): BotFinalVoteIntention {
-    return decideFinalVote(context, this.state, this.rng, this.weights);
+    const run = this.beginTracedDecision();
+    const verdict = decideFinalVote(context, this.state, run.rng, this.weights, run.probe);
+    run.finish(
+      context,
+      "FINAL_VOTE",
+      context.knowledge.trialAccusedId,
+      verdict.guilty ? "treo" : "tha",
+    );
+    return verdict;
   }
 
   /** Phát bắn cuối của Thợ Săn; `targetId: null` là không bắn. */
   decideHunterShot(context: BotDecisionContext): BotHunterShotIntention {
-    return decideHunterShot(context, this.state, this.rng, this.weights);
+    const run = this.beginTracedDecision();
+    const shot = decideHunterShot(context, this.state, run.rng, this.weights, run.probe);
+    run.finish(context, "HUNTER_SHOT", shot.targetId, shot.targetId ? "bắn" : "không bắn");
+    return shot;
+  }
+
+  // ---- Trace ----
+
+  /**
+   * Chuẩn bị một lượt quyết định có thể ghi lại được.
+   *
+   * Khi `trace` là `undefined`, hàm này trả về đúng `this.rng` và một `finish`
+   * rỗng: không probe, không mảng `rngDraws`, không object trace nào được cấp
+   * phát. Đó là toàn bộ chi phí của trace ở production.
+   */
+  private beginTracedDecision(): {
+    rng: BotRng;
+    probe: DecisionProbeCollector | undefined;
+    finish: (
+      context: BotDecisionContext,
+      decision: TraceDecisionKind,
+      targetId: string | null,
+      label: string,
+    ) => void;
+  } {
+    if (!this.trace) {
+      return { rng: this.rng, probe: undefined, finish: () => {} };
+    }
+
+    const sink = this.trace;
+    const draws: number[] = [];
+    const probe = createDecisionProbe();
+    const rng = wrapRngForTrace(this.rng, draws);
+
+    return {
+      rng,
+      probe,
+      finish: (context, decision, targetId, label) => {
+        sink.record({
+          botId: this.state.playerId,
+          round: context.knowledge.round,
+          phase: context.knowledge.phase,
+          decision,
+          chosen: { targetId, label },
+          candidates: probe.candidates,
+          beliefBefore: this.beliefBefore,
+          beliefAfter: this.beliefAfter,
+          personality: { ...this.state.personality },
+          rngDraws: draws,
+          fallbackReason: probe.fallbackReason,
+          knowledgeSnapshot: snapshotKnowledge(context.knowledge),
+        });
+      },
+    };
+  }
+
+  private snapshotBelief(): BeliefSnapshot {
+    const snapshot: BeliefSnapshot = {};
+    for (const id of Object.keys(this.state.suspicion).sort()) {
+      snapshot[id] = {
+        suspicion: this.state.suspicion[id]?.score ?? 0,
+        trust: this.state.trust[id]?.score ?? 0,
+      };
+    }
+    return snapshot;
   }
 
   /**

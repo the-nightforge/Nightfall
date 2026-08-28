@@ -1,5 +1,6 @@
 import type { Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import { sumTerms, type TraceTerm } from "../trace/trace";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
 import { informationValue } from "./uncertainty";
 
@@ -21,9 +22,12 @@ export function seerStrategy(
   return {
     role,
 
-    decideNight(context, state, rng) {
+    decideNight(context, state, rng, probe) {
       const night = context.knowledge.night;
-      if (!night || !night.legalActions.includes("SEE")) return null;
+      if (!night || !night.legalActions.includes("SEE")) {
+        probe?.fallback("không có lượt soi nào đang mở");
+        return null;
+      }
 
       const alreadySeen = new Set(
         state.knownInformation.seerResults
@@ -32,15 +36,24 @@ export function seerStrategy(
       );
 
       const candidates = night.legalTargets.SEE.filter((id) => !alreadySeen.has(id));
-      if (candidates.length === 0) return null;
+      if (candidates.length === 0) {
+        probe?.fallback("đã soi hết mọi mục tiêu hợp lệ");
+        return null;
+      }
 
       const scored = candidates
-        .map((targetId) => ({
-          targetId,
-          score:
-            informationValue(state.suspicion[targetId]?.score ?? 0, weights) +
-            (rng() - 0.5) * weights.confidence.jitterSpan,
-        }))
+        .map((targetId) => {
+          const terms: TraceTerm[] = [
+            {
+              name: "informationValue",
+              value: informationValue(state.suspicion[targetId]?.score ?? 0, weights),
+            },
+            { name: "jitter", value: (rng() - 0.5) * weights.confidence.jitterSpan },
+          ];
+          const score = sumTerms(terms);
+          probe?.candidate({ targetId, score, terms, evidenceIds: [] });
+          return { targetId, score };
+        })
         .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));
 
       const winner = scored[0];
