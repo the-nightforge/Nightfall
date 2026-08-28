@@ -1,8 +1,9 @@
 "use client";
 
-import { ROLE_META, type RoomSnapshot } from "@masoi/shared";
-import { roleLabel } from "@/lib/cursed";
-import { getIdentity } from "@/lib/identity";
+import { useMemo } from "react";
+import type { RoomSnapshot } from "@masoi/shared";
+import { assignAvatars, tintFor } from "@/lib/avatar";
+import { PlayerSeat } from "./PlayerSeat";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -22,52 +23,44 @@ export function PlayerGrid({
   disabledIds = [],
   allowSelf = false,
 }: Props) {
-  const meId = getIdentity()?.playerId;
+  // snapshot.you thay cho getIdentity(): id của chính người xem đã nằm sẵn
+  // trong snapshot, không việc gì phải đọc localStorage ở mỗi lần render.
+  const meId = snapshot.you?.id ?? null;
+
+  // Gán lại chỉ khi TẬP người chơi đổi. Lưới này render lại theo từng lá phiếu,
+  // mà bảng ảnh đại diện thì không phụ thuộc vào phiếu.
+  const roster = snapshot.players.map((p) => p.id).join(",");
+  const avatars = useMemo(
+    () => assignAvatars(roster ? roster.split(",") : []),
+    [roster],
+  );
+
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-      {snapshot.players.map((p) => {
-        const isMe = p.id === meId;
-        const dead = !p.alive;
-        const disabled = !selectable || dead || (isMe && !allowSelf) || disabledIds.includes(p.id);
-        const selected = selectedId === p.id;
+    // Ba cột cố định: breakpoint sm/lg bám VIEWPORT chứ không bám container, mà
+    // container thì luôn bị khoá ở max-w-lg - thêm cột chỉ làm ô teo lại trên
+    // desktop chứ không tận dụng thêm được chỗ nào.
+    <div className="grid grid-cols-3 gap-2">
+      {snapshot.players.map((player) => {
+        const isMe = player.id === meId;
+        const disabled =
+          !selectable ||
+          !player.alive ||
+          (isMe && !allowSelf) ||
+          disabledIds.includes(player.id);
         return (
-          <button
-            key={p.id}
+          <PlayerSeat
+            key={player.id}
+            player={player}
+            avatar={avatars[player.id]}
+            tint={tintFor(player.id)}
+            isMe={isMe}
+            isHost={snapshot.hostId === player.id}
+            selected={selectedId === player.id}
             disabled={disabled}
-            onClick={() => onSelect?.(p.id)}
-            className={`relative rounded-lg border px-3 py-2 text-left transition
-              ${dead ? "border-night-600 bg-night-950/70 opacity-50 line-through" : "border-night-600 bg-night-800"}
-              ${selectable && !disabled ? "hover:border-blood-500 cursor-pointer" : ""}
-              ${selected ? "border-blood-500 ring-1 ring-blood-500 bg-blood-600/20" : ""}`}
-          >
-            <div className="flex items-center justify-between gap-1">
-              <span className={`truncate text-sm font-semibold ${dead ? "text-mist/50" : "text-white"}`}>
-                {p.name}
-              </span>
-              {(p.voteCount ?? 0) > 0 && (
-                <span className="shrink-0 rounded-full bg-blood-600/80 px-1.5 text-xs font-bold text-white">
-                  {p.voteCount}
-                </span>
-              )}
-            </div>
-            <div className="mt-0.5 flex flex-wrap items-center gap-1">
-              {isMe && <Tag cls="bg-indigo-800 text-indigo-200">Bạn</Tag>}
-              {snapshot.hostId === p.id && <Tag cls="bg-amber-800/80 text-amber-200">Chủ phòng</Tag>}
-              {!p.alive && <Tag cls="bg-night-700 text-mist/70">Đã chết</Tag>}
-              {p.isBot && <Tag cls="bg-slate-700 text-slate-200">Bot</Tag>}
-              {p.role && (
-                <Tag cls={ROLE_META[p.role].team === "wolves" ? "bg-blood-600/70 text-white" : "bg-emerald-900/70 text-emerald-200"}>
-                  {roleLabel(p)}
-                </Tag>
-              )}
-            </div>
-          </button>
+            onSelect={onSelect ? () => onSelect(player.id) : undefined}
+          />
         );
       })}
     </div>
   );
-}
-
-function Tag({ children, cls }: { children: React.ReactNode; cls: string }) {
-  return <span className={`rounded px-1 py-0.5 text-[10px] font-semibold leading-none ${cls}`}>{children}</span>;
 }

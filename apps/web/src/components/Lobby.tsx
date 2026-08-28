@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { MIN_PLAYERS_TO_START, validateRoomConfig, type RoomConfig, type RoomSnapshot } from "@masoi/shared";
+import { assignAvatars, tintFor } from "@/lib/avatar";
 import type { Identity } from "@/lib/identity";
+import { Avatar } from "./Avatar";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -24,6 +26,10 @@ export function Lobby({ snapshot, identity, onReady, onStart, onKick, onAddBot, 
   const unreadyGuests = snapshot.players.filter(
     (player) => !player.isBot && player.id !== snapshot.hostId && !player.ready,
   );
+  // Phòng chờ là nơi người chơi thấy mặt mình lần đầu, và bảng gán phải khớp
+  // với lưới trong ván - cùng một hàm, cùng một tập id.
+  const roster = snapshot.players.map((player) => player.id).join(",");
+  const avatars = useMemo(() => assignAvatars(roster ? roster.split(",") : []), [roster]);
 
   return (
     <div className="space-y-4">
@@ -39,7 +45,12 @@ export function Lobby({ snapshot, identity, onReady, onStart, onKick, onAddBot, 
               className={`flex items-center justify-between rounded-lg px-3 py-2 ${snapshot.hostId === p.id ? "bg-night-800 border border-amber-700/40" : "bg-night-800"}`}
             >
               <div className="flex items-center gap-2">
-                <span className={`inline-block h-2.5 w-2.5 rounded-full ${me?.id === p.id ? "bg-indigo-400" : "bg-night-600"}`} />
+                <Avatar
+                  avatar={avatars[p.id]}
+                  tint={tintFor(p.id)}
+                  alive
+                  className={`h-9 w-9 shrink-0 ${me?.id === p.id ? "ring-1 ring-indigo-400/70" : ""}`}
+                />
                 <span className="text-sm font-semibold text-white">{p.name}</span>
                 {snapshot.hostId === p.id && (
                   <span className="rounded bg-amber-800/80 px-1.5 text-[10px] font-bold text-amber-200">CHỦ PHÒNG</span>
