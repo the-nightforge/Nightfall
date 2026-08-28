@@ -30,6 +30,11 @@ function cursedState(over: Partial<GameState> = {}): GameState {
     phase: "NIGHT",
     round: 1,
     phaseEndsAt: 30_000,
+    phaseStartedAt: 0,
+    voteMutations: [],
+    dayVoteHistory: [],
+    trial: null,
+    lastTrial: null,
     players: [
       { id: "wolf", name: "Sói", role: "WEREWOLF", alive: true, isBot: false },
       { id: "cursed", name: "Nguyền", role: "CURSED", alive: true, isBot: false },

@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { GameEngine } from "../src/engine";
 import { assignRoles, buildRoleDeck } from "../src/assignRoles";
 import { GameError, type GameState } from "../src/types";
-import type { RoomConfig } from "@masoi/shared";
+import { DEFAULT_ROOM_CONFIG, type RoomConfig } from "@masoi/shared";
 
 const CONFIG: RoomConfig = {
+  ...DEFAULT_ROOM_CONFIG,
   werewolves: 2,
   seer: true,
   guard: true,
@@ -79,6 +80,11 @@ function makeHunterEngine(phase: GameState["phase"] = "NIGHT") {
     phase,
     round: 1,
     phaseEndsAt: 30_000,
+    phaseStartedAt: 0,
+    voteMutations: [],
+    dayVoteHistory: [],
+    trial: null,
+    lastTrial: null,
     players: [
       { id: "hunter", name: "Thợ Săn", role: "HUNTER", alive: true, isBot: false },
       { id: "wolf", name: "Sói", role: "WEREWOLF", alive: true, isBot: false },

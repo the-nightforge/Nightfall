@@ -1,17 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { GameEngine } from "../src/engine";
 import type { GameState } from "../src/types";
-import type { GamePhase, Role, RoomConfig } from "@masoi/shared";
+import { DEFAULT_ROOM_CONFIG, type GamePhase, type Role, type RoomConfig } from "@masoi/shared";
 
 const CONFIG: RoomConfig = {
+  ...DEFAULT_ROOM_CONFIG,
   werewolves: 2,
-  seer: true,
   guard: false,
-  witch: true,
   hunter: false,
-  nightSeconds: 30,
-  discussionSeconds: 90,
-  voteSeconds: 30,
 };
 
 const ROSTER: Array<{ id: string; name: string; role: Role }> = [
