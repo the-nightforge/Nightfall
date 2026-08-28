@@ -497,46 +497,53 @@ describe("trọng số được nối vào quyết định", () => {
 
 describe("v1 là mốc so sánh đóng băng", () => {
   /**
-   * Vân tay hành vi của cấu hình v1, chụp ở commit ngay TRƯỚC khi trọng số được
-   * gom về một chỗ, rồi đối chiếu sau khi gom: hai lần chạy giống nhau từng byte.
+   * Vân tay hành vi của cấu hình v1 trên 24 ván.
    *
    * Tồn tại vì một test "cùng seed cho cùng kết quả" chạy hai lần trong cùng một
    * process KHÔNG bắt được một thay đổi đồng nhất - nó chỉ chứng minh hàm là
    * hàm. Chỉ một giá trị được ghim mới phân biệt được "vẫn đúng như cũ" với
-   * "sai giống hệt nhau ở cả hai lần chạy".
+   * "sai giống hệt nhau ở cả hai lần chạy". Đó là thứ đã chứng minh việc gom
+   * trọng số ở Task 1 là refactor thuần (0 dòng khác biệt trước/sau).
+   *
+   * **Đã ghim lại một lần ở Task 3, có chủ đích.** Task 3 cho `GameEngine.create`
+   * nhận `rng`, nên harness bỏ được mẹo "sort rồi xáo lại" và ánh xạ
+   * seed → phân vai thay đổi. Đổi ở đây là ở tầng DỰNG VÁN, không phải ở lõi
+   * quyết định: không dòng nào trong `bot/decision`, `bot/roles` hay `bot/belief`
+   * bị chạm, và 480 test còn lại - gồm 100 seed của `bot-scenario` - vẫn xanh
+   * qua đúng lần đổi đó. Tỉ lệ Sói thắng giữ nguyên 23/24.
    *
    * Task 8 sẽ đổi `DEFAULT_BOT_WEIGHTS` sang v2. Khẳng định dưới đây neo vào
    * `BOT_WEIGHTS_V1` một cách tường minh, nên nó vẫn phải xanh sau lần đổi đó.
    * Nếu nó đỏ, nghĩa là một thay đổi đã âm thầm chạm vào cái mốc.
    */
   const V1_FINGERPRINT = [
-    "golden-0 wolves 4 44",
-    "golden-1 wolves 5 58",
-    "golden-2 wolves 4 46",
-    "golden-3 wolves 3 32",
-    "golden-4 wolves 3 44",
-    "golden-5 wolves 4 48",
-    "golden-6 wolves 5 42",
-    "golden-7 wolves 4 47",
-    "golden-8 wolves 4 39",
-    "golden-9 wolves 5 58",
-    "golden-10 wolves 5 49",
-    "golden-11 wolves 4 47",
-    "golden-12 wolves 3 43",
-    "golden-13 wolves 4 48",
-    "golden-14 wolves 5 56",
-    "golden-15 wolves 5 51",
-    "golden-16 wolves 6 65",
-    "golden-17 village 4 47",
-    "golden-18 wolves 3 44",
-    "golden-19 wolves 4 46",
-    "golden-20 wolves 4 48",
-    "golden-21 wolves 2 30",
-    "golden-22 wolves 4 57",
-    "golden-23 wolves 4 46",
+    "golden-0 wolves 5 50",
+    "golden-1 wolves 5 48",
+    "golden-2 wolves 4 48",
+    "golden-3 wolves 3 31",
+    "golden-4 wolves 6 72",
+    "golden-5 wolves 3 37",
+    "golden-6 wolves 3 36",
+    "golden-7 wolves 4 50",
+    "golden-8 wolves 3 35",
+    "golden-9 wolves 4 46",
+    "golden-10 wolves 5 52",
+    "golden-11 wolves 4 41",
+    "golden-12 wolves 4 48",
+    "golden-13 wolves 4 36",
+    "golden-14 wolves 7 63",
+    "golden-15 wolves 4 48",
+    "golden-16 village 4 48",
+    "golden-17 wolves 4 50",
+    "golden-18 wolves 4 55",
+    "golden-19 wolves 3 34",
+    "golden-20 wolves 5 55",
+    "golden-21 wolves 5 59",
+    "golden-22 wolves 3 35",
+    "golden-23 wolves 3 35",
   ];
 
-  it("tái lập chính xác hành vi Phase 2 trên 24 ván", () => {
+  it("tái lập chính xác cấu hình v1 trên 24 ván", () => {
     const actual = V1_FINGERPRINT.map((_, i) => {
       const seed = `golden-${i}`;
       const result = simulateGame({ seed, playerCount: 8, weights: BOT_WEIGHTS_V1 });

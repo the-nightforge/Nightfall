@@ -193,12 +193,19 @@ export class GameEngine {
     return this.state;
   }
 
+  /**
+   * `rng` là tham số CUỐI và tuỳ chọn, nên mọi call site hiện có không đổi hành
+   * vi. Nó chỉ mở một đường inject đã có sẵn ở `assignRoles`, không đổi luật:
+   * không có nó, một ván mô phỏng "cùng seed" vẫn chia vai khác nhau mỗi lần và
+   * harness phải đi đường vòng để tự xáo lại.
+   */
   static create(
     players: AssignInput[],
     config: RoomConfig,
     now = Date.now(),
+    rng: () => number = Math.random,
   ): GameEngine {
-    const roles = assignRoles(players, config);
+    const roles = assignRoles(players, config, rng);
     const guardianAngelCharges: Record<string, number> = {};
     for (const p of players) {
       if (roles[p.id] === "GUARDIAN_ANGEL") {
