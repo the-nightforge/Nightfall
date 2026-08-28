@@ -161,7 +161,7 @@ Khi phát bắn hoàn tất, snapshot/log công khai tên người bị bắn. N
 
 Mở rộng `BotBrain` bằng method riêng `decideHunterShot(view)`. Không dùng `decideNight`, vì phase và quyền hành động khác nhau.
 
-- `RandomBrain`: chọn ngẫu nhiên một người còn sống khác Thợ Săn hoặc bỏ qua với xác suất nhỏ.
+- `RandomBrain`: bỏ qua với xác suất 10%; trong 90% còn lại, chọn ngẫu nhiên một người còn sống khác Thợ Săn. Khi không còn mục tiêu hợp lệ thì luôn bỏ qua.
 - Các brain AI: prompt chỉ nhận `RoomSnapshot` đã lọc; output là `targetId | null` và được validate bằng danh sách mục tiêu hợp lệ.
 - Deadline bot ngắn hơn 15 giây; nếu AI lỗi, timeout hoặc output sai thì `RandomBrain` quyết.
 - Machine chỉ nộp tối đa một quyết định; engine là trọng tài cuối.

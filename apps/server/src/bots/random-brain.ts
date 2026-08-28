@@ -13,6 +13,9 @@ function randomOf<T>(items: T[]): T | undefined {
   return items.length === 0 ? undefined : items[Math.floor(Math.random() * items.length)];
 }
 
+/** Thợ Săn bot đôi khi chủ động giữ súng để tránh phát bắn bất lợi cho phe làng. */
+const HUNTER_SKIP_CHANCE = 0.1;
+
 /**
  * Não dự phòng cuối cùng: chọn ngẫu nhiên trong các nước đi hợp lệ, không gọi
  * mạng nên không bao giờ hỏng. Vì thế nó chỉ trả ok - không có nhánh { ok: false }.
@@ -48,7 +51,11 @@ export class RandomBrain implements BotBrain {
   }
 
   async decideHunterShot(view: RoomSnapshot): Promise<Always<HunterShotDecision>> {
-    return decided({ targetId: randomOf(legalHunterTargets(view)) ?? null });
+    const targets = legalHunterTargets(view);
+    if (targets.length === 0 || Math.random() < HUNTER_SKIP_CHANCE) {
+      return decided({ targetId: null });
+    }
+    return decided({ targetId: randomOf(targets) ?? null });
   }
 }
 

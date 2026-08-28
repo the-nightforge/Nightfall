@@ -56,6 +56,10 @@ vi.mock("../src/bots", async () => {
 
 import { continueAfterDeathResult } from "../src/game/machine";
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 function hunterView(over: Partial<RoomSnapshot> = {}): RoomSnapshot {
   return {
     code: "HUNT1",
@@ -185,14 +189,29 @@ describe("Hunter bot decision", () => {
     ).toEqual([]);
   });
 
-  it("RandomBrain returns a decision object even when its target is an intentional skip", async () => {
+  it("RandomBrain intentionally skips the Hunter shot on the 10% branch", async () => {
     const brain = new RandomBrain();
-    vi.spyOn(Math, "random").mockReturnValue(0);
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.099);
     expect(await brain.decideHunterShot(hunterView())).toEqual({
       ok: true,
-      value: { targetId: "wolf" },
+      value: { targetId: null },
     });
+    expect(random).toHaveBeenCalledTimes(1);
+  });
 
+  it("RandomBrain uses a separate random draw to select a target outside the skip branch", async () => {
+    const brain = new RandomBrain();
+    const random = vi.spyOn(Math, "random").mockReturnValueOnce(0.1).mockReturnValueOnce(0.75);
+    expect(await brain.decideHunterShot(hunterView())).toEqual({
+      ok: true,
+      value: { targetId: "villager" },
+    });
+    expect(random).toHaveBeenCalledTimes(2);
+  });
+
+  it("RandomBrain skips without drawing randomness when no legal Hunter target exists", async () => {
+    const brain = new RandomBrain();
+    const random = vi.spyOn(Math, "random");
     const noTargets = hunterView({
       players: [{ id: "hunter", name: "Thợ Săn", alive: false, isBot: true }],
     });
@@ -200,7 +219,7 @@ describe("Hunter bot decision", () => {
       ok: true,
       value: { targetId: null },
     });
-    vi.restoreAllMocks();
+    expect(random).not.toHaveBeenCalled();
   });
 
   it("rejects an illegal AI target but preserves an intentional null skip", () => {
