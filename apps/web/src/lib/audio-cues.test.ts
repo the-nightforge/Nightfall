@@ -14,12 +14,14 @@ function snapshot(over: Partial<RoomSnapshot> = {}): RoomSnapshot {
     you: { id: "me", name: "Tôi", ready: true, connected: true, role: "VILLAGER", alive: true },
     players: [],
     night: null,
+    hunterShot: null,
     hasVoted: false,
     myVote: null,
     noEliminationVoteCount: 0,
     discussionSkip: null,
     votesRevealed: false,
     nightHistory: [],
+    hunterShots: [],
     lastNightDeaths: [],
     lastEliminated: null,
     winner: null,
@@ -52,6 +54,35 @@ describe("cuesFor", () => {
     const before = snapshot({ phase: "NIGHT", round: 2, night: { canAct: false, acted: false } });
     const after = snapshot({ phase: "NIGHT", round: 2, night: { canAct: true, acted: false } });
     assert.deepEqual(cuesFor(before, after), ["turn"]);
+  });
+
+  it("Thợ Săn được gọi bắn cũng là tới lượt", () => {
+    const before = snapshot({ phase: "ELIMINATION", round: 2 });
+    const after = snapshot({
+      phase: "HUNTER_SHOT",
+      round: 2,
+      hunterShot: {
+        hunterId: "me",
+        hunterName: "Tôi",
+        canAct: true,
+        resolved: false,
+        target: null,
+      },
+    });
+    assert.deepEqual(cuesFor(before, after), ["turn"]);
+  });
+
+  it("người khác nhìn Thợ Săn bắn thì không nghe tiếng tới lượt", () => {
+    const watching = {
+      hunterId: "khac",
+      hunterName: "Người khác",
+      canAct: false,
+      resolved: false,
+      target: null,
+    };
+    const before = snapshot({ phase: "ELIMINATION", round: 2 });
+    const after = snapshot({ phase: "HUNTER_SHOT", round: 2, hunterShot: watching });
+    assert.deepEqual(cuesFor(before, after), []);
   });
 
   it("có người chết trong đêm", () => {

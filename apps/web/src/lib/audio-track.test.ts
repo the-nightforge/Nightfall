@@ -15,7 +15,7 @@ describe("trackFor", () => {
   });
 
   it("các pha quanh bỏ phiếu dùng chung track bỏ phiếu", () => {
-    for (const phase of ["VOTING", "ELIMINATION", "CHECK_WIN"] as const) {
+    for (const phase of ["VOTING", "ELIMINATION", "HUNTER_SHOT", "CHECK_WIN"] as const) {
       assert.equal(trackFor(phase), "vote", phase);
     }
   });

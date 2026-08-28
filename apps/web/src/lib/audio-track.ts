@@ -19,6 +19,7 @@ const TRACK_BY_PHASE: Record<Phase, Track | null> = {
   DAY_DISCUSSION: "day",
   VOTING: "vote",
   ELIMINATION: "vote",
+  HUNTER_SHOT: "vote",
   CHECK_WIN: "vote",
   GAME_OVER: null,
 };

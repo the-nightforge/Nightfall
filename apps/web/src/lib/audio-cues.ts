@@ -22,9 +22,10 @@ export function cuesFor(prev: RoomSnapshot | null, next: RoomSnapshot): Cue[] {
   const changed = prev.round !== next.round || prev.phase !== next.phase;
 
   if (changed && next.phase === "NIGHT") cues.push("howl");
-  // canAct của Phù Thuỷ lật sang true đúng lúc bầy Sói chốt phiếu, nên luật
-  // chung này tự đúng với lượt đi sau của cô ta mà không cần nhánh riêng.
-  if (prev.night?.canAct !== true && next.night?.canAct === true) cues.push("turn");
+  // Một luật chung cho mọi lượt hành động. canAct của Phù Thuỷ lật sang true
+  // đúng lúc bầy Sói chốt phiếu, và Thợ Săn được gọi bắn cũng là tới lượt, nên
+  // không vai nào cần nhánh riêng.
+  if (myTurnStarted(prev, next)) cues.push("turn");
   if (changed && diedThisPhase(next)) cues.push("death");
   if (!prev.hasVoted && next.hasVoted) cues.push("ballot");
 
@@ -34,6 +35,16 @@ export function cuesFor(prev: RoomSnapshot | null, next: RoomSnapshot): Cue[] {
   }
 
   return cues;
+}
+
+/** Vừa mở ra một lượt mà chính người xem phải hành động. */
+function myTurnStarted(prev: RoomSnapshot, next: RoomSnapshot): boolean {
+  const started = (was: boolean | undefined, now: boolean | undefined) =>
+    was !== true && now === true;
+  return (
+    started(prev.night?.canAct, next.night?.canAct) ||
+    started(prev.hunterShot?.canAct, next.hunterShot?.canAct)
+  );
 }
 
 function diedThisPhase(view: RoomSnapshot): boolean {
