@@ -150,7 +150,9 @@ Tính năng này nâng đáng kể số lượt gọi mỗi ván. Ước lượn
 | Lời biện hộ (mới) | ~6 |
 | **Tổng** | **~126** |
 
-Mặc định hiện tại là 60, tức governor sẽ ngắt mạch từ giữa ván. Nâng mặc định của `resolveBotAiMaxCallsPerGame` lên **180** để một ván đầy đủ chạy hết mà vẫn còn trần chặn sự cố lặp vô hạn. `BOT_AI_MAX_CALLS_PER_GAME` vẫn là đường tinh chỉnh theo môi trường và cần đặt lại trên Render.
+Mặc định hiện tại là 60, tức governor sẽ ngắt mạch từ giữa ván. Nâng mặc định của `resolveBotAiMaxCallsPerGame` lên **180** để một ván đầy đủ chạy hết mà vẫn còn trần chặn sự cố lặp vô hạn.
+
+`BOT_AI_MAX_CALLS_PER_GAME` vẫn là đường tinh chỉnh theo môi trường, nhưng không cần đặt ở đâu cả: biến này chưa từng được đặt trên Render, và cũng không có trong `.env` local, nên cả hai nơi đều tự nhận mặc định mới. Chỉ phải động vào nó nếu sau này có ai đó đặt một giá trị đè lên.
 
 ### Hạn chót và đường lui của phiếu xác nhận
 
