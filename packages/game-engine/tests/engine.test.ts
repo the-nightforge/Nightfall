@@ -553,6 +553,16 @@ describe("Bỏ phiếu", () => {
     expect(e.voteTally().noElimination).toBe(1);
   });
 
+  it("xóa mutation khi bắt đầu một pha VOTING mới", () => {
+    const e = votingEngine();
+    e.submitVote("p1", "p2", 1_000);
+
+    e.setPhase("DAY_DISCUSSION", 60_000, 2_000);
+    e.setPhase("VOTING", 30_000, 3_000);
+
+    expect(e.state.voteMutations).toEqual([]);
+  });
+
   it("người có nhiều phiếu nhất bị đưa ra toà chứ chưa chết", () => {
     const e = makeEngine(6);
     toVoting(e);
@@ -771,7 +781,20 @@ describe("Snapshot không lộ thông tin bí mật", () => {
     }
   });
 
-  it("toàn bộ vai trò chỉ lộ khi game kết thúc hoặc viewer đã chết", () => {
+  it("người xem đã chết không làm lộ vai trò trước GAME_OVER", () => {
+    const e = makeEngine(7);
+    const deadViewer = findPlayersByRole(e, "VILLAGER")[0];
+    const otherDead = e.state.players.find((player) => player.id !== deadViewer.id)!;
+    deadViewer.alive = false;
+    otherDead.alive = false;
+
+    const view = e.snapshotFor(deadViewer.id);
+
+    expect(view.you?.role).toBe(deadViewer.role);
+    expect(view.players.every((player) => player.role === undefined)).toBe(true);
+  });
+
+  it("toàn bộ vai trò chỉ lộ khi game kết thúc", () => {
     const e = makeEngine(7);
     e.finishGame("village");
     const view = e.snapshotFor("p1");
@@ -1224,7 +1247,11 @@ describe("Thợ Săn", () => {
 
       expect(e.completeHunterReaction()).toBe(source);
       e.setPhase(nextPhase, 30_000, 3_000);
-      expect(e.snapshotFor("hunter").players.find((player) => player.id === "wolf")?.role).toBe("WEREWOLF");
+      expect(
+        e.snapshotFor("hunter").players
+          .filter((player) => player.id !== "hunter")
+          .every((player) => player.role === undefined),
+      ).toBe(true);
     },
   );
 
