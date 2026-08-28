@@ -12,11 +12,11 @@ import { buildBotDecisionContext } from "../bots/context";
 import { renderBotSpeech } from "../bots/speech-renderer";
 import { personaFor } from "../bots/prompt";
 import type { SpeechRequest } from "../bots/types";
-import { engineVote, legalHunterTargets, usablePlannedVote } from "../bots/targets";
+import { engineVote, legalHunterTargets } from "../bots/targets";
 import { botSessionFor, clearBotSession, startBotSession } from "../bots/session-registry";
 import { newId } from "../util";
 import type { NightDecision, PlannedVote } from "../bots/types";
-import { pendingEndFinalVote, pendingVote } from "./bot-room-state";
+import { pendingEndFinalVote } from "./bot-room-state";
 import {
   DISCONNECT_GRACE_MS,
   clearDiscussionSkipVotes,
@@ -276,7 +276,6 @@ export function resetToLobby(room: Room): void {
   room.engine = null;
   room.status = "LOBBY";
   for (const m of room.members) m.ready = false;
-  pendingVote.delete(room.code);
   pendingEndFinalVote.delete(room.code);
   clearBotSession(room.code);
   resetBotBudget(room.code);
@@ -298,7 +297,6 @@ function onGameOver(room: Room): void {
     })
     .catch(() => undefined);
 
-  pendingVote.delete(room.code);
   clearBotSession(room.code);
   resetBotBudget(room.code);
 
@@ -491,8 +489,6 @@ function toSpeechRequest(
 export function scheduleDayBots(room: Room): void {
   const bots = room.members.filter((m) => m.isBot);
   const window = room.config.discussionSeconds * 1_000;
-  const votes = new Map<string, PlannedVote>();
-  pendingVote.set(room.code, votes);
 
   bots.forEach((member, i) => {
     // Rải đều trong khung thảo luận thay vì dội ra cùng lúc
@@ -509,14 +505,18 @@ export function scheduleDayBots(room: Room): void {
           runtime.observe(context);
           // Phiếu là quyết định của lõi deterministic, chốt TRƯỚC khi hỏi nhà
           // cung cấp. Provider chỉ còn việc diễn đạt.
+          //
+          // Phiếu KHÔNG được ghi nhớ ở đây: pha bỏ phiếu sẽ hỏi lại chính lõi
+          // này với ngữ cảnh mới nhất. Một phiếu đóng băng từ lúc thảo luận là
+          // phiếu bỏ qua mọi thứ xảy ra sau đó.
           const vote = runtime.decideVote(context);
           const speech = runtime.decideSpeech(context, vote);
           const chat = speech
             ? await renderBotSpeech(toSpeechRequest(room, member, context, speech))
             : null;
 
-          // Kết quả về sau khi pha đổi thì bỏ TẤT CẢ, kể cả phiếu đã định: nó
-          // được tính từ một tình thế không còn tồn tại.
+          // Kết quả về sau khi pha đổi thì bỏ hết: nó được tính từ một tình thế
+          // không còn tồn tại.
           if (
             room.engine !== discussionEngine ||
             discussionEngine.state.phase !== "DAY_DISCUSSION" ||
@@ -524,7 +524,6 @@ export function scheduleDayBots(room: Room): void {
             discussionEngine.state.phaseEndsAt !== discussionEndsAt
           ) return;
 
-          votes.set(member.playerId, toPlannedVote(vote.choice));
           if (!speech || !chat) return;
 
           const resolved = resolveChat(room, member.playerId);
@@ -609,7 +608,6 @@ function scheduleDefenseBot(room: Room, accusedId: string): void {
 function scheduleFinalVoteBots(room: Room): void {
   const scheduledEngine = room.engine;
   if (!scheduledEngine) return;
-  const votes = pendingVote.get(room.code);
   const accusedId = scheduledEngine.state.trial?.accusedId;
   if (!accusedId) return;
 
@@ -621,7 +619,7 @@ function scheduleFinalVoteBots(room: Room): void {
     const view = buildSnapshot(room, member.playerId);
     if (!view.trial?.canVote) continue;
 
-    const planned = votes?.get(member.playerId);
+    const planned = nominationBallotFor(room, member.playerId);
     const delay = 2_000 + Math.floor(Math.random() * 4_000);
     const pending = botBrain().decideFinalVote(view);
     const earliest = new Promise<void>((r) => setTimeout(r, delay));
@@ -685,38 +683,84 @@ function deterministicVote(room: Room, botId: string): PlannedVote | null {
   }
 }
 
-function scheduleVoteBots(room: Room): void {
-  const votes = pendingVote.get(room.code);
+/**
+ * Lá phiếu đề cử mà chính bot đã nộp trong vòng này.
+ *
+ * Đọc từ recap công khai chứ không từ một map phiếu "đã định": recap là thứ
+ * engine thật sự đã tính, nên nó không bao giờ lệch với bảng phiếu người chơi
+ * vừa nhìn thấy. `undefined` nghĩa là vòng đề cử chưa chốt hoặc bot không bỏ
+ * phiếu nào.
+ */
+function nominationBallotFor(room: Room, botId: string): PlannedVote | undefined {
+  const st = room.engine?.state;
+  if (!st) return undefined;
+
+  const recap = [...st.dayVoteHistory].reverse().find((item) => item.round === st.round);
+  const ballot = recap?.finalBallots.find((item) => item.voterId === botId);
+  if (!ballot) return undefined;
+
+  return ballot.choice.type === "PLAYER"
+    ? { type: "PLAYER", targetId: ballot.choice.targetId }
+    : { type: "NO_ELIMINATION" };
+}
+
+/**
+ * Ba mốc quyết định trong khung bỏ phiếu, dạng [đầu khung, biên độ].
+ *
+ * Bot bỏ phiếu sớm để bảng phiếu có thứ cho người thật đọc và phản ứng, soi lại
+ * khi bảng đã đông, rồi chốt sát giờ. Một mốc duy nhất thì phiếu bot hoặc quá
+ * sớm để biết gì, hoặc quá muộn để ai kịp phản ứng.
+ */
+const VOTE_CHECKPOINTS: ReadonlyArray<readonly [number, number]> = [
+  [0.12, 0.12],
+  [0.52, 0.08],
+  [0.84, 0.08],
+];
+
+/**
+ * Xếp lịch bỏ phiếu cho bot.
+ *
+ * Mốc gieo từ RNG của session nên cùng một ván luôn phát lại được; không còn
+ * `Math.random()` và không còn đường lui ngẫu nhiên. Ở mỗi mốc, lõi deterministic
+ * được hỏi lại với ngữ cảnh mới nhất, nên bot đổi phiếu đúng khi và chỉ khi nó
+ * thật sự đổi ý.
+ */
+export function scheduleVoteBots(room: Room): void {
+  const session = botSessionFor(room);
+  const window = room.config.voteSeconds * 1_000;
 
   for (const member of room.members) {
     if (!member.isBot) continue;
-    setRoomTimer(room.code, () => {
-      void (async () => {
+
+    const rng = session.rngFor(member.playerId, "vote-schedule");
+    const delays = VOTE_CHECKPOINTS.map(([start, spread]) =>
+      Math.floor((start + rng() * spread) * window),
+    );
+
+    for (const delay of delays) {
+      setRoomTimer(room.code, () => {
         try {
           if (!room.engine || room.engine.state.phase !== "VOTING") return;
-          const view = buildSnapshot(room, member.playerId);
 
-          // Không còn đường lui ngẫu nhiên: nếu chưa có phiếu đã định thì hỏi
-          // lại chính lõi deterministic.
-          const vote =
-            usablePlannedVote(view, votes?.get(member.playerId)) ??
-            deterministicVote(room, member.playerId);
-
+          const vote = deterministicVote(room, member.playerId);
           if (!vote) return;
-          try {
-            room.engine.submitVote(member.playerId, engineVote(vote));
-            // Phiếu của người thật được broadcast ngay trong handler socket, còn
-            // phiếu bot thì không: client giữ nguyên snapshot cũ nên mọi voteCount
-            // đứng yên ở 0 tới tận lúc pha kết thúc. Trong phòng toàn bot, bộ đếm
-            // "Không treo ai (x phiếu)" vì thế trông như hỏng.
-            sync(room);
-          } catch {
-            /* bỏ phiếu lỗi */
-          }
+
+          // Engine coi lá trùng là no-op, nhưng chặn ở đây thì mốc "không đổi ý"
+          // cũng không phát broadcast thừa cho cả phòng.
+          const target = engineVote(vote);
+          const previous = room.engine.state.votes[member.playerId];
+          if (previous !== undefined && previous === target) return;
+
+          room.engine.submitVote(member.playerId, target);
+          // Phiếu của người thật được broadcast ngay trong handler socket, còn
+          // phiếu bot thì không: client giữ nguyên snapshot cũ nên mọi voteCount
+          // đứng yên ở 0 tới tận lúc pha kết thúc. Trong phòng toàn bot, bộ đếm
+          // "Không treo ai (x phiếu)" vì thế trông như hỏng.
+          sync(room);
         } catch {
-          /* não bot lỗi (mạng, JSON hỏng,...) không được kéo sập cả tiến trình */
+          /* lõi bot lỗi không được kéo sập cả tiến trình */
         }
-      })();
-    }, 3_000 + Math.floor(Math.random() * 8_000));
+      }, delay);
+    }
   }
 }

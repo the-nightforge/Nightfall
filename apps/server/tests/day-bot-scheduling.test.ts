@@ -4,13 +4,14 @@ import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { Attempt, DaySpeechDecision } from "../src/bots/types";
 import type { Room } from "../src/rooms/store";
 import { scheduleDayBots, submitDiscussionSkip } from "../src/game/machine";
-import { pendingVote } from "../src/game/bot-room-state";
 import { clearDiscussionSkipVotes } from "../src/game/discussion-skip";
 
 const brainControl = vi.hoisted(() => ({
   renderDaySpeech: vi.fn(),
   resolveDay: undefined as ((attempt: Attempt<DaySpeechDecision>) => void) | undefined,
 }));
+
+const runtimeControl = vi.hoisted(() => ({ recordSpeech: vi.fn() }));
 
 vi.mock("../src/rooms/store", () => ({
   clearRoomTimers: () => undefined,
@@ -46,7 +47,7 @@ vi.mock("../src/bots/session-registry", () => {
       evidence: [],
     }),
     decideSpeech: () => intention,
-    recordSpeech: () => undefined,
+    recordSpeech: runtimeControl.recordSpeech,
   };
   return {
     botSessionFor: () => ({ runtimeFor: () => runtime, rngFor: () => () => 0.5 }),
@@ -120,6 +121,7 @@ describe("scheduleDayBots", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     brainControl.resolveDay = undefined;
+    runtimeControl.recordSpeech.mockReset();
     brainControl.renderDaySpeech.mockReset();
     brainControl.renderDaySpeech.mockImplementation(
       () => new Promise<Attempt<DaySpeechDecision>>((resolve) => {
@@ -130,7 +132,6 @@ describe("scheduleDayBots", () => {
 
   afterEach(() => {
     vi.useRealTimers();
-    pendingVote.delete("ABCDE");
     clearDiscussionSkipVotes("ABCDE");
   });
 
@@ -153,6 +154,21 @@ describe("scheduleDayBots", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(room.chatLog).toEqual([]);
-    expect(pendingVote.get(room.code)?.has("bot")).toBe(false);
+    // Lời nói bị bỏ thì căn cứ của nó cũng không được đánh dấu là "đã dùng":
+    // ghi vào speechMemory ở đây sẽ khoá luôn luận điểm mà bot chưa hề nói ra.
+    expect(runtimeControl.recordSpeech).not.toHaveBeenCalled();
+  });
+
+  it("không chốt sẵn phiếu ở pha thảo luận", async () => {
+    const room = discussionRoom();
+    scheduleDayBots(room);
+
+    await vi.advanceTimersByTimeAsync(Math.floor(room.config.discussionSeconds * 1_000 / 2));
+    brainControl.resolveDay?.({ ok: true, value: { chat: "Tôi nghi Người 1" } });
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Bỏ phiếu là việc của pha VOTING. Một phiếu đóng băng từ lúc thảo luận là
+    // phiếu bỏ qua mọi thứ xảy ra sau đó, kể cả người vừa bị nghi lên tiếng.
+    expect(room.engine!.getState().votes).toEqual({});
   });
 });

@@ -14,7 +14,6 @@ import {
   derivedFinalVote,
   legalHunterTargets,
   legalNightTargets,
-  legalVoteTargets,
   soloNightAction,
   witchActions,
 } from "./targets";

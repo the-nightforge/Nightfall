@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RoomSnapshot } from "@masoi/shared";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
-import {
-  legalNightTargets,
-  legalVoteTargets,
-  soloNightAction,
-  witchActions,
-} from "../src/bots/targets";
+import { legalNightTargets, soloNightAction, witchActions } from "../src/bots/targets";
 
 function view(over: Partial<RoomSnapshot> = {}): RoomSnapshot {
   return {
@@ -125,8 +120,6 @@ describe("witchActions", () => {
   });
 });
 
-describe("legalVoteTargets", () => {
-  it("bỏ người chết và chính mình", () => {
-    expect(legalVoteTargets(view())).toEqual(["b", "c"]);
-  });
-});
+// Mục tiêu bỏ phiếu ban ngày không còn được tính lại ở tầng server: engine phát
+// `legalVoteChoices` trong `botKnowledgeFor`, và luật hợp lệ chỉ nên có một bản.
+// Coverage cho nó nằm ở packages/game-engine/tests/bot-knowledge.test.ts.

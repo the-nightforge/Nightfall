@@ -97,7 +97,8 @@ describe("skip discussion flow", () => {
     expect(submitDiscussionSkip(room, "human2", true)).toBeNull();
     expect(room.engine!.getState().phase).toBe("VOTING");
     expect(storeMocks.clearRoomTimers).toHaveBeenCalledWith(room.code);
-    expect(storeMocks.setRoomTimer).toHaveBeenCalledTimes(2);
+    // Ba mốc quyết định của con bot duy nhất, cộng hạn chót đóng pha bỏ phiếu.
+    expect(storeMocks.setRoomTimer).toHaveBeenCalledTimes(4);
   });
 
   it("không giảm ngưỡng khi một người thật mất kết nối và từ chối bot", () => {

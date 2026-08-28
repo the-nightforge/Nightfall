@@ -1,9 +1,5 @@
 import { resetBotBudget } from "../bots";
 import { clearBotSession } from "../bots/session-registry";
-import type { PlannedVote } from "../bots/types";
-
-/** Phiếu bot đã định trong pha thảo luận, dùng lại ở pha bỏ phiếu. */
-export const pendingVote = new Map<string, Map<string, PlannedVote>>();
 
 /**
  * Cờ chặn hẹn giờ kết thúc sớm cho vòng bỏ phiếu xác nhận. Không có cờ này thì
@@ -12,10 +8,10 @@ export const pendingVote = new Map<string, Map<string, PlannedVote>>();
 export const pendingEndFinalVote = new Map<string, boolean>();
 
 /**
- * Dọn toàn bộ state bot của một phòng: phiếu đã định, cờ final-vote, session
- * nhận thức và ngân sách governor. Gọi khi phòng bị xoá hẳn khỏi bộ nhớ (removeRoom)
- * để tránh rò rỉ - không dọn thì các Map này tích luỹ một entry cho mỗi phòng
- * bị bỏ hoang trong suốt vòng đời process.
+ * Dọn toàn bộ state bot của một phòng: cờ final-vote, session nhận thức và ngân
+ * sách governor. Gọi khi phòng bị xoá hẳn khỏi bộ nhớ (removeRoom) để tránh rò
+ * rỉ - không dọn thì các Map này tích luỹ một entry cho mỗi phòng bị bỏ hoang
+ * trong suốt vòng đời process.
  *
  * Tách riêng khỏi machine.ts (thay vì để store.ts import thẳng machine.ts) vì
  * machine.ts đã import store.ts để dùng clearRoomTimers/persistRoom/setRoomTimer;
@@ -23,7 +19,6 @@ export const pendingEndFinalVote = new Map<string, boolean>();
  * machine.ts cùng import được nó mà không có cạnh nào quay lại nhau.
  */
 export function cleanupRoomBotState(code: string): void {
-  pendingVote.delete(code);
   pendingEndFinalVote.delete(code);
   clearBotSession(code);
   resetBotBudget(code);
