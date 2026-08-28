@@ -16,20 +16,23 @@ Thêm nhạc nền đổi theo pha và một bộ hiệu ứng ngắn cho client
 - Trang chủ không có nhạc. Chỉ trong phòng mới có.
 - Thiếu file âm thanh thì im lặng, không hiện lỗi, không chặn game. Nhờ vậy code merge được trước khi có đủ asset.
 - Hiệu ứng `turn` và `ballot` chỉ dựa vào snapshot riêng của người xem nên máy người khác không phát. Không có tiếng nào để lộ thông tin mà người nghe chưa được biết.
+- Ba file nhạc dùng giấy phép CC BY 4.0 nên phần ghi công là bắt buộc, không phải tuỳ chọn. Xem `apps/web/public/audio/CREDITS.md`.
 
 ## Các phương án đã cân nhắc
 
-### 1. `<audio>` thuần cộng một module singleton — chọn
+### 1. Web Audio API với loop points — chọn
 
-Ba thẻ `HTMLAudioElement` cho ba track, crossfade bằng cách nhích `.volume` theo một `setInterval` ngắn; hiệu ứng phát bằng `new Audio(src)` mỗi lần gọi nên chồng tiếng được. Hai thanh âm lượng chỉ là hai hệ số nhân.
+Một `AudioContext`, hai `GainNode` làm bus nhạc và bus hiệu ứng, nhạc phát bằng `AudioBufferSourceNode` có đặt `loopStart` và `loopEnd`, crossfade bằng `linearRampToValueAtTime`.
 
-Không thêm dependency, nhạc được stream chứ không nạp hết vào bộ nhớ, và lượng code đủ nhỏ để đọc hết trong một lần. Crossfade từng nấc về lý thuyết không mượt bằng gain ramp thật, nhưng ở 600ms thì không nghe ra khác biệt.
+Chọn vì chính hình dạng của file nhạc đòi hỏi nó. Ba file được dựng với **đệm 0.5 giây ở đầu và cuối**: bộ mã hoá mp3 không tái tạo chính xác các frame biên nên artefact được đẩy vào vùng đệm, còn đoạn lặp thật nằm giữa hai mốc ghi trong `loop-points.json`. Loop có điểm bắt đầu và kết thúc tuỳ ý là thứ chỉ Web Audio làm được. Mô hình hai bus cũng khớp sẵn với hai thanh âm lượng.
 
-### 2. Web Audio API, tự dựng audio engine
+Cái giá là bộ nhớ: `AudioBuffer` giữ PCM đã giải nén, `day.mp3` dài 102 giây thành khoảng 36MB. Khắc phục bằng cách chỉ decode track đang cần và thả buffer cũ sau khi crossfade xong, nên cao điểm chỉ hai buffer.
 
-Một `AudioContext`, hai `GainNode` làm hai bus, decode file thành `AudioBuffer`, crossfade bằng `linearRampToValueAtTime`. Mô hình hai bus khớp đúng với hai thanh âm lượng và chuyển cảnh mượt chuẩn.
+### 2. `<audio loop>` thuần
 
-Loại vì cái giá không tương xứng: `AudioBuffer` giữ PCM đã giải nén, một loop hai phút thành hàng chục MB thường trú trên máy người chơi mobile. Đây là công cụ đúng cho một game cần trộn âm thật, còn bài toán ở đây là ba track đổi theo pha và vài tiếng ngắn.
+Ba thẻ `HTMLAudioElement`, crossfade bằng cách nhích `.volume`. Ít code nhất, nhạc được stream nên gần như không tốn RAM.
+
+Loại vì `loop` của `HTMLAudioElement` luôn lặp trọn file, không nhận điểm lặp. Với file có đệm hai đầu, mỗi vòng người nghe sẽ bị nhạc nhảy tới gần một phút rồi nhảy lùi lại, thành một khoảng lộn xộn dài một giây — tệ hơn hẳn cái click mà vùng đệm sinh ra để tránh. Muốn dùng phương án này thì phải cắt bỏ đệm, và cắt xong là click quay lại.
 
 ### 3. Dùng thư viện howler.js
 
@@ -44,13 +47,19 @@ Tách phần thuần logic khỏi phần chạm DOM, cùng cách repo đã tách
 | `lib/audio-settings.ts` | Đọc ghi thiết lập vào `localStorage`, kẹp giá trị | có |
 | `lib/audio-track.ts` | `trackFor(phase)` | có |
 | `lib/audio-cues.ts` | `cuesFor(prev, next)` | có |
-| `lib/audio-engine.ts` | Giữ ba `<audio>`, crossfade, phát hiệu ứng, mở khoá autoplay | không |
+| `lib/audio-engine.ts` | Giữ `AudioContext`, hai bus gain, decode và loop nhạc, phát hiệu ứng, mở khoá autoplay | không |
 | `lib/useGameAudio.ts` | Hook nối snapshot với engine | không |
 | `components/SoundControl.tsx` | Nút loa và popover hai thanh trượt | không |
 
 Ba module thuần nằm thẳng trong `src/lib/` chứ không nhét vào thư mục con, vì script test là `tsx --test src/lib/*.test.ts` với glob phẳng.
 
 `audio-engine` là module singleton giữ state ngoài React, đúng khuôn `lib/socket.ts`. Không dựng React context: thứ duy nhất cần chia sẻ là một object mệnh lệnh, không phải state để render.
+
+### Điểm lặp và bộ nhớ
+
+Engine tải `/audio/loop-points.json` một lần rồi dùng `loopStart` và `loopEnd` của từng track. Đọc từ file thay vì viết cứng số trong code là có chủ ý: người dựng lại nhạc sau này chỉ cần thay file cùng bộ mốc mới, không phải sửa TypeScript, và không có đường nào để mốc trong code trôi lệch khỏi mốc của asset.
+
+Buffer chỉ được decode khi track đó thật sự cần phát, và buffer của track cũ được thả ngay sau khi crossfade xong. Không giữ cả ba cùng lúc: `day.mp3` một mình đã khoảng 36MB sau giải nén. Nếu về sau máy yếu vẫn nặng, hạ `AudioContext` xuống 22050Hz sẽ giảm một nửa mà tai không nghe ra với nhạc ambient.
 
 ### Luồng dữ liệu
 
@@ -84,14 +93,17 @@ export const DEFAULT_SETTINGS: AudioSettings; // 0.4 / 0.8 / false
 export function loadSettings(): AudioSettings;
 export function saveSettings(settings: AudioSettings): void;
 
-// audio-engine.ts
+// audio-engine.ts — giao diện không đổi dù bên trong là Web Audio
 export const audioEngine: {
   unlock(): void;                        // gọi bên trong handler của cử chỉ
+  isUnlocked(): boolean;
+  onUnlock(listener: () => void): () => void;
   setTrack(track: Track | null): void;
   playCue(cue: Cue): void;
   applySettings(settings: AudioSettings): void;
   stop(): void;
 };
+export function installUnlockListener(): () => void;
 ```
 
 Khoá `localStorage` là `masoi.audio`, cùng tiền tố với `masoi.identity`.
@@ -134,7 +146,9 @@ Hai tiếng bị loại khỏi phạm vi: tiếng mỗi khi có người bỏ ph
 
 ## Hợp đồng file
 
-Đặt trong `apps/web/public/audio/`. Tổng dung lượng nên dưới 6MB vì người chơi mobile phải tải.
+Đặt trong `apps/web/public/audio/`. Tổng dung lượng nên dưới 6MB vì người chơi mobile phải tải; bộ hiện tại là 3.1MB.
+
+Kèm hai file không phải âm thanh: `loop-points.json` ghi mốc lặp của từng track, và `CREDITS.md` ghi công theo yêu cầu giấy phép.
 
 | Đường dẫn | Yêu cầu |
 | --- | --- |
@@ -148,7 +162,15 @@ Hai tiếng bị loại khỏi phạm vi: tiếng mỗi khi có người bỏ ph
 | `sfx/win.mp3` | dưới 3s |
 | `sfx/lose.mp3` | dưới 3s |
 
-Hai ràng buộc khi chọn nhạc. Thứ nhất, ba file nhạc nên cùng bộ để không lệch tông khi chuyển pha, và phải trộn sẵn cho nhỏ hơn hiệu ứng rõ rệt. Thứ hai, bộ mã hoá mp3 chèn một khoảng lặng ở đầu file nên chỗ nối vòng lặp luôn hở một vết nhỏ; chọn nhạc ambient không có nhịp trống rõ thì tai không bắt được vết đó. Đổi sang `.ogg` sẽ loop chuẩn nhưng Safari cũ không đọc được, nên không dùng.
+Ba file nhạc nên cùng bộ để không lệch tông khi chuyển pha, và phải trộn sẵn cho nhỏ hơn hiệu ứng rõ rệt.
+
+Mỗi file nhạc phải có đệm ở hai đầu và một mục tương ứng trong `loop-points.json`:
+
+```json
+{ "night": { "loopStart": 0.5, "loopEnd": 61.6224 } }
+```
+
+Vùng đệm là nơi chứa artefact biên của bộ mã hoá mp3; đoạn giữa hai mốc mới là phần được lặp. Thiếu mục trong `loop-points.json` thì engine lặp trọn file, tức là nghe thấy cả phần đệm.
 
 ## Chặn autoplay
 
@@ -167,11 +189,13 @@ Hook giữ snapshot trước trong ref xuyên qua lần rớt mạng, nên ngư�
 
 ## Xử lý lỗi
 
-- File thiếu hoặc 404: `<audio>` bắn `onerror`, engine đánh dấu track đó không dùng được và không thử lại. `playCue` với file thiếu là no-op.
+- File thiếu, 404, hoặc `decodeAudioData` từ chối: engine đánh dấu nguồn đó hỏng và không thử lại. `playCue` với file hỏng là no-op.
+- `loop-points.json` thiếu hoặc hỏng: nhạc vẫn phát, lặp trọn file. Kém hơn nhưng không im lặng.
+- Trình duyệt không có `AudioContext`: toàn bộ engine thành no-op, game chạy bình thường không tiếng.
 - `localStorage` ném lỗi (Safari chế độ riêng tư): `loadSettings` trả mặc định, `saveSettings` nuốt lỗi.
-- Đổi track khi lần crossfade trước chưa xong: huỷ interval cũ, chỉ giữ đúng một slot timer.
+- Đổi track khi lần crossfade trước chưa xong: dừng source cũ ngay và thả buffer của nó.
 - Rời phòng: fade out rồi `stop()`.
-- Tab chạy nền bị trình duyệt bóp timer nên crossfade kéo dài hơn. Không xử lý; kết quả cuối vẫn đúng.
+- Tab chạy nền: `AudioContext` có thể bị `suspend`. Gọi `resume()` mỗi lần `setTrack`, và nuốt lỗi nếu bị từ chối.
 
 ## Kiểm thử
 
@@ -181,7 +205,7 @@ Chạy bằng script sẵn có `tsx --test src/lib/*.test.ts`.
 - `audio-cues.test.ts` — phần nặng nhất. `prev` null trả rỗng; mỗi tiếng bắn đúng một lần trên đúng cạnh; lặp lại cùng một snapshot không bắn gì; resync giữa pha không bắn gì; `win` và `lose` chọn đúng theo phe của người xem; không có role thì không phát tiếng kết cục.
 - `audio-settings.test.ts` — kẹp giá trị ngoài `[0,1]`, ghi rồi đọc lại khớp, `localStorage` ném lỗi thì trả mặc định chứ không vỡ.
 
-`audio-engine.ts` cố ý không có unit test: mọi thứ quyết định được đã rút ra ba module thuần, phần còn lại chỉ là gọi `<audio>`, test nó sẽ là test cái mock của chính mình. Kiểm bằng tay khi chạy game.
+`audio-engine.ts` cố ý không có unit test: mọi thứ quyết định được đã rút ra ba module thuần, phần còn lại chỉ là gọi Web Audio, test nó sẽ là test cái mock của chính mình. Kiểm bằng tay khi chạy game, đặc biệt là nghe hết một vòng lặp nhạc để xác nhận chỗ nối không có tiếng lạ.
 
 ## Ngoài phạm vi
 

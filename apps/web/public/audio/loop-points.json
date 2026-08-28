@@ -1,0 +1,26 @@
+{
+  "night": {
+    "loopStart": 0.5,
+    "loopEnd": 61.6224,
+    "loopLen": 61.122,
+    "fileLen": 62.122,
+    "seam_z": -0.19,
+    "kb": 728.9
+  },
+  "day": {
+    "loopStart": 0.5,
+    "loopEnd": 101.6959,
+    "loopLen": 101.196,
+    "fileLen": 102.196,
+    "seam_z": 1.31,
+    "kb": 1198.5
+  },
+  "vote": {
+    "loopStart": 0.5,
+    "loopEnd": 91.5286,
+    "loopLen": 91.029,
+    "fileLen": 92.029,
+    "seam_z": 3.58,
+    "kb": 1079.1
+  }
+}

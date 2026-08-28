@@ -4,7 +4,7 @@
 
 **Goal:** Thêm ba track nhạc nền đổi theo pha và sáu hiệu ứng ngắn cho client web, kèm nút loa với hai thanh âm lượng riêng cho nhạc và hiệu ứng.
 
-**Architecture:** Ba module thuần (`audio-track`, `audio-cues`, `audio-settings`) giữ toàn bộ phần quyết định được và có test; một module singleton `audio-engine` là nơi duy nhất chạm `HTMLAudioElement`. Hook `useGameAudio` nối snapshot của `useRoomSocket` vào engine: mỗi snapshot mới cho ra một track cần phát và một danh sách tiếng cần bật. Server và `packages/*` không đổi.
+**Architecture:** Ba module thuần (`audio-track`, `audio-cues`, `audio-settings`) giữ toàn bộ phần quyết định được và có test; một module singleton `audio-engine` là nơi duy nhất chạm Web Audio. Hook `useGameAudio` nối snapshot của `useRoomSocket` vào engine: mỗi snapshot mới cho ra một track cần phát và một danh sách tiếng cần bật. Server và `packages/*` không đổi.
 
 **Tech Stack:** TypeScript, React 19, Next.js 16, `node:test` chạy qua `tsx`.
 
@@ -17,9 +17,12 @@
 - Thiếu file âm thanh thì im lặng, không hiện lỗi, không chặn game.
 - Mặc định: `musicVolume` 0.4, `sfxVolume` 0.8, `muted` false.
 - Khoá `localStorage` là `masoi.audio`.
-- Crossfade 600ms, chia 20 nấc.
+- Crossfade 600ms bằng `linearRampToValueAtTime`.
+- Nhạc lặp theo `loopStart`/`loopEnd` đọc từ `/audio/loop-points.json`, không lặp trọn file.
+- Chỉ giữ buffer của track đang phát; thả buffer cũ sau khi crossfade xong.
+- Không xoá `apps/web/public/audio/CREDITS.md`: ba file nhạc là CC BY 4.0, ghi công là bắt buộc.
 - Mọi lời gọi `play()` phải nuốt lỗi bằng `.catch(() => undefined)`; lỗi audio không bao giờ nổi lên React.
-- Lệnh `play()` đầu tiên phải nằm trong stack đồng bộ của cử chỉ người dùng, không được đặt sau `await`.
+- `AudioContext` phải được tạo trong stack đồng bộ của cử chỉ người dùng, không được đặt sau `await`.
 - Viết test thất bại trước phần implementation ở Task 1–3. Task 4–6 không có unit test theo đúng spec; kiểm bằng `npm run lint` và chạy tay.
 - Mọi file mới trong `apps/web/src` bắt đầu bằng `"use client";` trừ file test.
 
@@ -30,11 +33,11 @@
 - `apps/web/src/lib/audio-track.ts`: ánh xạ pha sang track nhạc.
 - `apps/web/src/lib/audio-cues.ts`: so hai snapshot ra danh sách hiệu ứng cần phát.
 - `apps/web/src/lib/audio-settings.ts`: đọc ghi thiết lập âm lượng vào `localStorage`.
-- `apps/web/src/lib/audio-engine.ts`: singleton giữ ba `<audio>`, crossfade, phát hiệu ứng, mở khoá autoplay.
+- `apps/web/src/lib/audio-engine.ts`: singleton giữ `AudioContext`, hai bus gain, decode và loop nhạc, phát hiệu ứng, mở khoá autoplay.
 - `apps/web/src/lib/useGameAudio.ts`: hook nối snapshot với engine.
 - `apps/web/src/components/SoundControl.tsx`: nút loa và popover hai thanh trượt.
 - `apps/web/src/app/room/[code]/page.tsx`: gọi hook và gắn nút loa vào header.
-- `apps/web/public/audio/README.md`: hợp đồng file cho người bỏ nhạc vào.
+- `apps/web/public/audio/README.md`: hợp đồng file và điểm lặp cho người thay nhạc sau này.
 
 ---
 
@@ -532,7 +535,9 @@ git commit -m "feat: persist audio volume settings"
 
 ### Task 4: Engine phát nhạc và hiệu ứng
 
-Không có unit test, đúng như spec: mọi thứ quyết định được đã nằm ở Task 1–3, phần còn lại chỉ là gọi `HTMLAudioElement` nên test nó sẽ là test cái mock của chính mình.
+Không có unit test, đúng như spec: mọi thứ quyết định được đã nằm ở Task 1–3, phần còn lại chỉ là gọi Web Audio nên test nó sẽ là test cái mock của chính mình.
+
+Asset đã nằm sẵn trong `apps/web/public/audio/` (3 file nhạc, 6 file hiệu ứng, `loop-points.json`, `CREDITS.md`). Task này chỉ thêm README và engine.
 
 **Files:**
 - Create: `apps/web/src/lib/audio-engine.ts`
@@ -542,20 +547,20 @@ Không có unit test, đúng như spec: mọi thứ quyết định được đ�
 - Consumes: `Track` từ `./audio-track`, `Cue` từ `./audio-cues`, `AudioSettings` và `DEFAULT_SETTINGS` từ `./audio-settings`.
 - Produces: `audioEngine` với `unlock()`, `isUnlocked()`, `onUnlock(listener: () => void): () => void`, `setTrack(track: Track | null)`, `playCue(cue: Cue)`, `applySettings(settings: AudioSettings)`, `stop()`; và `installUnlockListener(): () => void`.
 
-- [ ] **Step 1: Viết hợp đồng file cho asset**
+- [ ] **Step 1: Viết README cho thư mục asset**
 
 Tạo `apps/web/public/audio/README.md`:
 
-```markdown
+````markdown
 # File âm thanh
 
-Bỏ file vào đúng đường dẫn dưới đây. Thiếu file nào thì phần đó im lặng, game vẫn chạy bình thường.
+Thiếu file nào thì phần đó im lặng, game vẫn chạy bình thường.
 
 | Đường dẫn | Yêu cầu |
 | --- | --- |
-| `music/night.mp3` | loop 60–120s, u ám, chậm |
-| `music/day.mp3` | loop 60–120s, căng thẳng vừa, dùng cho cả phòng chờ |
-| `music/vote.mp3` | loop 60–120s, dồn dập |
+| `music/night.mp3` | loop, u ám, chậm |
+| `music/day.mp3` | loop, căng thẳng vừa, dùng cho cả phòng chờ |
+| `music/vote.mp3` | loop, dồn dập |
 | `sfx/howl.mp3` | dưới 2s, sói hú |
 | `sfx/turn.mp3` | dưới 1s, nhẹ, nghe nhiều lần mỗi ván |
 | `sfx/death.mp3` | dưới 2s |
@@ -563,15 +568,22 @@ Bỏ file vào đúng đường dẫn dưới đây. Thiếu file nào thì ph�
 | `sfx/win.mp3` | dưới 3s |
 | `sfx/lose.mp3` | dưới 3s |
 
-Chỉ dùng file có giấy phép cho phép dùng thương mại (CC0 hoặc royalty-free).
+## Điểm lặp
 
-Ba file nhạc nên cùng một bộ để không lệch tông khi chuyển pha, và phải trộn sẵn
-cho nhỏ hơn hiệu ứng rõ rệt. Chọn nhạc ambient không có nhịp trống rõ: bộ mã hoá
-mp3 chèn một khoảng lặng ở đầu file nên chỗ nối vòng lặp luôn hở một vết nhỏ, và
-nhạc không nhịp sẽ giấu được vết đó.
+Mỗi file nhạc có đệm 0.5 giây ở đầu và cuối, và một mục trong `loop-points.json`:
 
-Tổng dung lượng nên dưới 6MB vì người chơi mobile phải tải.
+```json
+{ "night": { "loopStart": 0.5, "loopEnd": 61.6224 } }
 ```
+
+Vùng đệm chứa artefact biên của bộ mã hoá mp3; đoạn giữa hai mốc mới là phần
+được lặp. Engine đọc file này lúc chạy, nên thay nhạc thì phải cập nhật cả mốc.
+Thiếu mục thì engine lặp trọn file, tức là nghe cả phần đệm.
+
+## Giấy phép
+
+Xem `CREDITS.md`. Ba file nhạc là CC BY 4.0 nên **bắt buộc giữ phần ghi công**.
+````
 
 - [ ] **Step 2: Viết engine**
 
@@ -599,78 +611,145 @@ const SFX_SRC: Record<Cue, string> = {
   lose: "/audio/sfx/lose.mp3",
 };
 
-const FADE_MS = 600;
-const FADE_STEPS = 20;
+const LOOP_POINTS_URL = "/audio/loop-points.json";
+const FADE_SEC = 0.6;
+
+interface LoopPoint {
+  loopStart: number;
+  loopEnd: number;
+}
+
+interface Playing {
+  source: AudioBufferSourceNode;
+  gain: GainNode;
+}
+
+let ctx: AudioContext | null = null;
+let musicBus: GainNode | null = null;
+let sfxBus: GainNode | null = null;
 
 let settings: AudioSettings = DEFAULT_SETTINGS;
 let unlocked = false;
-/** Track đang phát. */
+/** Track đã cam kết phát. Đặt đồng bộ trong setTrack, không đợi decode. */
 let current: Track | null = null;
-/** Track muốn phát; khác current khi trình duyệt còn chặn autoplay. */
+/** Track muốn phát khi trình duyệt còn chặn autoplay. */
 let wanted: Track | null = null;
-let fadeTimer: ReturnType<typeof setInterval> | null = null;
+/** Tăng mỗi lần đổi ý; lần decode nào về trễ hơn thế hệ hiện tại thì bỏ. */
+let generation = 0;
 
-const elements = new Map<Track, HTMLAudioElement>();
+let playing: Playing | null = null;
+let loopPoints: Promise<Record<string, LoopPoint>> | null = null;
+const sfxCache = new Map<Cue, AudioBuffer>();
 const broken = new Set<string>();
 const unlockListeners = new Set<() => void>();
 
-function musicTarget(): number {
-  return settings.muted ? 0 : settings.musicVolume;
+type AudioContextCtor = typeof AudioContext;
+
+function context(): AudioContext | null {
+  if (ctx) return ctx;
+  const Ctor: AudioContextCtor | undefined =
+    globalThis.AudioContext ??
+    (globalThis as unknown as { webkitAudioContext?: AudioContextCtor }).webkitAudioContext;
+  if (!Ctor) return null;
+
+  ctx = new Ctor();
+  musicBus = ctx.createGain();
+  sfxBus = ctx.createGain();
+  musicBus.connect(ctx.destination);
+  sfxBus.connect(ctx.destination);
+  applyBusGains();
+  return ctx;
 }
 
-/** null khi file thiếu hoặc hỏng: gọi lại cũng vô ích nên không thử lại. */
-function element(track: Track): HTMLAudioElement | null {
-  const src = MUSIC_SRC[track];
+/** Hai bus tách biệt là lý do applySettings chỉ còn hai dòng. */
+function applyBusGains(): void {
+  if (musicBus) musicBus.gain.value = settings.muted ? 0 : settings.musicVolume;
+  if (sfxBus) sfxBus.gain.value = settings.muted ? 0 : settings.sfxVolume;
+}
+
+function fetchLoopPoints(): Promise<Record<string, LoopPoint>> {
+  loopPoints ??= fetch(LOOP_POINTS_URL)
+    .then((res) => (res.ok ? (res.json() as Promise<Record<string, LoopPoint>>) : {}))
+    .catch(() => ({}));
+  return loopPoints;
+}
+
+async function decode(audio: AudioContext, src: string): Promise<AudioBuffer | null> {
   if (broken.has(src)) return null;
-
-  const existing = elements.get(track);
-  if (existing) return existing;
-
-  const el = new Audio(src);
-  el.loop = true;
-  el.volume = 0;
-  el.addEventListener("error", () => broken.add(src));
-  elements.set(track, el);
-  return el;
+  try {
+    const res = await fetch(src);
+    if (!res.ok) throw new Error(String(res.status));
+    return await audio.decodeAudioData(await res.arrayBuffer());
+  } catch {
+    // Hỏng một lần là hỏng mãi: đánh dấu để không thử lại mỗi lần chuyển pha.
+    broken.add(src);
+    return null;
+  }
 }
 
-function fadeTo(track: Track | null): void {
-  if (fadeTimer) clearInterval(fadeTimer);
-  const from = current !== null ? element(current) : null;
-  const to = track !== null ? element(track) : null;
-  current = track;
+function fadeOutPlaying(audio: AudioContext): void {
+  const previous = playing;
+  playing = null;
+  if (!previous) return;
 
-  if (to && to !== from) {
-    to.volume = 0;
-    // play() gọi đồng bộ ngay tại đây: nếu fadeTo chạy trong stack của một cử
-    // chỉ người dùng thì iOS mới cho phát. Đặt sau await là Safari chặn.
-    void to.play().catch(() => undefined);
+  const now = audio.currentTime;
+  previous.gain.gain.cancelScheduledValues(now);
+  previous.gain.gain.setValueAtTime(previous.gain.gain.value, now);
+  previous.gain.gain.linearRampToValueAtTime(0, now + FADE_SEC);
+  previous.source.stop(now + FADE_SEC);
+  // Ngắt kết nối để buffer PCM được thu hồi. Giữ cả ba track cùng lúc là hơn
+  // trăm MB trên máy người chơi.
+  previous.source.onended = () => {
+    previous.source.disconnect();
+    previous.gain.disconnect();
+  };
+}
+
+async function startTrack(track: Track): Promise<void> {
+  const audio = context();
+  if (!audio) return;
+  const mine = ++generation;
+
+  const [buffer, points] = await Promise.all([decode(audio, MUSIC_SRC[track]), fetchLoopPoints()]);
+  // Đã chuyển pha khác trong lúc decode thì bỏ kết quả này.
+  if (!buffer || mine !== generation || !musicBus) return;
+
+  const gain = audio.createGain();
+  gain.gain.value = 0;
+  gain.connect(musicBus);
+
+  const source = audio.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+
+  const point = points[track];
+  if (point) {
+    source.loopStart = point.loopStart;
+    source.loopEnd = point.loopEnd;
   }
+  source.connect(gain);
+  // Bắt đầu ngay tại loopStart để bỏ qua vùng đệm đầu file.
+  source.start(0, point ? point.loopStart : 0);
 
-  let step = 0;
-  fadeTimer = setInterval(() => {
-    step += 1;
-    const ratio = Math.min(1, step / FADE_STEPS);
-    if (from && from !== to) from.volume = musicTarget() * (1 - ratio);
-    if (to) to.volume = musicTarget() * ratio;
-    if (ratio < 1) return;
-
-    if (fadeTimer) clearInterval(fadeTimer);
-    fadeTimer = null;
-    if (from && from !== to) {
-      from.pause();
-      from.currentTime = 0;
-    }
-  }, FADE_MS / FADE_STEPS);
+  fadeOutPlaying(audio);
+  gain.gain.linearRampToValueAtTime(1, audio.currentTime + FADE_SEC);
+  playing = { source, gain };
 }
 
 export const audioEngine = {
-  /** Gọi bên trong handler của cử chỉ người dùng, không bao giờ sau await. */
+  /**
+   * Gọi bên trong handler của cử chỉ người dùng. AudioContext phải được tạo
+   * ngay trong stack đó, đặt sau await là iOS vẫn chặn.
+   */
   unlock(): void {
     if (unlocked) return;
     unlocked = true;
-    if (wanted !== null) fadeTo(wanted);
+    const audio = context();
+    void audio?.resume().catch(() => undefined);
+
+    const pending = wanted;
     for (const listener of unlockListeners) listener();
+    if (pending !== null) audioEngine.setTrack(pending);
   },
 
   isUnlocked(): boolean {
@@ -686,44 +765,52 @@ export const audioEngine = {
     wanted = track;
     // Chưa có cử chỉ nào thì chỉ ghi nhớ; unlock() sẽ phát track đang chờ.
     if (!unlocked || track === current) return;
-    fadeTo(track);
+    current = track;
+
+    const audio = context();
+    if (!audio) return;
+    void audio.resume().catch(() => undefined);
+
+    if (track === null) {
+      generation += 1;
+      fadeOutPlaying(audio);
+      return;
+    }
+    void startTrack(track);
   },
 
   playCue(cue: Cue): void {
     if (!unlocked || settings.muted || settings.sfxVolume === 0) return;
-    const src = SFX_SRC[cue];
-    if (broken.has(src)) return;
+    void (async () => {
+      const audio = context();
+      if (!audio || !sfxBus) return;
 
-    // Mỗi lần một element mới để hai tiếng chồng nhau được.
-    const el = new Audio(src);
-    el.volume = settings.sfxVolume;
-    el.addEventListener("error", () => broken.add(src));
-    void el.play().catch(() => undefined);
+      // Sáu file hiệu ứng đều dưới 2 giây nên giữ hết trong cache vẫn nhẹ,
+      // đổi lại lần phát sau không có độ trễ mạng.
+      let buffer = sfxCache.get(cue);
+      if (!buffer) {
+        const decoded = await decode(audio, SFX_SRC[cue]);
+        if (!decoded) return;
+        buffer = decoded;
+        sfxCache.set(cue, buffer);
+      }
+
+      const source = audio.createBufferSource();
+      source.buffer = buffer;
+      source.connect(sfxBus);
+      source.onended = () => source.disconnect();
+      source.start();
+    })();
   },
 
   applySettings(next: AudioSettings): void {
     settings = next;
-    const el = current !== null ? element(current) : null;
-    if (!el) return;
-
-    if (settings.muted) {
-      el.pause();
-      return;
-    }
-    // Đang crossfade thì để interval tự đưa volume tới đích, đừng giẫm lên.
-    if (!fadeTimer) el.volume = musicTarget();
-    if (unlocked) void el.play().catch(() => undefined);
+    applyBusGains();
   },
 
   stop(): void {
-    if (fadeTimer) {
-      clearInterval(fadeTimer);
-      fadeTimer = null;
-    }
-    for (const el of elements.values()) {
-      el.pause();
-      el.currentTime = 0;
-    }
+    generation += 1;
+    if (ctx) fadeOutPlaying(ctx);
     current = null;
     wanted = null;
   },
@@ -758,7 +845,7 @@ Expected: không có output, tức `tsc --noEmit` sạch.
 
 - [ ] **Step 4: Kiểm build production**
 
-Engine chạy ở client nhưng module vẫn bị Next nạp lúc build, nên phải chắc chắn không có lời gọi DOM nào ở mức module.
+Engine chạy ở client nhưng module vẫn bị Next nạp lúc build, nên phải chắc chắn không có lời gọi Web Audio nào ở mức module.
 
 Run: `npm run build --workspace @masoi/web`
 Expected: `Compiled successfully`.
@@ -767,7 +854,7 @@ Expected: `Compiled successfully`.
 
 ```bash
 git add apps/web/src/lib/audio-engine.ts apps/web/public/audio/README.md
-git commit -m "feat: add audio playback engine"
+git commit -m "feat: add web audio playback engine"
 ```
 
 ---
