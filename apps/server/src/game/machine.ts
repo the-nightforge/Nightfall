@@ -7,6 +7,7 @@ import { prisma } from "../db";
 import { buildSnapshot, pushChat, resolveChat } from "../rooms/snapshot";
 import { botBrain, randomBrain, resetBotBudget } from "../bots";
 import { engineVote, legalHunterTargets, usablePlannedVote } from "../bots/targets";
+import { clearBotSession, startBotSession } from "../bots/session-registry";
 import { newId } from "../util";
 import type { NightDecision, PlannedVote } from "../bots/types";
 import { pendingEndFinalVote, pendingVote } from "./bot-room-state";
@@ -57,6 +58,9 @@ export function startGame(room: Room): void {
   room.engine = GameEngine.create(players, room.config);
   room.status = "IN_GAME";
   pendingEndFinalVote.set(room.code, false);
+  // Ván mới thì nhận thức của BOT phải bắt đầu lại từ đầu: giữ lại brain của
+  // ván trước sẽ mang theo nghi ngờ về những người đã đổi vai.
+  startBotSession(room);
 
   // ROLE_REVEAL rồi tự vào đêm
   setRoomTimer(room.code, () => beginNight(room), ROLE_REVEAL_MS);
@@ -268,6 +272,7 @@ export function resetToLobby(room: Room): void {
   for (const m of room.members) m.ready = false;
   pendingVote.delete(room.code);
   pendingEndFinalVote.delete(room.code);
+  clearBotSession(room.code);
   resetBotBudget(room.code);
   sync(room);
 }
@@ -288,6 +293,7 @@ function onGameOver(room: Room): void {
     .catch(() => undefined);
 
   pendingVote.delete(room.code);
+  clearBotSession(room.code);
   resetBotBudget(room.code);
 
   sync(room);
