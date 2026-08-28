@@ -15,10 +15,21 @@ function HomeInner() {
   const [joinCode, setJoinCode] = useState(params.get("code") ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /*
+   * Có phiên đã lưu hay không phải là STATE, không được đọc thẳng localStorage
+   * trong lúc render: server render không có localStorage nên luôn ra null, còn
+   * client hydrate thì đã thấy phiên - hai cây DOM lệch nhau và React dựng lại
+   * cả nhánh. Khởi tạo bằng false đúng bằng thứ server dựng, rồi effect bên
+   * dưới mới bật lên sau khi hydrate xong.
+   */
+  const [hasIdentity, setHasIdentity] = useState(false);
 
   useEffect(() => {
     const existing = getIdentity();
-    if (existing) setNickname(existing.nickname);
+    if (existing) {
+      setNickname(existing.nickname);
+      setHasIdentity(true);
+    }
   }, []);
 
   async function ensurePlayer(): Promise<Identity | null> {
@@ -40,6 +51,7 @@ function HomeInner() {
     }
     const identity: Identity = data;
     saveIdentity(identity);
+    setHasIdentity(true);
     return identity;
   }
 
@@ -106,6 +118,10 @@ function HomeInner() {
     clearIdentity();
     disconnectSocket();
     setNickname("");
+    // Bắt buộc phải có: nút này từng ẩn đi nhờ setNickname("") làm render lại,
+    // nhưng khi ô biệt danh vốn đã rỗng thì React bỏ qua lần set đó và nút vẫn
+    // hiện dù phiên đã xoá.
+    setHasIdentity(false);
   }
 
   return (
@@ -165,7 +181,7 @@ function HomeInner() {
           {error && (
             <p className="rounded-lg bg-blood-600/20 px-3 py-2 text-sm text-blood-400">{error}</p>
           )}
-          {getIdentity() && (
+          {hasIdentity && (
             <button className="w-full text-center text-xs text-mist/40 hover:text-mist" onClick={handleLogout}>
               Xoá phiên đăng nhập trên thiết bị này
             </button>
