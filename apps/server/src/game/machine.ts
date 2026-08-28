@@ -18,6 +18,7 @@ import {
 
 const ROLE_REVEAL_MS = 10_000;
 const RESULT_MS = 8_000;
+const HUNTER_SHOT_MS = 15_000;
 const GAME_OVER_MS = 30_000;
 /** Cửa sổ riêng cho Phù Thuỷ sau khi bầy Sói chốt nạn nhân. */
 const WITCH_WINDOW_MS = 15_000;
@@ -110,7 +111,7 @@ function endNight(room: Room): void {
   sync(room);
 
   setRoomTimer(room.code, () => {
-    checkWinOrContinue(room, () => beginDiscussion(room));
+    continueAfterDeathResult(room, "night");
   }, RESULT_MS);
 }
 
@@ -164,8 +165,47 @@ function endVoting(room: Room): void {
   sync(room);
 
   setRoomTimer(room.code, () => {
-    checkWinOrContinue(room, () => beginNight(room));
+    continueAfterDeathResult(room, "vote");
   }, RESULT_MS);
+}
+
+export function continueAfterDeathResult(room: Room, source: "night" | "vote"): void {
+  const e = engine(room);
+  if (!e.hasPendingHunterShot()) {
+    checkWinOrContinue(room, () => (source === "night" ? beginDiscussion(room) : beginNight(room)));
+    return;
+  }
+
+  clearRoomTimers(room.code);
+  e.beginHunterShot(HUNTER_SHOT_MS);
+  setRoomTimer(room.code, () => timeoutHunterShot(room), HUNTER_SHOT_MS + 500);
+  sync(room);
+}
+
+export function submitHunterShot(room: Room, playerId: string, targetId: string | null): void {
+  engine(room).submitHunterShot(playerId, targetId);
+  sync(room);
+  setRoomTimer(room.code, () => finishHunterShot(room), 800);
+}
+
+function timeoutHunterShot(room: Room): void {
+  if (!room.engine || room.engine.state.phase !== "HUNTER_SHOT") return;
+  const reaction = room.engine.state.hunterReaction;
+  if (!reaction || reaction.resolved) return;
+
+  room.engine.submitHunterShot(reaction.hunterId, null);
+  sync(room);
+  finishHunterShot(room);
+}
+
+function finishHunterShot(room: Room): void {
+  if (!room.engine || room.engine.state.phase !== "HUNTER_SHOT") return;
+  const reaction = room.engine.state.hunterReaction;
+  if (!reaction?.resolved) return;
+
+  clearRoomTimers(room.code);
+  const source = room.engine.completeHunterReaction();
+  checkWinOrContinue(room, () => (source === "night" ? beginDiscussion(room) : beginNight(room)));
 }
 
 export function resetToLobby(room: Room): void {

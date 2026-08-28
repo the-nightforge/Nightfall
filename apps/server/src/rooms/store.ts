@@ -114,13 +114,21 @@ export async function loadRoomFromRedis(code: string): Promise<Room | null> {
     const raw = await redis.get(`room:${code}`);
     if (!raw) return null;
     const data = JSON.parse(raw) as SerializedRoom;
+    const storedConfig = data.config as RoomConfig & { hunter?: boolean };
+    const normalizedConfig: RoomConfig = {
+      ...storedConfig,
+      hunter: storedConfig.hunter ?? false,
+    };
+    const normalizedEngineState = data.engineState
+      ? { ...data.engineState, config: normalizedConfig }
+      : null;
     const room: Room = {
       code: data.code,
       hostId: data.hostId,
       status: data.status,
       members: data.members.map((m) => ({ ...m, connected: false })),
-      config: data.config,
-      engine: data.engineState ? new GameEngine(data.engineState) : null,
+      config: normalizedConfig,
+      engine: normalizedEngineState ? new GameEngine(normalizedEngineState) : null,
       chatLog: data.chatLog ?? [],
       createdAt: data.createdAt,
     };

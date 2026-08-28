@@ -186,7 +186,12 @@ export const roomService = {
     assertHost(room, hostId);
     if (room.status !== "LOBBY") throw new RoomError("Không thể đổi cấu hình khi đang chơi");
     // Chỉ chặn cấu hình vô lý; điều kiện đủ người kiểm tra chặt lúc bắt đầu
-    const totalSpecial = config.werewolves + (config.seer ? 1 : 0) + (config.guard ? 1 : 0) + (config.witch ? 1 : 0);
+    const totalSpecial =
+      config.werewolves +
+      (config.seer ? 1 : 0) +
+      (config.guard ? 1 : 0) +
+      (config.witch ? 1 : 0) +
+      (config.hunter ? 1 : 0);
     if (room.members.length >= 6) {
       const err = validateRoomConfig(config, room.members.length);
       if (err) throw new RoomError(err);
