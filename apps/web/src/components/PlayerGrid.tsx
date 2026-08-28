@@ -36,10 +36,10 @@ export function PlayerGrid({
   );
 
   return (
-    // Ba cột cố định: breakpoint sm/lg bám VIEWPORT chứ không bám container, mà
-    // container thì luôn bị khoá ở max-w-lg - thêm cột chỉ làm ô teo lại trên
-    // desktop chứ không tận dụng thêm được chỗ nào.
-    <div className="grid grid-cols-3 gap-2">
+    // Lưới này giờ chỉ nằm ở cột nội dung - cột phụ dùng RosterPanel - nên từ lg
+    // trở lên nó thật sự rộng ra và cần thêm cột, nếu không mỗi ô phình tới hơn
+    // 200px. Dưới lg vẫn ba cột như trên điện thoại.
+    <div className="grid grid-cols-3 gap-2 lg:grid-cols-4">
       {snapshot.players.map((player) => {
         const isMe = player.id === meId;
         const disabled =

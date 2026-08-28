@@ -19,9 +19,13 @@ export function NightPanel({ snapshot, onAction }: Props) {
 
   if (!snapshot.you?.alive) {
     return (
-      <div className="card text-center text-mist/60">
-        <p className="text-2xl">💀</p>
-        Bạn đã chết. Hãy trò chuyện cùng những người chết khác ở khung chat bên dưới.
+      <div className="card py-8 text-center">
+        <p className="text-xs uppercase tracking-[0.3em] text-mist/50">Bạn đã chết</p>
+        <h3 className="mt-2 font-display text-3xl font-bold text-mist/70">Khán đài</h3>
+        <p className="mx-auto mt-2 max-w-xs text-sm text-mist/60">
+          Bạn xem được mọi kênh chat, kể cả kênh của Sói - nhưng chỉ nói được với
+          những người đã chết.
+        </p>
       </div>
     );
   }
@@ -31,11 +35,13 @@ export function NightPanel({ snapshot, onAction }: Props) {
   // Dân thường: chỉ ngủ
   if (!meta || !canActAtNight(role)) {
     return (
-      <div className="card text-center">
-        <p className="text-2xl">😴</p>
-        <p className="mt-2 font-semibold text-white">Đêm đã xuống...</p>
-        <p className="text-sm text-mist/70">Bạn nhắm mắt ngủ và chờ buổi sáng.</p>
-        <div className="mt-3 text-left">
+      <div className="card py-8 text-center">
+        <p className="text-xs uppercase tracking-[0.3em] text-mist/50">Đêm thứ {snapshot.round}</p>
+        <h3 className="mt-2 font-display text-3xl font-bold text-indigo-200">Bạn ngủ say</h3>
+        <p className="mx-auto mt-2 max-w-xs text-sm text-mist/60">
+          Không có gì để làm cho tới sáng. Hãy nghe ngóng xem sáng mai ai vắng mặt.
+        </p>
+        <div className="mt-4 text-left">
           <CursedNote snapshot={snapshot} />
         </div>
       </div>
@@ -63,11 +69,23 @@ export function NightPanel({ snapshot, onAction }: Props) {
   return (
     <div className="space-y-4">
       <div className={`card ${acted ? "opacity-80" : ""}`}>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className={`font-bold ${meta.team === "wolves" ? "text-blood-400" : "text-indigo-300"}`}>
-            Vai trò của bạn: {meta.name}
-          </h3>
-          {showActedBadge && <span className="badge-phase bg-emerald-900/60 text-emerald-300">Đã hành động</span>}
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-[0.3em] text-mist/50">Lượt của bạn</p>
+            <h3
+              className={`font-display text-2xl font-bold ${
+                meta.team === "wolves" ? "text-blood-400" : "text-indigo-200"
+              }`}
+            >
+              {meta.name}
+            </h3>
+            <p className="mt-1 text-sm text-mist/60">{meta.description}</p>
+          </div>
+          {showActedBadge && (
+            <span className="badge-phase shrink-0 bg-emerald-900/60 text-emerald-300">
+              Đã hành động
+            </span>
+          )}
         </div>
         <div className="mb-3">
           <CursedNote snapshot={snapshot} />

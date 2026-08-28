@@ -2,10 +2,7 @@
 
 import { useState } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
-import { roleLabel } from "@/lib/cursed";
 import { PlayerGrid } from "./PlayerGrid";
-import { HunterShotTimeline } from "./HunterShotTimeline";
-import { NightRecapTimeline } from "./NightRecapTimeline";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -27,28 +24,39 @@ export function DayView({ snapshot, onVote, onSkipDiscussion }: Props) {
   return (
     <div className="space-y-4">
       {snapshot.phase === "NIGHT_RESULT" && (
-        <div className="card text-center">
-          <p className="text-2xl">🌅</p>
+        <div
+          className={`card py-7 text-center ${
+            snapshot.lastNightDeaths.length > 0 ? "border-blood-500/40" : "border-emerald-500/30"
+          }`}
+        >
+          <p className="text-xs uppercase tracking-[0.3em] text-mist/50">Trời đã sáng</p>
           {snapshot.lastNightDeaths.length > 0 ? (
             <>
-              <p className="font-semibold text-blood-400">Đêm qua {snapshot.lastNightDeaths.length} người đã mất:</p>
-              <p className="mt-1 text-white">
-                {snapshot.lastNightDeaths.map((d) => d.name).join(", ")}
+              <h3 className="mt-2 font-display text-3xl font-bold text-blood-400">
+                {snapshot.lastNightDeaths.length} người không qua khỏi đêm nay
+              </h3>
+              <p className="mt-3 text-lg font-semibold text-white">
+                {snapshot.lastNightDeaths.map((d) => d.name).join(" · ")}
               </p>
             </>
           ) : (
-            <p className="mt-1 font-semibold text-emerald-300">
-              Trời sáng, không ai mất tích. Một đêm bình yên!
-            </p>
+            <h3 className="mt-2 font-display text-3xl font-bold text-emerald-300">
+              Một đêm bình yên
+            </h3>
           )}
         </div>
       )}
 
       {isVoting && (
         <div className={`card ${dead ? "opacity-70" : ""}`}>
-          <h3 className="mb-2 font-bold text-white">
-            {dead ? "Bạn đã chết - không được bỏ phiếu" : "Chọn người bạn nghi là Ma Sói"}
+          <h3 className="mb-1 font-display text-2xl font-bold text-white">
+            {dead ? "Bạn đã chết" : "Ai là Ma Sói?"}
           </h3>
+          <p className="mb-3 text-sm text-mist/60">
+            {dead
+              ? "Bạn theo dõi được nhưng không bỏ phiếu."
+              : "Vòng này chỉ chọn ra bị cáo, chưa ai bị treo."}
+          </p>
           {hasVoted && !dead && (
             <p className="mb-2 text-sm text-emerald-300">
               {myVote
@@ -86,10 +94,29 @@ export function DayView({ snapshot, onVote, onSkipDiscussion }: Props) {
       )}
 
       {snapshot.phase === "DAY_DISCUSSION" && (
-        <div className="card text-center">
-          <p className="text-2xl">☀️</p>
-          <p className="font-semibold text-white">Thảo luận! Ai là Ma Sói?</p>
-          <p className="text-sm text-mist/70">Dùng khung chat bên dưới để tranh luận.</p>
+        <div className="card py-7 text-center">
+          <p className="text-xs uppercase tracking-[0.3em] text-mist/50">Ban ngày</p>
+          <h3 className="mt-2 font-display text-3xl font-bold text-amber-100">Thảo luận</h3>
+          <p className="mx-auto mt-2 max-w-sm text-sm text-mist/70">
+            Ai đáng ngờ? Buộc tội, bào chữa, và để ý ai đang im lặng.
+          </p>
+
+          {/*
+            * Nhắc lại đêm vừa rồi ngay tại đây. Đây chính là dữ kiện cả làng đang
+            * cãi nhau về, và snapshot vẫn gửi lastNightDeaths suốt pha thảo luận
+            * chứ không chỉ ở pha công bố.
+            */}
+          <div className="mx-auto mt-5 max-w-sm rounded-xl border border-white/[0.06] bg-night-800/50 px-4 py-3">
+            <p className="text-[10px] uppercase tracking-[0.25em] text-mist/40">Đêm vừa rồi</p>
+            {snapshot.lastNightDeaths.length > 0 ? (
+              <p className="mt-1 font-semibold text-blood-400">
+                {snapshot.lastNightDeaths.map((d) => d.name).join(" · ")}{" "}
+                <span className="font-normal text-mist/60">đã chết</span>
+              </p>
+            ) : (
+              <p className="mt-1 font-semibold text-emerald-300">Không ai chết</p>
+            )}
+          </div>
           {discussionSkip && (
             discussionSkip.canVote ? (
               <div className="mt-3">
@@ -118,20 +145,27 @@ export function DayView({ snapshot, onVote, onSkipDiscussion }: Props) {
 
 export function EliminationView({ snapshot }: { snapshot: RoomSnapshot }) {
   return (
-    <div className="card text-center">
-      <p className="text-2xl">⚖️</p>
+    <div className="card py-7 text-center">
+      <p className="text-xs uppercase tracking-[0.3em] text-mist/50">Phán quyết của làng</p>
       {snapshot.lastEliminated ? (
         <>
-          <p className="mt-1 font-semibold text-white">
-            Làng đã quyết định loại <span className="text-blood-400">{snapshot.lastEliminated.name}</span>.
-          </p>
+          <h3 className="mt-2 font-display text-3xl font-bold text-blood-400">
+            {snapshot.lastEliminated.name}
+          </h3>
+          <p className="mt-1 text-sm text-mist/70">đã bị treo cổ</p>
           {(() => {
             const p = snapshot.players.find((x) => x.id === snapshot.lastEliminated!.playerId);
             if (p?.role) {
               const wolf = p.role === "WEREWOLF";
               return (
-                <p className={`mt-1 text-sm font-semibold ${wolf ? "text-emerald-300" : "text-blood-400"}`}>
-                  Hắn/Họ là... {wolf ? "MA SÓI!" : "Dân làng vô tội!"}
+                <p
+                  className={`mt-4 inline-block rounded-full px-4 py-1.5 font-display text-lg font-bold ${
+                    wolf
+                      ? "bg-emerald-900/50 text-emerald-300"
+                      : "bg-blood-600/25 text-blood-400"
+                  }`}
+                >
+                  {wolf ? "Đúng là Ma Sói" : "Một dân làng vô tội"}
                 </p>
               );
             }
@@ -142,9 +176,9 @@ export function EliminationView({ snapshot }: { snapshot: RoomSnapshot }) {
         // Được tha là một kết cục riêng: lastEliminated === null không phân biệt
         // được nó với hoà phiếu hay "không treo ai" thắng.
         <>
-          <p className="mt-1 font-semibold text-white">
-            Làng đã tha <span className="text-emerald-300">{snapshot.lastTrial.accused.name}</span>.
-          </p>
+          <h3 className="mt-2 font-display text-3xl font-bold text-emerald-300">
+            {snapshot.lastTrial.accused.name} được tha
+          </h3>
           <p className="mt-1 text-sm text-mist/70">
             {snapshot.lastTrial.guilty} phiếu treo - {snapshot.lastTrial.innocent} phiếu tha
             {snapshot.lastTrial.abstain > 0 && `, ${snapshot.lastTrial.abstain} không bỏ phiếu`}.
@@ -153,56 +187,8 @@ export function EliminationView({ snapshot }: { snapshot: RoomSnapshot }) {
       ) : (
         // Không còn khẳng định hoà phiếu: không ai bị loại giờ có hai lý do
         // (hoà, hoặc "Không treo ai" thắng) mà snapshot không phân biệt.
-        <p className="mt-1 font-semibold text-white">Không ai bị loại hôm nay.</p>
+        <h3 className="mt-2 font-display text-3xl font-bold text-white">Không ai bị loại hôm nay</h3>
       )}
-    </div>
-  );
-}
-
-export function GameOverView({
-  snapshot,
-  isHost,
-  onReset,
-  onLeave,
-}: {
-  snapshot: RoomSnapshot;
-  isHost: boolean;
-  onReset: () => void;
-  onLeave: () => void;
-}) {
-  const wolvesWin = snapshot.winner === "wolves";
-  return (
-    <div className="space-y-4">
-      <div className={`card border-2 text-center py-8 ${wolvesWin ? "border-blood-500 bg-blood-600/10" : "border-emerald-500/60 bg-emerald-900/10"}`}>
-        <div className="text-5xl">{wolvesWin ? "🐺" : "🎉"}</div>
-        <h2 className={`mt-3 text-2xl font-bold ${wolvesWin ? "text-blood-400" : "text-emerald-300"}`}>
-          {wolvesWin ? "Phe Ma Sói chiến thắng!" : "Phe Dân Làng chiến thắng!"}
-        </h2>
-      </div>
-
-      <div className="card">
-        <h3 className="mb-2 font-semibold text-white">Vai trò của tất cả mọi người:</h3>
-        <ul className="space-y-2 text-sm">
-          {snapshot.players.map((p) => (
-            <li key={p.id} className="flex items-center justify-between rounded-lg bg-night-800 px-3 py-2">
-              <span className={p.alive ? "text-white" : "text-mist/50 line-through"}>{p.name}</span>
-              <span className={p.role === "WEREWOLF" ? "font-semibold text-blood-400" : "text-emerald-300"}>
-                {roleLabel(p)}
-                {!p.alive && " (đã chết)"}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <NightRecapTimeline nights={snapshot.nightHistory} />
-      <HunterShotTimeline shots={snapshot.hunterShots} />
-
-      <div className="flex gap-2">
-        {isHost && <button className="btn-primary flex-1" onClick={onReset}>Chơi lại (về phòng chờ)</button>}
-        <button className="btn-secondary flex-1" onClick={onLeave}>Rời phòng</button>
-      </div>
-      {!isHost && <p className="text-center text-xs text-mist/50">Chờ chủ phòng bấm chơi lại hoặc rời phòng.</p>}
     </div>
   );
 }

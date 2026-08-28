@@ -1,7 +1,9 @@
 "use client";
 
+import { useMemo } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
-import { PlayerGrid } from "./PlayerGrid";
+import { assignAvatars, tintFor } from "@/lib/avatar";
+import { Avatar } from "./Avatar";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -13,21 +15,35 @@ interface Props {
  * một bị cáo và cùng bảng phiếu sơ bộ, tách đôi chỉ tạo hai chỗ để lệch nhau.
  */
 export function TrialPanel({ snapshot, onFinalVote }: Props) {
+  const roster = snapshot.players.map((p) => p.id).join(",");
+  const avatars = useMemo(() => assignAvatars(roster ? roster.split(",") : []), [roster]);
+
   const trial = snapshot.trial;
   if (!trial) return null;
 
   const dead = !snapshot.you?.alive;
   const isAccused = snapshot.you?.id === trial.accusedId;
   const isDefense = snapshot.phase === "DEFENSE";
+  // Mẫu số là tổng phiếu ĐÃ BỎ hoặc ngưỡng kết án, lấy cái lớn hơn: chia cho
+  // tổng phiếu thôi thì hai phiếu Treo trên hai phiếu đã bỏ trông như đã đủ án.
+  const total = Math.max(trial.guiltyVotes + trial.innocentVotes, trial.guiltyRequired, 1);
 
   return (
     <div className="space-y-4">
-      <div className="card border border-amber-500/40 text-center">
-        <p className="text-2xl">⚖️</p>
-        <p className="mt-1 text-sm text-mist/70">
+      {/* Bị cáo là trung tâm của cả hai pha, nên trao hẳn cho họ một khu riêng. */}
+      <div className="card border-amber-500/40 py-7 text-center">
+        <p className="text-xs uppercase tracking-[0.3em] text-mist/50">
           {isDefense ? "Đang biện hộ" : "Bỏ phiếu xác nhận"}
         </p>
-        <p className="text-lg font-bold text-white">{trial.accusedName}</p>
+        <div className="mt-3 flex flex-col items-center gap-2">
+          <Avatar
+            avatar={avatars[trial.accusedId]}
+            tint={tintFor(trial.accusedId)}
+            alive
+            className="h-20 w-20 ring-2 ring-amber-500/50"
+          />
+          <h3 className="font-display text-3xl font-bold text-white">{trial.accusedName}</h3>
+        </div>
         <p className="mt-1 text-xs text-mist/60">
           bị đề cử với{" "}
           {snapshot.players.find((p) => p.id === trial.accusedId)?.voteCount ?? 0} phiếu sơ bộ
@@ -49,7 +65,7 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
         </div>
       ) : (
         <div className={`card ${dead ? "opacity-70" : ""}`}>
-          <h3 className="mb-1 font-bold text-white">
+          <h3 className="mb-1 font-display text-xl font-bold text-white">
             {isAccused
               ? "Bạn không được bỏ phiếu cho chính mình"
               : dead
@@ -60,14 +76,29 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
             Cần {trial.guiltyRequired} phiếu Treo để kết án. Không bỏ phiếu tính là Tha.
           </p>
 
-          <div className="flex gap-2 text-center text-sm">
-            <div className="flex-1 rounded-lg bg-night-800 px-3 py-2">
-              <div className="text-lg font-bold text-blood-400">{trial.guiltyVotes}</div>
-              <div className="text-xs text-mist/60">Treo</div>
+          {/*
+            * Thanh tương quan chứ không phải hai ô số rời: cái người chơi cần
+            * biết là phe Treo đã tới ngưỡng chưa, và hai con số cạnh nhau bắt họ
+            * tự làm phép trừ đó trong đầu.
+            */}
+          <div className="mt-1">
+            <div className="flex h-2.5 overflow-hidden rounded-full bg-night-800">
+              <div
+                className="bg-blood-500 transition-[width] duration-500"
+                style={{ width: `${barWidth(trial.guiltyVotes, total)}%` }}
+              />
+              <div
+                className="bg-emerald-500/80 transition-[width] duration-500"
+                style={{ width: `${barWidth(trial.innocentVotes, total)}%` }}
+              />
             </div>
-            <div className="flex-1 rounded-lg bg-night-800 px-3 py-2">
-              <div className="text-lg font-bold text-emerald-300">{trial.innocentVotes}</div>
-              <div className="text-xs text-mist/60">Tha</div>
+            <div className="mt-1.5 flex justify-between text-sm">
+              <span className="font-bold text-blood-400">
+                {trial.guiltyVotes} <span className="text-xs font-normal text-mist/60">Treo</span>
+              </span>
+              <span className="font-bold text-emerald-300">
+                <span className="text-xs font-normal text-mist/60">Tha</span> {trial.innocentVotes}
+              </span>
             </div>
           </div>
 
@@ -91,9 +122,10 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
           )}
         </div>
       )}
-
-      {/* Chỉ để đọc: số phiếu sơ bộ vẫn hiện, không ai chọn lại được ai. */}
-      <PlayerGrid snapshot={snapshot} selectable={false} />
     </div>
   );
+}
+
+function barWidth(votes: number, total: number): number {
+  return Math.round((votes / total) * 100);
 }

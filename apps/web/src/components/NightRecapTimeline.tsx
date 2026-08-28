@@ -4,60 +4,123 @@ import { cursedTurnedText } from "@/lib/cursed";
 const causeLabel = (cause: "wolf" | "poison") =>
   cause === "wolf" ? "bị Sói cắn" : "trúng độc của Phù Thủy";
 
+/** Màu chip theo vai, dùng đúng bảng màu phe đang dùng ở mọi chỗ khác. */
+const ACTOR_STYLE: Record<string, string> = {
+  Sói: "bg-blood-600/25 text-blood-400",
+  "Bảo Vệ": "bg-sky-900/50 text-sky-300",
+  "Tiên Tri": "bg-indigo-900/50 text-indigo-300",
+  "Phù Thủy": "bg-emerald-900/50 text-emerald-300",
+  Nguyền: "bg-amber-900/50 text-amber-300",
+};
+
+function Line({ actor, children }: { actor: string; children: React.ReactNode }) {
+  return (
+    <li className="flex items-baseline gap-2">
+      <span
+        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+          ACTOR_STYLE[actor] ?? "bg-night-700 text-mist/70"
+        }`}
+      >
+        {actor}
+      </span>
+      <span className="min-w-0 text-mist/80">{children}</span>
+    </li>
+  );
+}
+
+/**
+ * Diễn biến từng đêm.
+ *
+ * Chip vai thay cho emoji đầu dòng: emoji không có màu theo phe, không thẳng
+ * hàng, và ở cỡ chữ nhỏ thì 🧪 với ☠️ gần như không phân biệt được trên điện
+ * thoại. Chip thì quét mắt xuống cột trái là ra ngay ai làm gì.
+ */
 export function NightRecapTimeline({ nights }: { nights: NightRecap[] }) {
   return (
     <div className="card">
-      <h3 className="mb-3 font-semibold text-white">Diễn biến các đêm</h3>
+      <h3 className="mb-3 font-display text-lg font-bold text-white">Diễn biến các đêm</h3>
       {nights.length === 0 ? (
-        <p className="text-sm text-mist/60">
-          Ván đấu kết thúc trước khi có diễn biến ban đêm.
-        </p>
+        <p className="text-sm text-mist/60">Ván đấu kết thúc trước khi có diễn biến ban đêm.</p>
       ) : (
-        <div className="space-y-3">
-          {nights.map((night) => (
-            <section key={night.round} className="rounded-lg bg-night-800 px-3 py-3 text-sm">
-              <h4 className="mb-2 font-bold text-mist">Đêm {night.round}</h4>
-              <ul className="space-y-1 text-mist/80">
-                <li>
-                  🐺 {night.wolfTarget ? `Sói chọn cắn ${night.wolfTarget.name}.` : "Sói không chọn được mục tiêu."}
-                </li>
-                <li>
-                  🛡️ {night.guardTarget ? `Bảo Vệ bảo vệ ${night.guardTarget.name}.` : "Bảo Vệ không hành động."}
-                </li>
-                {night.seerChecks.length > 0 ? (
-                  night.seerChecks.map((check) => (
-                    <li key={`${check.seer.id}-${check.target.id}`}>
-                      🔮 Tiên Tri {check.seer.name} soi {check.target.name}: {check.isWolf ? "Ma Sói" : "Không phải Ma Sói"}.
-                    </li>
-                  ))
-                ) : (
-                  <li>🔮 Tiên Tri không hành động.</li>
-                )}
-                <li>
-                  🧪 {night.witch.usedHeal
-                    ? night.witch.healedTarget
-                      ? `Phù Thủy dùng bình cứu cho ${night.witch.healedTarget.name}.`
-                      : "Phù Thủy đã dùng bình cứu nhưng không có nạn nhân để cứu."
-                    : "Phù Thủy không dùng bình cứu."}
-                </li>
-                <li>
-                  ☠️ {night.witch.poisonTarget
-                    ? `Phù Thủy đầu độc ${night.witch.poisonTarget.name}.`
-                    : "Phù Thủy không dùng bình độc."}
-                </li>
-                {(() => {
-                  const turned = cursedTurnedText(night);
-                  return turned ? <li>🩸 {turned}</li> : null;
-                })()}
-              </ul>
-              <p className={`mt-2 font-semibold ${night.deaths.length > 0 ? "text-blood-400" : "text-emerald-300"}`}>
-                {night.deaths.length > 0
-                  ? `Kết quả: ${night.deaths.map(({ player, cause }) => `${player.name} (${causeLabel(cause)})`).join(", ")}.`
-                  : "Kết quả: Không ai chết trong đêm này."}
-              </p>
-            </section>
-          ))}
-        </div>
+        // Thanh dọc bên trái nối các đêm thành một mạch thời gian thay vì mấy
+        // khối rời nhau.
+        <ol className="relative space-y-3 border-l border-night-600/70 pl-4">
+          {nights.map((night) => {
+            const died = night.deaths.length > 0;
+            return (
+              <li key={night.round} className="relative">
+                <span
+                  className={`absolute -left-[21px] top-3 h-2.5 w-2.5 rounded-full ring-4 ring-night-900 ${
+                    died ? "bg-blood-500" : "bg-emerald-500/70"
+                  }`}
+                />
+                <section className="rounded-lg border border-white/[0.04] bg-night-800/50 px-3 py-2.5 text-sm">
+                  <h4 className="mb-2 font-display text-base font-bold text-mist">
+                    Đêm {night.round}
+                  </h4>
+                  <ul className="space-y-1.5">
+                    <Line actor="Sói">
+                      {night.wolfTarget ? (
+                        <>cắn <b className="text-white">{night.wolfTarget.name}</b></>
+                      ) : (
+                        "không chọn được mục tiêu"
+                      )}
+                    </Line>
+                    <Line actor="Bảo Vệ">
+                      {night.guardTarget ? (
+                        <>đỡ cho <b className="text-white">{night.guardTarget.name}</b></>
+                      ) : (
+                        "không hành động"
+                      )}
+                    </Line>
+                    {night.seerChecks.length > 0 ? (
+                      night.seerChecks.map((check) => (
+                        <Line key={`${check.seer.id}-${check.target.id}`} actor="Tiên Tri">
+                          {check.seer.name} soi <b className="text-white">{check.target.name}</b>{" "}
+                          <span className={check.isWolf ? "text-blood-400" : "text-emerald-300"}>
+                            {check.isWolf ? "→ là Ma Sói" : "→ không phải Ma Sói"}
+                          </span>
+                        </Line>
+                      ))
+                    ) : (
+                      <Line actor="Tiên Tri">không hành động</Line>
+                    )}
+                    <Line actor="Phù Thủy">
+                      {night.witch.usedHeal
+                        ? night.witch.healedTarget
+                          ? <>cứu <b className="text-white">{night.witch.healedTarget.name}</b></>
+                          : "đốt bình cứu nhưng không có nạn nhân"
+                        : "không dùng bình cứu"}
+                      {night.witch.poisonTarget ? (
+                        <>
+                          , đầu độc <b className="text-white">{night.witch.poisonTarget.name}</b>
+                        </>
+                      ) : (
+                        ", không dùng bình độc"
+                      )}
+                    </Line>
+                    {(() => {
+                      const turned = cursedTurnedText(night);
+                      return turned ? <Line actor="Nguyền">{turned}</Line> : null;
+                    })()}
+                  </ul>
+
+                  <p
+                    className={`mt-2.5 border-t border-white/[0.06] pt-2 text-sm font-semibold ${
+                      died ? "text-blood-400" : "text-emerald-300"
+                    }`}
+                  >
+                    {died
+                      ? night.deaths
+                          .map(({ player, cause }) => `${player.name} (${causeLabel(cause)})`)
+                          .join(", ")
+                      : "Không ai chết trong đêm này"}
+                  </p>
+                </section>
+              </li>
+            );
+          })}
+        </ol>
       )}
     </div>
   );

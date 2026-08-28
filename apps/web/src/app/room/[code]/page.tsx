@@ -10,11 +10,12 @@ import { useGameAudio } from "@/lib/useGameAudio";
 import { moodFor } from "@/lib/mood";
 import { Backdrop } from "@/components/Backdrop";
 import { PhaseBanner } from "@/components/PhaseBanner";
-import { PlayerGrid } from "@/components/PlayerGrid";
+import { RosterPanel } from "@/components/RosterPanel";
 import { ChatBox } from "@/components/ChatBox";
 import { RoleRevealView } from "@/components/RoleViews";
 import { NightPanel } from "@/components/NightPanel";
-import { DayView, EliminationView, GameOverView } from "@/components/DayViews";
+import { DayView, EliminationView } from "@/components/DayViews";
+import { GameOverView } from "@/components/GameOverView";
 import { HunterShotPanel } from "@/components/HunterShotPanel";
 import { TrialPanel } from "@/components/TrialPanel";
 import { Lobby } from "@/components/Lobby";
@@ -115,7 +116,7 @@ export default function RoomPage() {
     <>
       {/* Phòng chờ chưa có snapshot thì vẫn là buổi chiều, không nhảy thẳng vào đêm. */}
       <Backdrop mood={snapshot ? moodFor(snapshot.phase) : "dusk"} />
-      <main className="mx-auto flex min-h-screen w-full max-w-lg flex-col gap-3 px-3 py-4">
+      <main className="mx-auto w-full max-w-lg px-3 py-4 lg:max-w-6xl">
         <header className="flex items-center justify-between">
           <button className="text-sm text-mist/60 hover:text-white" onClick={leaveRoom}>
             ← Rời phòng
@@ -136,43 +137,60 @@ export default function RoomPage() {
           </div>
         </header>
 
-        {snapshot && <PhaseBanner snapshot={snapshot} />}
-        {snapshot?.phase === "LOBBY" && (
-          <p className="text-center text-xs text-mist/50">
-            Gửi mã phòng cho bạn bè để họ tham gia cùng bạn.
-          </p>
-        )}
-
         {/*
-          * mode="wait" để hai pha không chồng lên nhau giữa chừng làm nhảy layout.
-          * Đổi pha đã có nhịp riêng của nó rồi; 120ms chỉ đủ đánh dấu là "vừa
-          * sang chuyện khác", không đủ để trì hoãn thông tin nào.
+          * Dưới lg vẫn đúng một cột như cũ. Từ lg trở lên tách cột phụ có bề rộng
+          * CỐ ĐỊNH: lưới người chơi và khung chat không đẹp thêm khi rộng ra, chỉ
+          * có nội dung pha mới dùng được chỗ thừa.
           */}
-        <AnimatePresence mode="wait" initial={false}>
-          <m.div
-            key={snapshot?.phase ?? "connecting"}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6, transition: { duration: 0.12 } }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-          >
-            {content}
-          </m.div>
-        </AnimatePresence>
+        <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
+          <div className="flex min-w-0 flex-col gap-3">
+            {snapshot && <PhaseBanner snapshot={snapshot} />}
+            {snapshot?.phase === "LOBBY" && (
+              <p className="text-center text-xs text-mist/50">
+                Gửi mã phòng cho bạn bè để họ tham gia cùng bạn.
+              </p>
+            )}
 
-        {/* Chat hiển thị mọi lúc; server tự quyết định kênh & quyền xem */}
-        <ChatBox messages={room.messages} onSend={(text) => room.emit("chat:send", { text })} placeholder={chatPlaceholder} />
+            {/*
+              * mode="wait" để hai pha không chồng lên nhau giữa chừng làm nhảy layout.
+              * Đổi pha đã có nhịp riêng của nó rồi; 120ms chỉ đủ đánh dấu là "vừa
+              * sang chuyện khác", không đủ để trì hoãn thông tin nào.
+              */}
+            <AnimatePresence mode="wait" initial={false}>
+              <m.div
+                key={snapshot?.phase ?? "connecting"}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6, transition: { duration: 0.12 } }}
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              >
+                {content}
+              </m.div>
+            </AnimatePresence>
 
-        {room.error && (
-          <p className="rounded-lg bg-blood-600/20 px-3 py-2 text-center text-sm text-blood-400">{room.error}</p>
-        )}
+            {room.error && (
+              <p className="rounded-lg bg-blood-600/20 px-3 py-2 text-center text-sm text-blood-400">{room.error}</p>
+            )}
+          </div>
 
-        {snapshot && snapshot.phase !== "LOBBY" && (
-          <section>
-            <h3 className="mb-2 text-sm font-semibold text-mist/70">Người chơi</h3>
-            <PlayerGrid snapshot={snapshot} />
-          </section>
-        )}
+          {/*
+            * Cột phụ dính theo màn hình và cao hết khung nhìn, nên khung chat lấy
+            * được toàn bộ chiều cao thừa thay vì kẹt ở một con số cố định.
+            * Dùng dvh chứ không vh: bàn phím ảo trên điện thoại làm vh sai hẳn.
+            */}
+          <aside className="flex min-w-0 flex-col gap-3 lg:sticky lg:top-4 lg:h-[calc(100dvh-2rem)]">
+            {snapshot && snapshot.phase !== "LOBBY" && <RosterPanel snapshot={snapshot} />}
+
+            {/* Chat hiển thị mọi lúc; server tự quyết định kênh & quyền xem */}
+            <div className="h-72 min-h-0 lg:h-auto lg:flex-1">
+              <ChatBox
+                messages={room.messages}
+                onSend={(text) => room.emit("chat:send", { text })}
+                placeholder={chatPlaceholder}
+              />
+            </div>
+          </aside>
+        </div>
       </main>
     </>
   );
