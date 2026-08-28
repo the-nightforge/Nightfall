@@ -4,4 +4,8 @@ export * from "./engine";
 export * from "./bot/types";
 export * from "./bot/rng";
 export * from "./bot/knowledge";
+export * from "./bot/memory/memory-store";
+export * from "./bot/memory/memory-decay";
+export * from "./bot/belief/evidence";
+export * from "./bot/belief/belief-state";
 export * from "./bot/personality/personality";
