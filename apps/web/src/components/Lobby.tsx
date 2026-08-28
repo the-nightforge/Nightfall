@@ -1,23 +1,42 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { MIN_PLAYERS_TO_START, validateRoomConfig, type RoomConfig, type RoomSnapshot } from "@masoi/shared";
-import { assignAvatars, tintFor } from "@/lib/avatar";
+import { useState } from "react";
+import {
+  MAX_PLAYERS_PER_ROOM,
+  MIN_PLAYERS_TO_START,
+  validateRoomConfig,
+  type RoomConfig,
+  type RoomSnapshot,
+} from "@masoi/shared";
 import type { Identity } from "@/lib/identity";
-import { Avatar } from "./Avatar";
+import { RoleDeckPanel } from "./RoleDeckPanel";
 
 interface Props {
   snapshot: RoomSnapshot;
   identity: Identity;
   onReady: (ready: boolean) => void;
   onStart: () => void;
-  onKick: (playerId: string) => void;
   onAddBot: () => void;
   onLeave: () => void;
   onUpdateConfig: (config: RoomConfig) => void;
 }
 
-export function Lobby({ snapshot, identity, onReady, onStart, onKick, onAddBot, onLeave, onUpdateConfig }: Props) {
+/**
+ * Khu giữa của phòng chờ.
+ *
+ * Danh sách người chơi KHÔNG ở đây nữa - nó là cột riêng bên trái, cùng một
+ * component với lúc đang chơi, nên không còn hai cách trình bày người chơi phải
+ * giữ cho khớp nhau.
+ */
+export function Lobby({
+  snapshot,
+  identity,
+  onReady,
+  onStart,
+  onAddBot,
+  onLeave,
+  onUpdateConfig,
+}: Props) {
   const isHost = snapshot.hostId === identity.playerId;
   const me = snapshot.players.find((p) => p.id === identity.playerId);
   const count = snapshot.players.length;
@@ -26,103 +45,71 @@ export function Lobby({ snapshot, identity, onReady, onStart, onKick, onAddBot, 
   const unreadyGuests = snapshot.players.filter(
     (player) => !player.isBot && player.id !== snapshot.hostId && !player.ready,
   );
-  // Phòng chờ là nơi người chơi thấy mặt mình lần đầu, và bảng gán phải khớp
-  // với lưới trong ván - cùng một hàm, cùng một tập id.
-  const roster = snapshot.players.map((player) => player.id).join(",");
-  const avatars = useMemo(() => assignAvatars(roster ? roster.split(",") : []), [roster]);
+  const missing = Math.max(0, MIN_PLAYERS_TO_START - count);
 
   return (
-    <div className="space-y-4">
-      <div className="card">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-bold text-white">Người chơi ({count})</h2>
-          <span className="text-xs text-mist/60">Cần tối thiểu {MIN_PLAYERS_TO_START} người</span>
-        </div>
-        <ul className="space-y-2">
-          {snapshot.players.map((p) => (
-            <li
-              key={p.id}
-              className={`flex items-center justify-between rounded-lg px-3 py-2 ${snapshot.hostId === p.id ? "bg-night-800 border border-amber-700/40" : "bg-night-800"}`}
-            >
-              <div className="flex items-center gap-2">
-                <Avatar
-                  avatar={avatars[p.id]}
-                  tint={tintFor(p.id)}
-                  alive
-                  className={`h-9 w-9 shrink-0 ${me?.id === p.id ? "ring-1 ring-indigo-400/70" : ""}`}
-                />
-                <span className="text-sm font-semibold text-white">{p.name}</span>
-                {snapshot.hostId === p.id && (
-                  <span className="rounded bg-amber-800/80 px-1.5 text-[10px] font-bold text-amber-200">CHỦ PHÒNG</span>
-                )}
-                {p.isBot && <span className="rounded bg-slate-700 px-1.5 text-[10px] font-bold text-slate-200">BOT</span>}
-                {!p.alive && <span />}
-              </div>
-              <div className="flex items-center gap-2">
-                {p.isBot ? (
-                  <span className="text-xs text-emerald-300">Sẵn sàng</span>
-                ) : (
-                  <span className={`text-xs font-semibold ${p.ready ? "text-emerald-300" : "text-mist/50"}`}>
-                    {p.ready ? "Sẵn sàng" : `Chưa sẵn sàng${p.connected === false ? " (mất kết nối)" : ""}`}
-                  </span>
-                )}
-                {isHost && p.id !== identity.playerId && (
-                  <button
-                    className="rounded px-2 py-1 text-xs text-blood-400 hover:bg-blood-600/20"
-                    onClick={() => onKick(p.id)}
-                  >
-                    Loại
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
+    <div className="space-y-3">
+      <RoleDeckPanel snapshot={snapshot} isHost={isHost} onUpdateConfig={onUpdateConfig} />
 
-      <div className="flex flex-col gap-2">
+      {isHost && <TimingConfig config={snapshot.config} onSave={onUpdateConfig} />}
+
+      <div className="card space-y-2">
         {isHost ? (
           <>
             <button
-              className="btn-primary w-full"
+              className="btn-primary w-full py-3 text-base"
               onClick={onStart}
               disabled={!!configError || count < MIN_PLAYERS_TO_START || unreadyGuests.length > 0}
             >
               Bắt đầu trận đấu
             </button>
-            <button className="btn-secondary w-full" onClick={onAddBot} disabled={count >= 15}>
+            <button
+              className="btn-secondary w-full"
+              onClick={onAddBot}
+              disabled={count >= MAX_PLAYERS_PER_ROOM}
+            >
               + Thêm bot (để test một mình)
             </button>
           </>
         ) : (
-          <button className="btn-primary w-full" onClick={() => onReady(!myReady)}>
+          <button className="btn-primary w-full py-3 text-base" onClick={() => onReady(!myReady)}>
             {myReady ? "Huỷ sẵn sàng" : "Tôi đã sẵn sàng!"}
           </button>
         )}
-        {configError && count >= MIN_PLAYERS_TO_START && (
-          <p className="text-center text-xs text-blood-400">{configError}</p>
-        )}
-        {count < MIN_PLAYERS_TO_START && (
+
+        {/* Chỉ hiện đúng lý do đang chặn, theo thứ tự người chơi gặp phải. */}
+        {missing > 0 ? (
           <p className="text-center text-xs text-mist/50">
-            Chờ thêm {MIN_PLAYERS_TO_START - count} người nữa để bắt đầu.
+            Chờ thêm {missing} người nữa để bắt đầu. Gửi mã{" "}
+            <b className="font-mono text-white">{snapshot.code}</b> cho bạn bè.
           </p>
-        )}
-        {isHost && count >= MIN_PLAYERS_TO_START && unreadyGuests.length > 0 && (
+        ) : configError ? (
+          <p className="text-center text-xs text-blood-400">{configError}</p>
+        ) : isHost && unreadyGuests.length > 0 ? (
           <p className="text-center text-xs text-amber-300">
             Chờ {unreadyGuests.map((player) => player.name).join(", ")} sẵn sàng.
           </p>
-        )}
-        <button className="btn-secondary w-full" onClick={onLeave}>Rời phòng</button>
-      </div>
+        ) : null}
 
-      {isHost && (
-        <HostConfig config={snapshot.config} onSave={onUpdateConfig} />
-      )}
+        <button className="btn-secondary w-full" onClick={onLeave}>
+          Rời phòng
+        </button>
+      </div>
     </div>
   );
 }
 
-function HostConfig({ config, onSave }: { config: RoomConfig; onSave: (c: RoomConfig) => void }) {
+/**
+ * Mốc thời gian từng pha. Vẫn giấu trong details: nó là thứ chỉnh một lần rồi
+ * quên, không phải thứ cả phòng cần nhìn như bộ bài.
+ */
+function TimingConfig({
+  config,
+  onSave,
+}: {
+  config: RoomConfig;
+  onSave: (c: RoomConfig) => void;
+}) {
   const [draft, setDraft] = useState<RoomConfig>(config);
   const [dirty, setDirty] = useState(false);
 
@@ -133,52 +120,25 @@ function HostConfig({ config, onSave }: { config: RoomConfig; onSave: (c: RoomCo
 
   return (
     <details className="card">
-      <summary className="cursor-pointer font-semibold text-white">⚙️ Cấu hình vai trò &amp; thời gian</summary>
-      <div className="mt-3 space-y-3 text-sm">
-        <label className="flex items-center justify-between gap-3">
-          <span>Ma Sói</span>
-          <select
-            className="input w-24"
-            value={draft.werewolves}
-            onChange={(e) => set({ werewolves: Number(e.target.value) })}
-          >
-            {[1, 2, 3, 4].map((n) => (
-              <option key={n} value={n}>{n}</option>
-            ))}
-          </select>
-        </label>
-        {(
-          [
-            ["seer", "Tiên Tri"],
-            ["guard", "Bảo Vệ"],
-            ["witch", "Phù Thủy"],
-            ["hunter", "Thợ Săn"],
-            ["cursed", "Kẻ Nguyền Rủa"],
-          ] as const
-        ).map(([key, label]) => (
-          <label key={key} className="flex items-center justify-between gap-3">
-            <span>{label}</span>
-            <input
-              type="checkbox"
-              className="h-5 w-5 accent-blood-500"
-              checked={draft[key]}
-              onChange={(e) => set({ [key]: e.target.checked } as Partial<RoomConfig>)}
-            />
-          </label>
-        ))}
+      <summary className="cursor-pointer font-semibold text-white">
+        Thời gian từng pha
+      </summary>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {(
           [
             // Khoảng hợp lệ phải khớp roomConfigSchema; đặc biệt finalVoteSeconds
             // có cận dưới 15 vì chuỗi não bot mất tới 13 giây.
-            ["nightSeconds", "Thời gian đêm (giây)", 15, 120],
-            ["discussionSeconds", "Thời gian thảo luận (giây)", 30, 300],
-            ["voteSeconds", "Thời gian bỏ phiếu sơ bộ (giây)", 15, 120],
-            ["defenseSeconds", "Thời gian biện hộ (giây)", 10, 60],
-            ["finalVoteSeconds", "Thời gian bỏ phiếu xác nhận (giây)", 15, 60],
+            ["nightSeconds", "Đêm", 15, 120],
+            ["discussionSeconds", "Thảo luận", 30, 300],
+            ["voteSeconds", "Bỏ phiếu sơ bộ", 15, 120],
+            ["defenseSeconds", "Biện hộ", 10, 60],
+            ["finalVoteSeconds", "Bỏ phiếu xác nhận", 15, 60],
           ] as const
         ).map(([key, label, min, max]) => (
-          <label key={key} className="block">
-            <span className="text-mist/80">{label}</span>
+          <label key={key} className="block text-sm">
+            <span className="text-mist/80">
+              {label} <span className="text-mist/40">({min}-{max}s)</span>
+            </span>
             <input
               type="number"
               className="input mt-1"
@@ -189,17 +149,17 @@ function HostConfig({ config, onSave }: { config: RoomConfig; onSave: (c: RoomCo
             />
           </label>
         ))}
-        <button
-          className="btn-primary w-full"
-          disabled={!dirty}
-          onClick={() => {
-            onSave(draft);
-            setDirty(false);
-          }}
-        >
-          Lưu cấu hình
-        </button>
       </div>
+      <button
+        className="btn-primary mt-3 w-full"
+        disabled={!dirty}
+        onClick={() => {
+          onSave(draft);
+          setDirty(false);
+        }}
+      >
+        Lưu thời gian
+      </button>
     </details>
   );
 }

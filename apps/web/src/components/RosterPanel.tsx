@@ -2,32 +2,42 @@
 
 import { useMemo } from "react";
 import { AnimatePresence, m } from "motion/react";
-import { ROLE_META, type RoomSnapshot } from "@masoi/shared";
+import { MIN_PLAYERS_TO_START, ROLE_META, type RoomSnapshot } from "@masoi/shared";
 import { assignAvatars, tintFor } from "@/lib/avatar";
 import { roleLabel } from "@/lib/cursed";
 import { Avatar } from "./Avatar";
 
+interface Props {
+  snapshot: RoomSnapshot;
+  /** Chỉ ở phòng chờ: trạng thái sẵn sàng, ô còn trống, và quyền loại người. */
+  lobby?: { isHost: boolean; onKick: (playerId: string) => void };
+}
+
 /**
- * Bảng theo dõi người chơi ở cột phụ.
+ * Cột người chơi.
  *
- * Cố ý KHÔNG phải PlayerGrid: bố cục hai cột làm lưới chọn mục tiêu nằm ở cột
- * nội dung, và đặt thêm một lưới y hệt ở cột phụ thì người chơi không biết cái
- * nào bấm được. Ở đây là danh sách dọc chỉ để đọc - ai còn sống, ai đang bị dồn
- * phiếu - còn mọi thao tác chọn người đều ở cột kia.
+ * Cố ý KHÔNG phải PlayerGrid: lưới chọn mục tiêu nằm ở cột giữa, và đặt thêm
+ * một lưới y hệt ở đây thì người chơi không biết cái nào bấm được. Ở đây là
+ * danh sách dọc hẹp chỉ để theo dõi - ai còn sống, ai đang bị dồn phiếu - còn
+ * mọi thao tác chọn người đều ở cột kia.
  */
-export function RosterPanel({ snapshot }: { snapshot: RoomSnapshot }) {
+export function RosterPanel({ snapshot, lobby }: Props) {
   const meId = snapshot.you?.id ?? null;
   const roster = snapshot.players.map((p) => p.id).join(",");
   const avatars = useMemo(() => assignAvatars(roster ? roster.split(",") : []), [roster]);
 
+  const count = snapshot.players.length;
   const alive = snapshot.players.filter((p) => p.alive).length;
+  // Ô trống có đánh số cho thấy còn thiếu bao nhiêu người, thay vì một dòng chữ
+  // "cần thêm 4 người" mà mắt phải đọc mới biết.
+  const emptySlots = lobby ? Math.max(0, MIN_PLAYERS_TO_START - count) : 0;
 
   return (
     <section className="card p-3">
-      <div className="mb-2 flex items-baseline justify-between">
+      <div className="mb-2 flex items-baseline justify-between gap-2">
         <h3 className="font-display text-base font-bold text-white">Người chơi</h3>
-        <span className="text-xs text-mist/50">
-          {alive}/{snapshot.players.length} còn sống
+        <span className="shrink-0 text-xs text-mist/50">
+          {lobby ? `${count}/${MIN_PLAYERS_TO_START}` : `${alive}/${count} sống`}
         </span>
       </div>
 
@@ -38,7 +48,7 @@ export function RosterPanel({ snapshot }: { snapshot: RoomSnapshot }) {
           return (
             <li
               key={player.id}
-              className={`flex items-center gap-2 rounded-lg px-1.5 py-1 ${
+              className={`group flex items-center gap-2 rounded-lg px-1.5 py-1 ${
                 isMe ? "bg-indigo-500/10 ring-1 ring-indigo-500/30" : ""
               }`}
             >
@@ -56,57 +66,105 @@ export function RosterPanel({ snapshot }: { snapshot: RoomSnapshot }) {
                 )}
               </span>
 
-              <span
-                className={`min-w-0 flex-1 truncate text-sm font-semibold ${
-                  player.alive ? "text-white" : "text-mist/40 line-through"
-                }`}
-              >
-                {player.name}
-              </span>
-
-              {player.role && (
+              <span className="min-w-0 flex-1">
                 <span
-                  className={`shrink-0 truncate rounded px-1 py-0.5 text-[9px] font-semibold ${
-                    ROLE_META[player.role].team === "wolves"
-                      ? "bg-blood-600/70 text-white"
-                      : "bg-emerald-900/80 text-emerald-200"
+                  className={`block truncate text-sm font-semibold ${
+                    player.alive ? "text-white" : "text-mist/40 line-through"
                   }`}
                 >
-                  {roleLabel(player)}
+                  {player.name}
                 </span>
-              )}
-              {snapshot.hostId === player.id && (
-                <span className="shrink-0 rounded bg-amber-800/70 px-1 py-0.5 text-[9px] font-semibold text-amber-100">
-                  Chủ
+                <span className="flex items-center gap-1">
+                  {snapshot.hostId === player.id && (
+                    <span className="text-[9px] font-bold uppercase tracking-wide text-amber-300/90">
+                      Chủ phòng
+                    </span>
+                  )}
+                  {player.isBot && (
+                    <span className="text-[9px] font-bold uppercase tracking-wide text-mist/40">
+                      Bot
+                    </span>
+                  )}
+                  {player.role && (
+                    <span
+                      className={`truncate rounded px-1 text-[9px] font-semibold ${
+                        ROLE_META[player.role].team === "wolves"
+                          ? "bg-blood-600/70 text-white"
+                          : "bg-emerald-900/80 text-emerald-200"
+                      }`}
+                    >
+                      {roleLabel(player)}
+                    </span>
+                  )}
                 </span>
+              </span>
+
+              {lobby ? (
+                <LobbyStatus
+                  ready={player.isBot || (player.ready ?? false)}
+                  offline={player.connected === false}
+                />
+              ) : (
+                <AnimatePresence>
+                  {votes > 0 && (
+                    <m.span
+                      key="votes"
+                      initial={{ scale: 0.4, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.4, opacity: 0, transition: { duration: 0.12 } }}
+                      transition={{ type: "spring", stiffness: 600, damping: 22 }}
+                      className="grid h-5 min-w-[20px] shrink-0 place-items-center rounded-full bg-blood-600 px-1 text-[11px] font-bold text-white"
+                    >
+                      {votes}
+                    </m.span>
+                  )}
+                </AnimatePresence>
               )}
 
-              {/* Số phiếu là thứ duy nhất ở đây thay đổi liên tục, nên nó có nhịp riêng. */}
-              <AnimatePresence>
-                {votes > 0 && (
-                  <m.span
-                    key="votes"
-                    initial={{ scale: 0.4, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.4, opacity: 0, transition: { duration: 0.12 } }}
-                    transition={{ type: "spring", stiffness: 600, damping: 22 }}
-                    className="grid h-5 min-w-[20px] shrink-0 place-items-center rounded-full bg-blood-600 px-1 text-[11px] font-bold text-white"
-                  >
-                    {votes}
-                  </m.span>
-                )}
-              </AnimatePresence>
+              {lobby?.isHost && player.id !== meId && (
+                <button
+                  className="shrink-0 rounded px-1 text-xs text-mist/30 hover:bg-blood-600/20 hover:text-blood-400"
+                  title={`Loại ${player.name}`}
+                  onClick={() => lobby.onKick(player.id)}
+                >
+                  ✕
+                </button>
+              )}
             </li>
           );
         })}
+
+        {Array.from({ length: emptySlots }, (_, i) => (
+          <li
+            key={`empty-${i}`}
+            className="flex items-center gap-2 rounded-lg border border-dashed border-night-600/60 px-1.5 py-1"
+          >
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-night-800/60 text-xs font-bold text-mist/30">
+              {count + i + 1}
+            </span>
+            <span className="text-sm text-mist/30">Đang chờ...</span>
+          </li>
+        ))}
       </ul>
 
       {snapshot.noEliminationVoteCount > 0 && (
         <p className="mt-2 border-t border-white/[0.06] pt-2 text-xs text-mist/60">
-          Không treo ai:{" "}
-          <b className="text-white">{snapshot.noEliminationVoteCount} phiếu</b>
+          Không treo ai: <b className="text-white">{snapshot.noEliminationVoteCount}</b>
         </p>
       )}
     </section>
+  );
+}
+
+function LobbyStatus({ ready, offline }: { ready: boolean; offline: boolean }) {
+  if (offline) {
+    return <span className="shrink-0 text-[10px] font-semibold text-blood-400">Mất kết nối</span>;
+  }
+  return (
+    <span
+      className={`shrink-0 text-[10px] font-semibold ${ready ? "text-emerald-300" : "text-mist/40"}`}
+    >
+      {ready ? "Sẵn sàng" : "Chưa"}
+    </span>
   );
 }

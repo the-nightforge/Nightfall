@@ -52,7 +52,6 @@ export default function RoomPage() {
             identity={getIdentity()!}
             onReady={(ready) => room.emit("room:set-ready", { ready })}
             onStart={() => room.emit("room:start")}
-            onKick={(targetId) => room.emit("room:kick", { targetId })}
             onAddBot={() => room.emit("room:add-bot")}
             onUpdateConfig={(config) => room.emit("room:update-config", { config })}
             onLeave={leaveRoom}
@@ -116,7 +115,7 @@ export default function RoomPage() {
     <>
       {/* Phòng chờ chưa có snapshot thì vẫn là buổi chiều, không nhảy thẳng vào đêm. */}
       <Backdrop mood={snapshot ? moodFor(snapshot.phase) : "dusk"} />
-      <main className="mx-auto w-full max-w-lg px-3 py-4 lg:max-w-6xl">
+      <main className="mx-auto w-full max-w-lg px-3 py-4 lg:max-w-[1600px]">
         <header className="flex items-center justify-between">
           <button className="text-sm text-mist/60 hover:text-white" onClick={leaveRoom}>
             ← Rời phòng
@@ -138,18 +137,43 @@ export default function RoomPage() {
         </header>
 
         {/*
-          * Dưới lg vẫn đúng một cột như cũ. Từ lg trở lên tách cột phụ có bề rộng
-          * CỐ ĐỊNH: lưới người chơi và khung chat không đẹp thêm khi rộng ra, chỉ
-          * có nội dung pha mới dùng được chỗ thừa.
+          * Dưới lg vẫn đúng một cột như cũ. Từ lg trở lên là ba vùng: người chơi,
+          * nội dung pha, chat. Hai cột biên có bề rộng CỐ ĐỊNH và hẹp - chúng
+          * không đẹp thêm khi rộng ra, chỉ nội dung pha mới dùng được chỗ thừa.
           */}
-        <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
-          <div className="flex min-w-0 flex-col gap-3">
-            {snapshot && <PhaseBanner snapshot={snapshot} />}
-            {snapshot?.phase === "LOBBY" && (
-              <p className="text-center text-xs text-mist/50">
-                Gửi mã phòng cho bạn bè để họ tham gia cùng bạn.
-              </p>
+        <div className="mt-3 grid gap-3 lg:grid-cols-[15rem_minmax(0,1fr)_21rem] lg:items-start">
+          {/*
+            * Trên điện thoại, trong ván thì cột người chơi xuống dưới nội dung -
+            * ở đó nó chỉ để tra cứu, còn nội dung pha mới là thứ phải thao tác
+            * ngay. Riêng phòng chờ thì ngược lại: câu hỏi đầu tiên luôn là ai đã
+            * vào phòng, và bộ bài thì cuộn xuống xem lúc nào cũng được.
+            */}
+          <aside
+            className={`${
+              snapshot?.phase === "LOBBY" ? "order-1" : "order-2"
+            } lg:order-none lg:sticky lg:top-4`}
+          >
+            {snapshot && (
+              <RosterPanel
+                snapshot={snapshot}
+                lobby={
+                  snapshot.phase === "LOBBY"
+                    ? {
+                        isHost,
+                        onKick: (targetId) => room.emit("room:kick", { targetId }),
+                      }
+                    : undefined
+                }
+              />
             )}
+          </aside>
+
+          <div
+            className={`${
+              snapshot?.phase === "LOBBY" ? "order-2" : "order-1"
+            } flex min-w-0 flex-col gap-3 lg:order-none`}
+          >
+            {snapshot && <PhaseBanner snapshot={snapshot} />}
 
             {/*
               * mode="wait" để hai pha không chồng lên nhau giữa chừng làm nhảy layout.
@@ -174,22 +198,18 @@ export default function RoomPage() {
           </div>
 
           {/*
-            * Cột phụ dính theo màn hình và cao hết khung nhìn, nên khung chat lấy
-            * được toàn bộ chiều cao thừa thay vì kẹt ở một con số cố định.
+            * Chat dính theo màn hình và cao hết khung nhìn, nên nó lấy được toàn
+            * bộ chiều cao thừa thay vì kẹt ở một con số cố định.
             * Dùng dvh chứ không vh: bàn phím ảo trên điện thoại làm vh sai hẳn.
             */}
-          <aside className="flex min-w-0 flex-col gap-3 lg:sticky lg:top-4 lg:h-[calc(100dvh-2rem)]">
-            {snapshot && snapshot.phase !== "LOBBY" && <RosterPanel snapshot={snapshot} />}
-
+          <div className="order-3 h-72 min-h-0 lg:order-none lg:sticky lg:top-4 lg:h-[calc(100dvh-2rem)]">
             {/* Chat hiển thị mọi lúc; server tự quyết định kênh & quyền xem */}
-            <div className="h-72 min-h-0 lg:h-auto lg:flex-1">
-              <ChatBox
-                messages={room.messages}
-                onSend={(text) => room.emit("chat:send", { text })}
-                placeholder={chatPlaceholder}
-              />
-            </div>
-          </aside>
+            <ChatBox
+              messages={room.messages}
+              onSend={(text) => room.emit("chat:send", { text })}
+              placeholder={chatPlaceholder}
+            />
+          </div>
         </div>
       </main>
     </>
