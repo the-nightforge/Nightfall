@@ -1,5 +1,15 @@
 import type { DiscussionSkipView } from "@masoi/shared";
-import type { Room } from "../rooms/store";
+import type { Room, RoomMember } from "../rooms/store";
+
+/**
+ * Rớt mạng lâu hơn mốc này thì không còn được tính vào ngưỡng đồng thuận.
+ *
+ * Người đã đóng tab sẽ không bao giờ bấm skip, nên nếu vẫn tính họ thì cả
+ * phòng mất luôn khả năng kết thúc thảo luận sớm cho tới hết ván. Vẫn để một
+ * khoảng ân hạn vì đổi route, tải lại trang hay chớp mạng đều làm socket rụng
+ * vài giây, và người đó không đáng bị đá khỏi quyền biểu quyết vì chuyện đó.
+ */
+export const DISCONNECT_GRACE_MS = 20_000;
 
 export const discussionSkipVotes = new Map<string, Set<string>>();
 
@@ -67,11 +77,25 @@ function eligibleHumanIds(room: Room): Set<string> {
   const statePlayers = new Map(
     room.engine.getState().players.map((player) => [player.id, player]),
   );
+  const now = Date.now();
   return new Set(
     room.members
-      .filter((member) => !member.isBot && statePlayers.get(member.playerId)?.alive)
+      .filter(
+        (member) =>
+          !member.isBot &&
+          statePlayers.get(member.playerId)?.alive &&
+          withinReach(member, now),
+      )
       .map((member) => member.playerId),
   );
+}
+
+/** Còn đủ gần để chờ họ bấm hay không. */
+function withinReach(member: RoomMember, now: number): boolean {
+  if (member.connected) return true;
+  // Không rõ rớt từ lúc nào thì cho hưởng trọn ân hạn, không loại oan.
+  const since = member.disconnectedAt ?? now;
+  return now - since < DISCONNECT_GRACE_MS;
 }
 
 function normalizedVotes(

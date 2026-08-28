@@ -46,7 +46,14 @@ export const roomService = {
       while (getRoom(code) || (await loadRoomFromRedis(code))) {
         code = generateRoomCode();
       }
-      const member: RoomMember = { playerId, name, ready: false, connected: true, isBot: false };
+      const member: RoomMember = {
+        playerId,
+        name,
+        ready: false,
+        connected: true,
+        disconnectedAt: null,
+        isBot: false,
+      };
       const room = createRoom(code, member);
       try {
         await prisma.roomRecord.create({
@@ -74,6 +81,7 @@ export const roomService = {
       if (entryError) throw new RoomError(entryError);
       if (existing) {
         existing.connected = true;
+        existing.disconnectedAt = null;
         existing.name = name;
       } else {
         if (room.members.length >= MAX_PLAYERS_PER_ROOM) throw new RoomError("Phòng đã đầy");
@@ -81,7 +89,14 @@ export const roomService = {
           (m) => m.name.trim().localeCompare(name.trim(), "vi", { sensitivity: "accent" }) === 0,
         );
         if (dupName) throw new RoomError("Biệt danh đã có người trong phòng sử dụng");
-        room.members.push({ playerId, name, ready: false, connected: true, isBot: false });
+        room.members.push({
+          playerId,
+          name,
+          ready: false,
+          connected: true,
+          disconnectedAt: null,
+          isBot: false,
+        });
       }
 
       await persistRoom(room);

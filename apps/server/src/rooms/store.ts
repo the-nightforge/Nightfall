@@ -10,6 +10,12 @@ export interface RoomMember {
   name: string;
   ready: boolean;
   connected: boolean;
+  /**
+   * Mốc rớt mạng, null khi đang online. Cần mốc chứ không chỉ cần cờ connected
+   * vì ngưỡng đồng thuận skip thảo luận phải phân biệt một lần refresh với một
+   * người đã bỏ đi hẳn.
+   */
+  disconnectedAt?: number | null;
   isBot: boolean;
 }
 
@@ -118,7 +124,9 @@ export async function loadRoomFromRedis(code: string): Promise<Room | null> {
       code: data.code,
       hostId: data.hostId,
       status: data.status,
-      members: data.members.map((m) => ({ ...m, connected: false })),
+      // Sau khi process khởi động lại thì chưa ai kịp nối lại: cho tất cả một
+      // khoảng ân hạn mới thay vì coi như họ đã rớt từ lâu.
+      members: data.members.map((m) => ({ ...m, connected: false, disconnectedAt: Date.now() })),
       config: data.config,
       engine: data.engineState ? new GameEngine(data.engineState) : null,
       chatLog: data.chatLog ?? [],

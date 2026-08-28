@@ -11,6 +11,7 @@ import { newId } from "../util";
 import type { NightDecision, PlannedVote } from "../bots/types";
 import { pendingEndVote, pendingVote } from "./bot-room-state";
 import {
+  DISCONNECT_GRACE_MS,
   clearDiscussionSkipVotes,
   hasUnanimousDiscussionSkip,
   updateDiscussionSkipVote,
@@ -141,6 +142,22 @@ export function submitDiscussionSkip(room: Room, playerId: string, skip: boolean
   if (result.unanimous) beginVoting(room);
   else sync(room);
   return null;
+}
+
+/**
+ * Hết ân hạn của người vừa rớt mạng thì ngưỡng đồng thuận tụt xuống, và số
+ * phiếu đang có có thể đã đủ. Không hẹn lại thì những người còn lại đã bấm
+ * skip xong vẫn ngồi chờ, vì không có thao tác nào kích hoạt việc kiểm lại.
+ */
+export function scheduleDiscussionSkipRecheck(room: Room): void {
+  if (!room.engine || room.engine.state.phase !== "DAY_DISCUSSION") return;
+  setRoomTimer(
+    room.code,
+    () => {
+      if (!reconcileDiscussionSkip(room)) sync(room);
+    },
+    DISCONNECT_GRACE_MS + 500,
+  );
 }
 
 export function reconcileDiscussionSkip(room: Room): boolean {

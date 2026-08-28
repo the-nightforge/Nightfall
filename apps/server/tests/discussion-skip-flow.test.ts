@@ -3,9 +3,11 @@ import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import {
   resetToLobby,
+  scheduleDiscussionSkipRecheck,
   submitDiscussionSkip,
 } from "../src/game/machine";
 import {
+  DISCONNECT_GRACE_MS,
   clearDiscussionSkipVotes,
   discussionSkipVotes,
 } from "../src/game/discussion-skip";
@@ -119,6 +121,50 @@ describe("skip discussion flow", () => {
     expect(submitDiscussionSkip(room, "human1", true)).toBe("Chỉ có thể skip trong lúc thảo luận");
     expect(room.engine!.getState().phase).toBe("VOTING");
     expect(storeMocks.setRoomTimer).toHaveBeenCalledTimes(timersAfterTransition);
+  });
+
+  it("rút phiếu rồi bầu lại vẫn tính, và vẫn đạt được đồng thuận", () => {
+    const room = discussionRoom();
+
+    expect(submitDiscussionSkip(room, "human1", true)).toBeNull();
+    expect(discussionSkipVotes.get(room.code)).toEqual(new Set(["human1"]));
+
+    expect(submitDiscussionSkip(room, "human1", false)).toBeNull();
+    expect(discussionSkipVotes.get(room.code)).toEqual(new Set());
+
+    expect(submitDiscussionSkip(room, "human1", true)).toBeNull();
+    expect(submitDiscussionSkip(room, "human2", true)).toBeNull();
+    expect(room.engine!.getState().phase).toBe("VOTING");
+  });
+
+  it("hết ân hạn của người rớt mạng thì chốt được bằng số phiếu đang có", () => {
+    const room = discussionRoom();
+    const gone = room.members.find((member) => member.playerId === "human2")!;
+
+    submitDiscussionSkip(room, "human1", true);
+    expect(room.engine!.getState().phase).toBe("DAY_DISCUSSION");
+
+    gone.connected = false;
+    gone.disconnectedAt = Date.now() - DISCONNECT_GRACE_MS - 1;
+    scheduleDiscussionSkipRecheck(room);
+    const fire = storeMocks.setRoomTimer.mock.calls.at(-1)![1] as () => void;
+    fire();
+
+    expect(room.engine!.getState().phase).toBe("VOTING");
+  });
+
+  it("còn trong ân hạn thì lần kiểm lại không chốt vội", () => {
+    const room = discussionRoom();
+    const gone = room.members.find((member) => member.playerId === "human2")!;
+
+    submitDiscussionSkip(room, "human1", true);
+    gone.connected = false;
+    gone.disconnectedAt = Date.now();
+    scheduleDiscussionSkipRecheck(room);
+    const fire = storeMocks.setRoomTimer.mock.calls.at(-1)![1] as () => void;
+    fire();
+
+    expect(room.engine!.getState().phase).toBe("DAY_DISCUSSION");
   });
 
   it("xoá phiếu skip khi reset về phòng chờ", () => {

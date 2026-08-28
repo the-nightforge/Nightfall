@@ -99,7 +99,7 @@ export function DayView({ snapshot, onVote, onSkipDiscussion }: Props) {
                   {` (${discussionSkip.votes}/${discussionSkip.required})`}
                 </button>
                 <p className="mt-1 text-xs text-mist/50">
-                  Cần toàn bộ người thật còn sống đồng ý.
+                  Cần toàn bộ người thật còn sống và đang online đồng ý.
                 </p>
               </div>
             ) : (

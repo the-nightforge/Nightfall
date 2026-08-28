@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import {
+  DISCONNECT_GRACE_MS,
   clearDiscussionSkipVotes,
   getDiscussionSkipView,
   updateDiscussionSkipVote,
@@ -66,8 +67,9 @@ afterEach(() => {
 });
 
 describe("discussion skip state", () => {
-  it("chỉ tính người thật còn sống và vẫn tính người mất kết nối", () => {
+  it("chỉ tính người thật còn sống, và vẫn tính người vừa mất kết nối", () => {
     const room = dayRoom();
+    room.members.find((m) => m.playerId === "offline")!.disconnectedAt = Date.now();
 
     expect(getDiscussionSkipView(room, "alice")).toEqual({
       votes: 0,
@@ -88,6 +90,44 @@ describe("discussion skip state", () => {
 
     expect(updateDiscussionSkipVote(room, "alice", false)).toEqual({ ok: true, unanimous: false });
     expect(getDiscussionSkipView(room, "alice")?.votes).toBe(0);
+  });
+
+  it("bỏ người mất kết nối quá lâu khỏi ngưỡng đồng thuận", () => {
+    const room = dayRoom();
+    const gone = room.members.find((m) => m.playerId === "offline")!;
+    gone.disconnectedAt = Date.now() - DISCONNECT_GRACE_MS - 1;
+
+    // Người đã đóng tab không bao giờ bấm nữa; tính họ vào ngưỡng là khoá luôn
+    // khả năng skip của cả phòng cho tới hết ván.
+    expect(getDiscussionSkipView(room, "alice")).toMatchObject({ votes: 0, required: 2 });
+
+    updateDiscussionSkipVote(room, "alice", true);
+    updateDiscussionSkipVote(room, "bob", true);
+    expect(getDiscussionSkipView(room, "alice")).toMatchObject({ votes: 2, required: 2 });
+  });
+
+  it("dọn phiếu cũ của người vừa bị loại khỏi ngưỡng", () => {
+    const room = dayRoom();
+    const gone = room.members.find((m) => m.playerId === "offline")!;
+    expect(updateDiscussionSkipVote(room, "offline", true)).toEqual({
+      ok: true,
+      unanimous: false,
+    });
+
+    gone.connected = false;
+    gone.disconnectedAt = Date.now() - DISCONNECT_GRACE_MS - 1;
+    expect(getDiscussionSkipView(room, "alice")).toMatchObject({ votes: 0, required: 2 });
+  });
+
+  it("người nối lại được tính lại ngay", () => {
+    const room = dayRoom();
+    const gone = room.members.find((m) => m.playerId === "offline")!;
+    gone.disconnectedAt = Date.now() - DISCONNECT_GRACE_MS - 1;
+    expect(getDiscussionSkipView(room, "alice")?.required).toBe(2);
+
+    gone.connected = true;
+    gone.disconnectedAt = null;
+    expect(getDiscussionSkipView(room, "alice")?.required).toBe(3);
   });
 
   it("từ chối bot, người chết và người ngoài phòng", () => {

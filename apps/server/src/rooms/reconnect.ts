@@ -27,6 +27,7 @@ export async function reconnectPlayer(
   }
 
   member.connected = true;
+  member.disconnectedAt = null;
   await dependencies.saveRoom(room);
   return room;
 }

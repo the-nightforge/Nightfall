@@ -23,8 +23,13 @@ import { GameError } from "@masoi/game-engine";
 import { roomService, RoomError } from "./rooms/service";
 import { getRoomSyncByPlayer } from "./rooms/index-helpers";
 import { getRoom, loadRoomFromRedis, persistRoom } from "./rooms/store";
-import { trackSocket, untrackSocket, broadcastRoom } from "./rooms/broadcast";
-import { maybeEndVotingEarly, maybeEndWitchWindow, submitDiscussionSkip } from "./game/machine";
+import { trackSocket, untrackSocket, broadcastRoom, hasConnection } from "./rooms/broadcast";
+import {
+  maybeEndVotingEarly,
+  maybeEndWitchWindow,
+  scheduleDiscussionSkipRecheck,
+  submitDiscussionSkip,
+} from "./game/machine";
 import { getPlayerRoom, updateSessionRoom } from "./redis";
 import { reconnectPlayer } from "./rooms/reconnect";
 
@@ -222,7 +227,12 @@ export function setupSocket(io: SocketServer): void {
       if (roomCode) {
         const room = getRoom(roomCode);
         const member = room?.members.find((m) => m.playerId === playerId);
-        if (member) member.connected = false;
+        if (member) {
+          // Một người có thể mở nhiều tab; chỉ coi là rớt khi không còn socket nào.
+          member.connected = hasConnection(playerId);
+          member.disconnectedAt = member.connected ? null : Date.now();
+          if (room && !member.connected) scheduleDiscussionSkipRecheck(room);
+        }
         broadcastRoom(roomCode);
       }
     });
