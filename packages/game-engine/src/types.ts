@@ -56,7 +56,10 @@ export interface NightState {
   seerResults: Record<string, { targetId: string; isWolf: boolean; secondaryTargetId?: string; secondaryIsWolf?: boolean; unknown?: boolean }>;
   priestTarget: string | null;
   detectiveTargets: { target1: string; target2: string } | null;
-  detectiveResults: Record<string, { target1Id: string; target2Id: string; sameTeam: boolean }>;
+  detectiveResults: Record<
+    string,
+    { target1Id: string; target2Id: string; sameTeam: boolean; unknown?: boolean }
+  >;
   priestResults: Record<string, { targetId: string; isWolf: boolean }>;
 }
 

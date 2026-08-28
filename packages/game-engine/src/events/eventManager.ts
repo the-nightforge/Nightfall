@@ -2,6 +2,8 @@ import type { GameEventId, GameEventView } from "@masoi/shared";
 import type { GameState } from "../types";
 import { calculateMomentum } from "./momentum";
 
+const RANKED_NEUTRAL_EVENT_CHANCE = 0.35;
+
 export interface GameEventDefinition {
   id: GameEventId;
   name: string;
@@ -138,8 +140,7 @@ export function selectEvent(
   } else if (momentum <= -0.35) {
     targetBeneficiary = "wolves";
   } else {
-    // Neutral or no event
-    return null;
+    targetBeneficiary = "neutral";
   }
 
   const candidateEvents = eligibleEvents.filter((event) => {
@@ -149,6 +150,7 @@ export function selectEvent(
   });
 
   if (candidateEvents.length === 0) return null;
+  if (targetBeneficiary === "neutral" && rng() >= RANKED_NEUTRAL_EVENT_CHANCE) return null;
 
   const chosen = candidateEvents[Math.floor(rng() * candidateEvents.length)];
   return {

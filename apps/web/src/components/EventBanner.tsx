@@ -62,6 +62,11 @@ export function EventBanner({ event }: Props) {
               </div>
               <h4 className="font-display text-base font-bold text-amber-200">{event.name}</h4>
               <p className="mt-0.5 text-xs text-mist/80">{event.description}</p>
+              {event.announcement && (
+                <p className="mt-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm font-bold text-amber-100">
+                  {event.announcement}
+                </p>
+              )}
             </div>
           </div>
         </div>

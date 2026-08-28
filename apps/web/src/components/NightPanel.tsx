@@ -225,8 +225,20 @@ export function NightPanel({ snapshot, onAction }: Props) {
                 <p className="text-xs text-mist/60">Kết quả điều tra gần nhất:</p>
                 <p className="mt-1">
                   <b>{night.detectiveResult.target1.name}</b> và <b>{night.detectiveResult.target2.name}</b>:{" "}
-                  <b className={night.detectiveResult.sameTeam ? "text-indigo-300" : "text-amber-300"}>
-                    {night.detectiveResult.sameTeam ? "CÙNG PHE" : "KHÁC PHE"}
+                  <b
+                    className={
+                      night.detectiveResult.unknown
+                        ? "text-mist/70"
+                        : night.detectiveResult.sameTeam
+                          ? "text-indigo-300"
+                          : "text-amber-300"
+                    }
+                  >
+                    {night.detectiveResult.unknown
+                      ? "KHÔNG THỂ XÁC ĐỊNH"
+                      : night.detectiveResult.sameTeam
+                        ? "CÙNG PHE"
+                        : "KHÁC PHE"}
                   </b>
                 </p>
               </div>

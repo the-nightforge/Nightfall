@@ -45,7 +45,8 @@ export interface SeerResultView {
 export interface DetectiveResultView {
   target1: { id: string; name: string };
   target2: { id: string; name: string };
-  sameTeam: boolean;
+  sameTeam?: boolean;
+  unknown?: boolean;
 }
 
 export interface PriestResultView {
@@ -343,22 +344,28 @@ export class GameEngine {
       actualDuration = Math.floor(durationMs / 2);
     }
     this.setPhase("DAY_DISCUSSION", actualDuration, now);
-    this.state.activeEvent = event;
-    if (event) {
-      this.state.eventHistory.push(event);
-      this.state.log.push(`Sự kiện Ngày: [${event.name}] - ${event.description}`);
-      if (event.id === "JUDGMENT_DAY") {
-        const detectiveEntries = Object.values(this.state.night.detectiveResults);
-        if (detectiveEntries.length > 0) {
-          const lastRes = detectiveEntries[detectiveEntries.length - 1];
-          const t1 = this.player(lastRes.target1Id)?.name ?? "?";
-          const t2 = this.player(lastRes.target2Id)?.name ?? "?";
-          const matchText = lastRes.sameTeam ? "CÙNG PHE" : "KHÁC PHE";
-          this.state.log.push(`[Ngày Phán Xét] Kết quả Thám Tử: ${t1} và ${t2} là ${matchText}!`);
-        }
+    let activeEvent = event;
+    if (event?.id === "JUDGMENT_DAY") {
+      const detectiveEntries = Object.values(this.state.night.detectiveResults);
+      const lastResult = detectiveEntries.at(-1);
+      if (lastResult) {
+        const target1Name = this.player(lastResult.target1Id)?.name ?? "?";
+        const target2Name = this.player(lastResult.target2Id)?.name ?? "?";
+        const announcement = lastResult.unknown
+          ? `Kết quả Thám Tử: Không thể xác định phe của ${target1Name} và ${target2Name}!`
+          : `Kết quả Thám Tử: ${target1Name} và ${target2Name} là ${lastResult.sameTeam ? "CÙNG PHE" : "KHÁC PHE"}!`;
+        activeEvent = { ...event, announcement };
       }
     }
-    return event;
+    this.state.activeEvent = activeEvent;
+    if (activeEvent) {
+      this.state.eventHistory.push(activeEvent);
+      this.state.log.push(`Sự kiện Ngày: [${activeEvent.name}] - ${activeEvent.description}`);
+      if (activeEvent.announcement) {
+        this.state.log.push(`[${activeEvent.name}] ${activeEvent.announcement}`);
+      }
+    }
+    return activeEvent;
   }
 
   // ---- Hành động ban đêm ----
@@ -503,6 +510,7 @@ export class GameEngine {
           target1Id: targetId,
           target2Id: secondaryTargetId,
           sameTeam,
+          unknown: st.activeEvent?.id === "SHROUDED_ECLIPSE" || undefined,
         };
         break;
       }
@@ -1272,7 +1280,8 @@ export class GameEngine {
               id: detectiveEntry.target2Id,
               name: this.player(detectiveEntry.target2Id)?.name ?? "?",
             },
-            sameTeam: detectiveEntry.sameTeam,
+            sameTeam: detectiveEntry.unknown ? undefined : detectiveEntry.sameTeam,
+            unknown: detectiveEntry.unknown,
           }
         : null;
 

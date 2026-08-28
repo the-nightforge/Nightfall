@@ -150,7 +150,7 @@ describe("Momentum Calculation", () => {
 });
 
 describe("Dynamic Event Selection", () => {
-  it("selects nothing in ranked mode when momentum is balanced (|M| < 0.35)", () => {
+  it("selects nothing when the balanced-ranked neutral roll is 35% or higher", () => {
     const state = createTestState([
       { id: "w1", role: "WEREWOLF", alive: true },
       { id: "w2", role: "WEREWOLF", alive: true },
@@ -161,8 +161,69 @@ describe("Dynamic Event Selection", () => {
     ]);
     state.config.mode = "ranked";
 
-    const event = selectEvent(state, "NIGHT");
+    const event = selectEvent(state, "NIGHT", () => 0.35);
     expect(event).toBeNull();
+  });
+
+  it("selects a neutral night event when the balanced-ranked roll is below 35%", () => {
+    const state = createTestState([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "w2", role: "WEREWOLF", alive: true },
+      { id: "seer", role: "SEER", alive: true },
+      { id: "guard", role: "GUARD", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v2", role: "VILLAGER", alive: true },
+    ]);
+    state.config.mode = "ranked";
+    const rolls = [0.3499, 0.99];
+
+    const event = selectEvent(state, "NIGHT", () => rolls.shift()!);
+
+    expect(event?.id).toBe("SILENT_NIGHT");
+    expect(event?.beneficiary).toBe("neutral");
+  });
+
+  it("chooses uniformly from eligible neutral day events after a successful ranked roll", () => {
+    const state = createTestState([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "w2", role: "WEREWOLF", alive: true },
+      { id: "seer", role: "SEER", alive: true },
+      { id: "guard", role: "GUARD", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v2", role: "VILLAGER", alive: true },
+    ]);
+    state.config.mode = "ranked";
+    const rolls = [0.1, 0.99];
+
+    const event = selectEvent(state, "DAY", () => rolls.shift()!);
+
+    expect(event?.id).toBe("AMNESTY_DAY");
+    expect(event?.targetPhase).toBe("DAY");
+  });
+
+  it("does not consume RNG when no neutral event is eligible for a balanced ranked phase", () => {
+    const state = createTestState([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "w2", role: "WEREWOLF", alive: true },
+      { id: "seer", role: "SEER", alive: true },
+      { id: "guard", role: "GUARD", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v2", role: "VILLAGER", alive: true },
+    ]);
+    state.config.mode = "ranked";
+    state.eventHistory.push({
+      ...GAME_EVENTS.SILENT_NIGHT,
+      round: 1,
+    });
+    let rngCalls = 0;
+
+    const event = selectEvent(state, "NIGHT", () => {
+      rngCalls += 1;
+      return 0.1;
+    });
+
+    expect(event).toBeNull();
+    expect(rngCalls).toBe(0);
   });
 
   it("selects a village-benefiting night event when wolves are favored in ranked mode", () => {
@@ -382,6 +443,30 @@ describe("Event Modifiers in GameEngine", () => {
     expect(snap.nightInfo?.seerResult?.unknown).toBe(true);
   });
 
+  it("SHROUDED_ECLIPSE also obscures Detective results", () => {
+    const state = createTestState([
+      { id: "det", role: "DETECTIVE", alive: true },
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+    ]);
+    state.activeEvent = {
+      id: "SHROUDED_ECLIPSE",
+      name: "Bóng Tối Bao Phủ",
+      description: "...",
+      targetPhase: "NIGHT",
+      round: 1,
+      beneficiary: "wolves",
+      power: 2,
+    };
+
+    const engine = new GameEngine(state);
+    engine.submitNightAction("det", "DETECTIVE_CHECK", "w1", "v1");
+
+    const result = engine.snapshotFor("det").nightInfo?.detectiveResult;
+    expect(result?.unknown).toBe(true);
+    expect(result?.sameTeam).toBeUndefined();
+  });
+
   it("BLOODY_HUNT allows secondary wolf kill with 50% success probability", () => {
     const state = createTestState([
       { id: "w1", role: "WEREWOLF", alive: true },
@@ -433,11 +518,11 @@ describe("Event Modifiers in GameEngine", () => {
     expect(engine.state.phaseEndsAt).toBe(now + 30000);
   });
 
-  it("JUDGMENT_DAY publishes detective investigation result in log", () => {
+  it("JUDGMENT_DAY publishes the Detective result in the public event snapshot", () => {
     const state = createTestState([
-      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "w1", name: "Khải", role: "WEREWOLF", alive: true },
       { id: "det", role: "DETECTIVE", alive: true },
-      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v1", name: "Linh", role: "VILLAGER", alive: true },
     ]);
     state.night.detectiveResults["det"] = {
       target1Id: "w1",
@@ -458,7 +543,9 @@ describe("Event Modifiers in GameEngine", () => {
 
     engine.startDay(60000, 100000, () => 0, judgmentEvent);
 
-    expect(engine.state.log.some((l) => l.includes("Ngày Phán Xét") && l.includes("KHÁC PHE"))).toBe(true);
+    expect(engine.snapshotFor("v1").activeEvent?.announcement).toBe(
+      "Kết quả Thám Tử: Khải và Linh là KHÁC PHE!",
+    );
   });
 
   it("includes activeEvent in snapshotFor", () => {
