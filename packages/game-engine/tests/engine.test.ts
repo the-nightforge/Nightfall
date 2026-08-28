@@ -1081,6 +1081,16 @@ describe("Thợ Săn", () => {
     expect(e.snapshotFor("wolf").hunterShots).toEqual(e.state.hunterShots);
   });
 
+  it("không tiết lộ vai trò bí mật cho Thợ Săn đã chết trong lượt bắn", () => {
+    const e = makeHunterEngine("NIGHT_RESULT");
+    prepareHunterShot(e);
+
+    const view = e.snapshotFor("hunter");
+
+    expect(view.you?.role).toBe("HUNTER");
+    expect(view.players.filter((player) => player.id !== "hunter").every((player) => player.role === undefined)).toBe(true);
+  });
+
   it("xóa phản ứng đã giải quyết và chuẩn hóa state cũ", () => {
     const e = makeHunterEngine("NIGHT_RESULT");
     prepareHunterShot(e);
