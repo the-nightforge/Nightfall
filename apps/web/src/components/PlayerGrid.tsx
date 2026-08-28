@@ -9,16 +9,25 @@ interface Props {
   selectedId?: string | null;
   onSelect?: (playerId: string) => void;
   disabledIds?: string[];
+  /** Bảo Vệ được tự bảo vệ mình, nên vài lưới đêm phải mở ô của chính người chơi. */
+  allowSelf?: boolean;
 }
 
-export function PlayerGrid({ snapshot, selectable, selectedId, onSelect, disabledIds = [] }: Props) {
+export function PlayerGrid({
+  snapshot,
+  selectable,
+  selectedId,
+  onSelect,
+  disabledIds = [],
+  allowSelf = false,
+}: Props) {
   const meId = getIdentity()?.playerId;
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
       {snapshot.players.map((p) => {
         const isMe = p.id === meId;
         const dead = !p.alive;
-        const disabled = !selectable || dead || isMe || disabledIds.includes(p.id);
+        const disabled = !selectable || dead || (isMe && !allowSelf) || disabledIds.includes(p.id);
         const selected = selectedId === p.id;
         return (
           <button

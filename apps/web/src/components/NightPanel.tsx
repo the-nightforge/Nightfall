@@ -42,13 +42,14 @@ export function NightPanel({ snapshot, onAction }: Props) {
   const locked = night?.wolvesLocked ?? false;
   const nameOf = (id: string | null | undefined) =>
     snapshot.players.find((p) => p.id === id)?.name ?? "?";
-  const aliveOthers = (opts?: { selectable?: boolean; disabledIds?: string[] }) => (
+  const aliveOthers = (opts?: { selectable?: boolean; disabledIds?: string[]; allowSelf?: boolean }) => (
     <PlayerGrid
       snapshot={snapshot}
       selectable={opts?.selectable ?? !acted}
       selectedId={selected}
       onSelect={setSelected}
       disabledIds={opts?.disabledIds}
+      allowSelf={opts?.allowSelf}
     />
   );
 
@@ -129,9 +130,18 @@ export function NightPanel({ snapshot, onAction }: Props) {
         {role === "GUARD" && (
           <>
             <p className="mb-2 text-sm text-mist/70">
-              Không thể bảo vệ cùng một người hai đêm liên tiếp.
+              Bạn có thể tự bảo vệ mình, nhưng không thể bảo vệ cùng một người hai đêm liên tiếp.
+              {night?.guardPrevious && (
+                <>
+                  {" "}
+                  Đêm trước bạn đã đỡ <b className="text-white">{nameOf(night.guardPrevious)}</b>.
+                </>
+              )}
             </p>
-            {aliveOthers()}
+            {aliveOthers({
+              allowSelf: true,
+              disabledIds: night?.guardPrevious ? [night.guardPrevious] : undefined,
+            })}
             <button
               className="btn-primary mt-3 w-full"
               disabled={!selected || acted}

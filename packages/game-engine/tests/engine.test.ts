@@ -133,6 +133,19 @@ describe("Thứ tự xử lý hành động ban đêm", () => {
     expect(e.state.lastNightDeaths).toHaveLength(0);
   });
 
+  it("Bảo Vệ tự bảo vệ mình thì sống sót qua cú cắn", () => {
+    const e = makeEngine(7);
+    const wolf = findPlayersByRole(e, "WEREWOLF")[0];
+    const guard = findPlayersByRole(e, "GUARD")[0];
+
+    e.submitNightAction(guard.id, "GUARD", guard.id);
+    e.submitNightAction(wolf.id, "KILL", guard.id);
+
+    const deaths = e.resolveNight();
+    expect(deaths).toHaveLength(0);
+    expect(guard.alive).toBe(true);
+  });
+
   it("Sói cắn người không được bảo vệ thì người đó chết", () => {
     const e = makeEngine(7);
     const wolf = findPlayersByRole(e, "WEREWOLF")[0];
