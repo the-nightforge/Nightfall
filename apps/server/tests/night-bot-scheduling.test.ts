@@ -73,6 +73,7 @@ function nightRoom(): Room {
     healUsed: false,
     poisonUsed: false,
     lastNightDeaths: [],
+    nightHistory: [],
     lastEliminated: null,
     log: [],
   };

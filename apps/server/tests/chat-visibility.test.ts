@@ -36,6 +36,7 @@ function gameState(phase: GameState["phase"]): GameState {
     healUsed: false,
     poisonUsed: false,
     lastNightDeaths: [],
+    nightHistory: [],
     lastEliminated: null,
     log: [],
   };

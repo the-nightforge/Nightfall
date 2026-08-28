@@ -1,4 +1,4 @@
-import type { GamePhase, RoomConfig, Winner } from "@masoi/shared";
+import type { GamePhase, NightRecap, RoomConfig, Winner } from "@masoi/shared";
 import type { Role } from "@masoi/shared";
 
 export interface EnginePlayer {
@@ -56,6 +56,7 @@ export interface GameState {
   healUsed: boolean;
   poisonUsed: boolean;
   lastNightDeaths: PublicDeath[];
+  nightHistory: NightRecap[];
   lastEliminated: PublicDeath | null;
   log: string[];
 }

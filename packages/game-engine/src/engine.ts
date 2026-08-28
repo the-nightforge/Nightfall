@@ -1,8 +1,18 @@
-import { ROLE_META, roleTeam, type GamePhase, type Role, type RoomConfig, type Winner } from "@masoi/shared";
+import {
+  ROLE_META,
+  roleTeam,
+  type GamePhase,
+  type NightRecap,
+  type RecapPlayer,
+  type Role,
+  type RoomConfig,
+  type Winner,
+} from "@masoi/shared";
 import { assignRoles, type AssignInput } from "./assignRoles";
 import {
   GameError,
   type DeathInfo,
+  type EnginePlayer,
   type GameState,
   type PublicDeath,
 } from "./types";
@@ -44,9 +54,13 @@ export interface PlayerGameView {
   noEliminationVoteCount: number;
   votesRevealed: boolean;
   lastNightDeaths: PublicDeath[];
+  nightHistory: NightRecap[];
   lastEliminated: PublicDeath | null;
   log: string[];
 }
+
+const recapPlayer = (player: EnginePlayer | undefined): RecapPlayer | null =>
+  player ? { id: player.id, name: player.name } : null;
 
 function emptyNight(): GameState["night"] {
   return {
@@ -68,6 +82,7 @@ export class GameEngine {
 
   constructor(state: GameState) {
     this.state = state;
+    this.state.nightHistory ??= [];
   }
 
   /** Trạng thái thô (plain object, dùng để serialize qua Redis). */
@@ -98,6 +113,7 @@ export class GameEngine {
       healUsed: false,
       poisonUsed: false,
       lastNightDeaths: [],
+      nightHistory: [],
       lastEliminated: null,
       log: [],
     };
@@ -262,6 +278,29 @@ export class GameEngine {
         ? `Đêm ${st.round}: bình yên vô sự.`
         : `Đêm ${st.round}: ${deaths.length} người đã mất.`,
     );
+
+    const wolfTarget = recapPlayer(st.night.killTarget ? this.player(st.night.killTarget) : undefined);
+    const usedHeal = st.night.healTonight;
+    const recap: NightRecap = {
+      round: st.round,
+      wolfTarget,
+      guardTarget: recapPlayer(st.night.guardTarget ? this.player(st.night.guardTarget) : undefined),
+      seerChecks: Object.entries(st.night.seerResults).flatMap(([seerId, result]) => {
+        const seer = recapPlayer(this.player(seerId));
+        const target = recapPlayer(this.player(result.targetId));
+        return seer && target ? [{ seer, target, isWolf: result.isWolf }] : [];
+      }),
+      witch: {
+        usedHeal,
+        healedTarget: usedHeal ? wolfTarget : null,
+        poisonTarget: recapPlayer(st.night.poisonTarget ? this.player(st.night.poisonTarget) : undefined),
+      },
+      deaths: deaths.map((death) => ({
+        player: { id: death.playerId, name: death.name },
+        cause: death.cause,
+      })),
+    };
+    st.nightHistory.push(recap);
 
     st.phase = "NIGHT_RESULT";
     st.phaseEndsAt = now + 8_000;
@@ -438,6 +477,7 @@ export class GameEngine {
       noEliminationVoteCount: showVoteCounts ? tally.noElimination : 0,
       votesRevealed: st.phase === "ELIMINATION" || st.phase === "GAME_OVER" || st.phase === "CHECK_WIN",
       lastNightDeaths: st.phase === "NIGHT_RESULT" || st.phase === "DAY_DISCUSSION" ? st.lastNightDeaths : [],
+      nightHistory: st.phase === "GAME_OVER" ? st.nightHistory : [],
       lastEliminated: st.phase === "ELIMINATION" || st.phase === "CHECK_WIN" ? st.lastEliminated : null,
       log: st.log.slice(-10),
     };

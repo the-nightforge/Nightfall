@@ -64,6 +64,7 @@ function discussionRoom(): Room {
     healUsed: false,
     poisonUsed: false,
     lastNightDeaths: [],
+    nightHistory: [],
     lastEliminated: null,
     log: [],
   };

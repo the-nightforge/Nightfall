@@ -27,6 +27,7 @@ function nightState(guardPrevious: string | null): GameState {
     healUsed: false,
     poisonUsed: false,
     lastNightDeaths: [],
+    nightHistory: [],
     lastEliminated: null,
     log: [],
   };

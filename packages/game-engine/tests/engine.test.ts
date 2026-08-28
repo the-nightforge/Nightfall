@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GameEngine } from "../src/engine";
 import { assignRoles, buildRoleDeck } from "../src/assignRoles";
-import { GameError } from "../src/types";
+import { GameError, type GameState } from "../src/types";
 import type { RoomConfig } from "@masoi/shared";
 
 const CONFIG: RoomConfig = {
@@ -137,6 +137,12 @@ describe("Thứ tự xử lý hành động ban đêm", () => {
 
     expect(deaths.filter((d) => d.playerId === target.id)).toHaveLength(1);
     expect(e.state.lastNightDeaths.filter((d) => d.playerId === target.id)).toHaveLength(1);
+    expect(e.state.nightHistory[0].deaths).toEqual([
+      {
+        player: { id: target.id, name: target.name },
+        cause: "wolf",
+      },
+    ]);
   });
 
   it("Bảo Vệ không thể bảo vệ cùng một người hai đêm liên tiếp", () => {
@@ -417,5 +423,105 @@ describe("Snapshot không lộ thông tin bí mật", () => {
     const json = JSON.stringify(e.snapshotFor("p3"));
     expect(json).not.toMatch(/"votes"/);
     expect(json).not.toContain('"myVote":"p2"');
+  });
+});
+
+describe("Lịch sử diễn biến ban đêm", () => {
+  it("ghi đầy đủ hành động và kết quả của một đêm", () => {
+    const e = makeEngine(7);
+    const wolf = findPlayersByRole(e, "WEREWOLF")[0];
+    const guard = findPlayersByRole(e, "GUARD")[0];
+    const seer = findPlayersByRole(e, "SEER")[0];
+    const witch = findPlayersByRole(e, "WITCH")[0];
+    const wolfTarget = e.state.players.find((p) => p.role === "VILLAGER")!;
+    const poisonTarget = e.state.players.find(
+      (p) => p.alive && p.id !== wolfTarget.id && p.id !== witch.id && p.role !== "WEREWOLF",
+    )!;
+
+    e.submitNightAction(wolf.id, "KILL", wolfTarget.id);
+    e.submitNightAction(guard.id, "GUARD", wolfTarget.id);
+    e.submitNightAction(seer.id, "SEE", wolf.id);
+    e.submitNightAction(witch.id, "HEAL", null);
+    e.submitNightAction(witch.id, "POISON", poisonTarget.id);
+    e.resolveNight();
+
+    expect(e.state.nightHistory).toEqual([
+      {
+        round: 1,
+        wolfTarget: { id: wolfTarget.id, name: wolfTarget.name },
+        guardTarget: { id: wolfTarget.id, name: wolfTarget.name },
+        seerChecks: [{
+          seer: { id: seer.id, name: seer.name },
+          target: { id: wolf.id, name: wolf.name },
+          isWolf: true,
+        }],
+        witch: {
+          usedHeal: true,
+          healedTarget: { id: wolfTarget.id, name: wolfTarget.name },
+          poisonTarget: { id: poisonTarget.id, name: poisonTarget.name },
+        },
+        deaths: [{
+          player: { id: poisonTarget.id, name: poisonTarget.name },
+          cause: "poison",
+        }],
+      },
+    ]);
+  });
+
+  it("giữ các đêm theo thứ tự và ghi cả đêm không có người chết", () => {
+    const e = makeEngine(7);
+    e.resolveNight();
+    e.setPhase("NIGHT", 30_000);
+    e.resolveNight();
+
+    expect(e.state.nightHistory.map((night) => night.round)).toEqual([1, 2]);
+    expect(e.state.nightHistory[0].deaths).toEqual([]);
+    expect(e.state.nightHistory[1].deaths).toEqual([]);
+  });
+
+  it("engine của ván mới không mang lịch sử ván trước", () => {
+    const first = makeEngine(7);
+    first.resolveNight();
+    const next = makeEngine(7);
+
+    expect(first.state.nightHistory).toHaveLength(1);
+    expect(next.state.nightHistory).toEqual([]);
+  });
+
+  it("ghi việc dùng bình cứu dù đêm đó không có mục tiêu của Sói", () => {
+    const e = makeEngine(7);
+    const witch = findPlayersByRole(e, "WITCH")[0];
+    e.submitNightAction(witch.id, "HEAL", null);
+    e.resolveNight();
+
+    expect(e.state.nightHistory[0].witch).toMatchObject({
+      usedHeal: true,
+      healedTarget: null,
+    });
+  });
+
+  it("ẩn toàn bộ lịch sử đêm trước GAME_OVER kể cả với người đã chết", () => {
+    const e = makeEngine(7);
+    e.resolveNight();
+    const deadViewer = e.state.players[0];
+    deadViewer.alive = false;
+
+    expect(e.snapshotFor(e.state.players[1].id).nightHistory).toEqual([]);
+    expect(e.snapshotFor(deadViewer.id).nightHistory).toEqual([]);
+  });
+
+  it("công khai toàn bộ lịch sử khi GAME_OVER", () => {
+    const e = makeEngine(7);
+    e.resolveNight();
+    e.finishGame("village");
+
+    expect(e.snapshotFor(e.state.players[0].id).nightHistory).toEqual(e.state.nightHistory);
+  });
+
+  it("chuẩn hóa state cũ chưa có nightHistory thành mảng rỗng", () => {
+    const source = GameEngine.create(ids(7), CONFIG).getState();
+    const legacy = { ...source, nightHistory: undefined } as unknown as GameState;
+
+    expect(new GameEngine(legacy).state.nightHistory).toEqual([]);
   });
 });
