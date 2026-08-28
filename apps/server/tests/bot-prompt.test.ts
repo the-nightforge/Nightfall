@@ -176,7 +176,10 @@ describe("chống lặp lời", () => {
     ).user;
 
     expect(user).not.toContain("Wolf");
-    expect(user).toContain("không có bằng chứng nào được phép nêu");
+    // Nhà cung cấp phải được nói rõ là KHÔNG có gì để nêu, kèm lệnh cấm bịa -
+    // nếu không nó sẽ tự dựng một sự kiện cho câu nói nghe có trọng lượng.
+    expect(user).toContain("chưa có bằng chứng nào");
+    expect(user).toContain("đừng bịa");
   });
 });
 

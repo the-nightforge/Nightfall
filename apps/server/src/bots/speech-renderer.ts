@@ -17,7 +17,10 @@ export function speechTemplate(request: SpeechRequest): string | null {
 
   const first = request.evidence[0];
   if (request.intention.kind === "QUESTION" || !first) {
-    return `${request.targetName} giải thích giúp tôi lá phiếu vừa rồi được không?`;
+    // KHÔNG nhắc tới "lá phiếu vừa rồi": ý định QUESTION xuất hiện nhiều nhất ở
+    // vòng thảo luận đầu tiên, khi chưa ai bỏ phiếu lần nào. Một câu hỏi về
+    // một sự kiện chưa xảy ra là lời nói dối, và nó lặp lại y hệt ở mọi bot.
+    return `${request.targetName} nghĩ sao về tình hình hiện tại?`;
   }
   return `Tôi đang nghi ${request.targetName} vì ${first.summary}.`;
 }

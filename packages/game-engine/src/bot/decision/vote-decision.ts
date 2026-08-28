@@ -45,6 +45,44 @@ const DESPERATION_PRESSURE = 0.3;
  * Dùng `players` (gồm cả người chết) làm mẫu số nên BOT không cần biết sĩ số
  * ban đầu từ đâu khác.
  */
+/**
+ * Những người BOT được phép CHẤM ĐIỂM.
+ *
+ * `legalVoteChoices` trả lời câu hỏi "tôi được nộp lá phiếu nào NGAY BÂY GIỜ",
+ * và engine chỉ khác rỗng trong pha `VOTING`. Dùng thẳng nó làm nguồn ứng viên
+ * khiến BOT không có ý kiến nào trong pha thảo luận: danh sách rỗng, không ai
+ * được chấm điểm, và mọi BOT kết luận "không treo ai" rồi nói đúng một câu
+ * "chưa đủ căn cứ" - suốt cả ván.
+ *
+ * Hai câu hỏi khác nhau nên có hai nguồn khác nhau:
+ * - Đang bỏ phiếu: bám ĐÚNG danh sách engine cấp, không được nới.
+ * - Ngoài pha đó: không có gì để nộp, nhưng vẫn cần một ý kiến để nói. Chấm
+ *   điểm mọi người còn sống là an toàn vì không lá phiếu nào rời khỏi hàm này.
+ */
+function candidatesFor(
+  knowledge: BotDecisionContext["knowledge"],
+  selfId: string,
+  aliveIds: readonly string[],
+): string[] {
+  // Phân biệt hai trạng thái KHÁC NHAU, cả hai đều cho ra danh sách người rỗng:
+  //   - engine không cấp lựa chọn nào  → chưa tới lượt nộp phiếu (thảo luận)
+  //   - engine có cấp nhưng không ai hợp lệ → đang bỏ phiếu và phải bỏ trắng
+  // Gộp chúng lại sẽ khiến BOT nêu tên người trong một pha mà luật đã nói là
+  // không được chọn ai.
+  if (knowledge.legalVoteChoices.length > 0) {
+    return knowledge.legalVoteChoices.flatMap((choice) =>
+      choice.type === "PLAYER" ? [choice.targetId] : [],
+    );
+  }
+
+  // Người chết không có ý kiến. `aliveIds` gồm cả chính mình; vòng lặp gọi hàm
+  // này đã tự loại `selfId`, nhưng loại sẵn ở đây để danh sách nói đúng nghĩa.
+  const self = knowledge.players.find((player) => player.id === selfId);
+  if (!self?.alive) return [];
+
+  return aliveIds.filter((id) => id !== selfId);
+}
+
 function survivalPressure(knowledge: BotDecisionContext["knowledge"]): number {
   const total = knowledge.players.length;
   if (total === 0) return 0;
@@ -129,30 +167,29 @@ export function selectVote(
   const aliveIds = knowledge.players.filter((p) => p.alive).map((p) => p.id);
 
   const scored: ScoredTarget[] = [];
-  for (const choice of knowledge.legalVoteChoices) {
-    if (choice.type !== "PLAYER") continue;
+  for (const targetId of candidatesFor(knowledge, state.playerId, aliveIds)) {
     // Engine cho phép tự bầu mình, nhưng một BOT tự đề cử mình là hành vi vô
     // nghĩa; luật vẫn được báo cáo trung thực ở knowledge view.
-    if (choice.targetId === state.playerId) continue;
+    if (targetId === state.playerId) continue;
 
-    const belief = state.suspicion[choice.targetId];
+    const belief = state.suspicion[targetId];
     const reasons = belief?.reasons ?? [];
     const topConfidence = reasons.reduce((max, item) => Math.max(max, item.confidence), 0);
 
     let score =
       (belief?.score ?? 0) +
       topConfidence * EVIDENCE_CONFIDENCE_BONUS +
-      incomingHostilityOf(state, choice.targetId) * HOSTILITY_BONUS +
-      pairPressure(state, choice.targetId) * PAIR_BONUS -
-      (state.trust[choice.targetId]?.score ?? 0) * TRUST_DAMPING +
-      (bias[choice.targetId] ?? 0) +
+      incomingHostilityOf(state, targetId) * HOSTILITY_BONUS +
+      pairPressure(state, targetId) * PAIR_BONUS -
+      (state.trust[targetId]?.score ?? 0) * TRUST_DAMPING +
+      (bias[targetId] ?? 0) +
       // Người bị cả làng dồn vào mà không ai bênh thì dễ bị treo; đó vừa là tín
       // hiệu (có thể họ đã lộ), vừa là cái bẫy (đám đông có khi đang sai).
       // Trọng số nhỏ có chủ đích: nó không được tự mình đẩy ai qua ngưỡng.
-      isolationScore(state, choice.targetId, aliveIds) * ISOLATION_BONUS;
+      isolationScore(state, targetId, aliveIds) * ISOLATION_BONUS;
 
     // Phase 1 chỉ có teammate-safety penalty đơn giản; bussing thuộc Phase 3.
-    const targetRole = knowledge.knownRoles[choice.targetId];
+    const targetRole = knowledge.knownRoles[targetId];
     const targetIsWolf = targetRole === "WEREWOLF" || targetRole === "WOLF_CUB";
     if (selfIsWolf && targetIsWolf) {
       score -= 25 + personality.loyalty * 30;
@@ -161,7 +198,7 @@ export function selectVote(
     score += (rng() - 0.5) * JITTER_SPAN;
 
     scored.push({
-      targetId: choice.targetId,
+      targetId,
       score,
       evidence: reasons.slice(-MAX_INTENTION_EVIDENCE),
       topConfidence,

@@ -183,12 +183,17 @@ export function buildDaySpeechPrompt(request: SpeechRequest): PromptSpec {
     request.intention.kind === "ACCUSE"
       ? `Bạn đang nghi ${request.targetName ?? "một người"} và muốn nói ra điều đó.`
       : request.intention.kind === "QUESTION"
-        ? `Bạn muốn hỏi ${request.targetName ?? "một người"} một câu để ép họ giải thích.`
+        ? // Không giả định đã có lịch sử để hỏi về. Ý định này xuất hiện nhiều
+          // nhất ở vòng thảo luận đầu, khi chưa ai bỏ phiếu và chưa ai làm gì
+          // đáng ngờ - lúc đó câu hỏi phải là câu dò, không phải câu chất vấn.
+          `Bạn để ý ${request.targetName ?? "một người"} và muốn hỏi họ một câu để nghe họ nói.`
         : "Bạn chưa đủ căn cứ để chỉ đích danh ai, và muốn nói vậy.";
 
   const evidenceLines = request.evidence.length
     ? request.evidence.map((item) => `- [${item.sourceId}] ${item.summary}`)
-    : ["- (không có bằng chứng nào được phép nêu)"];
+    : [
+        "- (chưa có bằng chứng nào; đừng bịa ra một sự kiện để lấp chỗ trống)",
+      ];
 
   return {
     system: [
