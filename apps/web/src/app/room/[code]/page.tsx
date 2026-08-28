@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { AnimatePresence, m } from "motion/react";
 import type { RoomSnapshot } from "@masoi/shared";
 import { getIdentity } from "@/lib/identity";
 import { useRoomSocket } from "@/lib/useRoomSocket";
@@ -101,7 +102,7 @@ export default function RoomPage() {
         return null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snapshot, isHost, room.messages]);
+  }, [snapshot, isHost]);
 
   function leaveRoom() {
     room.emit("room:leave");
@@ -142,7 +143,22 @@ export default function RoomPage() {
           </p>
         )}
 
-        {content}
+        {/*
+          * mode="wait" để hai pha không chồng lên nhau giữa chừng làm nhảy layout.
+          * Đổi pha đã có nhịp riêng của nó rồi; 120ms chỉ đủ đánh dấu là "vừa
+          * sang chuyện khác", không đủ để trì hoãn thông tin nào.
+          */}
+        <AnimatePresence mode="wait" initial={false}>
+          <m.div
+            key={snapshot?.phase ?? "connecting"}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6, transition: { duration: 0.12 } }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {content}
+          </m.div>
+        </AnimatePresence>
 
         {/* Chat hiển thị mọi lúc; server tự quyết định kênh & quyền xem */}
         <ChatBox messages={room.messages} onSend={(text) => room.emit("chat:send", { text })} placeholder={chatPlaceholder} />

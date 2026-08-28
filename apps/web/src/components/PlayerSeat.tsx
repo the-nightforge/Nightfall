@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatePresence, m } from "motion/react";
 import { ROLE_META, type PlayerView } from "@masoi/shared";
 import { roleLabel } from "@/lib/cursed";
 import type { AvatarId } from "@/lib/avatar-art";
@@ -45,19 +46,32 @@ export function PlayerSeat({
         : "border-night-600/70 bg-night-800/40";
 
   return (
-    <button
+    <m.button
       type="button"
       disabled={disabled}
       onClick={onSelect}
-      className={`relative flex flex-col items-center gap-1.5 rounded-xl border px-1.5 pb-2 pt-2.5 transition
+      // Chỉ scale, không layout: lưới này render lại theo từng lá phiếu, và
+      // layout animation trên 15 ô cùng lúc là chỗ giật đầu tiên trên máy yếu.
+      whileTap={disabled ? undefined : { scale: 0.96 }}
+      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+      className={`relative flex flex-col items-center gap-1.5 rounded-xl border px-1.5 pb-2 pt-2.5 transition-colors
         ${frame}
-        ${!disabled ? "cursor-pointer hover:border-blood-500/80 active:scale-[0.97]" : "cursor-default"}`}
+        ${!disabled ? "cursor-pointer hover:border-blood-500/80" : "cursor-default"}`}
     >
-      {votes > 0 && (
-        <span className="absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-blood-600 px-1 text-[11px] font-bold text-white shadow shadow-black/50">
-          {votes}
-        </span>
-      )}
+      <AnimatePresence>
+        {votes > 0 && (
+          <m.span
+            key="votes"
+            initial={{ scale: 0.4, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.4, opacity: 0, transition: { duration: 0.12 } }}
+            transition={{ type: "spring", stiffness: 600, damping: 22 }}
+            className="absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-blood-600 px-1 text-[11px] font-bold text-white shadow shadow-black/50"
+          >
+            {votes}
+          </m.span>
+        )}
+      </AnimatePresence>
 
       <span className="relative">
         <Avatar avatar={avatar} tint={tint} alive={player.alive} className="h-12 w-12" />
@@ -94,7 +108,7 @@ export function PlayerSeat({
           </Tag>
         )}
       </span>
-    </button>
+    </m.button>
   );
 }
 

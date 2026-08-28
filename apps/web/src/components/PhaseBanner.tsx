@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatePresence, m } from "motion/react";
 import type { Phase, RoomSnapshot } from "@masoi/shared";
 import { moodFor } from "@/lib/mood";
 import { Timer } from "./Timer";
@@ -34,19 +35,29 @@ export function PhaseBanner({ snapshot }: { snapshot: RoomSnapshot }) {
 
   return (
     <div className="card flex items-center justify-between gap-3 py-3">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${meta.dot} animate-pulseSlow`} />
-          <h2 className={`truncate font-display text-2xl font-bold leading-tight ${meta.accent}`}>
-            {meta.label}
-          </h2>
-        </div>
-        {snapshot.round > 0 && (
-          <p className="mt-0.5 pl-3.5 text-xs uppercase tracking-[0.2em] text-mist/50">
-            {unit} thứ {snapshot.round}
-          </p>
-        )}
-      </div>
+      {/* Tên pha là thứ đổi nghĩa cả màn hình, nên nó được một nhịp riêng. */}
+      <AnimatePresence mode="wait" initial={false}>
+        <m.div
+          key={snapshot.phase}
+          initial={{ opacity: 0, x: -8 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 6, transition: { duration: 0.1 } }}
+          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          className="min-w-0"
+        >
+          <div className="flex items-center gap-2">
+            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${meta.dot} animate-pulseSlow`} />
+            <h2 className={`truncate font-display text-2xl font-bold leading-tight ${meta.accent}`}>
+              {meta.label}
+            </h2>
+          </div>
+          {snapshot.round > 0 && (
+            <p className="mt-0.5 pl-3.5 text-xs uppercase tracking-[0.2em] text-mist/50">
+              {unit} thứ {snapshot.round}
+            </p>
+          )}
+        </m.div>
+      </AnimatePresence>
       <Timer endsAt={snapshot.phaseEndsAt} />
     </div>
   );
