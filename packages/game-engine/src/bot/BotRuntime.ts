@@ -324,9 +324,10 @@ export class BotRuntime {
 
   private ingestChat(context: BotDecisionContext): void {
     const knowledge = context.knowledge;
-    const fresh = context.visibleChat.filter(
-      (message) => !this.state.seenEventIds.includes(message.id),
-    );
+    // Set thay vì includes trong vòng lặp: seenEventIds dài dần theo cả ván, và
+    // đây là đường chạy lại ở mọi checkpoint bỏ phiếu của mọi BOT.
+    const seen = new Set(this.state.seenEventIds);
+    const fresh = context.visibleChat.filter((message) => !seen.has(message.id));
     if (fresh.length === 0) return;
 
     const memories = analyzeChat(fresh, knowledge.players, {
@@ -338,7 +339,8 @@ export class BotRuntime {
     // Kể cả câu bị parser bỏ qua cũng được đánh dấu đã đọc, để lần observe sau
     // không phân tích lại cùng một tin nhắn.
     for (const message of fresh) {
-      if (!this.state.seenEventIds.includes(message.id)) {
+      if (!seen.has(message.id)) {
+        seen.add(message.id);
         this.state.seenEventIds.push(message.id);
       }
     }
@@ -396,20 +398,21 @@ export class BotRuntime {
             "Công khai bênh vực người này.",
           ),
         );
-        applyTrustEvidence(
-          this.state,
-          evidenceOf(
-            "DEFEND",
-            "belief",
-            memory.sourceId,
-            memory.targetId,
-            memory.actorId,
-            round,
-            3,
-            0.4,
-            "Được một người chơi khác công khai bênh vực.",
-          ),
+        // Weight ÂM vì đây là bằng chứng gỡ tội: applyEvidence hạ nghi ngờ của
+        // người được bênh, còn applyTrustEvidence đảo dấu nên tin tưởng tăng.
+        const exculpatory = evidenceOf(
+          "DEFEND",
+          "belief",
+          memory.sourceId,
+          memory.targetId,
+          memory.actorId,
+          round,
+          -3,
+          0.4,
+          "Được một người chơi khác công khai bênh vực.",
         );
+        applyEvidence(this.state, exculpatory);
+        applyTrustEvidence(this.state, exculpatory);
         continue;
       }
 

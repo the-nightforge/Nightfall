@@ -8,6 +8,19 @@ import type { BeliefEntry, BotBrainState, BotMemory, BotPersonality } from "../t
 const PINNED_LIMIT = 60;
 
 /**
+ * Ba loại này LUÔN là pinned fact, bất kể caller truyền gì. Ghim theo type chứ
+ * không tin vào cờ của caller: kho mirror (`claims`, `seerResults`) và bước
+ * prune cùng dựa trên một tiêu chí, nên hai bên không thể lệch nhau.
+ */
+const PINNED_TYPES = new Set<BotMemory["type"]>(["ROLE_CLAIM", "COUNTER_CLAIM", "SEER_RESULT"]);
+
+/**
+ * Trần cho con trỏ sự kiện đã xử lý. Một ván dài nhất cũng chỉ tạo vài trăm ID,
+ * nên trần này chỉ chặn trường hợp spam chat; ID cũ nhất bị bỏ trước.
+ */
+const SEEN_EVENT_LIMIT = 2_000;
+
+/**
  * Hai memory là một khi cùng loại, cùng nguồn, cùng người làm và cùng mục tiêu.
  * Dùng source ID trong khoá là điều bắt buộc: nó khiến việc dựng lại context
  * nhiều lần trong cùng một pha không thể nhân đôi một sự kiện.
@@ -68,21 +81,44 @@ export function remember(state: BotBrainState, memory: BotMemory): void {
 
   // Copy để state không giữ tham chiếu tới object của caller: analyzer tái sử
   // dụng object của nó sẽ âm thầm viết lại lịch sử đã ghi.
-  const stored: BotMemory = { ...memory, data: { ...memory.data } };
+  const stored: BotMemory = {
+    ...memory,
+    pinned: memory.pinned || PINNED_TYPES.has(memory.type),
+    data: { ...memory.data },
+  };
   state.memories.push(stored);
 
   if (!state.seenEventIds.includes(stored.sourceId)) {
     state.seenEventIds.push(stored.sourceId);
+    if (state.seenEventIds.length > SEEN_EVENT_LIMIT) state.seenEventIds.shift();
   }
 
   if (stored.type === "ROLE_CLAIM" || stored.type === "COUNTER_CLAIM") {
     state.claims.push(stored);
-    if (state.claims.length > PINNED_LIMIT) state.claims.splice(0, state.claims.length - PINNED_LIMIT);
   }
-
   if (stored.type === "SEER_RESULT") {
     state.knownInformation.seerResults.push(stored);
-    const seerResults = state.knownInformation.seerResults;
-    if (seerResults.length > PINNED_LIMIT) seerResults.splice(0, seerResults.length - PINNED_LIMIT);
   }
+
+  enforcePinnedBudget(state);
+}
+
+/**
+ * Giữ tổng số pinned fact trong trần, và giữ ba kho (memories, claims,
+ * seerResults) nói cùng một câu chuyện.
+ *
+ * Với tối đa 15 người thì số claim/soi hợp lệ không bao giờ chạm trần này; trần
+ * chỉ tồn tại để một người chơi spam "tôi là dân" không thể chiếm hết ngân sách
+ * memory của BOT. Bỏ cái CŨ nhất, vì cái mới nhất là cái đang được tranh luận.
+ */
+function enforcePinnedBudget(state: BotBrainState): void {
+  const pinned = state.memories.filter((memory) => memory.pinned);
+  if (pinned.length <= PINNED_LIMIT) return;
+
+  const evicted = new Set(pinned.slice(0, pinned.length - PINNED_LIMIT));
+  state.memories = state.memories.filter((memory) => !evicted.has(memory));
+  state.claims = state.claims.filter((memory) => !evicted.has(memory));
+  state.knownInformation.seerResults = state.knownInformation.seerResults.filter(
+    (memory) => !evicted.has(memory),
+  );
 }

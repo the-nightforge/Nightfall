@@ -151,6 +151,43 @@ describe("bot memory decay and pruning", () => {
     expect(state.memories.map((item) => item.sourceId)).toEqual(["strong"]);
   });
 
+  it("never drops a pinned fact even when pinned facts fill the budget", () => {
+    for (let i = 0; i < 70; i += 1) {
+      remember(
+        state,
+        memory({ type: "ROLE_CLAIM", sourceId: `claim:${i}`, importance: 1, pinned: true }),
+      );
+    }
+    for (let i = 0; i < 80; i += 1) {
+      remember(state, memory({ sourceId: `vote:${i}`, importance: 5 }));
+    }
+
+    decayAndPrune(state, 5, 120);
+
+    const pinned = state.memories.filter((item) => item.pinned);
+    // Kho pinned bị chặn trần ngay lúc ghi, nên nó không chiếm hết ngân sách...
+    expect(pinned).toHaveLength(60);
+    // ...và không có pinned fact nào bị bước prune bỏ đi.
+    expect(state.claims).toHaveLength(60);
+    expect(state.claims.every((claim) => state.memories.includes(claim))).toBe(true);
+    expect(state.memories.some((item) => !item.pinned)).toBe(true);
+  });
+
+  it("keeps the mirrored claim and seer stores in step with memories", () => {
+    remember(state, memory({ type: "ROLE_CLAIM", sourceId: "m1" }));
+    remember(state, memory({ type: "SEER_RESULT", sourceId: "seer:1" }));
+
+    // Kể cả khi caller quên đặt cờ, hai loại này vẫn được ghim theo type.
+    expect(state.memories.every((item) => item.pinned)).toBe(true);
+
+    decayAndPrune(state, 9, 1);
+
+    expect(state.claims.every((claim) => state.memories.includes(claim))).toBe(true);
+    expect(
+      state.knownInformation.seerResults.every((item) => state.memories.includes(item)),
+    ).toBe(true);
+  });
+
   it("defaults to the documented 120 memory budget", () => {
     for (let i = 0; i < 140; i += 1) {
       remember(state, memory({ sourceId: `vote:${i}`, importance: 1 }));
@@ -190,8 +227,18 @@ describe("bot evidence validation and belief updates", () => {
   it("never lets a belief score leave the 0-100 range", () => {
     state.seenEventIds.push("vote:1");
     applyEvidence(state, evidence({ sourceId: "vote:1", weight: -500 }));
-
     expect(state.suspicion.c!.score).toBe(0);
+
+    applyEvidence(state, evidence({ id: "ev-up", sourceId: "vote:1", weight: 500 }));
+    expect(state.suspicion.c!.score).toBe(100);
+  });
+
+  it("bounds the seen-event cursor so a long game cannot grow it forever", () => {
+    for (let i = 0; i < 2_100; i += 1) {
+      remember(state, memory({ sourceId: `evt:${i}`, importance: 1 }));
+    }
+
+    expect(state.seenEventIds.length).toBeLessThanOrEqual(2_000);
   });
 
   it("applies stubbornness as inertia on the update size", () => {
@@ -235,14 +282,46 @@ describe("bot evidence validation and belief updates", () => {
     expect(state.suspicion.late!.score).toBeGreaterThan(0);
   });
 
-  it("keeps trust independent of suspicion instead of mirroring it", () => {
+  it("moves trust in the opposite direction to suspicion for one evidence", () => {
     state.seenEventIds.push("vote:1");
-    applyEvidence(state, evidence({ weight: 40 }));
-    applyTrustEvidence(state, evidence({ id: "ev-2", kind: "DEFEND", weight: 40 }));
+    const accusing = evidence({ weight: 40 });
 
+    applyEvidence(state, accusing);
+    applyTrustEvidence(state, accusing);
+
+    // Buộc tội: nghi ngờ tăng, tin tưởng giảm (đã chạm sàn 0).
+    expect(state.suspicion.c!.score).toBeGreaterThan(0);
+    expect(state.trust.c!.score).toBe(0);
+  });
+
+  it("lets exculpatory evidence raise trust and lower suspicion", () => {
+    state.seenEventIds.push("vote:1", "vote:2");
+    applyEvidence(state, evidence({ id: "ev-a", sourceId: "vote:1", weight: 60 }));
+    const before = state.suspicion.c!.score;
+
+    const exculpatory = evidence({ id: "ev-b", sourceId: "vote:2", kind: "DEFEND", weight: -20 });
+    applyEvidence(state, exculpatory);
+    applyTrustEvidence(state, exculpatory);
+
+    expect(state.suspicion.c!.score).toBeLessThan(before);
+    expect(state.trust.c!.score).toBeGreaterThan(0);
+  });
+
+  it("keeps trust as its own accumulator, not a mirror of suspicion", () => {
+    state.seenEventIds.push("vote:1", "vote:2");
+    applyEvidence(state, evidence({ id: "ev-a", sourceId: "vote:1", weight: 40 }));
+    applyTrustEvidence(
+      state,
+      evidence({ id: "ev-b", sourceId: "vote:2", kind: "DEFEND", weight: -30 }),
+    );
+
+    // Hai bảng có lịch sử lý do riêng: cùng một người có thể vừa đáng ngờ vừa
+    // đáng tin khi bằng chứng mâu thuẫn.
     expect(state.suspicion.c!.score).toBeGreaterThan(0);
     expect(state.trust.c!.score).toBeGreaterThan(0);
     expect(state.trust.c!.score).not.toBe(100 - state.suspicion.c!.score);
+    expect(state.suspicion.c!.reasons.map((item) => item.id)).toEqual(["ev-a"]);
+    expect(state.trust.c!.reasons.map((item) => item.id)).toEqual(["ev-b"]);
   });
 
   it("never attributes evidence to the bot itself", () => {

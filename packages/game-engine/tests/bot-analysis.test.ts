@@ -95,6 +95,47 @@ function bandwagonRecap(): DayVoteRecap {
   );
 }
 
+function mercyMutation(
+  voterId: string,
+  from: string | null,
+  at: number,
+  sequence: number,
+  round = 2,
+): VoteMutation {
+  return {
+    id: `${round}:nomination:${sequence}`,
+    round,
+    voterId,
+    previousChoice: from === null ? null : player(from),
+    choice: { type: "NO_ELIMINATION" },
+    castAt: at,
+    phaseStartedAt: PHASE_START,
+    phaseEndsAt: PHASE_END,
+    sequence,
+  };
+}
+
+/** Ba nguoi cung chon "khong treo ai" khi lua chon do da dan phieu. */
+function mercyRecap(): DayVoteRecap {
+  const recap = recapOf([
+    mercyMutation("m1", null, 1_000, 1),
+    mercyMutation("m2", null, 2_000, 2),
+    mercyMutation("m3", null, 3_000, 3),
+  ]);
+  return { ...recap, nomination: { kind: "NONE", reason: "no-elimination" } };
+}
+
+/** Doi sang "khong treo ai" o 90% thoi gian bo phieu. */
+function lateMercyRecap(): DayVoteRecap {
+  return recapOf([
+    ...mutations([
+      { voterId: "a1", from: null, to: "a", at: 1_000 },
+      { voterId: "c", from: null, to: "a", at: 2_000 },
+    ]),
+    mercyMutation("c", "a", 27_000, 3),
+  ]);
+}
+
 const alwaysNotice = () => 0;
 
 describe("vote recap analysis", () => {
@@ -165,20 +206,66 @@ describe("vote recap analysis", () => {
     expect(distracted).toEqual([]);
   });
 
+  it("never notices anything at all with zero analytical skill", () => {
+    expect(analyzeVoteRecap(decisiveLateSwitchRecap(), 0, () => 0)).toEqual([]);
+  });
+
+  it("misses only some candidates at middling skill", () => {
+    const full = analyzeVoteRecap(decisiveLateSwitchRecap(), 1, alwaysNotice);
+    const partial = analyzeVoteRecap(decisiveLateSwitchRecap(), 0.6, createSeededRng("seed"));
+
+    expect(partial.length).toBeGreaterThan(0);
+    expect(partial.length).toBeLessThan(full.length);
+    // Bo sot la bo sot, khong phai bia: moi thu con lai van la candidate that.
+    const fullIds = new Set(full.map((item) => item.id));
+    expect(partial.every((item) => fullIds.has(item.id))).toBe(true);
+  });
+
   it("is deterministic for the same seed and skill", () => {
     const left = analyzeVoteRecap(decisiveLateSwitchRecap(), 0.6, createSeededRng("seed"));
     const right = analyzeVoteRecap(decisiveLateSwitchRecap(), 0.6, createSeededRng("seed"));
 
+    expect(left.length).toBeGreaterThan(0);
     expect(left).toEqual(right);
+    expect(analyzeVoteRecap(decisiveLateSwitchRecap(), 0.6, createSeededRng("other"))).not.toEqual(
+      left,
+    );
   });
 
   it("never invents a source that is not a real mutation", () => {
     const recap = decisiveLateSwitchRecap();
     const realIds = new Set(recap.mutations.map((mutation) => mutation.id));
+    const evidence = analyzeVoteRecap(recap, 1, alwaysNotice);
 
-    for (const item of analyzeVoteRecap(recap, 1, alwaysNotice)) {
+    expect(evidence.length).toBeGreaterThan(0);
+    for (const item of evidence) {
       expect(realIds.has(item.sourceId)).toBe(true);
     }
+  });
+
+  it("does not treat a mercy vote as a bandwagon or a tie break", () => {
+    const evidence = analyzeVoteRecap(mercyRecap(), 1, alwaysNotice);
+
+    expect(evidence.some((item) => item.kind === "BANDWAGON")).toBe(false);
+    expect(evidence.some((item) => item.kind === "TIE_BREAK")).toBe(false);
+  });
+
+  it("still spots a late switch into no elimination", () => {
+    const evidence = analyzeVoteRecap(lateMercyRecap(), 1, alwaysNotice);
+
+    expect(evidence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "LATE_SWITCH", actorId: "c", targetId: undefined }),
+      ]),
+    );
+  });
+
+  it("does not pair voters who chose no elimination together", () => {
+    const evidence = analyzeVoteRecap(mercyRecap(), 1, alwaysNotice).filter(
+      (item) => item.kind === "VOTE_ALIGNMENT",
+    );
+
+    expect(evidence).toEqual([]);
   });
 });
 
@@ -383,6 +470,65 @@ describe("conservative chat analysis", () => {
     ]);
   });
 
+  it("ignores rhetorical, conditional and negated self-role mentions", () => {
+    const memories = analyzeChat(
+      [
+        message("m1", "a", "Ai bao toi la soi?"),
+        message("m2", "b", "\u0110\u1eebng n\u00f3i t\u00f4i l\u00e0 s\u00f3i"),
+        message("m3", "c", "N\u1ebfu t\u00f4i l\u00e0 S\u00f3i th\u00ec t\u00f4i \u0111\u00e3 gi\u1ebft B\u00ecnh r\u1ed3i"),
+      ],
+      players,
+    );
+
+    expect(memories).toEqual([]);
+  });
+
+  it("ignores negated accusations instead of inverting them", () => {
+    const memories = analyzeChat(
+      [
+        message("m1", "a", "B\u00ecnh kh\u00f4ng th\u1ec3 l\u00e0 s\u00f3i"),
+        message("m2", "b", "T\u00f4i kh\u00f4ng nghi Chi"),
+        message("m3", "c", "T\u00f4i kh\u00f4ng tin An"),
+      ],
+      players,
+    );
+
+    expect(memories).toEqual([]);
+  });
+
+  it("does not confuse the verb nghi with the verb nghi-tilde", () => {
+    const memories = analyzeChat(
+      [message("m1", "a", "T\u00f4i ngh\u0129 B\u00ecnh v\u00f4 t\u1ed9i")],
+      players,
+    );
+
+    expect(memories).toEqual([]);
+  });
+
+  it("still understands a player typing without diacritics", () => {
+    const memories = analyzeChat(
+      [message("m1", "a", "Toi la tien tri"), message("m2", "b", "Dung treo Chi")],
+      players,
+    );
+
+    expect(memories.map((item) => [item.type, item.targetId])).toEqual([
+      ["ROLE_CLAIM", undefined],
+      ["DEFEND", "c"],
+    ]);
+  });
+
+  it("keeps every clause of a multi-part message", () => {
+    const memories = analyzeChat(
+      [message("m1", "a", "\u0110\u1eebng treo B\u00ecnh, t\u00f4i nghi Chi")],
+      players,
+    );
+
+    expect(memories.map((item) => [item.type, item.targetId])).toEqual([
+      ["DEFEND", "b"],
+      ["ACCUSE", "c"],
+    ]);
+  });
+
   it("drops a message whose short name matches two players", () => {
     const ambiguous: BotPlayerKnowledge[] = [
       { id: "x", name: "Nguyễn An", alive: true },
@@ -398,9 +544,19 @@ describe("conservative chat analysis", () => {
   });
 
   it("never copies the raw message text into the memory", () => {
-    const memories = analyzeChat([message("m1", "a", "Tôi là Tiên Tri và tôi soi Bình rồi")], players);
+    const memories = analyzeChat(
+      [message("m1", "a", "Tôi là Tiên Tri và tôi soi Bình rồi")],
+      players,
+    );
 
-    expect(JSON.stringify(memories)).not.toContain("soi Bình rồi");
+    expect(memories).toHaveLength(1);
+    // Kiem tra theo hinh dang du lieu, khong theo mot chuoi cu the: mot ban
+    // chuan hoa cua cau goc cung la ro ri.
+    expect(Object.keys(memories[0]!.data)).toEqual(["role"]);
+    const serialized = JSON.stringify(memories);
+    for (const needle of ["soi Bình rồi", "soi binh roi", "và tôi", "va toi"]) {
+      expect(serialized).not.toContain(needle);
+    }
   });
 
   it("produces memories whose source ids are real message ids", () => {

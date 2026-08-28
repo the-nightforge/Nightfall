@@ -50,12 +50,17 @@ export function applyEvidence(state: BotBrainState, evidence: BotEvidence): void
 }
 
 /**
- * Trust là một accumulator riêng, KHÔNG phải `100 - suspicion`. Một người vừa
- * đáng ngờ vừa đáng tin là trạng thái có thật khi bằng chứng mâu thuẫn, và gộp
- * hai khái niệm sẽ xoá mất chính sự mâu thuẫn đó.
+ * Trust là một accumulator RIÊNG, không phải `100 - suspicion`: hai bảng có
+ * lịch sử lý do khác nhau, và một người vừa đáng ngờ vừa đáng tin là trạng thái
+ * có thật khi bằng chứng mâu thuẫn.
+ *
+ * Cùng một evidence được áp vào trust với dấu NGƯỢC LẠI suspicion. Nhờ vậy một
+ * bằng chứng buộc tội (weight dương) vừa tăng nghi ngờ vừa giảm tin tưởng, còn
+ * một bằng chứng gỡ tội (weight âm) làm điều ngược lại - caller chỉ cần chọn
+ * đúng dấu một lần, thay vì phải nhớ đảo dấu ở từng chỗ gọi.
  */
 export function applyTrustEvidence(state: BotBrainState, evidence: BotEvidence): void {
   validateEvidence(evidence, state.seenEventIds);
   if (evidence.actorId === state.playerId) return;
-  updateBelief(state.trust, evidence, state.personality);
+  updateBelief(state.trust, { ...evidence, weight: -evidence.weight }, state.personality);
 }

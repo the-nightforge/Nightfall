@@ -29,5 +29,11 @@ export function decayAndPrune(
     return right.importance - left.importance;
   });
 
-  if (state.memories.length > limit) state.memories.length = limit;
+  // Chỉ memory thường bị cắt. Pinned fact đã bị chặn trần ngay lúc ghi
+  // (`enforcePinnedBudget`), nên chúng không thể chiếm hết ngân sách, và ở đây
+  // chúng không bao giờ bị bỏ - quên một lời claim là BOT tự mâu thuẫn với
+  // chính điều nó đã nói.
+  const pinnedCount = state.memories.filter((memory) => memory.pinned).length;
+  const keep = Math.max(pinnedCount, limit);
+  if (state.memories.length > keep) state.memories.length = keep;
 }

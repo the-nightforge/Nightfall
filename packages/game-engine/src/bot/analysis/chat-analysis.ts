@@ -2,36 +2,50 @@ import type { Phase, Role } from "@masoi/shared";
 import type { BotChatObservation, BotMemory, BotMemoryType, BotPlayerKnowledge } from "../types";
 
 /**
- * Bỏ dấu và hạ chữ thường để so khớp tên và mẫu câu. `đ` không phải dấu tổ hợp
- * nên phải thay riêng, nếu không "Đừng treo" sẽ không khớp mẫu nào.
+ * Dạng "plain": hạ chữ thường, bỏ dấu câu, nhưng GIỮ NGUYÊN dấu tiếng Việt.
  */
-function normalize(text: string): string {
+function plainForm(text: string): string {
   return text
-    .normalize("NFD")
-    // Escape thay vì dán ký tự tổ hợp trực tiếp: một editor chuẩn hoá lại file
-    // sẽ âm thầm làm hỏng character class nếu nó được viết bằng ký tự thật.
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .replace(/Đ/g, "D")
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/[^\p{Letter}\p{Number}\s]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
+/** Dấu câu là ranh giới mệnh đề duy nhất mà parser này tin. */
+const CLAUSE_SEPARATORS = /[.,;:!?\n]+/;
+
+const COMBINING_MARKS = /[\u0300-\u036f]/g;
+
+/**
+ * Dạng "ascii": bỏ dấu, để so khớp tên và để hiểu người gõ không dấu. `đ` không
+ * phải dấu tổ hợp nên phải thay riêng.
+ */
+function asciiForm(text: string): string {
+  return plainForm(text).normalize("NFD").replace(COMBINING_MARKS, "").replace(/đ/g, "d");
+}
+
 /** Cụm dài đứng trước để "dân làng" không bị khớp thành "dân". */
 const ROLE_PHRASES: Array<[string, Role]> = [
-  ["ke nguyen rua", "CURSED"],
-  ["dan thuong", "VILLAGER"],
-  ["dan lang", "VILLAGER"],
-  ["tien tri", "SEER"],
-  ["phu thuy", "WITCH"],
-  ["tho san", "HUNTER"],
-  ["bao ve", "GUARD"],
-  ["ma soi", "WEREWOLF"],
-  ["soi", "WEREWOLF"],
-  ["dan", "VILLAGER"],
+  ["kẻ nguyền rủa", "CURSED"],
+  ["dân thường", "VILLAGER"],
+  ["dân làng", "VILLAGER"],
+  ["tiên tri", "SEER"],
+  ["phù thuỷ", "WITCH"],
+  ["phù thủy", "WITCH"],
+  ["thợ săn", "HUNTER"],
+  ["bảo vệ", "GUARD"],
+  ["ma sói", "WEREWOLF"],
+  ["sói", "WEREWOLF"],
+  ["dân", "VILLAGER"],
 ];
+
+/**
+ * Một mệnh đề chứa từ phủ định thì ý nghĩa của nó đảo ngược, và parser này cố
+ * tình không hiểu ngữ nghĩa. "An không thể là sói" phải bị bỏ qua, chứ không
+ * được biến thành một cáo buộc nhắm vào An.
+ */
+const NEGATIONS = ["không", "chưa", "chẳng", "chả", "đâu có", "làm gì"];
 
 const IMPORTANCE: Partial<Record<BotMemoryType, number>> = {
   ROLE_CLAIM: 8,
@@ -40,9 +54,26 @@ const IMPORTANCE: Partial<Record<BotMemoryType, number>> = {
   DEFEND: 3,
 };
 
-function roleAtStart(segment: string): Role | null {
+/** Hai dạng của cùng một mệnh đề, dùng song song trong toàn bộ parser. */
+interface Clause {
+  plain: string;
+  ascii: string;
+}
+
+function hasNegation(clause: Clause): boolean {
+  return NEGATIONS.some(
+    (word) => clause.plain.includes(word) || clause.ascii.includes(asciiForm(word)),
+  );
+}
+
+function roleAtStart(segment: Clause): Role | null {
   for (const [phrase, role] of ROLE_PHRASES) {
-    if (segment === phrase || segment.startsWith(`${phrase} `)) return role;
+    for (const [text, marker] of [
+      [segment.plain, phrase],
+      [segment.ascii, asciiForm(phrase)],
+    ] as const) {
+      if (text === marker || text.startsWith(`${marker} `)) return role;
+    }
   }
   return null;
 }
@@ -58,39 +89,29 @@ function containsTokens(haystack: readonly string[], needle: readonly string[]):
 /**
  * Chỉ nhận target khi nó khớp duy nhất.
  *
- * Tên đầy đủ được ưu tiên; chỉ khi không có tên đầy đủ nào khớp thì mới xét
- * tên rút gọn. Hai người cùng tên rút gọn thì bỏ qua câu, vì đoán bừa một
- * người sẽ tạo ra bằng chứng sai mà người chơi không thể phản bác.
+ * Tên đầy đủ được ưu tiên; chỉ khi không có tên đầy đủ nào khớp thì mới xét tên
+ * rút gọn. Hai người cùng tên rút gọn thì bỏ qua câu, vì đoán bừa một người sẽ
+ * tạo ra bằng chứng sai mà người chơi không thể phản bác.
  */
 function resolveTarget(
   segment: string,
   players: readonly BotPlayerKnowledge[],
 ): BotPlayerKnowledge | null {
-  const tokens = normalize(segment).split(" ").filter(Boolean);
+  const tokens = asciiForm(segment).split(" ").filter(Boolean);
   if (tokens.length === 0) return null;
 
   const fullMatches = players.filter((player) =>
-    containsTokens(tokens, normalize(player.name).split(" ").filter(Boolean)),
+    containsTokens(tokens, asciiForm(player.name).split(" ").filter(Boolean)),
   );
   if (fullMatches.length === 1) return fullMatches[0]!;
   if (fullMatches.length > 1) return null;
 
   const shortMatches = players.filter((player) => {
-    const parts = normalize(player.name).split(" ").filter(Boolean);
+    const parts = asciiForm(player.name).split(" ").filter(Boolean);
     const short = parts.at(-1);
     return short !== undefined && tokens.includes(short);
   });
   return shortMatches.length === 1 ? shortMatches[0]! : null;
-}
-
-function after(text: string, marker: string): string | null {
-  const index = text.indexOf(marker);
-  return index === -1 ? null : text.slice(index + marker.length).trim();
-}
-
-function before(text: string, marker: string): string | null {
-  const index = text.indexOf(marker);
-  return index === -1 ? null : text.slice(0, index).trim();
 }
 
 interface ParsedSpeech {
@@ -99,60 +120,98 @@ interface ParsedSpeech {
   data: Record<string, unknown>;
 }
 
-function parse(
-  text: string,
+/**
+ * Mẫu chỉ được nhận ở ĐẦU mệnh đề.
+ *
+ * Cho phép khớp giữa câu là cách nhanh nhất để biến "ai bảo tôi là sói?" hay
+ * "nếu tôi là sói thì tôi đã giết B rồi" thành một lời tự nhận vai được ghim
+ * vĩnh viễn vào state.
+ *
+ * `acceptAscii = false` dành cho mẫu mà việc bỏ dấu tạo ra một từ khác hẳn:
+ * "tôi nghi" (nghi ngờ) và "tôi nghĩ" (suy nghĩ) cùng rút về "toi nghi", nên
+ * chấp nhận dạng không dấu ở đó sẽ biến mọi câu "tôi nghĩ X vô tội" thành một
+ * lời buộc tội X.
+ */
+function afterMarker(clause: Clause, marker: string, acceptAscii = true): Clause | null {
+  if (clause.plain.startsWith(marker)) {
+    const rest = clause.plain.slice(marker.length).trim();
+    return { plain: rest, ascii: asciiForm(rest) };
+  }
+  if (!acceptAscii) return null;
+  const asciiMarker = asciiForm(marker);
+  if (clause.ascii.startsWith(asciiMarker)) {
+    const rest = clause.ascii.slice(asciiMarker.length).trim();
+    return { plain: rest, ascii: rest };
+  }
+  return null;
+}
+
+/** Vị trí của một mẫu nằm giữa mệnh đề, thử cả hai dạng. */
+function markerIndex(clause: Clause, marker: string): { index: number; text: string } | null {
+  const plainIndex = clause.plain.indexOf(marker);
+  if (plainIndex !== -1) return { index: plainIndex, text: clause.plain };
+  const asciiIndex = clause.ascii.indexOf(asciiForm(marker));
+  return asciiIndex === -1 ? null : { index: asciiIndex, text: clause.ascii };
+}
+
+/**
+ * Phản bác: "<tên> không thể là <role>, tôi mới là <role>".
+ *
+ * Mẫu này được so trên CẢ tin nhắn chứ không theo mệnh đề, vì hai vế của nó nằm
+ * hai bên dấu phẩy. Nó cũng là mẫu duy nhất được phép chứa từ phủ định, vì phủ
+ * định chính là nội dung của nó.
+ */
+function parseCounterClaim(
+  whole: Clause,
   players: readonly BotPlayerKnowledge[],
 ): ParsedSpeech | null {
-  const normalized = normalize(text);
+  const denied = markerIndex(whole, " không thể là ");
+  if (!denied) return null;
+  const counter = markerIndex(whole, "tôi mới là ");
+  if (!counter) return null;
 
-  // Phản bác: "<tên> không thể là <role>, tôi mới là <role>".
-  const deniedSegment = before(normalized, " khong the la ");
-  const counterRoleSegment = after(normalized, " toi moi la ");
-  if (deniedSegment !== null && counterRoleSegment !== null) {
-    const target = resolveTarget(deniedSegment, players);
-    const role = roleAtStart(counterRoleSegment);
-    if (target && role) {
-      return { type: "COUNTER_CLAIM", targetId: target.id, data: { role } };
-    }
-    return null;
-  }
+  const target = resolveTarget(denied.text.slice(0, denied.index), players);
+  const rest = counter.text.slice(counter.index + "tôi mới là ".length).trim();
+  const role = roleAtStart({ plain: rest, ascii: asciiForm(rest) });
+  return target && role
+    ? { type: "COUNTER_CLAIM", targetId: target.id, data: { role } }
+    : null;
+}
 
-  // Tự nhận vai: "tôi là <role>".
-  const claimSegment = normalized.startsWith("toi la ")
-    ? normalized.slice("toi la ".length)
-    : after(normalized, " toi la ");
-  if (claimSegment !== null) {
-    const role = roleAtStart(claimSegment);
+function parseClause(
+  clause: Clause,
+  players: readonly BotPlayerKnowledge[],
+): ParsedSpeech | null {
+  if (clause.plain.length === 0) return null;
+  if (hasNegation(clause)) return null;
+
+  const claim = afterMarker(clause, "tôi là ");
+  if (claim) {
+    const role = roleAtStart(claim);
     return role ? { type: "ROLE_CLAIM", data: { role } } : null;
   }
 
-  // Buộc tội rõ ràng.
-  const suspectSegment = normalized.startsWith("toi nghi ")
-    ? normalized.slice("toi nghi ".length)
-    : after(normalized, " toi nghi ");
-  if (suspectSegment !== null) {
-    const target = resolveTarget(suspectSegment, players);
-    return target ? { type: "ACCUSE", targetId: target.id, data: {} } : null;
-  }
-  const wolfCallSegment = before(normalized, " la soi");
-  if (wolfCallSegment !== null) {
-    const target = resolveTarget(wolfCallSegment, players);
+  const suspect = afterMarker(clause, "tôi nghi ", false);
+  if (suspect) {
+    const target = resolveTarget(suspect.plain, players);
     return target ? { type: "ACCUSE", targetId: target.id, data: {} } : null;
   }
 
-  // Bênh vực rõ ràng.
-  const trustSegment = normalized.startsWith("toi tin ")
-    ? normalized.slice("toi tin ".length)
-    : after(normalized, " toi tin ");
-  if (trustSegment !== null) {
-    const target = resolveTarget(trustSegment, players);
+  const wolfCall = markerIndex(clause, " là sói");
+  if (wolfCall) {
+    const target = resolveTarget(wolfCall.text.slice(0, wolfCall.index), players);
+    return target ? { type: "ACCUSE", targetId: target.id, data: {} } : null;
+  }
+
+  const trust = afterMarker(clause, "tôi tin ");
+  if (trust) {
+    const target = resolveTarget(trust.plain, players);
     return target ? { type: "DEFEND", targetId: target.id, data: {} } : null;
   }
-  const spareSegment = normalized.startsWith("dung treo ")
-    ? normalized.slice("dung treo ".length)
-    : after(normalized, " dung treo ");
-  if (spareSegment !== null) {
-    const target = resolveTarget(spareSegment, players);
+
+  const spare = afterMarker(clause, "đừng treo ");
+  if (spare) {
+    const target = resolveTarget(spare.plain, players);
     return target ? { type: "DEFEND", targetId: target.id, data: {} } : null;
   }
 
@@ -166,8 +225,12 @@ export interface ChatAnalysisOptions {
 
 /**
  * Parser bảo thủ: chỉ tạo observation khi actor có thật, message ID có thật,
- * target khớp duy nhất và câu chứa một mẫu rõ ràng. Câu mơ hồ bị bỏ qua thay vì
- * suy diễn, và nội dung gốc không bao giờ được copy vào memory.
+ * target khớp duy nhất và một mệnh đề bắt đầu bằng một mẫu rõ ràng. Câu mơ hồ,
+ * câu phủ định và tên trùng đều bị bỏ qua thay vì suy diễn, và nội dung gốc
+ * không bao giờ được copy vào memory.
+ *
+ * Caller phải truyền chat ĐÃ LỌC theo quyền của chính BOT: module này phân tích
+ * đúng những gì nó được đưa và không tự biết kênh nào là bí mật.
  */
 export function analyzeChat(
   messages: readonly BotChatObservation[],
@@ -177,14 +240,9 @@ export function analyzeChat(
   const { round = 0, phase = "DAY_DISCUSSION" } = options;
   const memories: BotMemory[] = [];
 
-  for (const message of messages) {
-    if (!players.some((player) => player.id === message.actorId)) continue;
-    const parsed = parse(message.text, players);
-    if (!parsed) continue;
-
-    const pinned = parsed.type === "ROLE_CLAIM" || parsed.type === "COUNTER_CLAIM";
+  const push = (message: BotChatObservation, parsed: ParsedSpeech) => {
     memories.push({
-      id: `${parsed.type}:${message.id}`,
+      id: `${parsed.type}:${message.id}:${parsed.targetId ?? ""}`,
       sourceId: message.id,
       round,
       phase,
@@ -192,9 +250,28 @@ export function analyzeChat(
       actorId: message.actorId,
       targetId: parsed.targetId,
       importance: IMPORTANCE[parsed.type] ?? 3,
-      pinned,
+      pinned: parsed.type === "ROLE_CLAIM" || parsed.type === "COUNTER_CLAIM",
       data: parsed.data,
     });
+  };
+
+  for (const message of messages) {
+    if (!players.some((player) => player.id === message.actorId)) continue;
+
+    const whole: Clause = { plain: plainForm(message.text), ascii: asciiForm(message.text) };
+    const counterClaim = parseCounterClaim(whole, players);
+    if (counterClaim) {
+      push(message, counterClaim);
+      continue;
+    }
+
+    // Tách mệnh đề trên văn bản gốc: dấu câu là ranh giới duy nhất cho biết một
+    // mẫu có đang mở đầu một ý mới hay chỉ nằm lọt giữa câu. Mỗi mệnh đề được
+    // đọc độc lập, nên "Đừng treo An, tôi nghi Chi" giữ được cả hai ý.
+    for (const raw of message.text.split(CLAUSE_SEPARATORS)) {
+      const parsed = parseClause({ plain: plainForm(raw), ascii: asciiForm(raw) }, players);
+      if (parsed) push(message, parsed);
+    }
   }
 
   return memories;
