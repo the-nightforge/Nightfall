@@ -61,7 +61,7 @@ export function createRoom(code: string, host: RoomMember): Room {
 export function removeRoom(code: string): void {
   clearRoomTimers(code);
   rooms.delete(code);
-  // Không dọn thì pendingVote/pendingEndVote và ngân sách governor tích luỹ
+  // Không dọn thì pendingVote/pendingEndFinalVote và ngân sách governor tích luỹ
   // một entry cho mỗi phòng bị bỏ hoang trong suốt vòng đời process.
   cleanupRoomBotState(code);
   clearDiscussionSkipVotes(code);

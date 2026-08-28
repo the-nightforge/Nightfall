@@ -4,18 +4,15 @@ import type { PlannedVote } from "../bots/types";
 /** Phiếu bot đã định trong pha thảo luận, dùng lại ở pha bỏ phiếu. */
 export const pendingVote = new Map<string, Map<string, PlannedVote>>();
 
-/** Cờ đang chờ mốc kết thúc bỏ phiếu sớm (mọi người còn sống đã bỏ phiếu). */
-export const pendingEndVote = new Map<string, boolean>();
-
 /**
- * Cùng vai trò với pendingEndVote nhưng cho vòng bỏ phiếu xác nhận. Không có cờ
- * này thì mỗi lá phiếu về muộn lại hẹn thêm một mốc kết thúc 800ms nữa.
+ * Cờ chặn hẹn giờ kết thúc sớm cho vòng bỏ phiếu xác nhận. Không có cờ này thì
+ * mỗi lá phiếu về muộn lại hẹn thêm một mốc kết thúc 800ms nữa.
  */
 export const pendingEndFinalVote = new Map<string, boolean>();
 
 /**
- * Dọn toàn bộ state bot của một phòng: phiếu đã định, cờ chờ kết thúc bỏ phiếu
- * sớm, và ngân sách governor. Gọi khi phòng bị xoá hẳn khỏi bộ nhớ (removeRoom)
+ * Dọn toàn bộ state bot của một phòng: phiếu đã định, cờ final-vote và ngân
+ * sách governor. Gọi khi phòng bị xoá hẳn khỏi bộ nhớ (removeRoom)
  * để tránh rò rỉ - không dọn thì các Map này tích luỹ một entry cho mỗi phòng
  * bị bỏ hoang trong suốt vòng đời process.
  *
@@ -26,7 +23,6 @@ export const pendingEndFinalVote = new Map<string, boolean>();
  */
 export function cleanupRoomBotState(code: string): void {
   pendingVote.delete(code);
-  pendingEndVote.delete(code);
   pendingEndFinalVote.delete(code);
   resetBotBudget(code);
 }

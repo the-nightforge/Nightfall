@@ -36,6 +36,7 @@ function snapshot(you: RoomSnapshot["you"]): RoomSnapshot {
     serverNow: 0,
     discussionSkip: null,
     votesRevealed: false,
+    dayVoteHistory: [],
     nightHistory: [],
     hunterShots: [],
     lastNightDeaths: [],

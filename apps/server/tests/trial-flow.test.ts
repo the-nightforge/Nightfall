@@ -38,8 +38,8 @@ vi.mock("../src/db", () => ({
   prisma: { gameResult: { create: vi.fn(async () => undefined) } },
 }));
 
-import { maybeEndFinalVoteEarly, maybeEndVotingEarly } from "../src/game/machine";
-import { pendingEndFinalVote, pendingEndVote } from "../src/game/bot-room-state";
+import { endVoting, maybeEndFinalVoteEarly } from "../src/game/machine";
+import { pendingEndFinalVote } from "../src/game/bot-room-state";
 
 const CONFIG = {
   ...DEFAULT_ROOM_CONFIG,
@@ -123,13 +123,11 @@ async function advance(ms: number) {
 }
 
 /**
- * Chốt vote sơ bộ. Phòng test bắt đầu thẳng ở VOTING nên chưa có timer nào của
- * beginVoting; đi qua đường kết thúc sớm là cách duy nhất khởi động chuỗi mà
- * không phải chạy lại cả một đêm.
+ * Mô phỏng timer deadline của vote sơ bộ. Phòng test bắt đầu thẳng ở VOTING nên
+ * chưa có timer nào của beginVoting để Vitest chạy tới mốc đó.
  */
 async function closeNomination(room: Room) {
-  maybeEndVotingEarly(room);
-  await advance(1_000);
+  endVoting(room);
 }
 
 /** p2 dẫn 3 phiếu; ba người còn lại rải mỗi người một phiếu khác nhau. */
@@ -143,9 +141,8 @@ beforeEach(() => {
   vi.useFakeTimers();
   storeMocks.rooms.clear();
   storeMocks.timers.length = 0;
-  // Hai cờ này sống theo mã phòng ngoài phạm vi một ván; không dọn thì test thứ
-  // hai trở đi thấy cờ đã bật và bỏ qua mốc chốt sớm.
-  pendingEndVote.clear();
+  // Cờ final-vote sống theo mã phòng ngoài phạm vi một ván; không dọn thì test
+  // thứ hai trở đi thấy cờ đã bật và bỏ qua mốc chốt sớm.
   pendingEndFinalVote.clear();
 });
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
 import { PlayerGrid } from "./PlayerGrid";
+import { VoteHistoryPanel } from "./VoteHistoryPanel";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -62,23 +63,23 @@ export function DayView({ snapshot, onVote, onSkipDiscussion }: Props) {
               {myVote
                 ? `Bạn đã bỏ phiếu cho ${snapshot.players.find((p) => p.id === myVote)?.name}.`
                 : "Bạn đã chọn không treo ai."}
-              {" Đang chờ người khác..."}
+              {" Bạn vẫn có thể đổi phiếu tới khi hết giờ."}
             </p>
           )}
           <PlayerGrid
             snapshot={snapshot}
-            selectable={!dead && !hasVoted}
+            selectable={!dead}
             selectedId={selected ?? myVote}
             onSelect={setSelected}
           />
-          {!dead && !hasVoted ? (
+          {!dead ? (
             <>
               <button
                 className="btn-primary mt-3 w-full"
                 disabled={!selected}
                 onClick={() => selected && onVote(selected)}
               >
-                Bỏ phiếu
+                {hasVoted ? "Đổi phiếu" : "Bỏ phiếu"}
               </button>
               <button className="btn-secondary mt-2 w-full" onClick={() => onVote(null)}>
                 Không treo ai ({snapshot.noEliminationVoteCount} phiếu)
@@ -144,35 +145,37 @@ export function DayView({ snapshot, onVote, onSkipDiscussion }: Props) {
 }
 
 export function EliminationView({ snapshot }: { snapshot: RoomSnapshot }) {
+  const latestRecap = snapshot.dayVoteHistory.at(-1);
   return (
-    <div className="card py-7 text-center">
-      <p className="text-xs uppercase tracking-[0.3em] text-mist/50">Phán quyết của làng</p>
-      {snapshot.lastEliminated ? (
-        <>
-          <h3 className="mt-2 font-display text-3xl font-bold text-blood-400">
-            {snapshot.lastEliminated.name}
-          </h3>
-          <p className="mt-1 text-sm text-mist/70">đã bị treo cổ</p>
-          {(() => {
-            const p = snapshot.players.find((x) => x.id === snapshot.lastEliminated!.playerId);
-            if (p?.role) {
-              const wolf = p.role === "WEREWOLF";
-              return (
-                <p
-                  className={`mt-4 inline-block rounded-full px-4 py-1.5 font-display text-lg font-bold ${
-                    wolf
-                      ? "bg-emerald-900/50 text-emerald-300"
-                      : "bg-blood-600/25 text-blood-400"
-                  }`}
-                >
-                  {wolf ? "Đúng là Ma Sói" : "Một dân làng vô tội"}
-                </p>
-              );
-            }
-            return null;
-          })()}
-        </>
-      ) : snapshot.lastTrial ? (
+    <div className="space-y-4">
+      <div className="card py-7 text-center">
+        <p className="text-xs uppercase tracking-[0.3em] text-mist/50">Phán quyết của làng</p>
+        {snapshot.lastEliminated ? (
+          <>
+            <h3 className="mt-2 font-display text-3xl font-bold text-blood-400">
+              {snapshot.lastEliminated.name}
+            </h3>
+            <p className="mt-1 text-sm text-mist/70">đã bị treo cổ</p>
+            {(() => {
+              const p = snapshot.players.find((x) => x.id === snapshot.lastEliminated!.playerId);
+              if (p?.role) {
+                const wolf = p.role === "WEREWOLF";
+                return (
+                  <p
+                    className={`mt-4 inline-block rounded-full px-4 py-1.5 font-display text-lg font-bold ${
+                      wolf
+                        ? "bg-emerald-900/50 text-emerald-300"
+                        : "bg-blood-600/25 text-blood-400"
+                    }`}
+                  >
+                    {wolf ? "Đúng là Ma Sói" : "Một dân làng vô tội"}
+                  </p>
+                );
+              }
+              return null;
+            })()}
+          </>
+        ) : snapshot.lastTrial ? (
         // Được tha là một kết cục riêng: lastEliminated === null không phân biệt
         // được nó với hoà phiếu hay "không treo ai" thắng.
         <>
@@ -184,11 +187,13 @@ export function EliminationView({ snapshot }: { snapshot: RoomSnapshot }) {
             {snapshot.lastTrial.abstain > 0 && `, ${snapshot.lastTrial.abstain} không bỏ phiếu`}.
           </p>
         </>
-      ) : (
+        ) : (
         // Không còn khẳng định hoà phiếu: không ai bị loại giờ có hai lý do
         // (hoà, hoặc "Không treo ai" thắng) mà snapshot không phân biệt.
-        <h3 className="mt-2 font-display text-3xl font-bold text-white">Không ai bị loại hôm nay</h3>
-      )}
+          <h3 className="mt-2 font-display text-3xl font-bold text-white">Không ai bị loại hôm nay</h3>
+        )}
+      </div>
+      {latestRecap && <VoteHistoryPanel recap={latestRecap} players={snapshot.players} />}
     </div>
   );
 }

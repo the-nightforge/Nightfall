@@ -9,7 +9,7 @@ import { botBrain, randomBrain, resetBotBudget } from "../bots";
 import { engineVote, legalHunterTargets, usablePlannedVote } from "../bots/targets";
 import { newId } from "../util";
 import type { NightDecision, PlannedVote } from "../bots/types";
-import { pendingEndFinalVote, pendingEndVote, pendingVote } from "./bot-room-state";
+import { pendingEndFinalVote, pendingVote } from "./bot-room-state";
 import {
   DISCONNECT_GRACE_MS,
   clearDiscussionSkipVotes,
@@ -56,7 +56,6 @@ export function startGame(room: Room): void {
   const players = room.members.map((m) => ({ id: m.playerId, name: m.name, isBot: m.isBot }));
   room.engine = GameEngine.create(players, room.config);
   room.status = "IN_GAME";
-  pendingEndVote.set(room.code, false);
   pendingEndFinalVote.set(room.code, false);
 
   // ROLE_REVEAL rồi tự vào đêm
@@ -97,7 +96,7 @@ function lockWolves(room: Room): void {
 
 /**
  * Đóng cửa sổ Phù Thuỷ ngay khi cô ta đã quyết, khỏi bắt cả phòng ngồi chờ hết
- * 15 giây. Cùng cách làm với maybeEndVotingEarly ở pha bỏ phiếu.
+ * 15 giây, để không phải chờ toàn bộ cửa sổ đêm.
  */
 export function maybeEndWitchWindow(room: Room): void {
   if (!room.engine || room.engine.state.phase !== "NIGHT") return;
@@ -132,7 +131,6 @@ function beginVoting(room: Room): void {
   clearRoomTimers(room.code);
   clearDiscussionSkipVotes(room.code);
   const e = engine(room);
-  pendingEndVote.set(room.code, false);
   e.setPhase("VOTING", room.config.voteSeconds * 1000);
   scheduleVoteBots(room);
   setRoomTimer(room.code, () => endVoting(room), room.config.voteSeconds * 1000 + 500);
@@ -169,18 +167,11 @@ export function reconcileDiscussionSkip(room: Room): boolean {
   return room.engine?.state.phase === "VOTING";
 }
 
-export function maybeEndVotingEarly(room: Room): void {
-  if (!room.engine || room.engine.state.phase !== "VOTING") return;
-  if (!room.engine.allAliveVoted()) return;
-  if (pendingEndVote.get(room.code)) return;
-  pendingEndVote.set(room.code, true);
-  setRoomTimer(room.code, () => endVoting(room), 800);
-}
-
 /**
- * Chốt vote sơ bộ. Không ai chết ở đây: hoặc mở phiên toà, hoặc kết thúc ngày.
+ * Chốt vote sơ bộ tại deadline. Không ai chết ở đây: hoặc mở phiên toà, hoặc
+ * kết thúc ngày.
  */
-function endVoting(room: Room): void {
+export function endVoting(room: Room): void {
   clearRoomTimers(room.code);
   if (!room.engine || room.engine.state.phase !== "VOTING") return;
   const defenseMs = room.config.defenseSeconds * 1000;
@@ -209,7 +200,7 @@ function beginFinalVote(room: Room): void {
   sync(room);
 }
 
-/** Cùng cách làm với maybeEndVotingEarly, kể cả cờ chặn hẹn giờ trùng. */
+/** Cờ chặn hẹn giờ trùng cho vòng final vote. */
 export function maybeEndFinalVoteEarly(room: Room): void {
   if (!room.engine || room.engine.state.phase !== "FINAL_VOTE") return;
   if (!room.engine.allFinalVotersVoted()) return;
@@ -644,7 +635,6 @@ function scheduleVoteBots(room: Room): void {
             // đứng yên ở 0 tới tận lúc pha kết thúc. Trong phòng toàn bot, bộ đếm
             // "Không treo ai (x phiếu)" vì thế trông như hỏng.
             sync(room);
-            maybeEndVotingEarly(room);
           } catch {
             /* bỏ phiếu lỗi */
           }

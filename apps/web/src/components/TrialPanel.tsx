@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
 import { assignAvatars, tintFor } from "@/lib/avatar";
 import { Avatar } from "./Avatar";
+import { VoteHistoryPanel } from "./VoteHistoryPanel";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -20,6 +21,7 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
 
   const trial = snapshot.trial;
   if (!trial) return null;
+  const latestRecap = snapshot.dayVoteHistory.at(-1);
 
   const dead = !snapshot.you?.alive;
   const isAccused = snapshot.you?.id === trial.accusedId;
@@ -49,6 +51,8 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
           {snapshot.players.find((p) => p.id === trial.accusedId)?.voteCount ?? 0} phiếu sơ bộ
         </p>
       </div>
+
+      {latestRecap && <VoteHistoryPanel recap={latestRecap} players={snapshot.players} />}
 
       {isDefense ? (
         <div className="card text-center">

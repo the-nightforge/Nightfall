@@ -23,6 +23,7 @@ function snapshot(over: Partial<RoomSnapshot> = {}): RoomSnapshot {
     serverNow: 0,
     discussionSkip: null,
     votesRevealed: false,
+    dayVoteHistory: [],
     nightHistory: [],
     hunterShots: [],
     lastNightDeaths: [],

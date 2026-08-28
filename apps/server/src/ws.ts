@@ -28,7 +28,6 @@ import { getRoom, loadRoomFromRedis, persistRoom } from "./rooms/store";
 import { trackSocket, untrackSocket, broadcastRoom, hasConnection } from "./rooms/broadcast";
 import {
   maybeEndFinalVoteEarly,
-  maybeEndVotingEarly,
   maybeEndWitchWindow,
   scheduleDiscussionSkipRecheck,
   submitDiscussionSkip,
@@ -197,7 +196,6 @@ export function setupSocket(io: SocketServer): void {
       if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
 
       room.engine.submitVote(playerId, targetId);
-      maybeEndVotingEarly(room);
       broadcastRoom(roomCode);
       void import("./rooms/store").then((m) => m.persistRoom(room));
     });
