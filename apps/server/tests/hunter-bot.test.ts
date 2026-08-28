@@ -10,7 +10,7 @@ import { RandomBrain } from "../src/bots/random-brain";
 import type {
   Attempt,
   BotBrain,
-  DayDecision,
+  DaySpeechDecision,
   HunterShotDecision,
   NightDecision,
 } from "../src/bots/types";
@@ -48,7 +48,7 @@ vi.mock("../src/bots", async () => {
     botBrain: () => ({
       name: "controlled",
       decideNight: async () => ({ ok: true, value: null }),
-      decideDay: async () => ({ ok: true, value: null }),
+      renderDaySpeech: async () => ({ ok: true, value: null }),
       decideHunterShot: brainControl.decideHunterShot,
     }),
   };
@@ -167,7 +167,7 @@ function fakeBrain(
   return {
     name,
     decideNight: async (): Promise<Attempt<NightDecision>> => ({ ok: true, value: null }),
-    decideDay: async (): Promise<Attempt<DayDecision>> => ({ ok: true, value: null }),
+    renderDaySpeech: async (): Promise<Attempt<DaySpeechDecision>> => ({ ok: true, value: null }),
     decideHunterShot: decide,
   };
 }

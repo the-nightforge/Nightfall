@@ -2,19 +2,16 @@ import { z } from "zod";
 import type { RoomSnapshot } from "@masoi/shared";
 import type {
   Attempt,
-  DayDecision,
+  DaySpeechDecision,
   DefenseDecision,
   FinalVoteDecision,
   HunterShotDecision,
   NightDecision,
-  PlannedVote,
 } from "./types";
 import { decided, failed, nothingToDo } from "./types";
 import {
-  NO_ELIMINATION_VOTE,
   legalHunterTargets,
   legalNightTargets,
-  legalVoteTargets,
   soloNightAction,
   witchActions,
 } from "./targets";
@@ -25,11 +22,16 @@ export const nightSchema = z.object({
   targetId: z.string().nullable().optional(),
 });
 
-export const daySchema = z.object({
-  think: z.string(),
-  chat: z.string(),
-  voteTargetId: z.string().nullable().optional(),
-});
+/**
+ * `.strict()` là hàng rào cuối: kể cả khi prompt bị sửa sai và model trả về
+ * `voteTargetId`, schema từ chối thẳng thay vì âm thầm bỏ qua trường đó.
+ */
+export const daySpeechSchema = z
+  .object({
+    think: z.string(),
+    chat: z.string(),
+  })
+  .strict();
 
 export const hunterSchema = z.object({
   think: z.string(),
@@ -122,30 +124,22 @@ export function interpretNight(
   return decided({ action, targetId: target });
 }
 
-export function interpretDay(
-  view: RoomSnapshot,
+export function interpretDaySpeech(
   raw: unknown,
   chatMaxLength: number,
   log: LogOutcome,
-): Attempt<DayDecision> {
-  const parsed = daySchema.safeParse(raw);
+): Attempt<DaySpeechDecision> {
+  const parsed = daySpeechSchema.safeParse(raw);
   if (!parsed.success) {
     log("bad_shape");
     return failed();
   }
 
-  // Phiếu ngoài danh sách hợp lệ bị bỏ, nhưng lời thoại vẫn dùng được: đây là
-  // một lượt nói thành công, không phải lượt hỏng cần nhà cung cấp khác nói lại.
-  const choice = parsed.data.voteTargetId ?? null;
-  const vote: PlannedVote | null =
-    choice === NO_ELIMINATION_VOTE
-      ? { type: "NO_ELIMINATION" }
-      : choice && legalVoteTargets(view).includes(choice)
-        ? { type: "PLAYER", targetId: choice }
-        : null;
-
+  // Không parse mục tiêu từ output. Kể cả khi model viết tên người khác trong
+  // câu, quyết định gameplay vẫn là cái lõi deterministic đã chốt.
+  const chat = parsed.data.chat.trim();
   log("ok");
-  return decided({ chat: parsed.data.chat.slice(0, chatMaxLength), vote });
+  return decided({ chat: chat.length === 0 ? null : chat.slice(0, chatMaxLength) });
 }
 
 export function interpretDefense(

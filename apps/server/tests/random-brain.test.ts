@@ -70,22 +70,15 @@ describe("RandomBrain.decideNight", () => {
   });
 });
 
-describe("RandomBrain.decideDay", () => {
-  it("không bao giờ chat", async () => {
-    const d = await randomBrain.decideDay(view({ phase: "DAY_DISCUSSION" }));
-    expect(d.value?.chat).toBeNull();
+describe("RandomBrain.renderDaySpeech", () => {
+  // Ban ngày đã deterministic. Đường lui cuối cùng không được bịa ra một câu
+  // không nguồn - câu chữ khi mọi nhà cung cấp hỏng là việc của renderBotSpeech
+  // với mẫu cố định, dựng từ đúng ý định mà lõi AI đã chốt.
+  it("không tự sinh lời thoại", async () => {
+    expect(await randomBrain.renderDaySpeech()).toEqual({ ok: true, value: null });
   });
 
-  it("chọn phiếu trong danh sách hợp lệ", async () => {
-    const d = await randomBrain.decideDay(view({ phase: "VOTING" }));
-    expect(d.value?.vote).toEqual({ type: "PLAYER", targetId: expect.stringMatching(/^[bc]$/) });
-  });
-
-  it("trả null khi đã chết", async () => {
-    const v = view({
-      phase: "VOTING",
-      you: { id: "a", name: "A", ready: true, connected: true, role: "WEREWOLF", alive: false },
-    });
-    expect(await randomBrain.decideDay(v)).toEqual({ ok: true, value: null });
+  it("không còn quyết định phiếu ban ngày nào", () => {
+    expect("decideDay" in randomBrain).toBe(false);
   });
 });

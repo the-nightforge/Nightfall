@@ -1,13 +1,11 @@
 import type { RoomSnapshot } from "@masoi/shared";
 import {
-  NO_ELIMINATION_VOTE,
   legalHunterTargets,
   legalNightTargets,
-  legalVoteChoices,
-  legalVoteTargets,
   soloNightAction,
   witchActions,
 } from "./targets";
+import type { SpeechRequest } from "./types";
 
 export interface GeminiSchema {
   type: string;
@@ -280,30 +278,50 @@ function verbFor(action: string): string {
   return "bảo vệ";
 }
 
-export function buildDayPrompt(view: RoomSnapshot): PromptSpec | null {
-  if (!view.you?.alive) return null;
-  const targets = legalVoteTargets(view);
-  if (targets.length === 0) return null;
+/**
+ * Prompt diễn đạt cho ban ngày.
+ *
+ * Nhận `SpeechRequest` chứ không nhận `RoomSnapshot`: LLM chỉ được thấy đúng
+ * một mục tiêu và đúng những bằng chứng mà lõi deterministic đã chốt, nên nó
+ * không còn chỗ nào để chọn một mục tiêu khác. Schema ngày cũng không còn
+ * trường mục tiêu nào.
+ */
+export function buildDaySpeechPrompt(request: SpeechRequest): PromptSpec {
+  const intent =
+    request.intention.kind === "ACCUSE"
+      ? `Bạn đang nghi ${request.targetName ?? "một người"} và muốn nói ra điều đó.`
+      : request.intention.kind === "QUESTION"
+        ? `Bạn muốn hỏi ${request.targetName ?? "một người"} một câu để ép họ giải thích.`
+        : "Bạn chưa đủ căn cứ để chỉ đích danh ai, và muốn nói vậy.";
+
+  const evidenceLines = request.evidence.length
+    ? request.evidence.map((item) => `- [${item.sourceId}] ${item.summary}`)
+    : ["- (không có bằng chứng nào được phép nêu)"];
 
   return {
-    system: systemFor(view),
+    system: [
+      `Bạn là ${request.speaker.name}, một người chơi Ma Sói.`,
+      `Giọng điệu: ${request.personalityStyle}.`,
+      "Bạn CHỈ diễn đạt lại quyết định đã có. Bạn không quyết định gì cả.",
+    ].join("\n"),
     user: [
-      roleContext(view),
+      intent,
       "",
-      playerLines(view),
+      "Bằng chứng bạn được phép nhắc tới:",
+      ...evidenceLines,
       "",
-      chatBlock(view),
+      request.recentSpeechSourceIds.length
+        ? `Bạn đã dùng các căn cứ này ở lượt trước, đừng lặp lại: ${request.recentSpeechSourceIds.join(", ")}`
+        : "Đây là lượt nói đầu của bạn trong vòng này.",
       "",
-      "Nói một câu góp vào cuộc thảo luận, và chọn người bạn định bỏ phiếu.",
-      `Nếu bạn thấy hôm nay không nên treo ai, điền voteTargetId là ${NO_ELIMINATION_VOTE}.`,
-      "Nếu chưa quyết được thì bỏ trống voteTargetId, đừng điền bừa.",
+      "Viết tối đa hai câu, bằng tiếng Việt, như một người chơi đang nói.",
+      "Không được thêm sự kiện hoặc đổi mục tiêu: chỉ diễn đạt đúng những gì ở trên.",
     ].join("\n"),
     schema: {
       type: "object",
       properties: {
         think: THINK,
         chat: { type: "string", description: "Lời thoại, tối đa 300 ký tự" },
-        voteTargetId: { type: "string", enum: legalVoteChoices(view) },
       },
       required: ["think", "chat"],
     },

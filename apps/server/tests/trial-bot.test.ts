@@ -192,7 +192,7 @@ describe("chuỗi dự phòng phủ hết hai quyết định mới", () => {
     const broken = {
       name: "broken",
       decideNight: vi.fn(),
-      decideDay: vi.fn(),
+      renderDaySpeech: vi.fn(),
       decideHunterShot: vi.fn(),
       decideDefense: vi.fn(async () => ({ ok: false as const })),
       decideFinalVote: vi.fn(async () => ({ ok: false as const })),

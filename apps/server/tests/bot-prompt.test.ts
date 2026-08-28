@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { RoomSnapshot } from "@masoi/shared";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
-import { buildDayPrompt, buildNightPrompt, personaFor } from "../src/bots/prompt";
+import {
+  buildDaySpeechPrompt,
+  buildDefensePrompt,
+  buildNightPrompt,
+  personaFor,
+} from "../src/bots/prompt";
+import { interpretDaySpeech } from "../src/bots/decide";
+import type { SpeechRequest } from "../src/bots/types";
 
 /** Snapshot của Dân Làng: đã lọc, không ai lộ vai */
 function villagerView(): RoomSnapshot {
@@ -19,13 +26,18 @@ function villagerView(): RoomSnapshot {
       { id: "s", name: "Sang", alive: true, isBot: false },
     ],
     night: null,
+    hunterShot: null,
+    trial: null,
+    lastTrial: null,
     hasVoted: false,
     myVote: null,
     noEliminationVoteCount: 0,
     serverNow: 0,
     discussionSkip: null,
     votesRevealed: false,
+    dayVoteHistory: [],
     nightHistory: [],
+    hunterShots: [],
     lastNightDeaths: [],
     lastEliminated: null,
     winner: null,
@@ -68,10 +80,62 @@ function witchView(): RoomSnapshot {
   };
 }
 
+/** Bị cáo đang được nói lời bào chữa: nhánh còn lại vẫn đọc chat thô. */
+function defenseView(over: Partial<RoomSnapshot> = {}): RoomSnapshot {
+  return {
+    ...villagerView(),
+    phase: "DEFENSE",
+    trial: {
+      accusedId: "v",
+      accusedName: "Vân",
+      guiltyVotes: 0,
+      innocentVotes: 0,
+      guiltyRequired: 2,
+      canVote: false,
+      hasVoted: false,
+      myVote: null,
+      canSpeak: true,
+    },
+    ...over,
+  };
+}
+
+/** Một ý định ban ngày ĐÃ CHỐT, đúng hình dạng mà lõi deterministic phát ra. */
+function speechRequest(over: Partial<SpeechRequest> = {}): SpeechRequest {
+  return {
+    roomCode: "ABCDE",
+    speaker: { id: "v", name: "Vân" },
+    personalityStyle: personaFor("v"),
+    intention: {
+      kind: "ACCUSE",
+      targetId: "w",
+      confidence: 0.8,
+      evidence: [
+        {
+          id: "ev-1",
+          kind: "LATE_SWITCH",
+          sourceId: "vote:late-switch:2",
+          actorId: "w",
+          targetId: "s",
+          weight: 7,
+          confidence: 0.6,
+          round: 2,
+          summary: "đổi phiếu sát giờ chót",
+        },
+      ],
+    },
+    evidence: [{ sourceId: "vote:late-switch:2", summary: "đổi phiếu sát giờ chót" }],
+    targetName: "Wolf",
+    recentSpeechSourceIds: [],
+    ...over,
+  };
+}
+
 describe("ranh giới bảo mật của prompt", () => {
-  it("prompt của Dân Làng không chứa vai trò của bất kỳ ai khác", () => {
-    const spec = buildDayPrompt(villagerView());
-    const text = `${spec!.system}\n${spec!.user}`;
+  it("prompt ban ngày không chứa vai trò của bất kỳ ai, kể cả của chính bot", () => {
+    const spec = buildDaySpeechPrompt(speechRequest());
+    const text = `${spec.system}\n${spec.user}`;
+
     expect(text).not.toContain("WEREWOLF");
     expect(text).not.toContain("SEER");
     expect(text).not.toContain("WITCH");
@@ -81,6 +145,25 @@ describe("ranh giới bảo mật của prompt", () => {
     // này nhắm đúng dấu hiệu tiếng Việt mà code thực sự phát ra cho đồng bọn Sói,
     // để một hồi quy như vậy còn có cái gì đó bắt được.
     expect(text).not.toContain("đồng bọn Sói");
+    expect(text).not.toContain("Vai của bạn");
+  });
+
+  it("prompt ban ngày không nêu ai ngoài mục tiêu đã chốt", () => {
+    // Nhà cung cấp không thấy Sang thì nó không có cách nào chuyển hướng sang Sang.
+    const spec = buildDaySpeechPrompt(speechRequest());
+    const text = `${spec.system}\n${spec.user}`;
+
+    expect(text).toContain("Wolf");
+    expect(text).not.toContain("Sang");
+  });
+
+  it("prompt ban ngày không mang theo chat thô của người chơi", () => {
+    // Chat thô là bề mặt prompt-injection lớn nhất. Ban ngày đã deterministic
+    // nên nhà cung cấp không còn lý do gì để đọc nó.
+    const spec = buildDaySpeechPrompt(speechRequest());
+
+    expect(spec.user).not.toContain("<chat>");
+    expect(spec.user).not.toContain("Tôi nghi Wolf");
   });
 
   it("prompt của Sói nêu đồng bọn nhưng không nêu vai phe làng", () => {
@@ -93,54 +176,53 @@ describe("ranh giới bảo mật của prompt", () => {
   });
 
   it("chat của người chơi được bọc là dữ liệu, không phải chỉ thị", () => {
-    const spec = buildDayPrompt(villagerView());
+    // Các pha còn dùng snapshot (bào chữa, phiếu xác nhận) vẫn phải bọc chat.
+    const spec = buildDefensePrompt(defenseView());
     expect(spec!.user).toContain("<chat>");
     expect(spec!.user).toContain("</chat>");
     expect(spec!.user).toContain("Tôi nghi Wolf");
   });
-
-  it("nói rõ cách bỏ phiếu không treo ai, tách khỏi việc bỏ trống", () => {
-    const spec = buildDayPrompt(villagerView());
-    expect(spec!.user).toContain("không nên treo ai, điền voteTargetId là NO_ELIMINATION");
-    expect(spec!.user).toContain("chưa quyết được thì bỏ trống voteTargetId");
-  });
-
 });
 
 describe("chống lặp lời", () => {
-  function withOwnLine(): RoomSnapshot {
-    const base = villagerView();
-    return {
-      ...base,
-      chatLog: [
-        ...base.chatLog,
-        { id: "2", channel: "day", playerId: "v", playerName: "Vân", text: "Từ từ đã", at: 2 },
-      ],
-    };
-  }
+  // Trước đây bot đọc lại chat để biết mình đã nói gì. Giờ căn cứ đã nói được
+  // lõi ghi lại theo source ID, nên lời nhắc bám vào đúng luận điểm chứ không
+  // bám vào câu chữ - đó là thứ thực sự lặp.
+  it("có nhắc đừng lặp căn cứ đã dùng, kèm đúng source ID", () => {
+    const user = buildDaySpeechPrompt(
+      speechRequest({ recentSpeechSourceIds: ["vote:bandwagon:1"] }),
+    ).user;
 
-  // Không có dấu này, mọi dòng đều trông như lời người khác nên bot không biết
-  // mình đã nói gì - đó là lý do các persona kiệm lời lặp gần nguyên văn mỗi vòng.
-  it("đánh dấu (bạn) đúng vào lời của chính bot, không đánh dấu lời người khác", () => {
-    const user = buildDayPrompt(withOwnLine())!.user;
-    expect(user).toContain("Vân (bạn): Từ từ đã");
-    expect(user).toContain("Sang: Tôi nghi Wolf");
-    expect(user).not.toContain("Sang (bạn)");
+    expect(user).toContain("đừng lặp lại");
+    expect(user).toContain("vote:bandwagon:1");
   });
 
-  it("có nhắc đừng lặp khi bot đã từng nói", () => {
-    expect(buildDayPrompt(withOwnLine())!.user).toContain("nói ý mới");
+  it("chưa nói lần nào thì không thêm nhắc nhở thừa", () => {
+    const user = buildDaySpeechPrompt(speechRequest()).user;
+
+    expect(user).not.toContain("đừng lặp lại");
+    expect(user).toContain("lượt nói đầu");
   });
 
-  /** Chỉ phần trong <chat>, vì playerLines cũng dùng dấu "(bạn)" cho danh sách người chơi. */
-  function chatSection(user: string): string {
-    return user.slice(user.indexOf("<chat>"), user.indexOf("</chat>"));
-  }
+  it("liệt kê đúng bằng chứng được phép nhắc tới, kèm source ID", () => {
+    const user = buildDaySpeechPrompt(speechRequest()).user;
 
-  it("chưa nói lần nào thì không thêm nhắc nhở thừa và không dòng chat nào bị đánh dấu", () => {
-    const user = buildDayPrompt(villagerView())!.user;
-    expect(user).not.toContain("nói ý mới");
-    expect(chatSection(user)).not.toContain("(bạn)");
+    expect(user).toContain("vote:late-switch:2");
+    expect(user).toContain("đổi phiếu sát giờ chót");
+    expect(user).toContain("Không được thêm sự kiện hoặc đổi mục tiêu");
+  });
+
+  it("ý định WITHHOLD không nêu tên ai", () => {
+    const user = buildDaySpeechPrompt(
+      speechRequest({
+        intention: { kind: "WITHHOLD", confidence: 0.2, evidence: [] },
+        evidence: [],
+        targetName: null,
+      }),
+    ).user;
+
+    expect(user).not.toContain("Wolf");
+    expect(user).toContain("không có bằng chứng nào được phép nêu");
   });
 });
 
@@ -151,20 +233,26 @@ describe("responseSchema", () => {
     expect(target.enum).toEqual(["v"]);
   });
 
-  // responseSchema chỉ nhận tập con OpenAPI 3.0, nơi "type" là giá trị đơn.
-  // Mảng ["string","null"] là JSON Schema và bị trả về 400 INVALID_ARGUMENT,
-  // khiến mọi prompt ngày và mọi prompt đêm của Phù Thuỷ hỏng im lặng.
-  it("prompt ngày: voteTargetId là type đơn, không mã hoá nullable, và nằm ngoài required", () => {
-    const spec = buildDayPrompt(villagerView());
-    const vote = spec!.schema.properties.voteTargetId as {
-      type: string;
-      enum: string[];
-      nullable?: boolean;
-    };
-    expect(vote.type).toBe("string");
-    expect(vote.enum).toEqual(["w", "s", "NO_ELIMINATION"]);
-    expect(vote.nullable).toBeUndefined();
-    expect(spec!.schema.required).not.toContain("voteTargetId");
+  // Ban ngày nhà cung cấp chỉ được trả về CÂU CHỮ. Còn một trường mục tiêu nào
+  // trong schema là còn một đường để nó lái gameplay.
+  it("prompt ngày chỉ có think/chat, không còn trường mục tiêu nào", () => {
+    const spec = buildDaySpeechPrompt(speechRequest());
+
+    expect(spec.schema.properties).toHaveProperty("chat");
+    expect(spec.schema.properties).not.toHaveProperty("voteTargetId");
+    expect(spec.schema.properties).not.toHaveProperty("targetId");
+    expect(Object.keys(spec.schema.properties).sort()).toEqual(["chat", "think"]);
+    expect(spec.schema.required).toEqual(["think", "chat"]);
+  });
+
+  it("interpreter từ chối phản hồi ngày có thêm trường mục tiêu", () => {
+    const outcome = interpretDaySpeech(
+      { think: "nghi Wolf", chat: "Tôi nghi Wolf", voteTargetId: "s" },
+      300,
+      () => undefined,
+    );
+
+    expect(outcome).toEqual({ ok: false });
   });
 
   it("prompt đêm Phù Thuỷ: targetId là type đơn và nằm ngoài required", () => {

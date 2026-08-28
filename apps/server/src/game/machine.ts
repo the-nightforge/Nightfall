@@ -1,13 +1,19 @@
 import { GameEngine } from "@masoi/game-engine";
+import type { BotDecisionContext, BotSpeechIntention } from "@masoi/game-engine";
 import { GAME_OVER_MS, RESULT_MS, ROLE_REVEAL_MS, SERVER_EVENTS } from "@masoi/shared";
+import type { PublicVoteChoice } from "@masoi/shared";
 import type { Room } from "../rooms/store";
 import { clearRoomTimers, persistRoom, setRoomTimer } from "../rooms/store";
 import { broadcastRoom, emitToPlayers } from "../rooms/broadcast";
 import { prisma } from "../db";
 import { buildSnapshot, pushChat, resolveChat } from "../rooms/snapshot";
 import { botBrain, randomBrain, resetBotBudget } from "../bots";
+import { buildBotDecisionContext } from "../bots/context";
+import { renderBotSpeech } from "../bots/speech-renderer";
+import { personaFor } from "../bots/prompt";
+import type { SpeechRequest } from "../bots/types";
 import { engineVote, legalHunterTargets, usablePlannedVote } from "../bots/targets";
-import { clearBotSession, startBotSession } from "../bots/session-registry";
+import { botSessionFor, clearBotSession, startBotSession } from "../bots/session-registry";
 import { newId } from "../util";
 import type { NightDecision, PlannedVote } from "../bots/types";
 import { pendingEndFinalVote, pendingVote } from "./bot-room-state";
@@ -444,6 +450,44 @@ export function scheduleNightBots(room: Room): void {
   }
 }
 
+/** `PublicVoteChoice` của engine sang hình dạng phiếu mà scheduler đang dùng. */
+function toPlannedVote(choice: PublicVoteChoice): PlannedVote {
+  return choice.type === "PLAYER"
+    ? { type: "PLAYER", targetId: choice.targetId }
+    : { type: "NO_ELIMINATION" };
+}
+
+/**
+ * Gói một ý định đã chốt thành yêu cầu diễn đạt.
+ *
+ * Chỉ mang tên mục tiêu và tóm tắt bằng chứng: không snapshot, không bảng role,
+ * không danh sách mục tiêu hợp lệ - nhà cung cấp không có gì để đổi.
+ */
+function toSpeechRequest(
+  room: Room,
+  member: { playerId: string; name: string },
+  context: BotDecisionContext,
+  speech: BotSpeechIntention,
+): SpeechRequest {
+  const target = speech.targetId
+    ? context.knowledge.players.find((player) => player.id === speech.targetId)
+    : undefined;
+  const runtime = botSessionFor(room).runtimeFor(member.playerId);
+
+  return {
+    roomCode: room.code,
+    speaker: { id: member.playerId, name: member.name },
+    personalityStyle: personaFor(member.playerId),
+    intention: speech,
+    evidence: speech.evidence.map((item) => ({
+      sourceId: item.sourceId,
+      summary: item.summary,
+    })),
+    targetName: target?.name ?? null,
+    recentSpeechSourceIds: runtime.state.speechMemory.flatMap((entry) => entry.sourceIds),
+  };
+}
+
 export function scheduleDayBots(room: Room): void {
   const bots = room.members.filter((m) => m.isBot);
   const window = room.config.discussionSeconds * 1_000;
@@ -460,33 +504,44 @@ export function scheduleDayBots(room: Room): void {
           const discussionEngine = room.engine;
           const discussionRound = discussionEngine.state.round;
           const discussionEndsAt = discussionEngine.state.phaseEndsAt;
-          const view = buildSnapshot(room, member.playerId);
-          const attempt = await botBrain().decideDay(view);
+          const runtime = botSessionFor(room).runtimeFor(member.playerId);
+          const context = buildBotDecisionContext(room, member.playerId);
+          runtime.observe(context);
+          // Phiếu là quyết định của lõi deterministic, chốt TRƯỚC khi hỏi nhà
+          // cung cấp. Provider chỉ còn việc diễn đạt.
+          const vote = runtime.decideVote(context);
+          const speech = runtime.decideSpeech(context, vote);
+          const chat = speech
+            ? await renderBotSpeech(toSpeechRequest(room, member, context, speech))
+            : null;
+
+          // Kết quả về sau khi pha đổi thì bỏ TẤT CẢ, kể cả phiếu đã định: nó
+          // được tính từ một tình thế không còn tồn tại.
           if (
             room.engine !== discussionEngine ||
             discussionEngine.state.phase !== "DAY_DISCUSSION" ||
             discussionEngine.state.round !== discussionRound ||
             discussionEngine.state.phaseEndsAt !== discussionEndsAt
           ) return;
-          if (!attempt.ok || !attempt.value) return;
-          const decision = attempt.value;
-          if (decision.vote) votes.set(member.playerId, decision.vote);
-          if (decision.chat) {
-            const resolved = resolveChat(room, member.playerId);
-            if (resolved.ok) {
-              // ChatMessage cần đủ id và at; dựng giống hệt service.chat()
-              const message = {
-                id: newId(),
-                channel: resolved.channel,
-                playerId: member.playerId,
-                playerName: member.name,
-                text: decision.chat,
-                at: Date.now(),
-              };
-              pushChat(room, message);
-              emitToPlayers(resolved.recipients, SERVER_EVENTS.CHAT_NEW, message);
-              void persistRoom(room);
-            }
+
+          votes.set(member.playerId, toPlannedVote(vote.choice));
+          if (!speech || !chat) return;
+
+          const resolved = resolveChat(room, member.playerId);
+          if (resolved.ok) {
+            // ChatMessage cần đủ id và at; dựng giống hệt service.chat()
+            const message = {
+              id: newId(),
+              channel: resolved.channel,
+              playerId: member.playerId,
+              playerName: member.name,
+              text: chat,
+              at: Date.now(),
+            };
+            pushChat(room, message);
+            emitToPlayers(resolved.recipients, SERVER_EVENTS.CHAT_NEW, message);
+            void persistRoom(room);
+            runtime.recordSpeech(speech, discussionRound);
           }
         } catch {
           /* não bot lỗi (mạng, JSON hỏng,...) không được kéo sập cả tiến trình */
@@ -618,6 +673,18 @@ function scheduleFinalVoteBots(room: Room): void {
   }
 }
 
+/** Phiếu do lõi deterministic chốt ngay tại thời điểm gọi. */
+function deterministicVote(room: Room, botId: string): PlannedVote | null {
+  try {
+    const runtime = botSessionFor(room).runtimeFor(botId);
+    const context = buildBotDecisionContext(room, botId);
+    runtime.observe(context);
+    return toPlannedVote(runtime.decideVote(context).choice);
+  } catch {
+    return null;
+  }
+}
+
 function scheduleVoteBots(room: Room): void {
   const votes = pendingVote.get(room.code);
 
@@ -629,9 +696,11 @@ function scheduleVoteBots(room: Room): void {
           if (!room.engine || room.engine.state.phase !== "VOTING") return;
           const view = buildSnapshot(room, member.playerId);
 
+          // Không còn đường lui ngẫu nhiên: nếu chưa có phiếu đã định thì hỏi
+          // lại chính lõi deterministic.
           const vote =
             usablePlannedVote(view, votes?.get(member.playerId)) ??
-            (await randomBrain.decideDay(view)).value?.vote;
+            deterministicVote(room, member.playerId);
 
           if (!vote) return;
           try {

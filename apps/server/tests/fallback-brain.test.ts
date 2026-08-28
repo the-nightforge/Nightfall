@@ -5,7 +5,8 @@ import { FallbackBrain } from "../src/bots/fallback-brain";
 import type {
   Attempt,
   BotBrain,
-  DayDecision,
+  DaySpeechDecision,
+  SpeechRequest,
   HunterShotDecision,
   NightDecision,
 } from "../src/bots/types";
@@ -40,7 +41,7 @@ function view(): RoomSnapshot {
 }
 
 /** Não giả ghi lại số lần bị hỏi, để đếm xem chuỗi có đi tiếp hay không. */
-function stub(name: string, result: () => Attempt<DayDecision>) {
+function stub(name: string, result: () => Attempt<DaySpeechDecision>) {
   const calls = { n: 0 };
   const brain: BotBrain = {
     name,
@@ -48,7 +49,7 @@ function stub(name: string, result: () => Attempt<DayDecision>) {
       calls.n += 1;
       return { ok: false };
     },
-    async decideDay(): Promise<Attempt<DayDecision>> {
+    async renderDaySpeech(): Promise<Attempt<DaySpeechDecision>> {
       calls.n += 1;
       return result();
     },
@@ -60,18 +61,15 @@ function stub(name: string, result: () => Attempt<DayDecision>) {
   return { brain, calls };
 }
 
-const ok = (chat: string): Attempt<DayDecision> => ({
-  ok: true,
-  value: { chat, vote: null },
-});
+const ok = (chat: string): Attempt<DaySpeechDecision> => ({ ok: true, value: { chat } });
 
 describe("FallbackBrain", () => {
   it("dừng ở não đầu tiên thành công, không hỏi não sau", async () => {
     const a = stub("a", () => ok("xong"));
     const b = stub("b", () => ok("khong nen goi"));
 
-    const r = await new FallbackBrain([a.brain, b.brain]).decideDay(view());
-    expect(r).toEqual({ ok: true, value: { chat: "xong", vote: null } });
+    const r = await new FallbackBrain([a.brain, b.brain]).renderDaySpeech(speechRequest());
+    expect(r).toEqual({ ok: true, value: { chat: "xong" } });
     expect(a.calls.n).toBe(1);
     expect(b.calls.n).toBe(0);
   });
@@ -80,8 +78,8 @@ describe("FallbackBrain", () => {
     const a = stub("a", () => ({ ok: false }));
     const b = stub("b", () => ok("cuu duoc"));
 
-    const r = await new FallbackBrain([a.brain, b.brain]).decideDay(view());
-    expect(r).toEqual({ ok: true, value: { chat: "cuu duoc", vote: null } });
+    const r = await new FallbackBrain([a.brain, b.brain]).renderDaySpeech(speechRequest());
+    expect(r).toEqual({ ok: true, value: { chat: "cuu duoc" } });
     expect(b.calls.n).toBe(1);
   });
 
@@ -92,7 +90,7 @@ describe("FallbackBrain", () => {
     const a = stub("a", () => ({ ok: true, value: null }));
     const b = stub("b", () => ok("khong duoc goi"));
 
-    const r = await new FallbackBrain([a.brain, b.brain]).decideDay(view());
+    const r = await new FallbackBrain([a.brain, b.brain]).renderDaySpeech(speechRequest());
     expect(r).toEqual({ ok: true, value: null });
     expect(b.calls.n).toBe(0);
   });
@@ -101,22 +99,22 @@ describe("FallbackBrain", () => {
     const a: BotBrain = {
       name: "no",
       decideNight: async () => ({ ok: false }),
-      decideDay: async () => {
+      renderDaySpeech: async () => {
         throw new Error("mang hong");
       },
       decideHunterShot: async () => ({ ok: false }),
     };
     const b = stub("b", () => ok("van chay"));
 
-    const r = await new FallbackBrain([a, b.brain]).decideDay(view());
-    expect(r).toEqual({ ok: true, value: { chat: "van chay", vote: null } });
+    const r = await new FallbackBrain([a, b.brain]).renderDaySpeech(speechRequest());
+    expect(r).toEqual({ ok: true, value: { chat: "van chay" } });
   });
 
   it("mọi não đều hỏng thì báo hỏng", async () => {
     const a = stub("a", () => ({ ok: false }));
     const b = stub("b", () => ({ ok: false }));
 
-    expect(await new FallbackBrain([a.brain, b.brain]).decideDay(view())).toEqual({ ok: false });
+    expect(await new FallbackBrain([a.brain, b.brain]).renderDaySpeech(speechRequest())).toEqual({ ok: false });
     expect(a.calls.n).toBe(1);
     expect(b.calls.n).toBe(1);
   });
@@ -125,3 +123,33 @@ describe("FallbackBrain", () => {
     expect(() => new FallbackBrain([])).toThrow();
   });
 });
+
+function speechRequest(overrides: Partial<SpeechRequest> = {}): SpeechRequest {
+  return {
+    roomCode: "ABCDE",
+    speaker: { id: "v", name: "Vân" },
+    personalityStyle: "điềm tĩnh",
+    intention: {
+      kind: "ACCUSE",
+      targetId: "s",
+      confidence: 0.7,
+      evidence: [
+        {
+          id: "2:nomination:5:LATE_SWITCH",
+          kind: "LATE_SWITCH",
+          sourceId: "vote:late-switch:2",
+          actorId: "s",
+          targetId: "v",
+          weight: 7,
+          confidence: 0.6,
+          round: 2,
+          summary: "đổi phiếu sát giờ chót",
+        },
+      ],
+    },
+    evidence: [{ sourceId: "vote:late-switch:2", summary: "đổi phiếu sát giờ chót" }],
+    targetName: "Sang",
+    recentSpeechSourceIds: [],
+    ...overrides,
+  };
+}

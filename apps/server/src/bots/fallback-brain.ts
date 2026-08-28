@@ -2,11 +2,12 @@ import type { RoomSnapshot } from "@masoi/shared";
 import type {
   Attempt,
   BotBrain,
-  DayDecision,
+  DaySpeechDecision,
   DefenseDecision,
   FinalVoteDecision,
   HunterShotDecision,
   NightDecision,
+  SpeechRequest,
 } from "./types";
 import { failed } from "./types";
 
@@ -46,8 +47,8 @@ export class FallbackBrain implements BotBrain {
     return this.first((b) => b.decideNight(view));
   }
 
-  decideDay(view: RoomSnapshot): Promise<Attempt<DayDecision>> {
-    return this.first((b) => b.decideDay(view));
+  renderDaySpeech(request: SpeechRequest): Promise<Attempt<DaySpeechDecision>> {
+    return this.first((b) => b.renderDaySpeech(request));
   }
 
   decideHunterShot(view: RoomSnapshot): Promise<Attempt<HunterShotDecision>> {

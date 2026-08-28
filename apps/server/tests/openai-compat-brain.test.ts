@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { SpeechRequest } from "../src/bots/types";
 import type { RoomSnapshot } from "@masoi/shared";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import { OpenAiCompatBrain, tolerantJsonParse } from "../src/bots/openai-compat-brain";
@@ -77,42 +78,36 @@ describe("tolerantJsonParse", () => {
 });
 
 describe("OpenAiCompatBrain", () => {
-  it("chuyển phản hồi hợp lệ thành DayDecision", async () => {
-    const b = brain(async () => reply('{"think":"x","chat":"chào","voteTargetId":"w"}'));
-    expect(await b.decideDay(dayView())).toEqual({
+  it("chuyển phản hồi hợp lệ thành DaySpeechDecision", async () => {
+    const b = brain(async () => reply('{"think":"x","chat":"chào"}'));
+    expect(await b.renderDaySpeech(speechRequest())).toEqual({
       ok: true,
-      value: { chat: "chào", vote: { type: "PLAYER", targetId: "w" } },
+      value: { chat: "chào" },
     });
   });
 
-  it("phiếu ngoài danh sách hợp lệ bị bỏ nhưng vẫn giữ lời thoại", async () => {
+  // Ban ngày đã deterministic: một mục tiêu trong phản hồi là dấu hiệu model
+  // đang cố quyết hộ, nên cả lượt bị từ chối thay vì lọc bớt trường.
+  it("từ chối phản hồi có kèm mục tiêu bỏ phiếu", async () => {
     const b = brain(async () => reply('{"think":"x","chat":"ừ","voteTargetId":"khong-ton-tai"}'));
-    expect(await b.decideDay(dayView())).toEqual({
-      ok: true,
-      value: { chat: "ừ", vote: null },
-    });
+    expect(await b.renderDaySpeech(speechRequest())).toEqual({ ok: false });
   });
 
   it("văn xuôi không phải JSON là lượt hỏng", async () => {
     const b = brain(async () => reply("Tôi nghi Sang lắm nha"));
-    expect(await b.decideDay(dayView())).toEqual({ ok: false });
+    expect(await b.renderDaySpeech(speechRequest())).toEqual({ ok: false });
   });
 
   it("HTTP lỗi là lượt hỏng", async () => {
     const b = brain(async () => new Response(JSON.stringify({ error: "hong" }), { status: 500 }));
-    expect(await b.decideDay(dayView())).toEqual({ ok: false });
+    expect(await b.renderDaySpeech(speechRequest())).toEqual({ ok: false });
   });
 
-  it("bot đã chết thì không gọi API và cũng không báo hỏng", async () => {
-    let calls = 0;
-    const b = brain(async () => {
-      calls += 1;
-      return reply("{}");
-    });
-    const dead = dayView();
-    const v = { ...dead, you: { ...dead.you!, alive: false } };
-    expect(await b.decideDay(v)).toEqual({ ok: true, value: null });
-    expect(calls).toBe(0);
+  // Việc "có nên nói hay không" đã do lõi deterministic quyết trước khi tới
+  // đây, nên nhà cung cấp không còn nhận snapshot để tự kiểm tra sống/chết.
+  it("chat rỗng là chủ động im lặng, không phải lượt hỏng", async () => {
+    const b = brain(async () => reply('{"think":"x","chat":""}'));
+    expect(await b.renderDaySpeech(speechRequest())).toEqual({ ok: true, value: { chat: null } });
   });
 
   it("429 kích hoạt nghỉ riêng cho nhà cung cấp đó", async () => {
@@ -123,7 +118,7 @@ describe("OpenAiCompatBrain", () => {
       new BotGovernor(60),
       cooldown,
     );
-    expect(await b.decideDay(dayView())).toEqual({ ok: false });
+    expect(await b.renderDaySpeech(speechRequest())).toEqual({ ok: false });
     expect(cooldown.remainingMs()).toBe(4_000);
   });
 });
@@ -137,14 +132,14 @@ describe("OpenAiCompatBrain: hình dạng request", () => {
     const b = brain(
       async (_u, init) => {
         body = JSON.parse(String(init.body));
-        return reply('{"think":"x","chat":"a","voteTargetId":null}');
+        return reply('{"think":"x","chat":"a"}');
       },
       jsonMode,
       new BotGovernor(60),
       new Cooldown(),
       extra,
     );
-    await b.decideDay(dayView());
+    await b.renderDaySpeech(speechRequest());
     return body;
   }
 
@@ -157,7 +152,9 @@ describe("OpenAiCompatBrain: hình dạng request", () => {
     const body = await capture("prompt");
     expect(body.response_format).toBeUndefined();
     expect(body.messages[1].content).toContain("CHỈ trả về một object JSON hợp lệ");
-    expect(body.messages[1].content).toContain('"voteTargetId"');
+    // Prompt ngày không còn bất kỳ trường mục tiêu nào: LLM chỉ diễn đạt.
+    expect(body.messages[1].content).toContain('"chat"');
+    expect(body.messages[1].content).not.toContain('"voteTargetId"');
   });
 
   it("chế độ json_schema gửi schema strict, mọi field nằm trong required", async () => {
@@ -166,10 +163,10 @@ describe("OpenAiCompatBrain: hình dạng request", () => {
     expect(body.response_format.json_schema.strict).toBe(true);
     expect(schema.additionalProperties).toBe(false);
     expect(schema.required).toEqual(Object.keys(schema.properties));
-    // strict cấm field tuỳ chọn, nên thứ vốn có thể vắng phải thành nullable.
-    expect(schema.properties.voteTargetId.type).toEqual(["string", "null"]);
-    expect(schema.properties.voteTargetId.enum).toContain(null);
     expect(schema.properties.chat.type).toBe("string");
+    // Không còn trường mục tiêu nào trong schema ngày.
+    expect(schema.properties.voteTargetId).toBeUndefined();
+    expect(Object.keys(schema.properties)).toEqual(["think", "chat"]);
   });
 
   // "OpenAI-compatible" không có nghĩa là giống nhau. gpt-5.x trả 400 cho
@@ -195,3 +192,33 @@ describe("OpenAiCompatBrain: hình dạng request", () => {
     expect((await capture("prompt", { temperature: 1.2 })).temperature).toBe(1.2);
   });
 });
+
+function speechRequest(overrides: Partial<SpeechRequest> = {}): SpeechRequest {
+  return {
+    roomCode: "ABCDE",
+    speaker: { id: "v", name: "Vân" },
+    personalityStyle: "điềm tĩnh",
+    intention: {
+      kind: "ACCUSE",
+      targetId: "s",
+      confidence: 0.7,
+      evidence: [
+        {
+          id: "2:nomination:5:LATE_SWITCH",
+          kind: "LATE_SWITCH",
+          sourceId: "vote:late-switch:2",
+          actorId: "s",
+          targetId: "v",
+          weight: 7,
+          confidence: 0.6,
+          round: 2,
+          summary: "đổi phiếu sát giờ chót",
+        },
+      ],
+    },
+    evidence: [{ sourceId: "vote:late-switch:2", summary: "đổi phiếu sát giờ chót" }],
+    targetName: "Sang",
+    recentSpeechSourceIds: [],
+    ...overrides,
+  };
+}

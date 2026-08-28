@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { buildDaySpeechPrompt } from "../src/bots/prompt";
+import type { SpeechRequest } from "../src/bots/types";
 import type { RoomSnapshot } from "@masoi/shared";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import { GeminiBrain } from "../src/bots/gemini-brain";
@@ -229,35 +231,70 @@ describe("GeminiBrain.decideNight (Phù Thuỷ)", () => {
   });
 });
 
-describe("GeminiBrain.decideDay", () => {
+describe("GeminiBrain.renderDaySpeech", () => {
   it("cắt lời thoại về 300 ký tự", async () => {
-    const long = "a".repeat(500);
-    const b = brain(async () => reply({ think: "x", chat: long, voteTargetId: "v" }));
-    const v = { ...wolfNightView(), phase: "DAY_DISCUSSION" as const, night: null };
-    expect(await b.decideDay(v)).toEqual({
+    const b = brain(async () => reply({ think: "x", chat: "a".repeat(500) }));
+
+    expect(await b.renderDaySpeech(speechRequest())).toEqual({
       ok: true,
-      value: { chat: "a".repeat(300), vote: { type: "PLAYER", targetId: "v" } },
+      value: { chat: "a".repeat(300) },
     });
   });
 
-  it("chấp nhận voteTargetId null", async () => {
-    const b = brain(async () => reply({ think: "x", chat: "ừ", voteTargetId: null }));
-    const v = { ...wolfNightView(), phase: "DAY_DISCUSSION" as const, night: null };
-    expect(await b.decideDay(v)).toEqual({ ok: true, value: { chat: "ừ", vote: null } });
+  it("trả về đúng lời thoại và không có mục tiêu nào", async () => {
+    const b = brain(async () => reply({ think: "x", chat: "ừ" }));
+
+    expect(await b.renderDaySpeech(speechRequest())).toEqual({ ok: true, value: { chat: "ừ" } });
   });
 
-  it("hiểu NO_ELIMINATION là cố ý không treo ai, khác với chưa quyết", async () => {
-    const b = brain(async () => reply({ think: "x", chat: "ừ", voteTargetId: "NO_ELIMINATION" }));
-    const v = { ...wolfNightView(), phase: "DAY_DISCUSSION" as const, night: null };
-    expect(await b.decideDay(v)).toEqual({
-      ok: true,
-      value: { chat: "ừ", vote: { type: "NO_ELIMINATION" } },
-    });
+  // Hàng rào cuối của luật "LLM không được đổi gameplay": kể cả khi model cố
+  // trả về một mục tiêu, schema .strict() từ chối cả lượt thay vì bỏ qua trường.
+  it("từ chối phản hồi có mục tiêu bỏ phiếu", async () => {
+    const b = brain(async () => reply({ think: "x", chat: "ừ", voteTargetId: "v" }));
+
+    expect(await b.renderDaySpeech(speechRequest())).toEqual({ ok: false });
   });
 
-  it("bỏ phiếu ngoài danh sách hợp lệ nhưng vẫn giữ lời thoại", async () => {
-    const b = brain(async () => reply({ think: "x", chat: "ừ", voteTargetId: "khong-ton-tai" }));
-    const v = { ...wolfNightView(), phase: "DAY_DISCUSSION" as const, night: null };
-    expect(await b.decideDay(v)).toEqual({ ok: true, value: { chat: "ừ", vote: null } });
+  it("chat rỗng là chủ động không nói gì, không phải lượt hỏng", async () => {
+    const b = brain(async () => reply({ think: "x", chat: "   " }));
+
+    expect(await b.renderDaySpeech(speechRequest())).toEqual({ ok: true, value: { chat: null } });
+  });
+
+  it("không gửi trường mục tiêu nào trong prompt ngày", async () => {
+    const spec = buildDaySpeechPrompt(speechRequest());
+
+    expect(Object.keys(spec.schema.properties)).toEqual(["think", "chat"]);
+    expect(`${spec.system}\n${spec.user}`).not.toContain("voteTargetId");
   });
 });
+
+function speechRequest(overrides: Partial<SpeechRequest> = {}): SpeechRequest {
+  return {
+    roomCode: "ABCDE",
+    speaker: { id: "v", name: "Vân" },
+    personalityStyle: "điềm tĩnh",
+    intention: {
+      kind: "ACCUSE",
+      targetId: "s",
+      confidence: 0.7,
+      evidence: [
+        {
+          id: "2:nomination:5:LATE_SWITCH",
+          kind: "LATE_SWITCH",
+          sourceId: "vote:late-switch:2",
+          actorId: "s",
+          targetId: "v",
+          weight: 7,
+          confidence: 0.6,
+          round: 2,
+          summary: "đổi phiếu sát giờ chót",
+        },
+      ],
+    },
+    evidence: [{ sourceId: "vote:late-switch:2", summary: "đổi phiếu sát giờ chót" }],
+    targetName: "Sang",
+    recentSpeechSourceIds: [],
+    ...overrides,
+  };
+}

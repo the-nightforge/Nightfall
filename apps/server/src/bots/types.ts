@@ -1,3 +1,4 @@
+import type { BotSpeechIntention } from "@masoi/game-engine";
 import type { RoomSnapshot } from "@masoi/shared";
 
 export type NightActionType = "KILL" | "SEE" | "GUARD" | "HEAL" | "POISON";
@@ -18,11 +19,41 @@ export type PlannedVote =
   | { type: "PLAYER"; targetId: string }
   | { type: "NO_ELIMINATION" };
 
-export interface DayDecision {
-  /** null nghĩa là bot không nói gì vòng này */
+/**
+ * Một mẩu bằng chứng đã được rút gọn để đọc thành lời. Chỉ có source ID và một
+ * câu tóm tắt: LLM không cần - và không được - biết weight hay confidence.
+ */
+export interface RenderableEvidence {
+  sourceId: string;
+  summary: string;
+}
+
+/**
+ * Yêu cầu diễn đạt một quyết định ĐÃ CHỐT.
+ *
+ * Cố tình KHÔNG chứa `RoomSnapshot`, bảng role hay danh sách mục tiêu hợp lệ:
+ * nếu LLM không nhìn thấy lựa chọn nào khác thì nó không có gì để đổi. Mục tiêu
+ * và bằng chứng ở đây đã do lõi deterministic quyết xong.
+ */
+export interface SpeechRequest {
+  /** Chỉ để governor tính ngân sách theo phòng; không phải thông tin ván đấu. */
+  roomCode: string;
+  speaker: { id: string; name: string };
+  personalityStyle: string;
+  intention: BotSpeechIntention;
+  evidence: RenderableEvidence[];
+  /** Tên hiển thị của mục tiêu, hoặc null khi ý định không nhắm vào ai. */
+  targetName: string | null;
+  /** Các source đã dùng ở lượt nói trước, để không lặp lại đúng một luận điểm. */
+  recentSpeechSourceIds: string[];
+}
+
+/**
+ * Kết quả duy nhất mà nhà cung cấp được trả về cho ban ngày: một câu nói.
+ * Không có mục tiêu, không có phiếu - gameplay đã được chốt trước khi hỏi.
+ */
+export interface DaySpeechDecision {
   chat: string | null;
-  /** null nghĩa là chưa quyết, chỗ gọi sẽ tự chốt hộ */
-  vote: PlannedVote | null;
 }
 
 /**
@@ -83,7 +114,11 @@ export const failed = <T>(): Attempt<T> => ({ ok: false });
 export interface BotBrain {
   readonly name: string;
   decideNight(view: RoomSnapshot): Promise<Attempt<NightDecision>>;
-  decideDay(view: RoomSnapshot): Promise<Attempt<DayDecision>>;
+  /**
+   * Diễn đạt một ý định ban ngày đã chốt. Thay cho `decideDay` cũ: nhà cung cấp
+   * không còn được chọn mục tiêu hay lá phiếu nào nữa.
+   */
+  renderDaySpeech(request: SpeechRequest): Promise<Attempt<DaySpeechDecision>>;
   decideHunterShot(view: RoomSnapshot): Promise<Attempt<HunterShotDecision>>;
   decideDefense(view: RoomSnapshot): Promise<Attempt<DefenseDecision>>;
   decideFinalVote(view: RoomSnapshot): Promise<Attempt<FinalVoteDecision>>;

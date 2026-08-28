@@ -2,7 +2,8 @@ import type { RoomSnapshot } from "@masoi/shared";
 import type {
   Attempt,
   BotBrain,
-  DayDecision,
+  DaySpeechDecision,
+  SpeechRequest,
   DefenseDecision,
   FinalVoteDecision,
   HunterShotDecision,
@@ -10,7 +11,7 @@ import type {
 } from "./types";
 import { failed, nothingToDo } from "./types";
 import {
-  buildDayPrompt,
+  buildDaySpeechPrompt,
   buildDefensePrompt,
   buildFinalVotePrompt,
   buildHunterPrompt,
@@ -20,7 +21,7 @@ import {
 import { BotGovernor, Cooldown, withTimeout } from "./governor";
 import {
   DEFAULT_CHAT_MAX,
-  interpretDay,
+  interpretDaySpeech,
   interpretDefense,
   interpretFinalVote,
   interpretHunterShot,
@@ -212,11 +213,10 @@ export class GeminiBrain implements BotBrain {
     return interpretNight(view, result.raw, log);
   }
 
-  async decideDay(view: RoomSnapshot): Promise<Attempt<DayDecision>> {
-    const spec = buildDayPrompt(view);
-    if (!spec) return nothingToDo();
+  async renderDaySpeech(request: SpeechRequest): Promise<Attempt<DaySpeechDecision>> {
+    const spec = buildDaySpeechPrompt(request);
 
-    const result = await this.call(view.code, spec);
+    const result = await this.call(request.roomCode, spec);
     if (!result) return failed();
 
     const log = this.logger(result.startedAt);
@@ -224,7 +224,7 @@ export class GeminiBrain implements BotBrain {
       log(result.reason, result.detail);
       return failed();
     }
-    return interpretDay(view, result.raw, this.opts.chatMaxLength ?? DEFAULT_CHAT_MAX, log);
+    return interpretDaySpeech(result.raw, this.opts.chatMaxLength ?? DEFAULT_CHAT_MAX, log);
   }
 
   async decideHunterShot(view: RoomSnapshot): Promise<Attempt<HunterShotDecision>> {

@@ -2,7 +2,7 @@ import type { RoomSnapshot } from "@masoi/shared";
 import type {
   Always,
   BotBrain,
-  DayDecision,
+  DaySpeechDecision,
   DefenseDecision,
   FinalVoteDecision,
   HunterShotDecision,
@@ -62,12 +62,15 @@ export class RandomBrain implements BotBrain {
     return targetId ? decided({ action, targetId }) : nothingToDo();
   }
 
-  async decideDay(view: RoomSnapshot): Promise<Always<DayDecision>> {
-    if (!view.you?.alive) return nothingToDo();
-    // Não chót: luôn chọn một người. "Không treo ai" là một phán đoán về ván
-    // đấu, không phải nước đi mặc định khi bí - để dành cho não thật quyết.
-    const targetId = randomOf(legalVoteTargets(view));
-    return decided({ chat: null, vote: targetId ? { type: "PLAYER", targetId } : null });
+  /**
+   * Não chót KHÔNG tự sinh lời thoại.
+   *
+   * Ban ngày đã deterministic: mục tiêu do lõi AI chốt, còn câu chữ khi mọi nhà
+   * cung cấp hỏng là việc của `renderBotSpeech` với mẫu cố định. Trả về "không
+   * có gì để nói" ở đây giữ cho đường lui không bịa ra một câu không nguồn.
+   */
+  async renderDaySpeech(): Promise<Always<DaySpeechDecision>> {
+    return nothingToDo();
   }
 
   async decideDefense(view: RoomSnapshot): Promise<Always<DefenseDecision>> {

@@ -5,7 +5,7 @@
  */
 import path from "node:path";
 import dotenv from "dotenv";
-import { DEFAULT_ROOM_CONFIG, type RoomSnapshot } from "@masoi/shared";
+import type { SpeechRequest } from "../src/bots/types";
 
 // Script được chạy từ thư mục gốc repo (npm run bot:probe), nhưng key nằm ở
 // apps/server/.env theo README - nạp rõ đường dẫn thay vì dựa vào cwd.
@@ -16,33 +16,37 @@ import { DEFAULT_ROOM_CONFIG, type RoomSnapshot } from "@masoi/shared";
 // một công cụ chẩn đoán chạy tay thì file phải là nguồn sự thật.
 dotenv.config({ path: path.resolve(__dirname, "../.env"), override: true });
 
-const view: RoomSnapshot = {
-  code: "PROBE",
-  hostId: "w",
-  phase: "DAY_DISCUSSION",
-  config: { ...DEFAULT_ROOM_CONFIG },
-  round: 2,
-  phaseEndsAt: null,
-  you: { id: "w", name: "Hải", ready: true, connected: true, role: "WEREWOLF", alive: true },
-  players: [
-    { id: "w", name: "Hải", alive: true, isBot: true, role: "WEREWOLF" },
-    { id: "v", name: "Vân", alive: true, isBot: false },
-    { id: "s", name: "Sang", alive: true, isBot: false },
+/**
+ * Ý định giả đã "chốt" sẵn, đúng hình dạng mà lõi deterministic phát ra. Probe
+ * chỉ kiểm tra khâu diễn đạt: nhà cung cấp không còn chọn mục tiêu nữa.
+ */
+const request: SpeechRequest = {
+  roomCode: "PROBE",
+  speaker: { id: "w", name: "Hải" },
+  personalityStyle: "điềm tĩnh, ít lời",
+  intention: {
+    kind: "ACCUSE",
+    targetId: "v",
+    confidence: 0.72,
+    evidence: [
+      {
+        id: "2:nomination:5:LATE_SWITCH",
+        kind: "LATE_SWITCH",
+        sourceId: "2:nomination:5",
+        actorId: "v",
+        targetId: "s",
+        weight: 7,
+        confidence: 0.6,
+        round: 2,
+        summary: "đổi phiếu sang Sang khi chỉ còn vài giây",
+      },
+    ],
+  },
+  evidence: [
+    { sourceId: "2:nomination:5", summary: "đổi phiếu sang Sang khi chỉ còn vài giây" },
   ],
-  night: null,
-  hasVoted: false,
-  myVote: null,
-  noEliminationVoteCount: 0,
-  serverNow: 0,
-  votesRevealed: false,
-  nightHistory: [],
-  lastNightDeaths: [{ playerId: "x", name: "Bình" }],
-  lastEliminated: null,
-  winner: null,
-  chatLog: [
-    { id: "1", channel: "day", playerId: "v", playerName: "Vân", text: "Tôi nghi Hải đấy", at: 1 },
-  ],
-  log: [],
+  targetName: "Vân",
+  recentSpeechSourceIds: [],
 };
 
 async function main() {
@@ -51,15 +55,19 @@ async function main() {
   // .env) trước khi dòng dotenv ở trên kịp trỏ đúng apps/server/.env - và cả
   // chuỗi nhà cung cấp bị dựng từ config rỗng.
   const { botBrain } = await import("../src/bots");
+  const { speechTemplate } = await import("../src/bots/speech-renderer");
 
   // Đi qua đúng chuỗi mà server dùng, kể cả fallback - probe gọi thẳng một nhà
   // cung cấp sẽ không phát hiện được lỗi nằm ở khâu chọn hay khâu chuyển tiếp.
   const brain = botBrain();
   console.log(`Chuỗi: ${brain.name}`);
 
-  const attempt = await brain.decideDay(view);
+  const attempt = await brain.renderDaySpeech(request);
   if (!attempt.ok) {
     console.error("Mọi nhà cung cấp đều hỏng - xem dòng [bot] phía trên");
+    // Đường lui mẫu vẫn nói được, nên probe in ra để phân biệt "chuỗi hỏng"
+    // với "cả hệ thống câm".
+    console.log("Mẫu dự phòng:", speechTemplate(request));
     process.exitCode = 1;
     return;
   }

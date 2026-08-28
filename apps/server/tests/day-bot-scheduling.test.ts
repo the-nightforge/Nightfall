@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
-import type { Attempt, DayDecision } from "../src/bots/types";
+import type { Attempt, DaySpeechDecision } from "../src/bots/types";
 import type { Room } from "../src/rooms/store";
 import { scheduleDayBots, submitDiscussionSkip } from "../src/game/machine";
 import { pendingVote } from "../src/game/bot-room-state";
 import { clearDiscussionSkipVotes } from "../src/game/discussion-skip";
 
 const brainControl = vi.hoisted(() => ({
-  decideDay: vi.fn(),
-  resolveDay: undefined as ((attempt: Attempt<DayDecision>) => void) | undefined,
+  renderDaySpeech: vi.fn(),
+  resolveDay: undefined as ((attempt: Attempt<DaySpeechDecision>) => void) | undefined,
 }));
 
 vi.mock("../src/rooms/store", () => ({
@@ -25,6 +25,36 @@ vi.mock("../src/rooms/broadcast", () => ({
 
 vi.mock("../src/db", () => ({ prisma: {} }));
 
+/**
+ * Runtime giả luôn muốn nói: test này kiểm tra việc BỎ kết quả cũ, không kiểm
+ * tra xác suất im lặng theo personality.
+ */
+vi.mock("../src/bots/session-registry", () => {
+  const intention = {
+    kind: "ACCUSE" as const,
+    targetId: "human1",
+    confidence: 0.9,
+    evidence: [],
+  };
+  const runtime = {
+    state: { speechMemory: [] as Array<{ sourceIds: string[]; round: number }> },
+    observe: () => undefined,
+    decideVote: () => ({
+      kind: "VOTE" as const,
+      choice: { type: "PLAYER" as const, targetId: "human1" },
+      confidence: 0.9,
+      evidence: [],
+    }),
+    decideSpeech: () => intention,
+    recordSpeech: () => undefined,
+  };
+  return {
+    botSessionFor: () => ({ runtimeFor: () => runtime, rngFor: () => () => 0.5 }),
+    startBotSession: () => undefined,
+    clearBotSession: () => undefined,
+  };
+});
+
 vi.mock("../src/bots", async () => {
   const actual = await vi.importActual<typeof import("../src/bots")>("../src/bots");
   return {
@@ -32,7 +62,7 @@ vi.mock("../src/bots", async () => {
     botBrain: () => ({
       name: "deferred-day-brain",
       decideNight: vi.fn(),
-      decideDay: brainControl.decideDay,
+      renderDaySpeech: brainControl.renderDaySpeech,
       decideHunterShot: vi.fn(),
     }),
   };
@@ -90,9 +120,9 @@ describe("scheduleDayBots", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     brainControl.resolveDay = undefined;
-    brainControl.decideDay.mockReset();
-    brainControl.decideDay.mockImplementation(
-      () => new Promise<Attempt<DayDecision>>((resolve) => {
+    brainControl.renderDaySpeech.mockReset();
+    brainControl.renderDaySpeech.mockImplementation(
+      () => new Promise<Attempt<DaySpeechDecision>>((resolve) => {
         brainControl.resolveDay = resolve;
       }),
     );
@@ -110,7 +140,7 @@ describe("scheduleDayBots", () => {
 
     const botDelay = Math.floor(room.config.discussionSeconds * 1_000 / 2);
     await vi.advanceTimersByTimeAsync(botDelay);
-    expect(brainControl.decideDay).toHaveBeenCalledTimes(1);
+    expect(brainControl.renderDaySpeech).toHaveBeenCalledTimes(1);
 
     submitDiscussionSkip(room, "human1", true);
     submitDiscussionSkip(room, "human2", true);
@@ -118,7 +148,7 @@ describe("scheduleDayBots", () => {
 
     brainControl.resolveDay?.({
       ok: true,
-      value: { chat: "Tin thảo luận đã lỗi thời", vote: { type: "PLAYER", targetId: "human1" } },
+      value: { chat: "Tin thảo luận đã lỗi thời" },
     });
     await vi.advanceTimersByTimeAsync(0);
 

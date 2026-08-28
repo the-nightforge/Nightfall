@@ -37,7 +37,7 @@ vi.mock("../src/db", () => ({
 const hangingBrain: BotBrain = {
   name: "hanging-forever",
   decideNight: () => new Promise(() => undefined),
-  decideDay: () => new Promise(() => undefined),
+  renderDaySpeech: () => new Promise(() => undefined),
   decideHunterShot: () => new Promise(() => undefined),
 };
 
