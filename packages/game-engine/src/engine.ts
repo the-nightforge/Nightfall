@@ -5,6 +5,7 @@ import {
   ROLE_META,
   roleTeam,
   type DayVoteRecap,
+  type GameEventView,
   type GamePhase,
   type HunterShotRecap,
   type HunterShotView,
@@ -17,6 +18,7 @@ import {
   type TrialView,
   type Winner,
 } from "@masoi/shared";
+import { selectEvent } from "./events/eventManager";
 import { assignRoles, type AssignInput } from "./assignRoles";
 import { buildBotKnowledgeView, buildLegalVoteChoices } from "./bot/knowledge";
 import type { BotKnowledgeView } from "./bot/types";
@@ -33,7 +35,11 @@ import {
 export interface SeerResultView {
   targetId: string;
   targetName: string;
-  isWolf: boolean;
+  isWolf?: boolean;
+  secondaryTargetId?: string;
+  secondaryTargetName?: string;
+  secondaryIsWolf?: boolean;
+  unknown?: boolean;
 }
 
 export interface DetectiveResultView {
@@ -73,6 +79,7 @@ export interface PlayerGameView {
   phase: GamePhase;
   round: number;
   phaseEndsAt: number | null;
+  activeEvent?: GameEventView | null;
   winner: Winner;
   you: {
     id: string;
@@ -167,6 +174,8 @@ export class GameEngine {
     this.state.priestHolyWaterUsed ??= {};
     this.state.apprenticeAwakened ??= false;
     this.state.wolfCubRageNextNight ??= false;
+    this.state.activeEvent ??= null;
+    this.state.eventHistory ??= [];
     // State lưu trước khi có Kẻ Nguyền Rủa không có hai trường dưới đây. Mặc
     // định an toàn là "role tắt, chưa ai bị nguyền": không ván cũ nào bỗng dưng
     // mọc thêm một người đã đổi phe.
@@ -228,6 +237,8 @@ export class GameEngine {
       lastTrial: null,
       hunterReaction: null,
       hunterShots: [],
+      activeEvent: null,
+      eventHistory: [],
       log: [],
     };
     return new GameEngine(state);
@@ -295,6 +306,52 @@ export class GameEngine {
     }
   }
 
+  startNight(
+    durationMs: number,
+    now = Date.now(),
+    rng: () => number = Math.random,
+    customEvent?: GameEventView | null,
+  ): GameEventView | null {
+    this.setPhase("NIGHT", durationMs, now);
+    const event = customEvent !== undefined ? customEvent : selectEvent(this.state, "NIGHT", rng);
+    this.state.activeEvent = event;
+    if (event) {
+      this.state.eventHistory.push(event);
+      this.state.log.push(`Sự kiện Đêm: [${event.name}] - ${event.description}`);
+    }
+    return event;
+  }
+
+  startDay(
+    durationMs: number,
+    now = Date.now(),
+    rng: () => number = Math.random,
+    customEvent?: GameEventView | null,
+  ): GameEventView | null {
+    const event = customEvent !== undefined ? customEvent : selectEvent(this.state, "DAY", rng);
+    let actualDuration = durationMs;
+    if (event?.id === "CURFEW") {
+      actualDuration = Math.floor(durationMs / 2);
+    }
+    this.setPhase("DAY_DISCUSSION", actualDuration, now);
+    this.state.activeEvent = event;
+    if (event) {
+      this.state.eventHistory.push(event);
+      this.state.log.push(`Sự kiện Ngày: [${event.name}] - ${event.description}`);
+      if (event.id === "JUDGMENT_DAY") {
+        const detectiveEntries = Object.values(this.state.night.detectiveResults);
+        if (detectiveEntries.length > 0) {
+          const lastRes = detectiveEntries[detectiveEntries.length - 1];
+          const t1 = this.player(lastRes.target1Id)?.name ?? "?";
+          const t2 = this.player(lastRes.target2Id)?.name ?? "?";
+          const matchText = lastRes.sameTeam ? "CÙNG PHE" : "KHÁC PHE";
+          this.state.log.push(`[Ngày Phán Xét] Kết quả Thám Tử: ${t1} và ${t2} là ${matchText}!`);
+        }
+      }
+    }
+    return event;
+  }
+
   // ---- Hành động ban đêm ----
 
   submitNightAction(
@@ -343,14 +400,58 @@ export class GameEngine {
         if (roleTeam(target.role) === "wolves") throw new GameError("Không thể cắn đồng bọn");
         // Một phiếu, không phải quyết định cuối: Sói được đổi ý tới lúc khoá phiếu.
         st.night.wolfVotes[playerId] = targetId;
+        if (secondaryTargetId) {
+          const secTarget = this.player(secondaryTargetId);
+          if (!secTarget || !secTarget.alive) throw new GameError("Mục tiêu phụ không hợp lệ");
+          if (roleTeam(secTarget.role) === "wolves") throw new GameError("Không thể cắn đồng bọn");
+          if (targetId === secondaryTargetId) throw new GameError("Không thể cắn cùng một người 2 lần");
+          st.night.wolfSecondaryTarget = secondaryTargetId;
+        }
         break;
       }
       case "SEE": {
         const canSee = p.role === "SEER" || (p.role === "APPRENTICE_SEER" && st.apprenticeAwakened);
         if (!canSee) throw new GameError("Chỉ Tiên Tri (hoặc Tiên Tri Tập Sự đã thức tỉnh) mới được soi");
+        if (st.activeEvent?.id === "MOONLESS_NIGHT") {
+          throw new GameError("Đêm Không Trăng: Tiên Tri không thể soi đêm nay");
+        }
         if (!targetId || !target) throw new GameError("Hãy chọn một người để soi");
         if (targetId === playerId) throw new GameError("Không thể soi chính mình");
-        st.night.seerResults[playerId] = { targetId, isWolf: roleTeam(target.role) === "wolves" };
+
+        const isUnknown = st.activeEvent?.id === "SHROUDED_ECLIPSE";
+        let secTargetId: string | undefined;
+        let secIsWolf: boolean | undefined;
+
+        if (secondaryTargetId) {
+          if (st.activeEvent?.id !== "CLEARING_MIST") {
+            throw new GameError("Chỉ được soi 2 người khi có sự kiện Màn Sương Tan");
+          }
+          const secTarget = this.player(secondaryTargetId);
+          if (!secTarget || !secTarget.alive) throw new GameError("Mục tiêu soi thứ 2 không hợp lệ");
+          if (targetId === secondaryTargetId) throw new GameError("Không thể soi cùng 1 người 2 lần");
+          secTargetId = secondaryTargetId;
+          secIsWolf = roleTeam(secTarget.role) === "wolves";
+        }
+
+        const seerResult: {
+          targetId: string;
+          isWolf: boolean;
+          secondaryTargetId?: string;
+          secondaryIsWolf?: boolean;
+          unknown?: boolean;
+        } = {
+          targetId,
+          isWolf: roleTeam(target.role) === "wolves",
+        };
+        if (secTargetId !== undefined) {
+          seerResult.secondaryTargetId = secTargetId;
+          seerResult.secondaryIsWolf = secIsWolf;
+        }
+        if (isUnknown) {
+          seerResult.unknown = true;
+        }
+
+        st.night.seerResults[playerId] = seerResult;
         break;
       }
       case "GUARD": {
@@ -519,13 +620,13 @@ export class GameEngine {
    * 5. Impact & Conversion (Shields/Heal nullify kill, Cursed turned, Poison ignores shields)
    * 6. Post-night triggers (Hunter, Apprentice Seer awakening, Wolf Cub rage)
    */
-  resolveNight(now = Date.now()): DeathInfo[] {
+  resolveNight(now = Date.now(), rng: () => number = Math.random): DeathInfo[] {
     const st = this.state;
     if (st.phase !== "NIGHT") throw new GameError("Chỉ xử lý đêm khi đang trong pha NIGHT");
 
     // Đêm kết thúc mà chưa ai khoá phiếu Sói thì chốt ngay tại đây: mọi lối vào
     // resolveNight đều phải thấy cùng một killTarget đã kiểm phiếu.
-    if (!st.night.wolvesLocked) this.lockWolves();
+    if (!st.night.wolvesLocked) this.lockWolves(rng);
 
     const deaths: DeathInfo[] = [];
     const addDeath = (death: DeathInfo): void => {
@@ -560,7 +661,18 @@ export class GameEngine {
     let healApplied = false;
     let cursedBitten: EnginePlayer | null = null;
 
-    const wolfTargets = [st.night.killTarget, st.night.wolfSecondaryTarget].filter(
+    const isPeacefulNight = st.activeEvent?.id === "PEACEFUL_NIGHT";
+    const primaryWolfTarget = isPeacefulNight ? null : st.night.killTarget;
+
+    let secondaryTargetToProcess = st.night.wolfSecondaryTarget;
+    if (st.activeEvent?.id === "BLOODY_HUNT" && secondaryTargetToProcess) {
+      const success = rng() < 0.5;
+      if (!success) {
+        secondaryTargetToProcess = null;
+      }
+    }
+
+    const wolfTargets = [primaryWolfTarget, secondaryTargetToProcess].filter(
       (t): t is string => t !== null && t !== undefined,
     );
 
@@ -1034,8 +1146,13 @@ export class GameEngine {
       acted = st.night.witchSkipped || st.night.healTonight || st.night.poisonTarget !== null;
     }
 
+    let canAct = isWitch ? locked : isWolf ? !locked : true;
+    if ((viewer.role === "SEER" || viewer.role === "APPRENTICE_SEER") && st.activeEvent?.id === "MOONLESS_NIGHT") {
+      canAct = false;
+    }
+
     return {
-      canAct: isWitch ? locked : isWolf ? !locked : true,
+      canAct,
       acted,
       wolvesLocked: locked,
       wolfTarget: (isWolf || isWitch) && locked ? st.night.killTarget : null,
@@ -1119,14 +1236,20 @@ export class GameEngine {
     }));
 
     const seerResultEntry = viewer ? st.night.seerResults[viewerId] : undefined;
-    const seerResult =
-      seerResultEntry && viewer
-        ? {
-            targetId: seerResultEntry.targetId,
-            targetName: this.player(seerResultEntry.targetId)?.name ?? "?",
-            isWolf: seerResultEntry.isWolf,
-          }
-        : null;
+    let seerResult: SeerResultView | null = null;
+    if (seerResultEntry && viewer) {
+      seerResult = {
+        targetId: seerResultEntry.targetId,
+        targetName: this.player(seerResultEntry.targetId)?.name ?? "?",
+        isWolf: seerResultEntry.unknown ? undefined : seerResultEntry.isWolf,
+        secondaryTargetId: seerResultEntry.secondaryTargetId,
+        secondaryTargetName: seerResultEntry.secondaryTargetId
+          ? this.player(seerResultEntry.secondaryTargetId)?.name ?? "?"
+          : undefined,
+        secondaryIsWolf: seerResultEntry.unknown ? undefined : seerResultEntry.secondaryIsWolf,
+        unknown: seerResultEntry.unknown,
+      };
+    }
 
     const detectiveEntry = viewer ? st.night.detectiveResults[viewerId] : undefined;
     const detectiveResult =
@@ -1160,6 +1283,7 @@ export class GameEngine {
       phase: st.phase,
       round: st.round,
       phaseEndsAt: st.phaseEndsAt,
+      activeEvent: st.activeEvent,
       winner: st.winner,
       you: viewer
         ? {

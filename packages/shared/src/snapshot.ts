@@ -62,7 +62,15 @@ export interface NightActionView {
   /** Với Thiên Thần Hộ Mệnh: mục tiêu đêm trước, không được đỡ lại */
   guardianAngelPrevious?: string | null;
   /** Với Tiên Tri: kết quả soi gần nhất */
-  seerResult?: { targetId: string; targetName: string; isWolf: boolean } | null;
+  seerResult?: {
+    targetId: string;
+    targetName: string;
+    isWolf?: boolean;
+    secondaryTargetId?: string;
+    secondaryTargetName?: string;
+    secondaryIsWolf?: boolean;
+    unknown?: boolean;
+  } | null;
   /** Với Tiên Tri Tập Sự: cờ đánh dấu đã thức tỉnh thừa kế kỹ năng soi */
   apprenticeAwakened?: boolean;
   /** Với Thám Tử: kết quả kiểm tra 2 mục tiêu */

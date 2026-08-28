@@ -1,5 +1,6 @@
 import type {
   DayVoteRecap,
+  GameEventView,
   GamePhase,
   HunterShotRecap,
   NightRecap,
@@ -52,7 +53,7 @@ export interface NightState {
   poisonTarget: string | null;
   /** Phù Thủy đã chủ động bỏ qua cả hai bình trong đêm này */
   witchSkipped: boolean;
-  seerResults: Record<string, { targetId: string; isWolf: boolean }>;
+  seerResults: Record<string, { targetId: string; isWolf: boolean; secondaryTargetId?: string; secondaryIsWolf?: boolean; unknown?: boolean }>;
   priestTarget: string | null;
   detectiveTargets: { target1: string; target2: string } | null;
   detectiveResults: Record<string, { target1Id: string; target2Id: string; sameTeam: boolean }>;
@@ -154,6 +155,8 @@ export interface GameState {
   lastTrial: TrialRecapState | null;
   hunterReaction: HunterReactionState | null;
   hunterShots: HunterShotRecap[];
+  activeEvent: GameEventView | null;
+  eventHistory: GameEventView[];
   log: string[];
 }
 
