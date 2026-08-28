@@ -796,6 +796,7 @@ describe("Lịch sử diễn biến ban đêm", () => {
           player: { id: poisonTarget.id, name: poisonTarget.name },
           cause: "poison",
         }],
+        cursedTurned: null,
       },
     ]);
   });

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ROLE_META, type RoomSnapshot } from "@masoi/shared";
 import { PlayerGrid } from "./PlayerGrid";
 import { canActAtNight } from "@/lib/night-role";
+import { CursedNote } from "./RoleViews";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -34,6 +35,9 @@ export function NightPanel({ snapshot, onAction }: Props) {
         <p className="text-2xl">😴</p>
         <p className="mt-2 font-semibold text-white">Đêm đã xuống...</p>
         <p className="text-sm text-mist/70">Bạn nhắm mắt ngủ và chờ buổi sáng.</p>
+        <div className="mt-3 text-left">
+          <CursedNote snapshot={snapshot} />
+        </div>
       </div>
     );
   }
@@ -64,6 +68,9 @@ export function NightPanel({ snapshot, onAction }: Props) {
             Vai trò của bạn: {meta.name}
           </h3>
           {showActedBadge && <span className="badge-phase bg-emerald-900/60 text-emerald-300">Đã hành động</span>}
+        </div>
+        <div className="mb-3">
+          <CursedNote snapshot={snapshot} />
         </div>
 
         {/* MA SÓI */}

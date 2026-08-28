@@ -140,6 +140,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
           connected: member.connected,
           role: gameView?.you?.role,
           alive: gameView?.you?.alive ?? true,
+          cursedTurned: gameView?.you?.cursedTurned,
         }
       : null,
     players: (() => {
@@ -152,6 +153,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
             alive: p.alive,
             isBot: p.isBot,
             role: p.role,
+            cursedTurned: p.cursedTurned,
             voteCount: p.voteCount,
             ready: member?.ready,
             connected: member?.connected,

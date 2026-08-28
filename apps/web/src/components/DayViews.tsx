@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ROLE_META, type RoomSnapshot } from "@masoi/shared";
+import type { RoomSnapshot } from "@masoi/shared";
+import { roleLabel } from "@/lib/cursed";
 import { PlayerGrid } from "./PlayerGrid";
 import { HunterShotTimeline } from "./HunterShotTimeline";
 import { NightRecapTimeline } from "./NightRecapTimeline";
@@ -174,7 +175,7 @@ export function GameOverView({
             <li key={p.id} className="flex items-center justify-between rounded-lg bg-night-800 px-3 py-2">
               <span className={p.alive ? "text-white" : "text-mist/50 line-through"}>{p.name}</span>
               <span className={p.role === "WEREWOLF" ? "font-semibold text-blood-400" : "text-emerald-300"}>
-                {p.role ? ROLE_META[p.role].name : "Chưa rõ"}
+                {roleLabel(p)}
                 {!p.alive && " (đã chết)"}
               </span>
             </li>

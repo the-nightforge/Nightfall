@@ -1,6 +1,7 @@
 "use client";
 
 import { ROLE_META, type RoomSnapshot } from "@masoi/shared";
+import { roleLabel } from "@/lib/cursed";
 import { getIdentity } from "@/lib/identity";
 
 interface Props {
@@ -56,7 +57,7 @@ export function PlayerGrid({
               {p.isBot && <Tag cls="bg-slate-700 text-slate-200">Bot</Tag>}
               {p.role && (
                 <Tag cls={ROLE_META[p.role].team === "wolves" ? "bg-blood-600/70 text-white" : "bg-emerald-900/70 text-emerald-200"}>
-                  {ROLE_META[p.role].name}
+                  {roleLabel(p)}
                 </Tag>
               )}
             </div>

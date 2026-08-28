@@ -86,6 +86,20 @@ function chatBlock(view: RoomSnapshot): string {
 
 function roleContext(view: RoomSnapshot): string {
   const bits: string[] = [`Vai của bạn: ${vietnameseRole(view)}.`, `Vòng ${view.round}.`];
+  // Kẻ Nguyền Rủa là vai bí mật: bot phải hiểu luật đủ để chơi, nhưng không được
+  // tự khai cơ chế ra chat. Sau khi hoá Sói, role đã là WEREWOLF nên nhánh
+  // thứ hai phải bám vào cờ cursedTurned chứ không phải role.
+  if (view.you?.role === "CURSED") {
+    bits.push(
+      "Bạn không có hành động ban đêm. Nếu bị Ma Sói cắn lần đầu thì bạn không chết mà hoá thành Ma Sói.",
+      "Tuyệt đối không nói ra vai của mình hay cơ chế nguyền rủa trong chat.",
+    );
+  } else if (view.you?.cursedTurned) {
+    bits.push(
+      "Bạn vốn là Kẻ Nguyền Rủa, đã bị cắn và giờ thuộc phe Ma Sói.",
+      "Tuyệt đối không nói ra chuyện mình bị nguyền trong chat.",
+    );
+  }
   const seer = view.night?.seerResult;
   if (seer) {
     bits.push(`Bạn đã soi ${seer.targetName}, kết quả: ${seer.isWolf ? "là Sói" : "không phải Sói"}.`);
@@ -121,6 +135,8 @@ function vietnameseRole(view: RoomSnapshot): string {
       return "Phù Thuỷ";
     case "HUNTER":
       return "Thợ Săn";
+    case "CURSED":
+      return "Kẻ Nguyền Rủa";
     default:
       return "Dân Làng";
   }

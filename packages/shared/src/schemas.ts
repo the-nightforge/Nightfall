@@ -19,6 +19,7 @@ export const roomConfigSchema = z
     guard: bool,
     witch: bool,
     hunter: bool,
+    cursed: bool,
     nightSeconds: z.number().int().min(15).max(120),
     discussionSeconds: z.number().int().min(30).max(300),
     voteSeconds: z.number().int().min(15).max(120),
@@ -37,7 +38,11 @@ export function validateRoomConfig(config: RoomConfig, playerCount: number): str
     return `Tối đa ${MAX_PLAYERS_PER_ROOM} người mỗi phòng`;
   }
   const specials =
-    (config.seer ? 1 : 0) + (config.guard ? 1 : 0) + (config.witch ? 1 : 0) + (config.hunter ? 1 : 0);
+    (config.seer ? 1 : 0) +
+    (config.guard ? 1 : 0) +
+    (config.witch ? 1 : 0) +
+    (config.hunter ? 1 : 0) +
+    (config.cursed ? 1 : 0);
   const totalRoles = config.werewolves + specials;
   if (totalRoles > playerCount) {
     return "Tổng số vai trò đặc biệt vượt quá số người chơi";

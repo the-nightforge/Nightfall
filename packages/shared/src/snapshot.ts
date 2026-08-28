@@ -9,6 +9,12 @@ export interface PlayerView {
   isBot: boolean;
   /** Chỉ hiện khi game kết thúc hoặc viewer đã chết */
   role?: Role;
+  /**
+   * Người này vốn là Kẻ Nguyền Rủa và đã bị Sói cắn hoá Sói. Chỉ đi kèm khi
+   * `role` được phép lộ hoàn toàn (hết ván / viewer đã chết): đồng bọn Sói chỉ
+   * thấy `role` là WEREWOLF chứ không biết gốc nguyền rủa.
+   */
+  cursedTurned?: boolean;
   /** Số phiếu đang có (chỉ trong VOTING) hoặc phiếu cuối (sau bỏ phiếu) */
   voteCount?: number;
   /** Chỉ dùng trong phòng chờ */
@@ -91,6 +97,11 @@ export interface NightRecap {
     player: RecapPlayer;
     cause: "wolf" | "poison";
   }>;
+  /**
+   * Kẻ Nguyền Rủa đã bị nguyền và hoá Sói trong đêm này; null khi không có.
+   * Không bắt buộc vì lịch sử đêm lưu từ trước khi có role này thiếu trường đó.
+   */
+  cursedTurned?: RecapPlayer | null;
 }
 
 /** Snapshot toàn bộ trạng thái phòng + trận đấu dành cho MỘT người chơi cụ thể. */
@@ -109,6 +120,8 @@ export interface RoomSnapshot {
     connected: boolean;
     role?: Role;
     alive: boolean;
+    /** Chính viewer là Kẻ Nguyền Rủa đã hoá Sói. Không gửi cho ai khác. */
+    cursedTurned?: boolean;
   } | null;
   players: PlayerView[];
   night: NightActionView | null;

@@ -206,7 +206,8 @@ export const roomService = {
       (config.seer ? 1 : 0) +
       (config.guard ? 1 : 0) +
       (config.witch ? 1 : 0) +
-      (config.hunter ? 1 : 0);
+      (config.hunter ? 1 : 0) +
+      (config.cursed ? 1 : 0);
     if (room.members.length >= 6) {
       const err = validateRoomConfig(config, room.members.length);
       if (err) throw new RoomError(err);

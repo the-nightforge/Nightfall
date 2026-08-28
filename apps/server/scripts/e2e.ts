@@ -146,6 +146,7 @@ async function main() {
       guard: true,
       witch: true,
       hunter: false,
+      cursed: false,
       nightSeconds: 20,
       discussionSeconds: 30,
       voteSeconds: 20,

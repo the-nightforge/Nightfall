@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ROLE_META, type Role, type RoomSnapshot } from "@masoi/shared";
+import { myCursedNote } from "@/lib/cursed";
 
 export function RoleCard({ role }: { role: Role | undefined }) {
   if (!role) {
@@ -28,6 +29,20 @@ export function RoleCard({ role }: { role: Role | undefined }) {
   );
 }
 
+/**
+ * Luật riêng của Kẻ Nguyền Rủa, chỉ hiện cho chính họ. Không bao giờ suy ra từ
+ * người khác: snapshot của người khác không mang cờ cursedTurned.
+ */
+export function CursedNote({ snapshot }: { snapshot: RoomSnapshot }) {
+  const note = myCursedNote(snapshot);
+  if (!note) return null;
+  return (
+    <p className="rounded-lg border border-amber-700/40 bg-amber-900/20 px-3 py-2 text-sm text-amber-200">
+      🩸 {note}
+    </p>
+  );
+}
+
 export function RoleRevealView({ snapshot }: { snapshot: RoomSnapshot }) {
   const [revealed, setRevealed] = useState(false);
   const role = snapshot.you?.role;
@@ -46,6 +61,7 @@ export function RoleRevealView({ snapshot }: { snapshot: RoomSnapshot }) {
       ) : (
         <>
           <RoleCard role={role} />
+          <CursedNote snapshot={snapshot} />
           {role === "WEREWOLF" && (
             <div className="card">
               <p className="mb-2 text-sm font-semibold text-blood-400">Đồng bọn của bạn:</p>

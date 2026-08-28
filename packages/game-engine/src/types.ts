@@ -7,6 +7,15 @@ export interface EnginePlayer {
   role: Role;
   alive: boolean;
   isBot: boolean;
+  /**
+   * Kẻ Nguyền Rủa đã bị Sói cắn thành công và đổi phe. Khi đó `role` đã được
+   * ghi đè thành WEREWOLF - cờ này chỉ giữ lại gốc nguyền rủa để hiển thị cuối
+   * ván và để chặn lần chuyển phe thứ hai.
+   *
+   * Không bắt buộc vì state lưu từ trước khi có role này không có trường đó;
+   * constructor của GameEngine chuẩn hoá về false khi nạp lại.
+   */
+  cursedTurned?: boolean;
 }
 
 export interface NightState {

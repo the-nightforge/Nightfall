@@ -142,6 +142,7 @@ function HostConfig({ config, onSave }: { config: RoomConfig; onSave: (c: RoomCo
             ["guard", "Bảo Vệ"],
             ["witch", "Phù Thủy"],
             ["hunter", "Thợ Săn"],
+            ["cursed", "Kẻ Nguyền Rủa"],
           ] as const
         ).map(([key, label]) => (
           <label key={key} className="flex items-center justify-between gap-3">

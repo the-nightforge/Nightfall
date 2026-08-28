@@ -49,6 +49,7 @@ export interface PlayerGameView {
     id: string;
     role: Role | undefined;
     alive: boolean;
+    cursedTurned: boolean;
   } | null;
   players: {
     id: string;
@@ -56,6 +57,8 @@ export interface PlayerGameView {
     alive: boolean;
     isBot: boolean;
     role?: Role;
+    /** Chỉ kèm theo khi role được lộ hoàn toàn; xem PlayerView.cursedTurned. */
+    cursedTurned?: boolean;
     voteCount: number;
   }[];
   nightInfo: NightInfoView | null;
@@ -107,6 +110,11 @@ export class GameEngine {
     this.state.night.wolfVotes ??= {};
     this.state.night.wolvesLocked ??= false;
     this.state.night.witchSkipped ??= false;
+    // State lưu trước khi có Kẻ Nguyền Rủa không có hai trường dưới đây. Mặc
+    // định an toàn là "role tắt, chưa ai bị nguyền": không ván cũ nào bỗng dưng
+    // mọc thêm một người đã đổi phe.
+    this.state.config.cursed ??= false;
+    for (const player of this.state.players) player.cursedTurned ??= false;
   }
 
   /** Trạng thái thô (plain object, dùng để serialize qua Redis). */
@@ -128,6 +136,7 @@ export class GameEngine {
         ...p,
         role: roles[p.id],
         alive: true,
+        cursedTurned: false,
       })),
       config,
       winner: null,
@@ -371,13 +380,19 @@ export class GameEngine {
 
     // 1. Xác định nạn nhân bị cắn
     let healApplied = false;
+    let cursedBitten: EnginePlayer | null = null;
     if (st.night.killTarget) {
       const victim = this.player(st.night.killTarget);
       if (victim && victim.alive) {
         const guarded = st.night.guardTarget === victim.id;
         healApplied = st.night.healTonight && !st.healUsed;
         if (!guarded && !healApplied) {
-          addDeath({ playerId: victim.id, name: victim.name, cause: "wolf" });
+          // Đòn cắn ăn vào Kẻ Nguyền Rủa thì nguyền chứ không giết. Bị Bảo Vệ đỡ
+          // hoặc được Phù Thuỷ cứu nghĩa là không có đòn cắn thành công nào, nên
+          // lời nguyền cũng không kích hoạt - đó là lý do nhánh này nằm trong
+          // đúng khối đã loại hai trường hợp trên.
+          if (victim.role === "CURSED") cursedBitten = victim;
+          else addDeath({ playerId: victim.id, name: victim.name, cause: "wolf" });
         }
       }
     }
@@ -403,6 +418,19 @@ export class GameEngine {
       const p = this.player(d.playerId);
       if (p) p.alive = false;
     }
+
+    // Đổi phe sau khi đã chốt kết quả đêm, và chỉ khi Kẻ Nguyền Rủa sống qua
+    // đêm đó: trúng bình độc cùng đêm thì chết bình thường, vẫn là dân làng.
+    // Ghi đè hẳn role thay vì gắn thêm một lớp phe: mọi chỗ kiểm tra phe (soi,
+    // đếm điều kiện thắng, kênh chat Sói, mục tiêu cắn) đọc role, nên đổi ở đây
+    // là đủ và không có đường nào sót lại coi họ là dân làng. Vì role không còn
+    // là CURSED, đòn cắn sau đó không thể nguyền lần thứ hai.
+    const cursedTurned = cursedBitten !== null && cursedBitten.alive ? cursedBitten : null;
+    if (cursedTurned) {
+      cursedTurned.role = "WEREWOLF";
+      cursedTurned.cursedTurned = true;
+    }
+
     this.queueHunterReaction(deaths, "night");
     st.log.push(
       deaths.length === 0
@@ -430,6 +458,9 @@ export class GameEngine {
         player: { id: death.playerId, name: death.name },
         cause: death.cause,
       })),
+      // Chỉ nằm trong lịch sử đêm (chỉ trả về ở GAME_OVER), không đưa vào
+      // st.log vốn được phát cho cả phòng ngay trong ván.
+      cursedTurned: recapPlayer(cursedTurned ?? undefined),
     };
     st.nightHistory.push(recap);
 
@@ -651,6 +682,9 @@ export class GameEngine {
         : viewerIsWolf && p.id !== viewerId && roleTeam(p.role) === "wolves"
           ? p.role
           : undefined,
+      // Đồng bọn Sói chỉ được biết đây là một con Sói, không được biết nó vốn
+      // là Kẻ Nguyền Rủa: gốc nguyền rủa chỉ lộ cùng lúc với toàn bộ vai trò.
+      cursedTurned: revealAll ? p.cursedTurned === true : undefined,
       voteCount: showVoteCounts ? tally.players[p.id] ?? 0 : 0,
     }));
 
@@ -670,7 +704,12 @@ export class GameEngine {
       phaseEndsAt: st.phaseEndsAt,
       winner: st.winner,
       you: viewer
-        ? { id: viewer.id, role: viewer.role, alive: viewer.alive }
+        ? {
+            id: viewer.id,
+            role: viewer.role,
+            alive: viewer.alive,
+            cursedTurned: viewer.cursedTurned === true,
+          }
         : null,
       players: playersView,
       nightInfo:

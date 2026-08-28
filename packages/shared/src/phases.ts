@@ -23,6 +23,7 @@ export interface RoomConfig {
   guard: boolean;
   witch: boolean;
   hunter: boolean;
+  cursed: boolean;
   /** giây */
   nightSeconds: number;
   discussionSeconds: number;
@@ -35,6 +36,7 @@ export const DEFAULT_ROOM_CONFIG: RoomConfig = {
   guard: true,
   witch: true,
   hunter: false,
+  cursed: false,
   nightSeconds: 30,
   discussionSeconds: 90,
   voteSeconds: 30,

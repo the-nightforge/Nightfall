@@ -1,5 +1,5 @@
 /** Các vai trò trong game. Thêm role mới: bổ sung enum + ROLE_META. */
-export const ROLES = ["WEREWOLF", "SEER", "GUARD", "WITCH", "HUNTER", "VILLAGER"] as const;
+export const ROLES = ["WEREWOLF", "SEER", "GUARD", "WITCH", "HUNTER", "CURSED", "VILLAGER"] as const;
 export type Role = (typeof ROLES)[number];
 
 export type Team = "wolves" | "village";
@@ -46,6 +46,15 @@ export const ROLE_META: Record<Role, RoleMeta> = {
     id: "HUNTER",
     name: "Thợ Săn",
     description: "Khi chết, có thể bắn một người còn sống hoặc không bắn ai.",
+    team: "village",
+  },
+  CURSED: {
+    id: "CURSED",
+    name: "Kẻ Nguyền Rủa",
+    description:
+      "Ban đêm không có hành động. Nếu bị Ma Sói cắn thành công lần đầu thì không chết mà hoá thành Ma Sói.",
+    // Phe lúc chia bài. Sau khi bị nguyền, engine đổi hẳn vai sang WEREWOLF nên
+    // mọi kiểm tra phe (soi, đếm thắng, chat) tự động thấy phe mới.
     team: "village",
   },
   VILLAGER: {

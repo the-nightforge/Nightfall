@@ -1,4 +1,5 @@
 import type { NightRecap } from "@masoi/shared";
+import { cursedTurnedText } from "@/lib/cursed";
 
 const causeLabel = (cause: "wolf" | "poison") =>
   cause === "wolf" ? "bị Sói cắn" : "trúng độc của Phù Thủy";
@@ -44,6 +45,10 @@ export function NightRecapTimeline({ nights }: { nights: NightRecap[] }) {
                     ? `Phù Thủy đầu độc ${night.witch.poisonTarget.name}.`
                     : "Phù Thủy không dùng bình độc."}
                 </li>
+                {(() => {
+                  const turned = cursedTurnedText(night);
+                  return turned ? <li>🩸 {turned}</li> : null;
+                })()}
               </ul>
               <p className={`mt-2 font-semibold ${night.deaths.length > 0 ? "text-blood-400" : "text-emerald-300"}`}>
                 {night.deaths.length > 0
