@@ -1,12 +1,21 @@
 import type { BotSpeechIntention } from "@masoi/game-engine";
 import type { RoomSnapshot } from "@masoi/shared";
 
-export type NightActionType = "KILL" | "SEE" | "GUARD" | "HEAL" | "POISON";
+export type NightActionType =
+  | "KILL"
+  | "SEE"
+  | "GUARD"
+  | "HEAL"
+  | "POISON"
+  | "DETECTIVE_CHECK"
+  | "GUARDIAN_PROTECT"
+  | "HOLY_WATER";
 
 export interface NightDecision {
   action: NightActionType;
   /** null với HEAL, vì engine không nhận mục tiêu cho bình cứu */
   targetId: string | null;
+  secondaryTargetId?: string | null;
 }
 
 /**

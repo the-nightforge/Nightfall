@@ -97,7 +97,9 @@ export function selectVote(
 ): BotVoteIntention {
   const knowledge = context.knowledge;
   const personality = state.personality;
-  const selfIsWolf = knowledge.knownRoles[state.playerId] === "WEREWOLF";
+  const selfIsWolf =
+    knowledge.knownRoles[state.playerId] === "WEREWOLF" ||
+    knowledge.knownRoles[state.playerId] === "WOLF_CUB";
   const threshold = voteThreshold(personality);
 
   const scored: ScoredTarget[] = [];
@@ -119,7 +121,9 @@ export function selectVote(
       (state.trust[choice.targetId]?.score ?? 0) * TRUST_DAMPING;
 
     // Phase 1 chỉ có teammate-safety penalty đơn giản; bussing thuộc Phase 3.
-    if (selfIsWolf && knowledge.knownRoles[choice.targetId] === "WEREWOLF") {
+    const targetRole = knowledge.knownRoles[choice.targetId];
+    const targetIsWolf = targetRole === "WEREWOLF" || targetRole === "WOLF_CUB";
+    if (selfIsWolf && targetIsWolf) {
       score -= 25 + personality.loyalty * 30;
     }
 
