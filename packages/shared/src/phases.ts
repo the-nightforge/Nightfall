@@ -20,6 +20,8 @@ export type GamePhase = Exclude<Phase, "LOBBY">;
 
 export type Winner = "wolves" | "village" | null;
 
+export type RoomMode = "ranked" | "chaos";
+
 /** Cấu hình số lượng vai trò do chủ phòng đặt. Dân Làng tự động lấp chỗ còn lại. */
 export interface RoomConfig {
   werewolves: number;
@@ -28,6 +30,13 @@ export interface RoomConfig {
   witch: boolean;
   hunter: boolean;
   cursed: boolean;
+  wolfCub?: boolean;
+  apprenticeSeer?: boolean;
+  detective?: boolean;
+  guardianAngel?: boolean;
+  priest?: boolean;
+  mayor?: boolean;
+  mode?: RoomMode;
   /** giây */
   nightSeconds: number;
   discussionSeconds: number;
@@ -50,6 +59,7 @@ export const DEFAULT_ROOM_CONFIG: RoomConfig = {
   witch: true,
   hunter: false,
   cursed: false,
+  mode: "ranked",
   nightSeconds: 30,
   // Hạ từ 90 khi thêm phiên toà: vote sơ bộ giờ đã đóng vai trò vòng thảo luận
   // thứ hai, giữ 90 thì một ngày kéo dài gần ba phút.

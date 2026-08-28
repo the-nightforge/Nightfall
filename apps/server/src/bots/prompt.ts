@@ -45,11 +45,17 @@ function systemFor(view: RoomSnapshot): string {
 
 /** Danh sách người chơi kèm vai — chỉ những vai đã có sẵn trong snapshot đã lọc. */
 function playerLines(view: RoomSnapshot): string {
+  const isWolfTeam = view.you?.role === "WEREWOLF" || view.you?.role === "WOLF_CUB";
   return view.players
     .map((p) => {
       const me = p.id === view.you?.id ? " (bạn)" : "";
       const status = p.alive ? "còn sống" : "đã chết";
-      const ally = p.role === "WEREWOLF" && p.id !== view.you?.id ? ", đồng bọn Sói của bạn" : "";
+      const ally =
+        isWolfTeam &&
+        p.id !== view.you?.id &&
+        (p.role === "WEREWOLF" || p.role === "WOLF_CUB")
+          ? ", đồng bọn Sói của bạn"
+          : "";
       return `- ${p.name}${me}: ${status}${ally}`;
     })
     .join("\n");
@@ -97,10 +103,46 @@ function roleContext(view: RoomSnapshot): string {
       "Bạn vốn là Kẻ Nguyền Rủa, đã bị cắn và giờ thuộc phe Ma Sói.",
       "Tuyệt đối không nói ra chuyện mình bị nguyền trong chat.",
     );
+  } else if (view.you?.role === "MAYOR") {
+    bits.push("Bạn là Thị Trưởng, phiếu biểu quyết ban ngày của bạn có trọng số x2.");
+  } else if (view.you?.role === "WOLF_CUB") {
+    bits.push("Bạn là Sói Con thuộc phe Ma Sói. Nếu bạn chết, đêm sau bầy Sói được cắn 2 mục tiêu.");
+  } else if (view.you?.role === "APPRENTICE_SEER") {
+    bits.push(
+      view.apprenticeAwakened || view.night?.apprenticeAwakened
+        ? "Tiên Tri đã chết! Bạn đã thức tỉnh và thừa kế kỹ năng soi."
+        : "Bạn là Tiên Tri Tập Sự. Khi Tiên Tri chết, bạn sẽ thức tỉnh và thừa kế kỹ năng soi.",
+    );
+  } else if (view.you?.role === "GUARDIAN_ANGEL") {
+    bits.push(`Bạn là Thiên Thần Hộ Mệnh. Bạn còn ${view.night?.guardianAngelCharges ?? 2} lượt bảo vệ.`);
+  } else if (view.you?.role === "PRIEST") {
+    bits.push(`Bạn là Linh Mục. Bình Nước thánh ${view.night?.priestHolyWaterUsed ? "đã dùng" : "còn"}.`);
   }
+
   const seer = view.night?.seerResult;
   if (seer) {
-    bits.push(`Bạn đã soi ${seer.targetName}, kết quả: ${seer.isWolf ? "là Sói" : "không phải Sói"}.`);
+    if (seer.unknown) {
+      bits.push(`Bạn đã soi ${seer.targetName}, nhưng kết quả bị che giấu: KHÔNG RÕ (UNKNOWN).`);
+    } else {
+      bits.push(`Bạn đã soi ${seer.targetName}, kết quả: ${seer.isWolf ? "là Sói" : "không phải Sói"}.`);
+      if (seer.secondaryTargetName) {
+        bits.push(`Mục tiêu thứ 2 (${seer.secondaryTargetName}): ${seer.secondaryIsWolf ? "là Sói" : "không phải Sói"}.`);
+      }
+    }
+  }
+
+  const detective = view.night?.detectiveResult;
+  if (detective) {
+    bits.push(
+      `Kết quả Thám Tử: ${detective.target1.name} và ${detective.target2.name} ${
+        detective.sameTeam ? "CÙNG PHE" : "KHÁC PHE"
+      }.`,
+    );
+  }
+
+  const priestResult = view.night?.priestResult;
+  if (priestResult) {
+    bits.push(`Kết quả Nước thánh lên ${priestResult.target.name}: ${priestResult.isWolf ? "là Sói" : "không phải Sói"}.`);
   }
   if (view.night?.wolfTarget) {
     const name = view.players.find((p) => p.id === view.night?.wolfTarget)?.name;
@@ -125,14 +167,26 @@ function vietnameseRole(view: RoomSnapshot): string {
   switch (view.you?.role) {
     case "WEREWOLF":
       return "Ma Sói";
+    case "WOLF_CUB":
+      return "Sói Con";
     case "SEER":
       return "Tiên Tri";
+    case "APPRENTICE_SEER":
+      return "Tiên Tri Tập Sự";
+    case "DETECTIVE":
+      return "Thám Tử";
     case "GUARD":
       return "Bảo Vệ";
+    case "GUARDIAN_ANGEL":
+      return "Thiên Thần Hộ Mệnh";
+    case "PRIEST":
+      return "Linh Mục";
     case "WITCH":
       return "Phù Thuỷ";
     case "HUNTER":
       return "Thợ Săn";
+    case "MAYOR":
+      return "Thị Trưởng";
     case "CURSED":
       return "Kẻ Nguyền Rủa";
     default:
@@ -142,11 +196,19 @@ function vietnameseRole(view: RoomSnapshot): string {
 
 const THINK = { type: "string", description: "Suy luận ngắn, tối đa 200 ký tự" };
 
+function verbFor(action: string): string {
+  if (action === "KILL") return "cắn";
+  if (action === "SEE") return "soi";
+  if (action === "HOLY_WATER") return "ném Nước thánh vào";
+  if (action === "DETECTIVE_CHECK") return "kiểm tra";
+  return "bảo vệ";
+}
+
 export function buildNightPrompt(view: RoomSnapshot): PromptSpec | null {
   if (!view.night?.canAct || !view.you?.alive) return null;
 
   const isWitch = view.you.role === "WITCH";
-  const action = soloNightAction(view.you.role);
+  const action = soloNightAction(view.you.role, view);
   if (!isWitch && !action) return null;
 
   const targets = isWitch ? legalNightTargets(view, "POISON") : legalNightTargets(view, action!);
@@ -157,13 +219,12 @@ export function buildNightPrompt(view: RoomSnapshot): PromptSpec | null {
 
   if (isWitch) {
     properties.action = { type: "string", enum: witchActions(view) };
-    // responseSchema chỉ nhận tập con OpenAPI 3.0: "type" phải là giá trị đơn.
-    // Mảng ["string","null"] là cú pháp JSON Schema, chỉ hợp lệ ở responseJsonSchema
-    // - gửi vào đây là 400 INVALID_ARGUMENT. Cờ "nullable" cũng có tiền lệ bị từ
-    // chối, nên không mã hoá nullable ở đâu cả: targetId nằm ngoài "required",
-    // Phù Thuỷ không nhắm ai thì bỏ trống, và nightSchema đã .optional().
     properties.targetId = { type: "string", enum: targets };
     required.push("action");
+  } else if (action === "DETECTIVE_CHECK") {
+    properties.targetId = { type: "string", enum: targets };
+    properties.secondaryTargetId = { type: "string", enum: targets };
+    required.push("targetId", "secondaryTargetId");
   } else {
     properties.targetId = { type: "string", enum: targets };
     required.push("targetId");
@@ -171,7 +232,9 @@ export function buildNightPrompt(view: RoomSnapshot): PromptSpec | null {
 
   const task = isWitch
     ? "Chọn hành động đêm nay. HEAL cứu đúng nạn nhân bầy Sói vừa chốt và không cần mục tiêu. POISON cần chọn một người. SKIP là không làm gì."
-    : `Chọn một người để ${verbFor(action!)}.`;
+    : action === "DETECTIVE_CHECK"
+      ? "Chọn 2 người chơi còn sống khác nhau để kiểm tra xem họ cùng phe hay khác phe."
+      : `Chọn một người để ${verbFor(action!)}.`;
 
   return {
     system: systemFor(view),
@@ -272,11 +335,7 @@ export function buildFinalVotePrompt(view: RoomSnapshot): PromptSpec | null {
   };
 }
 
-function verbFor(action: string): string {
-  if (action === "KILL") return "cắn";
-  if (action === "SEE") return "soi";
-  return "bảo vệ";
-}
+
 
 /**
  * Prompt diễn đạt cho ban ngày.

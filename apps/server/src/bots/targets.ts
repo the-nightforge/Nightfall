@@ -2,14 +2,23 @@ import type { Role, RoomSnapshot } from "@masoi/shared";
 import type { NightActionType, PlannedVote } from "./types";
 
 /** Vai chỉ có đúng một loại hành động đêm. Phù Thuỷ trả null vì có lựa chọn. */
-export function soloNightAction(role: Role | undefined): NightActionType | null {
+export function soloNightAction(role: Role | undefined, view?: RoomSnapshot): NightActionType | null {
   switch (role) {
     case "WEREWOLF":
+    case "WOLF_CUB":
       return "KILL";
     case "SEER":
       return "SEE";
+    case "APPRENTICE_SEER":
+      return view?.apprenticeAwakened || view?.night?.apprenticeAwakened ? "SEE" : null;
     case "GUARD":
       return "GUARD";
+    case "GUARDIAN_ANGEL":
+      return (view?.night?.guardianAngelCharges ?? 2) > 0 ? "GUARDIAN_PROTECT" : null;
+    case "PRIEST":
+      return !view?.night?.priestHolyWaterUsed ? "HOLY_WATER" : null;
+    case "DETECTIVE":
+      return "DETECTIVE_CHECK";
     default:
       return null;
   }
@@ -26,11 +35,19 @@ export function legalNightTargets(view: RoomSnapshot, action: NightActionType): 
   switch (action) {
     case "KILL":
       // Sói thấy vai đồng bọn trong snapshot của mình nên lọc được
-      return alive.filter((p) => p.id !== me && p.role !== "WEREWOLF").map((p) => p.id);
+      return alive
+        .filter((p) => p.id !== me && p.role !== "WEREWOLF" && p.role !== "WOLF_CUB")
+        .map((p) => p.id);
     case "SEE":
       return alive.filter((p) => p.id !== me).map((p) => p.id);
     case "GUARD":
       return alive.filter((p) => p.id !== view.night?.guardPrevious).map((p) => p.id);
+    case "GUARDIAN_PROTECT":
+      return alive.filter((p) => p.id !== view.night?.guardianAngelPrevious).map((p) => p.id);
+    case "HOLY_WATER":
+      return alive.filter((p) => p.id !== me).map((p) => p.id);
+    case "DETECTIVE_CHECK":
+      return alive.map((p) => p.id);
     case "POISON":
       return alive.map((p) => p.id);
     case "HEAL":
@@ -72,7 +89,10 @@ export function derivedFinalVote(
   if (!accusedId) return false;
   const accused = view.players.find((p) => p.id === accusedId);
   // Sói thấy vai đồng bọn trong snapshot của chính mình, đúng như legalNightTargets dùng.
-  if (view.you?.role === "WEREWOLF" && accused?.role === "WEREWOLF") return false;
+  const myRole = view.you?.role;
+  const isSelfWolf = myRole === "WEREWOLF" || myRole === "WOLF_CUB";
+  const isAccusedWolf = accused?.role === "WEREWOLF" || accused?.role === "WOLF_CUB";
+  if (isSelfWolf && isAccusedWolf) return false;
   if (myNomination?.type === "NO_ELIMINATION") return false;
   // Mặc định Treo. Nếu đường lui chỉ treo người mà chính bot đã đề cử, một làng
   // bot rải phiếu sẽ không bao giờ đạt đa số tuyệt đối, không ai bị treo, và Sói

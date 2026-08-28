@@ -20,6 +20,7 @@ export const nightSchema = z.object({
   think: z.string(),
   action: z.enum(["HEAL", "POISON", "SKIP"]).optional(),
   targetId: z.string().nullable().optional(),
+  secondaryTargetId: z.string().nullable().optional(),
 });
 
 /**
@@ -110,11 +111,24 @@ export function interpretNight(
     return decided({ action: "POISON", targetId: target });
   }
 
-  const action = soloNightAction(view.you?.role);
+  const action = soloNightAction(view.you?.role, view);
   if (!action) {
     log("skip");
     return nothingToDo();
   }
+
+  if (action === "DETECTIVE_CHECK") {
+    const target1 = parsed.data.targetId ?? null;
+    const target2 = parsed.data.secondaryTargetId ?? null;
+    const legal = legalNightTargets(view, "DETECTIVE_CHECK");
+    if (!target1 || !target2 || target1 === target2 || !legal.includes(target1) || !legal.includes(target2)) {
+      log("illegal_target");
+      return failed();
+    }
+    log("ok");
+    return decided({ action: "DETECTIVE_CHECK", targetId: target1, secondaryTargetId: target2 });
+  }
+
   const target = parsed.data.targetId ?? null;
   if (!target || !legalNightTargets(view, action).includes(target)) {
     log("illegal_target");

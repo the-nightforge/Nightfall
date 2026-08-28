@@ -38,8 +38,12 @@ function view(over: Partial<RoomSnapshot> = {}): RoomSnapshot {
 describe("soloNightAction", () => {
   it("ánh xạ vai sang hành động cố định", () => {
     expect(soloNightAction("WEREWOLF")).toBe("KILL");
+    expect(soloNightAction("WOLF_CUB")).toBe("KILL");
     expect(soloNightAction("SEER")).toBe("SEE");
     expect(soloNightAction("GUARD")).toBe("GUARD");
+    expect(soloNightAction("GUARDIAN_ANGEL")).toBe("GUARDIAN_PROTECT");
+    expect(soloNightAction("PRIEST")).toBe("HOLY_WATER");
+    expect(soloNightAction("DETECTIVE")).toBe("DETECTIVE_CHECK");
   });
 
   it("trả null cho Phù Thuỷ vì vai này có lựa chọn", () => {
@@ -91,6 +95,43 @@ describe("legalNightTargets", () => {
 
   it("HEAL không nhận mục tiêu nên danh sách rỗng", () => {
     expect(legalNightTargets(view(), "HEAL")).toEqual([]);
+  });
+
+  it("Thiên Thần Hộ Mệnh loại mục tiêu đêm trước", () => {
+    const v = view({
+      you: { id: "a", name: "A", ready: true, connected: true, role: "GUARDIAN_ANGEL", alive: true },
+      players: [
+        { id: "a", name: "A", alive: true, isBot: true },
+        { id: "b", name: "B", alive: true, isBot: false },
+        { id: "c", name: "C", alive: true, isBot: false },
+      ],
+      night: { canAct: true, acted: false, guardianAngelPrevious: "b", guardianAngelCharges: 2 },
+    });
+    expect(legalNightTargets(v, "GUARDIAN_PROTECT")).toEqual(["a", "c"]);
+  });
+
+  it("Linh Mục chọn được người khác còn sống", () => {
+    const v = view({
+      you: { id: "a", name: "A", ready: true, connected: true, role: "PRIEST", alive: true },
+      players: [
+        { id: "a", name: "A", alive: true, isBot: true },
+        { id: "b", name: "B", alive: true, isBot: false },
+        { id: "c", name: "C", alive: false, isBot: false },
+      ],
+    });
+    expect(legalNightTargets(v, "HOLY_WATER")).toEqual(["b"]);
+  });
+
+  it("Thám Tử chọn được toàn bộ người còn sống", () => {
+    const v = view({
+      you: { id: "a", name: "A", ready: true, connected: true, role: "DETECTIVE", alive: true },
+      players: [
+        { id: "a", name: "A", alive: true, isBot: true },
+        { id: "b", name: "B", alive: true, isBot: false },
+        { id: "c", name: "C", alive: true, isBot: false },
+      ],
+    });
+    expect(legalNightTargets(v, "DETECTIVE_CHECK")).toEqual(["a", "b", "c"]);
   });
 });
 

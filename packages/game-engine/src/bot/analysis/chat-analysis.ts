@@ -28,6 +28,13 @@ function asciiForm(text: string): string {
 /** Cụm dài đứng trước để "dân làng" không bị khớp thành "dân". */
 const ROLE_PHRASES: Array<[string, Role]> = [
   ["kẻ nguyền rủa", "CURSED"],
+  ["tiên tri tập sự", "APPRENTICE_SEER"],
+  ["thiên thần hộ mệnh", "GUARDIAN_ANGEL"],
+  ["thiên thần", "GUARDIAN_ANGEL"],
+  ["thám tử", "DETECTIVE"],
+  ["linh mục", "PRIEST"],
+  ["thị trưởng", "MAYOR"],
+  ["sói con", "WOLF_CUB"],
   ["dân thường", "VILLAGER"],
   ["dân làng", "VILLAGER"],
   ["tiên tri", "SEER"],

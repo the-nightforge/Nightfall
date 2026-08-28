@@ -54,8 +54,19 @@ export class RandomBrain implements BotBrain {
       return nothingToDo();
     }
 
-    const action = soloNightAction(view.you.role);
+    const action = soloNightAction(view.you.role, view);
     if (!action) return nothingToDo();
+
+    if (action === "DETECTIVE_CHECK") {
+      const targets = legalNightTargets(view, "DETECTIVE_CHECK");
+      if (targets.length < 2) return nothingToDo();
+      const t1 = randomOf(targets);
+      if (!t1) return nothingToDo();
+      const remaining = targets.filter((id) => id !== t1);
+      const t2 = randomOf(remaining);
+      if (!t2) return nothingToDo();
+      return decided({ action: "DETECTIVE_CHECK", targetId: t1, secondaryTargetId: t2 });
+    }
 
     const targetId = randomOf(legalNightTargets(view, action));
     return targetId ? decided({ action, targetId }) : nothingToDo();
