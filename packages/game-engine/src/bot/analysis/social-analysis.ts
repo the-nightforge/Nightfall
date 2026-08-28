@@ -20,7 +20,14 @@ export function socialEdgeKey(fromId: string, toId: string): string {
 }
 
 function emptyEdge(): SocialEdge {
-  return { support: 0, hostility: 0, voteAlignment: 0, samples: 0, reasons: [] };
+  return {
+    support: 0,
+    hostility: 0,
+    voteAlignment: 0,
+    samples: 0,
+    reasons: [],
+    lastUpdatedRound: 0,
+  };
 }
 
 /**
@@ -62,6 +69,7 @@ export function applySocialEvidence(state: BotBrainState, evidence: BotEvidence)
   }
 
   edge.samples += 1;
+  edge.lastUpdatedRound = evidence.round;
   edge.reasons = [
     ...edge.reasons.filter((reason) => reason.id !== evidence.id),
     { ...evidence },

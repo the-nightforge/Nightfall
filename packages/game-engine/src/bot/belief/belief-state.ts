@@ -64,3 +64,59 @@ export function applyTrustEvidence(state: BotBrainState, evidence: BotEvidence):
   if (evidence.actorId === state.playerId) return;
   updateBelief(state.trust, { ...evidence, weight: -evidence.weight }, state.personality);
 }
+
+/** Mỗi vòng trôi qua, một niềm tin không được củng cố giữ lại 85% sức nặng. */
+export const BELIEF_DECAY_PER_ROUND = 0.85;
+
+/**
+ * Bằng chứng KHÔNG bao giờ nguội đi.
+ *
+ * Kết quả soi và danh tính đồng đội là sự thật do engine cấp, không phải ấn
+ * tượng rút ra từ hành vi. Cho chúng phai theo thời gian sẽ khiến Tiên Tri vô
+ * dụng sau vài vòng, và khiến Sói quên mất đồng bọn của chính mình.
+ */
+const PERMANENT_KINDS = new Set<BotEvidence["kind"]>([
+  "SEER_RESULT_WOLF",
+  "SEER_RESULT_CLEAR",
+  "KNOWN_ALLY",
+]);
+
+function isPermanent(entry: BeliefEntry): boolean {
+  return entry.reasons.some((reason) => PERMANENT_KINDS.has(reason.kind));
+}
+
+function decayEntry(entry: BeliefEntry, round: number): void {
+  if (isPermanent(entry)) return;
+
+  const age = Math.max(0, round - entry.lastUpdatedRound);
+  if (age === 0) return;
+
+  entry.score = clampBeliefScore(entry.score * BELIEF_DECAY_PER_ROUND ** age);
+  // Ghi lại mốc để lần gọi sau không nhân tiếp phần vừa nhân. Không có dòng này
+  // thì gọi decay hai lần trong cùng một vòng sẽ nguội gấp đôi, và số vòng bot
+  // "quên" một nghi ngờ phụ thuộc vào việc observe được gọi mấy lần.
+  entry.lastUpdatedRound = round;
+}
+
+/**
+ * Làm nguội mọi niềm tin không được củng cố trong các vòng vừa qua.
+ *
+ * Belief chỉ tăng là sai về hành vi: một nghi ngờ từ vòng 1 sẽ nặng ngang một
+ * nghi ngờ vừa có ở vòng 5, kể cả khi người bị nghi đã chứng minh điều ngược
+ * lại suốt bốn vòng. Decay là thứ cho phép bot đổi ý.
+ */
+export function decayBeliefs(state: BotBrainState, round: number): void {
+  for (const entry of Object.values(state.suspicion)) decayEntry(entry, round);
+  for (const entry of Object.values(state.trust)) decayEntry(entry, round);
+
+  for (const edge of Object.values(state.relationships)) {
+    const age = Math.max(0, round - edge.lastUpdatedRound);
+    if (age === 0) continue;
+
+    const factor = BELIEF_DECAY_PER_ROUND ** age;
+    edge.support *= factor;
+    edge.hostility *= factor;
+    edge.voteAlignment *= factor;
+    edge.lastUpdatedRound = round;
+  }
+}

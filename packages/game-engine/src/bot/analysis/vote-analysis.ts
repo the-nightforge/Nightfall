@@ -1,5 +1,5 @@
 import type { DayVoteRecap, PublicVoteChoice, VoteMutation } from "@masoi/shared";
-import type { BotEvidence, BotRng, EvidenceKind } from "../types";
+import type { BotEvidence, BotRng, PublicEvidenceKind } from "../types";
 
 /**
  * "Không treo ai" là một ứng viên ngang hàng với người chơi trong bảng kiểm
@@ -30,7 +30,7 @@ interface EvidenceWeight {
  * để kết tội. Phá hoà nặng nhất vì nó là hành động một mình quyết định ai bị
  * đưa ra xử.
  */
-const WEIGHTS: Record<EvidenceKind, EvidenceWeight> = {
+const WEIGHTS: Record<PublicEvidenceKind, EvidenceWeight> = {
   TIE_BREAK: { weight: 10, confidence: 0.7 },
   SAVE_VOTE: { weight: 9, confidence: 0.65 },
   LATE_SWITCH: { weight: 7, confidence: 0.6 },
@@ -79,7 +79,7 @@ function elapsedRatio(mutation: VoteMutation): number {
 }
 
 function evidenceOf(
-  kind: EvidenceKind,
+  kind: PublicEvidenceKind,
   sourceId: string,
   actorId: string,
   targetId: string | undefined,

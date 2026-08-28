@@ -16,7 +16,14 @@ export type BotMemoryType =
   | "SEER_RESULT"
   | "BOT_SPOKE";
 
-export type EvidenceKind =
+/**
+ * Bằng chứng rút ra từ hành vi CÔNG KHAI: lịch sử phiếu và lời nói.
+ *
+ * Mọi kind ở đây đều có thể sai - đó là suy đoán, và nó nguội đi theo thời gian.
+ * Tách riêng khỏi thông tin do engine cấp để bảng weight của vote-analysis chỉ
+ * phải khai báo đúng những gì nó thật sự sinh ra.
+ */
+export type PublicEvidenceKind =
   | "LATE_SWITCH"
   | "BANDWAGON"
   | "TIE_BREAK"
@@ -26,6 +33,20 @@ export type EvidenceKind =
   | "COUNTER_CLAIM"
   | "ACCUSE"
   | "DEFEND";
+
+export type EvidenceKind =
+  | PublicEvidenceKind
+  /**
+   * Thông tin riêng của vai, không phải suy đoán từ hành vi công khai.
+   *
+   * Tách thành kind riêng vì hai lý do: nó được miễn decay (sự thật không nguội
+   * đi như ấn tượng), và nó cho phép test khẳng định rằng một niềm tin tuyệt
+   * đối chỉ đến từ kết quả soi chứ không bao giờ từ chat hay lịch sử phiếu.
+   */
+  | "SEER_RESULT_WOLF"
+  | "SEER_RESULT_CLEAR"
+  /** Đồng đội do engine cấp (Sói thấy Sói), không phải claim ai đó tự nhận. */
+  | "KNOWN_ALLY";
 
 export interface BotEvidence {
   id: string;
@@ -88,6 +109,8 @@ export interface SocialEdge {
   voteAlignment: number;
   samples: number;
   reasons: BotEvidence[];
+  /** Vòng cuối cạnh này được củng cố; đầu vào cho decay. */
+  lastUpdatedRound: number;
 }
 
 export interface BotPlayerKnowledge {

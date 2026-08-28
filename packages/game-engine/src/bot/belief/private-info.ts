@@ -1,0 +1,155 @@
+import type { BotBrainState, BotEvidence, BotKnowledgeView } from "../types";
+import { applyEvidence, applyTrustEvidence } from "./belief-state";
+import { MAX_BELIEF_SCORE } from "./evidence";
+
+/**
+ * Đưa thông tin RIÊNG của vai vào belief.
+ *
+ * Phase 1 ghi kết quả soi thành memory pinned rồi dừng ở đó, nên Tiên Tri soi
+ * trúng Sói xong vẫn bỏ phiếu y như chưa soi - thông tin đắt nhất trong ván
+ * không ảnh hưởng gì tới quyết định. Hàm này nối phần còn thiếu.
+ *
+ * Nguồn duy nhất được chấp nhận là `BotKnowledgeView`, tức thứ engine đã lọc
+ * theo quyền của chính bot. Không có đường nào để một claim trong chat đi vào
+ * đây: claim là lời nói, và nó được xử lý ở chat-analysis với sức nặng rất khác.
+ */
+
+/**
+ * Đủ lớn để một mình nó vượt mọi ngưỡng vote, kể cả khi bị inertia làm chậm.
+ *
+ * Dấu ÂM cho hai hằng số dưới là có chủ đích: `applyTrustEvidence` đảo dấu
+ * weight trước khi cộng, nên một bằng chứng "gỡ tội" phải mang weight âm thì
+ * mới làm TĂNG tin tưởng. Truyền số dương ở đây sẽ kéo trust về 0 - đúng
+ * ngược lại ý định.
+ */
+const SEER_WOLF_WEIGHT = 400;
+const SEER_CLEAR_WEIGHT = -120;
+const ALLY_WEIGHT = -80;
+
+/**
+ * Ghim điểm thay vì để nó cộng dồn.
+ *
+ * `observe()` chạy nhiều lần mỗi vòng, và thông tin riêng là một sự thật CỐ
+ * ĐỊNH chứ không phải một quan sát mới mỗi lần. Nếu để `updateBelief` cộng dồn
+ * thì niềm tin của bot phụ thuộc vào việc scheduler gọi observe mấy lần - một
+ * biến số không liên quan gì tới ván đấu, và đủ để phá tính tái lập.
+ *
+ * Evidence vẫn được áp trước đó vì nó là thứ ghi `reasons`, và `reasons` mới là
+ * cái cho entry quyền miễn decay.
+ */
+function pinScore(
+  entries: Record<string, { score: number; lastUpdatedRound: number }>,
+  playerId: string,
+  score: number,
+  round: number,
+): void {
+  const entry = entries[playerId];
+  if (!entry) return;
+  entry.score = score;
+  entry.lastUpdatedRound = round;
+}
+
+function seerSourceId(targetId: string): string {
+  return `seer:${targetId}`;
+}
+
+function allySourceId(allyId: string): string {
+  return `ally:${allyId}`;
+}
+
+/**
+ * Đăng ký một source tổng hợp.
+ *
+ * `validateEvidence` từ chối mọi evidence có source chưa từng thấy - đó là hàng
+ * rào chống bịa bằng chứng của Phase 1 và không được nới. Thông tin riêng không
+ * đến từ một message hay mutation nào, nên nó cần một source ID ổn định do
+ * chính lõi phát ra: khoá theo target, để áp lại nhiều lần vẫn là cùng một
+ * nguồn thay vì một chuỗi nguồn mới mỗi lần observe.
+ */
+function ensureSource(state: BotBrainState, sourceId: string): void {
+  if (!state.seenEventIds.includes(sourceId)) state.seenEventIds.push(sourceId);
+}
+
+function evidenceFor(
+  over: Pick<BotEvidence, "id" | "kind" | "sourceId" | "actorId" | "weight" | "summary"> &
+    Partial<BotEvidence>,
+  round: number,
+): BotEvidence {
+  return { confidence: 1, round, targetId: undefined, ...over };
+}
+
+export function applyPrivateInformation(
+  state: BotBrainState,
+  knowledge: BotKnowledgeView,
+): void {
+  const round = knowledge.round;
+  const result = knowledge.seerResult;
+
+  if (result) {
+    const sourceId = seerSourceId(result.targetId);
+    ensureSource(state, sourceId);
+
+    if (result.isWolf) {
+      // Đẩy thẳng lên trần thay vì cộng dồn: soi trúng Sói là chắc chắn, và một
+      // giá trị cố định khiến việc áp lại nhiều lần trong cùng một vòng là
+      // idempotent.
+      applyEvidence(
+        state,
+        evidenceFor(
+          {
+            id: `seer-wolf:${result.targetId}`,
+            kind: "SEER_RESULT_WOLF",
+            sourceId,
+            actorId: result.targetId,
+            weight: SEER_WOLF_WEIGHT,
+            summary: `soi ra ${result.targetName} là Sói`,
+          },
+          round,
+        ),
+      );
+      pinScore(state.suspicion, result.targetId, MAX_BELIEF_SCORE, round);
+    } else {
+      applyTrustEvidence(
+        state,
+        evidenceFor(
+          {
+            id: `seer-clear:${result.targetId}`,
+            kind: "SEER_RESULT_CLEAR",
+            sourceId,
+            actorId: result.targetId,
+            weight: SEER_CLEAR_WEIGHT,
+            summary: `soi ra ${result.targetName} không phải Sói`,
+          },
+          round,
+        ),
+      );
+      // Đã biết chắc không phải Sói thì mọi nghi ngờ tích trước đó là rác.
+      pinScore(state.trust, result.targetId, MAX_BELIEF_SCORE, round);
+      pinScore(state.suspicion, result.targetId, 0, round);
+    }
+  }
+
+  for (const [playerId, role] of Object.entries(knowledge.knownRoles)) {
+    if (playerId === state.playerId) continue;
+    if (role !== "WEREWOLF") continue;
+
+    const sourceId = allySourceId(playerId);
+    ensureSource(state, sourceId);
+    applyTrustEvidence(
+      state,
+      evidenceFor(
+        {
+          id: `ally:${playerId}`,
+          kind: "KNOWN_ALLY",
+          sourceId,
+          actorId: playerId,
+          weight: ALLY_WEIGHT,
+          summary: "đồng đội Sói do engine xác nhận",
+        },
+        round,
+      ),
+    );
+    pinScore(state.trust, playerId, MAX_BELIEF_SCORE, round);
+    pinScore(state.suspicion, playerId, 0, round);
+  }
+}

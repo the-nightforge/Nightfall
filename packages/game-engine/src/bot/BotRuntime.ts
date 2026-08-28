@@ -2,7 +2,8 @@ import type { DayVoteRecap, VoteMutation } from "@masoi/shared";
 import { analyzeChat } from "./analysis/chat-analysis";
 import { applySocialEvidence } from "./analysis/social-analysis";
 import { analyzeVoteRecap } from "./analysis/vote-analysis";
-import { applyEvidence, applyTrustEvidence } from "./belief/belief-state";
+import { applyEvidence, applyTrustEvidence, decayBeliefs } from "./belief/belief-state";
+import { applyPrivateInformation } from "./belief/private-info";
 import { selectVote } from "./decision/vote-decision";
 import { decayAndPrune } from "./memory/memory-decay";
 import { createBotBrainState, remember } from "./memory/memory-store";
@@ -112,10 +113,18 @@ export class BotRuntime {
     this.ingestRecaps(knowledge);
     this.ingestChat(context);
 
+    // Decay TRƯỚC, thông tin riêng SAU.
+    //
+    // Thứ tự này quan trọng: nếu áp thông tin riêng trước rồi mới decay, kết quả
+    // soi vừa ghi ở chính vòng này sẽ bị nguội ngay trong cùng một lượt observe.
+    // Decay chỉ được phép chạm vào những gì đã cũ.
     if (this.lastDecayRound !== knowledge.round) {
       decayAndPrune(this.state, knowledge.round);
+      decayBeliefs(this.state, knowledge.round);
       this.lastDecayRound = knowledge.round;
     }
+
+    applyPrivateInformation(this.state, knowledge);
   }
 
   /** Chốt phiếu deterministic từ belief hiện tại. */
