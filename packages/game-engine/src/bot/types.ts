@@ -67,6 +67,21 @@ export interface BotVoteIntention {
   evidence: BotEvidence[];
 }
 
+/**
+ * Một nước đi đêm đã chốt.
+ *
+ * `targetId` là `null` với HEAL (engine không nhận mục tiêu cho bình cứu) và
+ * với SKIP. Không dùng `null` để nói "chưa quyết được" - trạng thái đó được
+ * biểu diễn bằng chính `BotNightIntention | null` ở chỗ trả về.
+ */
+export interface BotNightIntention {
+  kind: "NIGHT_ACTION";
+  action: NightActionKind;
+  targetId: string | null;
+  confidence: number;
+  evidence: BotEvidence[];
+}
+
 export interface BotSpeechIntention {
   kind: "ACCUSE" | "QUESTION" | "WITHHOLD";
   targetId?: string;

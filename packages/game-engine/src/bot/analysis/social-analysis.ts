@@ -85,6 +85,24 @@ export function applySocialEvidence(state: BotBrainState, evidence: BotEvidence)
  * một hệ số tin cậy theo số lần quan sát, nên một lần trùng phiếu duy nhất
  * không thể tạo ra một "cặp Sói".
  */
+/**
+ * Mức thù địch trung bình mà cả làng hướng VÀO một người.
+ *
+ * Sống ở đây chứ không ở `vote-decision` vì nó là một phép đo trên social
+ * graph, và từ Phase 2 có hai consumer: chấm điểm phiếu ban ngày, và chiến
+ * lược đêm của Sói (ai đang lái được dư luận thì nguy hiểm).
+ */
+export function incomingHostilityOf(state: BotBrainState, targetId: string): number {
+  let total = 0;
+  let count = 0;
+  for (const [key, edge] of Object.entries(state.relationships)) {
+    if (!key.endsWith(`->${targetId}`)) continue;
+    total += edge.hostility;
+    count += 1;
+  }
+  return count === 0 ? 0 : total / count;
+}
+
 export function possibleWolfPairScore(
   state: BotBrainState,
   leftId: string,

@@ -1,5 +1,5 @@
 import type { PublicVoteChoice } from "@masoi/shared";
-import { possibleWolfPairScore } from "../analysis/social-analysis";
+import { incomingHostilityOf, possibleWolfPairScore } from "../analysis/social-analysis";
 import type {
   BotBrainState,
   BotDecisionContext,
@@ -38,17 +38,6 @@ export function voteThreshold(personality: BotPersonality): number {
 /** Khoảng cách tối thiểu để bỏ mục tiêu đang bầu và chuyển sang người khác. */
 export function voteHysteresis(personality: BotPersonality): number {
   return 5 + personality.stubbornness * 8;
-}
-
-function incomingHostility(state: BotBrainState, targetId: string): number {
-  let total = 0;
-  let count = 0;
-  for (const [key, edge] of Object.entries(state.relationships)) {
-    if (!key.endsWith(`->${targetId}`)) continue;
-    total += edge.hostility;
-    count += 1;
-  }
-  return count === 0 ? 0 : total / count;
 }
 
 /**
@@ -114,7 +103,7 @@ export function selectVote(
     let score =
       (belief?.score ?? 0) +
       topConfidence * EVIDENCE_CONFIDENCE_BONUS +
-      incomingHostility(state, choice.targetId) * HOSTILITY_BONUS +
+      incomingHostilityOf(state, choice.targetId) * HOSTILITY_BONUS +
       pairPressure(state, choice.targetId) * PAIR_BONUS -
       (state.trust[choice.targetId]?.score ?? 0) * TRUST_DAMPING;
 
