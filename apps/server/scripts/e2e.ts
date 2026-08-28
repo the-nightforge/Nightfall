@@ -145,6 +145,7 @@ async function main() {
       seer: true,
       guard: true,
       witch: true,
+      hunter: false,
       nightSeconds: 20,
       discussionSeconds: 30,
       voteSeconds: 20,

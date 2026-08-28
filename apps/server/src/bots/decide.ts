@@ -1,9 +1,16 @@
 import { z } from "zod";
 import type { RoomSnapshot } from "@masoi/shared";
-import type { Attempt, DayDecision, NightDecision, PlannedVote } from "./types";
+import type {
+  Attempt,
+  DayDecision,
+  HunterShotDecision,
+  NightDecision,
+  PlannedVote,
+} from "./types";
 import { decided, failed, nothingToDo } from "./types";
 import {
   NO_ELIMINATION_VOTE,
+  legalHunterTargets,
   legalNightTargets,
   legalVoteTargets,
   soloNightAction,
@@ -20,6 +27,11 @@ export const daySchema = z.object({
   think: z.string(),
   chat: z.string(),
   voteTargetId: z.string().nullable().optional(),
+});
+
+export const hunterSchema = z.object({
+  think: z.string(),
+  targetId: z.string().nullable().optional(),
 });
 
 export const DEFAULT_CHAT_MAX = 300;
@@ -121,4 +133,29 @@ export function interpretDay(
 
   log("ok");
   return decided({ chat: parsed.data.chat.slice(0, chatMaxLength), vote });
+}
+
+export function interpretHunterShot(
+  view: RoomSnapshot,
+  raw: unknown,
+  log: LogOutcome,
+): Attempt<HunterShotDecision> {
+  const parsed = hunterSchema.safeParse(raw);
+  if (!parsed.success) {
+    log("bad_shape");
+    return failed();
+  }
+
+  const targetId = parsed.data.targetId ?? null;
+  if (targetId === null) {
+    log("skip");
+    return decided({ targetId: null });
+  }
+  if (!legalHunterTargets(view).includes(targetId)) {
+    log("illegal_target");
+    return failed();
+  }
+
+  log("ok");
+  return decided({ targetId });
 }

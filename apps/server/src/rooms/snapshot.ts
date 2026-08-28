@@ -2,6 +2,10 @@ import type { ChatMessage, RoomSnapshot } from "@masoi/shared";
 import { getDiscussionSkipView } from "../game/discussion-skip";
 import type { Room } from "./store";
 
+function isHunterReactionParticipant(room: Room, playerId: string): boolean {
+  return room.engine?.state.hunterReaction?.hunterId === playerId;
+}
+
 /**
  * Xác định kênh chat của người gửi và ai được nhận tin nhắn.
  * Server là nơi duy nhất quyết định quyền - client không gửi channel.
@@ -24,9 +28,17 @@ export function resolveChat(room: Room, senderId: string):
   }
 
   if (!alive) {
+    if (isHunterReactionParticipant(room, senderId)) {
+      return { ok: false, error: "Thợ Săn chưa thể dùng kênh chat người chết" };
+    }
     // Người chết chỉ chat với người chết
     const recipients = room.members
-      .filter((m) => !room.engine!.snapshotFor(m.playerId).you?.alive && !m.isBot)
+      .filter(
+        (m) =>
+          !room.engine!.snapshotFor(m.playerId).you?.alive &&
+          !m.isBot &&
+          !isHunterReactionParticipant(room, m.playerId),
+      )
       .map((m) => m.playerId);
     return { ok: true, channel: "dead", recipients };
   }
@@ -75,7 +87,9 @@ export function visibleChatLog(room: Room, viewerId: string): ChatMessage[] {
   const view = room.engine.snapshotFor(viewerId);
   if (!view.you) return [];
   if (view.phase === "GAME_OVER") return messagesFor("lobby");
-  if (!view.you.alive) return messagesFor("dead");
+  if (!view.you.alive) {
+    return isHunterReactionParticipant(room, viewerId) ? [] : messagesFor("dead");
+  }
 
   if (view.phase === "NIGHT") {
     return view.you.role === "WEREWOLF" ? messagesFor("wolves") : [];
@@ -143,12 +157,14 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
       }));
     })(),
     night: gameView?.nightInfo ?? null,
+    hunterShot: gameView?.hunterShotInfo ?? null,
     hasVoted: gameView?.hasVoted ?? false,
     myVote: gameView?.myVote ?? null,
     noEliminationVoteCount: gameView?.noEliminationVoteCount ?? 0,
     discussionSkip: getDiscussionSkipView(room, viewerId),
     votesRevealed: gameView?.votesRevealed ?? false,
     nightHistory: gameView?.nightHistory ?? [],
+    hunterShots: gameView?.hunterShots ?? [],
     lastNightDeaths: gameView?.lastNightDeaths ?? [],
     lastEliminated: gameView?.lastEliminated ?? null,
     winner: gameView?.winner ?? null,

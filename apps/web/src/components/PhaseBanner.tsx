@@ -11,6 +11,7 @@ const PHASE_LABEL: Record<string, { label: string; cls: string }> = {
   DAY_DISCUSSION: { label: "Thảo luận", cls: "bg-amber-900/60 text-amber-200" },
   VOTING: { label: "Bỏ phiếu", cls: "bg-blood-600/40 text-blood-400 border border-blood-500/40" },
   ELIMINATION: { label: "Công bố loại", cls: "bg-blood-600/40 text-blood-400" },
+  HUNTER_SHOT: { label: "Thợ Săn phản kích", cls: "bg-amber-900 text-amber-200" },
   CHECK_WIN: { label: "Kiểm tra thắng", cls: "bg-night-700 text-mist" },
   GAME_OVER: { label: "Kết thúc", cls: "bg-emerald-900/50 text-emerald-300" },
 };

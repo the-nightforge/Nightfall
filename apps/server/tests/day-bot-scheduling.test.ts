@@ -33,6 +33,7 @@ vi.mock("../src/bots", async () => {
       name: "deferred-day-brain",
       decideNight: vi.fn(),
       decideDay: brainControl.decideDay,
+      decideHunterShot: vi.fn(),
     }),
   };
 });

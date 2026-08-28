@@ -1,6 +1,7 @@
 import type { RoomSnapshot } from "@masoi/shared";
 import {
   NO_ELIMINATION_VOTE,
+  legalHunterTargets,
   legalNightTargets,
   legalVoteChoices,
   legalVoteTargets,
@@ -118,6 +119,8 @@ function vietnameseRole(view: RoomSnapshot): string {
       return "Bảo Vệ";
     case "WITCH":
       return "Phù Thuỷ";
+    case "HUNTER":
+      return "Thợ Săn";
     default:
       return "Dân Làng";
   }
@@ -160,6 +163,30 @@ export function buildNightPrompt(view: RoomSnapshot): PromptSpec | null {
     system: systemFor(view),
     user: [roleContext(view), "", playerLines(view), "", task].join("\n"),
     schema: { type: "object", properties, required },
+  };
+}
+
+export function buildHunterPrompt(view: RoomSnapshot): PromptSpec | null {
+  const targets = legalHunterTargets(view);
+  if (targets.length === 0) return null;
+
+  return {
+    system: systemFor(view),
+    user: [
+      roleContext(view),
+      "",
+      playerLines(view),
+      "",
+      "Bạn vừa chết. Chọn một người còn sống để bắn, hoặc bỏ trống targetId để không bắn.",
+    ].join("\n"),
+    schema: {
+      type: "object",
+      properties: {
+        think: THINK,
+        targetId: { type: "string", enum: targets },
+      },
+      required: ["think"],
+    },
   };
 }
 

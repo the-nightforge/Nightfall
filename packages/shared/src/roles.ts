@@ -1,5 +1,5 @@
 /** Các vai trò trong game. Thêm role mới: bổ sung enum + ROLE_META. */
-export const ROLES = ["WEREWOLF", "SEER", "GUARD", "WITCH", "VILLAGER"] as const;
+export const ROLES = ["WEREWOLF", "SEER", "GUARD", "WITCH", "HUNTER", "VILLAGER"] as const;
 export type Role = (typeof ROLES)[number];
 
 export type Team = "wolves" | "village";
@@ -41,6 +41,12 @@ export const ROLE_META: Record<Role, RoleMeta> = {
     description: "Có một bình cứu người và một bình độc, mỗi bình chỉ dùng một lần cả ván.",
     team: "village",
     nightOrder: 3,
+  },
+  HUNTER: {
+    id: "HUNTER",
+    name: "Thợ Săn",
+    description: "Khi chết, có thể bắn một người còn sống hoặc không bắn ai.",
+    team: "village",
   },
   VILLAGER: {
     id: "VILLAGER",

@@ -1,11 +1,20 @@
 import type { RoomSnapshot } from "@masoi/shared";
-import type { Always, BotBrain, DayDecision, NightDecision } from "./types";
+import type { Always, BotBrain, DayDecision, HunterShotDecision, NightDecision } from "./types";
 import { decided, nothingToDo } from "./types";
-import { legalNightTargets, legalVoteTargets, soloNightAction, witchActions } from "./targets";
+import {
+  legalHunterTargets,
+  legalNightTargets,
+  legalVoteTargets,
+  soloNightAction,
+  witchActions,
+} from "./targets";
 
 function randomOf<T>(items: T[]): T | undefined {
   return items.length === 0 ? undefined : items[Math.floor(Math.random() * items.length)];
 }
+
+/** Thợ Săn bot đôi khi chủ động giữ súng để tránh phát bắn bất lợi cho phe làng. */
+const HUNTER_SKIP_CHANCE = 0.1;
 
 /**
  * Não dự phòng cuối cùng: chọn ngẫu nhiên trong các nước đi hợp lệ, không gọi
@@ -39,6 +48,14 @@ export class RandomBrain implements BotBrain {
     // đấu, không phải nước đi mặc định khi bí - để dành cho não thật quyết.
     const targetId = randomOf(legalVoteTargets(view));
     return decided({ chat: null, vote: targetId ? { type: "PLAYER", targetId } : null });
+  }
+
+  async decideHunterShot(view: RoomSnapshot): Promise<Always<HunterShotDecision>> {
+    const targets = legalHunterTargets(view);
+    if (targets.length === 0 || Math.random() < HUNTER_SKIP_CHANCE) {
+      return decided({ targetId: null });
+    }
+    return decided({ targetId: randomOf(targets) ?? null });
   }
 }
 

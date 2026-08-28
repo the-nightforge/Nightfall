@@ -38,6 +38,7 @@ const hangingBrain: BotBrain = {
   name: "hanging-forever",
   decideNight: () => new Promise(() => undefined),
   decideDay: () => new Promise(() => undefined),
+  decideHunterShot: () => new Promise(() => undefined),
 };
 
 vi.mock("../src/bots", async () => {

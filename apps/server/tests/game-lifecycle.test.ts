@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { GameEngine } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG, type ChatMessage } from "@masoi/shared";
 import { startGame } from "../src/game/machine";
 import { discussionSkipVotes } from "../src/game/discussion-skip";
@@ -54,5 +55,37 @@ describe("vòng đời chat giữa các ván", () => {
 
     expect(room.chatLog).toEqual([]);
     expect(discussionSkipVotes.has(room.code)).toBe(false);
+  });
+
+  it("tạo engine mới không mang phản ứng và recap Thợ Săn từ ván trước", () => {
+    const room = lobbyWithOldChat();
+    const previousEngine = GameEngine.create(
+      room.members.map((member) => ({
+        id: member.playerId,
+        name: member.name,
+        isBot: member.isBot,
+      })),
+      room.config,
+    );
+    previousEngine.state.hunterReaction = {
+      hunterId: "p1",
+      source: "night",
+      resolved: true,
+    };
+    previousEngine.state.hunterShots = [
+      {
+        round: 4,
+        hunter: { id: "p1", name: "Người 1" },
+        target: { id: "p2", name: "Người 2" },
+        source: "night",
+      },
+    ];
+    room.engine = previousEngine;
+
+    startGame(room);
+
+    expect(room.engine).not.toBe(previousEngine);
+    expect(room.engine?.state.hunterReaction).toBeNull();
+    expect(room.engine?.state.hunterShots).toEqual([]);
   });
 });

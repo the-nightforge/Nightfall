@@ -17,6 +17,7 @@ import {
   votePayload,
   skipDiscussionPayload,
   addBotPayload,
+  hunterShotPayload,
 } from "@masoi/shared";
 import { config } from "./config";
 import { GameError } from "@masoi/game-engine";
@@ -29,6 +30,7 @@ import {
   maybeEndWitchWindow,
   scheduleDiscussionSkipRecheck,
   submitDiscussionSkip,
+  submitHunterShot,
 } from "./game/machine";
 import { getPlayerRoom, updateSessionRoom } from "./redis";
 import { reconnectPlayer } from "./rooms/reconnect";
@@ -210,6 +212,19 @@ export function setupSocket(io: SocketServer): void {
 
       const error = submitDiscussionSkip(room, playerId, skip);
       if (error) throw new RoomError(error);
+    });
+
+    handler(CLIENT_EVENTS.GAME_HUNTER_SHOT, async (payload) => {
+      const { targetId } = hunterShotPayload.parse(payload);
+      if (!allowAction(`hunter-shot:${playerId}`, 3, 3_000)) {
+        throw new RoomError("Thao tác quá nhanh");
+      }
+      const roomCode = getRoomSyncByPlayer(playerId);
+      if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
+      const room = getRoom(roomCode);
+      if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
+
+      submitHunterShot(room, playerId, targetId);
     });
 
     handler(CLIENT_EVENTS.CHAT_SEND, async (payload) => {
