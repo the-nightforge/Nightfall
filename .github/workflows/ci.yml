@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Push liên tiếp lên cùng một nhánh thì chỉ lần cuối đáng chạy.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    env:
+      # `prisma generate` chỉ đọc schema, không kết nối. Nhưng datasource khai
+      # báo `env("DATABASE_URL")` nên biến phải TỒN TẠI. Đây là giá trị giả và
+      # không có database nào ở đầu kia - không job nào ở đây chạm tới DB thật.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Khớp với node:20.19-alpine trong Dockerfile.server.
+          node-version: 20.19.x
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Generate Prisma client
+        # `tsc` trên apps/server cần type của @prisma/client. Hook postinstall
+        # của @prisma/client thường lo việc này, nhưng gọi thẳng thì lỗi hiện ra
+        # ở đúng bước của nó thay vì thành một lỗi type khó hiểu ở bước sau.
+        run: npm run db:generate
+
+      - name: Build
+        # PHẢI chạy trước test và lint. `@masoi/shared` và `@masoi/game-engine`
+        # trỏ main/types vào `dist/`, mà `dist/` nằm trong .gitignore - checkout
+        # sạch thì hai package đó chưa tồn tại dưới dạng mà workspace khác import
+        # được. Bỏ bước này thì test server/web đỏ hàng loạt vì "has no exported
+        # member", chứ không phải vì code sai.
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Lint
+        run: npm run lint
