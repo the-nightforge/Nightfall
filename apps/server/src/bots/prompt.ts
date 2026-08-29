@@ -1,3 +1,4 @@
+import { describeSpeechStyle, type BotSpeechStyle } from "@masoi/game-engine";
 import type { RoomSnapshot } from "@masoi/shared";
 import type { SpeechRequest } from "./types";
 
@@ -27,10 +28,17 @@ export function personaFor(botId: string): string {
   return PERSONAS[hash % PERSONAS.length];
 }
 
-function systemFor(view: RoomSnapshot): string {
+/**
+ * `style` là tuỳ chọn nhưng chỗ gọi ở production LUÔN truyền nó.
+ *
+ * Để tuỳ chọn vì `RoomSnapshot` không mang tính cách - nó là ảnh chụp ván đấu,
+ * còn tính cách sống trong `BotRuntime`. Nhánh `personaFor` bên dưới chỉ còn
+ * phục vụ những chỗ gọi không có runtime (test cũ, công cụ dò).
+ */
+function systemFor(view: RoomSnapshot, style?: BotSpeechStyle): string {
   return [
     `Bạn là ${view.you?.name}, một người chơi trong ván Ma Sói trực tuyến.`,
-    `Tính cách: ${personaFor(view.you?.id ?? "")}.`,
+    `Cách nói của bạn: ${style ? describeSpeechStyle(style) : personaFor(view.you?.id ?? "")}.`,
     "Viết tiếng Việt đời thường như đang chat game, tối đa hai câu.",
     "Không bao giờ nói mình là AI, bot, hay mô hình ngôn ngữ.",
     "Không dùng markdown, không xuống dòng.",
@@ -136,7 +144,7 @@ function vietnameseRole(view: RoomSnapshot): string {
 
 const THINK = { type: "string", description: "Suy luận ngắn, tối đa 200 ký tự" };
 
-export function buildDefensePrompt(view: RoomSnapshot): PromptSpec | null {
+export function buildDefensePrompt(view: RoomSnapshot, style?: BotSpeechStyle): PromptSpec | null {
   if (!view.trial?.canSpeak) return null;
 
   // voteCount đã lộ ở pha này, nên bị cáo biết chính xác ai đẩy mình lên.
@@ -146,7 +154,7 @@ export function buildDefensePrompt(view: RoomSnapshot): PromptSpec | null {
   const myVotes = view.players.find((p) => p.id === view.you?.id)?.voteCount ?? 0;
 
   return {
-    system: systemFor(view),
+    system: systemFor(view, style),
     user: [
       roleContext(view),
       "",

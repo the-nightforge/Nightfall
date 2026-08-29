@@ -159,5 +159,5 @@ export interface BotBrain {
    */
   renderDaySpeech(request: SpeechRequest): Promise<Attempt<DaySpeechDecision>>;
   /** Lời tự bào chữa của bị cáo. Là lời nói, không phải nước đi. */
-  decideDefense(view: RoomSnapshot): Promise<Attempt<DefenseDecision>>;
+  decideDefense(view: RoomSnapshot, style?: BotSpeechStyle): Promise<Attempt<DefenseDecision>>;
 }

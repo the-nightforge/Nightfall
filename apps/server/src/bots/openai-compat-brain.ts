@@ -1,3 +1,4 @@
+import type { BotSpeechStyle } from "@masoi/game-engine";
 import type { RoomSnapshot } from "@masoi/shared";
 import type {
   Attempt,

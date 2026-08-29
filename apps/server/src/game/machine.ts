@@ -562,7 +562,10 @@ function scheduleDefenseBot(room: Room, accusedId: string): void {
 
   void (async () => {
     try {
-      const attempt = await botBrain().decideDefense(view);
+      // Bị cáo tự bào chữa bằng ĐÚNG giọng của chính nó, không phải một trong
+      // bốn nhãn cứng gieo từ ID.
+      const style = botSessionFor(room).runtimeFor(member.playerId).style;
+      const attempt = await botBrain().decideDefense(view, style);
       // Chỉ lượt HỎNG mới đáng để đường lui nói thay: bot chủ động im lặng
       // (đã chết, không còn là bị cáo) phải được tôn trọng.
       const decision = attempt.ok ? attempt : await randomBrain.decideDefense(view);
