@@ -154,6 +154,21 @@ function pct(value: Ratio): string {
   return `${(value.value * 100).toFixed(1)}% (${value.numerator}/${value.denominator})`;
 }
 
+/**
+ * Gắn cờ CẢNH BÁO, không phải cổng chặn.
+ *
+ * Ngưỡng hội thoại không được biến thành mục tiêu. Cách rẻ nhất để đưa mọi tỉ
+ * lệ lặp về 0 là bắt BOT im, và cách rẻ nhất để đẩy `replyRate` lên là bắt nó
+ * đáp mọi câu - cả hai đều làm hội thoại tệ đi trong khi bảng số đẹp lên. Vì
+ * vậy chúng chỉ in ra một dấu hiệu để người đọc đi tìm nguyên nhân, và
+ * `silenceRate` luôn được in ngay bên cạnh làm đối trọng.
+ */
+function flag(value: Ratio, threshold: number, direction: "trên" | "dưới"): string {
+  if (value.value === null) return "";
+  const bad = direction === "trên" ? value.value > threshold : value.value < threshold;
+  return bad ? `  ⚠ ${direction} ngưỡng ${(threshold * 100).toFixed(0)}%` : "";
+}
+
 /** Bản tóm tắt cho người đọc. Cùng dữ liệu với JSON, không thêm kết luận nào. */
 export function formatReportText(report: SelfPlayReport): string {
   const m = report.metrics;
@@ -178,7 +193,24 @@ export function formatReportText(report: SelfPlayReport): string {
     `  Đồng thuận               ${m.consensus === null ? "n/a" : m.consensus.toFixed(3)}`,
     `  Gắn kết coalition        ${m.coalitionCohesion === null ? "n/a" : m.coalitionCohesion.toFixed(3)}`,
     `  Bằng chứng hết hạn       ${pct(m.staleEvidenceRate)}`,
-    `  Lặp lời thoại            ${pct(m.speechRepetitionRate)}`,
+    `  Lặp lời thoại            ${pct(m.speechRepetitionRate)}  (chỉ số cũ Phase 3)`,
+    "",
+    "── Hội thoại ──",
+    `  Lặp nguyên văn           ${pct(m.exactRepetitionRate)}${flag(m.exactRepetitionRate, 0.05, "trên")}`,
+    `  Lặp sau chuẩn hoá        ${pct(m.normalizedRepetitionRate)}${flag(m.normalizedRepetitionRate, 0.1, "trên")}`,
+    `  Lặp ý                    ${pct(m.semanticRepetitionRate)}${flag(m.semanticRepetitionRate, 0.15, "trên")}`,
+    `  Lặp cách mở đầu          ${pct(m.repeatedOpeningRate)}${flag(m.repeatedOpeningRate, 0.25, "trên")}`,
+    `  Nhắm mãi một người       ${pct(m.consecutiveSameTargetRate)}`,
+    `  Có trả lời ai đó         ${pct(m.replyRate)}${flag(m.replyRate, 0.15, "dưới")}`,
+    `  Đáp câu hỏi trực tiếp    ${pct(m.directQuestionResponseRate)}${flag(m.directQuestionResponseRate, 0.4, "dưới")}`,
+    `  Im lặng                  ${pct(m.silenceRate)}`,
+    `  Dùng mẫu câu             ${pct(m.fallbackTemplateRate)}`,
+    `  Tin/BOT/ngày             ${m.messagesPerBotPerDay === null ? "n/a" : m.messagesPerBotPerDay.toFixed(2)}${
+      (m.messagesPerBotPerDay ?? 0) > 3 ? "  ⚠ vượt hạn mức" : ""
+    }`,
+    `  Chuỗi đối đáp dài nhất   ${m.maxDialogueChainLength}${
+      m.maxDialogueChainLength > 4 ? "  ⚠ dài bất thường" : ""
+    }`,
     "",
     "── An toàn ──",
     `  Vi phạm ranh giới hiểu biết  ${m.knowledgeBoundaryViolations}`,

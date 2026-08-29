@@ -1,5 +1,6 @@
 import { roleTeam, type Role, type Team } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import { normalizeSpeechText, openingOf } from "../conversation/fingerprint";
 import type { SelfPlayEvent, SelfPlayGame } from "./selfplay";
 
 /**
@@ -61,9 +62,49 @@ export interface SelfPlayMetrics {
   fallbackActions: number;
   /** Lượt mà vai CÓ hành động nhưng chủ động không dùng. Không phải lỗi. */
   declinedTurns: number;
-  /** Nói lại đúng `(kiểu, mục tiêu)` của lần mình nói liền trước. */
+  /**
+   * Nói lại đúng `(kiểu, mục tiêu)` của lần mình nói liền trước.
+   *
+   * @deprecated Giữ để so dọc với Phase 3. Nó KHÔNG đo lặp câu chữ: với ba mẫu
+   * câu cố định của Phase 3, hai lượt `ACCUSE` nhắm hai người khác nhau đọc lên
+   * gần như y hệt mà chỉ số này báo "không lặp". Dùng `exactRepetitionRate`,
+   * `normalizedRepetitionRate` và `semanticRepetitionRate` thay cho nó.
+   */
   speechRepetitionRate: Ratio;
   roundLimitRate: Ratio;
+
+  // ---- Hội thoại (Phase 4) ----
+  //
+  // Ba chỉ số lặp đầu tiên cố tình CHỒNG LẤN nhau và đo ba thứ khác nhau. Một
+  // BOT lách được cái này bằng cách đổi chữ sẽ hiện lên ở cái kia; đọc cả ba
+  // cùng lúc mới ra bức tranh thật.
+
+  /** Câu trùng NGUYÊN VĂN một câu trước đó của CÙNG BOT trong cùng ván. */
+  exactRepetitionRate: Ratio;
+  /** Trùng sau khi hạ chữ thường, bỏ dấu câu và bỏ từ đệm đầu câu. */
+  normalizedRepetitionRate: Ratio;
+  /** Trùng Ý ĐỊNH: cùng loại, mục tiêu, câu được đáp, topic và tập bằng chứng. */
+  semanticRepetitionRate: Ratio;
+  /** Ba token mở đầu trùng câu LIỀN TRƯỚC của cùng BOT. */
+  repeatedOpeningRate: Ratio;
+  /** Hai câu liên tiếp của cùng BOT nhắm cùng một người. */
+  consecutiveSameTargetRate: Ratio;
+  /** Câu có trả lời một message cụ thể. */
+  replyRate: Ratio;
+  /**
+   * Câu hỏi nhắm thẳng vào ai đó và được người đó đáp lại.
+   *
+   * Không nên bằng 1: một quần thể trả lời mọi câu hỏi là một quần thể máy móc.
+   */
+  directQuestionResponseRate: Ratio;
+  /** Trung bình số tin của một BOT trong một ngày mà nó CÓ nói. */
+  messagesPerBotPerDay: number | null;
+  /** Chuỗi đối đáp lồng nhau dài nhất thấy được. */
+  maxDialogueChainLength: number;
+  /** Lượt được mời nói mà BOT chọn im lặng. `null` khi không đo được. */
+  silenceRate: Ratio;
+  /** Câu do bảng mẫu sinh ra. Trong self-play luôn bằng 1 theo thiết kế. */
+  fallbackTemplateRate: Ratio;
 }
 
 export interface RoleMetrics {
@@ -137,6 +178,18 @@ export function collectMetrics(
   let speechRepeats = 0;
   let speechTotal = 0;
   let roundLimited = 0;
+  let exactRepeats = 0;
+  let normalizedRepeats = 0;
+  let semanticRepeats = 0;
+  let openingRepeats = 0;
+  let sameTargetRuns = 0;
+  let replies = 0;
+  let directQuestionTotal = 0;
+  let directQuestionAnswered = 0;
+  let chainMax = 0;
+  let silenceOpportunities = 0;
+  let silentBotDays = 0;
+  const botDaySamples: number[] = [];
 
   const roleGames = new Map<Role, number>();
   const roleWins = new Map<Role, number>();
@@ -224,12 +277,74 @@ export function collectMetrics(
 
     // --- Lời nói ---
     const lastSpeech = new Map<string, string>();
+    /** Mọi câu một BOT đã nói trong ván này, theo ba dạng vân tay. */
+    const saidExact = new Map<string, Set<string>>();
+    const saidNormalized = new Map<string, Set<string>>();
+    const saidSemantic = new Map<string, Set<string>>();
+    const lastOpening = new Map<string, string | null>();
+    const lastTarget = new Map<string, string | null>();
+    /** Câu hỏi nhắm thẳng vào một người: messageId -> người được hỏi. */
+    const directQuestions = new Map<string, string>();
+    const answeredQuestions = new Set<string>();
+    const perBotPerRound = new Map<string, number>();
+
+    const remember = (
+      table: Map<string, Set<string>>,
+      actorId: string,
+      key: string,
+    ): boolean => {
+      const seen = table.get(actorId) ?? new Set<string>();
+      const repeated = seen.has(key);
+      seen.add(key);
+      table.set(actorId, seen);
+      return repeated;
+    };
+
     for (const event of game.events) {
       if (event.kind === "SPEECH") {
         speechTotal += 1;
         const signature = `${event.speech}:${event.targetId ?? "-"}`;
         if (lastSpeech.get(event.actorId) === signature) speechRepeats += 1;
         lastSpeech.set(event.actorId, signature);
+
+        // --- Lặp thật ---
+        if (remember(saidExact, event.actorId, event.text)) exactRepeats += 1;
+        if (remember(saidNormalized, event.actorId, normalizeSpeechText(event.text))) {
+          normalizedRepeats += 1;
+        }
+        if (remember(saidSemantic, event.actorId, event.semanticFingerprint)) {
+          semanticRepeats += 1;
+        }
+
+        const opening = openingOf(event.text);
+        if (opening !== null && lastOpening.get(event.actorId) === opening) {
+          openingRepeats += 1;
+        }
+        lastOpening.set(event.actorId, opening);
+
+        if (event.targetId !== null && lastTarget.get(event.actorId) === event.targetId) {
+          sameTargetRuns += 1;
+        }
+        lastTarget.set(event.actorId, event.targetId);
+
+        // --- Mức độ đối thoại ---
+        if (event.replyToMessageId !== null) {
+          replies += 1;
+          const asked = directQuestions.get(event.replyToMessageId);
+          // Chỉ tính là ĐÃ ĐÁP khi đúng người được hỏi trả lời. Người thứ ba
+          // xen vào không phải là câu hỏi được trả lời.
+          if (asked === event.actorId) answeredQuestions.add(event.replyToMessageId);
+        }
+        if (
+          (event.speech === "QUESTION" || event.speech === "ASK_EVIDENCE") &&
+          event.targetId !== null
+        ) {
+          directQuestions.set(event.messageId, event.targetId);
+        }
+
+        chainMax = Math.max(chainMax, event.chainDepth);
+        const dayKey = `${event.round}:${event.actorId}`;
+        perBotPerRound.set(dayKey, (perBotPerRound.get(dayKey) ?? 0) + 1);
 
         // Sói công khai tố đồng bọn cũng là tự phá.
         const actorTeam = teamOf(event.actorId);
@@ -248,6 +363,29 @@ export function collectMetrics(
       }
 
       if (event.kind === "COALITION") cohesionSamples.push(event.cohesion);
+    }
+
+    directQuestionTotal += directQuestions.size;
+    directQuestionAnswered += answeredQuestions.size;
+    for (const count of perBotPerRound.values()) botDaySamples.push(count);
+
+    // --- Im lặng ---
+    //
+    // Mẫu số là số cặp (vòng, người CÒN SỐNG), không phải số người trên bàn:
+    // một người chết ở vòng 2 không "im lặng" ở vòng 5. Không lọc theo sống
+    // chết thì chỉ số này chỉ đo được số người đã chết.
+    const diedAtRound = new Map<string, number>();
+    for (const event of game.events) {
+      if (event.kind !== "DEATH") continue;
+      if (!diedAtRound.has(event.playerId)) diedAtRound.set(event.playerId, event.round);
+    }
+    for (let round = 1; round <= game.rounds; round += 1) {
+      for (const playerId of Object.keys(game.roles)) {
+        const died = diedAtRound.get(playerId);
+        if (died !== undefined && died < round) continue;
+        silenceOpportunities += 1;
+        if (!perBotPerRound.has(`${round}:${playerId}`)) silentBotDays += 1;
+      }
     }
   }
 
@@ -270,6 +408,33 @@ export function collectMetrics(
     declinedTurns,
     speechRepetitionRate: ratio(speechRepeats, speechTotal),
     roundLimitRate: ratio(roundLimited, games.length),
+
+    exactRepetitionRate: ratio(exactRepeats, speechTotal),
+    normalizedRepetitionRate: ratio(normalizedRepeats, speechTotal),
+    semanticRepetitionRate: ratio(semanticRepeats, speechTotal),
+    repeatedOpeningRate: ratio(openingRepeats, speechTotal),
+    consecutiveSameTargetRate: ratio(sameTargetRuns, speechTotal),
+    replyRate: ratio(replies, speechTotal),
+    directQuestionResponseRate: ratio(directQuestionAnswered, directQuestionTotal),
+    messagesPerBotPerDay: mean(botDaySamples),
+    maxDialogueChainLength: chainMax,
+    /**
+     * Ngày mà một người còn sống không nói câu nào.
+     *
+     * Đo cùng lúc với các chỉ số lặp, và đó là điểm mấu chốt: cách dễ nhất để
+     * ép mọi tỉ lệ lặp về 0 là bịt miệng BOT. Nếu `silenceRate` leo lên cùng
+     * lúc các chỉ số lặp đẹp đi thì cơ chế chống lặp đang siết quá tay, và
+     * không có chỉ số nào khác nhìn thấy điều đó.
+     */
+    silenceRate: ratio(silentBotDays, silenceOpportunities),
+    /**
+     * Trong self-play, con số này luôn bằng 1 THEO THIẾT KẾ.
+     *
+     * Nhân mô phỏng là thuần và không gọi mạng, nên mọi câu đều do bảng mẫu
+     * sinh ra. Tỉ lệ thật của production được đo ở tầng server, nơi có nhà cung
+     * cấp để mà hỏng.
+     */
+    fallbackTemplateRate: ratio(speechTotal, speechTotal),
   };
 
   const byTeam: Record<Team, TeamMetrics> = {

@@ -76,6 +76,53 @@
       "value": 0,
       "numerator": 0,
       "denominator": 12
+    },
+    "exactRepetitionRate": {
+      "value": 0.03669724770642202,
+      "numerator": 4,
+      "denominator": 109
+    },
+    "normalizedRepetitionRate": {
+      "value": 0.03669724770642202,
+      "numerator": 4,
+      "denominator": 109
+    },
+    "semanticRepetitionRate": {
+      "value": 0.03669724770642202,
+      "numerator": 4,
+      "denominator": 109
+    },
+    "repeatedOpeningRate": {
+      "value": 0.08256880733944955,
+      "numerator": 9,
+      "denominator": 109
+    },
+    "consecutiveSameTargetRate": {
+      "value": 0.05504587155963303,
+      "numerator": 6,
+      "denominator": 109
+    },
+    "replyRate": {
+      "value": 0,
+      "numerator": 0,
+      "denominator": 109
+    },
+    "directQuestionResponseRate": {
+      "value": 0,
+      "numerator": 0,
+      "denominator": 75
+    },
+    "messagesPerBotPerDay": 1,
+    "maxDialogueChainLength": 0,
+    "silenceRate": {
+      "value": 0.5155555555555555,
+      "numerator": 116,
+      "denominator": 225
+    },
+    "fallbackTemplateRate": {
+      "value": 1,
+      "numerator": 109,
+      "denominator": 109
     }
   },
   "metricsByTeam": {
