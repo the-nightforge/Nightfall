@@ -126,8 +126,7 @@ export default function RoomPage() {
 
   return (
     <>
-      {/* Phòng chờ chưa có snapshot thì vẫn là buổi chiều, không nhảy thẳng vào đêm. */}
-      <Backdrop mood={snapshot ? moodFor(snapshot.phase) : "dusk"} />
+      <Backdrop mood={snapshot ? moodFor(snapshot.phase) : "dusk"} event={snapshot?.activeEvent ?? null} />
       <main className="mx-auto w-full max-w-lg px-3 py-4 lg:max-w-[1600px]">
         <header className="flex items-center justify-between">
           <button className="text-sm text-mist/60 hover:text-white" onClick={leaveRoom}>
