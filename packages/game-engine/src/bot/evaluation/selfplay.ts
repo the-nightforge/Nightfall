@@ -3,6 +3,7 @@ import { GameEngine } from "../../engine";
 import { detectCoalitions } from "../analysis/coalition";
 import { BotRuntime } from "../BotRuntime";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import { judgeChainPosition } from "../conversation/chain-limits";
 import {
   speechSemanticFingerprint,
   speechTextFingerprint,
@@ -332,21 +333,17 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     const round = engine.state.round;
     resetRoundBudget(round);
 
-    const parentDepth =
-      speech.replyToMessageId === undefined
-        ? -1
-        : chainDepthOf.get(speech.replyToMessageId) ?? 0;
-    const depth = parentDepth + 1;
-    const replies =
-      speech.replyToMessageId === undefined
-        ? 0
-        : repliesTo.get(speech.replyToMessageId) ?? 0;
-
-    const blocked =
-      !hasBudget(playerId) ||
-      depth > weights.conversation.maxChainDepth ||
-      (speech.replyToMessageId !== undefined &&
-        replies >= weights.conversation.maxRepliesPerMessage);
+    // Hai trần của CHUỖI đến từ một hàm chung với scheduler phía server, nên
+    // "chuỗi sâu nhất là 3" đo được ở đây nói đúng về căn phòng thật. Ngân sách
+    // mỗi BOT thì vẫn là chuyện riêng của harness: nhịp của nó khác production.
+    const position = judgeChainPosition(
+      speech.replyToMessageId,
+      { depthOf: chainDepthOf, repliesTo },
+      weights.conversation,
+    );
+    const depth = position.depth;
+    const replies = position.parentReplies;
+    const blocked = !hasBudget(playerId) || position.blockedBy !== null;
 
     if (blocked) {
       runtimes.get(playerId)!.recordSpeech(speech, round);

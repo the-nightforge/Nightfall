@@ -76,9 +76,35 @@ export async function renderBotSpeech(
   try {
     const attempt = await brain.renderDaySpeech(request);
     const chat = attempt.ok ? attempt.value?.chat : null;
-    if (chat) return { text: chat.slice(0, chatMaxLength), fromTemplate: false };
+    if (chat && !echoesItself(request, chat)) {
+      return { text: chat.slice(0, chatMaxLength), fromTemplate: false };
+    }
   } catch {
     // Não ném lỗi ngoài dự kiến cũng chỉ là một lượt hỏng.
   }
   return { text: speechTemplate(request), fromTemplate: true };
+}
+
+/**
+ * Nhà cung cấp vừa đọc lại đúng câu BOT vừa nói?
+ *
+ * `recentOwnLines` đi vào prompt kèm lời dặn "đừng diễn đạt lại", và bảng mẫu
+ * thì bị chặn CỨNG bằng `avoidFingerprints`. Nhưng lời dặn trong prompt chỉ là
+ * một đề nghị: một mô hình nhỏ, một lượt hỏng, một prompt bị cắt là đủ để nó
+ * trả về nguyên văn câu cũ - và câu đó đi thẳng ra phòng, vì đường của nhà cung
+ * cấp không có ai gác. Nói cách khác, chỗ dễ sai nhất lại là chỗ duy nhất không
+ * bị kiểm.
+ *
+ * So bằng đúng vân tay mà bảng mẫu dùng, nên hai đường có cùng một định nghĩa
+ * "trùng câu": khác mỗi dấu câu, chữ hoa hay từ đệm đầu câu vẫn là trùng.
+ *
+ * Trùng thì rơi về bảng mẫu chứ không hỏi lại. Hỏi lại tốn thêm một vòng mạng
+ * ngay giữa pha thảo luận, mà bảng mẫu vốn đã tránh sẵn những câu này.
+ */
+function echoesItself(request: SpeechRequest, chat: string): boolean {
+  if (request.recentOwnLines.length === 0) return false;
+  const fingerprint = speechTextFingerprint(chat);
+  return request.recentOwnLines.some(
+    (line) => speechTextFingerprint(line) === fingerprint,
+  );
 }

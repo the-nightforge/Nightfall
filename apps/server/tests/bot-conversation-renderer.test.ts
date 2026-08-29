@@ -191,3 +191,59 @@ describe("nhà cung cấp chỉ được viết câu chữ", () => {
     expect(result.text).not.toBeNull();
   });
 });
+
+/**
+ * Nhà cung cấp cũng phải tuân luật chống lặp, không chỉ bảng mẫu.
+ *
+ * `recentOwnLines` được gửi vào prompt kèm lời dặn "đừng diễn đạt lại", và bảng
+ * mẫu thì bị chặn cứng bằng `avoidFingerprints`. Nhưng lời dặn trong prompt là
+ * một ĐỀ NGHỊ: một mô hình nhỏ, một lượt hỏng, hay một prompt bị cắt là đủ để
+ * nó trả về đúng câu BOT vừa nói - và câu đó được phát thẳng ra phòng. Bảng mẫu
+ * bị kiểm còn nhà cung cấp thì không, tức chỗ dễ sai nhất lại là chỗ không ai
+ * gác.
+ */
+describe("nhà cung cấp không được nhại lại chính BOT", () => {
+  const OWN = "Tôi thấy Chi rất đáng ngờ.";
+
+  it("trả về nguyên văn câu vừa nói thì bị bỏ, và về mẫu câu", async () => {
+    const result = await renderBotSpeech(
+      request({}, { recentOwnLines: [OWN] }),
+      speaking(OWN),
+    );
+    expect(result.text).not.toBe(OWN);
+    expect(result.fromTemplate).toBe(true);
+  });
+
+  it("khác mỗi dấu câu và chữ hoa cũng vẫn là nhại lại", async () => {
+    // Cùng vân tay văn bản nghĩa là cùng một câu - đó đúng là định nghĩa mà
+    // `speechTextFingerprint` tồn tại để cấp, và bảng mẫu đã dùng nó.
+    const result = await renderBotSpeech(
+      request({}, { recentOwnLines: [OWN] }),
+      speaking("tôi thấy Chi rất đáng ngờ!!!"),
+    );
+    expect(result.fromTemplate).toBe(true);
+  });
+
+  it("nhại một câu CŨ hơn trong cửa sổ cũng bị bỏ", async () => {
+    const result = await renderBotSpeech(
+      request({}, { recentOwnLines: [OWN, "Bình im lặng suốt nãy giờ."] }),
+      speaking(OWN),
+    );
+    expect(result.fromTemplate).toBe(true);
+  });
+
+  it("câu thật sự mới thì vẫn được dùng", async () => {
+    const result = await renderBotSpeech(
+      request({}, { recentOwnLines: [OWN] }),
+      speaking("Chi đổi phiếu sát giờ chót, ai giải thích giúp tôi."),
+    );
+    expect(result.text).toBe("Chi đổi phiếu sát giờ chót, ai giải thích giúp tôi.");
+    expect(result.fromTemplate).toBe(false);
+  });
+
+  it("chưa nói gì thì không có gì để nhại", async () => {
+    const result = await renderBotSpeech(request({}, { recentOwnLines: [] }), speaking(OWN));
+    expect(result.text).toBe(OWN);
+    expect(result.fromTemplate).toBe(false);
+  });
+});
