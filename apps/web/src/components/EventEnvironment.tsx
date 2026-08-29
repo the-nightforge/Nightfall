@@ -32,21 +32,21 @@ export function EventEnvironment({ event }: Props) {
 
 function StaticTint({ eventId }: { eventId: string }) {
   const tint: Record<string, string> = {
-    BLOOD_MOON: "bg-blood-600/15",
-    MOONLESS_NIGHT: "bg-night-950/40",
-    CLEARING_MIST: "bg-white/5 backdrop-blur-sm",
-    CURFEW: "ring-2 ring-amber-500/20 ring-inset",
-    BLOODY_HUNT: "bg-blood-600/10",
-    WOLF_SHADOW: "bg-indigo-900/15",
-    SILENT_NIGHT: "bg-slate-800/10",
-    PEACEFUL_NIGHT: "bg-emerald-900/12",
-    LAST_STAND: "bg-amber-900/10",
-    HOWL_OF_THE_PACK: "bg-blood-900/8",
-    DAY_OF_TRUTH: "bg-sky-900/10",
-    JUDGMENT_DAY: "bg-amber-900/10",
-    AMNESTY_DAY: "bg-white/5",
-    MORNING_REPORT: "bg-sky-900/8",
-    DEAD_CAN_SPEAK: "bg-violet-900/12",
+    BLOOD_MOON: "bg-blood-600/25",
+    MOONLESS_NIGHT: "bg-night-950/55",
+    CLEARING_MIST: "bg-white/10 backdrop-blur-sm",
+    CURFEW: "ring-2 ring-amber-500/30 ring-inset",
+    BLOODY_HUNT: "bg-blood-600/15",
+    WOLF_SHADOW: "bg-indigo-900/25",
+    SILENT_NIGHT: "bg-slate-800/20",
+    PEACEFUL_NIGHT: "bg-emerald-900/20",
+    LAST_STAND: "bg-amber-900/18",
+    HOWL_OF_THE_PACK: "bg-blood-900/15",
+    DAY_OF_TRUTH: "bg-sky-900/15",
+    JUDGMENT_DAY: "bg-amber-900/18",
+    AMNESTY_DAY: "bg-white/8",
+    MORNING_REPORT: "bg-sky-900/12",
+    DEAD_CAN_SPEAK: "bg-violet-900/18",
   };
   return <div className={`absolute inset-0 ${tint[eventId] ?? ""}`} />;
 }
@@ -56,13 +56,18 @@ function EventLayer({ id }: { id: string }) {
     case "BLOOD_MOON":
       return (
         <>
-          <div className="absolute inset-0 bg-gradient-to-t from-blood-600/20 via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-blood-600/30 via-blood-900/10 to-transparent" />
           <m.div
-            className="absolute -top-10 -right-10 h-64 w-64 rounded-full bg-gradient-to-br from-blood-400/30 to-blood-600/20 blur-2xl"
-            animate={{ scale: [1, 1.08, 1], opacity: [0.5, 0.7, 0.5] }}
-            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -top-10 -right-10 h-72 w-72 rounded-full bg-gradient-to-br from-blood-400/35 to-blood-600/25 blur-2xl"
+            animate={{ scale: [1, 1.12, 1], opacity: [0.6, 0.85, 0.6] }}
+            transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
           />
-          <div className="absolute inset-0 opacity-20" style={{ background: "radial-gradient(600px 400px at 50% 30%, rgba(220,38,64,0.15), transparent 70%)" }} />
+          <m.div
+            className="absolute left-1/2 top-[22%] h-28 w-28 -translate-x-1/2 rounded-full bg-blood-400/20 blur-xl"
+            animate={{ scale: [1, 1.2, 1], opacity: [0.4, 0.7, 0.4] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          />
+          <div className="absolute inset-0 opacity-30" style={{ background: "radial-gradient(700px 420px at 50% 28%, rgba(220,38,64,0.22), transparent 72%)" }} />
         </>
       );
     case "MOONLESS_NIGHT":
@@ -71,15 +76,16 @@ function EventLayer({ id }: { id: string }) {
       return (
         <>
           <m.div
-            className="absolute inset-0 bg-white/[0.06] backdrop-blur-[1px]"
-            animate={{ x: [-20, 20, -20] }}
-            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute inset-0 bg-white/[0.10] backdrop-blur-[2px]"
+            animate={{ x: [-24, 24, -24] }}
+            transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
           />
           <m.div
-            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent"
+            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
             animate={{ x: ["-100%", "100%"] }}
-            transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+            transition={{ duration: 7, repeat: Infinity, ease: "linear" }}
           />
+          <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-white/10 via-white/5 to-transparent" />
         </>
       );
     case "SILENT_NIGHT":
