@@ -129,7 +129,7 @@ describe("phát tiếng trên iOS", () => {
 
 describe("voiceUi", () => {
   it("phòng chưa bật voice thì không hiện gì", () => {
-    const ui = voiceUi(initialVoiceState, { enabled: false, canPublish: false, roomName: "r" });
+    const ui = voiceUi(initialVoiceState, { available: true, enabled: false, canPublish: false, roomName: "r" });
     assert.equal(ui.visible, false);
   });
 
@@ -139,18 +139,19 @@ describe("voiceUi", () => {
   });
 
   it("bật voice nhưng chưa nối thì mời bấm để vào", () => {
-    const ui = voiceUi(initialVoiceState, { enabled: true, canPublish: true, roomName: "r" });
+    const ui = voiceUi(initialVoiceState, { available: true, enabled: true, canPublish: true, roomName: "r" });
     assert.equal(ui.visible, true);
     assert.equal(ui.mode, "join");
   });
 
   it("đã nối và được nói thì hiện nút giữ để nói", () => {
-    const ui = voiceUi(run(READY), { enabled: true, canPublish: true, roomName: "r" });
+    const ui = voiceUi(run(READY), { available: true, enabled: true, canPublish: true, roomName: "r" });
     assert.equal(ui.mode, "talk");
   });
 
   it("đã nối nhưng không được nói thì nói rõ là chỉ nghe", () => {
     const ui = voiceUi(run([{ type: "connect_requested" }, { type: "connected" }]), {
+      available: true,
       enabled: true,
       canPublish: false,
       roomName: "r",
@@ -160,6 +161,7 @@ describe("voiceUi", () => {
 
   it("bị chặn phát tiếng thì lời mời bấm được ưu tiên hơn mọi thứ khác", () => {
     const ui = voiceUi(run([...READY, { type: "audio_playback_blocked" }]), {
+      available: true,
       enabled: true,
       canPublish: true,
       roomName: "r",
@@ -169,6 +171,7 @@ describe("voiceUi", () => {
 
   it("bị đá vì mở tab khác thì báo đúng lý do, không để người chơi tưởng mạng hỏng", () => {
     const ui = voiceUi(run([...READY, { type: "duplicate_session" }]), {
+      available: true,
       enabled: true,
       canPublish: true,
       roomName: "r",

@@ -311,7 +311,15 @@ export interface RoomSnapshot {
 }
 
 export interface VoiceView {
-  /** Server có cấu hình LiveKit VÀ phòng đã bật voice. */
+  /**
+   * Máy chủ CÓ cấu hình LiveKit. Độc lập với việc phòng đã bật hay chưa.
+   *
+   * Tách khỏi `enabled` vì công tắc trong phòng chờ cần đúng tín hiệu này: dùng
+   * `enabled` sẽ thành vòng luẩn quẩn - công tắc chỉ hiện khi voice đã bật, mà
+   * voice chỉ bật được bằng công tắc.
+   */
+  available: boolean;
+  /** `available` VÀ phòng đã bật voice. */
   enabled: boolean;
   /**
    * Người này có được nói ở pha hiện tại không.

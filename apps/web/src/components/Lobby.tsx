@@ -51,7 +51,7 @@ export function Lobby({
     <div className="space-y-3">
       <RoleDeckPanel snapshot={snapshot} isHost={isHost} onUpdateConfig={onUpdateConfig} />
 
-      {isHost && snapshot.voice && (
+      {isHost && snapshot.voice?.available && (
         <VoiceConfig config={snapshot.config} onSave={onUpdateConfig} />
       )}
       {isHost && <TimingConfig config={snapshot.config} onSave={onUpdateConfig} />}

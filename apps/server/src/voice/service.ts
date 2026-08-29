@@ -248,6 +248,7 @@ export async function issueVoiceToken(room: Room, playerId: string): Promise<Voi
 export function voiceViewFor(room: Room, viewerId: string): VoiceView {
   const enabled = voiceEnabledFor(room);
   return {
+    available: admin !== null,
     enabled,
     canPublish: enabled && desiredPermission(room, viewerId),
     roomName: voiceRoomNameFor(room.code),

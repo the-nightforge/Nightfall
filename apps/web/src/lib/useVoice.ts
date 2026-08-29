@@ -31,6 +31,10 @@ export interface UseVoice {
 export function useVoice(socket: Socket | null, view: VoiceView | undefined): UseVoice {
   const [state, dispatch] = useReducer(voiceReducer, initialVoiceState);
   const roomRef = useRef<VoiceRoomHandle | null>(null);
+  // Đọc trạng thái mới nhất từ trong callback của socket mà không phải gắn lại
+  // listener mỗi lần state đổi.
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   if (!roomRef.current) {
     roomRef.current = createVoiceRoom({
@@ -59,6 +63,30 @@ export function useVoice(socket: Socket | null, view: VoiceView | undefined): Us
     socket.on(SERVER_EVENTS.VOICE_TOKEN, onToken);
     return () => {
       socket.off(SERVER_EVENTS.VOICE_TOKEN, onToken);
+    };
+  }, [socket]);
+
+  /**
+   * Socket nối lại thì tự giới thiệu lại với server.
+   *
+   * Server giữ tập "ai đã vào voice" trong RAM. Nó khởi động lại là mất sạch,
+   * trong khi room LiveKit vẫn sống và người chơi vẫn đang ngồi trong đó - server
+   * mới không biết họ tồn tại nên không bao giờ cấp lại quyền, và họ KẸT ở quyền
+   * của trước lúc restart. Hướng kẹt là kẹt câm nên không thành lỗ hổng, nhưng
+   * người chơi thì mất tiếng vĩnh viễn mà giao diện vẫn mời họ bấm giữ để nói.
+   *
+   * Quan sát được trong lần chạy thật ngày 2026-08-30, không phải suy đoán.
+   */
+  useEffect(() => {
+    if (!socket) return;
+    const onConnect = () => {
+      if (stateRef.current.connection === "connected") {
+        socket.emit(CLIENT_EVENTS.VOICE_READY, {});
+      }
+    };
+    socket.on("connect", onConnect);
+    return () => {
+      socket.off("connect", onConnect);
     };
   }, [socket]);
 

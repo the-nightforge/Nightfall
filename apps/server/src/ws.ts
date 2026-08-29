@@ -285,7 +285,13 @@ export function setupSocket(io: SocketServer): void {
      */
     handler(CLIENT_EVENTS.VOICE_READY, async (payload) => {
       voiceReadyPayload.parse(payload ?? {});
-      const roomCode = getRoomSyncByPlayer(playerId);
+      // Đường tra cứu ASYNC, không phải bản sync.
+      //
+      // Sự kiện này hay tới ngay sau khi socket nối lại, mà ngay sau một lần
+      // server khởi động lại thì chưa phòng nào nằm trong RAM - bản sync trả
+      // null và ta lặng lẽ bỏ qua, để người chơi kẹt vĩnh viễn ở quyền của
+      // trước lúc restart. Bản async biết nạp lại phòng từ Redis.
+      const roomCode = await roomService.findRoomOf(playerId);
       if (!roomCode) return;
       const room = getRoom(roomCode);
       // Client nói dối cũng vô hại: quyền vẫn do server tự tính từ pha và trạng

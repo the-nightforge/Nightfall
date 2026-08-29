@@ -162,9 +162,23 @@ describe("issueVoiceToken - đường thành công", () => {
 });
 
 describe("voiceViewFor - trường voice trong snapshot", () => {
-  it("chưa cấu hình server thì enabled=false", () => {
+  it("chưa cấu hình server thì cả available lẫn enabled đều false", () => {
     setVoiceAdmin(null);
-    expect(voiceViewFor(room(), "alive").enabled).toBe(false);
+    expect(voiceViewFor(room(), "alive")).toMatchObject({ available: false, enabled: false });
+  });
+
+  /**
+   * `available` phải tách khỏi `enabled`, nếu không công tắc trong phòng chờ rơi
+   * vào vòng luẩn quẩn: nó chỉ hiện khi voice đã bật, mà voice chỉ bật được
+   * bằng chính nó.
+   */
+  it("server có key nhưng phòng chưa bật: available=true, enabled=false", () => {
+    const { admin } = fakeAdmin();
+    setVoiceAdmin(admin, CONFIG);
+    expect(voiceViewFor(room(false), "alive")).toMatchObject({
+      available: true,
+      enabled: false,
+    });
   });
 
   it("ban ngày: người sống canPublish, người chết thì không", () => {
@@ -172,6 +186,7 @@ describe("voiceViewFor - trường voice trong snapshot", () => {
     setVoiceAdmin(admin, CONFIG);
 
     expect(voiceViewFor(room(), "alive")).toEqual({
+      available: true,
       enabled: true,
       canPublish: true,
       roomName: "masoi-prod-ABCDE",

@@ -345,7 +345,7 @@ Ba bàn đang tranh luận mất tiếng giữa chừng, không rõ lý do.
 
 Bỏ hẳn boot cleanup. Nó vốn nhằm tránh "room sống sót với quyền của pha cũ" —
 nhưng sau restart phòng về **LOBBY**, mà ở LOBBY ai cũng được nói, nên room sót
-lại không vi phạm quyền, nó chỉ là rác. Thay bằng ba lớp:
+lại không vi phạm quyền. Thay bằng ba lớp:
 
 1. `deleteRoom` tường minh ở các lối ra của mục 8.1;
 2. `createRoom` tường minh với **`emptyTimeout`** để room rỗng tự tiêu —
@@ -353,6 +353,24 @@ lại không vi phạm quyền, nó chỉ là rác. Thay bằng ba lớp:
    `emptyTimeout` mình muốn, nên phải tạo tường minh trước khi cấp token đầu
    tiên của phòng;
 3. tiền tố mang tên môi trường, để staging không bao giờ chạm production.
+
+**Nhưng "chỉ là rác" là kết luận SAI, phát hiện khi chạy thật ngày 2026-08-30.**
+Lập luận trên đúng về mặt an toàn nhưng bỏ sót hậu quả chức năng: tập "ai đã vào
+voice" chỉ nằm trong RAM, nên server mới không biết người đang ngồi trong room
+LiveKit tồn tại và **không bao giờ cấp lại quyền cho họ**. Người chơi kẹt ở quyền
+của trước lúc restart — quan sát được: `canPublish=false` của pha đêm còn nguyên
+sau khi phòng đã về lobby, trong khi giao diện vẫn mời họ "Giữ để nói". Hướng kẹt
+là kẹt câm nên bất biến bảo mật vẫn giữ, nhưng người chơi mất tiếng vĩnh viễn.
+
+Xử lý, hai nửa và cần cả hai:
+
+- **Client** phát lại `voice:ready` mỗi khi socket nối lại, nếu kết nối LiveKit
+  còn sống.
+- **Server** giải quyết phòng cho `voice:ready` bằng đường tra cứu **async**
+  (`roomService.findRoomOf`, biết nạp lại từ Redis), không phải bản sync. Ngay
+  sau restart chưa phòng nào nằm trong RAM, nên bản sync trả `null` và handler
+  lặng lẽ bỏ qua — nửa client ở trên tự nó KHÔNG đủ, và lần thử đầu tiên đã hỏng
+  đúng vì lý do này.
 
 ### 9.4 Bảng ca biên
 
