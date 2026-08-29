@@ -74,6 +74,7 @@ export interface NightInfoView {
   priestResult?: PriestResultView | null;
   healUsed: boolean;
   poisonUsed: boolean;
+  wolfCubRageTonight?: boolean;
 }
 
 export interface PlayerGameView {
@@ -417,11 +418,16 @@ export class GameEngine {
         // Một phiếu, không phải quyết định cuối: Sói được đổi ý tới lúc khoá phiếu.
         st.night.wolfVotes[playerId] = targetId;
         if (secondaryTargetId) {
+          const canDoubleKill = st.night.wolfCubRageTonight || st.activeEvent?.id === "BLOODY_HUNT";
+          if (!canDoubleKill) throw new GameError("Chỉ được cắn 2 mục tiêu khi có Sói Con phẫn nộ hoặc event Cuộc Săn Đẫm Máu");
           const secTarget = this.player(secondaryTargetId);
           if (!secTarget || !secTarget.alive) throw new GameError("Mục tiêu phụ không hợp lệ");
           if (roleTeam(secTarget.role) === "wolves") throw new GameError("Không thể cắn đồng bọn");
           if (targetId === secondaryTargetId) throw new GameError("Không thể cắn cùng một người 2 lần");
           st.night.wolfSecondaryTarget = secondaryTargetId;
+        } else if (st.night.wolfSecondaryTarget && st.night.wolfSecondaryTarget === targetId) {
+          // Đổi phiếu chính trùng mục tiêu phụ trước đó -> hủy phụ để tránh trùng lặp
+          st.night.wolfSecondaryTarget = null;
         }
         break;
       }
@@ -1083,6 +1089,9 @@ export class GameEngine {
       target = this.mustPlayer(targetId);
       if (!target.alive) throw new GameError("Không thể bắn người đã chết");
       target.alive = false;
+      if (target.role === "WOLF_CUB") {
+        st.wolfCubRageNextNight = true;
+      }
     }
 
     reaction.resolved = true;
@@ -1191,6 +1200,7 @@ export class GameEngine {
       priestResult,
       healUsed: st.healUsed,
       poisonUsed: st.poisonUsed,
+      wolfCubRageTonight: roleTeam(viewer.role) === "wolves" ? st.night.wolfCubRageTonight : undefined,
     };
   }
 
@@ -1318,15 +1328,19 @@ export class GameEngine {
           : null,
       hunterShotInfo:
         st.phase === "HUNTER_SHOT" && st.hunterReaction
-          ? {
-              hunterId: st.hunterReaction.hunterId,
-              hunterName: this.player(st.hunterReaction.hunterId)?.name ?? "?",
-              canAct: !st.hunterReaction.resolved && viewerId === st.hunterReaction.hunterId,
-              resolved: st.hunterReaction.resolved,
-              target: st.hunterReaction.resolved
-                ? st.hunterShots.at(-1)?.target ?? null
-                : null,
-            }
+          ? (() => {
+              const isHunterViewer = viewerId === st.hunterReaction!.hunterId;
+              return {
+                hunterId: isHunterViewer ? st.hunterReaction!.hunterId : "",
+                hunterName: isHunterViewer ? this.player(st.hunterReaction!.hunterId)?.name ?? "?" : "Ẩn danh",
+                canAct: !st.hunterReaction!.resolved && isHunterViewer,
+                resolved: st.hunterReaction!.resolved,
+                target:
+                  st.hunterReaction!.resolved && isHunterViewer
+                    ? st.hunterShots.at(-1)?.target ?? null
+                    : null,
+              };
+            })()
           : null,
       trialInfo: inTrialPhase && st.trial ? this.trialViewFor(viewerId, viewer) : null,
       lastTrial:

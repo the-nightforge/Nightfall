@@ -120,8 +120,17 @@ describe("Hunter snapshot privacy", () => {
     room.engine!.submitHunterShot("hunter", "wolf");
 
     const observer = buildSnapshot(room, "villager");
+    const hunterView = buildSnapshot(room, "hunter");
 
+    // Chỉ thợ săn thấy mục tiêu, người quan sát chỉ thấy ẩn danh
     expect(observer.hunterShot).toEqual({
+      hunterId: "",
+      hunterName: "Ẩn danh",
+      canAct: false,
+      resolved: true,
+      target: null,
+    });
+    expect(hunterView.hunterShot).toEqual({
       hunterId: "hunter",
       hunterName: "Thợ Săn",
       canAct: false,

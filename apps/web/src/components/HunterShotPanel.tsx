@@ -23,27 +23,34 @@ export function HunterShotPanel({ snapshot, onShoot }: Props) {
     );
   }
 
+  const isHunterViewer = snapshot.you?.id === reaction.hunterId;
+
   if (reaction.resolved) {
+    if (!isHunterViewer) {
+      return (
+        <div className="card text-center">
+          <p className="text-3xl">🎯</p>
+          <p className="mt-2 font-semibold text-mist/70">Đang xử lý phản kích…</p>
+          <p className="mt-1 text-sm text-mist/50">Vui lòng chờ.</p>
+        </div>
+      );
+    }
     const outcome = hunterShotOutcomeText(reaction);
     return (
       <div className="card text-center">
         <p className="text-3xl">🔫</p>
-        <p className="mt-2 font-semibold text-amber-200">
-          {outcome}
-        </p>
+        <p className="mt-2 font-semibold text-amber-200">{outcome}</p>
         <p className="mt-1 text-sm text-mist/60">Đang xử lý kết quả…</p>
       </div>
     );
   }
 
-  if (!reaction.canAct || snapshot.you?.role !== "HUNTER") {
+  if (!reaction.canAct || !isHunterViewer) {
     return (
       <div className="card text-center">
         <p className="text-3xl">🎯</p>
-        <p className="mt-2 font-semibold text-amber-200">
-          {reaction.hunterName} đang chọn người để bắn…
-        </p>
-        <p className="mt-1 text-sm text-mist/60">Vui lòng chờ lượt phản kích kết thúc.</p>
+        <p className="mt-2 font-semibold text-mist/70">Đang chờ xử lý lượt đặc biệt…</p>
+        <p className="mt-1 text-sm text-mist/50">Vui lòng chờ giây lát.</p>
       </div>
     );
   }

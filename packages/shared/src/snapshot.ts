@@ -89,6 +89,8 @@ export interface NightActionView {
   /** Với Phù Thủy */
   healUsed?: boolean;
   poisonUsed?: boolean;
+  /** Sói Con vừa chết vòng trước -> bầy Sói đêm nay được cắn 2 mục tiêu */
+  wolfCubRageTonight?: boolean;
 }
 
 export interface DiscussionSkipView {
