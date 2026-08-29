@@ -77,6 +77,21 @@ export interface GroundTruth {
    * khớp sự thật" sẽ tố cáo chính cái luật mà engine đang thi hành đúng.
    */
   activeEventId?: string | null;
+  /**
+   * Kết quả soi đã được engine CỐ Ý đảo, khoá `"${ownerId}:${targetId}"`.
+   *
+   * Tồn tại vì `activeEventId` một mình là không đủ. Bóng Sói đảo kết quả ở
+   * ĐÊM diễn ra sự kiện, nhưng kết quả sai đó nằm lại trong knowledge của Tiên
+   * Tri tới hết ván, trong khi sự kiện chỉ sống một vòng. Miễn trừ theo "sự
+   * kiện đang hoạt động" vì thế hết hiệu lực trước khi lời nói dối hết hạn, và
+   * auditor tố cáo chính cái luật mà engine đang thi hành đúng - đo được trên
+   * 150 ván có sự kiện: 3–5 báo động giả.
+   *
+   * Miễn trừ này CHỈ tắt phép so sánh với sự thật, và chỉ cho đúng cặp
+   * (người soi, mục tiêu) đã bị đảo. Câu hỏi "ai được phép cầm kết quả này"
+   * không có ngoại lệ nào.
+   */
+  shadowedSeerResults?: ReadonlySet<string>;
 }
 
 export interface InvariantAuditor {
@@ -212,11 +227,17 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
             actual: `nhận kết quả về ${result.targetId}`,
           });
         }
-        // Bóng Sói đảo kết quả soi với xác suất 30%, nên trong đêm có sự kiện này
+        // Bóng Sói đảo kết quả soi với xác suất 30%, nên với những kết quả đó
         // cả hai giá trị đều hợp lệ và không còn gì để đối chiếu. Chỉ miễn trừ
         // đúng phép so sánh với sự thật - kiểm tra "ai được cầm kết quả" ở trên
         // vẫn giữ nguyên hiệu lực.
-        const seerResultMayLie = truth.activeEventId === "WOLF_SHADOW";
+        //
+        // Hai điều kiện, không phải một: sự kiện đang diễn ra, HOẶC kết quả này
+        // đã được ghi nhận là bị đảo ở một vòng trước. Thiếu vế thứ hai thì mọi
+        // kết quả bị đảo đều thành báo động giả kể từ vòng kế tiếp.
+        const seerResultMayLie =
+          truth.activeEventId === "WOLF_SHADOW" ||
+          (truth.shadowedSeerResults?.has(`${self}:${result.targetId}`) ?? false);
         if (!seerResultMayLie && result.isWolf !== isWolfTeam(truth.roles[result.targetId])) {
           auditor.report("SEER_RESULT_SCOPE", {
             ...at,

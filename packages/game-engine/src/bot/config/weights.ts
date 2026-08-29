@@ -897,7 +897,27 @@ export const BOT_WEIGHTS_V3: BotWeights = Object.freeze({
     reactionChance: 0.18,
     promptChatWindow: 12,
     promptRecentOwnLines: 4,
-    selfPlayTurnsPerRound: 2,
+    /**
+     * Bốn lượt, không phải hai.
+     *
+     * Đây là con số của TẦNG ĐO, không phải của production: server có lịch
+     * riêng. Nó phải đủ lớn để mô phỏng CHẠM TỚI các giới hạn mà nó có nhiệm vụ
+     * kiểm. Với hai lượt, chuỗi đối đáp không bao giờ vượt độ sâu 1 - lượt 1 là
+     * phát biểu, lượt 2 là trả lời, và không có lượt nào để trả lời một câu trả
+     * lời. `maxChainDepth = 3` khi đó là một luật chưa từng chạy.
+     *
+     * Đo trên 120 ván mỗi mức:
+     *
+     * | lượt | đáp câu hỏi | có trả lời | chuỗi sâu nhất | tin/bot/ngày | im lặng |
+     * | ---- | ----------- | ---------- | -------------- | ------------ | ------- |
+     * | 2    | 38.1%       | 25.9%      | 1              | 1.38         | 31.9%   |
+     * | 3    | 56.9%       | 36.5%      | 2              | 1.84         | 23.6%   |
+     * | 4    | 66.3%       | 40.8%      | 3              | 2.15         | 21.5%   |
+     *
+     * Mức 4 là mức đầu tiên chạm trần `maxChainDepth`, và vẫn nằm trong mọi
+     * ngưỡng chất lượng. Cao hơn nữa chỉ tốn thời gian batch.
+     */
+    selfPlayTurnsPerRound: 4,
   }),
 }) as BotWeights;
 

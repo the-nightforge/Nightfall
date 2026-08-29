@@ -38,6 +38,11 @@ function truth(over: Partial<GroundTruth> = {}): GroundTruth {
       ...over.roles,
     },
     alive: { me: true, ally: true, seer: true, villager: true, ...over.alive },
+    // Các trường còn lại đi qua nguyên vẹn. Bản cũ chỉ ghép `roles` và `alive`,
+    // nên mọi trường mới của `GroundTruth` bị âm thầm nuốt mất và test truyền
+    // chúng vào sẽ đo một thứ khác với thứ nó tưởng.
+    activeEventId: over.activeEventId,
+    shadowedSeerResults: over.shadowedSeerResults,
   };
 }
 
@@ -211,6 +216,75 @@ describe("từng bất biến đều bắt được lỗi cố ý", () => {
           }),
           state(),
           truth(),
+        ),
+      ),
+    ).toContain("SEER_RESULT_SCOPE");
+  });
+
+  it("Bóng Sói: kết quả đã bị đảo vẫn được miễn trừ ở những vòng SAU", () => {
+    // Sự kiện Bóng Sói cố tình đảo kết quả soi. Kết quả sai đó nằm lại trong
+    // knowledge của Tiên Tri suốt phần còn lại của ván, nhưng sự kiện chỉ sống
+    // đúng một vòng. Miễn trừ theo sự kiện ĐANG hoạt động vì thế hết hiệu lực
+    // trước khi lời nói dối hết hạn, và auditor tố cáo chính cái luật mà engine
+    // đang thi hành đúng.
+    const seerKnowledge = knowledge({
+      botId: "seer",
+      selfRole: "SEER",
+      knownRoles: { seer: "SEER" },
+      seerResult: { targetId: "villager", targetName: "V", isWolf: true },
+    });
+
+    expect(
+      idsFrom((a) =>
+        a.checkKnowledge(seerKnowledge, state(), truth({ activeEventId: null })),
+      ),
+    ).toContain("SEER_RESULT_SCOPE");
+
+    expect(
+      idsFrom((a) =>
+        a.checkKnowledge(
+          seerKnowledge,
+          state(),
+          truth({
+            activeEventId: null,
+            shadowedSeerResults: new Set(["seer:villager"]),
+          }),
+        ),
+      ),
+    ).not.toContain("SEER_RESULT_SCOPE");
+  });
+
+  it("Bóng Sói: miễn trừ chỉ áp cho ĐÚNG kết quả đã bị đảo", () => {
+    // Không được biến miễn trừ thành một công tắc tắt cả bất biến: một kết quả
+    // khác, về một người khác, vẫn phải bị soi xét như thường.
+    expect(
+      idsFrom((a) =>
+        a.checkKnowledge(
+          knowledge({
+            botId: "seer",
+            selfRole: "SEER",
+            knownRoles: { seer: "SEER" },
+            seerResult: { targetId: "villager", targetName: "V", isWolf: true },
+          }),
+          state(),
+          truth({
+            activeEventId: null,
+            shadowedSeerResults: new Set(["seer:someone-else"]),
+          }),
+        ),
+      ),
+    ).toContain("SEER_RESULT_SCOPE");
+  });
+
+  it("Bóng Sói: miễn trừ KHÔNG che được việc sai chủ sở hữu", () => {
+    // Ranh giới "ai được cầm kết quả soi" là bất biến an toàn thật sự và không
+    // có sự kiện nào được phép phá nó.
+    expect(
+      idsFrom((a) =>
+        a.checkKnowledge(
+          knowledge({ seerResult: { targetId: "ally", targetName: "A", isWolf: true } }),
+          state(),
+          truth({ shadowedSeerResults: new Set(["me:ally"]) }),
         ),
       ),
     ).toContain("SEER_RESULT_SCOPE");

@@ -443,6 +443,15 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
    * `BotDecisionContext`: nếu có, harness sẽ tự chứng minh rằng BOT không rò rỉ
    * bằng cách chính nó rò rỉ.
    */
+  /**
+   * Kết quả soi sinh ra trong một đêm có Bóng Sói.
+   *
+   * Engine đảo chúng với xác suất 30% và không đánh dấu gì - đánh dấu sẽ là một
+   * rò rỉ thật, vì Tiên Tri sẽ biết kết quả của mình không đáng tin. Harness
+   * biết đêm nào có sự kiện, nên nó ghi lại ở đây và chỉ tầng kiểm bất biến đọc.
+   */
+  const shadowedSeerResults = new Set<string>();
+
   const groundTruth = (): GroundTruth => {
     const roles: Record<string, Role> = {};
     const alive: Record<string, boolean> = {};
@@ -450,7 +459,12 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       roles[player.id] = player.role;
       alive[player.id] = player.alive;
     }
-    return { roles, alive, activeEventId: engine.state.activeEvent?.id ?? null };
+    return {
+      roles,
+      alive,
+      activeEventId: engine.state.activeEvent?.id ?? null,
+      shadowedSeerResults,
+    };
   };
 
   const contextFor = (playerId: string): BotDecisionContext => ({
@@ -604,6 +618,13 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
           createSeededRng(`${input.seed}:night:${rounds}:${player.id}`),
         );
         actions += 1;
+        // Ghi lại NGAY: sự kiện chỉ sống một vòng, còn kết quả soi sống tới hết
+        // ván. Đây là khoảnh khắc duy nhất biết được cả hai.
+        if (engine.state.activeEvent?.id === "WOLF_SHADOW") {
+          for (const targetId of [decision.targetId, decision.secondaryTargetId]) {
+            if (targetId) shadowedSeerResults.add(`${player.id}:${targetId}`);
+          }
+        }
         log.push({
           kind: "NIGHT_ACTION",
           round: engine.state.round,
