@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { PublicVoteChoice } from "@masoi/shared";
 import {
   BOT_WEIGHTS_V1,
+  BOT_WEIGHTS_V2,
+  BOT_WEIGHTS_V3,
   DEFAULT_BOT_WEIGHTS,
   resolveWeights,
   validateWeights,
@@ -625,9 +627,12 @@ describe("v2 là cấu hình production", () => {
     };
   }
 
-  it("mặc định trỏ tới v2", () => {
-    expect(DEFAULT_BOT_WEIGHTS.version).toBe("2.0.0");
-    expect(weightsPreset("2.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+  it("mặc định trỏ tới v3", () => {
+    // Phase 4 thêm nhóm `conversation` và BẬT nó, nên cấu hình production đổi
+    // phiên bản. v2 vẫn tồn tại nguyên vẹn làm mốc so sánh của Phase 3.
+    expect(DEFAULT_BOT_WEIGHTS.version).toBe("3.0.0");
+    expect(weightsPreset("3.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    expect(weightsPreset("2.0.0")).toBe(BOT_WEIGHTS_V2);
   });
 
   it("không phe nào thắng quá áp đảo", () => {
@@ -668,6 +673,74 @@ describe("v2 là cấu hình production", () => {
         violations: [],
       });
     }
+  });
+});
+
+describe("nhóm conversation", () => {
+  it("v3 là v2 cộng thêm hội thoại, không sửa gì khác", () => {
+    // Mọi nhóm KHÁC `conversation` phải trỏ tới đúng object của v2. So sánh
+    // bằng tham chiếu chứ không bằng giá trị: một bản sao "giống hệt" hôm nay
+    // là một bản sao trôi lệch được vào ngày mai.
+    for (const group of Object.keys(BOT_WEIGHTS_V2) as Array<keyof BotWeights>) {
+      if (group === "version" || group === "conversation") continue;
+      expect(BOT_WEIGHTS_V3[group]).toBe(BOT_WEIGHTS_V2[group]);
+    }
+  });
+
+  it("v1 và v2 giữ nhóm ở giá trị TRUNG TÍNH, tức đúng hành vi Phase 3", () => {
+    // Nhóm mới phải có mặt trong mọi preset (BotWeights đòi nó), nhưng ở hai
+    // mốc lịch sử nó phải TẮT: một mốc so sánh thay đổi hành vi vì một phase
+    // sau đó không còn là mốc so sánh.
+    for (const legacy of [BOT_WEIGHTS_V1, BOT_WEIGHTS_V2]) {
+      expect(legacy.conversation.messagesPerBotPerRound).toBe(1);
+      expect(legacy.conversation.directReplyFloor).toBe(0);
+      expect(legacy.conversation.replyCeiling).toBe(0);
+      expect(legacy.conversation.selfPlayTurnsPerRound).toBe(1);
+      expect(legacy.conversation.humorChance).toBe(0);
+      expect(legacy.conversation.reactionChance).toBe(0);
+    }
+    expect(BOT_WEIGHTS_V1.version).toBe("1.0.0");
+    expect(BOT_WEIGHTS_V2.version).toBe("2.0.0");
+  });
+
+  it("v3 thật sự bật hội thoại", () => {
+    const { conversation } = BOT_WEIGHTS_V3;
+    expect(conversation.messagesPerBotPerRound).toBeGreaterThanOrEqual(2);
+    expect(conversation.messagesPerBotPerRound).toBeLessThanOrEqual(3);
+    expect(conversation.selfPlayTurnsPerRound).toBeGreaterThanOrEqual(2);
+    expect(conversation.directReplyFloor).toBeGreaterThan(0);
+    // Trần PHẢI nhỏ hơn 1: "ưu tiên trả lời khi bị gọi tên, nhưng không phải
+    // lúc nào cũng phản hồi". Một trần bằng 1 biến BOT thành máy trả lời.
+    expect(conversation.replyCeiling).toBeLessThan(1);
+    expect(conversation.replyCeiling).toBeGreaterThanOrEqual(conversation.directReplyFloor);
+    expect(conversation.maxChainDepth).toBeGreaterThanOrEqual(2);
+    expect(conversation.maxRepliesPerMessage).toBeGreaterThanOrEqual(1);
+  });
+
+  it("bắt tỉ lệ hội thoại nằm ngoài [0, 1]", () => {
+    for (const field of [
+      "directReplyFloor",
+      "replyCeiling",
+      "humorChance",
+      "reactionChance",
+    ] as const) {
+      const broken = resolveWeights({ conversation: { [field]: 1.5 } });
+      expect(validateWeights(broken).join(" ")).toContain(`conversation.${field}`);
+    }
+  });
+
+  it("báo thiếu nhóm conversation thay vì ném", () => {
+    const missing = { ...DEFAULT_BOT_WEIGHTS } as Record<string, unknown>;
+    delete missing.conversation;
+    expect(validateWeights(missing as unknown as BotWeights)).toContain(
+      'thiếu nhóm bắt buộc "conversation"',
+    );
+  });
+
+  it("nhóm conversation bất biến", () => {
+    expect(() => {
+      (DEFAULT_BOT_WEIGHTS.conversation as { maxChainDepth: number }).maxChainDepth = 99;
+    }).toThrow();
   });
 });
 

@@ -299,6 +299,54 @@ export interface MemoryLimits {
   topSuspects: number;
 }
 
+/**
+ * Hội thoại: bao nhiêu, bao lâu một lần, và khi nào thì im.
+ *
+ * Nhóm này KHÔNG chứa hằng số thời gian thật (mili giây). Server sở hữu timing;
+ * đưa `minGapMs` vào đây sẽ kéo một khái niệm của đồng hồ vào một package tuyên
+ * bố là thuần, và biến mọi test lõi thành test phụ thuộc lịch.
+ */
+export interface ConversationWeights {
+  /** Số bản ghi phát ngôn giữ lại trong `BotBrainState`. */
+  memoryWindow: number;
+  /**
+   * Cửa sổ chống lặp là KÉP: cả vòng lẫn số bản ghi.
+   *
+   * Chỉ theo vòng thì trong một vòng thảo luận dài BOT vẫn lặp được; chỉ theo
+   * số bản ghi thì sang vòng mới vẫn còn bị khoá bởi chuyện đã cũ.
+   */
+  semanticCooldownRounds: number;
+  semanticCooldownCount: number;
+  /** Trần tin nhắn của MỘT bot trong MỘT vòng. */
+  messagesPerBotPerRound: number;
+  /** Trần tin nhắn BOT của cả phòng trong một vòng. */
+  roomMessagesPerRound: number;
+  /** Một câu chat kích hoạt được tối đa bấy nhiêu phản hồi. */
+  maxRepliesPerMessage: number;
+  /** Độ sâu chuỗi A→B→A tối đa. Chặn vòng lặp hai bot đáp qua đáp lại. */
+  maxChainDepth: number;
+  /** Sàn xác suất trả lời khi bị gọi tên hoặc bị hỏi thẳng. `[0,1]`. */
+  directReplyFloor: number;
+  /** Trần xác suất phản hồi. PHẢI < 1: không ai trả lời mọi câu. `[0,1]`. */
+  replyCeiling: number;
+  /** Câu cũ hơn bấy nhiêu vòng không còn đáng phản hồi. */
+  triggerFreshnessRounds: number;
+  /** Trust tối thiểu để coi một người là "người tôi tin" khi họ bị tố. */
+  agreeTrustThreshold: number;
+  /** Suspicion tối thiểu để coi một người là "người tôi nghi" khi họ được bênh. */
+  disagreeSuspicionThreshold: number;
+  /** Cơ hội pha trò khi không có gì đáng nói. `[0,1]`. */
+  humorChance: number;
+  /** Cơ hội buông một câu phản ứng ngắn. `[0,1]`. */
+  reactionChance: number;
+  /** Số dòng chat tối đa đưa vào prompt. */
+  promptChatWindow: number;
+  /** Số câu gần nhất của CHÍNH bot đưa vào prompt để nó không tự lặp. */
+  promptRecentOwnLines: number;
+  /** Số lượt thảo luận mỗi vòng trong self-play. */
+  selfPlayTurnsPerRound: number;
+}
+
 export interface BotWeights {
   /** Semver. Đổi giá trị bất kỳ là phải đổi version. */
   readonly version: string;
@@ -319,6 +367,7 @@ export interface BotWeights {
   readonly nightConfidence: NightConfidenceWeights;
   readonly personalityRange: PersonalityRange;
   readonly limits: MemoryLimits;
+  readonly conversation: ConversationWeights;
 }
 
 /** Cho phép ghi đè từng nhánh mà không phải khai lại cả cây. */
@@ -366,6 +415,12 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   ["nightConfidence", "witchSkip"],
   ["nightConfidence", "priest"],
   ["nightConfidence", "nightEvidence"],
+  // Bốn cái dưới đây được so THẲNG với `rng()`. Một giá trị 1.5 biến "đôi khi
+  // trả lời" thành "luôn trả lời" mà không có lỗi nào để lần theo.
+  ["conversation", "directReplyFloor"],
+  ["conversation", "replyCeiling"],
+  ["conversation", "humorChance"],
+  ["conversation", "reactionChance"],
 ];
 
 /** Nhóm mà mọi kiểm tra sâu bên dưới giả định là có mặt. */
@@ -387,6 +442,7 @@ const REQUIRED_GROUPS: ReadonlyArray<keyof BotWeights> = [
   "nightConfidence",
   "personalityRange",
   "limits",
+  "conversation",
 ];
 
 function isFiniteNumber(value: unknown): value is number {
@@ -653,6 +709,34 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     intentionEvidence: 3,
     topSuspects: 3,
   }),
+
+  /**
+   * TRUNG TÍNH: nhóm này có mặt vì `BotWeights` đòi nó, nhưng mọi giá trị ở đây
+   * tái lập đúng hành vi Phase 3 — một tin mỗi bot mỗi ngày, không phản hồi ai,
+   * một lượt thảo luận trong self-play.
+   *
+   * v1 là mốc so sánh vĩnh viễn. Một mốc đổi hành vi vì một phase sau đó không
+   * còn là mốc.
+   */
+  conversation: Object.freeze({
+    memoryWindow: 12,
+    semanticCooldownRounds: 0,
+    semanticCooldownCount: 0,
+    messagesPerBotPerRound: 1,
+    roomMessagesPerRound: 15,
+    maxRepliesPerMessage: 0,
+    maxChainDepth: 0,
+    directReplyFloor: 0,
+    replyCeiling: 0,
+    triggerFreshnessRounds: 0,
+    agreeTrustThreshold: 1,
+    disagreeSuspicionThreshold: 1,
+    humorChance: 0,
+    reactionChance: 0,
+    promptChatWindow: 20,
+    promptRecentOwnLines: 4,
+    selfPlayTurnsPerRound: 1,
+  }),
 }) as BotWeights;
 
 /**
@@ -761,9 +845,55 @@ export const BOT_WEIGHTS_V2: BotWeights = Object.freeze({
 }) as BotWeights;
 
 /**
+ * Cấu hình v3 — Phase 4 bật hội thoại.
+ *
+ * Khác v2 ở ĐÚNG một nhóm: `conversation`. Mọi nhóm còn lại dùng chung tham
+ * chiếu với v2, nên hiệu chỉnh cân bằng của Phase 3 không thể trôi lệch qua
+ * đây, và chênh lệch win-rate giữa v2 và v3 (nếu có) chỉ có đúng một nguyên
+ * nhân khả dĩ: BOT nói nhiều hơn nên quan sát được nhiều hơn.
+ *
+ * Vì sao các con số ở đây:
+ *
+ * - `messagesPerBotPerRound: 3` — trần trên của khoảng 2–3 mà thiết kế yêu cầu.
+ *   Cao hơn thì một bàn 8 bot đẩy ra 24 tin mỗi ngày, đọc không kịp.
+ * - `replyCeiling: 0.9` < 1 có chủ đích. Một BOT trả lời 100% số câu nhắm vào
+ *   nó là một tổng đài, không phải người chơi.
+ * - `maxChainDepth: 3` — A tố B, B đáp, A đáp lại. Tới đó là đủ một nhịp tranh
+ *   luận; tầng thứ tư luôn là hai bot lặp lại nhau.
+ * - `semanticCooldown` kép 2 vòng / 6 bản ghi — xem chú thích ở `ConversationWeights`.
+ * - `agreeTrustThreshold` và `disagreeSuspicionThreshold` đặt trên thang belief
+ *   THẬT (p90 ≈ 1.8, xem `docs/bot-ai-phase-3-verification.md` §4), không phải
+ *   thang 0–100 trên giấy. Đây đúng là lỗi đã giết v1.
+ */
+export const BOT_WEIGHTS_V3: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V2,
+  version: "3.0.0",
+
+  conversation: Object.freeze({
+    memoryWindow: 12,
+    semanticCooldownRounds: 2,
+    semanticCooldownCount: 6,
+    messagesPerBotPerRound: 3,
+    roomMessagesPerRound: 18,
+    maxRepliesPerMessage: 2,
+    maxChainDepth: 3,
+    directReplyFloor: 0.75,
+    replyCeiling: 0.9,
+    triggerFreshnessRounds: 1,
+    agreeTrustThreshold: 2,
+    disagreeSuspicionThreshold: 2,
+    humorChance: 0.12,
+    reactionChance: 0.18,
+    promptChatWindow: 12,
+    promptRecentOwnLines: 4,
+    selfPlayTurnsPerRound: 2,
+  }),
+}) as BotWeights;
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
  * phải thay đổi chỉ vì cấu hình tồn tại.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V2;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V3;
