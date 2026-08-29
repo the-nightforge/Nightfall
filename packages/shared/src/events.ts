@@ -17,6 +17,7 @@ export const CLIENT_EVENTS = {
   GAME_FINAL_VOTE: "game:final-vote",
   GAME_HUNTER_SHOT: "game:hunter-shot",
   GAME_SKIP_DISCUSSION: "game:skip-discussion",
+  GAME_DAY_OF_TRUTH_CLAIM: "game:day-of-truth-claim",
   CHAT_SEND: "chat:send",
   VOICE_TOKEN: "voice:token",
   VOICE_READY: "voice:ready",

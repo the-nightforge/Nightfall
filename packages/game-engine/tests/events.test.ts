@@ -157,7 +157,7 @@ describe("Momentum Calculation", () => {
 });
 
 describe("Dynamic Event Selection", () => {
-  it("selects nothing when the balanced-ranked neutral roll is 35% or higher", () => {
+  it("selects nothing when the balanced-ranked neutral roll is 65% or higher", () => {
     const state = createTestState([
       { id: "w1", role: "WEREWOLF", alive: true },
       { id: "w2", role: "WEREWOLF", alive: true },
@@ -168,11 +168,11 @@ describe("Dynamic Event Selection", () => {
     ]);
     state.config.mode = "ranked";
 
-    const event = selectEvent(state, "NIGHT", () => 0.35);
+    const event = selectEvent(state, "NIGHT", () => 0.65);
     expect(event).toBeNull();
   });
 
-  it("selects a neutral night event when the balanced-ranked roll is below 35%", () => {
+  it("ranked never selects event even when roll is below threshold", () => {
     const state = createTestState([
       { id: "w1", role: "WEREWOLF", alive: true },
       { id: "w2", role: "WEREWOLF", alive: true },
@@ -182,15 +182,12 @@ describe("Dynamic Event Selection", () => {
       { id: "v2", role: "VILLAGER", alive: true },
     ]);
     state.config.mode = "ranked";
-    const rolls = [0.3499, 0.99];
 
-    const event = selectEvent(state, "NIGHT", () => rolls.shift()!);
-
-    expect(event?.id).toBe("SILENT_NIGHT");
-    expect(event?.beneficiary).toBe("neutral");
+    const event = selectEvent(state, "NIGHT", () => 0.1);
+    expect(event).toBeNull();
   });
 
-  it("chooses uniformly from eligible neutral day events after a successful ranked roll", () => {
+  it("ranked never selects day event", () => {
     const state = createTestState([
       { id: "w1", role: "WEREWOLF", alive: true },
       { id: "w2", role: "WEREWOLF", alive: true },
@@ -200,12 +197,9 @@ describe("Dynamic Event Selection", () => {
       { id: "v2", role: "VILLAGER", alive: true },
     ]);
     state.config.mode = "ranked";
-    const rolls = [0.1, 0.99];
 
-    const event = selectEvent(state, "DAY", () => rolls.shift()!);
-
-    expect(event?.id).toBe("MORNING_REPORT");
-    expect(event?.targetPhase).toBe("DAY");
+    const event = selectEvent(state, "DAY", () => 0.1);
+    expect(event).toBeNull();
   });
 
   it("does not consume RNG when no neutral event is eligible for a balanced ranked phase", () => {
@@ -233,7 +227,7 @@ describe("Dynamic Event Selection", () => {
     expect(rngCalls).toBe(0);
   });
 
-  it("selects a village-benefiting night event when wolves are favored in ranked mode", () => {
+  it("ranked never selects village event even when wolves are favored", () => {
     const state = createTestState([
       { id: "w1", role: "WEREWOLF", alive: true },
       { id: "w2", role: "WEREWOLF", alive: true },
@@ -247,13 +241,10 @@ describe("Dynamic Event Selection", () => {
     state.config.mode = "ranked";
 
     const event = selectEvent(state, "NIGHT");
-    expect(event).not.toBeNull();
-    expect(event?.beneficiary).toBe("village");
-    expect(event?.targetPhase).toBe("NIGHT");
-    expect(["CLEARING_MIST", "PEACEFUL_NIGHT", "LAST_STAND"]).toContain(event?.id);
+    expect(event).toBeNull();
   });
 
-  it("selects a wolves-benefiting night event when village is favored in ranked mode", () => {
+  it("ranked never selects wolves event even when village is favored", () => {
     const state = createTestState([
       { id: "w1", role: "WEREWOLF", alive: false },
       { id: "w2", role: "WEREWOLF", alive: true },
@@ -268,13 +259,10 @@ describe("Dynamic Event Selection", () => {
     state.config.mode = "ranked";
 
     const event = selectEvent(state, "NIGHT");
-    expect(event).not.toBeNull();
-    expect(event?.beneficiary).toBe("wolves");
-    expect(event?.targetPhase).toBe("NIGHT");
-    expect(["MOONLESS_NIGHT", "BLOODY_HUNT", "WOLF_SHADOW", "BLOOD_MOON"]).toContain(event?.id);
+    expect(event).toBeNull();
   });
 
-  it("selects JUDGMENT_DAY for day phase when wolves are favored and detective exists", () => {
+  it("ranked never selects JUDGMENT_DAY even when wolves are favored", () => {
     const state = createTestState([
       { id: "w1", role: "WEREWOLF", alive: true },
       { id: "w2", role: "WEREWOLF", alive: true },
@@ -291,17 +279,8 @@ describe("Dynamic Event Selection", () => {
       sameTeam: false,
     };
 
-    // PHẢI ghim rng. Ngày Phán Xét không còn là sự kiện ngày duy nhất có lợi cho
-    // phe Dân kể từ khi Ngày Sự Thật ra đời, nên `selectEvent` bốc một trong hai.
-    // Bỏ trống tham số này thì nó rơi về `Math.random` và bài test đúng đúng 50%
-    // số lần chạy - đủ để xanh ở máy mình và đỏ trên CI.
-    //
-    // `() => 0` chọn ứng viên ĐẦU TIÊN theo thứ tự khai báo trong GAME_EVENTS,
-    // nơi JUDGMENT_DAY đứng trước DAY_OF_TRUTH.
     const event = selectEvent(state, "DAY", () => 0);
-    expect(event).not.toBeNull();
-    expect(event?.id).toBe("JUDGMENT_DAY");
-    expect(event?.beneficiary).toBe("village");
+    expect(event).toBeNull();
   });
 
   it("does not select CLEARING_MIST or MOONLESS_NIGHT if Seer is dead and Apprentice is not awakened", () => {

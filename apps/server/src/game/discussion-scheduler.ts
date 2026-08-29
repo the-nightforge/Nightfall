@@ -1,12 +1,11 @@
 import { SERVER_EVENTS } from "@masoi/shared";
-import type { GameEngine } from "@masoi/game-engine";
+import { judgeChainPosition, type GameEngine } from "@masoi/game-engine";
 import { buildBotDecisionContext } from "../bots/context";
 import { botSessionFor } from "../bots/session-registry";
 import { renderBotSpeech } from "../bots/speech-renderer";
 import { emitToPlayers } from "../rooms/broadcast";
 import { pushChat, resolveChat } from "../rooms/snapshot";
 import { persistRoom, setRoomTimer, type Room } from "../rooms/store";
-import { newId } from "../util";
 import { toSpeechRequest } from "./machine";
 
 /**
@@ -36,6 +35,21 @@ const JITTER_MS = 4_000;
 const DEADLINE_BUFFER_MS = 2_000;
 /** Không bắt đầu ngay khi trời vừa sáng; để người thật lên tiếng trước. */
 const OPENING_DELAY_MS = 2_000;
+/**
+ * Nhịp nghỉ RIÊNG của mỗi BOT giữa hai câu của chính nó.
+ *
+ * `messagesPerBotPerRound` nói một con BOT được nói bao nhiêu câu một ngày,
+ * nhưng không nói gì về khoảng cách giữa chúng - nên không có hằng số này, một
+ * con BOT tiêu sạch hạn mức ngày của nó trong ba checkpoint liền nhau, tức
+ * khoảng tám giây, rồi im suốt phần còn lại của pha. Đọc lên đó là một cái loa
+ * vừa bật vừa tắt, không phải một người đang bàn bạc.
+ *
+ * Bảy giây ≈ 1,5 tới 2,8 checkpoint, nên giữa hai câu của cùng một BOT luôn có
+ * chỗ cho một người khác chen vào. Con số sống ở đây chứ không ở
+ * `ConversationWeights` vì đó là một bảng cố tình KHÔNG chứa mili giây: server
+ * sở hữu đồng hồ.
+ */
+export const PER_BOT_COOLDOWN_MS = 7_000;
 
 interface DiscussionRun {
   cancelled: boolean;
@@ -48,6 +62,17 @@ interface DiscussionRun {
   total: number;
   /** Mốc phát gần nhất, để không hai câu nào trùng khoảnh khắc. */
   lastAt: number;
+  /** Mốc phát gần nhất CỦA TỪNG BOT, cho nhịp nghỉ riêng. */
+  lastSpokenAt: Map<string, number>;
+  /**
+   * Độ sâu chuỗi của từng câu scheduler đã phát.
+   *
+   * Chỉ chứa câu của BOT. Message vắng mặt - câu của người thật, câu có từ
+   * trước khi phiên mở - ngầm hiểu là GỐC, tức độ sâu 0.
+   */
+  messageDepths: Map<string, number>;
+  /** Số phản hồi mỗi message đã nhận, đếm theo `replyToMessageId`. */
+  replyCounts: Map<string, number>;
 }
 
 const runs = new Map<string, DiscussionRun>();
@@ -86,6 +111,12 @@ export function runDiscussionScheduler(room: Room): void {
   cancelDiscussionScheduler(room.code);
   if (!room.engine || room.engine.state.phase !== "DAY_DISCUSSION") return;
 
+  // Không có BOT thì không có việc gì để làm, và lối ra phải sạch: không đồng
+  // hồ, không session, không ngoại lệ. Tám người thật ngồi với nhau là một ván
+  // hợp lệ, không phải một trường hợp biên cần chống đỡ.
+  const botMembers = room.members.filter((member) => member.isBot);
+  if (botMembers.length === 0) return;
+
   const run: DiscussionRun = {
     cancelled: false,
     engine: room.engine,
@@ -94,12 +125,23 @@ export function runDiscussionScheduler(room: Room): void {
     spoken: new Map(),
     total: 0,
     lastAt: 0,
+    lastSpokenAt: new Map(),
+    messageDepths: new Map(),
+    replyCounts: new Map(),
   };
   runs.set(room.code, run);
 
   const session = botSessionFor(room);
   const pick = session.rngFor("__room__", `discussion:${run.round}`);
-  const weights = session.runtimeFor(room.members[0]!.playerId).weights.conversation;
+  // Đọc bảng hạn mức từ một BOT THẬT, không phải từ `members[0]`.
+  //
+  // `members[0]` là chủ phòng, và chủ phòng gần như luôn là người thật - nên
+  // dòng cũ dựng cả một bộ não cho người không cần não, chỉ để với tới một bảng
+  // hằng số. Nó cũng đổ vỡ ở một phòng không có thành viên nào.
+  //
+  // Đây là hạn mức của CĂN PHÒNG, và mọi BOT dùng chung một bảng; lấy ở con nào
+  // cũng ra cùng một kết quả, và con này thì đằng nào cũng cần runtime.
+  const weights = session.runtimeFor(botMembers[0]!.playerId).weights.conversation;
 
   const step = (): void => {
     if (run.cancelled || runs.get(room.code) !== run) return;
@@ -112,7 +154,7 @@ export function runDiscussionScheduler(room: Room): void {
     // Ứng viên: BOT còn sống, chưa chạm hạn mức riêng. Sắp theo ID để lựa chọn
     // chỉ phụ thuộc RNG đã gieo hạt, không phụ thuộc thứ tự thành viên trong
     // phòng - thứ tự đó đổi theo ai vào phòng trước.
-    const candidates = room.members
+    const eligible = room.members
       .filter((member) => member.isBot)
       .filter(
         (member) =>
@@ -124,7 +166,22 @@ export function runDiscussionScheduler(room: Room): void {
       )
       .sort((left, right) => left.playerId.localeCompare(right.playerId));
 
-    if (candidates.length === 0) return;
+    // Không ai còn lượt nói trong vòng này. Đây là kết thúc THẬT: hết pha rồi
+    // mới có thêm ngân sách, nên dừng hẳn hàng đợi.
+    if (eligible.length === 0) return;
+
+    const readyAt = (botId: string): number =>
+      (run.lastSpokenAt.get(botId) ?? Number.NEGATIVE_INFINITY) + PER_BOT_COOLDOWN_MS;
+    const candidates = eligible.filter((member) => readyAt(member.playerId) <= now);
+
+    // Ai cũng đang trong nhịp nghỉ. KHÔNG phải lý do để dừng: chờ tới đúng lúc
+    // con sớm nhất hết nghỉ rồi hỏi lại. Đợi đúng mốc chứ không thăm dò mỗi
+    // giây, và không rút RNG - dòng RNG chỉ tiến khi có người thật sự nói.
+    if (candidates.length === 0) {
+      const wakeAt = Math.min(...eligible.map((member) => readyAt(member.playerId)));
+      setRoomTimer(room.code, step, Math.max(wakeAt - now, 1));
+      return;
+    }
 
     // RNG chứ không phải xoay vòng: xoay vòng cho ra đúng một thứ tự nói mỗi
     // ngày, và "các BOT nghe giống nhau" chính là thứ Phase 4 phải chữa.
@@ -146,6 +203,24 @@ export function runDiscussionScheduler(room: Room): void {
         const speech = runtime.decideSpeech(context, vote);
         if (!speech) return;
 
+        // Hai trần của CHUỖI, xét TRƯỚC khi hỏi nhà cung cấp. Chúng tồn tại để
+        // tiết kiệm cả sự chú ý của người chơi lẫn tiền gọi API; chặn sau khi
+        // đã trả tiền viết câu thì chỉ còn tiết kiệm được một nửa. Luật lấy từ
+        // `@masoi/game-engine` chứ không chép lại ở đây, nên harness self-play
+        // và căn phòng thật hiểu "sâu 3" theo đúng một nghĩa.
+        const position = judgeChainPosition(
+          speech.replyToMessageId,
+          { depthOf: run.messageDepths, repliesTo: run.replyCounts },
+          weights,
+        );
+        if (position.blockedBy !== null) {
+          // Báo cho lõi là chuyện này đã xử lý xong. Không có bước này, con BOT
+          // sẽ thấy lại đúng trigger đó ở checkpoint sau và đề nghị đáp lần
+          // nữa, mãi mãi.
+          runtime.declineSpeech(speech);
+          return;
+        }
+
         const rendered = await renderBotSpeech(
           toSpeechRequest(room, member, context, speech),
         );
@@ -165,7 +240,18 @@ export function runDiscussionScheduler(room: Room): void {
         if (!resolved.ok || resolved.channel !== "day") return;
 
         const message = {
-          id: newId(),
+          // ID TẤT ĐỊNH, không phải UUID.
+          //
+          // Một ID ngẫu nhiên không chỉ là một cái tên: nó quay ngược vào chính
+          // quyết định của BOT. `findConversationTriggers` phá hoà bằng
+          // `messageId`, nên hai trigger cùng độ ưu tiên được xếp theo một con
+          // số ngẫu nhiên - và cùng một ván, cùng một seed, cho ra hai cuộc hội
+          // thoại khác nhau. Đó cũng là kiểu nguồn ngẫu nhiên toàn cục mà Phase
+          // 1 đã bỏ công gỡ khỏi ban ngày.
+          //
+          // `(vòng, số thứ tự)` là đủ để duy nhất: `startGame` xoá sạch chatLog
+          // và mở session mới, nên hai ván không bao giờ dùng chung một log.
+          id: `bot-chat:${run.round}:${run.total}`,
           channel: resolved.channel,
           playerId: member.playerId,
           playerName: member.name,
@@ -174,11 +260,20 @@ export function runDiscussionScheduler(room: Room): void {
           // mili giây đọc lên như một cái bot, không như hai người.
           at: Math.max(at, run.lastAt + 1),
         };
+        pushChat(room, message);
+
+        // Vào sổ SAU khi câu đã thật sự nằm trong log, không sớm hơn. Một câu
+        // bị `resolveChat` chặn, hay về muộn quá hạn, mà đã kịp chiếm một suất
+        // phản hồi thì nó bịt miệng người khác bằng một câu chưa ai nghe thấy.
         run.lastAt = message.at;
+        run.lastSpokenAt.set(member.playerId, message.at);
         run.spoken.set(member.playerId, (run.spoken.get(member.playerId) ?? 0) + 1);
         run.total += 1;
+        run.messageDepths.set(message.id, position.depth);
+        if (speech.replyToMessageId !== undefined) {
+          run.replyCounts.set(speech.replyToMessageId, position.parentReplies + 1);
+        }
 
-        pushChat(room, message);
         emitToPlayers(resolved.recipients, SERVER_EVENTS.CHAT_NEW, message);
         void persistRoom(room);
         runtime.recordSpeech(speech, run.round, rendered.text);

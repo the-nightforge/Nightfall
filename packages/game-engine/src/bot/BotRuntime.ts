@@ -539,6 +539,25 @@ export class BotRuntime {
     }
   }
 
+  /**
+   * Một ý định đã được xét nhưng CĂN PHÒNG không cho phát.
+   *
+   * Xảy ra khi câu được đáp đã nhận đủ phản hồi, hoặc chuỗi đã đủ sâu - hai
+   * trần mà chỉ chỗ giữ sổ của phòng mới biết. BOT thì cần biết đúng một điều:
+   * chuyện này đã xử lý xong, đừng đề nghị lại. Không có bước này, con BOT sẽ
+   * thấy lại đúng trigger đó ở checkpoint sau và cố đáp lần nữa - mãi mãi, và
+   * trần của phòng biến thành một vòng lặp bận thay vì một giới hạn.
+   *
+   * KHÔNG ghi bản ghi phát ngôn. Một bản ghi cho câu chưa từng phát ra làm hỏng
+   * hai thứ cùng lúc: `speechCountInRound` tưởng BOT đã nói, và cửa sổ chống
+   * lặp bị chiếm chỗ bởi một câu không ai nghe thấy.
+   */
+  declineSpeech(speech: BotSpeechIntention): void {
+    if (speech.replyToMessageId) {
+      markReplied(this.state, speech.replyToMessageId, this.weights);
+    }
+  }
+
   // ---- Ingest helpers ----
 
   private write(draft: MemoryDraft, knowledge: BotKnowledgeView): void {

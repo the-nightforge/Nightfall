@@ -84,6 +84,7 @@ export default function RoomPage() {
             snapshot={snapshot}
             onVote={(targetId: string | null) => room.emit("game:vote", { targetId })}
             onSkipDiscussion={(skip) => room.emit("game:skip-discussion", { skip })}
+            onDayOfTruthClaim={(role) => room.emit("game:day-of-truth-claim", { role })}
           />
         );
       case "DEFENSE":
@@ -128,7 +129,10 @@ export default function RoomPage() {
 
   return (
     <VoiceProvider snapshot={snapshot}>
-      <Backdrop mood={snapshot ? moodFor(snapshot.phase) : "dusk"} event={snapshot?.activeEvent ?? null} />
+      <Backdrop
+        mood={snapshot ? moodFor(snapshot.phase) : "dusk"}
+        event={snapshot?.config.mode === "ranked" ? null : (snapshot?.activeEvent ?? null)}
+      />
       <main className="mx-auto w-full max-w-lg px-3 py-4 lg:max-w-[1600px]">
         <header className="flex items-center justify-between">
           <button className="text-sm text-mist/60 hover:text-white" onClick={leaveRoom}>

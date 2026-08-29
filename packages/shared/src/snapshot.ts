@@ -301,6 +301,8 @@ export interface RoomSnapshot {
   log: string[];
   /** Cảnh báo cân bằng lobby; null khi chưa tính hoặc cân bằng. */
   balanceWarning?: BalanceWarningView | null;
+  /** Claim Ngày Sự Thật: playerId -> role claim hoặc null là không tiết lộ */
+  dayOfTruthClaims?: Record<string, string | null>;
   /**
    * Trạng thái voice cho riêng người nhận snapshot này.
    *
