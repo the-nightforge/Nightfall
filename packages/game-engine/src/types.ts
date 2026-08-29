@@ -163,6 +163,12 @@ export interface GameState {
   activeEvent: GameEventView | null;
   eventHistory: GameEventView[];
   log: string[];
+  pendingLastStandVictim: { playerId: string; dieRound: number } | null;
+  bloodMoonArmed: boolean;
+  bloodMoonUsed: boolean;
+  deadCanSpeakUsed: boolean;
+  howlBonusDay: number | null;
+  dayOfTruthClaims: Record<string, string | null>;
 }
 
 export class GameError extends Error {

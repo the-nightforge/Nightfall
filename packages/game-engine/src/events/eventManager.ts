@@ -62,6 +62,22 @@ export const GAME_EVENTS: Record<GameEventId, GameEventDefinition> = {
     beneficiary: "village",
     power: 3,
   },
+  LAST_STAND: {
+    id: "LAST_STAND",
+    name: "Tử Thủ",
+    description: "Nạn nhân bị Sói cắn sống tới hết ngày hôm sau.",
+    targetPhase: "NIGHT",
+    beneficiary: "village",
+    power: 3,
+  },
+  DAY_OF_TRUTH: {
+    id: "DAY_OF_TRUTH",
+    name: "Ngày Sự Thật",
+    description: "Mỗi người công khai claim vai (không xác thực) trong ngày.",
+    targetPhase: "DAY",
+    beneficiary: "village",
+    power: 2,
+  },
   MOONLESS_NIGHT: {
     id: "MOONLESS_NIGHT",
     name: "Đêm Không Trăng",
@@ -78,12 +94,44 @@ export const GAME_EVENTS: Record<GameEventId, GameEventDefinition> = {
     beneficiary: "wolves",
     power: 4,
   },
-  SHROUDED_ECLIPSE: {
-    id: "SHROUDED_ECLIPSE",
-    name: "Bóng Tối Bao Phủ",
-    description: "Lần soi đầu tiên của Tiên Tri / Thám Tử nhận kết quả UNKNOWN.",
+  HOWL_OF_THE_PACK: {
+    id: "HOWL_OF_THE_PACK",
+    name: "Tiếng Hú Bầy Sói",
+    description: "Cộng 1 phiếu ẩn cho phe Sói vào ngày kế tiếp.",
+    targetPhase: "DAY",
+    beneficiary: "wolves",
+    power: 3,
+  },
+  BLOOD_MOON: {
+    id: "BLOOD_MOON",
+    name: "Trăng Máu",
+    description: "Nếu đêm nay 0 chết do Sói cắn, đêm sau 20% xuyên 1 khiên.",
     targetPhase: "NIGHT",
     beneficiary: "wolves",
+    power: 3,
+  },
+  WOLF_SHADOW: {
+    id: "WOLF_SHADOW",
+    name: "Bóng Sói",
+    description: "30% đảo kết quả soi của Tiên Tri.",
+    targetPhase: "NIGHT",
+    beneficiary: "wolves",
+    power: 3,
+  },
+  MORNING_REPORT: {
+    id: "MORNING_REPORT",
+    name: "Bản Tin Bình Minh",
+    description: "Công khai tóm tắt 1-2 dòng thật từ đêm trước.",
+    targetPhase: "DAY",
+    beneficiary: "neutral",
+    power: 2,
+  },
+  DEAD_CAN_SPEAK: {
+    id: "DEAD_CAN_SPEAK",
+    name: "Tiếng Vọng Người Chết",
+    description: "Một người chết gửi 1 tin nhắn ẩn danh 120 ký tự.",
+    targetPhase: "DAY",
+    beneficiary: "neutral",
     power: 2,
   },
 };
@@ -113,12 +161,37 @@ export function selectEvent(
       if (!hasDetectiveResult) return false;
     }
 
+    if (event.id === "BLOODY_HUNT") {
+      if (state.night.wolfCubRageTonight || state.wolfCubRageNextNight) return false;
+    }
+
+    if (event.id === "BLOOD_MOON") {
+      if (state.bloodMoonUsed || state.bloodMoonArmed) return false;
+    }
+
+    if (event.id === "DEAD_CAN_SPEAK") {
+      if (state.deadCanSpeakUsed) return false;
+      const hasDead = state.players.some((p) => !p.alive);
+      if (!hasDead) return false;
+    }
+
+    if (event.id === "AMNESTY_DAY") {
+      const last = eventHistory.at(-1);
+      if (last?.id === "AMNESTY_DAY") return false;
+    }
+
+    if (event.id === "MORNING_REPORT") {
+      const last = eventHistory.at(-1);
+      if (last?.id === "MORNING_REPORT") return false;
+    }
+
     return true;
   });
 
   if (eligibleEvents.length === 0) return null;
 
   if (mode === "chaos") {
+    if (rng() >= 0.6) return null;
     const randomIndex = Math.floor(rng() * eligibleEvents.length);
     const def = eligibleEvents[randomIndex];
     return {
