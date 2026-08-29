@@ -62,7 +62,67 @@ function importanceTable(weights: BotWeights): Partial<Record<BotMemoryType, num
     COUNTER_CLAIM: table.counterClaim,
     ACCUSE: table.accuse,
     DEFEND: table.defend,
+    DIRECT_ADDRESS: table.directAddress,
+    DIRECT_QUESTION: table.directQuestion,
   };
+}
+
+/**
+ * Từ để hỏi được chấp nhận khi câu không có dấu chấm hỏi.
+ *
+ * Người chat game bỏ dấu câu liên tục, nên bắt buộc phải có `?` sẽ bỏ sót phần
+ * lớn câu hỏi thật. Danh sách cố tình NGẮN và chỉ gồm những từ mà sự hiện diện
+ * của chúng, KÈM một cái tên khớp duy nhất, gần như luôn có nghĩa là đang hỏi.
+ */
+const QUESTION_WORDS = ["sao", "tại sao", "vì sao", "thế nào", "đâu", "gì", "nào", "ai"];
+
+/** Tiểu từ gọi đáp: dấu hiệu rõ ràng nhất của việc nói VỚI ai đó. */
+const VOCATIVE_PARTICLES = ["ơi", "à", "ê", "này", "nhé", "nhá"];
+
+/** Tiểu từ cầu khiến ở CUỐI câu: "An giải thích đi" là nói với An. */
+const IMPERATIVE_ENDINGS = ["đi", "nào", "xem", "coi", "thử"];
+
+function includesWord(text: string, word: string): boolean {
+  return (
+    text === word ||
+    text.startsWith(`${word} `) ||
+    text.endsWith(` ${word}`) ||
+    text.includes(` ${word} `)
+  );
+}
+
+/**
+ * Một câu nói THẲNG VỚI một người, nếu có.
+ *
+ * Đòi hỏi một dấu hiệu cú pháp tường minh: dấu hỏi, một từ để hỏi, một tiểu từ
+ * gọi đáp, hoặc một tiểu từ cầu khiến ở cuối câu. Chỉ nêu tên là CHƯA ĐỦ.
+ *
+ * Ranh giới này là cố ý và nó là ranh giới quan trọng nhất của cả module. "Bình
+ * không thể là sói" có nêu tên Bình nhưng là nói VỀ Bình, không phải nói VỚI
+ * Bình; coi nó là một lời nhắm tới sẽ khiến gần như mọi câu trong ván sinh ra
+ * một móc treo hội thoại, và BOT sẽ đáp lại những câu chẳng ai hỏi nó.
+ *
+ * Chạy trên CẢ tin nhắn chứ không theo mệnh đề: lời gọi tên hay nằm ở cuối
+ * ("nghĩ sao An?"), và tách mệnh đề sẽ cắt nó khỏi phần còn lại của câu.
+ */
+function parseDirectAddress(
+  whole: Clause,
+  raw: string,
+  actorId: string,
+  players: readonly BotPlayerKnowledge[],
+): ParsedSpeech | null {
+  const target = resolveTarget(whole.plain, players);
+  // Người gửi tự nêu tên mình không phải là đang nói với chính mình.
+  if (!target || target.id === actorId) return null;
+
+  const asking =
+    raw.includes("?") || QUESTION_WORDS.some((word) => includesWord(whole.plain, word));
+  if (asking) return { type: "DIRECT_QUESTION", targetId: target.id, data: {} };
+
+  const calling =
+    VOCATIVE_PARTICLES.some((word) => includesWord(whole.plain, word)) ||
+    IMPERATIVE_ENDINGS.some((word) => whole.plain.endsWith(` ${word}`));
+  return calling ? { type: "DIRECT_ADDRESS", targetId: target.id, data: {} } : null;
 }
 
 /** Hai dạng của cùng một mệnh đề, dùng song song trong toàn bộ parser. */
@@ -272,6 +332,16 @@ export function analyzeChat(
     if (!players.some((player) => player.id === message.actorId)) continue;
 
     const whole: Clause = { plain: plainForm(message.text), ascii: asciiForm(message.text) };
+
+    // Lời nhắm tới được xét ĐỘC LẬP với mọi mẫu khác, và luôn được xét.
+    //
+    // "Tôi nghi An, đúng không An?" vừa là một cáo buộc vừa là một câu hỏi nhắm
+    // vào An. Cho hai thứ đó loại trừ nhau sẽ mất một trong hai, và mất cái nào
+    // cũng làm hỏng một hành vi khác nhau: mất cáo buộc thì belief không cập
+    // nhật, mất câu hỏi thì BOT không biết mình vừa bị hỏi.
+    const addressed = parseDirectAddress(whole, message.text, message.actorId, players);
+    if (addressed) push(message, addressed);
+
     const counterClaim = parseCounterClaim(whole, players);
     if (counterClaim) {
       push(message, counterClaim);

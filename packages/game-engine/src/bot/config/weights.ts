@@ -66,6 +66,15 @@ export interface MemoryImportanceWeights {
   lateVote: number;
   nominated: number;
   finalJudgment: number;
+  /**
+   * Thấp có chủ đích.
+   *
+   * Một lời gọi tên hay một câu hỏi không phải bằng chứng về vai của ai; nó chỉ
+   * cần sống đủ lâu để BOT kịp trả lời. Đặt ngang `ACCUSE` sẽ khiến chúng chiếm
+   * chỗ của những quan sát thật sự có nội dung khi ngân sách memory bị cắt.
+   */
+  directAddress: number;
+  directQuestion: number;
 }
 
 /**
@@ -591,6 +600,8 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     lateVote: 7,
     nominated: 7,
     finalJudgment: 6,
+    directAddress: 2,
+    directQuestion: 3,
   }),
 
   privateInfo: Object.freeze({ seerWolf: 400, seerClear: -120, knownAlly: -80 }),

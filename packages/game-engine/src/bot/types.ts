@@ -15,6 +15,15 @@ export type BotMemoryType =
   | "DEFEND"
   | "SEER_RESULT"
   | "BOT_SPOKE"
+  /**
+   * Một câu nêu đích danh một người. Thuần CÚ PHÁP, không phải suy diễn.
+   *
+   * Không sinh bằng chứng và không đổi belief: gọi tên ai đó không nói lên
+   * người đó là Sói. Nó chỉ là móc treo để BOT biết mình đang được nói tới.
+   */
+  | "DIRECT_ADDRESS"
+  /** `DIRECT_ADDRESS` kèm dấu hỏi hoặc một từ để hỏi. Cũng không sinh bằng chứng. */
+  | "DIRECT_QUESTION"
   /** Đồng đội Sói đã chết; buộc phải đổi cách chơi phần còn lại của ván. */
   | "ALLY_LOST"
   /** Tóm tắt một vòng, để bot còn nhớ chuyện gì đã xảy ra chứ không chỉ nhớ điểm số. */
