@@ -7,6 +7,8 @@ import {
   type RoomSnapshot,
 } from "@masoi/shared";
 import { ROLE_ICON_PATHS } from "@/lib/role-art";
+import { BalanceMeter } from "./BalanceMeter";
+import { generateWarnings, PRESET_DECKS } from "@/lib/balance";
 
 /** Thứ tự hiển thị, không phải thứ tự hành động ban đêm. Dân Làng luôn đứng cuối. */
 const VILLAGE_ROLES: Role[] = [
@@ -51,6 +53,8 @@ interface Props {
 export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
   const config = snapshot.config;
   const playerCount = snapshot.players.length;
+  const balance = snapshot.balanceWarning ?? generateWarnings(config, playerCount);
+  const presetForCount = PRESET_DECKS[playerCount];
 
   const specials =
     (config.seer ? 1 : 0) +
@@ -87,6 +91,45 @@ export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
 
   return (
     <div className="card">
+      <BalanceMeter score={balance.score} />
+      {balance.warnings.length > 0 && (
+        <div
+          data-testid="balance-warning"
+          className={`mb-4 rounded-xl border px-3 py-2.5 ${
+            balance.blocking
+              ? "border-blood-500/40 bg-blood-600/15"
+              : "border-amber-500/30 bg-amber-500/10"
+          }`}
+        >
+          <p
+            className={`text-xs font-bold ${balance.blocking ? "text-blood-400" : "text-amber-300"}`}
+          >
+            {balance.blocking
+              ? "Cấu hình mất cân bằng — không thể bắt đầu ở Ranked"
+              : "Cảnh báo cân bằng"}
+          </p>
+          <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[11px] leading-snug text-mist/80">
+            {balance.warnings.map((w, i) => (
+              <li key={i}>{w}</li>
+            ))}
+          </ul>
+          {isHost && presetForCount && (
+            <button
+              type="button"
+              onClick={() => onUpdateConfig(presetForCount)}
+              className="mt-2 w-full rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/15"
+              data-testid="apply-preset"
+            >
+              Áp dụng preset chuẩn cho {playerCount} người
+            </button>
+          )}
+          {balance.blocking && (config.mode ?? "ranked") === "ranked" && (
+            <p className="mt-1.5 text-[11px] text-blood-300/80">
+              Chuyển sang Chaos hoặc sửa cấu hình để bắt đầu.
+            </p>
+          )}
+        </div>
+      )}
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h3 className="font-display text-xl font-bold text-white">Bộ bài của ván này</h3>
