@@ -607,9 +607,21 @@ describe("v2 là cấu hình production", () => {
    * 95% rộng ±12% - đủ để một lát seed kém may mắn làm đỏ một ngưỡng đặt đúng.
    * Đã đo: cùng cấu hình cho 28.3% ở n=60 và 40.5% ở n=200. Ngưỡng dưới đây vì
    * thế chừa biên cho sai số lấy mẫu (SE ≈ 3.5% ở n=200) chứ không bám sát giá
-   * trị đo được. Chạy hết ~0.8s.
+   * trị đo được.
    */
   const SEEDS = Array.from({ length: 200 }, (_, i) => `v2-accept-${i}`);
+
+  /**
+   * Hai batch 200 ván là hai test CHẬM NHẤT của cả engine (~2.2s mỗi cái ở máy
+   * dev; mọi test khác dưới 0.3s). Chúng là phép đo thống kê, không phải unit
+   * test, nên chúng cần một hạn giờ tường minh thay vì mặc định 5s.
+   *
+   * Vì sao cần: Phase 4 làm mỗi ván tốn hơn khoảng 3,3 lần (8.5ms so với 2.6ms)
+   * do BOT nói nhiều gấp 3,4 lần và mỗi câu đều đi qua `chat-analysis`. Ở máy
+   * dev chúng vẫn dưới 5s, nhưng runner CI chậm hơn 2–3 lần đã đẩy cả hai vượt
+   * hạn và làm đỏ build - xem `docs/bot-ai-phase-4-verification.md` §9 C8.
+   */
+  const BATCH_TIMEOUT_MS = 60_000;
 
   /**
    * Dùng `runSelfPlay` chứ không `simulateGame`.
@@ -617,14 +629,25 @@ describe("v2 là cấu hình production", () => {
    * `simulateGame` là mặt tiền tương thích của Phase 2 và nó tắt lời nói, nên
    * số liệu của nó KHÔNG phải số liệu của hành vi đang chạy ở production. Đo
    * bằng một cấu hình không ai chơi là cách chắc chắn nhất để hiệu chỉnh nhầm.
+   *
+   * Kết quả được ghi nhớ theo phiên bản trọng số. `runSelfPlay` là hàm thuần
+   * của `(seed, weights)`, nên chạy lại đúng cùng batch chỉ tốn thời gian mà
+   * không thêm thông tin - và hai test dưới đây cùng cần batch của v3.
    */
+  const cache = new Map<string, { village: number; wolves: number }>();
+
   function winRates(weights: BotWeights): { village: number; wolves: number } {
+    const memo = cache.get(weights.version);
+    if (memo) return memo;
+
     const results = SEEDS.map((seed) => runSelfPlay({ seed, weights }));
     const finished = results.filter((item) => item.winner !== null).length;
-    return {
+    const rates = {
       village: results.filter((item) => item.winner === "village").length / finished,
       wolves: results.filter((item) => item.winner === "wolves").length / finished,
     };
+    cache.set(weights.version, rates);
+    return rates;
   }
 
   it("mặc định trỏ tới v3", () => {
@@ -635,24 +658,32 @@ describe("v2 là cấu hình production", () => {
     expect(weightsPreset("2.0.0")).toBe(BOT_WEIGHTS_V2);
   });
 
-  it("không phe nào thắng quá áp đảo", () => {
-    // Ngưỡng thật, không phải "mỗi phe thắng ít nhất một ván" như Phase 2 - một
-    // tiêu chí mà 96% Sói thắng vẫn lọt qua.
-    // Đo được 40.5%; ngưỡng đặt ở 0.28/0.68 để chừa biên sai số lấy mẫu.
-    const rates = winRates(DEFAULT_BOT_WEIGHTS);
-    expect(rates.village).toBeGreaterThan(0.28);
-    expect(rates.village).toBeLessThan(0.68);
-    expect(rates.wolves).toBeGreaterThan(0.28);
-    expect(rates.wolves).toBeLessThan(0.68);
-  });
+  it(
+    "không phe nào thắng quá áp đảo",
+    () => {
+      // Ngưỡng thật, không phải "mỗi phe thắng ít nhất một ván" như Phase 2 -
+      // một tiêu chí mà 96% Sói thắng vẫn lọt qua.
+      // Đo được 41.3% ở v3; ngưỡng đặt ở 0.28/0.68 để chừa biên sai số lấy mẫu.
+      const rates = winRates(DEFAULT_BOT_WEIGHTS);
+      expect(rates.village).toBeGreaterThan(0.28);
+      expect(rates.village).toBeLessThan(0.68);
+      expect(rates.wolves).toBeGreaterThan(0.28);
+      expect(rates.wolves).toBeLessThan(0.68);
+    },
+    BATCH_TIMEOUT_MS,
+  );
 
-  it("cải thiện thật so với v1 trên cùng bộ seed", () => {
-    // Cùng seed, cùng engine, chỉ khác cấu hình: chênh lệch không thể là nhiễu
-    // seed. Đo được 11.5% (v1) so với 40.5% (v2).
-    expect(winRates(DEFAULT_BOT_WEIGHTS).village).toBeGreaterThan(
-      winRates(BOT_WEIGHTS_V1).village + 0.15,
-    );
-  });
+  it(
+    "cải thiện thật so với v1 trên cùng bộ seed",
+    () => {
+      // Cùng seed, cùng engine, chỉ khác cấu hình: chênh lệch không thể là nhiễu
+      // seed. Đo được 11.5% (v1) so với 41.3% (v3).
+      expect(winRates(DEFAULT_BOT_WEIGHTS).village).toBeGreaterThan(
+        winRates(BOT_WEIGHTS_V1).village + 0.15,
+      );
+    },
+    BATCH_TIMEOUT_MS,
+  );
 
   it("v1 vẫn đóng băng và vẫn tái lập được", () => {
     // Mốc so sánh chỉ có giá trị nếu nó không trôi. Đây là điều khiến câu

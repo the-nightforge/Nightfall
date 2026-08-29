@@ -199,6 +199,15 @@ Cả hai giá trị nằm giữa dải chấp nhận 28–68%, và cấu hình 1
 
 **C7 — Chưa có test đầu-cuối cho một phòng thật với nhà cung cấp thật.** Toàn bộ đường provider được kiểm bằng mock. `npm run test:e2e` và `npm run bot:probe` tồn tại nhưng cần khoá API nên không nằm trong cổng CI.
 
+**C8 — Self-play đắt hơn 3,3 lần mỗi ván, và nó đã làm đỏ CI một lần.** BOT nói nhiều gấp 3,4 lần, mỗi câu đều đi qua `chat-analysis`, nên chi phí một ván đi từ ~2.6ms (v1) lên ~8.5ms (v3). Hai test batch 200 ván trong `bot-weights.test.ts` vẫn dưới hạn 5s mặc định ở máy dev (2.2s) nhưng vượt hạn trên runner CI chậm hơn 2–3 lần — build `#21` đỏ vì đúng lý do này, không phải vì hành vi sai.
+
+Đã sửa bằng hai việc, không phải bằng cách nới hạn giờ một cách mù quáng:
+
+1. **Ghi nhớ kết quả batch theo phiên bản trọng số.** `runSelfPlay` là hàm thuần của `(seed, weights)`, mà hai test cùng cần batch của v3. Chạy lại nó chỉ tốn thời gian và không thêm thông tin. Test thứ hai: **2172ms → 621ms**.
+2. **Hạn giờ tường minh 60s cho đúng hai test batch đó**, kèm chú thích nói rõ chúng là phép đo thống kê chứ không phải unit test. Mọi test còn lại của engine đều dưới 0.36s nên không có cái nào khác nằm gần hạn.
+
+Tổng thời gian suite engine: **4.50s → 3.84s**, thấp hơn cả trước khi sửa. Nếu cần cắt thêm, đòn bẩy tiếp theo là hạ `selfPlayTurnsPerRound`, nhưng điều đó đánh đổi bằng độ phủ của chính tầng hội thoại (xem §C4).
+
 ---
 
 ## 10. Ghi chú vận hành
