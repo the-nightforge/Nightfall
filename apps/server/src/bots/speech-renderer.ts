@@ -76,17 +76,33 @@ export async function renderBotSpeech(
   try {
     const attempt = await brain.renderDaySpeech(request);
     const chat = attempt.ok ? attempt.value?.chat : null;
-    if (chat && !echoesItself(request, chat)) {
+    if (chat && !echoesRecentOwnLine(request, chat)) {
       return { text: chat.slice(0, chatMaxLength), fromTemplate: false };
     }
   } catch {
     // Não ném lỗi ngoài dự kiến cũng chỉ là một lượt hỏng.
   }
-  return { text: speechTemplate(request), fromTemplate: true };
+
+  // Đường lui cũng phải theo đúng luật vừa dùng để từ chối nhà cung cấp.
+  //
+  // `renderSpeechTemplate` quét cả bảng để né `avoidFingerprints`, nhưng khi cả
+  // bảng đều đã nói gần đây thì nó CỐ TÌNH trả về một mẫu trùng - một lượt nói
+  // trùng còn hơn một ngoại lệ chạy lên tầng scheduler. Và chuyện đó tới được
+  // thật: bảng nhỏ nhất có 4 mẫu, mà `promptRecentOwnLines` cũng đúng bằng 4.
+  //
+  // Ở đây thì trùng là vô nghĩa: vừa từ chối câu của nhà cung cấp vì nó nhại
+  // lại chính BOT, rồi tự nhại lại bằng đường khác. Im lặng mới là câu trả lời
+  // đúng, và nó không tốn gì - scheduler không tính lượt cho một câu rỗng, nên
+  // BOT giữ nguyên hạn mức và nói tiếp ở checkpoint sau.
+  const template = speechTemplate(request);
+  if (template !== null && echoesRecentOwnLine(request, template)) {
+    return { text: null, fromTemplate: true };
+  }
+  return { text: template, fromTemplate: true };
 }
 
 /**
- * Nhà cung cấp vừa đọc lại đúng câu BOT vừa nói?
+ * Câu này có phải là một câu BOT vừa nói không?
  *
  * `recentOwnLines` đi vào prompt kèm lời dặn "đừng diễn đạt lại", và bảng mẫu
  * thì bị chặn CỨNG bằng `avoidFingerprints`. Nhưng lời dặn trong prompt chỉ là
@@ -100,8 +116,11 @@ export async function renderBotSpeech(
  *
  * Trùng thì rơi về bảng mẫu chứ không hỏi lại. Hỏi lại tốn thêm một vòng mạng
  * ngay giữa pha thảo luận, mà bảng mẫu vốn đã tránh sẵn những câu này.
+ *
+ * Dùng cho CẢ HAI đường ra: câu của nhà cung cấp, và câu của bảng mẫu. Một luật
+ * chống lặp chỉ gác một nửa số lối ra thì không phải là một luật.
  */
-function echoesItself(request: SpeechRequest, chat: string): boolean {
+function echoesRecentOwnLine(request: SpeechRequest, chat: string): boolean {
   if (request.recentOwnLines.length === 0) return false;
   const fingerprint = speechTextFingerprint(chat);
   return request.recentOwnLines.some(
