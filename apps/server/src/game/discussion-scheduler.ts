@@ -49,7 +49,7 @@ const OPENING_DELAY_MS = 2_000;
  * `ConversationWeights` vì đó là một bảng cố tình KHÔNG chứa mili giây: server
  * sở hữu đồng hồ.
  */
-export const BOT_COOLDOWN_MS = 7_000;
+export const PER_BOT_COOLDOWN_MS = 7_000;
 
 interface DiscussionRun {
   cancelled: boolean;
@@ -63,7 +63,7 @@ interface DiscussionRun {
   /** Mốc phát gần nhất, để không hai câu nào trùng khoảnh khắc. */
   lastAt: number;
   /** Mốc phát gần nhất CỦA TỪNG BOT, cho nhịp nghỉ riêng. */
-  lastSpokeAt: Map<string, number>;
+  lastSpokenAt: Map<string, number>;
   /**
    * Độ sâu chuỗi của từng câu scheduler đã phát.
    *
@@ -111,6 +111,12 @@ export function runDiscussionScheduler(room: Room): void {
   cancelDiscussionScheduler(room.code);
   if (!room.engine || room.engine.state.phase !== "DAY_DISCUSSION") return;
 
+  // Không có BOT thì không có việc gì để làm, và lối ra phải sạch: không đồng
+  // hồ, không session, không ngoại lệ. Tám người thật ngồi với nhau là một ván
+  // hợp lệ, không phải một trường hợp biên cần chống đỡ.
+  const botMembers = room.members.filter((member) => member.isBot);
+  if (botMembers.length === 0) return;
+
   const run: DiscussionRun = {
     cancelled: false,
     engine: room.engine,
@@ -119,7 +125,7 @@ export function runDiscussionScheduler(room: Room): void {
     spoken: new Map(),
     total: 0,
     lastAt: 0,
-    lastSpokeAt: new Map(),
+    lastSpokenAt: new Map(),
     messageDepths: new Map(),
     replyCounts: new Map(),
   };
@@ -127,7 +133,15 @@ export function runDiscussionScheduler(room: Room): void {
 
   const session = botSessionFor(room);
   const pick = session.rngFor("__room__", `discussion:${run.round}`);
-  const weights = session.runtimeFor(room.members[0]!.playerId).weights.conversation;
+  // Đọc bảng hạn mức từ một BOT THẬT, không phải từ `members[0]`.
+  //
+  // `members[0]` là chủ phòng, và chủ phòng gần như luôn là người thật - nên
+  // dòng cũ dựng cả một bộ não cho người không cần não, chỉ để với tới một bảng
+  // hằng số. Nó cũng đổ vỡ ở một phòng không có thành viên nào.
+  //
+  // Đây là hạn mức của CĂN PHÒNG, và mọi BOT dùng chung một bảng; lấy ở con nào
+  // cũng ra cùng một kết quả, và con này thì đằng nào cũng cần runtime.
+  const weights = session.runtimeFor(botMembers[0]!.playerId).weights.conversation;
 
   const step = (): void => {
     if (run.cancelled || runs.get(room.code) !== run) return;
@@ -157,7 +171,7 @@ export function runDiscussionScheduler(room: Room): void {
     if (eligible.length === 0) return;
 
     const readyAt = (botId: string): number =>
-      (run.lastSpokeAt.get(botId) ?? Number.NEGATIVE_INFINITY) + BOT_COOLDOWN_MS;
+      (run.lastSpokenAt.get(botId) ?? Number.NEGATIVE_INFINITY) + PER_BOT_COOLDOWN_MS;
     const candidates = eligible.filter((member) => readyAt(member.playerId) <= now);
 
     // Ai cũng đang trong nhịp nghỉ. KHÔNG phải lý do để dừng: chờ tới đúng lúc
@@ -252,7 +266,7 @@ export function runDiscussionScheduler(room: Room): void {
         // bị `resolveChat` chặn, hay về muộn quá hạn, mà đã kịp chiếm một suất
         // phản hồi thì nó bịt miệng người khác bằng một câu chưa ai nghe thấy.
         run.lastAt = message.at;
-        run.lastSpokeAt.set(member.playerId, message.at);
+        run.lastSpokenAt.set(member.playerId, message.at);
         run.spoken.set(member.playerId, (run.spoken.get(member.playerId) ?? 0) + 1);
         run.total += 1;
         run.messageDepths.set(message.id, position.depth);

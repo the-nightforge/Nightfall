@@ -70,7 +70,7 @@ vi.mock("../src/bots", async () => {
   };
 });
 
-const { runDiscussionScheduler, cancelDiscussionScheduler, BOT_COOLDOWN_MS } =
+const { runDiscussionScheduler, cancelDiscussionScheduler, PER_BOT_COOLDOWN_MS } =
   await import("../src/game/discussion-scheduler");
 
 function discussionRoom(botCount = 4, aliveOverrides: Record<string, boolean> = {}): Room {
@@ -646,16 +646,43 @@ describe("nhịp riêng của từng BOT", () => {
       const last = previous.get(message.playerId);
       if (last !== undefined) {
         expect(message.at - last, message.playerId).toBeGreaterThanOrEqual(
-          BOT_COOLDOWN_MS,
+          PER_BOT_COOLDOWN_MS,
         );
       }
       previous.set(message.playerId, message.at);
     }
   });
 
-  it("cooldown chỉ hoãn lượt, không giết cả phiên", async () => {
-    // Hai BOT đều đang trong cooldown thì checkpoint này không có ai nói - và
-    // đó KHÔNG phải lý do để dừng hẳn hàng đợi. Lượt sau vẫn phải tới.
+  it("cả phòng cùng nghỉ thì hàng đợi vẫn sống, không dừng vĩnh viễn", async () => {
+    // ĐÚNG MỘT con BOT, và đó là điểm mấu chốt: khoảng cách giữa hai checkpoint
+    // nhiều nhất là `MIN_GAP_MS + JITTER_MS` = 6,5 giây, ngắn hơn nhịp nghỉ 7
+    // giây. Nên ngay sau mỗi câu, checkpoint kế tiếp CHẮC CHẮN rơi vào cảnh
+    // "không còn ai đủ điều kiện" - đúng nhánh cần thử.
+    //
+    // Với hai con trở lên, con kia gần như luôn rảnh và nhánh này không bao giờ
+    // chạy; một test như thế xanh kể cả khi scheduler dừng hẳn ở đó.
+    const room = discussionRoom(1);
+    scriptEveryBot(room, () => ({
+      kind: "ACCUSE",
+      targetId: "human",
+      topic: "SUSPICION",
+      confidence: 0.6,
+      evidence: [],
+      tone: "FIRM",
+    }));
+
+    await playDiscussion(room);
+
+    // Nếu nhánh đó dừng hàng đợi thay vì hẹn lại, con BOT nói đúng một câu rồi
+    // im tới hết pha.
+    expect(botLines(room)).toHaveLength(LIMITS.messagesPerBotPerRound);
+    const stamps = botLines(room).map((message) => message.at);
+    for (let i = 1; i < stamps.length; i += 1) {
+      expect(stamps[i]! - stamps[i - 1]!).toBeGreaterThanOrEqual(PER_BOT_COOLDOWN_MS);
+    }
+  });
+
+  it("nhịp nghỉ không đụng tới trần mỗi BOT và trần cả phòng", async () => {
     const room = discussionRoom(2);
     scriptEveryBot(room, () => ({
       kind: "ACCUSE",
@@ -675,5 +702,140 @@ describe("nhịp riêng của từng BOT", () => {
     // Cả hai con vẫn tiêu hết hạn mức ngày của mình, chỉ là rải ra.
     expect(counts.get("bot1")).toBe(LIMITS.messagesPerBotPerRound);
     expect(counts.get("bot2")).toBe(LIMITS.messagesPerBotPerRound);
+  });
+
+  it("con khác vẫn nói được trong lúc con vừa nói đang nghỉ", async () => {
+    // Nhịp nghỉ là của TỪNG BOT, không phải của căn phòng. Nếu nó khoá cả
+    // phòng thì cuộc thảo luận chậm lại đúng bằng lượng vừa chữa được.
+    const room = discussionRoom(3);
+    scriptEveryBot(room, () => ({
+      kind: "ACCUSE",
+      targetId: "human",
+      topic: "SUSPICION",
+      confidence: 0.6,
+      evidence: [],
+      tone: "FIRM",
+    }));
+
+    await playDiscussion(room);
+
+    const lines = botLines(room);
+    const opener = lines[0]!;
+    const duringCooldown = lines.filter(
+      (message) =>
+        message.at > opener.at && message.at < opener.at + PER_BOT_COOLDOWN_MS,
+    );
+    expect(duringCooldown.length).toBeGreaterThan(0);
+    for (const message of duringCooldown) {
+      expect(message.playerId).not.toBe(opener.playerId);
+    }
+  });
+
+  it("hết nghỉ thì được chọn lại, không bị loại khỏi vòng", async () => {
+    const room = discussionRoom(3);
+    scriptEveryBot(room, () => ({
+      kind: "ACCUSE",
+      targetId: "human",
+      topic: "SUSPICION",
+      confidence: 0.6,
+      evidence: [],
+      tone: "FIRM",
+    }));
+
+    await playDiscussion(room);
+
+    const counts = new Map<string, number>();
+    for (const message of botLines(room)) {
+      counts.set(message.playerId, (counts.get(message.playerId) ?? 0) + 1);
+    }
+    // Mỗi con nói lại nhiều lần: nhịp nghỉ HOÃN một lượt, nó không tước lượt.
+    for (const member of room.members.filter((entry) => entry.isBot)) {
+      expect(counts.get(member.playerId), member.playerId).toBe(
+        LIMITS.messagesPerBotPerRound,
+      );
+    }
+  });
+
+  it("lượt không phát ra câu nào KHÔNG bị tính là đã nói", async () => {
+    // Nhà cung cấp hỏng, BOT im lặng, hoặc ý định bị trần chặn - cả ba đều kết
+    // thúc mà không có câu nào. Nếu chúng vẫn nạp nhịp nghỉ thì một con BOT bị
+    // phạt vì một câu nó chưa từng nói, và càng hỏng nó càng bị bịt miệng.
+    //
+    // Ở đây: ý định thuộc loại cần người để nói tới nhưng không có ai, nên cả
+    // nhà cung cấp lẫn bảng mẫu đều không ra được chữ nào.
+    const room = discussionRoom(2);
+    scriptEveryBot(room, () => ({
+      kind: "REPLY",
+      topic: "PROCESS",
+      confidence: 0.5,
+      evidence: [],
+      tone: "NEUTRAL",
+    }));
+
+    await playDiscussion(room);
+
+    expect(botLines(room)).toHaveLength(0);
+
+    // Không có nhịp nghỉ giả: cùng một con được hỏi lại trong khoảng ngắn hơn
+    // cả cooldown, vì nó chưa hề nói gì.
+    const askedAgainQuickly = provider.calls.some((call, index) =>
+      provider.calls
+        .slice(index + 1)
+        .some(
+          (later) =>
+            later.botId === call.botId &&
+            later.at - call.at < PER_BOT_COOLDOWN_MS,
+        ),
+    );
+    expect(askedAgainQuickly).toBe(true);
+  });
+});
+
+/**
+ * Phòng không có BOT nào.
+ *
+ * Hoàn toàn bình thường - tám người thật ngồi với nhau là một ván hợp lệ. Lúc
+ * đó scheduler không có việc gì để làm, và "không có việc gì để làm" phải là
+ * một lối ra sạch: không đồng hồ, không runtime, không ngoại lệ.
+ */
+describe("phòng không có BOT", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    timers.scheduled = [];
+    provider.calls = [];
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    cancelDiscussionScheduler("ROOMA");
+    clearBotSession("ROOMA");
+    vi.useRealTimers();
+  });
+
+  it("không ném, không câu nào, và không hẹn lịch gì cả", async () => {
+    const room = discussionRoom(0);
+    expect(room.members.every((member) => !member.isBot)).toBe(true);
+
+    await expect(playDiscussion(room)).resolves.toBeUndefined();
+
+    expect(botLines(room)).toHaveLength(0);
+    expect(room.chatLog).toHaveLength(0);
+    // Không một checkpoint nào được đặt: không có ai để xếp lịch.
+    expect(timers.scheduled).toHaveLength(0);
+  });
+
+  it("không dựng BotRuntime cho người thật chỉ để đọc bảng cấu hình", async () => {
+    // Bảng `conversation` là hằng số của cấu hình, không phải tài sản của một
+    // người chơi. Đọc nó qua `runtimeFor(<người thật>)` vừa cấp phát một bộ não
+    // cho người không cần não, vừa nói sai ai là chủ của con số đó.
+    const room = discussionRoom(2);
+    const session = botSessionFor(room);
+    const runtimeFor = vi.spyOn(session, "runtimeFor");
+
+    await playDiscussion(room);
+
+    const asked = runtimeFor.mock.calls.map(([botId]) => botId);
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked).not.toContain("human");
   });
 });
