@@ -321,7 +321,7 @@ export function resetToLobby(room: Room): void {
   // Về lobby là xoá hẳn room voice: không ai được ngồi lại với quyền của ván
   // cũ. CỐ Ý không làm điều này ở GAME_OVER - lúc lật bài xong là lúc đáng nói
   // nhất cả ván, nên room vẫn sống tới khi phòng thật sự reset.
-  void destroyVoiceRoom(room.code);
+  void destroyVoiceRoom(room.code, "về lại phòng chờ");
   sync(room);
 }
 

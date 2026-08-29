@@ -121,7 +121,7 @@ export const roomService = {
       // đánh dấu đã chết rồi bị loại khỏi room.members, nên vòng đồng bộ theo
       // thành viên không bao giờ chạm tới họ nữa - họ nghe và nói được với
       // người sống tới hết ván.
-      void dropVoiceParticipant(room.code, playerId);
+      void dropVoiceParticipant(room.code, playerId, "rời phòng");
 
       if (room.members.length === 0) {
         removeRoom(room.code);
@@ -198,7 +198,7 @@ export const roomService = {
       room.members = room.members.filter((m) => m.playerId !== targetId);
       // Bị đuổi cũng không đi qua sync(): người bị đuổi vẫn nói được vào phòng
       // vừa đuổi họ nếu không đá khỏi voice ở đây.
-      void dropVoiceParticipant(room.code, targetId);
+      void dropVoiceParticipant(room.code, targetId, "bị đuổi");
       await updateSessionRoom(targetId, null);
       await persistRoom(room);
       broadcastRoom(room.code);
@@ -235,7 +235,7 @@ export const roomService = {
     const voiceTurnedOff = room.config.voice === true && config.voice !== true;
     room.config = config;
     // Host tắt voice giữa phòng chờ: xoá hẳn room, mọi người rơi về text.
-    if (voiceTurnedOff) void destroyVoiceRoom(room.code);
+    if (voiceTurnedOff) void destroyVoiceRoom(room.code, "host tắt voice");
     void persistRoom(room).then(() => broadcastRoom(room.code));
   },
 

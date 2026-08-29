@@ -256,12 +256,17 @@ export function voiceViewFor(room: Room, viewerId: string): VoiceView {
 }
 
 /** Đá một người khỏi room voice: rời phòng, bị đuổi. */
-export async function dropVoiceParticipant(code: string, playerId: string): Promise<void> {
+export async function dropVoiceParticipant(
+  code: string,
+  playerId: string,
+  reason = "không rõ",
+): Promise<void> {
   const state = stateFor(code);
   state.joined.delete(playerId);
   state.applied.delete(playerId);
   if (!admin) return;
 
+  console.log(`[voice] đá ${playerId} khỏi ${code} (${reason})`);
   try {
     await admin.removeParticipant(voiceRoomNameFor(code), playerId);
   } catch (err) {
@@ -277,10 +282,14 @@ export async function dropVoiceParticipant(code: string, playerId: string): Prom
  *
  * KHÔNG gọi ở GAME_OVER - lúc lật bài xong là lúc đáng nói nhất cả ván.
  */
-export async function destroyVoiceRoom(code: string): Promise<void> {
+export async function destroyVoiceRoom(code: string, reason = "không rõ"): Promise<void> {
   states.delete(code);
   if (!admin) return;
 
+  // Ghi cả lúc THÀNH CÔNG, không chỉ lúc lỗi. Ngày 2026-08-30 một room bị xoá
+  // giữa lúc chạy thử mà không truy được nguyên nhân, đúng vì đường này im lặng
+  // khi mọi thứ chạy trơn tru - và "chạy trơn tru" không có nghĩa là "đúng lúc".
+  console.log(`[voice] xoá room ${code} (${reason})`);
   try {
     await admin.deleteRoom(voiceRoomNameFor(code));
   } catch (err) {

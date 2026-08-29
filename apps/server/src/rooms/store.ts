@@ -62,7 +62,7 @@ export function createRoom(code: string, host: RoomMember): Room {
 export function removeRoom(code: string): void {
   // Phòng biến mất thì room voice cũng phải biến mất. Đây là chốt chặn duy nhất
   // của việc xoá phòng, nên mọi lối vào tương lai đều được phủ.
-  void destroyVoiceRoom(code);
+  void destroyVoiceRoom(code, "phòng bị xoá");
   clearRoomTimers(code);
   rooms.delete(code);
   // Không dọn thì pendingVote/pendingEndFinalVote và ngân sách governor tích luỹ
