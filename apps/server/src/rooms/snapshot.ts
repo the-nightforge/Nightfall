@@ -215,5 +215,6 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
     winner: gameView?.winner ?? null,
     chatLog: visibleChatLog(room, viewerId),
     log: gameView?.log ?? [],
+    dayOfTruthClaims: gameView?.dayOfTruthClaims ?? {},
   };
 }

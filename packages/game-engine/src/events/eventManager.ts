@@ -2,7 +2,7 @@ import type { GameEventId, GameEventView } from "@masoi/shared";
 import type { GameState } from "../types";
 import { calculateMomentum } from "./momentum";
 
-const RANKED_NEUTRAL_EVENT_CHANCE = 0.35;
+const RANKED_NEUTRAL_EVENT_CHANCE = 0.65;
 
 export interface GameEventDefinition {
   id: GameEventId;

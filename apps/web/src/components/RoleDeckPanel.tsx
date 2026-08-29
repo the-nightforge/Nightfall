@@ -282,21 +282,31 @@ function RoleCard({
         ${
           enabled
             ? wolf
-              ? "border-blood-500/40 bg-blood-600/10"
-              : "border-emerald-500/25 bg-emerald-900/10"
+              ? "border-blood-500/40 bg-blood-600/10 shadow-[inset_0_1px_0_rgba(244,71,96,0.15)]"
+              : "border-emerald-500/25 bg-emerald-900/10 shadow-[inset_0_1px_0_rgba(52,211,153,0.12)]"
             : "border-night-600/50 bg-night-800/30 opacity-45"
         }
         ${locked ? "cursor-default" : "cursor-pointer hover:border-white/25"}`}
     >
-      <svg
-        viewBox="0 0 512 512"
-        aria-hidden="true"
-        className={`h-9 w-9 transition-transform group-hover:scale-110 ${
-          enabled ? (wolf ? "fill-blood-400" : "fill-emerald-300") : "fill-mist/40"
+      <span
+        className={`grid h-12 w-12 place-items-center rounded-full ring-1 transition-transform group-hover:scale-110 ${
+          enabled
+            ? wolf
+              ? "bg-gradient-to-br from-blood-600/30 to-blood-900/20 ring-blood-500/30"
+              : "bg-gradient-to-br from-emerald-600/20 to-emerald-900/20 ring-emerald-500/25"
+            : "bg-night-800 ring-white/5"
         }`}
       >
-        <path d={ROLE_ICON_PATHS[role]} />
-      </svg>
+        <svg
+          viewBox="0 0 512 512"
+          aria-hidden="true"
+          className={`h-7 w-7 drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)] ${
+            enabled ? (wolf ? "fill-blood-300" : "fill-emerald-200") : "fill-mist/35"
+          }`}
+        >
+          <path d={ROLE_ICON_PATHS[role]} />
+        </svg>
+      </span>
 
       <span
         className={`mt-1.5 text-xs font-bold uppercase tracking-wide ${
