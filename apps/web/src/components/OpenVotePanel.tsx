@@ -1,33 +1,47 @@
 "use client";
 
 import type { RoomSnapshot } from "@masoi/shared";
-import { formatOpenBallots } from "@/lib/vote-history";
+import { assignAvatars, tintFor } from "@/lib/avatar";
+import { Avatar } from "./Avatar";
+import { useMemo } from "react";
 
-/**
- * Ai đang bỏ phiếu cho ai, ngay trong lúc còn cãi được.
- *
- * Vòng đề cử là vòng tranh luận, và hành vi bỏ phiếu là bằng chứng chính của
- * thể loại này: ai châm ngòi, ai hùa theo, ai rút phiếu khi gió đổi. Giấu tới
- * recap thì thông tin vẫn lộ, chỉ là lộ sau khi nó hết tác dụng.
- *
- * Không render gì khi chưa ai bỏ phiếu: một khung rỗng chỉ chiếm chỗ trên điện
- * thoại, mà đây là chỗ ngay dưới lưới ghế.
- */
 export function OpenVotePanel({ snapshot }: { snapshot: RoomSnapshot }) {
-  const names = new Map(snapshot.players.map((player) => [player.id, player.name]));
-  const lines = formatOpenBallots(snapshot.openBallots, names);
-  if (lines.length === 0) return null;
+  const openBallots = snapshot.openBallots ?? [];
+  if (openBallots.length === 0) return null;
+  const playerMap = useMemo(() => new Map(snapshot.players.map((p) => [p.id, p])), [snapshot.players]);
+  const avatars = useMemo(() => assignAvatars(snapshot.players.map((p) => p.id)), [snapshot.players]);
 
   return (
     <div className="mt-3 border-t border-white/[0.08] pt-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-mist/60">
-        Ai đang bỏ phiếu cho ai
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-mist/60">
+        Đang bỏ phiếu · {openBallots.length} phiếu
       </p>
-      <ol className="mt-1.5 space-y-1 text-sm text-mist/80">
-        {lines.map((line, index) => (
-          <li key={`${index}:${line}`}>{line}</li>
-        ))}
-      </ol>
+      <div className="flex flex-wrap gap-1.5">
+        {openBallots.map((b) => {
+          const voter = playerMap.get(b.voterId);
+          const isNoElim = b.choice.type === "NO_ELIMINATION";
+          const targetId = b.choice.type === "PLAYER" ? b.choice.targetId : null;
+          const target = targetId ? playerMap.get(targetId) : null;
+          return (
+            <div
+              key={b.voterId}
+              className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-night-800 px-2 py-1"
+            >
+              <Avatar avatar={avatars[b.voterId]} tint={tintFor(b.voterId)} alive className="h-5 w-5" />
+              <span className="text-[11px] font-medium text-white">{voter?.name ?? "?"}</span>
+              <span className="text-mist/30">→</span>
+              {isNoElim ? (
+                <span className="text-[11px] text-mist/60">🚫</span>
+              ) : (
+                <>
+                  <Avatar avatar={avatars[targetId!]} tint={tintFor(targetId!)} alive className="h-5 w-5" />
+                  <span className="text-[11px] text-mist/80">{target?.name ?? "?"}</span>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

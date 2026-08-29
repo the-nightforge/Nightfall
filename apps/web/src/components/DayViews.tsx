@@ -157,30 +157,13 @@ export function EliminationView({ snapshot }: { snapshot: RoomSnapshot }) {
     <div className="space-y-4">
       <div className="card py-7 text-center">
         <p className="text-xs uppercase tracking-[0.3em] text-mist/50">Phán quyết của làng</p>
-        {snapshot.lastEliminated ? (
+          {snapshot.lastEliminated ? (
           <>
             <h3 className="mt-2 font-display text-3xl font-bold text-blood-400">
               {snapshot.lastEliminated.name}
             </h3>
             <p className="mt-1 text-sm text-mist/70">đã bị treo cổ</p>
-            {(() => {
-              const p = snapshot.players.find((x) => x.id === snapshot.lastEliminated!.playerId);
-              if (p?.role) {
-                const wolf = p.role === "WEREWOLF";
-                return (
-                  <p
-                    className={`mt-4 inline-block rounded-full px-4 py-1.5 font-display text-lg font-bold ${
-                      wolf
-                        ? "bg-emerald-900/50 text-emerald-300"
-                        : "bg-blood-600/25 text-blood-400"
-                    }`}
-                  >
-                    {wolf ? "Đúng là Ma Sói" : "Một dân làng vô tội"}
-                  </p>
-                );
-              }
-              return null;
-            })()}
+            <p className="mt-3 text-xs text-mist/40">Vai trò sẽ được tiết lộ khi ván đấu kết thúc.</p>
           </>
         ) : snapshot.lastTrial ? (
         // Được tha là một kết cục riêng: lastEliminated === null không phân biệt

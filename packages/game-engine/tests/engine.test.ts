@@ -1237,9 +1237,17 @@ describe("Thợ Săn", () => {
       target: null,
     });
     expect(e.snapshotFor("wolf").hunterShotInfo).toEqual({
+      hunterId: "",
+      hunterName: "Ẩn danh",
+      canAct: false,
+      resolved: false,
+      target: null,
+    });
+    // Thợ săn vẫn thấy đầy đủ thông tin
+    expect(e.snapshotFor("hunter").hunterShotInfo).toEqual({
       hunterId: "hunter",
       hunterName: "Thợ Săn",
-      canAct: false,
+      canAct: true,
       resolved: false,
       target: null,
     });
@@ -1255,7 +1263,15 @@ describe("Thợ Săn", () => {
 
     e.submitHunterShot("hunter", "wolf");
 
+    // Chỉ thợ săn thấy mục tiêu, người khác chỉ thấy ẩn danh
     expect(e.snapshotFor("villager").hunterShotInfo).toEqual({
+      hunterId: "",
+      hunterName: "Ẩn danh",
+      canAct: false,
+      resolved: true,
+      target: null,
+    });
+    expect(e.snapshotFor("hunter").hunterShotInfo).toEqual({
       hunterId: "hunter",
       hunterName: "Thợ Săn",
       canAct: false,

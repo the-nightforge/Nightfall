@@ -15,6 +15,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
   const role = snapshot.you?.role;
   const night = snapshot.night;
   const [selected, setSelected] = useState<string | null>(null);
+  const [wolfSecondary, setWolfSecondary] = useState<string | null>(null);
   const [detectiveTarget1, setDetectiveTarget1] = useState<string | null>(null);
   const [detectiveTarget2, setDetectiveTarget2] = useState<string | null>(null);
   const [poisoning, setPoisoning] = useState(false);
@@ -123,6 +124,29 @@ export function NightPanel({ snapshot, onAction }: Props) {
                 🐾 Sói Con: Nếu bạn bị loại bỏ, đêm kế tiếp bầy Sói được cắn 2 nạn nhân!
               </p>
             )}
+            {(night?.wolfCubRageTonight || snapshot.activeEvent?.id === "BLOODY_HUNT") && !locked && (
+              <div className="mb-2 rounded-lg border border-blood-500/40 bg-blood-900/20 p-2">
+                <p className="text-xs font-bold text-blood-300">
+                  🩸 {night?.wolfCubRageTonight ? "Phẫn nộ Sói Con" : "Cuộc Săn Đẫm Máu"}: Chọn thêm 1 mục tiêu phụ!
+                </p>
+                <div className="mt-1 flex gap-1.5 text-xs">
+                  <span className={`rounded px-2 py-1 ${selected ? "bg-blood-600 text-white" : "bg-night-800 text-mist/50"}`}>
+                    Chính: {selected ? nameOf(selected) : "chưa chọn"}
+                  </span>
+                  <span className={`rounded px-2 py-1 ${wolfSecondary ? "bg-blood-600 text-white" : "bg-night-800 text-mist/50"}`}>
+                    Phụ: {wolfSecondary ? nameOf(wolfSecondary) : "chưa chọn"}
+                  </span>
+                  {wolfSecondary && (
+                    <button className="text-mist/50 hover:text-white" onClick={() => setWolfSecondary(null)}>
+                      ✕
+                    </button>
+                  )}
+                </div>
+                {snapshot.activeEvent?.id === "BLOODY_HUNT" && (
+                  <p className="mt-1 text-[10px] text-mist/50">Mục tiêu phụ chỉ có 50% tỉ lệ thành công.</p>
+                )}
+              </div>
+            )}
             {night?.wolfSecondaryTarget && (
               <p className="mb-2 rounded-lg border border-blood-500/40 bg-blood-900/30 p-2 text-xs font-semibold text-blood-300">
                 🩸 Đòn cắn kép đang kích hoạt!
@@ -146,19 +170,48 @@ export function NightPanel({ snapshot, onAction }: Props) {
               </p>
             ) : (
               <>
-                {aliveOthers({
-                  selectable: true,
-                  disabledIds: snapshot.players
-                    .filter((p) => p.role === "WEREWOLF" || p.role === "WOLF_CUB")
-                    .map((p) => p.id),
-                })}
-                <button
-                  className="btn-primary mt-3 w-full"
-                  disabled={!selected}
-                  onClick={() => selected && onAction("KILL", selected)}
-                >
-                  {acted ? "Đổi phiếu cắn" : "Bầu cắn mục tiêu"}
-                </button>
+                {(night?.wolfCubRageTonight || snapshot.activeEvent?.id === "BLOODY_HUNT") ? (
+                  <>
+                    <PlayerGrid
+                      snapshot={snapshot}
+                      selectable={true}
+                      selectedId={selected}
+                      onSelect={(id) => {
+                        if (selected === id) setSelected(null);
+                        else if (!selected) setSelected(id);
+                        else if (wolfSecondary === id) setWolfSecondary(null);
+                        else if (!wolfSecondary && id !== selected) setWolfSecondary(id);
+                        else setSelected(id);
+                      }}
+                      disabledIds={snapshot.players
+                        .filter((p) => p.role === "WEREWOLF" || p.role === "WOLF_CUB")
+                        .map((p) => p.id)}
+                    />
+                    <button
+                      className="btn-primary mt-3 w-full"
+                      disabled={!selected}
+                      onClick={() => selected && onAction("KILL", selected, wolfSecondary)}
+                    >
+                      {acted ? "Đổi phiếu cắn" : wolfSecondary ? "Bầu cắn 2 mục tiêu" : "Bầu cắn mục tiêu"}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {aliveOthers({
+                      selectable: true,
+                      disabledIds: snapshot.players
+                        .filter((p) => p.role === "WEREWOLF" || p.role === "WOLF_CUB")
+                        .map((p) => p.id),
+                    })}
+                    <button
+                      className="btn-primary mt-3 w-full"
+                      disabled={!selected}
+                      onClick={() => selected && onAction("KILL", selected)}
+                    >
+                      {acted ? "Đổi phiếu cắn" : "Bầu cắn mục tiêu"}
+                    </button>
+                  </>
+                )}
                 <button className="btn-secondary mt-2 w-full" onClick={() => onAction("SKIP", null)}>
                   Bầu không cắn đêm nay
                 </button>
