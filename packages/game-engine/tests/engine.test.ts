@@ -196,7 +196,7 @@ describe("Thứ tự xử lý hành động ban đêm", () => {
     const e = makeEngine(7);
     const wolf = findPlayersByRole(e, "WEREWOLF")[0];
     const guard = findPlayersByRole(e, "GUARD")[0];
-    const victim = e.state.players.find((p) => p.id !== wolf.id && p.id !== guard.id)!;
+    const victim = e.state.players.find((p) => p.role === "VILLAGER") ?? e.state.players.find((p) => p.id !== guard.id && p.role !== "WEREWOLF" && p.role !== "WOLF_CUB")!;
 
     e.submitNightAction(guard.id, "GUARD", victim.id);
     e.submitNightAction(wolf.id, "KILL", victim.id);
