@@ -23,6 +23,7 @@ export * from "./bot/roles/registry";
 export * from "./bot/BotRuntime";
 export * from "./bot/scenario";
 export * from "./bot/personality/personality";
+export * from "./bot/conversation/fingerprint";
 export * from "./bot/config/weights";
 export * from "./bot/config/presets";
 export * from "./bot/trace/trace";
