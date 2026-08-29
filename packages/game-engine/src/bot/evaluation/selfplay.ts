@@ -3,6 +3,7 @@ import { GameEngine } from "../../engine";
 import { detectCoalitions } from "../analysis/coalition";
 import { BotRuntime } from "../BotRuntime";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import { renderSpeechTemplate } from "../conversation/templates";
 import { createSeededRng } from "../rng";
 import type { BotDecisionTrace, BotTraceSink } from "../trace/trace";
 import { createTraceCollector } from "../trace/trace";
@@ -151,9 +152,28 @@ function baseConfig(over: Partial<RoomConfig> = {}): RoomConfig {
 export function renderIntentionText(
   speech: BotSpeechIntention,
   nameOf: (playerId: string) => string,
+  variation?: {
+    seedTag: string;
+    botId: string;
+    round: number;
+    seq: number;
+    avoidFingerprints?: readonly string[];
+  },
 ): string {
   const target = speech.targetId ? nameOf(speech.targetId) : "người đó";
   const author = speech.replyToActorId ? nameOf(speech.replyToActorId) : target;
+
+  // Bảng mẫu đầy đủ khi chỗ gọi cho biết đây là lượt nói thứ mấy của ai. Nhánh
+  // dưới là dạng tối giản một-câu-một-loại, giữ lại cho các test khẳng định
+  // đúng một chuỗi cố định.
+  if (variation) {
+    return renderSpeechTemplate({
+      intention: speech,
+      targetName: speech.targetId ? target : null,
+      replyToName: speech.replyToActorId ? author : null,
+      ...variation,
+    });
+  }
 
   switch (speech.kind) {
     case "ACCUSE":
