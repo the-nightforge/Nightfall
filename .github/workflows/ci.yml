@@ -53,9 +53,13 @@ jobs:
       - name: Lint
         run: npm run lint
 
-  # Vercel Hobby chỉ cho deploy commit mà git author là chủ project, nên mọi
-  # commit của người khác bị "Blocked". Hai job dưới đây tạo deployment bằng
-  # VERCEL_TOKEN của chủ project, nên ai push cũng deploy được. Đổi lại,
+  # Vercel Hobby chỉ cho deploy commit mà git author là chủ account. Commit của
+  # người khác không "fail" - deployment vào thẳng trạng thái BLOCKED, bỏ qua
+  # build, và `vercel deploy` không coi BLOCKED là trạng thái kết thúc nên nó
+  # chờ vô hạn. VERCEL_TOKEN KHÔNG cứu được: Vercel xét metadata git mà CLI đọc
+  # từ cây làm việc, không xét chủ sở hữu token. Xem bước "Stage source" bên
+  # dưới để biết cách đi vòng.
+  #
   # `git.deploymentEnabled: false` trong vercel.json đã tắt auto-deploy của Git
   # integration - nếu bật lại thì mỗi commit sẽ deploy hai lần.
   #
@@ -67,6 +71,10 @@ jobs:
     needs: verify
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    # Build của project này mất ~35s và Vercel cắt mọi build ở 45 phút, nên bất
+    # cứ thứ gì vượt mốc dưới đây là hỏng chứ không phải chậm. Không có dòng này
+    # thì job treo đủ 6 tiếng theo mặc định của GitHub.
+    timeout-minutes: 15
 
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -82,17 +90,35 @@ jobs:
       - name: Install Vercel CLI
         run: npm i -g vercel@59
 
+      # CLI đọc .git của cây làm việc rồi đính kèm tác giả commit vào deployment;
+      # đó chính là thứ khiến Vercel Hobby chặn commit của người ngoài. `git
+      # archive` cho ra đúng cây file của commit này mà không kèm .git, nên CLI
+      # không có tác giả nào để đính kèm và không còn gì để chặn.
+      #
+      # Deploy từ thư mục khác thay vì xoá .git tại chỗ, để bước post của
+      # actions/checkout vẫn còn repo mà dọn credentials.
+      - name: Stage source without git metadata
+        run: |
+          mkdir -p /tmp/deploy
+          git archive --format=tar HEAD | tar -x -C /tmp/deploy
+
       - name: Deploy preview
+        working-directory: /tmp/deploy
         # --archive=tgz gửi một file nén thay vì vài nghìn file lẻ; monorepo này
         # đủ lớn để cách upload từng file hay bị chậm và timeout.
+        #
+        # --logs đẩy log build của Vercel ra stderr; thiếu nó thì step chỉ in
+        # "Building…" rồi im lặng và không ai biết build đang ở đâu. stdout vẫn
+        # chỉ có mỗi URL nên $(...) dưới đây không bị lẫn log.
         run: |
-          url=$(vercel deploy --archive=tgz --yes --token="${{ secrets.VERCEL_TOKEN }}")
+          url=$(vercel deploy --archive=tgz --yes --logs --token="${{ secrets.VERCEL_TOKEN }}")
           echo "Preview: $url" >> "$GITHUB_STEP_SUMMARY"
 
   deploy-production:
     needs: verify
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -108,7 +134,14 @@ jobs:
       - name: Install Vercel CLI
         run: npm i -g vercel@59
 
-      - name: Deploy production
+      # Xem giải thích ở job deploy-preview.
+      - name: Stage source without git metadata
         run: |
-          url=$(vercel deploy --prod --archive=tgz --yes --token="${{ secrets.VERCEL_TOKEN }}")
+          mkdir -p /tmp/deploy
+          git archive --format=tar HEAD | tar -x -C /tmp/deploy
+
+      - name: Deploy production
+        working-directory: /tmp/deploy
+        run: |
+          url=$(vercel deploy --prod --archive=tgz --yes --logs --token="${{ secrets.VERCEL_TOKEN }}")
           echo "Production: $url" >> "$GITHUB_STEP_SUMMARY"
