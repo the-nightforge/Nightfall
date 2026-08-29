@@ -10,6 +10,7 @@ import {
   resetVoiceState,
   setVoiceAdmin,
   syncVoicePermissions,
+  syncVoiceForPlayer,
   type VoiceAdmin,
 } from "../src/voice/service";
 
@@ -344,5 +345,36 @@ describe("lối ra tường minh", () => {
     calls.length = 0;
     await syncVoicePermissions(room("DAY_DISCUSSION"));
     expect(calls).toEqual([]);
+  });
+});
+
+describe("vào lại voice sau khi tải lại trang", () => {
+  /**
+   * Token không bao giờ mang quyền nói, nên một phiên LiveKit mới LUÔN bắt đầu ở
+   * canPublish=false. Cache "đã áp" của phiên trước vì thế là sai ngay khoảnh
+   * khắc người chơi vào lại - tin nó thì bỏ qua đúng người vừa cần cấp lại.
+   */
+  it("cấp lại quyền dù lần trước đã cấp rồi", async () => {
+    const { admin, calls } = fakeAdmin();
+    setVoiceAdmin(admin);
+
+    await syncVoiceForPlayer(room("DAY_DISCUSSION"), "alive");
+    expect(calls).toEqual([{ kind: "update", identity: "alive", canPublish: true }]);
+
+    // Tải lại trang: vào lại room LiveKit bằng token mới.
+    calls.length = 0;
+    await syncVoiceForPlayer(room("DAY_DISCUSSION"), "alive");
+    expect(calls).toEqual([{ kind: "update", identity: "alive", canPublish: true }]);
+  });
+
+  it("không đụng tới người khác đang ở yên trong phòng", async () => {
+    const { admin, calls } = fakeAdmin();
+    setVoiceAdmin(admin);
+    joinBoth(calls);
+    await syncVoicePermissions(room("DAY_DISCUSSION"));
+    calls.length = 0;
+
+    await syncVoiceForPlayer(room("DAY_DISCUSSION"), "alive");
+    expect(calls).toEqual([{ kind: "update", identity: "alive", canPublish: true }]);
   });
 });

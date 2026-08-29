@@ -194,9 +194,23 @@ export function syncVoicePermissions(room: Room): Promise<void> {
   return state.tail;
 }
 
-/** Đồng bộ cho đúng một người, ngay sau khi họ vào voice. */
+/**
+ * Đồng bộ cho đúng một người, ngay sau khi họ vào voice.
+ *
+ * BẮT BUỘC xoá cache "quyền đã áp" của người này trước khi đồng bộ. Họ vừa vào
+ * một phiên LiveKit MỚI bằng một token mới, mà token thì không bao giờ mang
+ * quyền nói - nên quyền thật của họ lúc này là `canPublish: false`, bất kể
+ * phiên trước đã được cấp gì.
+ *
+ * Giữ lại cache cũ là hỏng đúng ca hay gặp nhất: người chơi tải lại trang giữa
+ * phòng chờ, vào lại, và vòng đồng bộ thấy "đã cấp true rồi" nên bỏ qua đúng
+ * người vừa cần được cấp lại. Họ kẹt câm vĩnh viễn trong khi giao diện vẫn mời
+ * bấm giữ để nói. Quan sát được trên production ngày 2026-08-30.
+ */
 export function syncVoiceForPlayer(room: Room, playerId: string): Promise<void> {
-  markVoiceJoined(room.code, playerId);
+  const state = stateFor(room.code);
+  state.joined.add(playerId);
+  state.applied.delete(playerId);
   return syncVoicePermissions(room);
 }
 
