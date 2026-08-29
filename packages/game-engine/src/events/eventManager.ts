@@ -142,6 +142,7 @@ export function selectEvent(
   rng: () => number = Math.random,
 ): GameEventView | null {
   const mode = state.config.mode ?? "ranked";
+  if (mode === "ranked") return null;
   const eventHistory = state.eventHistory ?? [];
 
   const eligibleEvents = Object.values(GAME_EVENTS).filter((event) => {
