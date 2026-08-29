@@ -6,6 +6,7 @@ import { AnimatePresence, m } from "motion/react";
 import type { RoomSnapshot } from "@masoi/shared";
 import { getIdentity } from "@/lib/identity";
 import { useRoomSocket } from "@/lib/useRoomSocket";
+import { VoiceControl } from "@/components/VoiceControl";
 import { useGameAudio } from "@/lib/useGameAudio";
 import { moodFor } from "@/lib/mood";
 import { Backdrop } from "@/components/Backdrop";
@@ -212,6 +213,7 @@ export default function RoomPage() {
 
           <div className="order-3 flex h-[38dvh] min-h-0 flex-col gap-3 lg:order-none lg:sticky lg:top-4 lg:flex lg:h-[calc(100dvh-2rem)] lg:flex-col">
             <RightMetaPanel snapshot={snapshot} />
+            <VoiceControl snapshot={snapshot} />
             <div className="min-h-0 flex-1 lg:max-h-[520px] lg:min-h-[320px]">
               <ChatBox
                 messages={room.messages}

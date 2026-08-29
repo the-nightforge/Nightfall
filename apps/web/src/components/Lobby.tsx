@@ -51,6 +51,9 @@ export function Lobby({
     <div className="space-y-3">
       <RoleDeckPanel snapshot={snapshot} isHost={isHost} onUpdateConfig={onUpdateConfig} />
 
+      {isHost && snapshot.voice && (
+        <VoiceConfig config={snapshot.config} onSave={onUpdateConfig} />
+      )}
       {isHost && <TimingConfig config={snapshot.config} onSave={onUpdateConfig} />}
 
       <div className="card space-y-2">
@@ -102,6 +105,42 @@ export function Lobby({
 /**
  * Mốc thời gian từng pha. Vẫn giấu trong details: nó là thứ chỉnh một lần rồi
  * quên, không phải thứ cả phòng cần nhìn như bộ bài.
+ */
+function VoiceConfig({
+  config,
+  onSave,
+}: {
+  config: RoomConfig;
+  onSave: (c: RoomConfig) => void;
+}) {
+  const on = config.voice === true;
+  return (
+    <div className="card flex flex-col gap-2">
+      <label className="flex cursor-pointer items-center justify-between gap-3">
+        <span className="font-semibold text-white">🎙️ Trò chuyện bằng giọng nói</span>
+        <input
+          type="checkbox"
+          className="h-5 w-5 accent-blood-500"
+          checked={on}
+          onChange={(e) => onSave({ ...config, voice: e.target.checked })}
+        />
+      </label>
+      <p className="text-xs text-mist/50">
+        Chỉ dùng được ban ngày. Ban đêm và phe Sói vẫn nhắn bằng chữ.
+      </p>
+      {on && (
+        <p className="text-xs text-amber-300/70">
+          Lưu ý: giọng nói làm lộ bạn là ai, kể cả khi vai của bạn còn bí mật.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Công tắc voice chỉ hiện khi máy chủ có cấu hình LiveKit - `snapshot.voice`
+ * vắng mặt nghĩa là server chưa bật, và khi đó bật công tắc chẳng có tác dụng
+ * gì ngoài gây khó hiểu.
  */
 function TimingConfig({
   config,
