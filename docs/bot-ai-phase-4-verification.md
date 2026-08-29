@@ -89,7 +89,9 @@ Lặp nguyên văn 1.1%, lặp ý 3.1%, lặp mở đầu 0.9%, trả lời 35.0
 
 ### 3.3 Số vòng hội thoại dài bất thường
 
-**0.** Chuỗi sâu nhất quan sát được là 3, đúng bằng `maxChainDepth`, và không ván nào vượt. Trần được thi hành ở hai chỗ độc lập: harness self-play và `discussion-scheduler` phía server, mỗi chỗ có test riêng.
+**0.** Chuỗi sâu nhất quan sát được là 3, đúng bằng `maxChainDepth`, và không ván nào vượt.
+
+> **Đính chính (sau code review).** Câu trước đây ở đây nói trần được thi hành ở *hai chỗ độc lập*, harness self-play và `discussion-scheduler`. Điều đó SAI: khi báo cáo này được viết, chỉ harness self-play thi hành hai trần; scheduler phía server chưa hề đếm `replyToMessageId` hay độ sâu chuỗi, nên con số "sâu nhất là 3" chỉ nói về tầng đo chứ không nói gì về phòng thật. Đã sửa: hai trần nay do một hàm chung `judgeChainPosition` (`bot/conversation/chain-limits.ts`) định nghĩa, và cả hai chỗ đều gọi nó — self-play khi phát một câu, scheduler TRƯỚC khi hỏi nhà cung cấp. Scheduler giữ `messageDepths`/`replyCounts` riêng cho mỗi vòng, và một ý định bị chặn được báo về lõi qua `BotRuntime.declineSpeech` (đánh dấu đã xử lý, KHÔNG ghi bản ghi phát ngôn giả) để BOT không đề nghị lại đúng câu đó ở checkpoint sau.
 
 ---
 
