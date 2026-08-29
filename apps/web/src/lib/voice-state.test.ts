@@ -179,3 +179,28 @@ describe("voiceUi", () => {
     assert.equal(ui.mode, "duplicate");
   });
 });
+
+describe("ai đang nói", () => {
+  it("ghi nhận danh sách từ LiveKit", () => {
+    const state = run([...READY, { type: "speakers_changed", identities: ["p1", "p2"] }]);
+    assert.deepEqual(state.speakers, ["p1", "p2"]);
+  });
+
+  it("mất kết nối thì danh sách phải rỗng, không để vòng sáng đứng yên mãi", () => {
+    const state = run([
+      ...READY,
+      { type: "speakers_changed", identities: ["p1"] },
+      { type: "disconnected" },
+    ]);
+    assert.deepEqual(state.speakers, []);
+  });
+
+  it("bị đá vì trùng danh tính cũng vậy", () => {
+    const state = run([
+      ...READY,
+      { type: "speakers_changed", identities: ["p1"] },
+      { type: "duplicate_session" },
+    ]);
+    assert.deepEqual(state.speakers, []);
+  });
+});

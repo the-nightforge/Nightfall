@@ -1,26 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
-import { getIdentity } from "@/lib/identity";
-import { getSocket } from "@/lib/socket";
-import { useVoice } from "@/lib/useVoice";
+import { useVoiceContext } from "@/components/VoiceProvider";
 
 /**
- * Điều khiển voice chat.
- *
- * Lấy socket từ chính singleton mà `useRoomSocket` đang dùng, nên không phải
- * đổi chữ ký hook đó và không có kết nối thứ hai.
+ * Điều khiển voice chat. Chỉ hiển thị - trạng thái do `VoiceProvider` giữ.
  */
 export function VoiceControl({ snapshot }: { snapshot: RoomSnapshot | null }) {
-  const [socket, setSocket] = useState<ReturnType<typeof getSocket> | null>(null);
-
-  useEffect(() => {
-    const identity = getIdentity();
-    if (identity) setSocket(getSocket(identity));
-  }, []);
-
-  const { ui, activate, holdStart, holdEnd, micOpen } = useVoice(socket, snapshot?.voice);
+  const voice = useVoiceContext();
+  const ui = voice?.ui ?? { visible: false, mode: "join" as const };
+  const micOpen = voice?.micOpen ?? false;
+  const activate = voice?.activate ?? (() => undefined);
+  const holdStart = voice?.holdStart ?? (() => undefined);
+  const holdEnd = voice?.holdEnd ?? (() => undefined);
 
   const hint = useMemo(() => {
     switch (ui.mode) {

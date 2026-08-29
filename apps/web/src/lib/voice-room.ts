@@ -16,6 +16,8 @@ export interface VoiceRoomHandlers {
   /** Quyền nói do CHÍNH LiveKit báo - nguồn duy nhất được phép mở mic. */
   onPermission(canPublish: boolean): void;
   onAudioPlayback(canPlay: boolean): void;
+  /** Danh sách identity đang nói; LiveKit tự lọc theo ngưỡng âm lượng. */
+  onSpeakers(identities: string[]): void;
   onFailed(message: string): void;
 }
 
@@ -44,6 +46,9 @@ export function createVoiceRoom(handlers: VoiceRoomHandlers): VoiceRoomHandle {
       next.on(RoomEvent.ParticipantPermissionsChanged, reportPermission);
       next.on(RoomEvent.AudioPlaybackStatusChanged, () => {
         handlers.onAudioPlayback(next.canPlaybackAudio);
+      });
+      next.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+        handlers.onSpeakers(speakers.map((p) => p.identity));
       });
       next.on(RoomEvent.Disconnected, (reason) => {
         // Trùng danh tính nghĩa là chính người này vừa mở ở tab khác. Phải phân

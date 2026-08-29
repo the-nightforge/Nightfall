@@ -34,6 +34,11 @@ export interface VoiceState {
   micOpen: boolean;
   /** Trình duyệt chặn phát tiếng, cần một cử chỉ nữa (iOS). */
   needsAudioGesture: boolean;
+  /**
+   * Ai đang nói, theo identity của LiveKit - mà identity CHÍNH LÀ playerId, nên
+   * đối chiếu thẳng với danh sách người chơi, không cần bảng ánh xạ.
+   */
+  speakers: string[];
   /** Bị đá vì cùng danh tính mở ở nơi khác. */
   duplicate: boolean;
   error: string | null;
@@ -46,6 +51,7 @@ export const initialVoiceState: VoiceState = {
   holding: false,
   micOpen: false,
   needsAudioGesture: false,
+  speakers: [],
   duplicate: false,
   error: null,
 };
@@ -63,7 +69,8 @@ export type VoiceAction =
   | { type: "mic_opened" }
   | { type: "mic_closed" }
   | { type: "audio_playback_blocked" }
-  | { type: "audio_playback_ok" };
+  | { type: "audio_playback_ok" }
+  | { type: "speakers_changed"; identities: string[] };
 
 export function voiceReducer(state: VoiceState, action: VoiceAction): VoiceState {
   switch (action.type) {
@@ -74,9 +81,17 @@ export function voiceReducer(state: VoiceState, action: VoiceAction): VoiceState
     case "disconnected":
       // Nhả nút luôn: giữ `holding` qua một lần mất kết nối sẽ khiến mic tự mở
       // lại ngay khi nối được, dù người dùng đã buông tay từ lâu.
-      return { ...state, connection: "idle", holding: false, livekitCanPublish: false };
+      return {
+        ...state,
+        connection: "idle",
+        holding: false,
+        livekitCanPublish: false,
+        // Không xoá danh sách này thì vòng sáng "đang nói" đứng yên vĩnh viễn
+        // quanh ghế người cuối cùng nói trước lúc mất kết nối.
+        speakers: [],
+      };
     case "duplicate_session":
-      return { ...state, connection: "idle", holding: false, duplicate: true };
+      return { ...state, connection: "idle", holding: false, duplicate: true, speakers: [] };
     case "failed":
       return { ...state, connection: "failed", holding: false, error: action.error };
     case "livekit_permission":
@@ -95,6 +110,8 @@ export function voiceReducer(state: VoiceState, action: VoiceAction): VoiceState
       return { ...state, needsAudioGesture: true };
     case "audio_playback_ok":
       return { ...state, needsAudioGesture: false };
+    case "speakers_changed":
+      return { ...state, speakers: action.identities };
     default:
       return state;
   }

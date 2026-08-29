@@ -20,6 +20,8 @@ export interface UseVoice {
   holdStart(): void;
   holdEnd(): void;
   micOpen: boolean;
+  /** Set chứ không phải mảng: mỗi ghế tra cứu một lần, danh sách đổi liên tục. */
+  speakers: ReadonlySet<string>;
 }
 
 /**
@@ -44,6 +46,7 @@ export function useVoice(socket: Socket | null, view: VoiceView | undefined): Us
       onPermission: (canPublish) => dispatch({ type: "livekit_permission", canPublish }),
       onAudioPlayback: (canPlay) =>
         dispatch(canPlay ? { type: "audio_playback_ok" } : { type: "audio_playback_blocked" }),
+      onSpeakers: (identities) => dispatch({ type: "speakers_changed", identities }),
       onFailed: (error) => dispatch({ type: "failed", error }),
     });
   }
@@ -146,5 +149,6 @@ export function useVoice(socket: Socket | null, view: VoiceView | undefined): Us
     holdStart: useCallback(() => dispatch({ type: "hold_start" }), []),
     holdEnd: useCallback(() => dispatch({ type: "hold_end", reason: "pointerup" }), []),
     micOpen: state.micOpen,
+    speakers: useMemo(() => new Set(state.speakers), [state.speakers]),
   };
 }

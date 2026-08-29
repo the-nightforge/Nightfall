@@ -7,6 +7,7 @@ import type { RoomSnapshot } from "@masoi/shared";
 import { getIdentity } from "@/lib/identity";
 import { useRoomSocket } from "@/lib/useRoomSocket";
 import { VoiceControl } from "@/components/VoiceControl";
+import { VoiceProvider } from "@/components/VoiceProvider";
 import { useGameAudio } from "@/lib/useGameAudio";
 import { moodFor } from "@/lib/mood";
 import { Backdrop } from "@/components/Backdrop";
@@ -126,7 +127,7 @@ export default function RoomPage() {
   const chatPlaceholder = chatChannelHint(snapshot);
 
   return (
-    <>
+    <VoiceProvider snapshot={snapshot}>
       <Backdrop mood={snapshot ? moodFor(snapshot.phase) : "dusk"} event={snapshot?.activeEvent ?? null} />
       <main className="mx-auto w-full max-w-lg px-3 py-4 lg:max-w-[1600px]">
         <header className="flex items-center justify-between">
@@ -224,7 +225,7 @@ export default function RoomPage() {
           </div>
         </div>
       </main>
-    </>
+    </VoiceProvider>
   );
 }
 
