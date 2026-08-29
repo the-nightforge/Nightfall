@@ -1,5 +1,5 @@
 import type { ChatMessage, RoomSnapshot } from "@masoi/shared";
-import { generateWarnings } from "@masoi/game-engine/src/balance/analyzer";
+import { generateWarnings } from "@masoi/game-engine";
 import { getDiscussionSkipView } from "../game/discussion-skip";
 import type { Room } from "./store";
 

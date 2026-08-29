@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildVersion, healthHttpStatus, redisConnectionHealthy } from "../src/health";
 import { resolveBotAiMaxCallsPerGame, resolvePort } from "../src/config";
@@ -64,6 +66,42 @@ describe("redisConnectionHealthy", () => {
     expect(redisConnectionHealthy("ready")).toBe(true);
     expect(redisConnectionHealthy("reconnecting")).toBe(false);
     expect(redisConnectionHealthy("end")).toBe(false);
+  });
+});
+
+/**
+ * `@masoi/shared` và `@masoi/game-engine` trỏ main vào `dist/`, và image production
+ * chỉ chép `dist/` sang tầng runner (Dockerfile.server) - `src/` không tồn tại ở đó.
+ *
+ * Một import kiểu `@masoi/game-engine/src/balance/analyzer` vẫn qua được `tsc`, vì
+ * trình biên dịch đọc thẳng file `.ts`. Nó cũng qua được vitest, vì vitest tự
+ * biên dịch TypeScript. Nó chỉ chết khi Node thật sự `require` đường dẫn đó lúc
+ * chạy - nghĩa là CI xanh toàn tập trong khi container khởi động là sập.
+ *
+ * Bài test này đứng đúng chỗ mù đó.
+ */
+describe("ranh giới module giữa các workspace", () => {
+  const repoRoot = join(__dirname, "..", "..", "..");
+  const roots = [join(repoRoot, "apps"), join(repoRoot, "packages")];
+
+  function sourceFiles(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      if (entry.name === "node_modules" || entry.name === "dist" || entry.name === ".next") {
+        return [];
+      }
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) return sourceFiles(full);
+      return /\.(ts|tsx)$/.test(entry.name) ? [full] : [];
+    });
+  }
+
+  it("không import xuyên vào src/ của một workspace khác", () => {
+    const offenders = roots
+      .flatMap(sourceFiles)
+      .filter((file) => /from\s+["']@masoi\/[a-z-]+\/src\//.test(readFileSync(file, "utf8")))
+      .map((file) => relative(repoRoot, file));
+
+    expect(offenders).toEqual([]);
   });
 });
 

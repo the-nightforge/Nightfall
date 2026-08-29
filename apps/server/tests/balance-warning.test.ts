@@ -1,11 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
-import { GameEngine } from "@masoi/game-engine";
+import { GameEngine, generateWarnings, PRESET_DECKS } from "@masoi/game-engine";
 import type { Room } from "../src/rooms/store";
 import { createRoom, allRooms } from "../src/rooms/store";
 import { buildSnapshot } from "../src/rooms/snapshot";
-import { generateWarnings } from "@masoi/game-engine/src/balance/analyzer";
-import { PRESET_DECKS } from "@masoi/game-engine/src/balance/presets";
 
 vi.mock("../src/rooms/broadcast", () => ({
   broadcastRoom: () => undefined,

@@ -1,5 +1,4 @@
-import type { BotDecisionContext } from "@masoi/game-engine";
-import { generateWarnings } from "@masoi/game-engine/src/balance/analyzer";
+import { generateWarnings, type BotDecisionContext } from "@masoi/game-engine";
 import { visibleChatLog } from "../rooms/snapshot";
 import type { Room } from "../rooms/store";
 

@@ -4,7 +4,7 @@ import {
   validateRoomConfig,
   type RoomConfig,
 } from "@masoi/shared";
-import { generateWarnings } from "@masoi/game-engine/src/balance/analyzer";
+import { generateWarnings } from "@masoi/game-engine";
 import { prisma } from "../db";
 import { getPlayerRoom, updateSessionRoom } from "../redis";
 import { botName, generateRoomCode, newId } from "../util";
