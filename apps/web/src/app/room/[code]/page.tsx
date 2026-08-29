@@ -215,7 +215,7 @@ export default function RoomPage() {
             * bộ chiều cao thừa thay vì kẹt ở một con số cố định.
             * Dùng dvh chứ không vh: bàn phím ảo trên điện thoại làm vh sai hẳn.
             */}
-          <div className="order-3 h-72 min-h-0 lg:order-none lg:sticky lg:top-4 lg:h-[calc(100dvh-2rem)]">
+          <div className="order-3 h-[38dvh] min-h-0 lg:order-none lg:sticky lg:top-4 lg:h-[calc(100dvh-2rem)]">
             {/* Chat hiển thị mọi lúc; server tự quyết định kênh & quyền xem */}
             <ChatBox
               messages={room.messages}

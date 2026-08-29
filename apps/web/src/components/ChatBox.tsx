@@ -54,7 +54,7 @@ export function ChatBox({ messages, onSend, placeholder }: Props) {
     <div className="flex h-full min-h-0 flex-col rounded-xl border border-night-600/60 bg-night-900/70">
       <div ref={boxRef} className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2.5">
         {messages.length === 0 && (
-          <p className="text-sm text-mist/40">Chưa có tin nhắn nào.</p>
+          <p className="text-sm text-mist/60">Chưa có tin nhắn nào.</p>
         )}
         {messages.map((message) => {
           const mine = message.playerId === meId;
@@ -73,13 +73,13 @@ export function ChatBox({ messages, onSend, placeholder }: Props) {
                   >
                     {message.playerName}
                   </span>
-                  <span
-                    className={`text-[9px] uppercase tracking-wide ${
-                      message.channel === "wolves" ? "text-blood-400/80" : "text-mist/40"
-                    }`}
-                  >
-                    {CHANNEL_LABEL[message.channel] ?? message.channel}
-                  </span>
+                   <span
+                      className={`text-[9px] uppercase tracking-wide ${
+                        message.channel === "wolves" ? "text-blood-400/80" : "text-mist/60"
+                      }`}
+                    >
+                      {CHANNEL_LABEL[message.channel] ?? message.channel}
+                    </span>
                 </div>
                 {/* break-words: một chuỗi 300 ký tự không dấu cách sẽ đẩy toang cột phụ. */}
                 <p className="break-words text-sm text-mist">{message.text}</p>

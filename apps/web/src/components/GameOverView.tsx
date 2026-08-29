@@ -186,7 +186,7 @@ function TeamPanel({
             <span className="min-w-0 flex-1">
               <span
                 className={`block truncate text-sm font-semibold ${
-                  player.alive ? "text-white" : "text-mist/40 line-through"
+                  player.alive ? "text-white" : "text-mist/60 line-through"
                 }`}
               >
                 {player.name}
@@ -196,7 +196,7 @@ function TeamPanel({
               </span>
             </span>
             {!player.alive && (
-              <span className="shrink-0 text-[10px] uppercase tracking-wider text-mist/40">
+              <span className="shrink-0 text-[10px] uppercase tracking-wider text-mist/60">
                 đã chết
               </span>
             )}
