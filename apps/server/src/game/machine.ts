@@ -22,6 +22,10 @@ import { newId } from "../util";
 import type { NightDecision, PlannedVote } from "../bots/types";
 import { pendingEndFinalVote } from "./bot-room-state";
 import {
+  cancelDiscussionScheduler,
+  runDiscussionScheduler,
+} from "./discussion-scheduler";
+import {
   DISCONNECT_GRACE_MS,
   clearDiscussionSkipVotes,
   hasUnanimousDiscussionSkip,
@@ -79,6 +83,9 @@ export function startGame(room: Room): void {
 
 function beginNight(room: Room): void {
   clearRoomTimers(room.code);
+  // Ngày Hoà Hoãn đi thẳng từ thảo luận sang đêm, nên đây cũng là một lối ra
+  // của pha thảo luận và mọi phản hồi đang chờ phải bị bỏ.
+  cancelDiscussionScheduler(room.code);
   const e = engine(room);
   e.startNight(room.config.nightSeconds * 1000);
   scheduleNightBots(room);
@@ -151,6 +158,9 @@ function beginDiscussion(room: Room): void {
 function beginVoting(room: Room): void {
   if (!room.engine || room.engine.state.phase !== "DAY_DISCUSSION") return;
   clearRoomTimers(room.code);
+  // Cả làng bấm bỏ qua thảo luận cũng đi qua đây; một câu về muộn sau đó là câu
+  // của một tình thế không còn tồn tại.
+  cancelDiscussionScheduler(room.code);
   clearDiscussionSkipVotes(room.code);
   const e = engine(room);
   e.setPhase("VOTING", room.config.voteSeconds * 1000);
@@ -295,6 +305,7 @@ function finishHunterShot(room: Room): void {
 
 export function resetToLobby(room: Room): void {
   clearRoomTimers(room.code);
+  cancelDiscussionScheduler(room.code);
   clearDiscussionSkipVotes(room.code);
   room.engine = null;
   room.status = "LOBBY";
@@ -306,6 +317,7 @@ export function resetToLobby(room: Room): void {
 }
 
 function onGameOver(room: Room): void {
+  cancelDiscussionScheduler(room.code);
   const e = engine(room);
   const st = e.getState();
   void prisma.gameResult
@@ -517,69 +529,14 @@ function recentOwnLines(room: Room, botId: string, count: number): string[] {
     .map((message) => message.text);
 }
 
+/**
+ * Mở phiên thảo luận cho BOT.
+ *
+ * Toàn bộ lịch, hạn mức và luật huỷ nằm trong `discussion-scheduler`. Ở đây chỉ
+ * còn một lời gọi, đúng như mọi `schedule*Bots` khác trong file này.
+ */
 export function scheduleDayBots(room: Room): void {
-  const bots = room.members.filter((m) => m.isBot);
-  const window = room.config.discussionSeconds * 1_000;
-
-  bots.forEach((member, i) => {
-    // Rải đều trong khung thảo luận thay vì dội ra cùng lúc
-    const delay = Math.floor(((i + 1) / (bots.length + 1)) * window);
-    setRoomTimer(room.code, () => {
-      void (async () => {
-        try {
-          if (!room.engine || room.engine.state.phase !== "DAY_DISCUSSION") return;
-          const discussionEngine = room.engine;
-          const discussionRound = discussionEngine.state.round;
-          const discussionEndsAt = discussionEngine.state.phaseEndsAt;
-          const runtime = botSessionFor(room).runtimeFor(member.playerId);
-          const context = buildBotDecisionContext(room, member.playerId);
-          runtime.observe(context);
-          // Phiếu là quyết định của lõi deterministic, chốt TRƯỚC khi hỏi nhà
-          // cung cấp. Provider chỉ còn việc diễn đạt.
-          //
-          // Phiếu KHÔNG được ghi nhớ ở đây: pha bỏ phiếu sẽ hỏi lại chính lõi
-          // này với ngữ cảnh mới nhất. Một phiếu đóng băng từ lúc thảo luận là
-          // phiếu bỏ qua mọi thứ xảy ra sau đó.
-          const vote = runtime.decideVote(context);
-          const speech = runtime.decideSpeech(context, vote);
-          const rendered = speech
-            ? await renderBotSpeech(toSpeechRequest(room, member, context, speech))
-            : null;
-          const chat = rendered?.text ?? null;
-
-          // Kết quả về sau khi pha đổi thì bỏ hết: nó được tính từ một tình thế
-          // không còn tồn tại.
-          if (
-            room.engine !== discussionEngine ||
-            discussionEngine.state.phase !== "DAY_DISCUSSION" ||
-            discussionEngine.state.round !== discussionRound ||
-            discussionEngine.state.phaseEndsAt !== discussionEndsAt
-          ) return;
-
-          if (!speech || !chat) return;
-
-          const resolved = resolveChat(room, member.playerId);
-          if (resolved.ok) {
-            // ChatMessage cần đủ id và at; dựng giống hệt service.chat()
-            const message = {
-              id: newId(),
-              channel: resolved.channel,
-              playerId: member.playerId,
-              playerName: member.name,
-              text: chat,
-              at: Date.now(),
-            };
-            pushChat(room, message);
-            emitToPlayers(resolved.recipients, SERVER_EVENTS.CHAT_NEW, message);
-            void persistRoom(room);
-            runtime.recordSpeech(speech, discussionRound);
-          }
-        } catch {
-          /* não bot lỗi (mạng, JSON hỏng,...) không được kéo sập cả tiến trình */
-        }
-      })();
-    }, delay);
-  });
+  runDiscussionScheduler(room);
 }
 
 /**
