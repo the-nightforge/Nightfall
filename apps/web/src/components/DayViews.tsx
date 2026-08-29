@@ -5,15 +5,17 @@ import type { RoomSnapshot } from "@masoi/shared";
 import { OpenVotePanel } from "./OpenVotePanel";
 import { PlayerGrid } from "./PlayerGrid";
 import { VoteHistoryPanel } from "./VoteHistoryPanel";
+import { DayOfTruthModal } from "./DayOfTruthModal";
 
 interface Props {
   snapshot: RoomSnapshot;
   /** null nghĩa là "Không treo ai" - một lựa chọn, không phải huỷ phiếu. */
   onVote: (targetId: string | null) => void;
   onSkipDiscussion: (skip: boolean) => void;
+  onDayOfTruthClaim?: (role: string | null) => void;
 }
 
-export function DayView({ snapshot, onVote, onSkipDiscussion }: Props) {
+export function DayView({ snapshot, onVote, onSkipDiscussion, onDayOfTruthClaim }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const isVoting = snapshot.phase === "VOTING";
   const dead = !snapshot.you?.alive;
@@ -147,6 +149,27 @@ export function DayView({ snapshot, onVote, onSkipDiscussion }: Props) {
           )}
         </div>
       )}
+      {snapshot.activeEvent?.id === "DAY_OF_TRUTH" && onDayOfTruthClaim && (
+        <DayOfTruthModal snapshot={snapshot} onClaim={onDayOfTruthClaim} />
+      )}
+      {snapshot.activeEvent?.id === "DAY_OF_TRUTH" &&
+        snapshot.dayOfTruthClaims &&
+        Object.keys(snapshot.dayOfTruthClaims).length > 0 && (
+          <div className="card">
+            <p className="text-xs font-bold uppercase tracking-widest text-mist/60">Đã claim</p>
+            <ul className="mt-2 space-y-1 text-xs">
+              {Object.entries(snapshot.dayOfTruthClaims).map(([pid, claim]) => {
+                const p = snapshot.players.find((x) => x.id === pid);
+                return (
+                  <li key={pid} className="flex justify-between">
+                    <span className="text-white">{p?.name ?? pid}</span>
+                    <span className="text-mist/70">{claim ?? "Không tiết lộ"}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
     </div>
   );
 }

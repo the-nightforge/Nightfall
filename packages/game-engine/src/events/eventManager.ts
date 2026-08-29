@@ -2,7 +2,7 @@ import type { GameEventId, GameEventView } from "@masoi/shared";
 import type { GameState } from "../types";
 import { calculateMomentum } from "./momentum";
 
-const RANKED_NEUTRAL_EVENT_CHANCE = 0.35;
+const RANKED_NEUTRAL_EVENT_CHANCE = 0.65;
 
 export interface GameEventDefinition {
   id: GameEventId;
@@ -142,6 +142,7 @@ export function selectEvent(
   rng: () => number = Math.random,
 ): GameEventView | null {
   const mode = state.config.mode ?? "ranked";
+  if (mode === "ranked") return null;
   const eventHistory = state.eventHistory ?? [];
 
   const eligibleEvents = Object.values(GAME_EVENTS).filter((event) => {
