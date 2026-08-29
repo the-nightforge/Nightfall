@@ -120,6 +120,7 @@ export interface PlayerGameView {
   hunterShots: HunterShotRecap[];
   dayVoteHistory: DayVoteRecap[];
   log: string[];
+  dayOfTruthClaims?: Record<string, string | null>;
 }
 
 const recapPlayer = (player: EnginePlayer | undefined): RecapPlayer | null =>
@@ -1241,6 +1242,19 @@ export class GameEngine {
     return reaction.source;
   }
 
+  submitDayOfTruthClaim(playerId: string, claim: string | null): void {
+    const st = this.state;
+    if (st.activeEvent?.id !== "DAY_OF_TRUTH") throw new GameError("Không trong Ngày Sự Thật");
+    const p = this.mustPlayer(playerId);
+    if (!p.alive) throw new GameError("Người chết không thể claim");
+    if (claim !== null && !Object.values(ROLE_META).some((m) => m.id === claim)) {
+      throw new GameError("Role claim không hợp lệ");
+    }
+    st.dayOfTruthClaims ??= {};
+    st.dayOfTruthClaims[playerId] = claim;
+    st.log.push(`${p.name} claim: ${claim ?? "Không tiết lộ"}`);
+  }
+
   // ---- Điều kiện thắng ----
 
   checkWin(): Winner {
@@ -1515,6 +1529,7 @@ export class GameEngine {
       })),
       lastEliminated: st.phase === "ELIMINATION" || st.phase === "CHECK_WIN" ? st.lastEliminated : null,
       log: st.log.slice(-10),
+      dayOfTruthClaims: st.dayOfTruthClaims ? { ...st.dayOfTruthClaims } : undefined,
     };
   }
 
