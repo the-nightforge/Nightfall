@@ -92,12 +92,9 @@ export function PlayerGrid({
   }, []);
 
   return (
-    // Lưới này giờ chỉ nằm ở cột nội dung - cột phụ dùng RosterPanel - nên từ lg
-    // trở lên nó thật sự rộng ra và cần thêm cột, nếu không mỗi ô phình tới hơn
-    // 200px. Dưới lg vẫn ba cột như trên điện thoại.
     <div
       ref={gridRef}
-      className="relative grid grid-cols-3 gap-2 lg:grid-cols-4 xl:grid-cols-5"
+      className="relative grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5"
     >
       {snapshot.players.map((player) => {
           const isMe = player.id === meId;

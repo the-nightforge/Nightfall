@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MOODS, type Mood } from "@/lib/mood";
+import type { GameEventView } from "@masoi/shared";
+import { EventEnvironment } from "./EventEnvironment";
 
 /**
  * Nền của cả màn hình, đổi theo không khí của pha.
@@ -16,7 +18,7 @@ import { MOODS, type Mood } from "@/lib/mood";
  * Chỉ cross-fade 1.1 giây thì đúng nhưng êm quá, mắt đang dán vào thẻ bài không
  * bắt được thời điểm.
  */
-export function Backdrop({ mood }: { mood: Mood }) {
+export function Backdrop({ mood, event }: { mood: Mood; event?: GameEventView | null }) {
   const previous = useRef(mood);
   const sweepSeq = useRef(0);
   const [sweep, setSweep] = useState<{ id: number; mood: Mood } | null>(null);
@@ -40,8 +42,6 @@ export function Backdrop({ mood }: { mood: Mood }) {
         />
       ))}
       {sweep && (
-        // key theo id nên hai lần đổi pha sát nhau thì lần sau chạy lại từ đầu,
-        // chứ không dùng chung một phần tử đang chạy dở.
         <div
           key={sweep.id}
           className={`backdrop-sweep backdrop-sweep-${sweep.mood}`}
@@ -49,6 +49,7 @@ export function Backdrop({ mood }: { mood: Mood }) {
         />
       )}
       <div className="backdrop-vignette" />
+      <EventEnvironment event={event} />
     </div>
   );
 }

@@ -58,7 +58,7 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                   tint={tintFor(player.id)}
                   alive={player.alive}
                   breathOffset={breathOffsetFor(player.id)}
-                  className="h-8 w-8"
+                  className="h-7 w-7 sm:h-8 sm:w-8"
                 />
                 {!player.alive && (
                   <span className="pointer-events-none absolute inset-0 grid place-items-center">
@@ -69,21 +69,21 @@ export function RosterPanel({ snapshot, lobby }: Props) {
 
               <span className="min-w-0 flex-1">
                 <span
-                  className={`block truncate text-sm font-semibold ${
-                    player.alive ? "text-white" : "text-mist/40 line-through"
-                  }`}
-                >
-                  {player.name}
-                </span>
-                <span className="flex items-center gap-1">
+                    className={`block truncate text-sm font-semibold ${
+                      player.alive ? "text-white" : "text-mist/60 line-through"
+                    }`}
+                  >
+                    {player.name}
+                  </span>
+                  <span className="flex items-center gap-1">
                   {snapshot.hostId === player.id && (
-                    <span className="text-[9px] font-bold uppercase tracking-wide text-amber-300/90">
-                      Chủ phòng
+                    <span className="text-[11px] leading-none" title="Chủ phòng" aria-label="Chủ phòng">
+                      👑
                     </span>
                   )}
                   {player.isBot && (
-                    <span className="text-[9px] font-bold uppercase tracking-wide text-mist/40">
-                      Bot
+                    <span className="text-[11px] leading-none" title="Bot" aria-label="Bot">
+                      🤖
                     </span>
                   )}
                   {player.role && (
@@ -140,7 +140,7 @@ export function RosterPanel({ snapshot, lobby }: Props) {
             key={`empty-${i}`}
             className="flex items-center gap-2 rounded-lg border border-dashed border-night-600/60 px-1.5 py-1"
           >
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-night-800/60 text-xs font-bold text-mist/30">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-night-800/60 text-xs font-bold text-mist/30 sm:h-8 sm:w-8">
               {count + i + 1}
             </span>
             <span className="text-sm text-mist/30">Đang chờ...</span>
@@ -159,13 +159,21 @@ export function RosterPanel({ snapshot, lobby }: Props) {
 
 function LobbyStatus({ ready, offline }: { ready: boolean; offline: boolean }) {
   if (offline) {
-    return <span className="shrink-0 text-[10px] font-semibold text-blood-400">Mất kết nối</span>;
+    return (
+      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blood-600/20 text-blood-400" aria-label="Mất kết nối">
+        ✕
+      </span>
+    );
   }
   return (
     <span
-      className={`shrink-0 text-[10px] font-semibold ${ready ? "text-emerald-300" : "text-mist/40"}`}
+      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+        ready ? "bg-emerald-600 text-white" : "bg-white/10 text-mist/60 ring-1 ring-white/10"
+      }`}
+      aria-label={ready ? "Sẵn sàng" : "Chưa sẵn sàng"}
+      title={ready ? "Sẵn sàng" : "Chưa sẵn sàng"}
     >
-      {ready ? "Sẵn sàng" : "Chưa"}
+      {ready ? "✓" : "○"}
     </span>
   );
 }
