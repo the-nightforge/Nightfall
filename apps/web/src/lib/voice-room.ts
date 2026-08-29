@@ -1,6 +1,6 @@
 "use client";
 
-import { DisconnectReason, Room, RoomEvent } from "livekit-client";
+import { DisconnectReason, Room, RoomEvent, Track, type RemoteTrack } from "livekit-client";
 
 /**
  * Lớp bọc mỏng quanh client LiveKit.
@@ -29,6 +29,25 @@ export interface VoiceRoomHandle {
   disconnect(): Promise<void>;
 }
 
+/**
+ * Nơi chứa các phần tử <audio> của người khác.
+ *
+ * LiveKit KHÔNG tự phát tiếng của người khác: nó nhận track về rồi thôi, việc
+ * gắn track vào một phần tử media là của phía ứng dụng. Thiếu bước này thì mọi
+ * thứ khác đều đúng - quyền, track, chỉ báo đang nói - mà không ai nghe được ai.
+ */
+function audioSink(): HTMLElement {
+  const id = "voice-audio-sink";
+  let el = document.getElementById(id);
+  if (!el) {
+    el = document.createElement("div");
+    el.id = id;
+    el.style.display = "none";
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
 export function createVoiceRoom(handlers: VoiceRoomHandlers): VoiceRoomHandle {
   let room: Room | null = null;
 
@@ -49,6 +68,19 @@ export function createVoiceRoom(handlers: VoiceRoomHandlers): VoiceRoomHandle {
       });
       next.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
         handlers.onSpeakers(speakers.map((p) => p.identity));
+      });
+      next.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
+        if (track.kind !== Track.Kind.Audio) return;
+        const element = track.attach();
+        element.autoplay = true;
+        // Đặt bằng attribute vì `playsInline` chỉ có trong kiểu của thẻ video.
+        // Với audio thì nó thừa, nhưng Safari đỡ khó tính hơn khi có nó.
+        element.setAttribute("playsinline", "");
+        audioSink().appendChild(element);
+      });
+      next.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
+        if (track.kind !== Track.Kind.Audio) return;
+        for (const element of track.detach()) element.remove();
       });
       next.on(RoomEvent.Disconnected, (reason) => {
         // Trùng danh tính nghĩa là chính người này vừa mở ở tab khác. Phải phân
@@ -84,6 +116,8 @@ export function createVoiceRoom(handlers: VoiceRoomHandlers): VoiceRoomHandle {
       if (!current) return;
       current.removeAllListeners();
       await current.disconnect();
+      // Dọn phần tử audio còn sót, nếu không mỗi lần vào lại sẽ chồng thêm một lớp.
+      audioSink().replaceChildren();
     },
   };
 }
