@@ -59,6 +59,14 @@ export interface InvariantViolation {
 export interface GroundTruth {
   roles: Record<string, Role>;
   alive: Record<string, boolean>;
+  /**
+   * Sự kiện đang có hiệu lực, nếu có.
+   *
+   * Cần cho những bất biến mà một sự kiện được phép phá. Bóng Sói cố tình đảo
+   * kết quả soi, nên nếu không có trường này thì kiểm tra "kết quả soi phải
+   * khớp sự thật" sẽ tố cáo chính cái luật mà engine đang thi hành đúng.
+   */
+  activeEventId?: string | null;
 }
 
 export interface InvariantAuditor {
@@ -194,7 +202,12 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
             actual: `nhận kết quả về ${result.targetId}`,
           });
         }
-        if (result.isWolf !== isWolfTeam(truth.roles[result.targetId])) {
+        // Bóng Sói đảo kết quả soi với xác suất 30%, nên trong đêm có sự kiện này
+        // cả hai giá trị đều hợp lệ và không còn gì để đối chiếu. Chỉ miễn trừ
+        // đúng phép so sánh với sự thật - kiểm tra "ai được cầm kết quả" ở trên
+        // vẫn giữ nguyên hiệu lực.
+        const seerResultMayLie = truth.activeEventId === "WOLF_SHADOW";
+        if (!seerResultMayLie && result.isWolf !== isWolfTeam(truth.roles[result.targetId])) {
           auditor.report("SEER_RESULT_SCOPE", {
             ...at,
             expected: `kết quả soi ${result.targetId} phải khớp sự thật`,

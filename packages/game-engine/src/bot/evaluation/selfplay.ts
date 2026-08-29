@@ -240,7 +240,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       roles[player.id] = player.role;
       alive[player.id] = player.alive;
     }
-    return { roles, alive };
+    return { roles, alive, activeEventId: engine.state.activeEvent?.id ?? null };
   };
 
   const contextFor = (playerId: string): BotDecisionContext => ({
@@ -375,11 +375,23 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
         // `secondaryTargetId` là BẮT BUỘC với Thám Tử: engine đòi đúng hai người.
         // Harness Phase 2 bỏ quên tham số này, nhưng không ván mô phỏng nào bật
         // Thám Tử nên lượt đêm của vai đó im lặng mất trắng suốt.
+        //
+        // Tham số rng thứ 5 KHÔNG được bỏ trống. Sự kiện Bóng Sói đảo kết quả
+        // soi với xác suất 30% (engine.ts), mà mặc định của tham số này là nguồn
+        // ngẫu nhiên toàn cục - bỏ trống thì cùng một seed cho ra hai ván khác
+        // nhau, đủ để `replayGame` lệch khỏi bản gốc chừng một phần ba số lần
+        // chạy. (Đừng viết tên hàm ngẫu nhiên đó ra đây: bot-rng-personality
+        // quét chuỗi trong src/bot và không phân biệt code với chú thích.)
+        //
+        // Dùng dòng riêng thay vì `roundRng`: `roundRng` còn được resolveNight
+        // và startDay rút tiếp, nên chen một lượt rút vào giữa sẽ đẩy lệch mọi
+        // lượt rút sau đó và làm đổi kết quả của những ván đã ghi lại.
         engine.submitNightAction(
           player.id,
           decision.action,
           decision.targetId,
           decision.secondaryTargetId ?? null,
+          createSeededRng(`${input.seed}:night:${rounds}:${player.id}`),
         );
         actions += 1;
         log.push({
@@ -410,7 +422,15 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
         const decision = runtime.decideNight(context);
         if (decision) {
           try {
-            engine.submitNightAction(witch.id, decision.action, decision.targetId);
+            // Phù Thuỷ hôm nay không chạm nhánh dùng rng nào trong engine, nhưng
+            // cứ gieo sẵn cho khỏi thành quả bom hẹn giờ như lượt soi ở trên.
+            engine.submitNightAction(
+              witch.id,
+              decision.action,
+              decision.targetId,
+              null,
+              createSeededRng(`${input.seed}:night:${rounds}:${witch.id}`),
+            );
             actions += 1;
             log.push({
               kind: "NIGHT_ACTION",

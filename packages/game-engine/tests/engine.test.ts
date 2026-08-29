@@ -99,8 +99,9 @@ function makeHunterEngine(phase: GameState["phase"] = "NIGHT") {
       guardTarget: null,
       healTonight: false,
       poisonTarget: null,
-      witchSkipped: false,
-      seerResults: {},
+    witchSkipped: false,
+    priestSkipped: false,
+    seerResults: {},
       wolfSecondaryTarget: null,
       wolfCubRageTonight: false,
       guardianAngelTarget: null,
@@ -126,6 +127,12 @@ function makeHunterEngine(phase: GameState["phase"] = "NIGHT") {
     activeEvent: null,
     eventHistory: [],
     log: [],
+    pendingLastStandVictim: null,
+    bloodMoonArmed: false,
+    bloodMoonUsed: false,
+    deadCanSpeakUsed: false,
+    howlBonusDay: null,
+    dayOfTruthClaims: {},
   };
   return new GameEngine(state);
 }

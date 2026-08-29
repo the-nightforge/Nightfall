@@ -38,6 +38,9 @@ function knowledgeFixture(phase: GamePhase = "VOTING") {
       healTonight: true,
       poisonTarget: "wolf-b",
       witchSkipped: false,
+      // Linh Mục đã chọn mục tiêu ở dưới, nên "đã bỏ qua" phải là false - fixture
+      // này chỉ có giá trị khi mọi trường khớp nhau như một đêm có thật.
+      priestSkipped: false,
       seerResults: { witch: { targetId: "wolf-b", isWolf: true } },
       // Bí mật của các vai mở rộng. Fixture này cố tình nhồi giá trị THẬT vào
       // mọi trường bí mật để các assert "không lộ" ở dưới có thứ để lộ.
@@ -74,6 +77,12 @@ function knowledgeFixture(phase: GamePhase = "VOTING") {
     activeEvent: null,
     eventHistory: [],
     log: ["Sói đã cắn Dân."],
+    pendingLastStandVictim: null,
+    bloodMoonArmed: false,
+    bloodMoonUsed: false,
+    deadCanSpeakUsed: false,
+    howlBonusDay: null,
+    dayOfTruthClaims: {},
   };
   return new GameEngine(state);
 }

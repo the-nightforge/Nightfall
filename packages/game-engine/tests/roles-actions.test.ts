@@ -42,8 +42,9 @@ function createTestState(players: Partial<EnginePlayer>[]): GameState {
       guardianAngelTarget: null,
       healTonight: false,
       poisonTarget: null,
-      witchSkipped: false,
-      seerResults: {},
+    witchSkipped: false,
+    priestSkipped: false,
+    seerResults: {},
       priestTarget: null,
       detectiveTargets: null,
       detectiveResults: {},
@@ -72,6 +73,12 @@ function createTestState(players: Partial<EnginePlayer>[]): GameState {
     activeEvent: null,
     eventHistory: [],
     log: [],
+    pendingLastStandVictim: null,
+    bloodMoonArmed: false,
+    bloodMoonUsed: false,
+    deadCanSpeakUsed: false,
+    howlBonusDay: null,
+    dayOfTruthClaims: {},
   };
 }
 

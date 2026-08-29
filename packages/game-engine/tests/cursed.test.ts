@@ -20,6 +20,7 @@ function emptyNight(): NightState {
     healTonight: false,
     poisonTarget: null,
     witchSkipped: false,
+    priestSkipped: false,
     seerResults: {},
     wolfSecondaryTarget: null,
     wolfCubRageTonight: false,
@@ -70,6 +71,12 @@ function cursedState(over: Partial<GameState> = {}): GameState {
     activeEvent: null,
     eventHistory: [],
     log: [],
+    pendingLastStandVictim: null,
+    bloodMoonArmed: false,
+    bloodMoonUsed: false,
+    deadCanSpeakUsed: false,
+    howlBonusDay: null,
+    dayOfTruthClaims: {},
     ...over,
   };
 }

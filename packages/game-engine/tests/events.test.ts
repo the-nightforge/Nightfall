@@ -43,8 +43,9 @@ function createTestState(players: Partial<EnginePlayer>[], overrides?: Partial<G
       guardianAngelTarget: null,
       healTonight: false,
       poisonTarget: null,
-      witchSkipped: false,
-      seerResults: {},
+    witchSkipped: false,
+    priestSkipped: false,
+    seerResults: {},
       priestTarget: null,
       detectiveTargets: null,
       detectiveResults: {},
@@ -71,6 +72,12 @@ function createTestState(players: Partial<EnginePlayer>[], overrides?: Partial<G
     activeEvent: null,
     eventHistory: [],
     log: [],
+    pendingLastStandVictim: null,
+    bloodMoonArmed: false,
+    bloodMoonUsed: false,
+    deadCanSpeakUsed: false,
+    howlBonusDay: null,
+    dayOfTruthClaims: {},
     ...overrides,
   };
 }
@@ -284,7 +291,14 @@ describe("Dynamic Event Selection", () => {
       sameTeam: false,
     };
 
-    const event = selectEvent(state, "DAY");
+    // PHẢI ghim rng. Ngày Phán Xét không còn là sự kiện ngày duy nhất có lợi cho
+    // phe Dân kể từ khi Ngày Sự Thật ra đời, nên `selectEvent` bốc một trong hai.
+    // Bỏ trống tham số này thì nó rơi về `Math.random` và bài test đúng đúng 50%
+    // số lần chạy - đủ để xanh ở máy mình và đỏ trên CI.
+    //
+    // `() => 0` chọn ứng viên ĐẦU TIÊN theo thứ tự khai báo trong GAME_EVENTS,
+    // nơi JUDGMENT_DAY đứng trước DAY_OF_TRUTH.
+    const event = selectEvent(state, "DAY", () => 0);
     expect(event).not.toBeNull();
     expect(event?.id).toBe("JUDGMENT_DAY");
     expect(event?.beneficiary).toBe("village");
