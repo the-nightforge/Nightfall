@@ -303,7 +303,13 @@ export class BotRuntime {
 
     if (vote.choice.type !== "PLAYER") {
       probe?.fallback("phiếu không nhắm ai nên không có gì để cáo buộc");
-      return { kind: "WITHHOLD", confidence: vote.confidence, evidence: [] };
+      return {
+        kind: "WITHHOLD",
+        confidence: vote.confidence,
+        evidence: [],
+        topic: "PROCESS",
+        tone: "NEUTRAL",
+      };
     }
     if (fresh.length === 0) {
       // Không có ý mới thì hỏi một câu, chứ không lặp lại đúng cáo buộc cũ.
@@ -313,6 +319,8 @@ export class BotRuntime {
         targetId: vote.choice.targetId,
         confidence: vote.confidence,
         evidence: [],
+        topic: "SUSPICION",
+        tone: "CURIOUS",
       };
     }
     return {
@@ -320,6 +328,8 @@ export class BotRuntime {
       targetId: vote.choice.targetId,
       confidence: vote.confidence,
       evidence: fresh,
+      topic: "SUSPICION",
+      tone: "FIRM",
     };
   }
 

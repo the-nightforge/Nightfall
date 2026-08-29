@@ -110,6 +110,7 @@ describe("bot seeded randomness and personality", () => {
       targetId: "b",
       confidence: 0.7,
       evidence: [evidence],
+      tone: "FIRM",
     };
     const context: BotDecisionContext = {
       knowledge: {

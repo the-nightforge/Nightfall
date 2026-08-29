@@ -219,10 +219,16 @@ describe("lời nói", () => {
   it("template chỉ nêu lại ý định, không thêm thông tin", () => {
     const nameOf = (id: string) => id.toUpperCase();
     expect(
-      renderIntentionText({ kind: "ACCUSE", targetId: "p2", confidence: 1, evidence: [] }, nameOf),
+      renderIntentionText(
+        { kind: "ACCUSE", targetId: "p2", confidence: 1, evidence: [], tone: "FIRM" },
+        nameOf,
+      ),
     ).toBe("Tôi nghi P2.");
     expect(
-      renderIntentionText({ kind: "WITHHOLD", confidence: 1, evidence: [] }, nameOf),
+      renderIntentionText(
+        { kind: "WITHHOLD", confidence: 1, evidence: [], tone: "NEUTRAL" },
+        nameOf,
+      ),
     ).toBe("Tôi chưa đủ căn cứ.");
   });
 

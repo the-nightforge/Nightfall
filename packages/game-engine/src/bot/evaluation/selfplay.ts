@@ -152,7 +152,9 @@ export function renderIntentionText(
   speech: BotSpeechIntention,
   nameOf: (playerId: string) => string,
 ): string {
-  const target = speech.targetId ? nameOf(speech.targetId) : "";
+  const target = speech.targetId ? nameOf(speech.targetId) : "người đó";
+  const author = speech.replyToActorId ? nameOf(speech.replyToActorId) : target;
+
   switch (speech.kind) {
     case "ACCUSE":
       return `Tôi nghi ${target}.`;
@@ -160,6 +162,31 @@ export function renderIntentionText(
       return `${target} giải thích đi.`;
     case "WITHHOLD":
       return "Tôi chưa đủ căn cứ.";
+    case "REPLY":
+      return `${author}, tôi trả lời đây.`;
+    case "AGREE":
+      return `Tôi cũng thấy vậy về ${target}.`;
+    case "DISAGREE":
+      return `Tôi không đồng ý về ${target}.`;
+    case "CHALLENGE":
+      return `${author} nói rõ xem nào.`;
+    case "DEFEND":
+      return `Đừng treo ${target} vội.`;
+    case "ASK_EVIDENCE":
+      return `${author} có căn cứ gì không?`;
+    case "CHANGE_MIND":
+      return `Tôi đổi ý về ${target}.`;
+    case "REACTION":
+      return "Ừ.";
+    case "HUMOR":
+      return "Thôi tôi im.";
+    default: {
+      // Không bao giờ chạy tới. Tồn tại để việc thêm một speech act mà quên
+      // nhánh render là một LỖI BIÊN DỊCH, chứ không phải một `undefined` lặng
+      // lẽ chảy vào chat log.
+      const unreachable: never = speech.kind;
+      throw new Error(`Speech act chưa có mẫu diễn đạt: ${String(unreachable)}`);
+    }
   }
 }
 

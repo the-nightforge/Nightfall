@@ -88,11 +88,140 @@ export interface BotNightIntention {
   evidence: BotEvidence[];
 }
 
+/**
+ * Những gì một BOT có thể LÀM bằng lời.
+ *
+ * Ba loại đầu là của Phase 1–3 và giữ nguyên nghĩa. Chín loại còn lại tồn tại
+ * vì một lý do duy nhất: `ACCUSE | QUESTION | WITHHOLD` không diễn đạt được
+ * hành vi *trả lời một người*. Một BOT chỉ có ba loại đó buộc phải phát biểu
+ * độc lập, và đó chính là triệu chứng mà Phase 4 phải chữa.
+ *
+ * Không BOT nào cần dùng đủ mười hai loại trong một ván.
+ */
+export const BOT_SPEECH_KINDS = [
+  "ACCUSE",
+  "QUESTION",
+  "WITHHOLD",
+  "REPLY",
+  "AGREE",
+  "DISAGREE",
+  "CHALLENGE",
+  "DEFEND",
+  "ASK_EVIDENCE",
+  "CHANGE_MIND",
+  "REACTION",
+  "HUMOR",
+] as const;
+
+export type BotSpeechKind = (typeof BOT_SPEECH_KINDS)[number];
+
+/**
+ * Giọng của một câu. Tập ĐÓNG, không phải chuỗi tự do.
+ *
+ * Bảng mẫu câu và prompt đều khoá theo giá trị này; một tone tự do sẽ lặng lẽ
+ * rơi về nhánh mặc định thay vì làm đỏ trình biên dịch.
+ */
+export const BOT_SPEECH_TONES = [
+  "NEUTRAL",
+  "FIRM",
+  "SOFT",
+  "PLAYFUL",
+  "TENSE",
+  "CURIOUS",
+] as const;
+
+export type BotSpeechTone = (typeof BOT_SPEECH_TONES)[number];
+
+/** Trục nội dung. Tham gia vào vân tay ngữ nghĩa để phân biệt hai câu cùng loại. */
+export const BOT_SPEECH_TOPICS = [
+  "SUSPICION",
+  "TRUST",
+  "VOTE",
+  "ROLE_CLAIM",
+  "EVIDENCE",
+  "PROCESS",
+  "SMALLTALK",
+] as const;
+
+export type BotSpeechTopic = (typeof BOT_SPEECH_TOPICS)[number];
+
+/** Ba loại này không nói điều gì kiểm chứng được, nên không được mang bằng chứng. */
+const EVIDENCE_FREE_KINDS: ReadonlySet<BotSpeechKind> = new Set<BotSpeechKind>([
+  "WITHHOLD",
+  "REACTION",
+  "HUMOR",
+]);
+
 export interface BotSpeechIntention {
-  kind: "ACCUSE" | "QUESTION" | "WITHHOLD";
+  kind: BotSpeechKind;
+  /** Người được nói TỚI hoặc nói VỀ. */
   targetId?: string;
+  /** Câu chat cụ thể đang được phản hồi. */
+  replyToMessageId?: string;
+  /** Tác giả của câu đó. */
+  replyToActorId?: string;
+  topic?: BotSpeechTopic;
   confidence: number;
   evidence: BotEvidence[];
+  /**
+   * Bắt buộc, không optional.
+   *
+   * Một trường optional ở đây tạo ra trạng thái thứ bảy - "không rõ giọng" - mà
+   * mọi bảng mẫu câu phải xử lý riêng, và không ai nhớ xử lý.
+   */
+  tone: BotSpeechTone;
+  /**
+   * Giải thích nội bộ, cho trace và log.
+   *
+   * KHÔNG được gửi cho nhà cung cấp: nó có thể chứa lý do rút từ thông tin
+   * riêng của vai (kết quả soi, danh sách đồng bọn).
+   */
+  reason?: string;
+}
+
+/** Đúng những gì một ý định được phép nhắc tới, đã lọc theo quyền của chính BOT. */
+export interface SpeechScope {
+  players: ReadonlyArray<{ id: string }>;
+  chat: ReadonlyArray<{ id: string }>;
+  seenSourceIds: readonly string[];
+}
+
+/**
+ * Mọi ID và mọi bằng chứng trong một ý định phải tồn tại trong tầm nhìn của BOT.
+ *
+ * Trả về DANH SÁCH vấn đề chứ không ném: chỗ gọi ở tầng kiểm bất biến cần gom
+ * hết vi phạm của một ván, còn chỗ gọi ở planner chỉ cần biết rỗng hay không.
+ */
+export function assertSpeechScope(
+  intention: BotSpeechIntention,
+  scope: SpeechScope,
+): string[] {
+  const problems: string[] = [];
+  const knownPlayer = new Set(scope.players.map((player) => player.id));
+  const knownMessage = new Set(scope.chat.map((message) => message.id));
+  const knownSource = new Set(scope.seenSourceIds);
+
+  if (intention.targetId !== undefined && !knownPlayer.has(intention.targetId)) {
+    problems.push(`targetId không có trong knowledge: ${intention.targetId}`);
+  }
+  if (intention.replyToActorId !== undefined && !knownPlayer.has(intention.replyToActorId)) {
+    problems.push(`replyToActorId không có trong knowledge: ${intention.replyToActorId}`);
+  }
+  if (intention.replyToMessageId !== undefined && !knownMessage.has(intention.replyToMessageId)) {
+    problems.push(
+      `replyToMessageId không có trong chat đã lọc: ${intention.replyToMessageId}`,
+    );
+  }
+  if (EVIDENCE_FREE_KINDS.has(intention.kind) && intention.evidence.length > 0) {
+    problems.push(`${intention.kind} không được mang bằng chứng`);
+  }
+  for (const item of intention.evidence) {
+    if (!knownSource.has(item.sourceId)) {
+      problems.push(`evidence.sourceId chưa từng được quan sát: ${item.sourceId}`);
+    }
+  }
+
+  return problems;
 }
 
 export interface BotPersonality {
