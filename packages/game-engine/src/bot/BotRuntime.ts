@@ -17,6 +17,8 @@ import {
   type BotWeights,
 } from "./config/weights";
 import { markReplied, recordSpeechIntention } from "./conversation/speech-memory";
+import { planSpeech } from "./conversation/speech-planner";
+import { deriveSpeechStyle, type BotSpeechStyle } from "./personality/speech-style";
 import { strategyFor } from "./roles/registry";
 import { decayAndPrune } from "./memory/memory-decay";
 import { createBotBrainState, remember } from "./memory/memory-store";
@@ -181,6 +183,7 @@ export class BotRuntime {
     const personality =
       options.personality ?? createBotPersonality(options.rng, this.weights);
     this.state = createBotBrainState(options.playerId, personality, options.playerIds);
+    this.style = deriveSpeechStyle(personality);
   }
 
   /** Nạp mọi quan sát công khai chưa thấy vào memory, belief và social graph. */
@@ -263,76 +266,27 @@ export class BotRuntime {
     vote: BotVoteIntention,
   ): BotSpeechIntention | null {
     const run = this.beginTracedDecision();
-    const speech = this.speechFor(context, vote, run.rng, run.probe);
+    const speech = planSpeech({
+      context,
+      state: this.state,
+      vote,
+      style: this.style,
+      rng: run.rng,
+      weights: this.weights,
+      probe: run.probe,
+    });
     run.finish(context, "SPEECH", speech?.targetId ?? null, speech?.kind ?? "im lặng");
     return speech;
   }
 
-  private speechFor(
-    context: BotDecisionContext,
-    vote: BotVoteIntention,
-    rng: BotRng,
-    probe: DecisionProbeCollector | undefined,
-  ): BotSpeechIntention | null {
-    if (rng() > this.state.personality.talkativeness) {
-      probe?.fallback("không đủ hoạt ngôn để lên tiếng lượt này");
-      return null;
-    }
-
-    const spoken = new Set(this.state.speechMemory.flatMap((entry) => entry.sourceIds));
-
-    /**
-     * Tiên Tri giữ kín kết quả soi trong những vòng đầu.
-     *
-     * Soi trúng Sói ngay đêm đầu rồi hô lên ở vòng 1 là cách nhanh nhất để chết
-     * ở đêm 2: bầy Sói biết ngay ai là Tiên Tri, và một Tiên Tri chết mang theo
-     * mọi thông tin nó sẽ có. Lá phiếu vẫn nhắm đúng người - thứ bị giữ lại là
-     * LÝ DO, không phải hành động.
-     */
-    const revealRound = this.weights.deceptionRisk.seerRevealRound;
-    const holdSeerEvidence = context.knowledge.round < revealRound;
-
-    const fresh = vote.evidence
-      .filter((item) => !spoken.has(item.sourceId))
-      .filter(
-        (item) =>
-          !holdSeerEvidence ||
-          (item.kind !== "SEER_RESULT_WOLF" && item.kind !== "SEER_RESULT_CLEAR"),
-      )
-      .slice(0, this.weights.limits.intentionEvidence)
-      .map((item) => ({ ...item }));
-
-    if (vote.choice.type !== "PLAYER") {
-      probe?.fallback("phiếu không nhắm ai nên không có gì để cáo buộc");
-      return {
-        kind: "WITHHOLD",
-        confidence: vote.confidence,
-        evidence: [],
-        topic: "PROCESS",
-        tone: "NEUTRAL",
-      };
-    }
-    if (fresh.length === 0) {
-      // Không có ý mới thì hỏi một câu, chứ không lặp lại đúng cáo buộc cũ.
-      probe?.fallback("mọi luận điểm đã nói rồi; hỏi thay vì lặp lại");
-      return {
-        kind: "QUESTION",
-        targetId: vote.choice.targetId,
-        confidence: vote.confidence,
-        evidence: [],
-        topic: "SUSPICION",
-        tone: "CURIOUS",
-      };
-    }
-    return {
-      kind: "ACCUSE",
-      targetId: vote.choice.targetId,
-      confidence: vote.confidence,
-      evidence: fresh,
-      topic: "SUSPICION",
-      tone: "FIRM",
-    };
-  }
+  /**
+   * Phong cách nói, dẫn xuất một lần từ personality.
+   *
+   * Tính một lần trong constructor chứ không mỗi lượt: nó là hàm thuần nên kết
+   * quả không đổi, và một BOT đổi giọng giữa ván là một bug chứ không phải một
+   * tính năng.
+   */
+  readonly style: BotSpeechStyle;
 
   /**
    * Nước đi đêm, uỷ quyền cho chiến lược của đúng vai.

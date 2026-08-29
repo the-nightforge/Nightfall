@@ -27,6 +27,7 @@ export * from "./bot/personality/speech-style";
 export * from "./bot/conversation/fingerprint";
 export * from "./bot/conversation/speech-memory";
 export * from "./bot/conversation/triggers";
+export * from "./bot/conversation/speech-planner";
 export * from "./bot/config/weights";
 export * from "./bot/config/presets";
 export * from "./bot/trace/trace";
