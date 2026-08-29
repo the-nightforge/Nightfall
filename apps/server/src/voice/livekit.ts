@@ -8,6 +8,21 @@ import { TrackSource } from "@livekit/protocol";
  * Phần biết luật chơi nằm ở `./service.ts`.
  */
 
+/**
+ * Participant không có trong room - vì chưa từng vào voice, hoặc đã rời.
+ *
+ * Phải phân biệt được với lỗi thật (mạng, 5xx): coi nó là lỗi sẽ khiến
+ * `service.ts` leo thang sang `removeParticipant`, mà trên LiveKit Cloud điều
+ * đó THU HỒI TOKEN của người chưa từng dùng voice - họ sẽ không vào được nữa và
+ * không hiểu vì sao.
+ */
+export class VoiceNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "VoiceNotFoundError";
+  }
+}
+
 export interface VoiceConfig {
   url: string;
   apiKey: string;
@@ -126,4 +141,76 @@ export function browserUrl(url: string): string {
 /** Dạng đưa cho RoomServiceClient phía server. */
 export function apiUrl(url: string): string {
   return swapScheme(url, { wss: "https", ws: "http" });
+}
+
+// ---------------------------------------------------------------------------
+// Adapter thật
+// ---------------------------------------------------------------------------
+
+/** Room rỗng tự tiêu sau 5 phút - lớp lưới cuối nếu mọi lối xoá tường minh đều trượt. */
+export const EMPTY_ROOM_TIMEOUT_SECONDS = 300;
+
+/**
+ * LiveKit không phơi ra kiểu lỗi riêng cho "không tồn tại", nên phải nhận dạng
+ * bằng thông điệp và mã trạng thái.
+ *
+ * Nhận nhầm theo hướng NÀY là an toàn hơn hướng ngược lại: coi lỗi thật thành
+ * NotFound chỉ làm mất một lần thử lại, còn coi NotFound thành lỗi thật sẽ leo
+ * thang sang `removeParticipant` và thu hồi token của người vô can.
+ */
+function isNotFound(err: unknown): boolean {
+  const status = (err as { status?: number; code?: number })?.status ?? (err as { code?: number })?.code;
+  if (status === 404) return true;
+  const message = err instanceof Error ? err.message.toLowerCase() : "";
+  return message.includes("does not exist") || message.includes("not found");
+}
+
+async function wrap<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (isNotFound(err)) throw new VoiceNotFoundError(err instanceof Error ? err.message : "not found");
+    throw err;
+  }
+}
+
+/**
+ * Dựng adapter thật. Kiểu trả về cố ý để `service.ts` khai báo (`VoiceAdmin`) -
+ * file này không biết gì về luật chơi và không import ngược lên service.
+ */
+export function createLiveKitAdmin(config: VoiceConfig) {
+  // Import trễ để `livekit-server-sdk` không bị nạp ở môi trường không dùng voice.
+  const { RoomServiceClient } = require("livekit-server-sdk") as typeof import("livekit-server-sdk");
+  const client = new RoomServiceClient(apiUrl(config.url), config.apiKey, config.apiSecret);
+
+  return {
+    /**
+     * Tạo room tường minh. BẮT BUỘC, không phải tối ưu hoá: LiveKit tự tạo room
+     * khi người đầu tiên join, và đường tự tạo đó không áp `emptyTimeout` mình
+     * muốn - room rỗng sẽ sống lâu hơn dự tính.
+     */
+    async createRoom(roomName: string): Promise<void> {
+      await wrap(() =>
+        client.createRoom({ name: roomName, emptyTimeout: EMPTY_ROOM_TIMEOUT_SECONDS }),
+      );
+    },
+
+    async updateParticipant(
+      roomName: string,
+      identity: string,
+      permission: VoiceParticipantPermission,
+    ): Promise<void> {
+      // Gửi TRỌN bộ quyền mỗi lần: LiveKit cập nhật theo kiểu thay thế, gửi
+      // thiếu `canSubscribe` là người đó hoá điếc.
+      await wrap(() => client.updateParticipant(roomName, identity, undefined, permission));
+    },
+
+    async removeParticipant(roomName: string, identity: string): Promise<void> {
+      await wrap(() => client.removeParticipant(roomName, identity));
+    },
+
+    async deleteRoom(roomName: string): Promise<void> {
+      await wrap(() => client.deleteRoom(roomName));
+    },
+  };
 }

@@ -9,6 +9,8 @@ import { setIo } from "./rooms/broadcast";
 import { pingRedis, redis } from "./redis";
 import { prisma } from "./db";
 import { botBrain } from "./bots";
+import { createLiveKitAdmin } from "./voice/livekit";
+import { setVoiceAdmin } from "./voice/service";
 
 async function main(): Promise<void> {
   const app = express();
@@ -32,6 +34,12 @@ async function main(): Promise<void> {
 
   setIo(io);
   setupSocket(io);
+
+  // Adapter chỉ được gắn khi cấu hình LiveKit hợp lệ. `service.ts` lấy chính
+  // việc "đã gắn hay chưa" làm câu trả lời cho "voice có bật không", nên không
+  // có nguồn sự thật thứ hai.
+  if (config.voice.enabled) setVoiceAdmin(createLiveKitAdmin(config.voice));
+  console.log(`[server] Voice chat: ${config.voice.enabled ? `bật (${config.voice.env})` : "tắt"}`);
 
   const redisOk = await pingRedis();
   console.log(`[server] Redis: ${redisOk ? "OK" : "KHÔNG kết nối được - kiểm tra docker compose"}`);

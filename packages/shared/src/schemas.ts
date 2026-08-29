@@ -29,6 +29,7 @@ export const roomConfigSchema = z
     priest: bool.optional(),
     mayor: bool.optional(),
     mode: roomModeSchema.optional(),
+    voice: bool.optional(),
     nightSeconds: z.number().int().min(15).max(120),
     discussionSeconds: z.number().int().min(30).max(300),
     voteSeconds: z.number().int().min(15).max(120),
