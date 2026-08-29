@@ -1,49 +1,84 @@
+import { renderSpeechTemplate, speechTextFingerprint } from "@masoi/game-engine";
 import { botBrain } from "./index";
 import { DEFAULT_CHAT_MAX } from "./decide";
-import type { BotBrain, SpeechRequest } from "./types";
+import type { BotBrain, RenderedSpeech, SpeechRequest } from "./types";
 
 /**
- * Câu mẫu cho một ý định đã chốt.
+ * Câu chữ cho một ý định đã chốt, không cần nhà cung cấp.
  *
  * KHÔNG dùng RNG: đây là đường lui, và một đường lui ngẫu nhiên sẽ làm hỏng
- * chính tính tái lập mà cả Phase 1 được xây để có. Mẫu chỉ nói lại đúng mục
- * tiêu và bằng chứng trong request - nó không bao giờ thêm sự kiện mới.
+ * chính tính tái lập mà Phase 1 và Phase 3 được xây để có. Biến thiên đến từ
+ * hàm băm của `(phòng, bot, vòng, lượt nói, vân tay ý định)`, nên hai lần chạy
+ * cùng đầu vào cho cùng một câu, mà hai BOT cùng ý vẫn nói khác nhau.
+ *
+ * Bảng mẫu sống trong `@masoi/game-engine` chứ không ở đây: self-play cũng cần
+ * nó, và engine phải thuần nên nó không thể import ngược lên server.
  */
-export function speechTemplate(request: SpeechRequest): string | null {
-  if (request.intention.kind === "WITHHOLD") {
-    return "Hiện tại tôi chưa thấy đủ bằng chứng để treo ai.";
-  }
-  if (!request.targetName) return null;
+/**
+ * Loại ý định KHÔNG nói được nếu thiếu người để nói tới.
+ *
+ * Lõi luôn gắn mục tiêu cho những loại này, nên nhánh dưới là phòng thủ. Nhưng
+ * phòng thủ đúng chỗ: im lặng còn hơn phát ra "Tôi nghi người đó." - một câu
+ * đọc lên như phần mềm hỏng, ngay giữa một ván đấu.
+ */
+const NEEDS_SOMEONE = new Set([
+  "ACCUSE",
+  "QUESTION",
+  "AGREE",
+  "DISAGREE",
+  "DEFEND",
+  "CHANGE_MIND",
+  "REPLY",
+  "CHALLENGE",
+  "ASK_EVIDENCE",
+]);
 
-  const first = request.evidence[0];
-  if (request.intention.kind === "QUESTION" || !first) {
-    // KHÔNG nhắc tới "lá phiếu vừa rồi": ý định QUESTION xuất hiện nhiều nhất ở
-    // vòng thảo luận đầu tiên, khi chưa ai bỏ phiếu lần nào. Một câu hỏi về
-    // một sự kiện chưa xảy ra là lời nói dối, và nó lặp lại y hệt ở mọi bot.
-    return `${request.targetName} nghĩ sao về tình hình hiện tại?`;
+export function speechTemplate(request: SpeechRequest): string | null {
+  if (
+    NEEDS_SOMEONE.has(request.intention.kind) &&
+    request.targetName === null &&
+    request.replyTo === null
+  ) {
+    return null;
   }
-  return `Tôi đang nghi ${request.targetName} vì ${first.summary}.`;
+
+  return renderSpeechTemplate({
+    intention: request.intention,
+    targetName: request.targetName,
+    replyToName: request.replyTo?.actorName ?? null,
+    seedTag: request.roomCode,
+    botId: request.speaker.id,
+    round: request.round,
+    seq: request.seq,
+    // Vân tay của chính những câu BOT vừa nói: mẫu trùng sẽ bị bỏ qua.
+    avoidFingerprints: request.recentOwnLines.map(speechTextFingerprint),
+  });
 }
 
 /**
  * Diễn đạt một ý định đã chốt thành một câu chat.
  *
  * Nhà cung cấp được ưu tiên vì nó nói tự nhiên hơn, nhưng nó chỉ đổi được CÂU
- * CHỮ: mục tiêu và bằng chứng nằm trong `request` và không bao giờ được đọc
- * ngược lại từ output. Mọi lỗi - timeout, JSON hỏng, hết quota, provider ném -
- * đều rơi về mẫu cố định, nên quyết định gameplay không đổi.
+ * CHỮ: mục tiêu, loại ý định và bằng chứng nằm trong `request` và không bao giờ
+ * được đọc ngược lại từ output. Mọi lỗi - timeout, JSON hỏng, hết quota,
+ * provider ném - đều rơi về bảng mẫu, nên quyết định gameplay không đổi dù nhà
+ * cung cấp có tồn tại hay không.
+ *
+ * Trả về cả `fromTemplate` để tầng đo biết bao nhiêu phần trăm lời thoại của
+ * production đến từ đường lui. Không có con số đó thì một nhà cung cấp hỏng
+ * lặng lẽ suốt một tuần trông y hệt một nhà cung cấp đang chạy tốt.
  */
 export async function renderBotSpeech(
   request: SpeechRequest,
   brain: BotBrain = botBrain(),
   chatMaxLength = DEFAULT_CHAT_MAX,
-): Promise<string | null> {
+): Promise<RenderedSpeech> {
   try {
     const attempt = await brain.renderDaySpeech(request);
     const chat = attempt.ok ? attempt.value?.chat : null;
-    if (chat) return chat.slice(0, chatMaxLength);
+    if (chat) return { text: chat.slice(0, chatMaxLength), fromTemplate: false };
   } catch {
     // Não ném lỗi ngoài dự kiến cũng chỉ là một lượt hỏng.
   }
-  return speechTemplate(request);
+  return { text: speechTemplate(request), fromTemplate: true };
 }

@@ -30,15 +30,33 @@ vi.mock("../src/db", () => ({ prisma: {} }));
  * Runtime giả luôn muốn nói: test này kiểm tra việc BỎ kết quả cũ, không kiểm
  * tra xác suất im lặng theo personality.
  */
-vi.mock("../src/bots/session-registry", () => {
+vi.mock("../src/bots/session-registry", async () => {
+  const engine = await vi.importActual<typeof import("@masoi/game-engine")>(
+    "@masoi/game-engine",
+  );
   const intention = {
     kind: "ACCUSE" as const,
     targetId: "human1",
     confidence: 0.9,
     evidence: [],
+    tone: "FIRM" as const,
   };
   const runtime = {
-    state: { speechMemory: [] as Array<{ sourceIds: string[]; round: number }> },
+    state: {
+      speechMemory: [] as unknown[],
+      speechSequence: 0,
+      repliedMessageIds: [] as string[],
+    },
+    style: engine.deriveSpeechStyle({
+      aggressiveness: 0.5,
+      talkativeness: 0.9,
+      riskTolerance: 0.5,
+      deceptionSkill: 0.5,
+      analyticalSkill: 0.5,
+      loyalty: 0.5,
+      stubbornness: 0.5,
+    }),
+    weights: engine.DEFAULT_BOT_WEIGHTS,
     observe: () => undefined,
     decideVote: () => ({
       kind: "VOTE" as const,

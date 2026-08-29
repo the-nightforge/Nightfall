@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { GameEngine } from "../src/engine";
 import { assignRoles, buildRoleDeck } from "../src/assignRoles";
 import { GameError, type GameState } from "../src/types";
-import { DEFAULT_ROOM_CONFIG, type RoomConfig } from "@masoi/shared";
+import { DEFAULT_ROOM_CONFIG, roleTeam, type RoomConfig } from "@masoi/shared";
 
 const CONFIG: RoomConfig = {
   ...DEFAULT_ROOM_CONFIG,
@@ -203,7 +203,16 @@ describe("Thứ tự xử lý hành động ban đêm", () => {
     const e = makeEngine(7);
     const wolf = findPlayersByRole(e, "WEREWOLF")[0];
     const guard = findPlayersByRole(e, "GUARD")[0];
-    const victim = e.state.players.find((p) => p.id !== wolf.id && p.id !== guard.id)!;
+    // Nạn nhân phải KHÔNG thuộc phe Sói.
+    //
+    // `makeEngine` không gieo hạt nên bộ bài đổi mỗi lần chạy, và bàn 7 người
+    // có hai con Sói. Bản cũ chỉ loại Sói thứ nhất và Bảo Vệ, nên khi nạn nhân
+    // rơi trúng con Sói thứ hai thì engine từ chối bằng "Không thể cắn đồng
+    // bọn" - test đỏ chừng 5% số lần chạy, vì một lý do không liên quan gì tới
+    // điều nó muốn khẳng định.
+    const victim = e.state.players.find(
+      (p) => p.id !== guard.id && roleTeam(p.role) !== "wolves",
+    )!;
 
     e.submitNightAction(guard.id, "GUARD", victim.id);
     e.submitNightAction(wolf.id, "KILL", victim.id);

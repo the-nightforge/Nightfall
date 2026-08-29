@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { speechDefaults } from "./helpers/speech-request";
 import type { SpeechRequest } from "../src/bots/types";
 import type { RoomSnapshot } from "@masoi/shared";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
@@ -197,7 +198,7 @@ function speechRequest(overrides: Partial<SpeechRequest> = {}): SpeechRequest {
   return {
     roomCode: "ABCDE",
     speaker: { id: "v", name: "Vân" },
-    personalityStyle: "điềm tĩnh",
+    ...speechDefaults(),
     intention: {
       kind: "ACCUSE",
       targetId: "s",

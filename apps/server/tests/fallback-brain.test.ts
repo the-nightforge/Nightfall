@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { speechDefaults } from "./helpers/speech-request";
 import { FallbackBrain } from "../src/bots/fallback-brain";
 import type {
   Attempt,
@@ -91,7 +92,7 @@ function speechRequest(overrides: Partial<SpeechRequest> = {}): SpeechRequest {
   return {
     roomCode: "ABCDE",
     speaker: { id: "v", name: "Vân" },
-    personalityStyle: "điềm tĩnh",
+    ...speechDefaults(),
     intention: {
       kind: "ACCUSE",
       targetId: "s",

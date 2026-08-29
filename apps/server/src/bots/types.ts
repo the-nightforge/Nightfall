@@ -1,4 +1,4 @@
-import type { BotSpeechIntention } from "@masoi/game-engine";
+import type { BotSpeechIntention, BotSpeechStyle } from "@masoi/game-engine";
 import type { RoomSnapshot } from "@masoi/shared";
 
 /**
@@ -59,13 +59,40 @@ export interface SpeechRequest {
   /** Chỉ để governor tính ngân sách theo phòng; không phải thông tin ván đấu. */
   roomCode: string;
   speaker: { id: string; name: string };
-  personalityStyle: string;
+  /**
+   * Phong cách nói, dẫn xuất từ `BotPersonality` THẬT.
+   *
+   * Thay `personalityStyle: string` của Phase 3, vốn là một trong bốn nhãn cứng
+   * gieo từ `botId` và hoàn toàn tách rời tính cách mà lõi đang dùng để quyết
+   * định. Trong một bàn tám BOT, trung bình hai con dùng chung một nhãn.
+   */
+  style: BotSpeechStyle;
+  /** Cùng phong cách đó, viết thành một câu tiếng Việt cho prompt. */
+  styleDescription: string;
   intention: BotSpeechIntention;
   evidence: RenderableEvidence[];
   /** Tên hiển thị của mục tiêu, hoặc null khi ý định không nhắm vào ai. */
   targetName: string | null;
-  /** Các source đã dùng ở lượt nói trước, để không lặp lại đúng một luận điểm. */
+  /** Câu chat cụ thể đang được trả lời, nếu có. */
+  replyTo: { messageId: string; actorName: string; text: string } | null;
+  /** Vài câu gần nhất của CHÍNH BOT, để nó không diễn đạt lại chính mình. */
+  recentOwnLines: string[];
+  /** Cửa sổ chat đã lọc, đủ để hiểu ngữ cảnh và không hơn. */
+  chatWindow: Array<{ actorName: string; text: string; isSelf: boolean }>;
+  /** Cách mở đầu cần tránh. */
+  avoidOpenings: string[];
+  /** Source đã dùng gần đây, đã CẮT theo cửa sổ chứ không phải cả ván. */
   recentSpeechSourceIds: string[];
+  /** Lượt nói thứ mấy của BOT này; nguồn biến thiên của bảng mẫu. */
+  seq: number;
+  round: number;
+}
+
+/** Kết quả một lượt diễn đạt, kèm nguồn gốc của câu chữ để còn đo được. */
+export interface RenderedSpeech {
+  text: string | null;
+  /** `true` khi câu đến từ bảng mẫu chứ không phải nhà cung cấp. */
+  fromTemplate: boolean;
 }
 
 /**

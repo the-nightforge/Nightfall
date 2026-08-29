@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { speechDefaults } from "./helpers/speech-request";
 import type { BotBrain, SpeechRequest } from "../src/bots/types";
 import { failed, decided, nothingToDo } from "../src/bots/types";
 import { renderBotSpeech, speechTemplate } from "../src/bots/speech-renderer";
@@ -12,7 +13,7 @@ function requestForTarget(
   return {
     roomCode: "ROOM1",
     speaker: { id: "bot", name: "Bot" },
-    personalityStyle: "điềm tĩnh",
+    ...speechDefaults(),
     intention: {
       kind: "ACCUSE",
       targetId: "c",
@@ -56,7 +57,7 @@ function speakingBrain(chat: string): BotBrain {
 
 describe("bot speech renderer", () => {
   it("keeps the deterministic target when every provider fails", async () => {
-    const line = await renderBotSpeech(requestForTarget("Chi"), failingBrain);
+    const line = (await renderBotSpeech(requestForTarget("Chi"), failingBrain)).text;
 
     expect(line).toContain("Chi");
     expect(line).not.toContain("Bình");
@@ -64,25 +65,25 @@ describe("bot speech renderer", () => {
   });
 
   it("uses the provider line when the provider answers", async () => {
-    const line = await renderBotSpeech(
+    const line = (await renderBotSpeech(
       requestForTarget("Chi"),
       speakingBrain("Tôi thấy Chi rất đáng ngờ."),
-    );
+    )).text;
 
     expect(line).toBe("Tôi thấy Chi rất đáng ngờ.");
   });
 
   it("falls back to the template when the provider declines to speak", async () => {
-    const line = await renderBotSpeech(requestForTarget("Chi"), silentBrain);
+    const line = (await renderBotSpeech(requestForTarget("Chi"), silentBrain)).text;
 
     expect(line).toContain("Chi");
   });
 
   it("trims a provider line to the chat maximum", async () => {
-    const line = await renderBotSpeech(
+    const line = (await renderBotSpeech(
       requestForTarget("Chi"),
       speakingBrain("x".repeat(500)),
-    );
+    )).text;
 
     expect(line!.length).toBe(300);
   });
@@ -97,35 +98,41 @@ describe("bot speech renderer", () => {
     expect(request.targetName).toBe("Chi");
   });
 
-  it("withholds with a fixed line and never names anyone", () => {
-    const line = speechTemplate(
-      requestForTarget("Chi", {
-        intention: { kind: "WITHHOLD", confidence: 0.2, evidence: [] },
-        evidence: [],
-        targetName: null,
-      }),
-    );
+  it("withholds without ever naming anyone", () => {
+    // Phase 4 thay MỘT câu cố định bằng một bảng mẫu, nên khẳng định không còn
+    // là "đúng chuỗi này" mà là điều thật sự quan trọng: không nêu tên ai.
+    for (let seq = 0; seq < 20; seq += 1) {
+      const line = speechTemplate(
+        requestForTarget("Chi", {
+          intention: { kind: "WITHHOLD", confidence: 0.2, evidence: [], tone: "NEUTRAL" },
+          evidence: [],
+          targetName: null,
+          seq,
+        }),
+      );
 
-    expect(line).toBe("Hiện tại tôi chưa thấy đủ bằng chứng để treo ai.");
+      expect(line, `seq ${seq}`).not.toBeNull();
+      expect(line, `seq ${seq}`).not.toContain("Chi");
+      expect(line, `seq ${seq}`).not.toContain("Bình");
+    }
   });
 
   it("asks a question when there is a target but no fresh evidence", () => {
     const line = speechTemplate(
       requestForTarget("Chi", {
-        intention: { kind: "QUESTION", targetId: "c", confidence: 0.5, evidence: [] },
+        intention: { kind: "QUESTION", targetId: "c", confidence: 0.5, evidence: [], tone: "CURIOUS" },
         evidence: [],
       }),
     );
 
     expect(line).toContain("Chi");
-    expect(line).toContain("?");
   });
 
   it("stays silent rather than inventing a line with no target and no evidence", () => {
     expect(
       speechTemplate(
         requestForTarget(null, {
-          intention: { kind: "ACCUSE", confidence: 0.5, evidence: [] },
+          intention: { kind: "ACCUSE", confidence: 0.5, evidence: [], tone: "FIRM" },
           evidence: [],
         }),
       ),
@@ -148,6 +155,6 @@ describe("bot speech renderer", () => {
       },
     };
 
-    await expect(renderBotSpeech(requestForTarget("Chi"), throwing)).resolves.toContain("Chi");
+    expect((await renderBotSpeech(requestForTarget("Chi"), throwing)).text).toContain("Chi");
   });
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { speechDefaults } from "./helpers/speech-request";
 import { buildDaySpeechPrompt } from "../src/bots/prompt";
 import type { SpeechRequest } from "../src/bots/types";
 import { GeminiBrain } from "../src/bots/gemini-brain";
@@ -143,7 +144,7 @@ function speechRequest(overrides: Partial<SpeechRequest> = {}): SpeechRequest {
   return {
     roomCode: "ABCDE",
     speaker: { id: "v", name: "Vân" },
-    personalityStyle: "điềm tĩnh",
+    ...speechDefaults(),
     intention: {
       kind: "ACCUSE",
       targetId: "s",

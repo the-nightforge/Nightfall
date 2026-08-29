@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { speechDefaults } from "./helpers/speech-request";
 import type { RoomSnapshot } from "@masoi/shared";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import { buildDaySpeechPrompt, buildDefensePrompt, personaFor } from "../src/bots/prompt";
@@ -68,7 +69,7 @@ function speechRequest(over: Partial<SpeechRequest> = {}): SpeechRequest {
   return {
     roomCode: "ABCDE",
     speaker: { id: "v", name: "Vân" },
-    personalityStyle: personaFor("v"),
+    ...speechDefaults(),
     intention: {
       kind: "ACCUSE",
       targetId: "w",
@@ -163,7 +164,10 @@ describe("chống lặp lời", () => {
 
     expect(user).toContain("vote:late-switch:2");
     expect(user).toContain("đổi phiếu sát giờ chót");
-    expect(user).toContain("Không được thêm sự kiện hoặc đổi mục tiêu");
+    // Phase 4 tách một câu cấm thành hai câu, mỗi câu một điều cấm: bịa sự
+    // kiện và đổi mục tiêu là hai lỗi khác nhau và đáng nói riêng.
+    expect(user).toContain("Không được bịa ra sự kiện");
+    expect(user).toContain("Không được đổi mục tiêu");
   });
 
   it("ý định WITHHOLD không nêu tên ai", () => {

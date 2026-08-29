@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { speechDefaults } from "./helpers/speech-request";
 import { buildDaySpeechPrompt, personaFor } from "../src/bots/prompt";
 import type { SpeechRequest } from "../src/bots/types";
 
@@ -14,7 +15,7 @@ function cursedSpeechRequest(over: Partial<SpeechRequest> = {}): SpeechRequest {
   return {
     roomCode: "CURSE",
     speaker: { id: "cursed", name: "Nguyền" },
-    personalityStyle: personaFor("cursed"),
+    ...speechDefaults(),
     intention: {
       kind: "ACCUSE",
       targetId: "villager",

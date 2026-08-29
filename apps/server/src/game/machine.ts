@@ -10,7 +10,11 @@ import { buildSnapshot, pushChat, resolveChat } from "../rooms/snapshot";
 import { botBrain, randomBrain, resetBotBudget } from "../bots";
 import { buildBotDecisionContext } from "../bots/context";
 import { renderBotSpeech } from "../bots/speech-renderer";
-import { personaFor } from "../bots/prompt";
+import {
+  describeSpeechStyle,
+  recentOpenings,
+  recentSpeechSourceIds,
+} from "@masoi/game-engine";
 import type { SpeechRequest } from "../bots/types";
 import { engineVote } from "../bots/targets";
 import { botSessionFor, clearBotSession, startBotSession } from "../bots/session-registry";
@@ -443,29 +447,74 @@ function toPlannedVote(choice: PublicVoteChoice): PlannedVote {
  * Chỉ mang tên mục tiêu và tóm tắt bằng chứng: không snapshot, không bảng role,
  * không danh sách mục tiêu hợp lệ - nhà cung cấp không có gì để đổi.
  */
-function toSpeechRequest(
+export function toSpeechRequest(
   room: Room,
   member: { playerId: string; name: string },
   context: BotDecisionContext,
   speech: BotSpeechIntention,
 ): SpeechRequest {
-  const target = speech.targetId
-    ? context.knowledge.players.find((player) => player.id === speech.targetId)
-    : undefined;
+  const nameOf = (playerId: string): string | undefined =>
+    context.knowledge.players.find((player) => player.id === playerId)?.name;
+
   const runtime = botSessionFor(room).runtimeFor(member.playerId);
+  const limits = runtime.weights.conversation;
+
+  const quoted = speech.replyToMessageId
+    ? context.visibleChat.find((message) => message.id === speech.replyToMessageId)
+    : undefined;
+
+  // Cửa sổ chat, KHÔNG phải cả ván. Trước Phase 4 chỗ này trải phẳng toàn bộ
+  // lịch sử phát ngôn, nên prompt phình theo độ dài ván và danh sách "đừng lặp
+  // lại" dài tới mức không còn nghĩa gì.
+  const window = context.visibleChat.slice(-limits.promptChatWindow);
 
   return {
     roomCode: room.code,
     speaker: { id: member.playerId, name: member.name },
-    personalityStyle: personaFor(member.playerId),
+    style: runtime.style,
+    styleDescription: describeSpeechStyle(runtime.style),
     intention: speech,
     evidence: speech.evidence.map((item) => ({
       sourceId: item.sourceId,
       summary: item.summary,
     })),
-    targetName: target?.name ?? null,
-    recentSpeechSourceIds: runtime.state.speechMemory.flatMap((entry) => entry.sourceIds),
+    targetName: speech.targetId ? nameOf(speech.targetId) ?? null : null,
+    replyTo:
+      quoted && speech.replyToMessageId
+        ? {
+            messageId: speech.replyToMessageId,
+            actorName: nameOf(quoted.actorId) ?? "một người",
+            text: quoted.text,
+          }
+        : null,
+    recentOwnLines: recentOwnLines(room, member.playerId, limits.promptRecentOwnLines),
+    chatWindow: window.map((message) => ({
+      actorName: nameOf(message.actorId) ?? "một người",
+      text: message.text,
+      isSelf: message.actorId === member.playerId,
+    })),
+    avoidOpenings: recentOpenings(runtime.state, limits.promptRecentOwnLines),
+    recentSpeechSourceIds: recentSpeechSourceIds(
+      runtime.state,
+      limits.promptRecentOwnLines,
+    ),
+    seq: runtime.state.speechSequence,
+    round: context.knowledge.round,
   };
+}
+
+/**
+ * Vài câu gần nhất mà chính BOT đã phát.
+ *
+ * Đọc từ `room.chatLog` chứ không từ `BotBrainState`: state cố tình chỉ giữ vân
+ * tay, không giữ chữ. Prompt thì cần chữ thật để mô hình biết mình vừa nói gì
+ * mà tránh diễn đạt lại.
+ */
+function recentOwnLines(room: Room, botId: string, count: number): string[] {
+  return room.chatLog
+    .filter((message) => message.playerId === botId)
+    .slice(-count)
+    .map((message) => message.text);
 }
 
 export function scheduleDayBots(room: Room): void {
@@ -493,9 +542,10 @@ export function scheduleDayBots(room: Room): void {
           // phiếu bỏ qua mọi thứ xảy ra sau đó.
           const vote = runtime.decideVote(context);
           const speech = runtime.decideSpeech(context, vote);
-          const chat = speech
+          const rendered = speech
             ? await renderBotSpeech(toSpeechRequest(room, member, context, speech))
             : null;
+          const chat = rendered?.text ?? null;
 
           // Kết quả về sau khi pha đổi thì bỏ hết: nó được tính từ một tình thế
           // không còn tồn tại.
