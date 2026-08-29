@@ -519,7 +519,17 @@ chứng trước khi chạm vào mạng.
 - **Render Free ngủ khi idle.** Media đi thẳng LiveKit, nhưng đổi quyền theo pha
   đi qua Render. Server ngủ giữa ván vốn đã hỏng ván, nên không phải rủi ro mới.
 - **iOS Safari** là nơi hay vỡ nhất; phải thử trên máy thật trước khi coi là xong.
-- **Suy luận chưa xác minh trực tiếp:** việc rejoin bằng token cũ khôi phục grant
-  gốc (mục 6) là suy ra từ cơ chế join-lấy-grant-từ-token, không có câu khẳng
-  định trực tiếp trong tài liệu. Bản vá vẫn đáng làm vì nó chặt hơn về mọi mặt và
-  gần như không tốn gì. Kiểm thủ công #2 ở mục 11.2 tồn tại để xác nhận.
+- **Suy luận ở mục 6 KHÔNG còn là rủi ro.** Bản 2 từng ghi rằng "rejoin bằng
+  token cũ khôi phục grant gốc" là suy luận chưa có câu khẳng định trực tiếp
+  trong tài liệu. Điều đó vẫn đúng, nhưng nó đã thôi quan trọng: vì **mọi** token
+  ký ra đều mang `canPublish: false` (đã xác nhận bằng `npm run voice:probe` với
+  credential thật), không tồn tại token nào mang quyền nói để mà khôi phục. Kết
+  luận không còn phụ thuộc vào ngữ nghĩa rejoin nữa.
+- **Nhận dạng lỗi NotFound đã được xác nhận với API thật.** `isNotFound` khớp
+  theo thông điệp và mã 404 — một suy đoán, và đoán sai sẽ khiến việc leo thang
+  thu hồi token của người vô can. `voice:probe` gọi `updateParticipant` với một
+  identity không tồn tại và xác nhận nó ra đúng `VoiceNotFoundError`.
+- **Còn lại cần trình duyệt thật:** đường end-to-end "người chết bấm mic thì
+  không ai nghe thấy" vẫn phải kiểm bằng hai trình duyệt. Probe chứng minh được
+  phần cấp quyền, không chứng minh được phần thu quyền đang chạy đúng trong một
+  phiên WebRTC thật.
