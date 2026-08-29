@@ -139,6 +139,7 @@ function emptyNight(wolfCubRageTonight = false): GameState["night"] {
     witchSkipped: false,
     seerResults: {},
     priestTarget: null,
+    priestSkipped: false,
     detectiveTargets: null,
     detectiveResults: {},
     priestResults: {},
@@ -170,6 +171,7 @@ export class GameEngine {
     this.state.night.witchSkipped ??= false;
     this.state.night.guardianAngelTarget ??= null;
     this.state.night.priestTarget ??= null;
+    this.state.night.priestSkipped ??= false;
     this.state.night.detectiveTargets ??= null;
     this.state.night.detectiveResults ??= {};
     this.state.night.priestResults ??= {};
@@ -479,6 +481,7 @@ export class GameEngine {
       case "GUARD": {
         if (p.role !== "GUARD") throw new GameError("Chỉ Bảo Vệ mới được bảo vệ");
         if (!targetId || !target) throw new GameError("Hãy chọn một người để bảo vệ");
+        if (targetId === playerId) throw new GameError("Bảo Vệ không thể tự bảo vệ mình");
         if (targetId === st.guardPrevious) {
           throw new GameError("Không thể bảo vệ cùng một người hai đêm liên tiếp");
         }
@@ -526,6 +529,9 @@ export class GameEngine {
         if (st.priestHolyWaterUsed[playerId]) {
           throw new GameError("Bình Nước thánh đã được sử dụng");
         }
+        if (st.night.priestSkipped) {
+          throw new GameError("Linh Mục đã chọn không dùng Nước thánh đêm nay");
+        }
         st.night.priestTarget = targetId;
         st.priestHolyWaterUsed[playerId] = true;
         break;
@@ -549,8 +555,12 @@ export class GameEngine {
           st.night.witchSkipped = true;
         } else if (roleTeam(p.role) === "wolves") {
           st.night.wolfVotes[playerId] = null;
+        } else if (p.role === "PRIEST") {
+          if (st.priestHolyWaterUsed[playerId]) throw new GameError("Bình Nước thánh đã được sử dụng");
+          if (st.night.priestSkipped) throw new GameError("Linh Mục đã bỏ qua đêm nay");
+          st.night.priestSkipped = true;
         } else {
-          throw new GameError("Chỉ Phù Thủy hoặc Ma Sói mới được bỏ qua hành động");
+          throw new GameError("Chỉ Phù Thủy, Ma Sói hoặc Linh Mục mới được bỏ qua hành động");
         }
         break;
       }
@@ -1167,7 +1177,7 @@ export class GameEngine {
     } else if (viewer.role === "DETECTIVE") {
       acted = st.night.detectiveResults[viewer.id] !== undefined;
     } else if (viewer.role === "PRIEST") {
-      acted = st.night.priestTarget !== null;
+      acted = st.night.priestTarget !== null || st.night.priestSkipped;
     } else if (isWitch) {
       acted = st.night.witchSkipped || st.night.healTonight || st.night.poisonTarget !== null;
     }
@@ -1540,19 +1550,22 @@ export class GameEngine {
         legalTargets.GUARDIAN_PROTECT = targets;
       }
     } else if (viewer.role === "PRIEST") {
-      // Một bình cả ván, và không tự ném vào mình.
-      const targets = alive
-        .filter((player) => player.id !== viewer.id)
-        .map((player) => player.id);
-      if (!st.priestHolyWaterUsed[viewer.id] && targets.length > 0) {
-        legalActions.push("HOLY_WATER");
-        legalTargets.HOLY_WATER = targets;
+      // Một bình cả ván, và không tự ném vào mình. Có thể chủ động skip để giữ bình.
+      if (!st.priestHolyWaterUsed[viewer.id]) {
+        const targets = alive
+          .filter((player) => player.id !== viewer.id)
+          .map((player) => player.id);
+        if (targets.length > 0) {
+          legalActions.push("HOLY_WATER");
+          legalTargets.HOLY_WATER = targets;
+        }
+        legalActions.push("SKIP");
       }
     } else if (viewer.role === "GUARD") {
+      // Không được tự bảo vệ, không đỡ lại đúng người đêm trước.
       legalActions.push("GUARD");
-      // Không đỡ lại đúng người đêm trước - luật engine, chép ra đây một lần.
       legalTargets.GUARD = alive
-        .filter((player) => player.id !== st.guardPrevious)
+        .filter((player) => player.id !== viewer.id && player.id !== st.guardPrevious)
         .map((player) => player.id);
     } else if (isWitch && st.night.wolvesLocked) {
       // Phù Thuỷ đi SAU bầy Sói: trước khi khoá phiếu, engine từ chối MỌI hành
@@ -1621,9 +1634,9 @@ export class GameEngine {
     if (viewer.role === "GUARD") return st.night.guardTarget === null;
     if (viewer.role === "DETECTIVE") return st.night.detectiveResults[viewer.id] === undefined;
     if (viewer.role === "GUARDIAN_ANGEL") return st.night.guardianAngelTarget === null;
-    // Bình Nước thánh bị trừ ngay lúc submit, nên cờ đã dùng cũng chính là
-    // "hết lượt đêm nay".
-    if (viewer.role === "PRIEST") return !st.priestHolyWaterUsed[viewer.id];
+    // Bình Nước thánh bị trừ ngay lúc submit, skip cũng tính là đã hành động.
+    if (viewer.role === "PRIEST")
+      return !st.priestHolyWaterUsed[viewer.id] && st.night.priestTarget === null && !st.night.priestSkipped;
     if (viewer.role === "WITCH") {
       // Chưa khoá phiếu Sói thì chưa tới lượt, nên `canAct` phải là false dù
       // cô ta chưa dùng bình nào.

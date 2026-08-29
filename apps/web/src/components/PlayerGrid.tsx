@@ -14,6 +14,7 @@ interface Props {
   snapshot: RoomSnapshot;
   selectable?: boolean;
   selectedId?: string | null;
+  selectedIds?: string[];
   onSelect?: (playerId: string) => void;
   disabledIds?: string[];
   /** Bảo Vệ được tự bảo vệ mình, nên vài lưới đêm phải mở ô của chính người chơi. */
@@ -24,6 +25,7 @@ export function PlayerGrid({
   snapshot,
   selectable,
   selectedId,
+  selectedIds,
   onSelect,
   disabledIds = [],
   allowSelf = false,
@@ -98,22 +100,24 @@ export function PlayerGrid({
       className="relative grid grid-cols-3 gap-2 lg:grid-cols-4 xl:grid-cols-5"
     >
       {snapshot.players.map((player) => {
-        const isMe = player.id === meId;
-        const disabled =
-          !selectable ||
-          !player.alive ||
-          (isMe && !allowSelf) ||
-          disabledIds.includes(player.id);
-        return (
-          <PlayerSeat
-            key={player.id}
-            player={player}
-            avatar={avatars[player.id]}
-            tint={tintFor(player.id)}
-            isMe={isMe}
-            isHost={snapshot.hostId === player.id}
-            selected={selectedId === player.id}
-            disabled={disabled}
+          const isMe = player.id === meId;
+          const disabled =
+            !selectable ||
+            !player.alive ||
+            (isMe && !allowSelf) ||
+            disabledIds.includes(player.id);
+          const isSelected =
+            selectedIds?.includes(player.id) ?? (selectedId === player.id);
+          return (
+            <PlayerSeat
+              key={player.id}
+              player={player}
+              avatar={avatars[player.id]}
+              tint={tintFor(player.id)}
+              isMe={isMe}
+              isHost={snapshot.hostId === player.id}
+              selected={isSelected}
+              disabled={disabled}
             onSelect={onSelect ? () => onSelect(player.id) : undefined}
             seatRef={(el) => {
               if (el) seatEls.current.set(player.id, el);
