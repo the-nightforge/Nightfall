@@ -398,6 +398,43 @@ export interface BotBrainState {
     action: NightActionKind;
     targetId: string | null;
   }>;
-  speechMemory: Array<{ sourceIds: string[]; round: number }>;
+  /**
+   * Lịch sử phát ngôn CÓ CẤU TRÚC, cửa sổ giới hạn.
+   *
+   * Phase 3 lưu đúng `{ sourceIds, round }`. Hai hệ quả: `QUESTION` và
+   * `WITHHOLD` không có bằng chứng nên được ghi thành danh sách rỗng - không
+   * phân biệt được với nhau, nên BOT lặp lại chúng vô hạn; và không có gì để
+   * đối chiếu khi muốn biết "câu này mình nói rồi chưa".
+   *
+   * Raw chat KHÔNG bao giờ vào đây. Chỉ vân tay và dữ liệu đã cấu trúc.
+   */
+  speechMemory: BotSpeechRecord[];
+  /** Bộ đếm tất định thay cho `Date.now`; nguồn của `BotSpeechRecord.seq`. */
+  speechSequence: number;
+  /** Message đã phản hồi rồi, để không đáp hai lần cùng một câu. Có trần. */
+  repliedMessageIds: string[];
   seenEventIds: string[];
+}
+
+/**
+ * Một lần BOT mở miệng.
+ *
+ * `seq` là thứ tự tất định trong ván, KHÔNG phải thời gian thật: một mốc thời
+ * gian ở đây sẽ làm replay lệch ngay lần chạy thứ hai.
+ */
+export interface BotSpeechRecord {
+  seq: number;
+  round: number;
+  kind: BotSpeechKind;
+  targetId: string | null;
+  replyToMessageId: string | null;
+  sourceIds: string[];
+  topic: BotSpeechTopic | null;
+  tone: BotSpeechTone;
+  /** Vân tay của văn bản ĐÃ PHÁT; `null` khi lõi chưa biết câu chữ. */
+  textFingerprint: string | null;
+  /** Vân tay của Ý ĐỊNH; luôn có, kể cả khi chưa render. */
+  semanticFingerprint: string;
+  /** Ba token mở đầu đã chuẩn hoá; `null` khi chưa render. */
+  opening: string | null;
 }

@@ -151,6 +151,8 @@ describe("bot seeded randomness and personality", () => {
       previousVotes: [],
       previousNightActions: [],
       speechMemory: [],
+      speechSequence: 0,
+      repliedMessageIds: [],
       seenEventIds: [],
     };
 

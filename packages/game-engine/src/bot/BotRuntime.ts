@@ -16,6 +16,7 @@ import {
   validateWeights,
   type BotWeights,
 } from "./config/weights";
+import { markReplied, recordSpeechIntention } from "./conversation/speech-memory";
 import { strategyFor } from "./roles/registry";
 import { decayAndPrune } from "./memory/memory-decay";
 import { createBotBrainState, remember } from "./memory/memory-store";
@@ -566,14 +567,21 @@ export class BotRuntime {
     }
   }
 
-  /** Ghi lại các source đã dùng để lần sau BOT không nói lại đúng luận điểm. */
-  recordSpeech(speech: BotSpeechIntention, round: number): void {
-    this.state.speechMemory.push({
-      sourceIds: speech.evidence.map((item) => item.sourceId),
-      round,
-    });
-    if (this.state.speechMemory.length > this.weights.limits.history) {
-      this.state.speechMemory.shift();
+  /**
+   * Ghi lại một lượt nói.
+   *
+   * `text` là tuỳ chọn: lõi chốt ý định, còn câu chữ do bảng mẫu hoặc nhà cung
+   * cấp sinh ra ở tầng trên. Khi chỗ gọi biết văn bản thật thì truyền vào, và
+   * bản ghi có thêm vân tay văn bản - thứ duy nhất phát hiện được hai câu khác
+   * ý định nhưng đọc lên y hệt nhau.
+   *
+   * `markReplied` chạy ở đây chứ không ở planner: một ý định được tính là "đã
+   * đáp" khi nó thật sự được PHÁT, không phải khi nó được nghĩ ra rồi bị bỏ.
+   */
+  recordSpeech(speech: BotSpeechIntention, round: number, text?: string): void {
+    recordSpeechIntention(this.state, speech, round, this.weights, text);
+    if (speech.replyToMessageId) {
+      markReplied(this.state, speech.replyToMessageId, this.weights);
     }
   }
 

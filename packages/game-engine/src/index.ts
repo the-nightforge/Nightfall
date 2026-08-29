@@ -24,6 +24,7 @@ export * from "./bot/BotRuntime";
 export * from "./bot/scenario";
 export * from "./bot/personality/personality";
 export * from "./bot/conversation/fingerprint";
+export * from "./bot/conversation/speech-memory";
 export * from "./bot/config/weights";
 export * from "./bot/config/presets";
 export * from "./bot/trace/trace";
