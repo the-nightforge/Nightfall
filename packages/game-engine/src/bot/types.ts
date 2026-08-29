@@ -236,6 +236,12 @@ export interface BotChatObservation {
 export interface BotDecisionContext {
   knowledge: BotKnowledgeView;
   visibleChat: BotChatObservation[];
+  /** Active event id currently affecting the game, if any - exposed for bot decision making */
+  activeEventId?: string | null;
+  /** Balance score 0..100 computed from lobby config and player count */
+  balanceScore?: number | null;
+  /** Pending LAST_STAND victim if any, carried across rounds */
+  pendingLastStand?: { playerId: string; dieRound: number } | null;
 }
 
 export interface BotBrainState {
