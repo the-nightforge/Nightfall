@@ -3,6 +3,11 @@ import { GameEngine } from "../../engine";
 import { detectCoalitions } from "../analysis/coalition";
 import { BotRuntime } from "../BotRuntime";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import {
+  speechSemanticFingerprint,
+  speechTextFingerprint,
+} from "../conversation/fingerprint";
+import { recentTextFingerprints } from "../conversation/speech-memory";
 import { renderSpeechTemplate } from "../conversation/templates";
 import { createSeededRng } from "../rng";
 import type { BotDecisionTrace, BotTraceSink } from "../trace/trace";
@@ -12,11 +17,13 @@ import {
   type GroundTruth,
   type InvariantViolation,
 } from "./invariants";
+import { assertSpeechScope } from "../types";
 import type {
   BotChatObservation,
   BotDecisionContext,
   BotEvidence,
   BotSpeechIntention,
+  BotVoteIntention,
   NightActionKind,
 } from "../types";
 
@@ -88,8 +95,18 @@ export type SelfPlayEvent =
       kind: "SPEECH";
       round: number;
       actorId: string;
+      /** ID của chính câu này trong chat, để đo chuỗi đối đáp. */
+      messageId: string;
       speech: BotSpeechIntention["kind"];
       targetId: string | null;
+      replyToMessageId: string | null;
+      /** 0 là tự mở lời; n là câu thứ n trong một chuỗi đối đáp. */
+      chainDepth: number;
+      tone: BotSpeechIntention["tone"];
+      /** Văn bản đã phát. Không đo được lặp thật nếu không có nó. */
+      text: string;
+      textFingerprint: string;
+      semanticFingerprint: string;
       evidenceSourceIds: string[];
     }
   | { kind: "NOMINATION"; round: number; accusedId: string | null }
@@ -272,6 +289,152 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   /** Chat công khai; mọi BOT còn sống đọc được ở lần `observe` kế tiếp. */
   const chat: BotChatObservation[] = [];
   let chatSequence = 0;
+
+  /**
+   * Kế toán hội thoại của một vòng.
+   *
+   * Ba con số này là toàn bộ thứ giữ cho một cuộc trò chuyện không biến thành
+   * hai con BOT đáp qua đáp lại tới hết pha. Chúng sống ở harness chứ không ở
+   * lõi vì chúng là luật của CĂN PHÒNG, không phải của một BOT: một BOT không
+   * biết và không cần biết cả phòng đã nói bao nhiêu câu.
+   */
+  /** Cấu hình có bật hội thoại Phase 4 hay không; v1/v2 là `false`. */
+  const conversational = weights.conversation.triggerFreshnessRounds > 0;
+  const chainDepthOf = new Map<string, number>();
+  const repliesTo = new Map<string, number>();
+  const spokenThisRound = new Map<string, number>();
+  const lastLineOf = new Map<string, string>();
+  /** Lá phiếu đã chốt ở lượt đầu; các lượt nói sau chỉ ĐỌC nó. */
+  const lastVote = new Map<string, BotVoteIntention>();
+  let conversationRound = -1;
+
+  const resetRoundBudget = (round: number): void => {
+    if (conversationRound === round) return;
+    conversationRound = round;
+    spokenThisRound.clear();
+  };
+
+  const hasBudget = (playerId: string): boolean =>
+    (spokenThisRound.get(playerId) ?? 0) < weights.conversation.messagesPerBotPerRound;
+
+  /**
+   * Phát một câu, hoặc từ chối nó vì đã chạm một trong các trần.
+   *
+   * Từ chối vẫn GHI vào trí nhớ của BOT. Nếu không, con BOT sẽ thấy đúng cái
+   * trigger đó ở lượt sau và cố đáp lại lần nữa, mãi mãi - trần của phòng sẽ
+   * biến thành một vòng lặp bận thay vì một giới hạn.
+   */
+  const emitSpeech = (
+    playerId: string,
+    speech: BotSpeechIntention,
+    sink: BotChatObservation[],
+  ): void => {
+    const round = engine.state.round;
+    resetRoundBudget(round);
+
+    const parentDepth =
+      speech.replyToMessageId === undefined
+        ? -1
+        : chainDepthOf.get(speech.replyToMessageId) ?? 0;
+    const depth = parentDepth + 1;
+    const replies =
+      speech.replyToMessageId === undefined
+        ? 0
+        : repliesTo.get(speech.replyToMessageId) ?? 0;
+
+    const blocked =
+      !hasBudget(playerId) ||
+      depth > weights.conversation.maxChainDepth ||
+      (speech.replyToMessageId !== undefined &&
+        replies >= weights.conversation.maxRepliesPerMessage);
+
+    if (blocked) {
+      runtimes.get(playerId)!.recordSpeech(speech, round);
+      return;
+    }
+
+    // Ranh giới của LỜI NÓI, kiểm ngay tại điểm phát.
+    //
+    // `checkKnowledge` chỉ soi state và knowledge; nó không nhìn thấy một ý
+    // định trỏ tới một message mà BOT chưa từng thấy. Mà đó chính là kiểu rò rỉ
+    // mà tầng hội thoại mới có thể tạo ra.
+    const outOfScope = assertSpeechScope(speech, {
+      players: engine.state.players,
+      chat,
+      seenSourceIds: runtimes.get(playerId)!.state.seenEventIds,
+    });
+    if (outOfScope.length > 0) {
+      auditor.report("SPEECH_SCOPE", {
+        round,
+        phase: engine.state.phase,
+        playerId,
+        expected: "mọi ID và nguồn bằng chứng trong lời nói đều nằm trong tầm nhìn đã lọc",
+        actual: outOfScope.join("; "),
+      });
+    }
+
+    chatSequence += 1;
+    const messageId = `chat:${round}:${chatSequence}`;
+    // Bảng mẫu phong phú CHỈ dùng khi cấu hình bật hội thoại.
+    //
+    // v1 và v2 là hai mốc đóng băng, và văn bản mà BOT phát ra là đầu vào của
+    // `chat-analysis`, tức nó đổi belief, đổi phiếu, đổi kết quả ván. Cho chúng
+    // dùng bảng mẫu mới sẽ làm trôi lệch chính những con số mà báo cáo Phase 3
+    // dựa vào - và làm nó lặng lẽ, vì không có gì trong bảng đó nói rằng câu
+    // chữ là một tham số của mô phỏng.
+    const text = conversational
+      ? renderIntentionText(speech, nameOf, {
+          seedTag: input.seed,
+          botId: playerId,
+          round,
+          seq: chatSequence,
+          avoidFingerprints: recentTextFingerprints(runtimes.get(playerId)!.state, 3),
+        })
+      : renderIntentionText(speech, nameOf);
+
+    // Chỉ áp cho cấu hình BẬT hội thoại.
+    //
+    // Đây là một bất biến về CHẤT LƯỢNG, không phải về an toàn. v1 và v2 lặp
+    // nguyên văn là chuyện đã biết - đó đúng là khuyết điểm mà Phase 4 sinh ra
+    // để sửa - nên bắt chúng phải đạt tiêu chuẩn mới chỉ tạo ra một batch "bẩn"
+    // mà không nói thêm điều gì. Các bất biến an toàn (`ROLE_LEAK`,
+    // `SPEECH_SCOPE`, ...) thì áp cho mọi cấu hình, không có ngoại lệ.
+    if (conversational && lastLineOf.get(playerId) === text) {
+      auditor.report("SPEECH_VERBATIM_REPEAT", {
+        round,
+        phase: engine.state.phase,
+        playerId,
+        expected: "không nói lại nguyên văn câu liền trước của chính mình",
+        actual: text,
+      });
+    }
+    lastLineOf.set(playerId, text);
+
+    runtimes.get(playerId)!.recordSpeech(speech, round, text);
+    chainDepthOf.set(messageId, depth);
+    spokenThisRound.set(playerId, (spokenThisRound.get(playerId) ?? 0) + 1);
+    if (speech.replyToMessageId !== undefined) {
+      repliesTo.set(speech.replyToMessageId, replies + 1);
+    }
+
+    log.push({
+      kind: "SPEECH",
+      round,
+      actorId: playerId,
+      messageId,
+      speech: speech.kind,
+      targetId: speech.targetId ?? null,
+      replyToMessageId: speech.replyToMessageId ?? null,
+      chainDepth: depth,
+      tone: speech.tone,
+      text,
+      textFingerprint: speechTextFingerprint(text),
+      semanticFingerprint: speechSemanticFingerprint(speech),
+      evidenceSourceIds: speech.evidence.map((item) => item.sourceId),
+    });
+
+    sink.push({ id: messageId, actorId: playerId, text, at: now });
+  };
 
   /**
    * Sự thật, chụp lại mỗi lần cần kiểm.
@@ -511,6 +674,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     enterPhase("VOTING", config.voteSeconds * 1_000);
     observeAll();
 
+    resetRoundBudget(engine.state.round);
     const spoken: BotChatObservation[] = [];
     for (const player of engine.alivePlayers()) {
       const runtime = runtimes.get(player.id)!;
@@ -520,8 +684,10 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       void before;
 
       castVote(player.id, vote);
+      lastVote.set(player.id, vote);
 
       if (!record.speech) continue;
+      if (!hasBudget(player.id)) continue;
 
       // Chụp nước đi TRƯỚC khi sinh lời nói, rồi so lại sau khi render.
       //
@@ -543,26 +709,50 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
         }
       }
       if (!speech) continue;
-      runtime.recordSpeech(speech, engine.state.round);
-      log.push({
-        kind: "SPEECH",
-        round: engine.state.round,
-        actorId: player.id,
-        speech: speech.kind,
-        targetId: speech.targetId ?? null,
-        evidenceSourceIds: speech.evidence.map((item) => item.sourceId),
-      });
-      chatSequence += 1;
-      spoken.push({
-        id: `chat:${engine.state.round}:${chatSequence}`,
-        actorId: player.id,
-        text: renderIntentionText(speech, nameOf),
-        at: now,
-      });
+      emitSpeech(player.id, speech, spoken);
     }
     // Đẩy vào chat chung SAU vòng lặp: trong một pha thảo luận thật, không ai
     // nghe được câu của người nói sau mình rồi mới quyết định.
     chat.push(...spoken);
+
+    // ---- CÁC LƯỢT HỘI THOẠI TIẾP THEO ----
+    //
+    // Lượt đầu ở trên là lượt "tự phát biểu": chưa ai nói gì trong vòng này nên
+    // không có gì để đáp. Những lượt sau mới là hội thoại thật - BOT đọc câu
+    // vừa rồi của người khác và quyết định có nói lại hay không.
+    //
+    // Lá phiếu KHÔNG được quyết lại ở đây. Nó đã chốt ở lượt đầu, và hỏi lại
+    // sẽ tiêu thêm số ngẫu nhiên của chính dòng RNG mà lượt đầu đã dùng, tức
+    // làm lệch mọi ván đã ghi lại. Đây cũng là điều đúng về mặt luật: lời nói
+    // không đổi được nước đi.
+    for (let turn = 1; record.speech && turn < weights.conversation.selfPlayTurnsPerRound; turn += 1) {
+      const later: BotChatObservation[] = [];
+      for (const player of engine.alivePlayers()) {
+        const ballot = lastVote.get(player.id);
+        if (!ballot) continue;
+        if (!hasBudget(player.id)) continue;
+
+        const runtime = runtimes.get(player.id)!;
+        const context = contextFor(player.id);
+        runtime.observe(context);
+
+        const sealed = JSON.stringify(ballot.choice);
+        const speech = runtime.decideSpeech(context, ballot);
+        if (!speech) continue;
+        if (JSON.stringify(ballot.choice) !== sealed) {
+          auditor.report("SPEECH_CHANGED_ACTION", {
+            round: engine.state.round,
+            phase: engine.state.phase,
+            playerId: player.id,
+            expected: `lá phiếu vẫn là ${sealed} sau khi sinh lời nói`,
+            actual: JSON.stringify(ballot.choice),
+          });
+        }
+        emitSpeech(player.id, speech, later);
+      }
+      if (later.length === 0) break;
+      chat.push(...later);
+    }
 
     // ---- LƯỢT CÂN NHẮC LẠI ----
     //

@@ -43,6 +43,35 @@ function vote(
   return { kind: "VOTE", round, voterId, targetId, changed: false, evidence: [], ...over };
 }
 
+let speechSeq = 0;
+
+/** Một lượt nói tối thiểu; mọi trường hội thoại để mặc định "tự mở lời". */
+export function speechEvent(
+  round: number,
+  actorId: string,
+  targetId: string | null,
+  over: Partial<Extract<SelfPlayEvent, { kind: "SPEECH" }>> = {},
+): SelfPlayEvent {
+  speechSeq += 1;
+  const text = over.text ?? `câu ${speechSeq}`;
+  return {
+    kind: "SPEECH",
+    round,
+    actorId,
+    messageId: `m${speechSeq}`,
+    speech: "ACCUSE",
+    targetId,
+    replyToMessageId: null,
+    chainDepth: 0,
+    tone: "FIRM",
+    text,
+    textFingerprint: `fp${speechSeq}`,
+    semanticFingerprint: `sem${speechSeq}`,
+    evidenceSourceIds: [],
+    ...over,
+  };
+}
+
 describe("mẫu số luôn hiện rõ", () => {
   it("mẫu số 0 cho ra null, không phải 0 và không phải NaN", () => {
     // "Chưa đo được" và "bằng không" là hai kết luận khác hẳn nhau. Một `0`
@@ -145,24 +174,7 @@ describe("từng chỉ số tính đúng trên ván dựng tay", () => {
   it("Sói tự phá: công khai tố đồng bọn", () => {
     const { overall } = collectMetrics([
       game({
-        events: [
-          {
-            kind: "SPEECH",
-            round: 1,
-            actorId: "w1",
-            speech: "ACCUSE",
-            targetId: "w2",
-            evidenceSourceIds: [],
-          },
-          {
-            kind: "SPEECH",
-            round: 1,
-            actorId: "w2",
-            speech: "ACCUSE",
-            targetId: "v1",
-            evidenceSourceIds: [],
-          },
-        ],
+        events: [speechEvent(1, "w1", "w2"), speechEvent(1, "w2", "v1")],
       }),
     ]);
     expect(overall.wolfSelfSabotage).toEqual({ value: 0.5, numerator: 1, denominator: 2 });
@@ -225,14 +237,8 @@ describe("từng chỉ số tính đúng trên ván dựng tay", () => {
   });
 
   it("lặp lời thoại: nói lại đúng kiểu và mục tiêu của lần trước", () => {
-    const speech = (round: number, actorId: string, targetId: string): SelfPlayEvent => ({
-      kind: "SPEECH",
-      round,
-      actorId,
-      speech: "ACCUSE",
-      targetId,
-      evidenceSourceIds: [],
-    });
+    const speech = (round: number, actorId: string, targetId: string): SelfPlayEvent =>
+      speechEvent(round, actorId, targetId);
     const { overall } = collectMetrics([
       game({
         roles: { v1: "VILLAGER", v2: "VILLAGER" } as Record<string, Role>,

@@ -34,6 +34,16 @@ export type InvariantId =
   | "FUTURE_EVIDENCE"
   /** Render lời thoại làm đổi nước đi. */
   | "SPEECH_CHANGED_ACTION"
+  /**
+   * Ý định phát ngôn nhắc tới một ID hoặc một nguồn bằng chứng ngoài tầm nhìn.
+   *
+   * Là phiên bản dành cho lời nói của `ROLE_LEAK`: một câu trả lời tới một
+   * message mà BOT chưa từng thấy là bằng chứng rằng nó đọc được kênh không
+   * được phép, kể cả khi câu đó không nêu vai của ai.
+   */
+  | "SPEECH_SCOPE"
+  /** Một BOT nói lại NGUYÊN VĂN câu liền trước của chính nó. */
+  | "SPEECH_VERBATIM_REPEAT"
   /** NaN, Infinity, hoặc xác suất ngoài `[0, 1]`. */
   | "NUMERIC_SANITY"
   /** Cùng seed cho ra khác nhau. */
