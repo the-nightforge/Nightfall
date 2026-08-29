@@ -6,6 +6,8 @@ import {
   SERVER_EVENTS,
   socketAuthSchema,
   chatSendPayload,
+  voiceTokenPayload,
+  voiceReadyPayload,
   createRoomPayload,
   joinRoomPayload,
   kickPayload,
@@ -35,6 +37,7 @@ import {
 } from "./game/machine";
 import { getPlayerRoom, updateSessionRoom } from "./redis";
 import { reconnectPlayer } from "./rooms/reconnect";
+import { issueVoiceToken, syncVoiceForPlayer } from "./voice/service";
 
 // ---- Rate limit đơn giản (sliding window trong bộ nhớ) ----
 const actionLog = new Map<string, number[]>();
@@ -252,6 +255,42 @@ export function setupSocket(io: SocketServer): void {
         throw new RoomError("Bạn gửi tin nhắn quá nhanh, hãy chậm lại");
       }
       roomService.chat(playerId, text);
+    });
+
+    handler(CLIENT_EVENTS.VOICE_TOKEN, async (payload) => {
+      voiceTokenPayload.parse(payload ?? {});
+      if (!allowAction(`voice:${playerId}`, 5, 10_000)) {
+        throw new RoomError("Thao tác quá nhanh");
+      }
+      const roomCode = getRoomSyncByPlayer(playerId);
+      if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
+      const room = getRoom(roomCode);
+      if (!room) throw new RoomError("Bạn chưa vào phòng nào");
+
+      const result = await issueVoiceToken(room, playerId);
+      if (!result.ok) throw new RoomError(result.error);
+      socket.emit(SERVER_EVENTS.VOICE_TOKEN, {
+        url: result.url,
+        token: result.token,
+        roomName: result.roomName,
+      });
+    });
+
+    /**
+     * Client báo đã vào room LiveKit xong.
+     *
+     * Bắt buộc phải có: token không mang quyền nói, nên nếu chỉ đồng bộ lúc
+     * chuyển pha thì người bật mic giữa pha sẽ ngồi câm tới lần chuyển pha kế
+     * tiếp - có thể là ba phút.
+     */
+    handler(CLIENT_EVENTS.VOICE_READY, async (payload) => {
+      voiceReadyPayload.parse(payload ?? {});
+      const roomCode = getRoomSyncByPlayer(playerId);
+      if (!roomCode) return;
+      const room = getRoom(roomCode);
+      // Client nói dối cũng vô hại: quyền vẫn do server tự tính từ pha và trạng
+      // thái sống/chết, việc này chỉ nói "tôi đã ở trong room, hãy tính cho tôi".
+      if (room) await syncVoiceForPlayer(room, playerId);
     });
 
     socket.on("disconnect", () => {

@@ -1,9 +1,11 @@
 import { voiceCanPublish, voiceRoomName } from "@masoi/shared";
-import type { Phase } from "@masoi/shared";
-import { config } from "../config";
+import type { Phase, VoiceView } from "@masoi/shared";
 import {
   VoiceNotFoundError,
+  browserUrl,
+  mintJoinToken,
   participantPermission,
+  type VoiceConfig,
   type VoiceParticipantPermission,
 } from "./livekit";
 import type { Room } from "../rooms/store";
@@ -27,10 +29,18 @@ export interface VoiceAdmin {
 }
 
 let admin: VoiceAdmin | null = null;
+let voiceConfig: VoiceConfig | null = null;
 
-/** Cùng nếp với `setIo` trong rooms/broadcast.ts. */
-export function setVoiceAdmin(next: VoiceAdmin | null): void {
+/**
+ * Gắn adapter và cấu hình của nó. Cùng nếp với `setIo` trong rooms/broadcast.ts.
+ *
+ * Hai thứ đi cùng nhau có chủ ý: "voice có bật không" chỉ có MỘT câu trả lời là
+ * "đã gắn adapter hay chưa". Đọc lại `config.voice` ở khắp nơi sẽ tạo nguồn sự
+ * thật thứ hai, và test thì không tiêm được.
+ */
+export function setVoiceAdmin(next: VoiceAdmin | null, cfg: VoiceConfig | null = null): void {
   admin = next;
+  voiceConfig = next ? cfg : null;
 }
 
 /**
@@ -68,8 +78,7 @@ export function resetVoiceState(): void {
 }
 
 export function voiceRoomNameFor(code: string): string {
-  const env = config.voice.enabled ? config.voice.env : "dev";
-  return voiceRoomName(env, code);
+  return voiceRoomName(voiceConfig?.env ?? "dev", code);
 }
 
 /**
@@ -189,6 +198,60 @@ export function syncVoicePermissions(room: Room): Promise<void> {
 export function syncVoiceForPlayer(room: Room, playerId: string): Promise<void> {
   markVoiceJoined(room.code, playerId);
   return syncVoicePermissions(room);
+}
+
+export type VoiceTokenResult =
+  | { ok: true; url: string; token: string; roomName: string }
+  | { ok: false; error: string };
+
+/**
+ * Cấp token join cho một người chơi.
+ *
+ * Trả kết quả kiểu ok/error thay vì ném lỗi, cùng nếp với `resolveChat`, để
+ * không phải import ngược `RoomError` từ `rooms/service` (chính file đó đã
+ * import xuống đây).
+ *
+ * Token KHÔNG mang quyền nói - xem `joinTokenGrant`. Người chơi vào phòng câm,
+ * rồi `voice:ready` mới kích hoạt việc cấp quyền theo pha hiện tại. Nhờ vậy dán
+ * lại một token cũ cũng không lấy lại được quyền của lúc còn sống.
+ */
+export async function issueVoiceToken(room: Room, playerId: string): Promise<VoiceTokenResult> {
+  if (!admin || !voiceConfig) return { ok: false, error: "Máy chủ chưa bật voice chat" };
+  if (room.config.voice !== true) return { ok: false, error: "Phòng này chưa bật voice chat" };
+
+  const member = room.members.find((m) => m.playerId === playerId);
+  if (!member) return { ok: false, error: "Bạn không ở trong phòng này" };
+  if (member.isBot) return { ok: false, error: "Bot không dùng voice chat" };
+
+  const roomName = voiceRoomNameFor(room.code);
+
+  // Tạo room tường minh trước khi ai đó join. Không phải tối ưu hoá: LiveKit tự
+  // tạo room khi người đầu tiên vào, và đường tự tạo đó không áp `emptyTimeout`
+  // mình muốn, nên room rỗng sẽ sống lâu hơn dự tính.
+  try {
+    await admin.createRoom(roomName);
+  } catch (err) {
+    console.error(`[voice] không tạo được room ${roomName}:`, err);
+    return { ok: false, error: "Không kết nối được máy chủ thoại, hãy thử lại" };
+  }
+
+  try {
+    const token = await mintJoinToken(voiceConfig, roomName, playerId, member.name);
+    return { ok: true, url: browserUrl(voiceConfig.url), token, roomName };
+  } catch (err) {
+    console.error(`[voice] không ký được token cho ${playerId}:`, err);
+    return { ok: false, error: "Không cấp được quyền thoại, hãy thử lại" };
+  }
+}
+
+/** Trạng thái voice gắn vào snapshot của riêng một người xem. */
+export function voiceViewFor(room: Room, viewerId: string): VoiceView {
+  const enabled = voiceEnabledFor(room);
+  return {
+    enabled,
+    canPublish: enabled && desiredPermission(room, viewerId),
+    roomName: voiceRoomNameFor(room.code),
+  };
 }
 
 /** Đá một người khỏi room voice: rời phòng, bị đuổi. */

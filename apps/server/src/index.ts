@@ -38,7 +38,7 @@ async function main(): Promise<void> {
   // Adapter chỉ được gắn khi cấu hình LiveKit hợp lệ. `service.ts` lấy chính
   // việc "đã gắn hay chưa" làm câu trả lời cho "voice có bật không", nên không
   // có nguồn sự thật thứ hai.
-  if (config.voice.enabled) setVoiceAdmin(createLiveKitAdmin(config.voice));
+  if (config.voice.enabled) setVoiceAdmin(createLiveKitAdmin(config.voice), config.voice);
   console.log(`[server] Voice chat: ${config.voice.enabled ? `bật (${config.voice.env})` : "tắt"}`);
 
   const redisOk = await pingRedis();

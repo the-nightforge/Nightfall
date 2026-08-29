@@ -2,6 +2,7 @@ import type { ChatMessage, RoomSnapshot } from "@masoi/shared";
 import { generateWarnings } from "@masoi/game-engine";
 import { getDiscussionSkipView } from "../game/discussion-skip";
 import type { Room } from "./store";
+import { voiceViewFor } from "../voice/service";
 
 function isHunterReactionParticipant(room: Room, playerId: string): boolean {
   return room.engine?.state.hunterReaction?.hunterId === playerId;
@@ -156,6 +157,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
     round: gameView?.round ?? 0,
     activeEvent: gameView?.activeEvent ?? null,
     balanceWarning,
+    voice: voiceViewFor(room, viewerId),
     apprenticeAwakened: gameView?.nightInfo?.apprenticeAwakened ?? room.engine?.state.apprenticeAwakened,
     phaseEndsAt: gameView ? gameView.phaseEndsAt : null,
     serverNow: Date.now(),

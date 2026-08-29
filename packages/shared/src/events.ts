@@ -18,13 +18,30 @@ export const CLIENT_EVENTS = {
   GAME_HUNTER_SHOT: "game:hunter-shot",
   GAME_SKIP_DISCUSSION: "game:skip-discussion",
   CHAT_SEND: "chat:send",
+  VOICE_TOKEN: "voice:token",
+  VOICE_READY: "voice:ready",
 } as const;
 
 export const SERVER_EVENTS = {
   SNAPSHOT: "room:snapshot",
   CHAT_NEW: "chat:new",
+  /**
+   * Trả token join LiveKit.
+   *
+   * Dùng server event chứ không dùng ack callback: helper `handler` trong
+   * ws.ts bọc `socket.on(event, (payload) => ...)` với ĐÚNG MỘT tham số, nên
+   * ack của Socket.IO bị vứt đi. Đổi helper sẽ đụng cả 15 handler đang chạy.
+   */
+  VOICE_TOKEN: "voice:token",
   ERROR: "error",
 } as const;
+
+export interface VoiceTokenPayload {
+  /** Dạng wss:// cho trình duyệt. */
+  url: string;
+  token: string;
+  roomName: string;
+}
 
 export interface SocketError {
   message: string;

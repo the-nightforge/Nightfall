@@ -301,6 +301,27 @@ export interface RoomSnapshot {
   log: string[];
   /** Cảnh báo cân bằng lobby; null khi chưa tính hoặc cân bằng. */
   balanceWarning?: BalanceWarningView | null;
+  /**
+   * Trạng thái voice cho riêng người nhận snapshot này.
+   *
+   * Optional vì web và server deploy rời nhau: client mới chạy với server cũ
+   * phải không vỡ.
+   */
+  voice?: VoiceView;
+}
+
+export interface VoiceView {
+  /** Server có cấu hình LiveKit VÀ phòng đã bật voice. */
+  enabled: boolean;
+  /**
+   * Người này có được nói ở pha hiện tại không.
+   *
+   * Dùng cho ĐÚNG HAI việc: tắt mic tức thì khi bị thu quyền, và vẽ UI. KHÔNG
+   * bao giờ dùng để mở mic - token không mang sẵn quyền nói, nên việc mở mic
+   * phải đợi sự kiện đổi quyền từ chính LiveKit.
+   */
+  canPublish: boolean;
+  roomName: string;
 }
 
 export interface ChatMessage {
