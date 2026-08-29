@@ -11,6 +11,13 @@ const CHANNEL_LABEL: Record<string, string> = {
   dead: "Người chết",
 };
 
+const CHANNEL_ICON: Record<string, string> = {
+  lobby: "🏠",
+  day: "☀️",
+  wolves: "🐺",
+  dead: "💀",
+};
+
 /**
  * Nền bong bóng theo kênh.
  *
@@ -73,13 +80,15 @@ export function ChatBox({ messages, onSend, placeholder }: Props) {
                   >
                     {message.playerName}
                   </span>
-                   <span
-                      className={`text-[9px] uppercase tracking-wide ${
-                        message.channel === "wolves" ? "text-blood-400/80" : "text-mist/60"
-                      }`}
-                    >
-                      {CHANNEL_LABEL[message.channel] ?? message.channel}
-                    </span>
+                  <span
+                    className={`text-[11px] leading-none ${
+                      message.channel === "wolves" ? "text-blood-400/80" : "text-mist/60"
+                    }`}
+                    title={CHANNEL_LABEL[message.channel] ?? message.channel}
+                    aria-label={CHANNEL_LABEL[message.channel] ?? message.channel}
+                  >
+                    {CHANNEL_ICON[message.channel] ?? "💬"}
+                  </span>
                 </div>
                 {/* break-words: một chuỗi 300 ký tự không dấu cách sẽ đẩy toang cột phụ. */}
                 <p className="break-words text-sm text-mist">{message.text}</p>

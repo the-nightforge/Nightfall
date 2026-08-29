@@ -76,16 +76,16 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                     {player.name}
                   </span>
                   <span className="flex items-center gap-1">
-                    {snapshot.hostId === player.id && (
-                      <span className="text-[9px] font-bold uppercase tracking-wide text-amber-300/90">
-                        Chủ phòng
-                      </span>
-                    )}
-                    {player.isBot && (
-                      <span className="text-[9px] font-bold uppercase tracking-wide text-mist/60">
-                        Bot
-                      </span>
-                    )}
+                  {snapshot.hostId === player.id && (
+                    <span className="text-[11px] leading-none" title="Chủ phòng" aria-label="Chủ phòng">
+                      👑
+                    </span>
+                  )}
+                  {player.isBot && (
+                    <span className="text-[11px] leading-none" title="Bot" aria-label="Bot">
+                      🤖
+                    </span>
+                  )}
                   {player.role && (
                     <span
                       className={`truncate rounded px-1 text-[9px] font-semibold ${
@@ -159,13 +159,21 @@ export function RosterPanel({ snapshot, lobby }: Props) {
 
 function LobbyStatus({ ready, offline }: { ready: boolean; offline: boolean }) {
   if (offline) {
-    return <span className="shrink-0 text-[10px] font-semibold text-blood-400">Mất kết nối</span>;
+    return (
+      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blood-600/20 text-blood-400" aria-label="Mất kết nối">
+        ✕
+      </span>
+    );
   }
   return (
     <span
-      className={`shrink-0 text-[10px] font-semibold ${ready ? "text-emerald-300" : "text-mist/60"}`}
+      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+        ready ? "bg-emerald-600 text-white" : "bg-white/10 text-mist/60 ring-1 ring-white/10"
+      }`}
+      aria-label={ready ? "Sẵn sàng" : "Chưa sẵn sàng"}
+      title={ready ? "Sẵn sàng" : "Chưa sẵn sàng"}
     >
-      {ready ? "Sẵn sàng" : "Chưa"}
+      {ready ? "✓" : "○"}
     </span>
   );
 }

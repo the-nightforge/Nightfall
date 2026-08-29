@@ -262,7 +262,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
               disabled={!selected || acted}
               onClick={() => selected && onAction("SEE", selected)}
             >
-              Soi người này
+              🔮 Soi người này
             </button>
           </>
         )}
@@ -321,7 +321,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
                 }
               }}
             >
-              Kiểm tra 2 người này
+              🔍 Kiểm tra 2 người này
             </button>
           </>
         )}
@@ -351,7 +351,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
               disabled={!selected || acted || (night?.guardianAngelCharges ?? 2) <= 0}
               onClick={() => selected && onAction("GUARDIAN_PROTECT", selected)}
             >
-              {(night?.guardianAngelCharges ?? 2) <= 0 ? "Đã hết lượt bảo vệ" : "Dùng khiên hộ mệnh"}
+              🛡️ {(night?.guardianAngelCharges ?? 2) <= 0 ? "Đã hết lượt bảo vệ" : "Dùng khiên hộ mệnh"}
             </button>
           </>
         )}
@@ -387,7 +387,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
                   disabled={!selected || night?.priestHolyWaterUsed}
                   onClick={() => selected && onAction("HOLY_WATER", selected)}
                 >
-                  {night?.priestHolyWaterUsed ? "Đã dùng Nước thánh" : "Ném Nước thánh vào mục tiêu"}
+                  💧 {night?.priestHolyWaterUsed ? "Đã dùng Nước thánh" : "Ném Nước thánh vào mục tiêu"}
                 </button>
                 <button
                   className="btn-secondary mt-2 w-full"
@@ -422,7 +422,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
               disabled={!selected || acted}
               onClick={() => selected && onAction("GUARD", selected)}
             >
-              Bảo vệ người này
+              🛡️ Bảo vệ người này
             </button>
           </>
         )}
