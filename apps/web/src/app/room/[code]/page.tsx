@@ -12,6 +12,7 @@ import { Backdrop } from "@/components/Backdrop";
 import { PhaseBanner } from "@/components/PhaseBanner";
 import { RosterPanel } from "@/components/RosterPanel";
 import { ChatBox } from "@/components/ChatBox";
+import { RightMetaPanel } from "@/components/RightMetaPanel";
 import { RoleRevealView } from "@/components/RoleViews";
 import { NightPanel } from "@/components/NightPanel";
 import { DayView, EliminationView } from "@/components/DayViews";
@@ -125,8 +126,7 @@ export default function RoomPage() {
 
   return (
     <>
-      {/* Phòng chờ chưa có snapshot thì vẫn là buổi chiều, không nhảy thẳng vào đêm. */}
-      <Backdrop mood={snapshot ? moodFor(snapshot.phase) : "dusk"} />
+      <Backdrop mood={snapshot ? moodFor(snapshot.phase) : "dusk"} event={snapshot?.activeEvent ?? null} />
       <main className="mx-auto w-full max-w-lg px-3 py-4 lg:max-w-[1600px]">
         <header className="flex items-center justify-between">
           <button className="text-sm text-mist/60 hover:text-white" onClick={leaveRoom}>
@@ -210,18 +210,15 @@ export default function RoomPage() {
             )}
           </div>
 
-          {/*
-            * Chat dính theo màn hình và cao hết khung nhìn, nên nó lấy được toàn
-            * bộ chiều cao thừa thay vì kẹt ở một con số cố định.
-            * Dùng dvh chứ không vh: bàn phím ảo trên điện thoại làm vh sai hẳn.
-            */}
-          <div className="order-3 h-72 min-h-0 lg:order-none lg:sticky lg:top-4 lg:h-[calc(100dvh-2rem)]">
-            {/* Chat hiển thị mọi lúc; server tự quyết định kênh & quyền xem */}
-            <ChatBox
-              messages={room.messages}
-              onSend={(text) => room.emit("chat:send", { text })}
-              placeholder={chatPlaceholder}
-            />
+          <div className="order-3 flex h-[38dvh] min-h-0 flex-col gap-3 lg:order-none lg:sticky lg:top-4 lg:flex lg:h-[calc(100dvh-2rem)] lg:flex-col">
+            <RightMetaPanel snapshot={snapshot} />
+            <div className="min-h-0 flex-1 lg:max-h-[520px] lg:min-h-[320px]">
+              <ChatBox
+                messages={room.messages}
+                onSend={(text) => room.emit("chat:send", { text })}
+                placeholder={chatPlaceholder}
+              />
+            </div>
           </div>
         </div>
       </main>

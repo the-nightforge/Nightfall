@@ -50,15 +50,20 @@ export function BalanceMeter({ score }: Props) {
         <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-white/30" aria-hidden="true" />
         {/* Needle */}
         <div
-          className="absolute top-0 h-full w-0.5 -translate-x-1/2 bg-white shadow-[0_0_6px_rgba(255,255,255,0.9)]"
+          className="absolute top-0 h-full w-0.5 -translate-x-1/2 bg-white shadow-[0_0_6px_rgba(255,255,255,0.9)] motion-reduce:transition-none"
           style={{ left: needleLeft }}
           data-testid="balance-needle"
-          aria-label={`Score ${clamped}`}
+          role="slider"
+          tabIndex={0}
+          aria-valuenow={clamped}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`Cân bằng ${label} ${clamped} trên 100`}
         >
           <span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-white" aria-hidden="true" />
         </div>
       </div>
-      <div className="mt-1 flex justify-between text-[10px] text-mist/40">
+      <div className="mt-1 flex justify-between text-[10px] text-mist/60">
         <span>0 Sói mạnh</span>
         <span>50</span>
         <span>Dân mạnh 100</span>

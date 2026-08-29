@@ -210,6 +210,10 @@ describe("Thứ tự xử lý hành động ban đêm", () => {
     // rơi trúng con Sói thứ hai thì engine từ chối bằng "Không thể cắn đồng
     // bọn" - test đỏ chừng 5% số lần chạy, vì một lý do không liên quan gì tới
     // điều nó muốn khẳng định.
+    //
+    // `8d9f997` sửa cùng lỗi này bằng cách liệt kê `WEREWOLF`/`WOLF_CUB`. Bản
+    // hợp nhất dùng `roleTeam` thay cho danh sách: đó là phép kiểm phe chuẩn
+    // của codebase, và nó không im lặng hỏng lại khi có thêm một vai phe Sói.
     const victim = e.state.players.find(
       (p) => p.id !== guard.id && roleTeam(p.role) !== "wolves",
     )!;

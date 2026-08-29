@@ -80,7 +80,9 @@ export function PlayerSeat({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.4, opacity: 0, transition: { duration: 0.12 } }}
             transition={{ type: "spring", stiffness: 600, damping: 22 }}
-            className="absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-blood-600 px-1 text-[11px] font-bold text-white shadow shadow-black/50"
+            className="absolute right-0 top-0 grid h-5 min-w-[20px] translate-x-1/3 -translate-y-1/3 place-items-center rounded-full bg-blood-600 px-1 text-[11px] font-bold text-white shadow shadow-black/50 motion-reduce:transition-none"
+            aria-label={`${votes} phiếu`}
+            role="status"
           >
             {votes}
           </m.span>
@@ -117,7 +119,7 @@ export function PlayerSeat({
 
       <span
         className={`w-full truncate text-center text-[11px] font-semibold leading-tight ${
-          dead ? "text-mist/40 line-through" : "text-white"
+          dead ? "text-mist/60 line-through" : "text-white"
         }`}
       >
         {player.name}

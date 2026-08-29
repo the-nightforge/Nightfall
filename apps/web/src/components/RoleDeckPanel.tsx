@@ -276,7 +276,9 @@ function RoleCard({
       type="button"
       disabled={locked}
       onClick={onToggle}
-      className={`flex flex-col items-center rounded-xl border px-3 py-3 text-center transition
+      title={meta.description}
+      aria-label={`${meta.name}: ${meta.description}`}
+      className={`group flex flex-col items-center rounded-xl border px-3 py-3 text-center transition hover:scale-[1.02] active:scale-[0.98]
         ${
           enabled
             ? wolf
@@ -289,7 +291,7 @@ function RoleCard({
       <svg
         viewBox="0 0 512 512"
         aria-hidden="true"
-        className={`h-9 w-9 ${
+        className={`h-9 w-9 transition-transform group-hover:scale-110 ${
           enabled ? (wolf ? "fill-blood-400" : "fill-emerald-300") : "fill-mist/40"
         }`}
       >
@@ -304,19 +306,11 @@ function RoleCard({
         {meta.name}
       </span>
 
-      {/* Mô tả luôn hiện: người mới cần biết vai đó làm gì trước khi vào ván. */}
-      <span className="mt-1 line-clamp-3 text-[11px] leading-snug text-mist/60">
-        {meta.description}
-      </span>
-
-      <span className="mt-2 text-[10px] font-semibold text-mist/40">
-        {count > 0
-          ? `${count} người`
-          : // Dân Làng không bao giờ bị tắt, họ chỉ lấp phần còn lại - phòng chờ
-            // chưa đủ người thì con số đó là 0, và "không dùng" sẽ nói sai.
-            role === "VILLAGER"
-            ? "lấp chỗ còn lại"
-            : "không dùng"}
+      <span className="mt-1 flex items-center gap-1 text-[10px] font-bold">
+        <span className={`h-1.5 w-1.5 rounded-full ${enabled ? (wolf ? "bg-blood-500" : "bg-emerald-500") : "bg-mist/30"}`} aria-hidden="true" />
+        <span className={enabled ? "text-white" : "text-mist/40"}>
+          {count > 0 ? `×${count}` : role === "VILLAGER" ? "lấp chỗ" : "—"}
+        </span>
       </span>
     </button>
   );

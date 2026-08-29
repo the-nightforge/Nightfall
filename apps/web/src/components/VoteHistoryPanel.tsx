@@ -45,7 +45,7 @@ export function VoteHistoryPanel({ recap, players }: Props) {
                   <Avatar avatar={avatars[m.voterId]} tint={tintFor(m.voterId)} alive className="h-6 w-6 shrink-0" />
                   <span className="truncate text-xs font-semibold text-white">{voter?.name ?? "?"}</span>
                 </span>
-                <span className="shrink-0 text-mist/40">
+                <span className="shrink-0 text-mist/60" aria-hidden="true">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <path d="M5 12h13M13 6l6 6-6 6" />
                   </svg>

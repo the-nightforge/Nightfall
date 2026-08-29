@@ -49,9 +49,13 @@ export function EventBanner({ event }: Props) {
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 text-xl">
+            <m.span
+              animate={event.power >= 4 ? { scale: [1, 1.1, 1], rotate: [0, -3, 3, 0] } : undefined}
+              transition={event.power >= 4 ? { duration: 0.6, ease: "easeInOut", repeat: 1 } : undefined}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 text-xl motion-reduce:animate-none"
+            >
               {icon}
-            </span>
+            </m.span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">
