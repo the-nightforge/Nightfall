@@ -17,7 +17,6 @@ export function VoteHistoryPanel({ recap, players }: Props) {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[10px] uppercase tracking-[0.25em] text-mist/50">Lịch sử bỏ phiếu</p>
-          <h3 className="font-display text-base font-bold text-white">Ai → Ai</h3>
         </div>
         <span className="rounded-full bg-night-800 px-2 py-0.5 text-[10px] text-mist/60">
           Vòng {recap.round}
