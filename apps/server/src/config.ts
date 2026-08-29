@@ -35,8 +35,45 @@ export function resolveBotAiMaxCallsPerGame(env: NodeJS.ProcessEnv): number {
   return value;
 }
 
+export type VoiceConfigResult =
+  | { enabled: false }
+  | { enabled: true; url: string; apiKey: string; apiSecret: string; env: string };
+
+/**
+ * Cấu hình LiveKit. Thiếu HẾT thì voice tắt và server chạy y như cũ; thiếu MỘT
+ * NỬA thì ném lỗi ngay lúc khởi động.
+ *
+ * Cố ý đi ngược thói quen thoái lui im lặng ở trên: comment về
+ * BOT_AI_MAX_CALLS_PER_GAME đã kể vì sao im lặng nuốt cấu hình hỏng là cái bẫy
+ * - tính năng tắt ngấm ngầm, không log, không báo lỗi. Người đặt hai trong ba
+ * biến rõ ràng là ĐANG MUỐN bật voice, nên im lặng bỏ qua là cách tệ nhất.
+ *
+ * Chuỗi rỗng tính là hỏng chứ không phải thiếu, cùng lý do với resolvePort.
+ */
+export function resolveVoiceConfig(env: NodeJS.ProcessEnv): VoiceConfigResult {
+  const url = env.LIVEKIT_URL?.trim();
+  const apiKey = env.LIVEKIT_API_KEY?.trim();
+  const apiSecret = env.LIVEKIT_API_SECRET?.trim();
+
+  // Rỗng tính như chưa đặt, KHÔNG tính là hỏng một nửa: `.env.example` khai báo
+  // sẵn ba khoá với giá trị rỗng, nên copy template về mà nổ là hỏng đường vào
+  // của người mới. "Hỏng một nửa" là khi có giá trị thật ở một số khoá.
+  const filled = [url, apiKey, apiSecret].filter((v) => v).length;
+  if (filled === 0) return { enabled: false };
+
+  if (!url || !apiKey || !apiSecret) {
+    throw new Error(
+      "Cấu hình LiveKit thiếu một nửa: cần đủ LIVEKIT_URL, LIVEKIT_API_KEY và " +
+        "LIVEKIT_API_SECRET. Bỏ trống cả ba để tắt hẳn voice chat.",
+    );
+  }
+
+  return { enabled: true, url, apiKey, apiSecret, env: env.LIVEKIT_ENV || "dev" };
+}
+
 export const config = {
   port: resolvePort(process.env),
+  voice: resolveVoiceConfig(process.env),
   redisUrl: process.env.REDIS_URL ?? "redis://127.0.0.1:6380",
   nodeEnv: process.env.NODE_ENV ?? "development",
   corsOrigin: process.env.CORS_ORIGIN ?? "*",
