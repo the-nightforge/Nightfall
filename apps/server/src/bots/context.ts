@@ -1,4 +1,5 @@
 import type { BotDecisionContext } from "@masoi/game-engine";
+import { generateWarnings } from "@masoi/game-engine/src/balance/analyzer";
 import { visibleChatLog } from "../rooms/snapshot";
 import type { Room } from "../rooms/store";
 
@@ -13,6 +14,8 @@ import type { Room } from "../rooms/store";
 export function buildBotDecisionContext(room: Room, botId: string): BotDecisionContext {
   if (!room.engine) throw new Error("Chưa có trận đấu");
 
+  const balance = generateWarnings(room.config, room.members.length);
+
   return {
     knowledge: room.engine.botKnowledgeFor(botId),
     visibleChat: visibleChatLog(room, botId).map((message) => ({
@@ -21,5 +24,8 @@ export function buildBotDecisionContext(room: Room, botId: string): BotDecisionC
       text: message.text,
       at: message.at,
     })),
+    activeEventId: room.engine.state.activeEvent?.id ?? null,
+    balanceScore: balance.score,
+    pendingLastStand: room.engine.state.pendingLastStandVictim ?? null,
   };
 }

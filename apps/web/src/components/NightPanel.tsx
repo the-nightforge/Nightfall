@@ -175,7 +175,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
                     <PlayerGrid
                       snapshot={snapshot}
                       selectable={true}
-                      selectedId={selected}
+                      selectedIds={[selected, wolfSecondary].filter((v): v is string => !!v)}
                       onSelect={(id) => {
                         if (selected === id) setSelected(null);
                         else if (!selected) setSelected(id);
@@ -307,9 +307,8 @@ export function NightPanel({ snapshot, onAction }: Props) {
             <PlayerGrid
               snapshot={snapshot}
               selectable={!acted}
-              selectedId={detectiveTarget1 === selected ? detectiveTarget1 : detectiveTarget2}
+              selectedIds={[detectiveTarget1, detectiveTarget2].filter((v): v is string => !!v)}
               onSelect={(id) => {
-                setSelected(id);
                 toggleDetectiveTarget(id);
               }}
             />
@@ -376,16 +375,29 @@ export function NightPanel({ snapshot, onAction }: Props) {
                 </p>
               </div>
             )}
-            {aliveOthers({
-              allowSelf: false,
-            })}
-            <button
-              className="btn-primary mt-3 w-full"
-              disabled={!selected || acted || night?.priestHolyWaterUsed}
-              onClick={() => selected && onAction("HOLY_WATER", selected)}
-            >
-              {night?.priestHolyWaterUsed ? "Đã dùng Nước thánh" : "Ném Nước thánh vào mục tiêu"}
-            </button>
+            {acted ? (
+              <p className="rounded-lg bg-night-800 p-3 text-center text-sm text-mist/50">Bạn đã hành động đêm nay.</p>
+            ) : (
+              <>
+                {aliveOthers({
+                  allowSelf: false,
+                })}
+                <button
+                  className="btn-primary mt-3 w-full"
+                  disabled={!selected || night?.priestHolyWaterUsed}
+                  onClick={() => selected && onAction("HOLY_WATER", selected)}
+                >
+                  {night?.priestHolyWaterUsed ? "Đã dùng Nước thánh" : "Ném Nước thánh vào mục tiêu"}
+                </button>
+                <button
+                  className="btn-secondary mt-2 w-full"
+                  disabled={!!night?.priestHolyWaterUsed}
+                  onClick={() => onAction("SKIP", null)}
+                >
+                  Không dùng Nước thánh đêm nay
+                </button>
+              </>
+            )}
           </>
         )}
 
@@ -393,7 +405,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
         {role === "GUARD" && (
           <>
             <p className="mb-2 text-sm text-mist/70">
-              Bạn có thể tự bảo vệ mình, nhưng không thể bảo vệ cùng một người hai đêm liên tiếp.
+              Bạn không thể tự bảo vệ mình và không thể bảo vệ cùng một người hai đêm liên tiếp.
               {night?.guardPrevious && (
                 <>
                   {" "}
@@ -402,7 +414,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
               )}
             </p>
             {aliveOthers({
-              allowSelf: true,
+              allowSelf: false,
               disabledIds: night?.guardPrevious ? [night.guardPrevious] : undefined,
             })}
             <button

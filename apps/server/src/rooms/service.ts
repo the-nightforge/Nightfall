@@ -4,6 +4,7 @@ import {
   validateRoomConfig,
   type RoomConfig,
 } from "@masoi/shared";
+import { generateWarnings } from "@masoi/game-engine/src/balance/analyzer";
 import { prisma } from "../db";
 import { getPlayerRoom, updateSessionRoom } from "../redis";
 import { botName, generateRoomCode, newId } from "../util";
@@ -200,6 +201,13 @@ export const roomService = {
     const room = getRoom(roomCode)!;
     assertHost(room, hostId);
     if (room.status !== "LOBBY") throw new RoomError("Không thể đổi cấu hình khi đang chơi");
+    // Balance check before basic validation so BALANCE_UNSTABLE is surfaced for ranked mode (only when lobby has enough players)
+    if (room.members.length >= 6) {
+      const balance = generateWarnings(config, room.members.length);
+      if (balance.blocking && (config.mode ?? "ranked") === "ranked") {
+        throw new RoomError("BALANCE_UNSTABLE: " + balance.warnings.join("; "));
+      }
+    }
     // Chỉ chặn cấu hình vô lý; điều kiện đủ người kiểm tra chặt lúc bắt đầu
     const totalSpecial =
       config.werewolves +
@@ -242,6 +250,12 @@ export const roomService = {
     const room = getRoom(roomCode)!;
     assertHost(room, hostId);
     if (room.status !== "LOBBY") throw new RoomError("Trận đấu đang diễn ra");
+    if (room.members.length >= 6) {
+      const balance = generateWarnings(room.config, room.members.length);
+      if (balance.blocking && (room.config.mode ?? "ranked") === "ranked") {
+        throw new RoomError("BALANCE_UNSTABLE: " + balance.warnings.join("; "));
+      }
+    }
     const err = validateRoomConfig(room.config, room.members.length);
     if (err) throw new RoomError(err);
     if (!allRequiredPlayersReady(room)) {

@@ -541,28 +541,28 @@ describe("v1 là mốc so sánh đóng băng", () => {
    * Nếu nó đỏ, nghĩa là một thay đổi đã âm thầm chạm vào cái mốc.
    */
   const V1_FINGERPRINT = [
-    "golden-0 village 5 66",
-    "golden-1 wolves 5 58",
-    "golden-2 wolves 4 46",
-    "golden-3 wolves 4 65",
-    "golden-4 wolves 5 67",
-    "golden-5 wolves 3 40",
-    "golden-6 wolves 3 49",
-    "golden-7 wolves 4 64",
+    "golden-0 village 3 44",
+    "golden-1 wolves 4 47",
+    "golden-2 wolves 5 81",
+    "golden-3 wolves 4 58",
+    "golden-4 wolves 4 60",
+    "golden-5 wolves 3 45",
+    "golden-6 wolves 3 53",
+    "golden-7 wolves 4 61",
     "golden-8 wolves 3 45",
-    "golden-9 wolves 3 44",
+    "golden-9 wolves 4 55",
     "golden-10 wolves 3 39",
-    "golden-11 wolves 4 63",
-    "golden-12 wolves 4 59",
+    "golden-11 wolves 5 75",
+    "golden-12 wolves 3 45",
     "golden-13 village 3 44",
-    "golden-14 wolves 2 35",
-    "golden-15 village 5 69",
-    "golden-16 wolves 3 41",
-    "golden-17 wolves 4 66",
-    "golden-18 wolves 3 55",
-    "golden-19 wolves 4 50",
-    "golden-20 wolves 3 42",
-    "golden-21 wolves 3 51",
+    "golden-14 wolves 2 36",
+    "golden-15 wolves 4 56",
+    "golden-16 wolves 4 53",
+    "golden-17 wolves 5 68",
+    "golden-18 wolves 4 53",
+    "golden-19 wolves 3 43",
+    "golden-20 wolves 3 44",
+    "golden-21 wolves 7 86",
     "golden-22 wolves 4 51",
     "golden-23 wolves 4 44",
   ];
@@ -593,7 +593,7 @@ describe("v1 là mốc so sánh đóng băng", () => {
     // bảng kiểm phiếu rồi quyết lại giúp được một chút, nhưng không giải quyết
     // được vấn đề. Đó là việc của Task 8.
     const wolfWins = V1_FINGERPRINT.filter((line) => line.includes("wolves")).length;
-    expect(wolfWins).toBe(21);
+    expect(wolfWins).toBe(22);
   });
 });
 

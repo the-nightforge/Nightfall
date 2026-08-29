@@ -139,6 +139,7 @@ function emptyNight(wolfCubRageTonight = false): GameState["night"] {
     witchSkipped: false,
     seerResults: {},
     priestTarget: null,
+    priestSkipped: false,
     detectiveTargets: null,
     detectiveResults: {},
     priestResults: {},
@@ -170,6 +171,7 @@ export class GameEngine {
     this.state.night.witchSkipped ??= false;
     this.state.night.guardianAngelTarget ??= null;
     this.state.night.priestTarget ??= null;
+    this.state.night.priestSkipped ??= false;
     this.state.night.detectiveTargets ??= null;
     this.state.night.detectiveResults ??= {};
     this.state.night.priestResults ??= {};
@@ -180,6 +182,12 @@ export class GameEngine {
     this.state.wolfCubRageNextNight ??= false;
     this.state.activeEvent ??= null;
     this.state.eventHistory ??= [];
+    this.state.pendingLastStandVictim ??= null;
+    this.state.bloodMoonArmed ??= false;
+    this.state.bloodMoonUsed ??= false;
+    this.state.deadCanSpeakUsed ??= false;
+    this.state.howlBonusDay ??= null;
+    this.state.dayOfTruthClaims ??= {};
     // State lưu trước khi có Kẻ Nguyền Rủa không có hai trường dưới đây. Mặc
     // định an toàn là "role tắt, chưa ai bị nguyền": không ván cũ nào bỗng dưng
     // mọc thêm một người đã đổi phe.
@@ -251,6 +259,12 @@ export class GameEngine {
       activeEvent: null,
       eventHistory: [],
       log: [],
+      pendingLastStandVictim: null,
+      bloodMoonArmed: false,
+      bloodMoonUsed: false,
+      deadCanSpeakUsed: false,
+      howlBonusDay: null,
+      dayOfTruthClaims: {},
     };
     return new GameEngine(state);
   }
@@ -297,11 +311,25 @@ export class GameEngine {
     this.state.phaseEndsAt = now + durationMs;
     if (phase === "NIGHT") {
       this.state.round += 1;
+      let pendingDeath: PublicDeath | null = null;
+      const pending = this.state.pendingLastStandVictim;
+      if (pending && pending.dieRound <= this.state.round) {
+        const victim = this.player(pending.playerId);
+        if (victim && victim.alive) {
+          victim.alive = false;
+          pendingDeath = { playerId: victim.id, name: victim.name };
+          this.state.log.push(`Tử Thủ: ${victim.name} đã không qua khỏi.`);
+          this.queueHunterReaction([{ playerId: victim.id }], "night");
+          if (victim.role === "WOLF_CUB") this.state.wolfCubRageNextNight = true;
+          if (victim.role === "SEER") this.state.apprenticeAwakened = true;
+        }
+        this.state.pendingLastStandVictim = null;
+      }
       const rageTonight = this.state.wolfCubRageNextNight;
       this.state.wolfCubRageNextNight = false;
       this.state.night = emptyNight(rageTonight);
       this.state.votes = {};
-      this.state.lastNightDeaths = [];
+      this.state.lastNightDeaths = pendingDeath ? [pendingDeath] : [];
     }
     if (phase === "DAY_DISCUSSION") {
       this.state.votes = {};
@@ -357,6 +385,32 @@ export class GameEngine {
           : `Kết quả Thám Tử: ${target1Name} và ${target2Name} là ${lastResult.sameTeam ? "CÙNG PHE" : "KHÁC PHE"}!`;
         activeEvent = { ...event, announcement };
       }
+    } else if (event?.id === "MORNING_REPORT") {
+      const lastNight = this.state.nightHistory.at(-1);
+      let announcement: string | undefined;
+      if (lastNight) {
+        const deaths = lastNight.deaths;
+        if (deaths.length === 0) {
+          announcement = `Đêm ${lastNight.round}: không ai thiệt mạng.`;
+        } else if (deaths.length === 1) {
+          announcement = `Đêm ${lastNight.round}: ${deaths[0].player.name} đã thiệt mạng.`;
+        } else {
+          const names = deaths.map((d) => d.player.name).join(", ");
+          announcement = `Đêm ${lastNight.round}: ${deaths.length} người thiệt mạng (${names}).`;
+        }
+      } else {
+        announcement = `Bản tin bình minh: không có dữ liệu đêm trước.`;
+      }
+      activeEvent = { ...event, announcement };
+    } else if (event?.id === "DEAD_CAN_SPEAK") {
+      const announcement = `Tiếng Vọng Người Chết: một linh hồn có thể gửi lời nhắn 120 ký tự ẩn danh.`;
+      activeEvent = { ...event, announcement };
+      // flag will be set when dead actually speaks; keep unused until then
+    } else if (event?.id === "HOWL_OF_THE_PACK") {
+      this.state.howlBonusDay = this.state.round + 1;
+    } else if (event?.id === "DAY_OF_TRUTH") {
+      // initialize claims map for this day
+      this.state.dayOfTruthClaims = {};
     }
     this.state.activeEvent = activeEvent;
     if (activeEvent) {
@@ -385,6 +439,7 @@ export class GameEngine {
       | "HOLY_WATER",
     targetId: string | null,
     secondaryTargetId?: string | null,
+    rng: () => number = Math.random,
   ): void {
     const st = this.state;
     if (st.phase !== "NIGHT") throw new GameError("Chỉ được hành động vào ban đêm");
@@ -440,7 +495,6 @@ export class GameEngine {
         if (!targetId || !target) throw new GameError("Hãy chọn một người để soi");
         if (targetId === playerId) throw new GameError("Không thể soi chính mình");
 
-        const isUnknown = st.activeEvent?.id === "SHROUDED_ECLIPSE";
         let secTargetId: string | undefined;
         let secIsWolf: boolean | undefined;
 
@@ -455,6 +509,12 @@ export class GameEngine {
           secIsWolf = roleTeam(secTarget.role) === "wolves";
         }
 
+        const isWolfShadow = st.activeEvent?.id === "WOLF_SHADOW";
+        const shouldFlip = isWolfShadow && rng() < 0.3;
+        let isWolf = roleTeam(target.role) === "wolves";
+        if (shouldFlip) isWolf = !isWolf;
+        if (secIsWolf !== undefined && shouldFlip) secIsWolf = !secIsWolf;
+
         const seerResult: {
           targetId: string;
           isWolf: boolean;
@@ -463,14 +523,11 @@ export class GameEngine {
           unknown?: boolean;
         } = {
           targetId,
-          isWolf: roleTeam(target.role) === "wolves",
+          isWolf,
         };
         if (secTargetId !== undefined) {
           seerResult.secondaryTargetId = secTargetId;
           seerResult.secondaryIsWolf = secIsWolf;
-        }
-        if (isUnknown) {
-          seerResult.unknown = true;
         }
 
         st.night.seerResults[playerId] = seerResult;
@@ -479,6 +536,7 @@ export class GameEngine {
       case "GUARD": {
         if (p.role !== "GUARD") throw new GameError("Chỉ Bảo Vệ mới được bảo vệ");
         if (!targetId || !target) throw new GameError("Hãy chọn một người để bảo vệ");
+        if (targetId === playerId) throw new GameError("Bảo Vệ không thể tự bảo vệ mình");
         if (targetId === st.guardPrevious) {
           throw new GameError("Không thể bảo vệ cùng một người hai đêm liên tiếp");
         }
@@ -516,7 +574,6 @@ export class GameEngine {
           target1Id: targetId,
           target2Id: secondaryTargetId,
           sameTeam,
-          unknown: st.activeEvent?.id === "SHROUDED_ECLIPSE" || undefined,
         };
         break;
       }
@@ -525,6 +582,9 @@ export class GameEngine {
         if (!targetId || !target) throw new GameError("Hãy chọn một người để dùng Nước thánh");
         if (st.priestHolyWaterUsed[playerId]) {
           throw new GameError("Bình Nước thánh đã được sử dụng");
+        }
+        if (st.night.priestSkipped) {
+          throw new GameError("Linh Mục đã chọn không dùng Nước thánh đêm nay");
         }
         st.night.priestTarget = targetId;
         st.priestHolyWaterUsed[playerId] = true;
@@ -549,8 +609,12 @@ export class GameEngine {
           st.night.witchSkipped = true;
         } else if (roleTeam(p.role) === "wolves") {
           st.night.wolfVotes[playerId] = null;
+        } else if (p.role === "PRIEST") {
+          if (st.priestHolyWaterUsed[playerId]) throw new GameError("Bình Nước thánh đã được sử dụng");
+          if (st.night.priestSkipped) throw new GameError("Linh Mục đã bỏ qua đêm nay");
+          st.night.priestSkipped = true;
         } else {
-          throw new GameError("Chỉ Phù Thủy hoặc Ma Sói mới được bỏ qua hành động");
+          throw new GameError("Chỉ Phù Thủy, Ma Sói hoặc Linh Mục mới được bỏ qua hành động");
         }
         break;
       }
@@ -662,6 +726,17 @@ export class GameEngine {
     const guardedIds = new Set<string>();
     if (st.night.guardTarget) guardedIds.add(st.night.guardTarget);
     if (st.night.guardianAngelTarget) guardedIds.add(st.night.guardianAngelTarget);
+    // BLOOD_MOON pierce: if armed from previous night, 20% chance to pierce one shield
+    if (st.bloodMoonArmed) {
+      const wasArmed = st.bloodMoonArmed;
+      st.bloodMoonArmed = false;
+      st.bloodMoonUsed = true;
+      if (wasArmed && guardedIds.size > 0 && rng() < 0.2) {
+        const firstShield = guardedIds.values().next().value as string;
+        guardedIds.delete(firstShield);
+        st.log.push(`Trăng Máu xuyên thủng khiên bảo vệ!`);
+      }
+    }
 
     // 2. Information results are already recorded during submitNightAction
 
@@ -710,7 +785,13 @@ export class GameEngine {
           if (victim.role === "CURSED") {
             cursedBitten = victim;
           } else {
-            addDeath({ playerId: victim.id, name: victim.name, cause: "wolf" });
+            // LAST_STAND: delay death until end of next day
+            if (st.activeEvent?.id === "LAST_STAND" && !st.pendingLastStandVictim) {
+              st.pendingLastStandVictim = { playerId: victim.id, dieRound: st.round + 1 };
+              st.log.push(`Tử Thủ: ${victim.name} được kéo dài sự sống tới hết ngày mai!`);
+            } else {
+              addDeath({ playerId: victim.id, name: victim.name, cause: "wolf" });
+            }
           }
         }
       }
@@ -761,6 +842,16 @@ export class GameEngine {
     });
     if (wolfCubDied) {
       st.wolfCubRageNextNight = true;
+    }
+
+    // BLOOD_MOON arm: if active and 0 wolf deaths this night, arm for next night
+    const wolfDeaths = deaths.filter((d) => d.cause === "wolf").length;
+    if (st.activeEvent?.id === "BLOOD_MOON" && wolfDeaths === 0 && !st.bloodMoonArmed && !st.bloodMoonUsed) {
+      st.bloodMoonArmed = true;
+      st.log.push(`Trăng Máu đã được kích hoạt: đêm sau có 20% xuyên khiên!`);
+    } else if (st.activeEvent?.id === "BLOOD_MOON" && wolfDeaths > 0) {
+      // if kill happened, still mark used (consumed)
+      st.bloodMoonUsed = true;
     }
 
     this.queueHunterReaction(deaths, "night");
@@ -849,6 +940,38 @@ export class GameEngine {
       const weight = voter?.role === "MAYOR" ? 2 : 1;
       if (targetId === null) noElimination += weight;
       else players[targetId] = (players[targetId] ?? 0) + weight;
+    }
+    // HOWL_OF_THE_PACK hidden +1 for wolves next day
+    if (this.state.howlBonusDay !== null && this.state.howlBonusDay === this.state.round) {
+      // find target most voted by wolves to add hidden vote
+      const wolfIds = new Set(this.alivePlayers().filter((p) => roleTeam(p.role) === "wolves").map((p) => p.id));
+      const wolfTally: Record<string, number> = {};
+      for (const [voterId, targetId] of Object.entries(this.state.votes)) {
+        if (!wolfIds.has(voterId) || targetId === null) continue;
+        wolfTally[targetId] = (wolfTally[targetId] ?? 0) + 1;
+      }
+      let bestWolfTarget: string | null = null;
+      let bestWolfCount = -1;
+      for (const [tid, cnt] of Object.entries(wolfTally)) {
+        if (cnt > bestWolfCount) {
+          bestWolfCount = cnt;
+          bestWolfTarget = tid;
+        }
+      }
+      if (bestWolfTarget) {
+        players[bestWolfTarget] = (players[bestWolfTarget] ?? 0) + 1;
+      } else {
+        // fallback: add to overall leader
+        let bestId: string | null = null;
+        let bestCount = -1;
+        for (const [tid, cnt] of Object.entries(players)) {
+          if (cnt > bestCount) {
+            bestCount = cnt;
+            bestId = tid;
+          }
+        }
+        if (bestId) players[bestId] = (players[bestId] ?? 0) + 1;
+      }
     }
     return { players, noElimination };
   }
@@ -1167,7 +1290,7 @@ export class GameEngine {
     } else if (viewer.role === "DETECTIVE") {
       acted = st.night.detectiveResults[viewer.id] !== undefined;
     } else if (viewer.role === "PRIEST") {
-      acted = st.night.priestTarget !== null;
+      acted = st.night.priestTarget !== null || st.night.priestSkipped;
     } else if (isWitch) {
       acted = st.night.witchSkipped || st.night.healTonight || st.night.poisonTarget !== null;
     }
@@ -1540,19 +1663,22 @@ export class GameEngine {
         legalTargets.GUARDIAN_PROTECT = targets;
       }
     } else if (viewer.role === "PRIEST") {
-      // Một bình cả ván, và không tự ném vào mình.
-      const targets = alive
-        .filter((player) => player.id !== viewer.id)
-        .map((player) => player.id);
-      if (!st.priestHolyWaterUsed[viewer.id] && targets.length > 0) {
-        legalActions.push("HOLY_WATER");
-        legalTargets.HOLY_WATER = targets;
+      // Một bình cả ván, và không tự ném vào mình. Có thể chủ động skip để giữ bình.
+      if (!st.priestHolyWaterUsed[viewer.id]) {
+        const targets = alive
+          .filter((player) => player.id !== viewer.id)
+          .map((player) => player.id);
+        if (targets.length > 0) {
+          legalActions.push("HOLY_WATER");
+          legalTargets.HOLY_WATER = targets;
+        }
+        legalActions.push("SKIP");
       }
     } else if (viewer.role === "GUARD") {
+      // Không được tự bảo vệ, không đỡ lại đúng người đêm trước.
       legalActions.push("GUARD");
-      // Không đỡ lại đúng người đêm trước - luật engine, chép ra đây một lần.
       legalTargets.GUARD = alive
-        .filter((player) => player.id !== st.guardPrevious)
+        .filter((player) => player.id !== viewer.id && player.id !== st.guardPrevious)
         .map((player) => player.id);
     } else if (isWitch && st.night.wolvesLocked) {
       // Phù Thuỷ đi SAU bầy Sói: trước khi khoá phiếu, engine từ chối MỌI hành
@@ -1621,9 +1747,9 @@ export class GameEngine {
     if (viewer.role === "GUARD") return st.night.guardTarget === null;
     if (viewer.role === "DETECTIVE") return st.night.detectiveResults[viewer.id] === undefined;
     if (viewer.role === "GUARDIAN_ANGEL") return st.night.guardianAngelTarget === null;
-    // Bình Nước thánh bị trừ ngay lúc submit, nên cờ đã dùng cũng chính là
-    // "hết lượt đêm nay".
-    if (viewer.role === "PRIEST") return !st.priestHolyWaterUsed[viewer.id];
+    // Bình Nước thánh bị trừ ngay lúc submit, skip cũng tính là đã hành động.
+    if (viewer.role === "PRIEST")
+      return !st.priestHolyWaterUsed[viewer.id] && st.night.priestTarget === null && !st.night.priestSkipped;
     if (viewer.role === "WITCH") {
       // Chưa khoá phiếu Sói thì chưa tới lượt, nên `canAct` phải là false dù
       // cô ta chưa dùng bình nào.

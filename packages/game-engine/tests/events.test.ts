@@ -197,7 +197,7 @@ describe("Dynamic Event Selection", () => {
 
     const event = selectEvent(state, "DAY", () => rolls.shift()!);
 
-    expect(event?.id).toBe("AMNESTY_DAY");
+    expect(event?.id).toBe("MORNING_REPORT");
     expect(event?.targetPhase).toBe("DAY");
   });
 
@@ -243,7 +243,7 @@ describe("Dynamic Event Selection", () => {
     expect(event).not.toBeNull();
     expect(event?.beneficiary).toBe("village");
     expect(event?.targetPhase).toBe("NIGHT");
-    expect(["CLEARING_MIST", "PEACEFUL_NIGHT"]).toContain(event?.id);
+    expect(["CLEARING_MIST", "PEACEFUL_NIGHT", "LAST_STAND"]).toContain(event?.id);
   });
 
   it("selects a wolves-benefiting night event when village is favored in ranked mode", () => {
@@ -264,7 +264,7 @@ describe("Dynamic Event Selection", () => {
     expect(event).not.toBeNull();
     expect(event?.beneficiary).toBe("wolves");
     expect(event?.targetPhase).toBe("NIGHT");
-    expect(["MOONLESS_NIGHT", "BLOODY_HUNT", "SHROUDED_ECLIPSE"]).toContain(event?.id);
+    expect(["MOONLESS_NIGHT", "BLOODY_HUNT", "WOLF_SHADOW", "BLOOD_MOON"]).toContain(event?.id);
   });
 
   it("selects JUDGMENT_DAY for day phase when wolves are favored and detective exists", () => {
@@ -342,7 +342,7 @@ describe("Dynamic Event Selection", () => {
     ]);
     state.config.mode = "chaos";
 
-    const event = selectEvent(state, "NIGHT");
+    const event = selectEvent(state, "NIGHT", () => 0.1);
     expect(event).not.toBeNull();
     expect(event?.targetPhase).toBe("NIGHT");
   });
@@ -420,51 +420,28 @@ describe("Event Modifiers in GameEngine", () => {
     expect(snap.nightInfo?.seerResult?.secondaryIsWolf).toBe(false);
   });
 
-  it("SHROUDED_ECLIPSE obscures investigation results to UNKNOWN", () => {
-    const state = createTestState([
-      { id: "w1", role: "WEREWOLF", alive: true },
-      { id: "seer", role: "SEER", alive: true },
-      { id: "v1", role: "VILLAGER", alive: true },
-    ]);
-    state.activeEvent = {
-      id: "SHROUDED_ECLIPSE",
-      name: "Bóng Tối Bao Phủ",
-      description: "...",
-      targetPhase: "NIGHT",
-      round: 1,
-      beneficiary: "wolves",
-      power: 2,
-    };
-
-    const engine = new GameEngine(state);
-    engine.submitNightAction("seer", "SEE", "w1");
-
-    const snap = engine.snapshotFor("seer");
-    expect(snap.nightInfo?.seerResult?.unknown).toBe(true);
-  });
-
-  it("SHROUDED_ECLIPSE also obscures Detective results", () => {
+  it("WOLF_SHADOW does not affect Detective results", () => {
     const state = createTestState([
       { id: "det", role: "DETECTIVE", alive: true },
       { id: "w1", role: "WEREWOLF", alive: true },
       { id: "v1", role: "VILLAGER", alive: true },
     ]);
     state.activeEvent = {
-      id: "SHROUDED_ECLIPSE",
-      name: "Bóng Tối Bao Phủ",
+      id: "WOLF_SHADOW",
+      name: "Bóng Sói",
       description: "...",
       targetPhase: "NIGHT",
       round: 1,
       beneficiary: "wolves",
-      power: 2,
+      power: 3,
     };
 
     const engine = new GameEngine(state);
     engine.submitNightAction("det", "DETECTIVE_CHECK", "w1", "v1");
 
     const result = engine.snapshotFor("det").nightInfo?.detectiveResult;
-    expect(result?.unknown).toBe(true);
-    expect(result?.sameTeam).toBeUndefined();
+    expect(result?.sameTeam).toBe(false);
+    expect(result?.unknown).toBeUndefined();
   });
 
   it("BLOODY_HUNT allows secondary wolf kill with 50% success probability", () => {
@@ -565,5 +542,117 @@ describe("Event Modifiers in GameEngine", () => {
     const engine = new GameEngine(state);
     const snap = engine.snapshotFor("w1");
     expect(snap.activeEvent?.id).toBe("SILENT_NIGHT");
+  });
+
+  it("LAST_STAND victim sống qua ngày sau", () => {
+    const state = createTestState([
+      { id: "wolf1", role: "WEREWOLF", alive: true },
+      { id: "villager", role: "VILLAGER", alive: true },
+      { id: "seer", role: "SEER", alive: true },
+    ]);
+    state.activeEvent = {
+      id: "LAST_STAND",
+      name: "Tử Thủ",
+      description: "...",
+      targetPhase: "NIGHT",
+      round: 1,
+      beneficiary: "village",
+      power: 3,
+    } as any;
+    const engine = new GameEngine(state);
+    engine.submitNightAction("wolf1", "KILL", "villager");
+    const deaths = engine.resolveNight();
+    expect(deaths.length).toBe(0);
+    expect(engine.state.pendingLastStandVictim?.playerId).toBe("villager");
+    expect(engine.player("villager")?.alive).toBe(true);
+    engine.setPhase("DAY_DISCUSSION", 30000);
+    // victim still alive during day
+    expect(engine.player("villager")?.alive).toBe(true);
+    engine.setPhase("NIGHT", 30000);
+    expect(engine.player("villager")?.alive).toBe(false);
+  });
+
+  it("WOLF_SHADOW 30% đảo phe", () => {
+    const wolfId = "w1";
+    // case flip when rng 0.1 <0.3
+    const stateFlip = createTestState([
+      { id: wolfId, role: "WEREWOLF", alive: true },
+      { id: "seer", role: "SEER", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+    ]);
+    stateFlip.activeEvent = {
+      id: "WOLF_SHADOW",
+      name: "Bóng Sói",
+      description: "...",
+      targetPhase: "NIGHT",
+      round: 1,
+      beneficiary: "wolves",
+      power: 3,
+    } as any;
+    const engineFlip = new GameEngine(stateFlip);
+    engineFlip.submitNightAction("seer", "SEE", wolfId, null, () => 0.1);
+    const snapFlip = engineFlip.snapshotFor("seer");
+    expect(snapFlip.nightInfo?.seerResult?.isWolf).toBe(false);
+
+    // case no flip when rng 0.5 >=0.3
+    const stateNoFlip = createTestState([
+      { id: wolfId, role: "WEREWOLF", alive: true },
+      { id: "seer", role: "SEER", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+    ]);
+    stateNoFlip.activeEvent = {
+      id: "WOLF_SHADOW",
+      name: "Bóng Sói",
+      description: "...",
+      targetPhase: "NIGHT",
+      round: 1,
+      beneficiary: "wolves",
+      power: 3,
+    } as any;
+    const engineNoFlip = new GameEngine(stateNoFlip);
+    engineNoFlip.submitNightAction("seer", "SEE", wolfId, null, () => 0.5);
+    const snapNoFlip = engineNoFlip.snapshotFor("seer");
+    expect(snapNoFlip.nightInfo?.seerResult?.isWolf).toBe(true);
+  });
+
+  it("BLOOD_MOON arm khi 0 death, đêm sau 20% xuyên shield", () => {
+    // Night 1: BLOOD_MOON active, 0 wolf deaths -> arm
+    const state1 = createTestState([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "guard", role: "GUARD", alive: true },
+    ]);
+    state1.activeEvent = {
+      id: "BLOOD_MOON",
+      name: "Trăng Máu",
+      description: "...",
+      targetPhase: "NIGHT",
+      round: 1,
+      beneficiary: "wolves",
+      power: 3,
+    } as any;
+    const engine1 = new GameEngine(state1);
+    // wolves do not kill (skip)
+    engine1.submitNightAction("w1", "SKIP", null);
+    const deaths1 = engine1.resolveNight(Date.now(), () => 0.9);
+    expect(deaths1.length).toBe(0);
+    expect(engine1.state.bloodMoonArmed).toBe(true);
+
+    // Night 2: guard protects v1, wolves kill v1, with pierce rng 0.1 <0.2 should pierce
+    engine1.setPhase("DAY_DISCUSSION", 30000);
+    engine1.setPhase("NIGHT", 30000);
+    // need to set no active event now but bloodMoonArmed still true before resolve
+    engine1.submitNightAction("guard", "GUARD", "v1");
+    engine1.submitNightAction("w1", "KILL", "v1");
+    const deaths2 = engine1.resolveNight(Date.now(), () => 0.1);
+    expect(deaths2.map((d) => d.playerId)).toContain("v1");
+    expect(engine1.state.bloodMoonArmed).toBe(false);
+    expect(engine1.state.bloodMoonUsed).toBe(true);
+  });
+
+  it("migrate cứng xóa SHROUDED_ECLIPSE", () => {
+    expect((GAME_EVENTS as any)["SHROUDED_ECLIPSE"]).toBeUndefined();
+    expect(GAME_EVENTS["WOLF_SHADOW"]).toBeDefined();
+    expect(Object.keys(GAME_EVENTS)).toHaveLength(15);
   });
 });

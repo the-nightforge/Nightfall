@@ -2,6 +2,14 @@ import type { Phase, RoomConfig, Winner } from "./phases";
 import type { Role } from "./roles";
 import type { GameEventId } from "./events";
 
+export interface BalanceWarningView {
+  score: number;
+  warnings: string[];
+  blocking: boolean;
+  villagePower: number;
+  wolfPower: number;
+}
+
 export interface GameEventView {
   id: GameEventId;
   name: string;
@@ -291,6 +299,8 @@ export interface RoomSnapshot {
   winner: Winner;
   chatLog: ChatMessage[];
   log: string[];
+  /** Cảnh báo cân bằng lobby; null khi chưa tính hoặc cân bằng. */
+  balanceWarning?: BalanceWarningView | null;
 }
 
 export interface ChatMessage {

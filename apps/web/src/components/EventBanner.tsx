@@ -20,9 +20,15 @@ const EVENT_ICONS: Record<string, string> = {
   CLEARING_MIST: "🌫️",
   PEACEFUL_NIGHT: "✨",
   JUDGMENT_DAY: "⚖️",
+  LAST_STAND: "🛡️",
+  DAY_OF_TRUTH: "🔍",
   MOONLESS_NIGHT: "🌑",
   BLOODY_HUNT: "🩸",
-  SHROUDED_ECLIPSE: "🌒",
+  HOWL_OF_THE_PACK: "🐺",
+  BLOOD_MOON: "🌕",
+  WOLF_SHADOW: "👤",
+  MORNING_REPORT: "📰",
+  DEAD_CAN_SPEAK: "👻",
 };
 
 export function EventBanner({ event }: Props) {

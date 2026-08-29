@@ -55,6 +55,8 @@ export interface NightState {
   witchSkipped: boolean;
   seerResults: Record<string, { targetId: string; isWolf: boolean; secondaryTargetId?: string; secondaryIsWolf?: boolean; unknown?: boolean }>;
   priestTarget: string | null;
+  /** Linh Mục đã chọn không dùng nước thánh đêm nay */
+  priestSkipped: boolean;
   detectiveTargets: { target1: string; target2: string } | null;
   detectiveResults: Record<
     string,
@@ -161,6 +163,12 @@ export interface GameState {
   activeEvent: GameEventView | null;
   eventHistory: GameEventView[];
   log: string[];
+  pendingLastStandVictim: { playerId: string; dieRound: number } | null;
+  bloodMoonArmed: boolean;
+  bloodMoonUsed: boolean;
+  deadCanSpeakUsed: boolean;
+  howlBonusDay: number | null;
+  dayOfTruthClaims: Record<string, string | null>;
 }
 
 export class GameError extends Error {

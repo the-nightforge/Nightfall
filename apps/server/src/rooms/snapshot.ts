@@ -1,4 +1,5 @@
 import type { ChatMessage, RoomSnapshot } from "@masoi/shared";
+import { generateWarnings } from "@masoi/game-engine/src/balance/analyzer";
 import { getDiscussionSkipView } from "../game/discussion-skip";
 import type { Room } from "./store";
 
@@ -145,6 +146,7 @@ export function visibleChatLog(room: Room, viewerId: string): ChatMessage[] {
 export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
   const member = room.members.find((m) => m.playerId === viewerId);
   const gameView = room.engine ? room.engine.snapshotFor(viewerId) : null;
+  const balanceWarning = generateWarnings(room.config, room.members.length);
 
   return {
     code: room.code,
@@ -153,6 +155,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
     config: room.config,
     round: gameView?.round ?? 0,
     activeEvent: gameView?.activeEvent ?? null,
+    balanceWarning,
     apprenticeAwakened: gameView?.nightInfo?.apprenticeAwakened ?? room.engine?.state.apprenticeAwakened,
     phaseEndsAt: gameView ? gameView.phaseEndsAt : null,
     serverNow: Date.now(),
