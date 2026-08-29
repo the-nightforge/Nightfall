@@ -157,7 +157,7 @@ describe("Momentum Calculation", () => {
 });
 
 describe("Dynamic Event Selection", () => {
-  it("selects nothing when the balanced-ranked neutral roll is 35% or higher", () => {
+  it("selects nothing when the balanced-ranked neutral roll is 65% or higher", () => {
     const state = createTestState([
       { id: "w1", role: "WEREWOLF", alive: true },
       { id: "w2", role: "WEREWOLF", alive: true },
@@ -168,11 +168,11 @@ describe("Dynamic Event Selection", () => {
     ]);
     state.config.mode = "ranked";
 
-    const event = selectEvent(state, "NIGHT", () => 0.35);
+    const event = selectEvent(state, "NIGHT", () => 0.65);
     expect(event).toBeNull();
   });
 
-  it("selects a neutral night event when the balanced-ranked roll is below 35%", () => {
+  it("selects a neutral night event when the balanced-ranked roll is below 65%", () => {
     const state = createTestState([
       { id: "w1", role: "WEREWOLF", alive: true },
       { id: "w2", role: "WEREWOLF", alive: true },
@@ -182,7 +182,7 @@ describe("Dynamic Event Selection", () => {
       { id: "v2", role: "VILLAGER", alive: true },
     ]);
     state.config.mode = "ranked";
-    const rolls = [0.3499, 0.99];
+    const rolls = [0.6499, 0.99];
 
     const event = selectEvent(state, "NIGHT", () => rolls.shift()!);
 
