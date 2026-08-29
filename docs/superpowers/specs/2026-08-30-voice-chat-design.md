@@ -73,6 +73,9 @@ bộ người sống, không qua `resolveChat`, không rate limit, không lưu v
 
 Mọi token ký ra **bắt buộc** mang đúng bộ grant này:
 
+**Token join** — không bao giờ mang quyền nói, và **không mang
+`canPublishSources`**:
+
 ```ts
 {
   roomJoin: true,
@@ -80,14 +83,34 @@ Mọi token ký ra **bắt buộc** mang đúng bộ grant này:
   canSubscribe: true,
   canPublish: false,          // LUÔN false - xem mục 6
   canPublishData: false,
-  canPublishSources: ["microphone"],
   canUpdateOwnMetadata: false,
   hidden: false,
 }
 ```
 
-`canPublishSources` giới hạn ở microphone chặn luôn camera và screen share —
-không có nó, `canPublish: true` cho phép publish mọi nguồn.
+**Quyền lúc chạy**, gửi trọn bộ mỗi lần `updateParticipant` (LiveKit cập nhật
+theo kiểu thay thế, gửi thiếu `canSubscribe` là người đó hoá điếc):
+
+```ts
+{
+  canSubscribe: true,
+  canPublish: <theo luật>,
+  canPublishData: false,
+  canPublishSources: canPublish ? [TrackSource.MICROPHONE] : [],
+  canUpdateMetadata: false,   // LƯU Ý: token dùng canUpdateOwnMetadata
+  hidden: false,
+}
+```
+
+**Vì sao `canPublishSources` không được nằm trong token.** SDK ghi rõ trường này
+*"supersedes CanPublish. Only sources explicitly set here can be published"*.
+Liệt kê microphone trong token sẽ **cho phép nói dù `canPublish` là `false`**,
+phá đúng bản vá ở mục 6. Danh sách nguồn vì thế chỉ xuất hiện lúc cấp quyền, và
+chính ở đó nó chặn camera lẫn screen share.
+
+**Hai tên trường khác nhau, rất dễ gõ nhầm:** token dùng `canUpdateOwnMetadata`
+(`VideoGrant`), quyền lúc chạy dùng `canUpdateMetadata`
+(`ParticipantPermission`). Gõ nhầm thì trường bị bỏ qua im lặng.
 
 Adapter phải là **nơi duy nhất** dựng object này, và có test khẳng định từng
 trường, để không ai vô tình bỏ sót một dòng khi thêm tính năng sau này.
