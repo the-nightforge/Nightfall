@@ -1,5 +1,6 @@
 import { roleTeam, type Role } from "@masoi/shared";
-import type { BotBrainState, BotDecisionContext } from "../types";
+import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import type { BotBrainState, BotDecisionContext, BotRng } from "../types";
 
 /**
  * Vai BOT công khai nhận trong Ngày Sự Thật.
@@ -55,4 +56,153 @@ export function decideRoleClaim(
   }
 
   return { role: COVER, reason: "giấu vai chức năng để không thành mục tiêu cắn đêm nay" };
+}
+
+export type ClaimKind = "PROACTIVE" | "UNDER_FIRE" | "COUNTER";
+
+export interface BotChatClaimIntention {
+  role: Role;
+  kind: ClaimKind;
+  /** Người mà lời khai chỉ mặt, hoặc `null` khi lời khai không chỉ ai. */
+  accusedId: string | null;
+  /** Chỉ `COUNTER`: người đang bị đè lên. */
+  counterTargetId: string | null;
+  reason: string;
+}
+
+/** Vai có kết quả riêng chỉ được đích danh một người. */
+const INFORMANT_ROLES = new Set<Role>(["SEER", "APPRENTICE_SEER", "DETECTIVE"]);
+
+/** Vai chức năng mà một con Sói bị dồn có thể nấp sau. Thứ tự là thứ tự ưu tiên. */
+const BLUFF_COVERS: readonly Role[] = ["GUARD", "WITCH", "HUNTER", "PRIEST"];
+
+/** Ai đang dẫn phiếu ngay lúc này, hoặc `null` khi chưa ai bị dồn. */
+function voteLeader(counts: Record<string, number>): string | null {
+  let leader: string | null = null;
+  let best = 0;
+  // Duyệt theo khoá đã sắp: hoà phiếu không được phụ thuộc thứ tự chèn.
+  for (const id of Object.keys(counts).sort()) {
+    const votes = counts[id] ?? 0;
+    if (votes > best) {
+      leader = id;
+      best = votes;
+    }
+  }
+  return leader;
+}
+
+/** Vai đã có người công khai nhận, kể cả người đã chết. */
+function alreadyClaimed(state: BotBrainState): Set<Role> {
+  return new Set(state.claims.map((memory) => memory.data.role as Role));
+}
+
+/**
+ * Lời khai tự phát trong khung chat.
+ *
+ * Tách khỏi `decideRoleClaim` (Ngày Sự Thật) vì hai câu hỏi khác nhau: sự kiện
+ * hỏi "bị bắt khai thì khai gì", còn hàm này hỏi "có đáng mở miệng lúc này
+ * không". Nhưng chúng chia sẻ đúng một lý lẽ nền — vai chức năng khai ban ngày
+ * là tự xin bị cắn đêm nay — nên hai chỗ không được mâu thuẫn nhau.
+ *
+ * `null` là kết quả thường gặp nhất và là kết quả đúng: im lặng.
+ */
+export function decideChatClaim(
+  context: BotDecisionContext,
+  state: BotBrainState,
+  rng: BotRng,
+  // Mục tiêu Sói định treo hôm nay, truyền vào thay vì đọc `state.currentTargets`.
+  // Trường đó chỉ được `decideVote` gán, không phải `observe`; hôm nay
+  // `decideVote` luôn chạy trước `decideSpeech` nên nó tình cờ có giá trị, nhưng
+  // thứ tự đó không được ghi ở đâu cả. Nếu ai đó đảo lại, đọc thẳng từ state sẽ
+  // âm thầm cho Sói khai láo mà không chỉ đích danh ai — sai mà không test nào
+  // đỏ. Tham số hoá để lỗi đó không thể xảy ra: `planSpeech` (Task 4) truyền
+  // đúng ý định phiếu vừa chốt.
+  voteTargetId: string | null,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): BotChatClaimIntention | null {
+  // Cổng tái lập. Phải đứng TRƯỚC mọi lượt rút số: v1/v2/v3 đi qua đây và phải
+  // ra khỏi hàm mà không đụng vào chuỗi RNG.
+  if (weights.claim.accusationWeight <= 0) return null;
+
+  // Một BOT, một vai, cả ván.
+  if (state.myClaim !== null) return null;
+
+  const knowledge = context.knowledge;
+  const role = knowledge.selfRole;
+  const me = state.playerId;
+  const isWolf = roleTeam(role) === "wolves";
+
+  // ---- PROACTIVE: phe làng đang cầm một kết quả chỉ đích danh ----
+  if (!isWolf && INFORMANT_ROLES.has(role)) {
+    const hit = state.knownInformation.seerResults.find(
+      (memory) => memory.data.isWolf === true && memory.targetId !== undefined,
+    );
+    if (hit?.targetId) {
+      return {
+        role,
+        kind: "PROACTIVE",
+        accusedId: hit.targetId,
+        counterTargetId: null,
+        reason: "đang cầm một kết quả soi trúng Sói nên khai để làng dùng được",
+      };
+    }
+  }
+
+  // ---- PROACTIVE: Sói khai láo ----
+  if (isWolf && knowledge.round >= weights.claim.wolfBluffFromRound) {
+    // Ai trong bầy đứng ra nói dối: con còn sống có id nhỏ nhất. Luật CỤC BỘ -
+    // mọi con tự tính ra cùng đáp án mà không cần một kênh đồng bộ nào.
+    const alive = new Set(knowledge.players.filter((p) => p.alive).map((p) => p.id));
+    const pack = Object.entries(knowledge.knownRoles)
+      .filter(([id, known]) => alive.has(id) && roleTeam(known) === "wolves")
+      .map(([id]) => id)
+      .sort();
+    if (pack[0] === me) {
+      const dare =
+        weights.claim.wolfBluffChance *
+        state.personality.deceptionSkill *
+        state.personality.riskTolerance;
+      if (rng() < dare) {
+        return {
+          role: "SEER",
+          kind: "PROACTIVE",
+          // Người nó định treo hôm nay, do caller truyền vào (xem chú thích ở
+          // tham số) để lời nói và lá phiếu không rời nhau.
+          accusedId: voteTargetId,
+          counterTargetId: null,
+          reason: "cướp uy tín Tiên Tri trước khi người thật kịp lên tiếng",
+        };
+      }
+    }
+  }
+
+  // ---- UNDER_FIRE: sắp bị treo ----
+  const underFire =
+    knowledge.trialAccusedId === me || voteLeader(knowledge.currentVoteCounts.players) === me;
+  if (underFire) {
+    if (!isWolf && role !== "VILLAGER") {
+      return {
+        role,
+        kind: "UNDER_FIRE",
+        accusedId: null,
+        counterTargetId: null,
+        reason: "sắp bị treo nên lôi vai thật ra làm lá bài cuối",
+      };
+    }
+    if (isWolf) {
+      const taken = alreadyClaimed(state);
+      const cover = BLUFF_COVERS.find((candidate) => !taken.has(candidate));
+      if (cover) {
+        return {
+          role: cover,
+          kind: "UNDER_FIRE",
+          accusedId: null,
+          counterTargetId: null,
+          reason: "sắp bị treo nên nhận một vai chức năng chưa ai lấy",
+        };
+      }
+    }
+  }
+
+  return null;
 }

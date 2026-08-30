@@ -434,6 +434,17 @@ export interface BotBrainState {
   trust: Record<string, BeliefEntry>;
   knownInformation: { knownRoles: Record<string, Role>; seerResults: BotMemory[] };
   claims: BotMemory[];
+  /**
+   * Vai chính BOT này đã công khai nhận, hoặc `null`.
+   *
+   * Một BOT khai đúng MỘT vai cả ván. Lật claim không bị cấm bằng kiểu — nó bị
+   * tính giá ở `claim-credibility` — nhưng lõi thì không bao giờ tự lật, vì
+   * một người chơi đổi lời khai giữa ván là đang tự thua.
+   *
+   * Tách khỏi `claims` (kho lời khai của NGƯỜI KHÁC) vì hai câu hỏi khác nhau:
+   * "ai đã khai gì" và "tôi đã cam kết điều gì".
+   */
+  myClaim: { role: Role; round: number } | null;
   memories: BotMemory[];
   relationships: Record<string, SocialEdge>;
   currentTheory: { summary: string; evidenceIds: string[] } | null;

@@ -145,6 +145,7 @@ describe("bot seeded randomness and personality", () => {
       trust: {},
       knownInformation: { knownRoles: {}, seerResults: [] },
       claims: [],
+      myClaim: null,
       memories: [],
       relationships: {},
       currentTheory: null,
