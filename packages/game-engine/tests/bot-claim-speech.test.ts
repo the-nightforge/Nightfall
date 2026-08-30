@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ROLES, ROLE_META, type Role } from "@masoi/shared";
 import { analyzeChat } from "../src/bot/analysis/chat-analysis";
-import { renderSpeechTemplate } from "../src/bot/conversation/templates";
+import { SPEECH_TEMPLATES, renderSpeechTemplate } from "../src/bot/conversation/templates";
 import { BOT_SPEECH_TONES, type BotSpeechIntention } from "../src/bot/types";
 
 const PLAYERS = [
@@ -69,4 +69,54 @@ describe("mẫu câu khai vai đọc ngược được", () => {
     expect(counter?.targetId).toBe("p2");
     expect(counter?.data.role).toBe("SEER");
   });
+});
+
+/**
+ * Sweep trực tiếp mọi mẫu trong `SPEECH_TEMPLATES`, không đi qua
+ * `renderSpeechTemplate`.
+ *
+ * Lý do tách riêng khối này: chỉ số mẫu của `renderSpeechTemplate` là hash của
+ * `(seedTag, botId, round, seq, kind, targetId, replyToMessageId, topic)` và
+ * KHÔNG phụ thuộc `tone`. Ba `it` phía trên dùng chung `seq`/semantic key nên
+ * mọi giọng luôn rơi vào đúng MỘT chỉ số mẫu như nhau; seq-sweep phía trên
+ * cũng chỉ chạy trên một giọng (WITCH/FIRM); còn COUNTER_CLAIM không được
+ * sweep chỉ số nào cả. Cộng lại, phần lớn mẫu trong bể chưa từng được render
+ * qua bất kỳ test nào — hai mẫu SOFT[2]/PLAYFUL[2] hỏng trước đây chỉ bị bắt
+ * vì tình cờ trúng đúng chỉ số mà vòng lặp giọng ở trên chạm tới.
+ *
+ * Khối này đọc thẳng bảng mẫu và tự điền `{role}`/`{target}`, nên độ phủ là
+ * CẤU TRÚC: một mẫu thêm sau này vào `SPEECH_TEMPLATES` tự động bị quét, không
+ * phụ thuộc hash rơi trúng đâu.
+ */
+function fillRaw(template: string, role: Role, target = "Bình"): string {
+  return template.replaceAll("{role}", ROLE_META[role].name).replaceAll("{target}", target);
+}
+
+describe("mọi mẫu trong SPEECH_TEMPLATES đọc ngược được, quét trực tiếp", () => {
+  for (const role of ROLES) {
+    for (const [tone, pool] of Object.entries(SPEECH_TEMPLATES.CLAIM_ROLE)) {
+      (pool ?? []).forEach((template, index) => {
+        it(`CLAIM_ROLE ${tone}[${index}] cho ${role} đọc ngược đúng vai`, () => {
+          const text = fillRaw(template, role);
+          const memories = analyzeChat([{ id: "m1", actorId: "p1", text, at: 0 }], PLAYERS);
+          const claim = memories.find((memory) => memory.type === "ROLE_CLAIM");
+          expect(claim?.data.role, text).toBe(role);
+        });
+      });
+    }
+  }
+
+  for (const role of ROLES) {
+    for (const [tone, pool] of Object.entries(SPEECH_TEMPLATES.COUNTER_CLAIM)) {
+      (pool ?? []).forEach((template, index) => {
+        it(`COUNTER_CLAIM ${tone}[${index}] cho ${role} đọc ngược đúng vai và đúng người`, () => {
+          const text = fillRaw(template, role);
+          const memories = analyzeChat([{ id: "m1", actorId: "p1", text, at: 0 }], PLAYERS);
+          const counter = memories.find((memory) => memory.type === "COUNTER_CLAIM");
+          expect(counter?.targetId, text).toBe("p2");
+          expect(counter?.data.role, text).toBe(role);
+        });
+      });
+    }
+  }
 });
