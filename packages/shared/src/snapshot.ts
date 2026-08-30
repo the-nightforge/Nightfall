@@ -28,6 +28,8 @@ export interface PlayerView {
   name: string;
   alive: boolean;
   isBot: boolean;
+  /** Ảnh đại diện custom base64, ưu tiên hơn avatar hash */
+  avatarUrl?: string | null;
   /** Chỉ hiện khi game kết thúc hoặc viewer đã chết */
   role?: Role;
   /**
@@ -252,6 +254,7 @@ export interface RoomSnapshot {
     name: string;
     ready: boolean;
     connected: boolean;
+    avatarUrl?: string | null;
     role?: Role;
     alive: boolean;
     /** Chính viewer là Kẻ Nguyền Rủa đã hoá Sói. Không gửi cho ai khác. */

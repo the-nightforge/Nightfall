@@ -182,6 +182,7 @@ export default function RoomPage() {
                       }
                     : undefined
                 }
+                onUpdateAvatar={(avatarUrl) => room.emit("room:update-avatar", { avatarUrl })}
               />
             )}
           </aside>

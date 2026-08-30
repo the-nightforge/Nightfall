@@ -316,7 +316,11 @@ function RoleCard({
         {meta.name}
       </span>
 
-      <span className="mt-1 flex items-center gap-1 text-[10px] font-bold">
+      <span className="mt-1 line-clamp-3 min-h-[32px] px-1 text-center text-[11px] leading-snug text-mist/60">
+        {meta.description}
+      </span>
+
+      <span className="mt-1.5 flex items-center gap-1 text-[10px] font-bold">
         <span className={`h-1.5 w-1.5 rounded-full ${enabled ? (wolf ? "bg-blood-500" : "bg-emerald-500") : "bg-mist/30"}`} aria-hidden="true" />
         <span className={enabled ? "text-white" : "text-mist/40"}>
           {count > 0 ? `×${count}` : role === "VILLAGER" ? "lấp chỗ" : "—"}
