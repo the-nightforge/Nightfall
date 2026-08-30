@@ -144,14 +144,33 @@ function HomeInner() {
   return (
     <>
       <Backdrop mood="dusk" />
-      <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-6 px-4 py-10 lg:max-w-5xl lg:grid lg:grid-cols-[minmax(0,1fr)_25rem] lg:items-center lg:gap-14">
+      {/*
+        * lg:items-start chứ không phải items-center.
+        *
+        * Cột trái cao 785px còn thẻ form chỉ 367px, nên căn giữa để lại 209px
+        * trống ĐỀU Ở TRÊN VÀ DƯỚI thẻ: nửa trái đặc kín từ trên xuống, nửa phải
+        * là một cái hộp nhỏ lửng lơ giữa chừng. Khối vẫn cân chính xác về mặt
+        * pixel, nhưng mắt đọc ra một đường chéo nặng dưới-trái. Cho hai mép trên
+        * thẳng hàng là hết.
+        *
+        * xl:max-w-6xl: trên màn 1650px, chốt ở 1024px để lại hai vệt tối 313px
+        * mỗi bên và cả cụm thành một hòn đảo giữa màn hình.
+        *
+        * lg:content-center là bắt buộc đi kèm, không phải trang trí thêm:
+        * `justify-center` của bản cũ là justify-CONTENT, mà ở grid nó chỉ căn
+        * theo trục ngang. Theo trục dọc, grid có min-h-screen và hàng cỡ auto sẽ
+        * GIÃN ra lấp hết chỗ thừa - dải ba mục bị đẩy rơi xuống cách ảnh hero
+        * 225px thay vì 56px. content-center giữ nguyên cỡ hàng rồi căn cả cụm
+        * vào giữa.
+        */}
+      <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-6 px-4 py-10 lg:max-w-5xl lg:grid lg:grid-cols-[minmax(0,1fr)_25rem] lg:content-center lg:items-start lg:gap-14 xl:max-w-6xl">
         {/*
           * Nửa trái chỉ là nhận diện, và trên desktop nó gánh luôn khoảng trống
           * mà bản cũ để không hai bên form. Trên điện thoại phần khung cảnh và
           * ba dòng giới thiệu bị cắt: ở đó chỗ trên màn hình thuộc về ô biệt
           * danh và ô mã phòng, không thuộc về trang trí.
           */}
-        <section className="lg:self-center">
+        <section>
           <header className="flex items-center gap-4 lg:block">
             <BrandMark className="h-16 w-16 shrink-0 lg:h-20 lg:w-20" />
             <div className="min-w-0 lg:mt-5">
@@ -164,22 +183,10 @@ function HomeInner() {
             </div>
           </header>
 
-          <HomeHero className="mt-8 hidden lg:block" />
-
-          <ul className="mt-6 hidden gap-4 text-sm text-mist/75 lg:grid lg:grid-cols-3">
-            <li>
-              <b className="block text-white">6 - 15 người</b>
-              Một mã phòng năm ký tự là đủ để cả nhóm vào.
-            </li>
-            <li>
-              <b className="block text-white">Chơi thử một mình</b>
-              Thêm bot cho đủ bàn, luật chạy y như ván thật.
-            </li>
-            <li>
-              <b className="block text-white">Chat theo pha</b>
-              Làng, phe Sói và người chết mỗi bên một kênh riêng.
-            </li>
-          </ul>
+          {/* xl:aspect-[16/10]: khung nới lên 1152px làm cột trái rộng thêm ~130px,
+            * và aspect-[5/4] sẽ biến đúng số đó thành ~100px CHIỀU CAO - tức là
+            * kéo lại đúng cái chênh lệch vừa sửa. Rộng ra thì bẹt lại. */}
+          <HomeHero className="mt-8 hidden lg:block xl:aspect-[16/10]" />
         </section>
 
         <section className="card space-y-4">
@@ -250,6 +257,29 @@ function HomeInner() {
             &quot;Thêm bot&quot;.
           </p>
         </section>
+
+        {/*
+          * Ba mục này trước nằm trong cột trái và đẩy nó cao thêm 105px so với
+          * thẻ form. Trải ngang cả hai cột thì cột trái ngắn lại, và chúng thành
+          * một dải chân trang buộc hai cột vào nhau thay vì kéo lệch một bên.
+          *
+          * Nằm SAU thẻ form trong DOM cũng là thứ tự đọc đúng hơn: người vào
+          * trang cần ô biệt danh trước, phần giới thiệu sau.
+          */}
+        <ul className="hidden gap-4 text-sm text-mist/75 lg:col-span-2 lg:grid lg:grid-cols-3">
+          <li>
+            <b className="block text-white">6 - 15 người</b>
+            Một mã phòng năm ký tự là đủ để cả nhóm vào.
+          </li>
+          <li>
+            <b className="block text-white">Chơi thử một mình</b>
+            Thêm bot cho đủ bàn, luật chạy y như ván thật.
+          </li>
+          <li>
+            <b className="block text-white">Chat theo pha</b>
+            Làng, phe Sói và người chết mỗi bên một kênh riêng.
+          </li>
+        </ul>
       </main>
     </>
   );
