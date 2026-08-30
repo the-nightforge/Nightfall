@@ -35,6 +35,7 @@ function emptyNight(): NightState {
 /** Bàn cờ cố định: một Sói, một Kẻ Nguyền Rủa và đủ vai để thử mọi lối chết. */
 function cursedState(over: Partial<GameState> = {}): GameState {
   return {
+    deadCanSpeakChosenId: null,
     phase: "NIGHT",
     round: 1,
     phaseEndsAt: 30_000,

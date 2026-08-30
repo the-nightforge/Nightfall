@@ -22,6 +22,7 @@ function createTestState(players: Partial<EnginePlayer>[]): GameState {
   }
 
   return {
+    deadCanSpeakChosenId: null,
     phase: "NIGHT",
     round: 1,
     phaseEndsAt: Date.now() + 30000,

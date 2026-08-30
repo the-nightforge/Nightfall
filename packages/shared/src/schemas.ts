@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { MAX_PLAYERS_PER_ROOM, MIN_PLAYERS_TO_START, type RoomConfig } from "./phases";
+import {
+  DEAD_MESSAGE_MAX_LENGTH,
+  MAX_PLAYERS_PER_ROOM,
+  MIN_PLAYERS_TO_START,
+  type RoomConfig,
+} from "./phases";
 
 export const nicknameSchema = z
   .string()
@@ -119,6 +124,17 @@ export const skipDiscussionPayload = z.object({ skip: z.boolean() }).strict();
 export const voiceTokenPayload = z.object({}).strict();
 export const voiceReadyPayload = z.object({}).strict();
 export const dayOfTruthClaimPayload = z.object({ role: z.string().min(1).nullable() }).strict();
+
+/**
+ * Lời nhắn của Tiếng Vọng Người Chết.
+ *
+ * Trần dùng chung hằng số với engine: hai con số rời nhau thì tầng lỏng hơn
+ * mới là luật thật, và ở đây tầng lỏng hơn sẽ đẩy engine tới chỗ từ chối - tức
+ * người chơi mất trắng lượt duy nhất của cả ván.
+ */
+export const deadMessagePayload = z
+  .object({ text: z.string().trim().min(1).max(DEAD_MESSAGE_MAX_LENGTH) })
+  .strict();
 export const updateAvatarPayload = z.object({ avatarUrl: z.string().nullable() }).strict();
 export const chatSendPayload = z.object({ text: z.string().trim().min(1).max(300) }).strict();
 

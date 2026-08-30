@@ -77,6 +77,7 @@ function lockWolves(engine: GameEngine, pick = 0) {
 
 function makeHunterEngine(phase: GameState["phase"] = "NIGHT") {
   const state: GameState = {
+    deadCanSpeakChosenId: null,
     phase,
     round: 1,
     phaseEndsAt: 30_000,

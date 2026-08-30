@@ -9,6 +9,9 @@ import type { Room } from "../rooms/store";
  * File này cố tình không đọc bất cứ trường nào của `room.engine.state`. Mọi
  * quyền xem đã được quyết ở `botKnowledgeFor` và `visibleChatLog`; thêm một
  * đường đọc thứ ba ở đây là cách dễ nhất để một bí mật lọt vào lõi AI.
+ *
+ * `activeEventId` từng được ghép ở đây và không có chỗ nào đọc. Nó đã chuyển
+ * vào `BotKnowledgeView`, tức đi qua đúng bộ lọc của engine như mọi thứ khác.
  */
 export function buildBotDecisionContext(room: Room, botId: string): BotDecisionContext {
   if (!room.engine) throw new Error("Chưa có trận đấu");
@@ -23,7 +26,6 @@ export function buildBotDecisionContext(room: Room, botId: string): BotDecisionC
       text: message.text,
       at: message.at,
     })),
-    activeEventId: room.engine.state.activeEvent?.id ?? null,
     balanceScore: balance.score,
     pendingLastStand: room.engine.state.pendingLastStandVictim ?? null,
   };

@@ -38,6 +38,7 @@ function stateFor(playerId = "me", seed = "weights"): BotBrainState {
 
 function emptyNight(over: Partial<NightKnowledge> = {}): NightKnowledge {
   return {
+    bonusSecondTargetFor: null,
     canAct: true,
     legalActions: [],
     legalTargets: {
@@ -62,6 +63,8 @@ function emptyNight(over: Partial<NightKnowledge> = {}): NightKnowledge {
 
 function knowledge(over: Partial<BotKnowledgeView> = {}): BotKnowledgeView {
   return {
+    dayOfTruthClaims: {},
+    activeEventId: null,
     botId: "me",
     round: 2,
     phase: "VOTING",

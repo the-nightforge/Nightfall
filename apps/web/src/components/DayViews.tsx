@@ -6,6 +6,7 @@ import { OpenVotePanel } from "./OpenVotePanel";
 import { PlayerGrid } from "./PlayerGrid";
 import { VoteHistoryPanel } from "./VoteHistoryPanel";
 import { DayOfTruthModal } from "./DayOfTruthModal";
+import { DeadWhisperPanel } from "./DeadWhisperPanel";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -13,9 +14,16 @@ interface Props {
   onVote: (targetId: string | null) => void;
   onSkipDiscussion: (skip: boolean) => void;
   onDayOfTruthClaim?: (role: string | null) => void;
+  onDeadMessage?: (text: string) => void;
 }
 
-export function DayView({ snapshot, onVote, onSkipDiscussion, onDayOfTruthClaim }: Props) {
+export function DayView({
+  snapshot,
+  onVote,
+  onSkipDiscussion,
+  onDayOfTruthClaim,
+  onDeadMessage,
+}: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const isVoting = snapshot.phase === "VOTING";
   const dead = !snapshot.you?.alive;
@@ -152,6 +160,7 @@ export function DayView({ snapshot, onVote, onSkipDiscussion, onDayOfTruthClaim 
       {snapshot.activeEvent?.id === "DAY_OF_TRUTH" && onDayOfTruthClaim && (
         <DayOfTruthModal snapshot={snapshot} onClaim={onDayOfTruthClaim} />
       )}
+      {onDeadMessage && <DeadWhisperPanel snapshot={snapshot} onSend={onDeadMessage} />}
     </div>
   );
 }

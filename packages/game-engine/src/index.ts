@@ -18,6 +18,8 @@ export * from "./bot/analysis/coalition";
 export * from "./bot/belief/private-info";
 export * from "./bot/decision/vote-decision";
 export * from "./bot/decision/trial-decision";
+export * from "./bot/decision/claim-decision";
+export * from "./bot/decision/ghost-decision";
 export * from "./bot/roles/strategy";
 export * from "./bot/roles/registry";
 export * from "./bot/BotRuntime";

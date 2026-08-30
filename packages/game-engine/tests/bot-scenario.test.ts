@@ -9,6 +9,8 @@ function step(round: number, history: DayVoteRecap[], chatId: string): BotDecisi
   const legal = PLAYERS.filter((id) => id !== "me");
   return {
     knowledge: {
+      dayOfTruthClaims: {},
+      activeEventId: null,
       botId: "me",
       round,
       phase: "VOTING",

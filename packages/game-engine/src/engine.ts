@@ -1,4 +1,5 @@
 import {
+  DEAD_MESSAGE_MAX_LENGTH,
   GAME_OVER_MS,
   RESULT_MS,
   ROLE_REVEAL_MS,
@@ -121,6 +122,8 @@ export interface PlayerGameView {
   dayVoteHistory: DayVoteRecap[];
   log: string[];
   dayOfTruthClaims?: Record<string, string | null>;
+  /** Lượt nói của linh hồn, tính riêng cho người xem. Xem RoomSnapshot. */
+  deadCanSpeak: { canAct: boolean } | null;
 }
 
 const recapPlayer = (player: EnginePlayer | undefined): RecapPlayer | null =>
@@ -187,6 +190,7 @@ export class GameEngine {
     this.state.bloodMoonArmed ??= false;
     this.state.bloodMoonUsed ??= false;
     this.state.deadCanSpeakUsed ??= false;
+    this.state.deadCanSpeakChosenId ??= null;
     this.state.howlBonusDay ??= null;
     this.state.dayOfTruthClaims ??= {};
     // State lưu trước khi có Kẻ Nguyền Rủa không có hai trường dưới đây. Mặc
@@ -264,6 +268,7 @@ export class GameEngine {
       bloodMoonArmed: false,
       bloodMoonUsed: false,
       deadCanSpeakUsed: false,
+      deadCanSpeakChosenId: null,
       howlBonusDay: null,
       dayOfTruthClaims: {},
     };
@@ -404,9 +409,17 @@ export class GameEngine {
       }
       activeEvent = { ...event, announcement };
     } else if (event?.id === "DEAD_CAN_SPEAK") {
-      const announcement = `Tiếng Vọng Người Chết: một linh hồn có thể gửi lời nhắn 120 ký tự ẩn danh.`;
+      const announcement = `Tiếng Vọng Người Chết: một linh hồn có thể gửi lời nhắn ${DEAD_MESSAGE_MAX_LENGTH} ký tự ẩn danh.`;
       activeEvent = { ...event, announcement };
-      // flag will be set when dead actually speaks; keep unused until then
+      // Bốc linh hồn NGAY tại đây thay vì để ai nhanh tay thì được: một cuộc
+      // đua giữa người thật và BOT thì BOT luôn thắng, và người thắng đua lại
+      // đổi theo độ trễ mạng chứ không theo ván đấu.
+      //
+      // `selectEvent` đã đòi có người chết, nhưng `customEvent` đi vòng qua nó
+      // nên hàng rào phải nằm ở đây.
+      const ghosts = this.state.players.filter((player) => !player.alive);
+      this.state.deadCanSpeakChosenId =
+        ghosts.length > 0 ? ghosts[Math.floor(rng() * ghosts.length)].id : null;
     } else if (event?.id === "HOWL_OF_THE_PACK") {
       this.state.howlBonusDay = this.state.round + 1;
     } else if (event?.id === "DAY_OF_TRUTH") {
@@ -1255,6 +1268,47 @@ export class GameEngine {
     st.log.push(`${p.name} claim: ${claim ?? "Không tiết lộ"}`);
   }
 
+  /**
+   * Lượt nói của linh hồn, tính riêng cho người xem.
+   *
+   * Trả về `{ canAct }` và KHÔNG GÌ KHÁC. Mọi trường thêm vào đây đều là một
+   * đường rò danh tính tiềm năng, và `hunterShotInfo` ngay phía trên đã phải
+   * thay tên thật bằng "Ẩn danh" vì đúng lý do đó.
+   */
+  private deadCanSpeakViewFor(viewerId: string): { canAct: boolean } | null {
+    const st = this.state;
+    if (st.activeEvent?.id !== "DEAD_CAN_SPEAK") return null;
+    return { canAct: !st.deadCanSpeakUsed && st.deadCanSpeakChosenId === viewerId };
+  }
+
+  /**
+   * Lời nhắn ẩn danh của linh hồn được chọn.
+   *
+   * Engine chỉ gác luật và tiêu lượt; nó KHÔNG đăng chat, vì chat không thuộc
+   * về nó. Trả lại câu đã trim để chỗ gọi khỏi tự chuẩn hoá lần thứ hai rồi
+   * lệch khỏi cái vừa được kiểm.
+   *
+   * Quá dài thì TỪ CHỐI chứ không cắt: cắt âm thầm đổi nghĩa câu nói của người
+   * chơi mà họ không hề biết, và họ chỉ có đúng một lượt.
+   */
+  submitDeadMessage(playerId: string, text: string): string {
+    const st = this.state;
+    if (st.activeEvent?.id !== "DEAD_CAN_SPEAK") throw new GameError("Không trong Tiếng Vọng Người Chết");
+    if (st.deadCanSpeakUsed) throw new GameError("Lời nhắn của linh hồn đã được gửi");
+    if (st.deadCanSpeakChosenId !== playerId) throw new GameError("Bạn không phải linh hồn được chọn");
+
+    const trimmed = text.trim();
+    if (trimmed.length === 0) throw new GameError("Lời nhắn không được để trống");
+    if (trimmed.length > DEAD_MESSAGE_MAX_LENGTH) {
+      throw new GameError(`Lời nhắn tối đa ${DEAD_MESSAGE_MAX_LENGTH} ký tự`);
+    }
+
+    st.deadCanSpeakUsed = true;
+    // Log KHÔNG mang tên người gửi: log đi vào snapshot công khai.
+    st.log.push(`[Tiếng Vọng Người Chết] Một linh hồn đã lên tiếng.`);
+    return trimmed;
+  }
+
   // ---- Điều kiện thắng ----
 
   checkWin(): Winner {
@@ -1530,6 +1584,7 @@ export class GameEngine {
       lastEliminated: st.phase === "ELIMINATION" || st.phase === "CHECK_WIN" ? st.lastEliminated : null,
       log: st.log.slice(-10),
       dayOfTruthClaims: st.dayOfTruthClaims ? { ...st.dayOfTruthClaims } : undefined,
+      deadCanSpeak: this.deadCanSpeakViewFor(viewerId),
     };
   }
 
@@ -1605,6 +1660,10 @@ export class GameEngine {
       currentVote: viewer.alive ? st.votes[botId] : undefined,
       legalVoteChoices: this.legalVoteChoicesFor(botId),
       lastNightDeaths: st.lastNightDeaths,
+      // Công khai với cả phòng qua `RoomSnapshot.activeEvent`, nên không có gì
+      // để lọc; lõi BOT cần nó để biết luật hôm nay đã đổi.
+      activeEventId: st.activeEvent?.id ?? null,
+      dayOfTruthClaims: this.publicRoleClaims(),
     });
   }
 
@@ -1726,7 +1785,57 @@ export class GameEngine {
       healUsed: isWitch ? st.healUsed : false,
       poisonUsed: isWitch ? st.poisonUsed : false,
       wolvesLocked: st.night.wolvesLocked,
+      bonusSecondTargetFor: this.bonusSecondTargetFor(viewer, isWolf, canSee && !seerBlocked),
     };
+  }
+
+  /**
+   * Bảng claim Ngày Sự Thật, đã lọc về đúng kiểu.
+   *
+   * `GameState` giữ claim là `string` vì nó đi thẳng từ payload socket. Lọc ở
+   * đây chứ không ép kiểu: một phòng phục hồi từ Redis có thể mang state của
+   * phiên bản khác, và truy một memory bịa ra từ chuỗi lạ tốn hơn nhiều so với
+   * một lần kiểm ở đúng ranh giới kiểu.
+   */
+  private publicRoleClaims(): Record<string, Role | null> {
+    const claims: Record<string, Role | null> = {};
+    for (const [playerId, claim] of Object.entries(this.state.dayOfTruthClaims ?? {})) {
+      if (claim === null) {
+        claims[playerId] = null;
+      } else if (claim in ROLE_META) {
+        claims[playerId] = claim as Role;
+      }
+    }
+    return claims;
+  }
+
+  /**
+   * Vai này có được chọn thêm một mục tiêu phụ đêm nay không.
+   *
+   * Điều kiện phải khớp ĐÚNG hai nhánh `secondaryTargetId` trong
+   * `submitNightAction`. Chào một mục tiêu phụ mà engine sẽ từ chối không chỉ
+   * làm mất mục tiêu phụ - nó làm mất CẢ lượt đêm, vì engine ném trước khi ghi
+   * nhận mục tiêu chính.
+   */
+  private bonusSecondTargetFor(
+    viewer: EnginePlayer,
+    isWolf: boolean,
+    canSee: boolean,
+  ): NightActionKind | null {
+    const st = this.state;
+    if (isWolf) {
+      const doubleKill = st.night.wolfCubRageTonight || st.activeEvent?.id === "BLOODY_HUNT";
+      // Cần ít nhất hai mồi ngoài bầy: dưới mức đó mục tiêu phụ chắc chắn trùng
+      // mục tiêu chính, và engine ném đúng vào cú trùng đó.
+      const prey = this.alivePlayers().filter((player) => roleTeam(player.role) !== "wolves");
+      return doubleKill && prey.length >= 2 ? "KILL" : null;
+    }
+    if (canSee && st.activeEvent?.id === "CLEARING_MIST") {
+      // Trừ chính mình: engine cấm tự soi, nên phải còn hai người KHÁC.
+      const targets = this.alivePlayers().filter((player) => player.id !== viewer.id);
+      return targets.length >= 2 ? "SEE" : null;
+    }
+    return null;
   }
 
   /**

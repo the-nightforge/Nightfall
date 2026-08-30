@@ -85,6 +85,8 @@ describe("nhận diện lời nói nhắm thẳng vào một người", () => {
 describe("lời nhắm tới KHÔNG phải bằng chứng", () => {
   const context = (chat: BotChatObservation[]): BotDecisionContext => ({
     knowledge: {
+      dayOfTruthClaims: {},
+      activeEventId: null,
       botId: "p1",
       round: 1,
       phase: "DAY_DISCUSSION",

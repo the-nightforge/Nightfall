@@ -85,6 +85,26 @@ export const ROLE_REVEAL_MS = 10_000;
 export const RESULT_MS = 8_000;
 export const GAME_OVER_MS = 30_000;
 
+/**
+ * Trần độ dài lời nhắn của Tiếng Vọng Người Chết.
+ *
+ * Khai báo ở shared vì cả ba tầng đều phải đồng ý: web chặn ở ô nhập, schema
+ * chặn ở biên socket, engine chặn lần cuối. Ba con số rời nhau thì tầng lỏng
+ * nhất mới là luật thật.
+ */
+export const DEAD_MESSAGE_MAX_LENGTH = 120;
+
+/**
+ * Tác giả giả của lời nhắn ẩn danh.
+ *
+ * `ChatMessage` bắt buộc có `playerId`, nên lời nhắn phải mang MỘT cái id nào
+ * đó. Nó phải là hằng số này chứ tuyệt đối không phải id thật: payload chat
+ * được phát cho cả phòng, và một id thật nằm trong đó là lộ danh tính bất kể
+ * client vẽ ra sao.
+ */
+export const GHOST_AUTHOR_ID = "__ghost__";
+export const GHOST_AUTHOR_NAME = "Một linh hồn";
+
 export const MIN_PLAYERS_TO_START = 6;
 export const MAX_PLAYERS_PER_ROOM = 15;
 
