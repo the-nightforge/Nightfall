@@ -159,10 +159,15 @@ describe("CLAIM_INTEGRITY", () => {
     expect(result.fromTemplate).toBe(true);
   });
 
-  it("vứt câu PHẢN BÁC khi chữ lại đọc ra một khai TRẦN — đúng vai, mất luôn mục tiêu lõi đã chốt", async () => {
-    // COUNTER_CLAIM(role=SEER, targetId=Bình) nhưng câu chỉ là "Tôi là tiên
-    // tri." - đọc ra ROLE_CLAIM trần, đúng vai nhưng không mang targetId nào,
-    // nên phần "ai bị phản bác" mà lõi đã quyết biến mất khỏi câu.
+  it("vứt câu PHẢN BÁC khi chữ lại đọc ra một khai TRẦN — chặn bởi so MỤC TIÊU, không phải so loại", async () => {
+    // KHÔNG phải bài test cho lớp so loại, dù trông giống. COUNTER_CLAIM
+    // (role=SEER, targetId=Bình) nhưng câu chỉ là "Tôi là tiên tri." - đọc ra
+    // ROLE_CLAIM trần, đúng vai. Một khai trần không bao giờ mang `targetId`
+    // (`parseClause` không gắn nó cho `ROLE_CLAIM`), nên phép so mục tiêu của
+    // round 1 đã tự rớt câu này ở `undefined !== "p2"` TRƯỚC KHI lớp so loại
+    // của round 2 kịp chạy tới - tắt lớp so loại đi, test này vẫn xanh y hệt.
+    // Ca thật sự cần lớp so loại để xanh là "CLAIM_ROLE mà chữ đọc ra
+    // COUNTER_CLAIM" ở test phía trên: chỉ ca đó đỏ khi bỏ so loại đi.
     const result = await renderBotSpeech(
       counterClaimRequestFor(),
       brainSaying("Tôi là tiên tri."),

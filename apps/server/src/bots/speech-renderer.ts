@@ -156,6 +156,14 @@ function echoesRecentOwnLine(request: SpeechRequest, chat: string): boolean {
  *    `COUNTER_CLAIM` đòi `COUNTER_CLAIM` — trước khi so bất cứ trường nào bên
  *    trong nó. So field mà bỏ qua loại là so nhầm chỗ: vai có thể khớp trong
  *    khi cả CÂU vẫn là một phát ngôn khác hẳn cái lõi đã chốt.
+ *
+ *    Lớp này KHÔNG chịu tải như nhau ở hai chiều. Chiều `CLAIM_ROLE` → chữ đọc
+ *    ra `COUNTER_CLAIM`: đây là lớp DUY NHẤT chặn được, vì vai vẫn có thể
+ *    trùng - bỏ lớp này thì câu lọt. Chiều `COUNTER_CLAIM` → chữ đọc ra
+ *    `ROLE_CLAIM` trần: lớp 3 (mục tiêu) đã tự chặn trước, vì một khai trần
+ *    không bao giờ mang `targetId` để khớp - lớp này ở chiều đó chỉ là phòng
+ *    thủ thêm, phòng khi hình dạng `ROLE_CLAIM` mà parser trả về đổi khác đi
+ *    trong tương lai. Không xoá lớp này chỉ vì một chiều "có vẻ" thừa.
  * 2. VAI. `data.role` phải đúng `claimedRole` mà lõi đã chốt.
  * 3. MỤC TIÊU (chỉ `COUNTER_CLAIM`). Lõi chốt cả người bị phản bác
  *    (`intention.targetId`, từ `claim.counterTargetId` — `speech-planner.ts`),
