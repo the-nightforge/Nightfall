@@ -45,6 +45,9 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
   // Ô trống có đánh số cho thấy còn thiếu bao nhiêu người, thay vì một dòng chữ
   // "cần thêm 4 người" mà mắt phải đọc mới biết.
   const emptySlots = lobby ? Math.max(0, MIN_PLAYERS_TO_START - count) : 0;
+  // Lời khai Ngày Sự Thật chỉ dán lên cột này trong đúng sự kiện đó.
+  const claims =
+    snapshot.activeEvent?.id === "DAY_OF_TRUTH" ? snapshot.dayOfTruthClaims : undefined;
 
   return (
     <section className="card p-3">
@@ -63,7 +66,10 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
           const isRoomHost = snapshot.hostId === player.id;
           // Bot vốn không có kết nối, nên connected=false của nó không phải sự cố.
           const offline = !player.isBot && player.connected === false;
-          const hasTags = isRoomHost || player.isBot || !!player.role || offline;
+          // null là "không tiết lộ" - vẫn là một lời khai, khác hẳn chưa khai.
+          const claim = claims?.[player.id];
+          const claimed = claims ? player.id in claims : false;
+          const hasTags = isRoomHost || player.isBot || !!player.role || offline || claimed;
           // Identity của LiveKit chính là playerId nên đối chiếu thẳng.
           const speaking = speakers.has(player.id);
           return (
@@ -154,6 +160,14 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
                       }`}
                     >
                       {roleLabel(player)}
+                    </span>
+                  )}
+                  {claimed && (
+                    <span className="inline-flex max-w-full items-center gap-0.5 truncate rounded bg-sky-600/20 px-1 py-0.5 text-[9px] font-bold text-sky-200 ring-1 ring-sky-500/30">
+                      <span aria-hidden="true">🔍</span>{" "}
+                      {claim == null
+                        ? "Không tiết lộ"
+                        : ((ROLE_META as any)[claim]?.name ?? claim)}
                     </span>
                   )}
                   {offline && (
