@@ -563,6 +563,9 @@ describe("Event Modifiers in GameEngine", () => {
     // victim still alive during day
     expect(engine.player("villager")?.alive).toBe(true);
     engine.setPhase("NIGHT", 30000);
+    expect(engine.player("villager")?.alive).toBe(true);
+    const deaths2 = engine.resolveNight();
+    expect(deaths2.some((d) => d.playerId === "villager")).toBe(true);
     expect(engine.player("villager")?.alive).toBe(false);
   });
 

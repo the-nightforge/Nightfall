@@ -69,7 +69,8 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
           // null là "không tiết lộ" - vẫn là một lời khai, khác hẳn chưa khai.
           const claim = claims?.[player.id];
           const claimed = claims ? player.id in claims : false;
-          const hasTags = isRoomHost || player.isBot || !!player.role || offline || claimed;
+          const isPending = snapshot.pendingLastStandVictim?.playerId === player.id;
+          const hasTags = isRoomHost || player.isBot || !!player.role || offline || claimed || isPending;
           // Identity của LiveKit chính là playerId nên đối chiếu thẳng.
           const speaking = speakers.has(player.id);
           return (
@@ -173,6 +174,11 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
                   {offline && (
                     <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-bold text-amber-300 ring-1 ring-amber-500/30">
                       <span aria-hidden="true">📴</span> Mất kết nối
+                    </span>
+                  )}
+                  {isPending && (
+                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/20 px-1 py-0.5 text-[9px] font-bold text-amber-300 ring-1 ring-amber-500/30">
+                      <span aria-hidden="true">🛡️</span> Tử Thủ
                     </span>
                   )}
                 </div>

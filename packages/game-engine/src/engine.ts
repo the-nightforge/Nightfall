@@ -122,6 +122,7 @@ export interface PlayerGameView {
   dayVoteHistory: DayVoteRecap[];
   log: string[];
   dayOfTruthClaims?: Record<string, string | null>;
+  pendingLastStandVictim?: { playerId: string; name: string } | null;
   /** Lượt nói của linh hồn, tính riêng cho người xem. Xem RoomSnapshot. */
   deadCanSpeak: { canAct: boolean } | null;
 }
@@ -317,25 +318,11 @@ export class GameEngine {
     this.state.phaseEndsAt = now + durationMs;
     if (phase === "NIGHT") {
       this.state.round += 1;
-      let pendingDeath: PublicDeath | null = null;
-      const pending = this.state.pendingLastStandVictim;
-      if (pending && pending.dieRound <= this.state.round) {
-        const victim = this.player(pending.playerId);
-        if (victim && victim.alive) {
-          victim.alive = false;
-          pendingDeath = { playerId: victim.id, name: victim.name };
-          this.state.log.push(`Tử Thủ: ${victim.name} đã không qua khỏi.`);
-          this.queueHunterReaction([{ playerId: victim.id }], "night");
-          if (victim.role === "WOLF_CUB") this.state.wolfCubRageNextNight = true;
-          if (victim.role === "SEER") this.state.apprenticeAwakened = true;
-        }
-        this.state.pendingLastStandVictim = null;
-      }
       const rageTonight = this.state.wolfCubRageNextNight;
       this.state.wolfCubRageNextNight = false;
       this.state.night = emptyNight(rageTonight);
       this.state.votes = {};
-      this.state.lastNightDeaths = pendingDeath ? [pendingDeath] : [];
+      this.state.lastNightDeaths = [];
     }
     if (phase === "DAY_DISCUSSION") {
       this.state.votes = {};
@@ -735,6 +722,21 @@ export class GameEngine {
         deaths.push(death);
       }
     };
+
+    // LAST_STAND: check pending victim at start of this night's resolution
+    if (this.state.pendingLastStandVictim && this.state.pendingLastStandVictim.dieRound <= this.state.round) {
+      const pending = this.state.pendingLastStandVictim;
+      const victim = this.player(pending.playerId);
+      if (victim && victim.alive) {
+        victim.alive = false;
+        addDeath({ playerId: victim.id, name: victim.name, cause: "wolf" });
+        this.state.log.push(`Tử Thủ: ${victim.name} đã gục sau khi kéo dài sự sống!`);
+        this.queueHunterReaction([{ playerId: victim.id }], "night");
+        if (victim.role === "WOLF_CUB") this.state.wolfCubRageNextNight = true;
+        if (victim.role === "SEER") this.state.apprenticeAwakened = true;
+      }
+      this.state.pendingLastStandVictim = null;
+    }
 
     // 1. Ghi nhận shields
     const guardedIds = new Set<string>();
@@ -1584,6 +1586,9 @@ export class GameEngine {
       lastEliminated: st.phase === "ELIMINATION" || st.phase === "CHECK_WIN" ? st.lastEliminated : null,
       log: st.log.slice(-10),
       dayOfTruthClaims: st.dayOfTruthClaims ? { ...st.dayOfTruthClaims } : undefined,
+      pendingLastStandVictim: st.pendingLastStandVictim
+        ? { playerId: st.pendingLastStandVictim.playerId, name: this.player(st.pendingLastStandVictim.playerId)?.name ?? "?" }
+        : null,
       deadCanSpeak: this.deadCanSpeakViewFor(viewerId),
     };
   }
