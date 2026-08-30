@@ -49,7 +49,9 @@ function intention(over: Partial<BotSpeechIntention> = {}): BotSpeechIntention {
 }
 
 describe("bảng speech act", () => {
-  it("có đúng mười hai loại mà thiết kế Phase 4 liệt kê", () => {
+  it("có đúng mười bốn loại mà thiết kế Phase 4/5 liệt kê", () => {
+    // Task 2 thêm CLAIM_ROLE và COUNTER_CLAIM: hai speech act cho lời khai vai
+    // nói TO giữa phòng, nâng tổng từ mười hai lên mười bốn.
     expect([...BOT_SPEECH_KINDS].sort()).toEqual(
       [
         "ACCUSE",
@@ -57,6 +59,8 @@ describe("bảng speech act", () => {
         "ASK_EVIDENCE",
         "CHALLENGE",
         "CHANGE_MIND",
+        "CLAIM_ROLE",
+        "COUNTER_CLAIM",
         "DEFEND",
         "DISAGREE",
         "HUMOR",

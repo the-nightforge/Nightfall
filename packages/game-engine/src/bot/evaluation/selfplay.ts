@@ -218,6 +218,10 @@ export function renderIntentionText(
       return "Ừ.";
     case "HUMOR":
       return "Thôi tôi im.";
+    case "CLAIM_ROLE":
+      return `Tôi là ${speech.claimedRole ?? "dân làng"}.`;
+    case "COUNTER_CLAIM":
+      return `${target} không thể là ${speech.claimedRole ?? "dân làng"}, tôi mới là ${speech.claimedRole ?? "dân làng"}.`;
     default: {
       // Không bao giờ chạy tới. Tồn tại để việc thêm một speech act mà quên
       // nhánh render là một LỖI BIÊN DỊCH, chứ không phải một `undefined` lặng

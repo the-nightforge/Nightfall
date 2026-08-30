@@ -105,7 +105,7 @@ export interface BotNightIntention {
  * hành vi *trả lời một người*. Một BOT chỉ có ba loại đó buộc phải phát biểu
  * độc lập, và đó chính là triệu chứng mà Phase 4 phải chữa.
  *
- * Không BOT nào cần dùng đủ mười hai loại trong một ván.
+ * Không BOT nào cần dùng đủ mười bốn loại trong một ván.
  */
 export const BOT_SPEECH_KINDS = [
   "ACCUSE",
@@ -120,6 +120,13 @@ export const BOT_SPEECH_KINDS = [
   "CHANGE_MIND",
   "REACTION",
   "HUMOR",
+  /**
+   * Tự nhận vai. Hai kind này là ĐƯỜNG DUY NHẤT để một lời khai của BOT ra
+   * khỏi lõi; không có đường nào khác, và cổng ở `speech-renderer` bảo đảm nhà
+   * cung cấp không mở thêm được đường thứ hai.
+   */
+  "CLAIM_ROLE",
+  "COUNTER_CLAIM",
 ] as const;
 
 export type BotSpeechKind = (typeof BOT_SPEECH_KINDS)[number];
@@ -170,6 +177,15 @@ export interface BotSpeechIntention {
   /** Tác giả của câu đó. */
   replyToActorId?: string;
   topic?: BotSpeechTopic;
+  /**
+   * Vai được nói TO giữa phòng. Bắt buộc với `CLAIM_ROLE`/`COUNTER_CLAIM`, vô
+   * nghĩa với mọi kind khác.
+   *
+   * KHÔNG phải vai thật: một con Sói khai láo mang `claimedRole: "SEER"`. Đây
+   * cũng chính là lý do trường này an toàn để đưa vào prompt — nó là thứ sắp
+   * được công bố, không phải thứ đang được giấu.
+   */
+  claimedRole?: Role;
   confidence: number;
   evidence: BotEvidence[];
   /**

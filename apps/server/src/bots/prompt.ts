@@ -1,5 +1,5 @@
 import { describeSpeechStyle, type BotSpeechStyle } from "@masoi/game-engine";
-import type { RoomSnapshot } from "@masoi/shared";
+import { ROLE_META, type Role, type RoomSnapshot } from "@masoi/shared";
 import type { SpeechRequest } from "./types";
 
 export interface GeminiSchema {
@@ -193,6 +193,15 @@ export function buildDefensePrompt(view: RoomSnapshot, style?: BotSpeechStyle): 
  * act mới thành một prompt không nói rõ phải làm gì, và mô hình sẽ tự bịa ra
  * một mục đích.
  */
+/**
+ * Tên vai cho prompt. Lấy từ `ROLE_META` chứ không viết tay: prompt và bảng
+ * mẫu phải nói cùng một chữ, nếu không cổng ở `speech-renderer` sẽ từ chối
+ * đúng những câu mà chính prompt này vừa yêu cầu.
+ */
+function roleName(role: Role | undefined): string {
+  return role ? ROLE_META[role].name : "dân làng";
+}
+
 function intentLine(request: SpeechRequest): string {
   const who = request.targetName ?? "một người";
   const author = request.replyTo?.actorName ?? who;
@@ -225,6 +234,16 @@ function intentLine(request: SpeechRequest): string {
       return "Bạn chỉ muốn buông một câu phản ứng rất ngắn, không lập luận gì.";
     case "HUMOR":
       return "Bạn muốn pha một câu cho nhẹ không khí, không nêu tên ai và không kết luận gì.";
+    case "CLAIM_ROLE":
+      return [
+        `Bạn công khai nhận mình là ${roleName(request.intention.claimedRole)}.`,
+        "Câu đầu tiên PHẢI là đúng dạng \"Tôi là <vai>.\" rồi mới nói thêm.",
+      ].join(" ");
+    case "COUNTER_CLAIM":
+      return [
+        `Bạn phản bác ${who}: họ nhận là ${roleName(request.intention.claimedRole)} nhưng bạn mới là.`,
+        `Viết đúng dạng \"<tên> không thể là <vai>, tôi mới là <vai>.\"`,
+      ].join(" ");
     default: {
       const unreachable: never = request.intention.kind;
       throw new Error(`Chưa có câu dẫn cho speech act: ${String(unreachable)}`);
