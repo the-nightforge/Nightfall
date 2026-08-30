@@ -18,6 +18,7 @@ import {
   loadRoomFromRedis,
   persistRoom,
   removeRoom,
+  setRoomTimer,
   type Room,
   type RoomMember,
 } from "./store";
@@ -55,13 +56,23 @@ function hostAbandonedGameOver(room: Room): boolean {
 /**
  * Phòng toàn bot (addBot không giới hạn số lượng) mất luôn người chơi thật
  * duy nhất: không ai, kể cả bot, bấm được "Chơi lại", và không có job dọn
- * phòng định kỳ nào. Reset thẳng về sảnh chờ ngay khi không còn ai để mà "out"
- * nhầm, thay vì để phòng treo IN_GAME vĩnh viễn.
+ * phòng định kỳ nào. Reset về sảnh chờ khi không còn ai để mà "out" nhầm,
+ * thay vì để phòng treo IN_GAME vĩnh viễn.
+ *
+ * Chỉ gọi qua scheduleAbandonedRoomCheck, KHÔNG gọi thẳng lúc vừa rớt mạng:
+ * ngay tại thời điểm đó ai cũng vừa mất kết nối, gọi sớm là xoá ván chỉ vì
+ * một lần tải lại trang.
  */
 export function resetIfAbandoned(room: Room): void {
   if (room.status !== "IN_GAME") return;
   if (room.members.some((m) => !m.isBot && m.connected)) return;
   resetToLobby(room);
+}
+
+/** Hẹn kiểm tra lại sau đúng khoảng ân hạn dùng chung với vote skip thảo luận: ai đã quay lại thì resetIfAbandoned tự bỏ qua. */
+export function scheduleAbandonedRoomCheck(room: Room): void {
+  if (room.status !== "IN_GAME") return;
+  setRoomTimer(room.code, () => resetIfAbandoned(room), DISCONNECT_GRACE_MS + 500);
 }
 
 export const roomService = {
