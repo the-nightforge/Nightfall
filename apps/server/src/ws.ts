@@ -27,7 +27,7 @@ import {
 } from "@masoi/shared";
 import { config } from "./config";
 import { GameError } from "@masoi/game-engine";
-import { roomService, RoomError } from "./rooms/service";
+import { roomService, RoomError, resetIfAbandoned } from "./rooms/service";
 import { getRoomSyncByPlayer } from "./rooms/index-helpers";
 import { getRoom, loadRoomFromRedis, persistRoom } from "./rooms/store";
 import { trackSocket, untrackSocket, broadcastRoom, hasConnection } from "./rooms/broadcast";
@@ -345,6 +345,7 @@ export function setupSocket(io: SocketServer): void {
           member.disconnectedAt = member.connected ? null : Date.now();
           if (room && !member.connected) scheduleDiscussionSkipRecheck(room);
         }
+        if (room) resetIfAbandoned(room);
         broadcastRoom(roomCode);
       }
     });

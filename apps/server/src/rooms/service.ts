@@ -52,6 +52,18 @@ function hostAbandonedGameOver(room: Room): boolean {
   return Date.now() - (host.disconnectedAt ?? 0) >= DISCONNECT_GRACE_MS;
 }
 
+/**
+ * Phòng toàn bot (addBot không giới hạn số lượng) mất luôn người chơi thật
+ * duy nhất: không ai, kể cả bot, bấm được "Chơi lại", và không có job dọn
+ * phòng định kỳ nào. Reset thẳng về sảnh chờ ngay khi không còn ai để mà "out"
+ * nhầm, thay vì để phòng treo IN_GAME vĩnh viễn.
+ */
+export function resetIfAbandoned(room: Room): void {
+  if (room.status !== "IN_GAME") return;
+  if (room.members.some((m) => !m.isBot && m.connected)) return;
+  resetToLobby(room);
+}
+
 export const roomService = {
   async create(playerId: string, name: string): Promise<Room> {
     return withPlayerRoomLock(playerId, async () => {
