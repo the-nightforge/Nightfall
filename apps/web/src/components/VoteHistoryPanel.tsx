@@ -16,9 +16,9 @@ export function VoteHistoryPanel({ recap, players }: Props) {
     <section className="card space-y-3" aria-label="Lịch sử phiếu">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.25em] text-mist/50">Lịch sử bỏ phiếu</p>
+          <p className="text-[11px] uppercase tracking-[0.25em] text-mist/65">Lịch sử bỏ phiếu</p>
         </div>
-        <span className="rounded-full bg-night-800 px-2 py-0.5 text-[10px] text-mist/60">
+        <span className="rounded-full bg-night-800 px-2 py-0.5 text-[11px] text-mist/60">
           Vòng {recap.round}
         </span>
       </div>
@@ -56,7 +56,7 @@ export function VoteHistoryPanel({ recap, players }: Props) {
 
       {recap.finalJudgment && (
         <div className="border-t border-white/[0.08] pt-3">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-mist/60">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-mist/60">
             Phán quyết · {recap.finalJudgment.guilty} treo · {recap.finalJudgment.innocent} tha · {recap.finalJudgment.abstain} bỏ qua
           </p>
           {recap.finalJudgment.ballots.length === 0 ? (
@@ -75,7 +75,7 @@ export function VoteHistoryPanel({ recap, players }: Props) {
                     <Avatar avatar={avatars[b.voterId]} tint={tintFor(b.voterId)} alive className="h-5 w-5 shrink-0" />
                     <span className="text-[11px] font-medium text-white">{voter?.name ?? "?"}</span>
                     <span
-                      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
                         b.guilty ? "bg-blood-600 text-white" : "bg-emerald-600 text-white"
                       }`}
                       title={b.guilty ? "Treo" : "Tha"}

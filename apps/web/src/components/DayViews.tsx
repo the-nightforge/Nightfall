@@ -41,7 +41,7 @@ export function DayView({
             snapshot.lastNightDeaths.length > 0 ? "border-blood-500/40" : "border-emerald-500/30"
           }`}
         >
-          <p className="text-xs uppercase tracking-[0.3em] text-mist/50">Trời đã sáng</p>
+          <p className="text-xs uppercase tracking-[0.3em] text-mist/65">Trời đã sáng</p>
           {snapshot.lastNightDeaths.length > 0 ? (
             <>
               <h3 className="mt-2 font-display text-3xl font-bold text-blood-400">
@@ -113,7 +113,7 @@ export function DayView({
 
       {snapshot.phase === "DAY_DISCUSSION" && (
         <div className="card py-7 text-center">
-          <p className="text-xs uppercase tracking-[0.3em] text-mist/50">Ban ngày</p>
+          <p className="text-xs uppercase tracking-[0.3em] text-mist/65">Ban ngày</p>
           <h3 className="mt-2 font-display text-3xl font-bold text-amber-100">Thảo luận</h3>
           <p className="mx-auto mt-2 max-w-sm text-sm text-mist/70">
             Ai đáng ngờ? Buộc tội, bào chữa, và để ý ai đang im lặng.
@@ -125,7 +125,7 @@ export function DayView({
             * chứ không chỉ ở pha công bố.
             */}
           <div className="mx-auto mt-5 max-w-sm rounded-xl border border-white/[0.06] bg-night-800/50 px-4 py-3">
-            <p className="text-[10px] uppercase tracking-[0.25em] text-mist/40">Đêm vừa rồi</p>
+            <p className="text-[11px] uppercase tracking-[0.25em] text-mist/60">Đêm vừa rồi</p>
             {snapshot.lastNightDeaths.length > 0 ? (
               <p className="mt-1 font-semibold text-blood-400">
                 {snapshot.lastNightDeaths.map((d) => d.name).join(" · ")}{" "}
@@ -145,7 +145,7 @@ export function DayView({
                   {discussionSkip.hasVoted ? "Huỷ skip" : "Skip thảo luận"}
                   {` (${discussionSkip.votes}/${discussionSkip.required})`}
                 </button>
-                <p className="mt-1 text-xs text-mist/50">
+                <p className="mt-1 text-xs text-mist/65">
                   Cần toàn bộ người thật còn sống và đang online đồng ý.
                 </p>
               </div>
@@ -170,14 +170,14 @@ export function EliminationView({ snapshot }: { snapshot: RoomSnapshot }) {
   return (
     <div className="space-y-4">
       <div className="card py-7 text-center">
-        <p className="text-xs uppercase tracking-[0.3em] text-mist/50">Phán quyết của làng</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-mist/65">Phán quyết của làng</p>
           {snapshot.lastEliminated ? (
           <>
             <h3 className="mt-2 font-display text-3xl font-bold text-blood-400">
               {snapshot.lastEliminated.name}
             </h3>
             <p className="mt-1 text-sm text-mist/70">đã bị treo cổ</p>
-            <p className="mt-3 text-xs text-mist/40">Vai trò sẽ được tiết lộ khi ván đấu kết thúc.</p>
+            <p className="mt-3 text-xs text-mist/60">Vai trò sẽ được tiết lộ khi ván đấu kết thúc.</p>
           </>
         ) : snapshot.lastTrial ? (
         // Được tha là một kết cục riêng: lastEliminated === null không phân biệt

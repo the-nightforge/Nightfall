@@ -139,7 +139,7 @@ export function PlayerSeat({
 
 function Tag({ children, cls }: { children: React.ReactNode; cls: string }) {
   return (
-    <span className={`rounded px-1 py-[1px] text-[9px] font-semibold leading-tight ${cls}`}>
+    <span className={`rounded px-1 py-[1px] text-[10px] font-semibold leading-tight ${cls}`}>
       {children}
     </span>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { GHOST_AUTHOR_ID, type ChatMessage } from "@masoi/shared";
 import { getIdentity } from "@/lib/identity";
 
@@ -35,10 +35,32 @@ interface Props {
   messages: ChatMessage[];
   onSend: (text: string) => void;
   placeholder?: string;
+  /**
+   * Bản nháp do bên ngoài giữ.
+   *
+   * Trên điện thoại khung này sống trong một tấm trượt đóng mở được, và tấm
+   * trượt đóng lại là component bị tháo. Giữ chữ đang gõ trong state nội bộ thì
+   * mỗi lần liếc ra ngoài xem lưới người chơi là mất câu đang viết dở. Bỏ trống
+   * cặp prop này thì khung tự giữ nháp như cũ.
+   */
+  draft?: string;
+  onDraftChange?: (draft: string) => void;
+  inputRef?: RefObject<HTMLInputElement | null>;
+  autoFocus?: boolean;
 }
 
-export function ChatBox({ messages, onSend, placeholder }: Props) {
-  const [text, setText] = useState("");
+export function ChatBox({
+  messages,
+  onSend,
+  placeholder,
+  draft,
+  onDraftChange,
+  inputRef,
+  autoFocus,
+}: Props) {
+  const [ownText, setOwnText] = useState("");
+  const text = draft ?? ownText;
+  const setText = onDraftChange ?? setOwnText;
   const boxRef = useRef<HTMLDivElement>(null);
   const meId = getIdentity()?.playerId;
 
@@ -107,6 +129,9 @@ export function ChatBox({ messages, onSend, placeholder }: Props) {
       <div className="flex gap-2 border-t border-night-600/60 p-2">
         <input
           className="input"
+          ref={inputRef}
+          autoFocus={autoFocus}
+          aria-label="Nội dung tin nhắn"
           value={text}
           maxLength={300}
           placeholder={placeholder ?? "Nhập tin nhắn..."}

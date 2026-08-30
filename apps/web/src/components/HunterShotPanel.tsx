@@ -31,7 +31,7 @@ export function HunterShotPanel({ snapshot, onShoot }: Props) {
         <div className="card text-center">
           <p className="text-3xl">🎯</p>
           <p className="mt-2 font-semibold text-mist/70">Đang xử lý phản kích…</p>
-          <p className="mt-1 text-sm text-mist/50">Vui lòng chờ.</p>
+          <p className="mt-1 text-sm text-mist/65">Vui lòng chờ.</p>
         </div>
       );
     }
@@ -50,7 +50,7 @@ export function HunterShotPanel({ snapshot, onShoot }: Props) {
       <div className="card text-center">
         <p className="text-3xl">🎯</p>
         <p className="mt-2 font-semibold text-mist/70">Đang chờ xử lý lượt đặc biệt…</p>
-        <p className="mt-1 text-sm text-mist/50">Vui lòng chờ giây lát.</p>
+        <p className="mt-1 text-sm text-mist/65">Vui lòng chờ giây lát.</p>
       </div>
     );
   }

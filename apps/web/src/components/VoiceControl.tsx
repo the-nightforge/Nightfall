@@ -78,7 +78,7 @@ export function VoiceControl({ snapshot }: { snapshot: RoomSnapshot | null }) {
           )}
 
           <button
-            className="text-xs text-mist/50 underline-offset-2 hover:underline"
+            className="text-xs text-mist/65 underline-offset-2 hover:underline"
             onClick={() => setMicMode(micMode === "ptt" ? "toggle" : "ptt")}
           >
             {micMode === "ptt" ? "Chuyển sang chạm bật/tắt" : "Chuyển sang giữ để nói"}
@@ -104,7 +104,7 @@ export function VoiceControl({ snapshot }: { snapshot: RoomSnapshot | null }) {
         </button>
       )}
 
-      {hint && <p className="text-center text-xs text-mist/50">{hint}</p>}
+      {hint && <p className="text-center text-xs text-mist/65">{hint}</p>}
     </div>
   );
 }

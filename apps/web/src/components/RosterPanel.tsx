@@ -54,7 +54,7 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <h3 className="font-display text-base font-bold text-white">Người chơi</h3>
         {/* Đếm theo sức chứa phòng: "15/6" đọc như phòng đang quá tải. */}
-        <span className="shrink-0 text-xs text-mist/50">
+        <span className="shrink-0 text-xs text-mist/65">
           {lobby ? `${count}/${MAX_PLAYERS_PER_ROOM}` : `${alive}/${count} sống`}
         </span>
       </div>
@@ -131,7 +131,7 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
 
                 {lobby?.isHost && player.id !== meId && (
                   <button
-                    className="inline-flex shrink-0 items-center gap-0.5 rounded bg-blood-600/15 px-1.5 py-0.5 text-[10px] font-bold text-blood-400 hover:bg-blood-600/25"
+                    className="inline-flex shrink-0 items-center gap-0.5 rounded bg-blood-600/15 px-1.5 py-0.5 text-[11px] font-bold text-blood-400 hover:bg-blood-600/25"
                     aria-label={`Kick ${player.name}`}
                     onClick={() => lobby.onKick(player.id)}
                   >
@@ -143,18 +143,18 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
               {hasTags && (
                 <div className="ml-9 mt-0.5 flex flex-wrap items-center gap-1 sm:ml-10">
                   {isRoomHost && (
-                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-bold text-amber-300">
+                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1 py-0.5 text-[10px] font-bold text-amber-300">
                       <span aria-hidden="true">👑</span> Chủ phòng
                     </span>
                   )}
                   {player.isBot && (
-                    <span className="inline-flex items-center gap-0.5 rounded bg-slate-700/60 px-1 py-0.5 text-[9px] font-bold text-slate-200">
+                    <span className="inline-flex items-center gap-0.5 rounded bg-slate-700/60 px-1 py-0.5 text-[10px] font-bold text-slate-200">
                       <span aria-hidden="true">🤖</span> Bot
                     </span>
                   )}
                   {player.role && (
                     <span
-                      className={`max-w-full truncate rounded px-1 py-0.5 text-[9px] font-semibold ${
+                      className={`max-w-full truncate rounded px-1 py-0.5 text-[10px] font-semibold ${
                         ROLE_META[player.role].team === "wolves"
                           ? "bg-blood-600/70 text-white"
                           : "bg-emerald-900/80 text-emerald-200"
@@ -164,7 +164,7 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
                     </span>
                   )}
                   {claimed && (
-                    <span className="inline-flex max-w-full items-center gap-0.5 truncate rounded bg-sky-600/20 px-1 py-0.5 text-[9px] font-bold text-sky-200 ring-1 ring-sky-500/30">
+                    <span className="inline-flex max-w-full items-center gap-0.5 truncate rounded bg-sky-600/20 px-1 py-0.5 text-[10px] font-bold text-sky-200 ring-1 ring-sky-500/30">
                       <span aria-hidden="true">🔍</span>{" "}
                       {claim == null
                         ? "Không tiết lộ"
@@ -172,12 +172,12 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
                     </span>
                   )}
                   {offline && (
-                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-bold text-amber-300 ring-1 ring-amber-500/30">
+                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1 py-0.5 text-[10px] font-bold text-amber-300 ring-1 ring-amber-500/30">
                       <span aria-hidden="true">📴</span> Mất kết nối
                     </span>
                   )}
                   {isPending && (
-                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/20 px-1 py-0.5 text-[9px] font-bold text-amber-300 ring-1 ring-amber-500/30">
+                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/20 px-1 py-0.5 text-[10px] font-bold text-amber-300 ring-1 ring-amber-500/30">
                       <span aria-hidden="true">🛡️</span> Tử Thủ
                     </span>
                   )}

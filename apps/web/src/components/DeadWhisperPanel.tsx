@@ -51,7 +51,7 @@ export function DeadWhisperPanel({ snapshot, onSend }: Props) {
           Gửi
         </button>
       </div>
-      <p className="mt-1 text-right text-[11px] text-mist/50">
+      <p className="mt-1 text-right text-[11px] text-mist/65">
         {text.length}/{DEAD_MESSAGE_MAX_LENGTH}
       </p>
     </div>
