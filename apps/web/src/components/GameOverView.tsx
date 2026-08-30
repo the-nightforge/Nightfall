@@ -22,6 +22,12 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
   const roster = snapshot.players.map((p) => p.id).join(",");
   const avatars = useMemo(() => assignAvatars(roster ? roster.split(",") : []), [roster]);
 
+  // Chủ phòng mất kết nối ở màn này thì không ai bấm được "Chơi lại" - server
+  // đã cho phép người khác thay thế sau một khoảng ân hạn, ở đây chỉ cần lộ
+  // nút ra khi chủ phòng đang offline. Bấm sớm quá thì lỗi từ server tự hiện.
+  const hostConnected = snapshot.players.find((p) => p.id === snapshot.hostId)?.connected ?? true;
+  const canReset = isHost || !hostConnected;
+
   // Phe lấy từ role sau khi ván kết thúc, nên Kẻ Nguyền Rủa đã hoá Sói tự nằm
   // đúng bên Sói - engine đã đổi hẳn vai chứ không gắn cờ.
   const byTeam = (team: Team) =>
@@ -108,7 +114,7 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
       <HunterShotTimeline shots={snapshot.hunterShots} />
 
       <div className="flex gap-2">
-        {isHost && (
+        {canReset && (
           <button className="btn-primary flex-1" onClick={onReset}>
             Chơi lại (về phòng chờ)
           </button>
@@ -119,7 +125,9 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
       </div>
       {!isHost && (
         <p className="text-center text-xs text-mist/50">
-          Chờ chủ phòng bấm chơi lại hoặc rời phòng.
+          {hostConnected
+            ? "Chờ chủ phòng bấm chơi lại hoặc rời phòng."
+            : "Chủ phòng mất kết nối - bạn có thể bấm chơi lại giúp phòng."}
         </p>
       )}
     </div>

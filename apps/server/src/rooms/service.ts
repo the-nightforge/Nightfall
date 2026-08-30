@@ -23,6 +23,7 @@ import {
 } from "./store";
 import { getRoomSyncByPlayer, getRoomsCache } from "./index-helpers";
 import { reconcileDiscussionSkip, startGame, resetToLobby } from "../game/machine";
+import { DISCONNECT_GRACE_MS } from "../game/discussion-skip";
 import { allRequiredPlayersReady, roomEntryError } from "./rules";
 import { withPlayerRoomLock } from "./player-room-lock";
 
@@ -36,6 +37,19 @@ function assertMember(room: Room, playerId: string): RoomMember {
 
 function assertHost(room: Room, playerId: string): void {
   if (room.hostId !== playerId) throw new RoomError("Chỉ chủ phòng mới được thực hiện hành động này");
+}
+
+/**
+ * Chủ phòng rớt mạng quá lâu ngay ở màn kết thúc: không ai bấm được "Chơi lại"
+ * thì cả phòng ngồi nhìn màn hình đó mãi mãi, vì bấm reset vốn chỉ dành cho
+ * chủ phòng. Quá mốc ân hạn dùng chung với vote skip thảo luận thì coi như chủ
+ * phòng đã bỏ đi, ai còn nối cũng bấm được.
+ */
+function hostAbandonedGameOver(room: Room): boolean {
+  if (room.engine?.state.phase !== "GAME_OVER") return false;
+  const host = room.members.find((m) => m.playerId === room.hostId);
+  if (!host || host.connected) return false;
+  return Date.now() - (host.disconnectedAt ?? 0) >= DISCONNECT_GRACE_MS;
 }
 
 export const roomService = {
@@ -306,11 +320,11 @@ export const roomService = {
     startGame(room);
   },
 
-  reset(hostId: string): void {
-    const roomCode = getRoomSyncByPlayer(hostId);
+  reset(playerId: string): void {
+    const roomCode = getRoomSyncByPlayer(playerId);
     if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
     const room = getRoom(roomCode)!;
-    assertHost(room, hostId);
+    if (room.hostId !== playerId && !hostAbandonedGameOver(room)) assertHost(room, playerId);
     if (room.status !== "IN_GAME") throw new RoomError("Không có trận đấu nào để đặt lại");
     resetToLobby(room);
   },
