@@ -42,6 +42,31 @@ export interface SelfPlayMetrics {
   villageVoteAccuracy: Ratio;
   /** Sói bỏ phiếu hoặc công khai tố đồng bọn. */
   wolfSelfSabotage: Ratio;
+  /**
+   * Lượt phản kích của Thợ Săn kết thúc bằng một phát bắn thật.
+   *
+   * Không bắn là một quyết định HỢP LỆ, nên chỉ số này không có mức "đúng" cố
+   * định; nó chỉ có nghĩa khi đọc CÙNG `hunterShotAccuracy`. Riêng giá trị 0
+   * thì luôn là một dấu hiệu xấu: nó nghĩa là ngưỡng bắn nằm ngoài tầm với của
+   * thang belief, và cả cơ chế không tồn tại trong ván thật.
+   */
+  hunterShotRate: Ratio;
+  /** Phát bắn trúng một con Sói thật. Mẫu số là số phát đã bắn. */
+  hunterShotAccuracy: Ratio;
+  /** Lượt Phù Thuỷ kết thúc bằng bình cứu. Mẫu số là mọi lượt cô ta được hỏi. */
+  witchHealRate: Ratio;
+  /**
+   * Bình cứu dùng cho CHÍNH Phù Thuỷ.
+   *
+   * Tách khỏi `witchHealRate` vì hai nhánh trong chiến lược là khác hẳn nhau:
+   * tự cứu đi qua một lối tắt vô điều kiện, còn cứu người khác phải vượt ngưỡng
+   * tin tưởng. Tỉ lệ này bằng 1 nghĩa là nhánh thứ hai chưa từng chạy.
+   */
+  witchHealSelfRate: Ratio;
+  /** Lượt Phù Thuỷ kết thúc bằng bình độc. Mẫu số là mọi lượt cô ta được hỏi. */
+  witchPoisonRate: Ratio;
+  /** Bình độc trúng một con Sói thật. Mẫu số là số bình độc đã dùng. */
+  witchPoisonAccuracy: Ratio;
   /** Lá phiếu thay cho một lá đã bỏ trước đó trong cùng vòng. */
   voteChangeRate: Ratio;
   /** Mức đồng thuận trung bình: phiếu cho ứng viên dẫn đầu / số người bỏ phiếu. */
@@ -258,6 +283,15 @@ export function collectMetrics(
   let seerClaimsBelieved = 0;
   let seerClaimsAccurate = 0;
 
+  let hunterReactions = 0;
+  let hunterShots = 0;
+  let hunterShotsOnWolf = 0;
+  let witchTurns = 0;
+  let witchHeals = 0;
+  let witchSelfHeals = 0;
+  let witchPoisons = 0;
+  let witchPoisonsOnWolf = 0;
+
   const roleGames = new Map<Role, number>();
   const roleWins = new Map<Role, number>();
   const teamVoteCorrect: Record<Team, number> = { village: 0, wolves: 0 };
@@ -339,6 +373,55 @@ export function collectMetrics(
       if (voters.size > 0) {
         const leader = Math.max(...tally.values());
         consensusSamples.push(leader / voters.size);
+      }
+    }
+
+    // --- Quyền năng dùng một lần (Phù Thuỷ, Thợ Săn) ---
+    //
+    // Bốn con số dưới đây đo thứ mà unit test không nhìn thấy được: test dựng
+    // sẵn một belief đã vượt ngưỡng rồi kiểm nhánh, nên một ngưỡng KHÔNG BAO
+    // GIỜ với tới trong ván thật vẫn cho test xanh. Chỉ tần suất đo trên ván
+    // đầy đủ mới phân biệt được "hiếm vì đắt" với "chết vì bất khả thi".
+    const wolfTargetsByRound = new Map<number, Set<string>>();
+    for (const event of game.events) {
+      if (event.kind !== "NIGHT_ACTION" || event.action !== "KILL") continue;
+      if (event.targetId === null) continue;
+      const bucket = wolfTargetsByRound.get(event.round) ?? new Set<string>();
+      bucket.add(event.targetId);
+      wolfTargetsByRound.set(event.round, bucket);
+    }
+
+    for (const event of game.events) {
+      if (event.kind === "HUNTER_SHOT") {
+        hunterReactions += 1;
+        if (event.targetId !== null) {
+          hunterShots += 1;
+          if (teamOf(event.targetId) === "wolves") hunterShotsOnWolf += 1;
+        }
+        continue;
+      }
+
+      if (event.kind !== "NIGHT_ACTION") continue;
+      if (game.roles[event.actorId] !== "WITCH") continue;
+      // SKIP nằm TRONG mẫu số: nó là một lượt Phù Thuỷ đã được hỏi và đã trả
+      // lời. Bỏ nó ra thì tỉ lệ dùng bình luôn bằng 1 và không đo được gì.
+      if (event.action !== "HEAL" && event.action !== "POISON" && event.action !== "SKIP") {
+        continue;
+      }
+      witchTurns += 1;
+
+      if (event.action === "HEAL") {
+        witchHeals += 1;
+        // Engine không nhận mục tiêu cho bình cứu - nó luôn cứu nạn nhân đêm
+        // đó - nên người được cứu phải suy ra từ mục tiêu của bầy Sói.
+        if (wolfTargetsByRound.get(event.round)?.has(event.actorId)) witchSelfHeals += 1;
+      }
+
+      if (event.action === "POISON") {
+        witchPoisons += 1;
+        if (event.targetId !== null && teamOf(event.targetId) === "wolves") {
+          witchPoisonsOnWolf += 1;
+        }
       }
     }
 
@@ -500,6 +583,12 @@ export function collectMetrics(
     averageRounds: mean(roundCounts),
     villageVoteAccuracy: ratio(villageCorrect, villageVotes),
     wolfSelfSabotage: ratio(wolfBetrayals, wolfSignals),
+    hunterShotRate: ratio(hunterShots, hunterReactions),
+    hunterShotAccuracy: ratio(hunterShotsOnWolf, hunterShots),
+    witchHealRate: ratio(witchHeals, witchTurns),
+    witchHealSelfRate: ratio(witchSelfHeals, witchHeals),
+    witchPoisonRate: ratio(witchPoisons, witchTurns),
+    witchPoisonAccuracy: ratio(witchPoisonsOnWolf, witchPoisons),
     voteChangeRate: ratio(voteChanges, voteTotal),
     consensus: mean(consensusSamples),
     coalitionCohesion: mean(cohesionSamples),

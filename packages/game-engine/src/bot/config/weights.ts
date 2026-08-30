@@ -1020,15 +1020,91 @@ export const BOT_WEIGHTS_V4: BotWeights = Object.freeze({
 });
 
 /**
+ * v5 — ba ngưỡng của quyền năng dùng-một-lần được đưa về thang belief THẬT.
+ *
+ * v2 đã tìm ra và sửa đúng lỗi này cho `voteThreshold`, nhưng CỐ Ý chừa lại ba
+ * ngưỡng ở đây, với lý do ghi rõ trong chú thích của nó: giữ cao để "chỉ mục
+ * tiêu Tiên Tri đã ghim 100 mới kích hoạt được". Lập luận đó đúng với Nước
+ * thánh của Linh Mục nhưng SAI với Phù Thuỷ và Thợ Săn, vì một lý do không ai
+ * kiểm lại lúc đó: **hai vai này không bao giờ có một mục tiêu bị ghim.** Ghim
+ * 100 chỉ đến từ `privateInfo.seerWolf`, tức từ lượt soi của CHÍNH mình. Phù
+ * Thuỷ không soi. Thợ Săn không soi. Với họ, ngưỡng 95 và 80 không phải là
+ * "cao" - chúng là bất khả thi.
+ *
+ * Đo trên 400 ván × 2 seed base độc lập (10 người, 2 Sói, có Thợ Săn):
+ *
+ * | | v4 | v5 |
+ * | --- | --- | --- |
+ * | Làng thắng | 61.0% / 59.3% | 65.3% / 63.5% |
+ * | Thợ Săn bắn (trên mỗi lượt phản kích) | 0% | ~50% |
+ * | Phát bắn trúng Sói | - | 30.1% / 30.3% |
+ * | Bình độc mỗi ván | 0.00 | 0.24 / 0.27 |
+ * | Bình độc trúng Sói | - | 36.1% / 37.0% |
+ * | Bình cứu cứu NGƯỜI KHÁC | 0% | ~25% |
+ *
+ * Mốc so sánh cho hai cột "trúng Sói": chọn bừa một người còn sống cho ra
+ * 22.7% với bình độc và 26.0% với phát bắn (đo trên cùng batch). Cả hai đều
+ * nằm trên mốc đó, nên hai cơ chế này đang mang thông tin thật chứ không phải
+ * đang gieo xúc xắc - đó là điều kiện để bật chúng lên.
+ *
+ * Chưa đụng tới: `priestSuspicion` (95) mắc ĐÚNG lỗi này. Nó ở lại v4 vì Linh
+ * Mục cần batch đo riêng, không phải vì nó đã đúng.
+ */
+export const BOT_WEIGHTS_V5: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V4,
+  version: "5.0.0",
+
+  confidence: Object.freeze({
+    ...BOT_WEIGHTS_V4.confidence,
+    /**
+     * `0`, không phải một số nhỏ.
+     *
+     * Bỏ hẳn khoảng cộng thêm biến ngưỡng bắn thành đúng `voteThreshold`, và
+     * đó là một luật phát biểu được thành lời: *bắn người mà tôi đã có đủ căn
+     * cứ để bỏ phiếu treo*. Một hằng số dương tuỳ ý ở đây thì không phát biểu
+     * được như vậy, và mọi giá trị dương đã thử đều cho làng thắng thấp hơn.
+     */
+    hunterMargin: 0,
+  }),
+
+  roleThresholds: Object.freeze({
+    ...BOT_WEIGHTS_V4.roleThresholds,
+    /**
+     * 5 nằm quanh p99 của thang suspicion thật (p50 = 0, p90 = 1.8, p99 = 8.6),
+     * nên bình độc vẫn HIẾM - khoảng một phần tư số ván - chứ không thành một
+     * nước đi mặc định. Hạ xuống 4 đẩy tần suất lên 0.58 bình/ván nhưng độ
+     * chính xác rơi về 25.5%, tức ngang mức chọn bừa: đó là ranh giới của việc
+     * "dùng bình" biến thành "vứt bình".
+     */
+    witchPoisonSuspicion: 5,
+    /**
+     * Nạn nhân đáng cứu phải có trust ĐO ĐƯỢC, và trên thang thật thì 1.5 đã
+     * là một dấu hiệu rõ. Ở mức 40 cũ, nhánh này chưa từng chạy: bình cứu chỉ
+     * còn kích hoạt qua lối tắt tự-cứu, nên Phù Thuỷ BOT không bao giờ cứu ai
+     * ngoài chính mình.
+     */
+    witchHealTrust: 1.5,
+    /**
+     * Đưa về cùng thang với hai ngưỡng trên. Đo được: KHÔNG đổi kết quả nào
+     * trên 800 ván - một mục tiêu vừa đủ đáng ngờ để bị độc vừa có trust ≥ 2
+     * là trường hợp chưa từng xảy ra. Sửa vì ở mức 50 nó là một chốt chặn
+     * không bao giờ chặn, chứ không phải vì nó đang chặn nhầm.
+     */
+    witchPoisonTrustVeto: 2,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
  * phải thay đổi chỉ vì cấu hình tồn tại - đây là cơ chế rollout: nâng
  * `DEFAULT_BOT_WEIGHTS` lên bản mới, và mọi `new BotRuntime({...})` không tự
  * truyền `weights` (bao gồm `session-registry.ts`, chỗ ván thật dựng runtime)
- * lập tức chạy bản mới mà không phải sửa. v4.0.0 bật nhóm `claim` (Task 3-7):
- * để nó nằm ngoài mặc định là để feature dựng xong mà cả ván thật không có bot
- * nào từng khai vai. v1/v2/v3 không bị ảnh hưởng - test tái lập của chúng luôn
- * truyền preset đích danh, không bao giờ dựa vào hằng số này.
+ * lập tức chạy bản mới mà không phải sửa. v5.0.0 đưa ba ngưỡng của Phù Thuỷ và
+ * Thợ Săn về thang belief thật: để chúng nằm ngoài mặc định là để hai vai đó
+ * dựng xong mà cả ván thật không bao giờ dùng tới bình hay phát bắn.
+ * v1/v2/v3/v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset
+ * đích danh, không bao giờ dựa vào hằng số này.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V4;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V5;
