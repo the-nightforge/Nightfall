@@ -557,6 +557,16 @@ export class BotRuntime {
    * đáp" khi nó thật sự được PHÁT, không phải khi nó được nghĩ ra rồi bị bỏ.
    */
   recordSpeech(speech: BotSpeechIntention, round: number, text?: string): void {
+    // Cam kết lời khai vào state ngay khi ý định được ghi nhận, không đợi câu
+    // chữ. Nếu đợi, hai checkpoint sát nhau sẽ cùng thấy `myClaim === null` và
+    // BOT khai hai lần trong một vòng.
+    if (
+      (speech.kind === "CLAIM_ROLE" || speech.kind === "COUNTER_CLAIM") &&
+      speech.claimedRole &&
+      this.state.myClaim === null
+    ) {
+      this.state.myClaim = { role: speech.claimedRole, round };
+    }
     recordSpeechIntention(this.state, speech, round, this.weights, text);
     if (speech.replyToMessageId) {
       markReplied(this.state, speech.replyToMessageId, this.weights);

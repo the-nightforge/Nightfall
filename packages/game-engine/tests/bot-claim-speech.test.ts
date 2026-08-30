@@ -1,8 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { ROLES, ROLE_META, type Role } from "@masoi/shared";
 import { analyzeChat } from "../src/bot/analysis/chat-analysis";
+import { BOT_WEIGHTS_V3, BOT_WEIGHTS_V4 } from "../src/bot/config/weights";
 import { SPEECH_TEMPLATES, renderSpeechTemplate } from "../src/bot/conversation/templates";
-import { BOT_SPEECH_TONES, type BotSpeechIntention } from "../src/bot/types";
+import { planSpeech } from "../src/bot/conversation/speech-planner";
+import { createBotBrainState } from "../src/bot/memory/memory-store";
+import { createBotPersonality } from "../src/bot/personality/personality";
+import { deriveSpeechStyle } from "../src/bot/personality/speech-style";
+import { createSeededRng } from "../src/bot/rng";
+import {
+  BOT_SPEECH_TONES,
+  type BotBrainState,
+  type BotDecisionContext,
+  type BotMemory,
+  type BotSpeechIntention,
+} from "../src/bot/types";
 
 const PLAYERS = [
   { id: "p1", name: "An", alive: true },
@@ -119,4 +131,98 @@ describe("mọi mẫu trong SPEECH_TEMPLATES đọc ngược được, quét tr�
       });
     }
   }
+});
+
+// Sao chép từ bot-claim-decision.test.ts thay vì import chéo giữa hai file
+// test: mỗi file test giữ nguyên bộ fixture của mình để không file nào âm thầm
+// vỡ khi file kia đổi shape.
+const CLAIM_SPEECH_IDS = ["p1", "p2", "p3", "p4"];
+
+function stateFor(id: string): BotBrainState {
+  return createBotBrainState(id, createBotPersonality(createSeededRng(id)), CLAIM_SPEECH_IDS);
+}
+
+function contextFor(
+  selfId: string,
+  selfRole: BotDecisionContext["knowledge"]["selfRole"],
+  overrides: Partial<BotDecisionContext["knowledge"]> = {},
+): BotDecisionContext {
+  return {
+    knowledge: {
+      botId: selfId,
+      round: 2,
+      phase: "DAY_DISCUSSION",
+      phaseStartedAt: 0,
+      phaseEndsAt: null,
+      selfRole,
+      players: CLAIM_SPEECH_IDS.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
+      knownRoles: { [selfId]: selfRole },
+      seerResult: null,
+      night: null,
+      trialAccusedId: null,
+      canFinalVote: false,
+      hunterShot: null,
+      publicVoteHistory: [],
+      currentVoteCounts: { players: {}, noElimination: 0 },
+      hasVoted: false,
+      myVote: null,
+      legalVoteChoices: [],
+      lastNightDeaths: [],
+      activeEventId: null,
+      dayOfTruthClaims: {},
+      ...overrides,
+    },
+    visibleChat: [],
+  };
+}
+
+function seerResultMemory(targetId: string): BotMemory {
+  return {
+    id: `SEER_RESULT:s1:p1`,
+    sourceId: "s1",
+    round: 1,
+    phase: "NIGHT",
+    type: "SEER_RESULT",
+    actorId: "p1",
+    targetId,
+    importance: 10,
+    pinned: true,
+    data: { isWolf: true },
+  };
+}
+
+function styleFor(state: BotBrainState) {
+  return deriveSpeechStyle(state.personality);
+}
+
+describe("planner phát ra lời khai", () => {
+  it("Tiên Tri cầm kết quả trúng Sói thì nói ra, kèm tên con Sói", () => {
+    const state = stateFor("p1");
+    state.knownInformation.seerResults.push(seerResultMemory("p3"));
+    const speech = planSpeech({
+      context: contextFor("p1", "SEER"),
+      state,
+      vote: { kind: "VOTE", choice: { type: "PLAYER", targetId: "p3" }, confidence: 0.9, evidence: [] },
+      style: styleFor(state),
+      rng: createSeededRng("a"),
+      weights: BOT_WEIGHTS_V4,
+    });
+    expect(speech?.kind).toBe("CLAIM_ROLE");
+    expect(speech?.claimedRole).toBe("SEER");
+    expect(speech?.targetId).toBe("p3");
+  });
+
+  it("v3 không bao giờ phát ra lời khai nào", () => {
+    const state = stateFor("p1");
+    state.knownInformation.seerResults.push(seerResultMemory("p3"));
+    const speech = planSpeech({
+      context: contextFor("p1", "SEER"),
+      state,
+      vote: { kind: "VOTE", choice: { type: "PLAYER", targetId: "p3" }, confidence: 0.9, evidence: [] },
+      style: styleFor(state),
+      rng: createSeededRng("a"),
+      weights: BOT_WEIGHTS_V3,
+    });
+    expect(speech?.kind).not.toBe("CLAIM_ROLE");
+  });
 });
