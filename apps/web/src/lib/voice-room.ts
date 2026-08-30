@@ -16,6 +16,14 @@ export interface VoiceRoomHandlers {
   /** Quyền nói do CHÍNH LiveKit báo - nguồn duy nhất được phép mở mic. */
   onPermission(canPublish: boolean): void;
   onAudioPlayback(canPlay: boolean): void;
+  /**
+   * LiveKit vừa tự nối lại sau khi mất kết nối.
+   *
+   * Nếu là reconnect ĐẦY ĐỦ thì participant vào lại bằng chính token cũ, mà
+   * token không bao giờ mang quyền nói. Server không biết chuyện đó xảy ra, nên
+   * phải tự giới thiệu lại - không thì kẹt câm.
+   */
+  onReconnected(): void;
   /** Danh sách identity đang nói; LiveKit tự lọc theo ngưỡng âm lượng. */
   onSpeakers(identities: string[]): void;
   onFailed(message: string): void;
@@ -131,6 +139,11 @@ export function createVoiceRoom(
       });
       next.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
         detachRemoteAudio(track);
+      });
+      next.on(RoomEvent.Reconnected, () => {
+        handlers.onReconnected();
+        // Đọc lại quyền thật: phiên mới có thể đã tụt về quyền của token.
+        reportPermission();
       });
       next.on(RoomEvent.Disconnected, (reason) => {
         // Trùng danh tính nghĩa là chính người này vừa mở ở tab khác. Phải phân

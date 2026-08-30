@@ -48,6 +48,10 @@ export function useVoice(socket: Socket | null, view: VoiceView | undefined): Us
   // listener mỗi lần state đổi.
   const stateRef = useRef(state);
   stateRef.current = state;
+  // Room được dựng một lần ở lần render đầu, lúc đó socket còn null - nên phải
+  // đọc qua ref chứ không bắt được vào closure.
+  const socketRef = useRef<Socket | null>(socket);
+  socketRef.current = socket;
   // Khởi tạo bằng mặc định chứ không đọc localStorage ngay: server render không
   // có localStorage, đọc ở đây sẽ lệch giữa server và client. Cùng nếp
   // SoundControl.
@@ -80,6 +84,7 @@ export function useVoice(socket: Socket | null, view: VoiceView | undefined): Us
       onAudioPlayback: (canPlay) =>
         dispatch(canPlay ? { type: "audio_playback_ok" } : { type: "audio_playback_blocked" }),
       onSpeakers: (identities) => dispatch({ type: "speakers_changed", identities }),
+      onReconnected: () => socketRef.current?.emit(CLIENT_EVENTS.VOICE_READY, {}),
       onFailed: (error) => dispatch({ type: "failed", error }),
     });
   }
