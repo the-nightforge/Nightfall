@@ -35,5 +35,11 @@ export function speechDefaults(): Omit<
     recentSpeechSourceIds: [],
     seq: 0,
     round: 1,
+    // Khớp id/tên mà các fixture đang dùng cho speaker ("bot") và mục tiêu
+    // ("c" → "Chi"), để cổng CLAIM_INTEGRITY nhận ra actor khi chạy analyzeChat.
+    players: [
+      { id: "bot", name: "Bot", alive: true },
+      { id: "c", name: "Chi", alive: true },
+    ],
   };
 }

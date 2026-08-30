@@ -86,6 +86,14 @@ export interface SpeechRequest {
   /** Lượt nói thứ mấy của BOT này; nguồn biến thiên của bảng mẫu. */
   seq: number;
   round: number;
+  /**
+   * Danh sách người chơi mà cổng `CLAIM_INTEGRITY` cần để chạy `analyzeChat`.
+   *
+   * Chỉ `{ id, name, alive }` — đúng cái parser đòi. Không mang vai, không
+   * mang gì khác: đây là dữ liệu cho một phép kiểm ở server, và nó KHÔNG bao
+   * giờ đi vào prompt.
+   */
+  players: Array<{ id: string; name: string; alive: boolean }>;
 }
 
 /** Kết quả một lượt diễn đạt, kèm nguồn gốc của câu chữ để còn đo được. */

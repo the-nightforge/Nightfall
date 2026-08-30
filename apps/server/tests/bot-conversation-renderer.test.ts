@@ -46,6 +46,12 @@ function request(
     recentSpeechSourceIds: [],
     seq: 0,
     round: 1,
+    // Khớp id speaker ("bot") và mục tiêu mặc định ("c" → "Chi") để cổng
+    // CLAIM_INTEGRITY nhận ra actor khi chạy analyzeChat trên câu thử.
+    players: [
+      { id: "bot", name: "An", alive: true },
+      { id: "c", name: "Chi", alive: true },
+    ],
     ...over,
   };
 }

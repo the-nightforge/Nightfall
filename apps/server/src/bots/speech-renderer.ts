@@ -1,4 +1,4 @@
-import { renderSpeechTemplate, speechTextFingerprint } from "@masoi/game-engine";
+import { analyzeChat, renderSpeechTemplate, speechTextFingerprint } from "@masoi/game-engine";
 import { botBrain } from "./index";
 import { DEFAULT_CHAT_MAX } from "./decide";
 import type { BotBrain, RenderedSpeech, SpeechRequest } from "./types";
@@ -76,7 +76,7 @@ export async function renderBotSpeech(
   try {
     const attempt = await brain.renderDaySpeech(request);
     const chat = attempt.ok ? attempt.value?.chat : null;
-    if (chat && !echoesRecentOwnLine(request, chat)) {
+    if (chat && !echoesRecentOwnLine(request, chat) && claimSurvivesRoundTrip(request, chat)) {
       return { text: chat.slice(0, chatMaxLength), fromTemplate: false };
     }
   } catch {
@@ -126,4 +126,40 @@ function echoesRecentOwnLine(request: SpeechRequest, chat: string): boolean {
   return request.recentOwnLines.some(
     (line) => speechTextFingerprint(line) === fingerprint,
   );
+}
+
+/**
+ * Câu này có nói ĐÚNG lời khai mà lõi đã chốt không — và chỉ đúng lời khai đó?
+ *
+ * Gác HAI CHIỀU, vì hỏng theo hai chiều:
+ *
+ * 1. Ý định có khai mà chữ không khai → lời khai bốc hơi trong im lặng. Người
+ *    chơi đọc chat vẫn thấy BOT nói; các BOT khác thì không thấy gì, vì cái
+ *    chúng đọc là `chat-analysis` chứ không phải ý định.
+ * 2. Ý định không khai mà chữ có khai → nhà cung cấp vừa tự đi một nước cờ.
+ *    Nó đặt cả bàn vào một lời khai mà lõi chưa bao giờ quyết, không seed nào
+ *    dựng lại được, và `ROLE_CLAIM` thì được GHIM vĩnh viễn vào state.
+ *
+ * Chiều thứ hai là chiều nguy hiểm hơn, và nó đã mở sẵn từ trước Phase 5.
+ *
+ * Dùng chính `analyzeChat` chứ không so chuỗi: cổng phải hỏi đúng câu hỏi mà
+ * các BOT khác sẽ hỏi. Một cổng có luật riêng sẽ trôi lệch khỏi parser, và nó
+ * sẽ trôi lệch âm thầm.
+ */
+function claimSurvivesRoundTrip(request: SpeechRequest, chat: string): boolean {
+  const intended =
+    request.intention.kind === "CLAIM_ROLE" || request.intention.kind === "COUNTER_CLAIM"
+      ? (request.intention.claimedRole ?? null)
+      : null;
+
+  const memories = analyzeChat(
+    [{ id: "probe", actorId: request.speaker.id, text: chat, at: 0 }],
+    request.players,
+  );
+  const spoken = memories.find(
+    (memory) => memory.type === "ROLE_CLAIM" || memory.type === "COUNTER_CLAIM",
+  );
+
+  if (intended === null) return spoken === undefined;
+  return spoken !== undefined && spoken.data.role === intended;
 }

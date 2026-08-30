@@ -721,6 +721,7 @@ export function toSpeechRequest(
     ),
     seq: runtime.state.speechSequence,
     round: context.knowledge.round,
+    players: context.knowledge.players,
   };
 }
 
