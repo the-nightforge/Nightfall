@@ -394,6 +394,109 @@ describe("Wolf Cub Rage Mechanics", () => {
   });
 });
 
+describe("Night Recap - đủ diễn biến vai trò mở rộng", () => {
+  it("ghi lại mục tiêu Thiên Thần Hộ Mệnh bảo vệ", () => {
+    const state = createTestState([
+      { id: "ga", role: "GUARDIAN_ANGEL" },
+      { id: "v1", role: "VILLAGER" },
+      { id: "w1", role: "WEREWOLF" },
+    ]);
+    const engine = new GameEngine(state);
+    engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v1");
+    engine.submitNightAction("w1", "KILL", "v1");
+    engine.resolveNight();
+
+    const night = engine.state.nightHistory[0];
+    expect(night.guardianAngelTarget).toEqual({ id: "v1", name: "Player 2" });
+  });
+
+  it("ghi lại mục tiêu và kết quả Nước Thánh của Linh Mục", () => {
+    const state = createTestState([
+      { id: "priest", role: "PRIEST" },
+      { id: "w1", role: "WEREWOLF" },
+      { id: "w2", role: "WEREWOLF" },
+      { id: "v1", role: "VILLAGER" },
+    ]);
+    const engine = new GameEngine(state);
+    engine.submitNightAction("priest", "HOLY_WATER", "w1");
+    engine.resolveNight();
+
+    const night = engine.state.nightHistory[0];
+    expect(night.priest).toEqual({
+      priest: { id: "priest", name: "Player 1" },
+      target: { id: "w1", name: "Player 2" },
+      isWolf: true,
+    });
+  });
+
+  it("ghi lại 2 mục tiêu Thám Tử kiểm tra", () => {
+    const state = createTestState([
+      { id: "det", role: "DETECTIVE" },
+      { id: "v1", role: "VILLAGER" },
+      { id: "w1", role: "WEREWOLF" },
+    ]);
+    const engine = new GameEngine(state);
+    engine.submitNightAction("det", "DETECTIVE_CHECK", "v1", "w1");
+    engine.resolveNight();
+
+    const night = engine.state.nightHistory[0];
+    expect(night.detectiveChecks).toEqual([
+      {
+        detective: { id: "det", name: "Player 1" },
+        target1: { id: "v1", name: "Player 2" },
+        target2: { id: "w1", name: "Player 3" },
+        sameTeam: false,
+      },
+    ]);
+  });
+
+  it("ghi lại mục tiêu soi thứ 2 của Tiên Tri khi có sự kiện Màn Sương Tan", () => {
+    const state = createTestState([
+      { id: "seer", role: "SEER" },
+      { id: "w1", role: "WEREWOLF" },
+      { id: "v1", role: "VILLAGER" },
+    ]);
+    state.activeEvent = {
+      id: "CLEARING_MIST",
+      name: "Màn Sương Tan",
+      description: "...",
+      targetPhase: "NIGHT",
+      round: 1,
+      beneficiary: "village",
+      power: 3,
+    };
+    const engine = new GameEngine(state);
+    engine.submitNightAction("seer", "SEE", "w1", "v1");
+    engine.resolveNight();
+
+    const night = engine.state.nightHistory[0];
+    expect(night.seerChecks).toEqual([
+      {
+        seer: { id: "seer", name: "Player 1" },
+        target: { id: "w1", name: "Player 2" },
+        isWolf: true,
+        secondaryTarget: { id: "v1", name: "Player 3" },
+        secondaryIsWolf: false,
+      },
+    ]);
+  });
+
+  it("ghi lại mục tiêu cắn thứ 2 khi Sói Con phẫn nộ", () => {
+    const state = createTestState([
+      { id: "w1", role: "WEREWOLF" },
+      { id: "v1", role: "VILLAGER" },
+      { id: "v2", role: "VILLAGER" },
+    ]);
+    state.night.wolfCubRageTonight = true;
+    const engine = new GameEngine(state);
+    engine.submitNightAction("w1", "KILL", "v1", "v2");
+    engine.resolveNight();
+
+    const night = engine.state.nightHistory[0];
+    expect(night.wolfSecondaryTarget).toEqual({ id: "v2", name: "Player 3" });
+  });
+});
+
 describe("Mayor 2x Vote Weight", () => {
   it("counts Mayor nomination vote as 2 votes", () => {
     const state = createTestState([

@@ -65,6 +65,7 @@ export function removeRoom(code: string): void {
   // của việc xoá phòng, nên mọi lối vào tương lai đều được phủ.
   void destroyVoiceRoom(code, "phòng bị xoá");
   clearRoomTimers(code);
+  clearAbandonCheckTimer(code);
   rooms.delete(code);
   // Không dọn thì pendingVote/pendingEndFinalVote và ngân sách governor tích luỹ
   // một entry cho mỗi phòng bị bỏ hoang trong suốt vòng đời process.
@@ -90,6 +91,22 @@ export function clearRoomTimers(code: string): void {
 
 export function setRoomTimer(code: string, fn: () => void, ms: number): void {
   addRoomTimer(code, setTimeout(() => fn(), ms));
+}
+
+// Bucket riêng cho check phòng bỏ hoang: phải sống sót qua các lần chuyển pha
+// (mỗi lần đều gọi clearRoomTimers xoá sạch roomTimers ở trên), nên không thể
+// dùng chung setRoomTimer/clearRoomTimers - chỉ dọn khi phòng thật sự bị xoá.
+const abandonCheckTimers = new Map<string, NodeJS.Timeout>();
+
+export function setAbandonCheckTimer(code: string, fn: () => void, ms: number): void {
+  clearAbandonCheckTimer(code);
+  abandonCheckTimers.set(code, setTimeout(fn, ms));
+}
+
+export function clearAbandonCheckTimer(code: string): void {
+  const t = abandonCheckTimers.get(code);
+  if (t) clearTimeout(t);
+  abandonCheckTimers.delete(code);
 }
 
 // ---- Redis persistence (write-through) ----

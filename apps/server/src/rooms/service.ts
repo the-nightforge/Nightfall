@@ -18,11 +18,13 @@ import {
   loadRoomFromRedis,
   persistRoom,
   removeRoom,
+  setAbandonCheckTimer,
   type Room,
   type RoomMember,
 } from "./store";
 import { getRoomSyncByPlayer, getRoomsCache } from "./index-helpers";
 import { reconcileDiscussionSkip, startGame, resetToLobby } from "../game/machine";
+import { DISCONNECT_GRACE_MS } from "../game/discussion-skip";
 import { allRequiredPlayersReady, roomEntryError } from "./rules";
 import { withPlayerRoomLock } from "./player-room-lock";
 
@@ -36,6 +38,48 @@ function assertMember(room: Room, playerId: string): RoomMember {
 
 function assertHost(room: Room, playerId: string): void {
   if (room.hostId !== playerId) throw new RoomError("Chỉ chủ phòng mới được thực hiện hành động này");
+}
+
+/**
+ * Chủ phòng rớt mạng quá lâu ngay ở màn kết thúc: không ai bấm được "Chơi lại"
+ * thì cả phòng ngồi nhìn màn hình đó mãi mãi, vì bấm reset vốn chỉ dành cho
+ * chủ phòng. Quá mốc ân hạn dùng chung với vote skip thảo luận thì coi như chủ
+ * phòng đã bỏ đi, ai còn nối cũng bấm được.
+ */
+function hostAbandonedGameOver(room: Room): boolean {
+  if (room.engine?.state.phase !== "GAME_OVER") return false;
+  const host = room.members.find((m) => m.playerId === room.hostId);
+  if (!host || host.connected) return false;
+  return Date.now() - (host.disconnectedAt ?? 0) >= DISCONNECT_GRACE_MS;
+}
+
+/**
+ * Phòng toàn bot (addBot không giới hạn số lượng) mất luôn người chơi thật
+ * duy nhất: không ai, kể cả bot, bấm được "Chơi lại", và không có job dọn
+ * phòng định kỳ nào. Reset về sảnh chờ khi không còn ai để mà "out" nhầm,
+ * thay vì để phòng treo IN_GAME vĩnh viễn.
+ *
+ * Chỉ gọi qua scheduleAbandonedRoomCheck, KHÔNG gọi thẳng lúc vừa rớt mạng:
+ * ngay tại thời điểm đó ai cũng vừa mất kết nối, gọi sớm là xoá ván chỉ vì
+ * một lần tải lại trang.
+ */
+export function resetIfAbandoned(room: Room): void {
+  if (room.status !== "IN_GAME") return;
+  if (room.members.some((m) => !m.isBot && m.connected)) return;
+  resetToLobby(room);
+}
+
+/**
+ * Hẹn kiểm tra lại sau đúng khoảng ân hạn dùng chung với vote skip thảo luận:
+ * ai đã quay lại thì resetIfAbandoned tự bỏ qua.
+ *
+ * Dùng setAbandonCheckTimer (bucket riêng), KHÔNG dùng setRoomTimer: mọi lần
+ * chuyển pha trong machine.ts đều gọi clearRoomTimers xoá sạch bucket đó, nên
+ * lịch kiểm tra bỏ hoang sẽ bị xoá theo trước khi kịp chạy.
+ */
+export function scheduleAbandonedRoomCheck(room: Room): void {
+  if (room.status !== "IN_GAME") return;
+  setAbandonCheckTimer(room.code, () => resetIfAbandoned(room), DISCONNECT_GRACE_MS + 500);
 }
 
 export const roomService = {
@@ -128,7 +172,19 @@ export const roomService = {
       // người sống tới hết ván.
       void dropVoiceParticipant(room.code, playerId, "rời phòng");
 
-      if (room.members.length === 0) {
+      // Rời hẳn là dứt khoát, không như rớt mạng còn cửa quay lại, nên kiểm
+      // tra bỏ hoang NGAY TẠI ĐÂY, trước khi gán lại host: nếu không, người
+      // thật cuối cùng rời đi khiến room.members[0] (một bot) bị gán làm host
+      // trước, rồi resetIfAbandoned mới đưa phòng về LOBBY - kết quả là một
+      // phòng LOBBY do bot làm host, không ai bấm "Bắt đầu" được và không bao
+      // giờ bị dọn.
+      resetIfAbandoned(room);
+
+      // LOBBY toàn bot cũng vô dụng y hệt phòng rỗng: không còn ai để bấm "Bắt
+      // đầu", và người mới join sau đó cũng không tự thành host. Xoá hẳn thay
+      // vì rơi xuống room.members[0] và gán nhầm một bot làm host.
+      const noRealPlayerLeft = room.members.every((m) => m.isBot);
+      if (room.members.length === 0 || (room.status === "LOBBY" && noRealPlayerLeft)) {
         removeRoom(room.code);
         await updateSessionRoom(playerId, null);
         await deletePersistedRoom(room.code);
@@ -306,11 +362,11 @@ export const roomService = {
     startGame(room);
   },
 
-  reset(hostId: string): void {
-    const roomCode = getRoomSyncByPlayer(hostId);
+  reset(playerId: string): void {
+    const roomCode = getRoomSyncByPlayer(playerId);
     if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
     const room = getRoom(roomCode)!;
-    assertHost(room, hostId);
+    if (room.hostId !== playerId && !hostAbandonedGameOver(room)) assertHost(room, playerId);
     if (room.status !== "IN_GAME") throw new RoomError("Không có trận đấu nào để đặt lại");
     resetToLobby(room);
   },

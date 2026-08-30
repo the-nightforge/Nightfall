@@ -23,6 +23,9 @@ const ACTOR_STYLE: Record<string, string> = {
   "Tiên Tri": "bg-indigo-900/50 text-indigo-300",
   "Phù Thủy": "bg-emerald-900/50 text-emerald-300",
   Nguyền: "bg-amber-900/50 text-amber-300",
+  "Thiên Thần": "bg-cyan-900/50 text-cyan-300",
+  "Thám Tử": "bg-violet-900/50 text-violet-300",
+  "Linh Mục": "bg-rose-900/50 text-rose-300",
 };
 
 function Line({ actor, children }: { actor: string; children: React.ReactNode }) {
@@ -73,7 +76,14 @@ export function NightRecapTimeline({ nights }: { nights: NightRecap[] }) {
                   <ul className="space-y-1.5">
                     <Line actor="Sói">
                       {night.wolfTarget ? (
-                        <>cắn <b className="text-white">{night.wolfTarget.name}</b></>
+                        <>
+                          cắn <b className="text-white">{night.wolfTarget.name}</b>
+                          {night.wolfSecondaryTarget && (
+                            <>
+                              {" "}và <b className="text-white">{night.wolfSecondaryTarget.name}</b> (cắn kép)
+                            </>
+                          )}
+                        </>
                       ) : (
                         "không chọn được mục tiêu"
                       )}
@@ -85,6 +95,11 @@ export function NightRecapTimeline({ nights }: { nights: NightRecap[] }) {
                         "không hành động"
                       )}
                     </Line>
+                    {night.guardianAngelTarget && (
+                      <Line actor="Thiên Thần">
+                        bảo vệ <b className="text-white">{night.guardianAngelTarget.name}</b>
+                      </Line>
+                    )}
                     {night.seerChecks.length > 0 ? (
                       night.seerChecks.map((check) => (
                         <Line key={`${check.seer.id}-${check.target.id}`} actor="Tiên Tri">
@@ -92,11 +107,28 @@ export function NightRecapTimeline({ nights }: { nights: NightRecap[] }) {
                           <span className={check.isWolf ? "text-blood-400" : "text-emerald-300"}>
                             {check.isWolf ? "→ là Ma Sói" : "→ không phải Ma Sói"}
                           </span>
+                          {check.secondaryTarget && (
+                            <>
+                              , soi thêm <b className="text-white">{check.secondaryTarget.name}</b>{" "}
+                              <span className={check.secondaryIsWolf ? "text-blood-400" : "text-emerald-300"}>
+                                {check.secondaryIsWolf ? "→ là Ma Sói" : "→ không phải Ma Sói"}
+                              </span>
+                            </>
+                          )}
                         </Line>
                       ))
                     ) : (
                       <Line actor="Tiên Tri">không hành động</Line>
                     )}
+                    {night.detectiveChecks?.map((check) => (
+                      <Line key={`${check.detective.id}-${check.target1.id}`} actor="Thám Tử">
+                        {check.detective.name} kiểm tra <b className="text-white">{check.target1.name}</b> và{" "}
+                        <b className="text-white">{check.target2.name}</b>{" "}
+                        <span className={check.sameTeam ? "text-amber-300" : "text-emerald-300"}>
+                          {check.sameTeam ? "→ cùng phe" : "→ khác phe"}
+                        </span>
+                      </Line>
+                    ))}
                     <Line actor="Phù Thủy">
                       {night.witch.usedHeal
                         ? night.witch.healedTarget
@@ -111,6 +143,17 @@ export function NightRecapTimeline({ nights }: { nights: NightRecap[] }) {
                         ", không dùng bình độc"
                       )}
                     </Line>
+                    {night.priest && (
+                      <Line actor="Linh Mục">
+                        {night.priest.priest.name} dùng Nước thánh lên{" "}
+                        <b className="text-white">{night.priest.target.name}</b>{" "}
+                        <span className={night.priest.isWolf ? "text-blood-400" : "text-emerald-300"}>
+                          {night.priest.isWolf
+                            ? "→ là Ma Sói, đã bị thanh tẩy"
+                            : "→ không phải Ma Sói, nước thánh phản phệ"}
+                        </span>
+                      </Line>
+                    )}
                     {(() => {
                       const turned = cursedTurnedText(night);
                       return turned ? <Line actor="Nguyền">{turned}</Line> : null;
