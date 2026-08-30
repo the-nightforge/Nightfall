@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import type { Role } from "@masoi/shared";
+import { analyzeChat } from "../src/bot/analysis/chat-analysis";
 import {
   BOT_SPEECH_KINDS,
   BOT_SPEECH_TONES,
@@ -87,6 +89,37 @@ describe("bảng speech act", () => {
       const text = renderIntentionText(intention({ kind }), (id) => `Tên ${id}`);
       expect(typeof text, kind).toBe("string");
       expect(text.trim().length, kind).toBeGreaterThan(0);
+    }
+  });
+
+  it("nhánh tối giản của CLAIM_ROLE/COUNTER_CLAIM đọc ngược được qua chat-analysis", () => {
+    // Nhánh này chỉ chạy khi hội thoại tắt (v1/v2/v3, xem `conversational` ở
+    // selfplay.ts) - không đi qua bảng mẫu phong phú của renderSpeechTemplate.
+    // Nó từng in ra định danh Role thô ("Tôi là SEER.") thay vì tên tiếng Việt
+    // của ROLE_META; không BOT nào đọc lại được lời khai như vậy, và lỗi đó
+    // không bao giờ đỏ vì không preset hiện có nào chạm tới nhánh này với claim
+    // bật. Bắt lỗi bằng cách cho văn bản đi trọn vòng qua `analyzeChat` - đúng
+    // bộ phân tích mà một BOT khác dùng để nghe lời khai.
+    const nameOf = (id: string) => PLAYERS.find((p) => p.id === id)?.name ?? id;
+    for (const role of ["SEER", "WITCH"] satisfies Role[]) {
+      const claimText = renderIntentionText(
+        intention({ kind: "CLAIM_ROLE", claimedRole: role }),
+        nameOf,
+      );
+      const claimed = analyzeChat([{ id: "m1", actorId: "p1", text: claimText, at: 0 }], PLAYERS);
+      expect(claimed.find((m) => m.type === "ROLE_CLAIM")?.data.role, claimText).toBe(role);
+
+      const counterText = renderIntentionText(
+        intention({ kind: "COUNTER_CLAIM", claimedRole: role, targetId: "p1" }),
+        nameOf,
+      );
+      const countered = analyzeChat(
+        [{ id: "m2", actorId: "p2", text: counterText, at: 0 }],
+        PLAYERS,
+      );
+      const counter = countered.find((m) => m.type === "COUNTER_CLAIM");
+      expect(counter?.data.role, counterText).toBe(role);
+      expect(counter?.targetId, counterText).toBe("p1");
     }
   });
 });

@@ -1,4 +1,4 @@
-import type { GamePhase, Phase, Role, RoomConfig, Winner } from "@masoi/shared";
+import { ROLE_META, type GamePhase, type Phase, type Role, type RoomConfig, type Winner } from "@masoi/shared";
 import { GameEngine } from "../../engine";
 import { detectCoalitions } from "../analysis/coalition";
 import { BotRuntime } from "../BotRuntime";
@@ -180,6 +180,11 @@ export function renderIntentionText(
 ): string {
   const target = speech.targetId ? nameOf(speech.targetId) : "người đó";
   const author = speech.replyToActorId ? nameOf(speech.replyToActorId) : target;
+  // Nguồn chữ vai DUY NHẤT là ROLE_META - cùng bảng UI dùng để hiển thị. Một
+  // định danh Role thô ("SEER") không phải tiếng Việt và bộ phân tích chat
+  // (`roleAtStart`) không đọc được nó; nhánh tối giản này vẫn phải sinh ra câu
+  // có thể đọc ngược, dù chỉ dùng khi hội thoại tắt.
+  const roleName = speech.claimedRole ? ROLE_META[speech.claimedRole].name : "dân làng";
 
   // Bảng mẫu đầy đủ khi chỗ gọi cho biết đây là lượt nói thứ mấy của ai. Nhánh
   // dưới là dạng tối giản một-câu-một-loại, giữ lại cho các test khẳng định
@@ -219,9 +224,9 @@ export function renderIntentionText(
     case "HUMOR":
       return "Thôi tôi im.";
     case "CLAIM_ROLE":
-      return `Tôi là ${speech.claimedRole ?? "dân làng"}.`;
+      return `Tôi là ${roleName}.`;
     case "COUNTER_CLAIM":
-      return `${target} không thể là ${speech.claimedRole ?? "dân làng"}, tôi mới là ${speech.claimedRole ?? "dân làng"}.`;
+      return `${target} không thể là ${roleName}, tôi mới là ${roleName}.`;
     default: {
       // Không bao giờ chạy tới. Tồn tại để việc thêm một speech act mà quên
       // nhánh render là một LỖI BIÊN DỊCH, chứ không phải một `undefined` lặng
