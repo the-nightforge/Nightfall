@@ -34,7 +34,7 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
     <div className="space-y-4">
       {/* Bị cáo là trung tâm của cả hai pha, nên trao hẳn cho họ một khu riêng. */}
       <div className="card border-amber-500/40 py-7 text-center">
-        <p className="text-xs uppercase tracking-[0.3em] text-mist/50">
+        <p className="text-xs uppercase tracking-[0.3em] text-mist/65">
           {isDefense ? "Đang biện hộ" : "Bỏ phiếu xác nhận"}
         </p>
         <div className="mt-3 flex flex-col items-center gap-2">

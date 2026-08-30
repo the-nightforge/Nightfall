@@ -25,8 +25,22 @@ const config: Config = {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
         display: ["var(--font-display)", "Georgia", "serif"],
       },
+      keyframes: {
+        // Sương trôi ngang hero trang chủ. Biên độ nhỏ và chu kỳ dài: đây là
+        // nền của một trang có ô nhập chữ, không phải một màn hình chờ.
+        fogDrift: {
+          "0%, 100%": { transform: "translate3d(-4%, 0, 0)" },
+          "50%": { transform: "translate3d(4%, 0, 0)" },
+        },
+        moonGlow: {
+          "0%, 100%": { opacity: "0.75" },
+          "50%": { opacity: "1" },
+        },
+      },
       animation: {
         pulseSlow: "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        fogDrift: "fogDrift 26s ease-in-out infinite",
+        moonGlow: "moonGlow 7s ease-in-out infinite",
       },
     },
   },

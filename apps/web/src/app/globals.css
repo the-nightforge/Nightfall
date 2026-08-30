@@ -11,6 +11,28 @@ body {
 }
 
 /*
+ * Vòng focus bàn phím.
+ *
+ * Đặt ở đây một lần thay vì rắc `focus-visible:` lên từng nút: bàn cờ có hàng
+ * chục nút (ghế người chơi, thẻ vai, kick, skip) và chỉ cần sót một cái là
+ * người dùng bàn phím mất dấu con trỏ giữa chừng. `:focus-visible` chứ không
+ * phải `:focus` để chuột bấm không kéo theo một vòng sáng chẳng ai cần.
+ *
+ * KHÔNG được thêm `focus:outline-none` vào .input hay bất kỳ lớp nào bên dưới:
+ * `.input:focus` đặc hiệu hơn selector này và sẽ xoá sạch vòng focus.
+ */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #cfe0ff;
+  outline-offset: 2px;
+}
+
+/*
  * Nền sân khấu. Mỗi không khí là một lớp riêng nằm chồng lên nhau, chỉ đổi
  * opacity - xem chú thích trong Backdrop.tsx về lý do không đổi background.
  */
@@ -210,9 +232,11 @@ body {
     @apply btn bg-night-700/80 text-mist hover:bg-night-600 active:bg-night-800;
   }
 
+  /* placeholder ở mist/40 gần như chìm hẳn vào nền night-800; /55 vẫn nhạt hơn
+   * chữ thật nên không bị nhầm là đã nhập, mà đọc được trên màn hình ngoài trời. */
   .input {
     @apply w-full rounded-lg border border-night-600 bg-night-800/80 px-3 py-2.5 text-white
-      placeholder:text-mist/40 focus:border-blood-500 focus:outline-none;
+      placeholder:text-mist/55 focus:border-blood-500;
   }
 
   .badge-phase {
