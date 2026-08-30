@@ -39,6 +39,8 @@ function context(options: {
   const myVote = options.myVote ?? null;
   return {
     knowledge: {
+      dayOfTruthClaims: {},
+      activeEventId: null,
       botId: "me",
       round: options.round ?? 1,
       phase: "VOTING",

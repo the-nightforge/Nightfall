@@ -106,10 +106,17 @@ export function werewolfStrategy(
         .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));
 
       const winner = scored[0];
+      // Cuộc Săn Đẫm Máu và Sói Con phẫn nộ cùng mở một mục tiêu phụ; engine đã
+      // gộp cả hai vào `bonusSecondTargetFor`, nên ở đây chỉ còn một điều kiện.
+      // `scored` đã lọc đồng bọn nên con thứ hai cũng an toàn theo luật.
+      const runnerUp =
+        night.bonusSecondTargetFor === "KILL" ? (scored[1]?.targetId ?? null) : null;
+
       return {
         kind: "NIGHT_ACTION",
         action: "KILL",
         targetId: winner.targetId,
+        secondaryTargetId: runnerUp,
         confidence: Math.min(1, Math.max(0, winner.score / MAX_BELIEF_SCORE)),
         evidence: [
           nightEvidence(

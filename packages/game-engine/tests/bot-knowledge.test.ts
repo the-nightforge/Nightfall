@@ -20,6 +20,7 @@ const ROSTER: Array<{ id: string; name: string; role: Role }> = [
 
 function knowledgeFixture(phase: GamePhase = "VOTING") {
   const state: GameState = {
+    deadCanSpeakChosenId: null,
     phase,
     round: 2,
     phaseEndsAt: 130_000,
@@ -261,6 +262,11 @@ describe("bot knowledge security boundary", () => {
     expect(Object.keys(view).sort()).toEqual(
       [
         "botId",
+        // Sự kiện đang chạy: công khai với cả phòng qua `RoomSnapshot`, nên nó
+        // ở đây là chuyển tiếp chứ không phải rò rỉ.
+        "activeEventId",
+        // Lời khai của Ngày Sự Thật: cùng lý do, cả phòng nhìn chung một bảng.
+        "dayOfTruthClaims",
         "currentVoteCounts",
         "hasVoted",
         "knownRoles",

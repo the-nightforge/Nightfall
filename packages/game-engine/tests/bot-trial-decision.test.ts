@@ -21,6 +21,8 @@ function stateFor(seed = "trial"): BotBrainState {
 function context(over: Partial<BotKnowledgeView> = {}): BotDecisionContext {
   return {
     knowledge: {
+      dayOfTruthClaims: {},
+      activeEventId: null,
       botId: "me",
       round: 2,
       phase: "FINAL_VOTE",
@@ -204,6 +206,7 @@ describe("BotRuntime · phương thức mới", () => {
         phase: "NIGHT",
         selfRole: "SEER",
         night: {
+          bonusSecondTargetFor: null,
           canAct: true,
           legalActions: ["SEE"],
           legalTargets: {

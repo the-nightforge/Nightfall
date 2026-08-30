@@ -8,6 +8,8 @@ const PLAYERS = ["me", "ally", "a", "b", "c"];
 function context(over: Partial<BotKnowledgeView> = {}): BotDecisionContext {
   return {
     knowledge: {
+      dayOfTruthClaims: {},
+      activeEventId: null,
       botId: "me",
       round: 2,
       phase: "DAY_DISCUSSION",

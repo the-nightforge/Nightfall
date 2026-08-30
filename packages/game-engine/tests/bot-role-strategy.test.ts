@@ -33,6 +33,7 @@ function stateFor(playerId: string, seed = "strategy"): BotBrainState {
 
 function night(over: Partial<NightKnowledge> = {}): NightKnowledge {
   return {
+    bonusSecondTargetFor: null,
     canAct: true,
     legalActions: ["KILL"],
     legalTargets: {
@@ -58,6 +59,8 @@ function night(over: Partial<NightKnowledge> = {}): NightKnowledge {
 function context(over: Partial<BotKnowledgeView> = {}): BotDecisionContext {
   return {
     knowledge: {
+      dayOfTruthClaims: {},
+      activeEventId: null,
       botId: "wolf",
       round: 2,
       phase: "NIGHT",

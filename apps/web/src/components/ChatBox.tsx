@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { ChatMessage } from "@masoi/shared";
+import { GHOST_AUTHOR_ID, type ChatMessage } from "@masoi/shared";
 import { getIdentity } from "@/lib/identity";
 
 const CHANNEL_LABEL: Record<string, string> = {
@@ -65,18 +65,25 @@ export function ChatBox({ messages, onSend, placeholder }: Props) {
         )}
         {messages.map((message) => {
           const mine = message.playerId === meId;
+          // Lời nhắn ẩn danh phải TRÔNG khác một câu chat thường, nếu không
+          // người chơi sẽ tưởng có một người tên "Một linh hồn" trong phòng.
+          const ghost = message.playerId === GHOST_AUTHOR_ID;
           return (
             <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
               <div
                 className={`max-w-[85%] rounded-xl border px-2.5 py-1.5 ${
-                  mine
-                    ? "bg-indigo-500/15 border-indigo-500/25"
-                    : CHANNEL_STYLE[message.channel] ?? DEFAULT_CHANNEL_STYLE
+                  ghost
+                    ? "border-violet-500/30 bg-violet-900/25 italic"
+                    : mine
+                      ? "bg-indigo-500/15 border-indigo-500/25"
+                      : CHANNEL_STYLE[message.channel] ?? DEFAULT_CHANNEL_STYLE
                 }`}
               >
                 <div className="flex items-baseline gap-1.5">
                   <span
-                    className={`text-xs font-bold ${mine ? "text-indigo-200" : "text-white"}`}
+                    className={`text-xs font-bold ${
+                      ghost ? "text-violet-200" : mine ? "text-indigo-200" : "text-white"
+                    }`}
                   >
                     {message.playerName}
                   </span>
@@ -87,7 +94,7 @@ export function ChatBox({ messages, onSend, placeholder }: Props) {
                     title={CHANNEL_LABEL[message.channel] ?? message.channel}
                     aria-label={CHANNEL_LABEL[message.channel] ?? message.channel}
                   >
-                    {CHANNEL_ICON[message.channel] ?? "💬"}
+                    {ghost ? "👻" : CHANNEL_ICON[message.channel] ?? "💬"}
                   </span>
                 </div>
                 {/* break-words: một chuỗi 300 ký tự không dấu cách sẽ đẩy toang cột phụ. */}

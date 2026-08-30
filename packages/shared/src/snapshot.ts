@@ -307,6 +307,14 @@ export interface RoomSnapshot {
   /** Claim Ngày Sự Thật: playerId -> role claim hoặc null là không tiết lộ */
   dayOfTruthClaims?: Record<string, string | null>;
   /**
+   * Lượt nói của Tiếng Vọng Người Chết, tính riêng cho người nhận snapshot này.
+   *
+   * CHỈ có `canAct`. Cố tình không mang `chosenId`: người xem đã biết mình có
+   * phải linh hồn được chọn hay không qua chính cờ này, còn ai khác biết là
+   * hỏng sự kiện. Optional vì web và server deploy rời nhau.
+   */
+  deadCanSpeak?: { canAct: boolean } | null;
+  /**
    * Trạng thái voice cho riêng người nhận snapshot này.
    *
    * Optional vì web và server deploy rời nhau: client mới chạy với server cũ

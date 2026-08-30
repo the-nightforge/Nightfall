@@ -1,4 +1,4 @@
-import type { DayVoteRecap, Phase, PublicVoteChoice, Role } from "@masoi/shared";
+import type { DayVoteRecap, GameEventId, Phase, PublicVoteChoice, Role } from "@masoi/shared";
 
 export type BotRng = () => number;
 
@@ -309,6 +309,18 @@ export interface NightKnowledge {
   healUsed: boolean;
   poisonUsed: boolean;
   wolvesLocked: boolean;
+  /**
+   * Hành động được chọn THÊM một mục tiêu phụ đêm nay, hoặc `null`.
+   *
+   * Sinh ra từ những luật NGOÀI vai: Màn Sương Tan cho Tiên Tri soi hai người,
+   * Cuộc Săn Đẫm Máu và Sói Con phẫn nộ cho bầy Sói cắn hai. Engine tính sẵn ở
+   * đây vì strategy không được đọc `activeEvent` rồi tự dựng lại luật - đó là
+   * bản sao luật thứ hai, và nó sẽ trôi lệch khỏi luật thật.
+   *
+   * KHÔNG bao gồm `DETECTIVE_CHECK`: Thám Tử luôn cần đúng hai người, đó là kỹ
+   * năng gốc chứ không phải phần thưởng, nên nó không đọc trường này.
+   */
+  bonusSecondTargetFor: NightActionKind | null;
 }
 
 /**
@@ -362,6 +374,25 @@ export interface BotKnowledgeView {
   myVote: PublicVoteChoice | null;
   legalVoteChoices: PublicVoteChoice[];
   lastNightDeaths: Array<{ playerId: string; name: string }>;
+  /**
+   * Sự kiện đang có hiệu lực, hoặc `null`.
+   *
+   * An toàn để lộ: `activeEvent` nằm trong `RoomSnapshot` công khai, cả phòng
+   * đang nhìn cùng một banner. Đặt ở đây chứ không ở `BotDecisionContext` để
+   * chỉ có MỘT đường - mọi thứ BOT biết đều đi qua bộ lọc của engine.
+   */
+  activeEventId: GameEventId | null;
+  /**
+   * Lời khai của Ngày Sự Thật, `playerId` -> vai, hoặc `null` là không tiết lộ.
+   *
+   * Công khai y như `activeEventId`: cả phòng nhìn cùng một bảng. Đi đường CẤU
+   * TRÚC chứ không qua chat có chủ đích - claim vốn đã là dữ liệu có cấu trúc,
+   * và đẩy nó qua parser tiếng Việt chỉ để đọc lại là tự thêm một tầng mất mát.
+   *
+   * Giữ lại sau khi sự kiện tắt: một lời khai hôm qua vẫn là bằng chứng hôm
+   * nay, và engine chỉ xoá bảng khi một Ngày Sự Thật MỚI bắt đầu.
+   */
+  dayOfTruthClaims: Record<string, Role | null>;
 }
 
 export interface BotChatObservation {
@@ -374,8 +405,6 @@ export interface BotChatObservation {
 export interface BotDecisionContext {
   knowledge: BotKnowledgeView;
   visibleChat: BotChatObservation[];
-  /** Active event id currently affecting the game, if any - exposed for bot decision making */
-  activeEventId?: string | null;
   /** Balance score 0..100 computed from lobby config and player count */
   balanceScore?: number | null;
   /** Pending LAST_STAND victim if any, carried across rounds */

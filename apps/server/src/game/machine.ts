@@ -1,16 +1,24 @@
 import { GameEngine } from "@masoi/game-engine";
 import type { BotDecisionContext, BotSpeechIntention } from "@masoi/game-engine";
-import { GAME_OVER_MS, RESULT_MS, ROLE_REVEAL_MS, SERVER_EVENTS } from "@masoi/shared";
+import {
+  DEAD_MESSAGE_MAX_LENGTH,
+  GAME_OVER_MS,
+  GHOST_AUTHOR_ID,
+  GHOST_AUTHOR_NAME,
+  RESULT_MS,
+  ROLE_REVEAL_MS,
+  SERVER_EVENTS,
+} from "@masoi/shared";
 import type { PublicVoteChoice } from "@masoi/shared";
 import type { Room } from "../rooms/store";
 import { clearRoomTimers, persistRoom, setRoomTimer } from "../rooms/store";
 import { broadcastRoom, emitToPlayers } from "../rooms/broadcast";
 import { destroyVoiceRoom, syncVoicePermissions } from "../voice/service";
 import { prisma } from "../db";
-import { buildSnapshot, pushChat, resolveChat } from "../rooms/snapshot";
+import { buildSnapshot, dayRecipients, pushChat, resolveChat } from "../rooms/snapshot";
 import { botBrain, randomBrain, resetBotBudget } from "../bots";
 import { buildBotDecisionContext } from "../bots/context";
-import { renderBotSpeech } from "../bots/speech-renderer";
+import { renderBotSpeech, speechTemplate } from "../bots/speech-renderer";
 import {
   describeSpeechStyle,
   recentOpenings,
@@ -40,6 +48,23 @@ const HUNTER_BOT_DEADLINE_BUFFER_MS = 1_000;
 const FINAL_VOTE_BOT_DEADLINE_BUFFER_MS = 1_500;
 /** Cửa sổ riêng cho Phù Thuỷ sau khi bầy Sói chốt nạn nhân. */
 const WITCH_WINDOW_MS = 15_000;
+
+/**
+ * Cửa sổ rải claim của Ngày Sự Thật.
+ *
+ * Claim phải nằm ở ĐẦU ngày để cả làng còn thời gian bàn về nó; rải hết cả pha
+ * thì con cuối cùng khai xong là vừa lúc chuyển sang bỏ phiếu. Vẫn bị kẹp lại
+ * theo cửa sổ thật ở dưới, vì Lệnh Giới Nghiêm cắt đôi pha thảo luận.
+ */
+const DAY_OF_TRUTH_SPREAD_MS = 6_000;
+
+/**
+ * Cửa sổ rải lời nhắn của linh hồn.
+ *
+ * Muộn hơn claim một chút để lời nhắn rơi vào lúc cuộc thảo luận đã có gì đó để
+ * bám vào, nhưng vẫn còn đủ ngày để làng phản ứng. Cũng bị kẹp theo cửa sổ thật.
+ */
+const GHOST_WHISPER_SPREAD_MS = 10_000;
 
 function engine(room: Room): GameEngine {
   if (!room.engine) throw new Error("Chưa có trận đấu");
@@ -157,6 +182,8 @@ function beginDiscussion(room: Room): void {
     setRoomTimer(room.code, () => beginVoting(room), durationMs + 500);
   }
   scheduleDayBots(room);
+  scheduleDayOfTruthBots(room);
+  scheduleDeadCanSpeakBot(room);
   sync(room);
 }
 
@@ -390,6 +417,179 @@ export function scheduleHunterBot(room: Room): void {
       /* state đổi sát lúc nộp thì để timeout toàn cục xử lý như một lượt skip */
     }
   }, delay);
+}
+
+/**
+ * Claim của BOT trong Ngày Sự Thật.
+ *
+ * Trước đây `submitDayOfTruthClaim` chỉ có một chỗ gọi là handler socket, nên
+ * sự kiện này không tồn tại với BOT: banner hiện lên, bảng claim rỗng, và cả
+ * làng nhìn nhau. Đây là sự kiện DUY NHẤT đòi một thao tác chủ động, nên nó là
+ * sự kiện duy nhất cần một scheduler riêng.
+ *
+ * Quyết định khai gì là của lõi deterministic, giống mọi nước đi khác: nhà cung
+ * cấp không được đụng vào.
+ */
+export function scheduleDayOfTruthBots(room: Room): void {
+  const scheduledEngine = room.engine;
+  if (!scheduledEngine) return;
+  // Ngoài sự kiện thì engine ném ở mọi lời gọi; xếp lịch mù biến mỗi ngày
+  // thường thành một chuỗi ngoại lệ bị nuốt.
+  if (scheduledEngine.state.activeEvent?.id !== "DAY_OF_TRUTH") return;
+
+  const session = botSessionFor(room);
+  const scheduledRound = scheduledEngine.state.round;
+
+  const stillOpen = (): boolean =>
+    room.engine === scheduledEngine &&
+    scheduledEngine.state.phase === "DAY_DISCUSSION" &&
+    scheduledEngine.state.round === scheduledRound &&
+    scheduledEngine.state.activeEvent?.id === "DAY_OF_TRUTH";
+
+  // Kẹp theo cửa sổ CÒN LẠI chứ không theo `discussionSeconds`: Lệnh Giới
+  // Nghiêm cắt đôi pha, và một hằng số cứng sẽ xếp claim ra ngoài pha.
+  const remaining = Math.max(0, (scheduledEngine.state.phaseEndsAt ?? Date.now()) - Date.now());
+  const spread = Math.min(DAY_OF_TRUTH_SPREAD_MS, Math.floor(remaining * 0.4));
+
+  for (const member of room.members) {
+    if (!member.isBot) continue;
+    // Người chết không claim được - engine ném - và người thật tự bấm lấy.
+    const player = scheduledEngine.state.players.find((p) => p.id === member.playerId);
+    if (!player?.alive) continue;
+
+    const rng = session.rngFor(member.playerId, "day-of-truth");
+    const delay = Math.floor(rng() * spread);
+
+    setRoomTimer(room.code, () => {
+      try {
+        if (!stillOpen()) return;
+
+        const runtime = session.runtimeFor(member.playerId);
+        const context = buildBotDecisionContext(room, member.playerId);
+        runtime.observe(context);
+
+        scheduledEngine.submitDayOfTruthClaim(
+          member.playerId,
+          runtime.decideRoleClaim(context).role,
+        );
+        sync(room);
+      } catch {
+        /* state đổi sát lúc nộp thì bỏ lượt claim, không kéo sập tiến trình */
+      }
+    }, delay);
+  }
+}
+
+/**
+ * Đăng một lời nhắn ẩn danh vào kênh ban ngày.
+ *
+ * Tác giả là hằng số `GHOST_AUTHOR_ID`, không phải id thật. Đây không phải một
+ * chi tiết hiển thị: payload chat được phát cho cả phòng, nên một id thật nằm
+ * trong đó là đã lộ, bất kể client vẽ ra sao.
+ */
+function postGhostChat(room: Room, text: string): void {
+  const message = {
+    id: newId(),
+    channel: "day",
+    playerId: GHOST_AUTHOR_ID,
+    playerName: GHOST_AUTHOR_NAME,
+    text,
+    at: Date.now(),
+  };
+  pushChat(room, message);
+  emitToPlayers(dayRecipients(room), SERVER_EVENTS.CHAT_NEW, message);
+  void persistRoom(room);
+}
+
+/**
+ * Lời nhắn của linh hồn - đường DUY NHẤT, dùng chung cho người thật và BOT.
+ *
+ * Engine gác luật và tiêu lượt; nếu nó ném thì không có gì được đăng. Hai đường
+ * riêng cho người và BOT sẽ trôi lệch, và ở đây "trôi lệch" nghĩa là một cú lộ
+ * danh tính không rút lại được.
+ */
+export function submitGhostMessage(room: Room, playerId: string, text: string): void {
+  const trimmed = engine(room).submitDeadMessage(playerId, text);
+  postGhostChat(room, trimmed);
+  sync(room);
+}
+
+/**
+ * Lời nhắn khi linh hồn được chọn là một BOT.
+ *
+ * Lõi chốt nói VỀ AI (`decideGhostWhisper`, chỉ đọc nghi ngờ công khai); nhà
+ * cung cấp chỉ diễn đạt, và trần 120 ký tự được ép ngay ở tầng render để engine
+ * không phải từ chối - một cú từ chối ở đây là mất trắng lượt duy nhất của ván.
+ */
+export function scheduleDeadCanSpeakBot(room: Room): void {
+  const scheduledEngine = room.engine;
+  if (!scheduledEngine) return;
+  if (scheduledEngine.state.activeEvent?.id !== "DEAD_CAN_SPEAK") return;
+
+  const ghostId = scheduledEngine.state.deadCanSpeakChosenId;
+  if (!ghostId) return;
+  const member = room.members.find((candidate) => candidate.playerId === ghostId);
+  // Người thật tự bấm lấy; scheduler không được cướp lượt của họ.
+  if (!member?.isBot) return;
+
+  const scheduledRound = scheduledEngine.state.round;
+  const stillOpen = (): boolean =>
+    room.engine === scheduledEngine &&
+    scheduledEngine.state.phase === "DAY_DISCUSSION" &&
+    scheduledEngine.state.round === scheduledRound &&
+    scheduledEngine.state.activeEvent?.id === "DEAD_CAN_SPEAK" &&
+    !scheduledEngine.state.deadCanSpeakUsed;
+
+  const session = botSessionFor(room);
+  const remaining = Math.max(0, (scheduledEngine.state.phaseEndsAt ?? Date.now()) - Date.now());
+  const spread = Math.min(GHOST_WHISPER_SPREAD_MS, Math.floor(remaining * 0.5));
+  const delay = Math.floor(session.rngFor(ghostId, "ghost-whisper")() * spread);
+
+  setRoomTimer(room.code, () => {
+    void (async () => {
+      try {
+        if (!stillOpen()) return;
+
+        const runtime = session.runtimeFor(ghostId);
+        const context = buildBotDecisionContext(room, ghostId);
+        runtime.observe(context);
+
+        const whisper = runtime.decideGhostWhisper(context);
+        // Im lặng là một quyết định thật: không nghi ai thì không chỉ bừa.
+        if (!whisper.targetId) return;
+
+        const request = toSpeechRequest(room, member, context, {
+          kind: "ACCUSE",
+          targetId: whisper.targetId,
+          confidence: 0.5,
+          evidence: [],
+          tone: "TENSE",
+        });
+        const rendered = await renderBotSpeech(request, botBrain(), DEAD_MESSAGE_MAX_LENGTH);
+        const text = stripSelfNaming(rendered.text, member.name) ?? speechTemplate(request);
+        if (!text) return;
+
+        // Kết quả về muộn không được lọt sang pha sau.
+        if (!stillOpen()) return;
+        submitGhostMessage(room, ghostId, text.slice(0, DEAD_MESSAGE_MAX_LENGTH));
+      } catch {
+        /* lượt của ma hỏng thì thôi, không kéo sập tiến trình */
+      }
+    })();
+  }, delay);
+}
+
+/**
+ * Bỏ câu nào tự xưng tên người nói.
+ *
+ * Prompt cố tình mang tên BOT vào để nó xưng hô tự nhiên, và ở mọi lượt nói
+ * khác điều đó vô hại. Ở đây nó phá đúng thứ sự kiện dựa vào, nên câu bị trả
+ * về `null` và chỗ gọi rơi sang bảng mẫu - bảng mẫu không bao giờ nhắc tên
+ * người nói, chỉ nhắc tên mục tiêu.
+ */
+function stripSelfNaming(text: string | null, speakerName: string): string | null {
+  if (!text) return null;
+  return text.toLowerCase().includes(speakerName.toLowerCase()) ? null : text;
 }
 
 function applyNight(room: Room, botId: string, decision: NightDecision | null): void {

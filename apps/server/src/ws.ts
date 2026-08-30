@@ -22,6 +22,7 @@ import {
   addBotPayload,
   hunterShotPayload,
   dayOfTruthClaimPayload,
+  deadMessagePayload,
   updateAvatarPayload,
 } from "@masoi/shared";
 import { config } from "./config";
@@ -35,6 +36,7 @@ import {
   maybeEndWitchWindow,
   scheduleDiscussionSkipRecheck,
   submitDiscussionSkip,
+  submitGhostMessage,
   submitHunterShot,
 } from "./game/machine";
 import { getPlayerRoom, updateSessionRoom } from "./redis";
@@ -266,6 +268,18 @@ export function setupSocket(io: SocketServer): void {
       room.engine.submitDayOfTruthClaim(playerId, role);
       broadcastRoom(roomCode);
       void import("./rooms/store").then((m) => m.persistRoom(room));
+    });
+
+    handler(CLIENT_EVENTS.GAME_DEAD_MESSAGE, async (payload) => {
+      const { text } = deadMessagePayload.parse(payload);
+      if (!allowAction(`dead-message:${playerId}`, 3, 3_000)) throw new RoomError("Thao tác quá nhanh");
+      const roomCode = getRoomSyncByPlayer(playerId);
+      if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
+      const room = getRoom(roomCode);
+      if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
+      // Cùng hàm mà BOT dùng: hai đường riêng sẽ trôi lệch, và ở đây trôi lệch
+      // nghĩa là một cú lộ danh tính.
+      submitGhostMessage(room, playerId, text);
     });
 
     handler(CLIENT_EVENTS.CHAT_SEND, async (payload) => {

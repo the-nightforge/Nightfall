@@ -36,6 +36,8 @@ function context(
 ): BotDecisionContext {
   return {
     knowledge: {
+      dayOfTruthClaims: {},
+      activeEventId: null,
       botId: "me",
       round: 2,
       phase: "NIGHT",
@@ -46,6 +48,7 @@ function context(
       knownRoles: {},
       seerResult: null,
       night: {
+        bonusSecondTargetFor: null,
         canAct: true,
         legalActions: [],
         legalTargets: emptyTargets(),

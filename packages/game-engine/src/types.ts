@@ -167,6 +167,13 @@ export interface GameState {
   bloodMoonArmed: boolean;
   bloodMoonUsed: boolean;
   deadCanSpeakUsed: boolean;
+  /**
+   * Linh hồn được chọn để nói trong Tiếng Vọng Người Chết.
+   *
+   * BÍ MẬT. Không được xuất hiện ở bất kỳ trường nào của `snapshotFor`, kể cả
+   * gián tiếp: cả sự kiện dựa vào việc không ai biết lời nhắn từ đâu ra.
+   */
+  deadCanSpeakChosenId: string | null;
   howlBonusDay: number | null;
   dayOfTruthClaims: Record<string, string | null>;
 }

@@ -85,6 +85,7 @@ export default function RoomPage() {
             onVote={(targetId: string | null) => room.emit("game:vote", { targetId })}
             onSkipDiscussion={(skip) => room.emit("game:skip-discussion", { skip })}
             onDayOfTruthClaim={(role) => room.emit("game:day-of-truth-claim", { role })}
+            onDeadMessage={(text) => room.emit("game:dead-message", { text })}
           />
         );
       case "DEFENSE":

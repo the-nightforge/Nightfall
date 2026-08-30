@@ -91,13 +91,25 @@ export function resolveChat(room: Room, senderId: string):
     view.phase === "NIGHT_RESULT" ||
     view.phase === "ELIMINATION"
   ) {
-    const recipients = room.members
-      .filter((m) => !m.isBot && room.engine!.snapshotFor(m.playerId).you?.alive)
-      .map((m) => m.playerId);
-    return { ok: true, channel: "day", recipients: [...recipients, ...deadSpectators(room)] };
+    return { ok: true, channel: "day", recipients: dayRecipients(room) };
   }
 
   return { ok: false, error: "Hiện tại không thể trò chuyện" };
+}
+
+/**
+ * Ai nghe được kênh `day`: người sống, cộng khán giả đã chết.
+ *
+ * Tách khỏi `resolveChat` vì Tiếng Vọng Người Chết cũng phát vào kênh này,
+ * nhưng KHÔNG đi qua `resolveChat` - hàm đó phân kênh theo người gửi, mà người
+ * gửi ở đây đã chết nên nó sẽ trả về kênh `dead`, tức đúng những người mà lời
+ * nhắn không cần tới.
+ */
+export function dayRecipients(room: Room): string[] {
+  const alive = room.members
+    .filter((m) => !m.isBot && room.engine!.snapshotFor(m.playerId).you?.alive)
+    .map((m) => m.playerId);
+  return [...alive, ...deadSpectators(room)];
 }
 
 export function pushChat(room: Room, message: ChatMessage): void {
@@ -221,5 +233,8 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
     chatLog: visibleChatLog(room, viewerId),
     log: gameView?.log ?? [],
     dayOfTruthClaims: gameView?.dayOfTruthClaims ?? {},
+    // Chỉ `canAct`, đã tính riêng cho chính người nhận snapshot này. Danh tính
+    // linh hồn nằm lại trong engine và không có đường nào ra đây.
+    deadCanSpeak: gameView?.deadCanSpeak ?? null,
   };
 }

@@ -57,10 +57,16 @@ export function seerStrategy(
         .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));
 
       const winner = scored[0];
+      // Màn Sương Tan mở lượt soi thứ hai. Điều kiện do engine chốt ở
+      // `bonusSecondTargetFor`; đọc thẳng `activeEventId` ở đây là dựng lại
+      // luật lần thứ hai, và bản sao đó sẽ trôi lệch khỏi `submitNightAction`.
+      const runnerUp = night.bonusSecondTargetFor === "SEE" ? (scored[1]?.targetId ?? null) : null;
+
       return {
         kind: "NIGHT_ACTION",
         action: "SEE",
         targetId: winner.targetId,
+        secondaryTargetId: runnerUp,
         confidence: weights.nightConfidence.seer,
         evidence: [
           nightEvidence(

@@ -99,6 +99,7 @@ function believe(
 
 function night(over: Partial<NightKnowledge> = {}): NightKnowledge {
   return {
+    bonusSecondTargetFor: null,
     canAct: true,
     legalActions: [],
     legalTargets: {
@@ -124,6 +125,8 @@ function night(over: Partial<NightKnowledge> = {}): NightKnowledge {
 function context(over: Partial<BotKnowledgeView> = {}): BotDecisionContext {
   return {
     knowledge: {
+      dayOfTruthClaims: {},
+      activeEventId: null,
       botId: "me",
       round: 2,
       phase: "VOTING",

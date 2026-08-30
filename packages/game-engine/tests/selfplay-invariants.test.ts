@@ -48,6 +48,7 @@ function truth(over: Partial<GroundTruth> = {}): GroundTruth {
 
 function night(over: Partial<NightKnowledge> = {}): NightKnowledge {
   return {
+    bonusSecondTargetFor: null,
     canAct: true,
     legalActions: [],
     legalTargets: {
@@ -72,6 +73,8 @@ function night(over: Partial<NightKnowledge> = {}): NightKnowledge {
 
 function knowledge(over: Partial<BotKnowledgeView> = {}): BotKnowledgeView {
   return {
+    dayOfTruthClaims: {},
+    activeEventId: null,
     botId: "me",
     round: 3,
     phase: "VOTING" as Phase,

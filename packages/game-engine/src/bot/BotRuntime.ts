@@ -4,6 +4,8 @@ import { applySocialEvidence } from "./analysis/social-analysis";
 import { analyzeVoteRecap } from "./analysis/vote-analysis";
 import { applyEvidence, applyTrustEvidence, decayBeliefs } from "./belief/belief-state";
 import { applyPrivateInformation } from "./belief/private-info";
+import { decideRoleClaim, type BotClaimIntention } from "./decision/claim-decision";
+import { decideGhostWhisper, type BotGhostWhisperIntention } from "./decision/ghost-decision";
 import { selectVote } from "./decision/vote-decision";
 import {
   decideFinalVote,
@@ -202,6 +204,7 @@ export class BotRuntime {
 
     this.ingestDeaths(knowledge);
     this.ingestSeerResult(knowledge);
+    this.ingestRoleClaims(knowledge);
     this.ingestRecaps(knowledge);
     this.ingestChat(context);
 
@@ -336,6 +339,27 @@ export class BotRuntime {
       verdict.guilty ? "treo" : "tha",
     );
     return verdict;
+  }
+
+  /**
+   * Vai công khai nhận trong Ngày Sự Thật.
+   *
+   * Không đi qua `beginTracedDecision`: đây không phải một lượt chọn mục tiêu
+   * nên nó không có candidate nào để ghi, và nó không rút RNG - thêm nó vào
+   * trace chỉ làm bẩn chuỗi rút số mà mọi test tái lập đang dựa vào.
+   */
+  decideRoleClaim(context: BotDecisionContext): BotClaimIntention {
+    return decideRoleClaim(context, this.state);
+  }
+
+  /**
+   * Người mà linh hồn sẽ nói tới trong Tiếng Vọng Người Chết.
+   *
+   * Cùng lý do với `decideRoleClaim` mà không đi qua trace: không có candidate
+   * để ghi và không rút RNG.
+   */
+  decideGhostWhisper(context: BotDecisionContext): BotGhostWhisperIntention {
+    return decideGhostWhisper(context, this.state);
   }
 
   /** Phát bắn cuối của Thợ Săn; `targetId: null` là không bắn. */
@@ -608,6 +632,36 @@ export class BotRuntime {
       },
       knowledge,
     );
+  }
+
+  /**
+   * Lời khai của Ngày Sự Thật, nạp thẳng thành `ROLE_CLAIM`.
+   *
+   * Cùng loại memory mà `chat-analysis` sinh ra khi ai đó tự nhận vai bằng lời,
+   * nên nó chảy vào đúng bộ máy đã có - `werewolf.threatScore` không cần biết
+   * lời khai đến từ ô chat hay từ bảng claim.
+   *
+   * `sourceId` KHÔNG chứa vòng đang quan sát: sự kiện chỉ nổ một lần mỗi ván,
+   * còn bảng claim thì còn lại tới cuối. Gắn vòng vào sẽ đẻ một memory mới mỗi
+   * vòng cho cùng một lời khai. Nhưng nó CÓ chứa vai, nên người lật claim để
+   * lại hai memory - và đó là chuyện đúng, vì họ thật sự đã nói cả hai câu.
+   */
+  private ingestRoleClaims(knowledge: BotKnowledgeView): void {
+    for (const [playerId, role] of Object.entries(knowledge.dayOfTruthClaims)) {
+      // "Không tiết lộ" không phải một lời khai; nó không nói gì để mà nhớ.
+      if (role === null) continue;
+      this.write(
+        {
+          type: "ROLE_CLAIM",
+          sourceId: `day-of-truth:${playerId}:${role}`,
+          actorId: playerId,
+          importance: this.weights.memoryImportance.roleClaim,
+          pinned: true,
+          data: { role },
+        },
+        knowledge,
+      );
+    }
   }
 
   private ingestRecaps(knowledge: BotKnowledgeView): void {
