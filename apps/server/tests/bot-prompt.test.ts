@@ -1,68 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { speechDefaults } from "./helpers/speech-request";
-import type { RoomSnapshot } from "@masoi/shared";
-import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
-import { buildDaySpeechPrompt, buildDefensePrompt, personaFor } from "../src/bots/prompt";
+import { buildDaySpeechPrompt } from "../src/bots/prompt";
 import { interpretDaySpeech } from "../src/bots/decide";
 import type { SpeechRequest } from "../src/bots/types";
-
-/** Snapshot của Dân Làng: đã lọc, không ai lộ vai */
-function villagerView(): RoomSnapshot {
-  return {
-    code: "ABCDE",
-    hostId: "v",
-    phase: "DAY_DISCUSSION",
-    config: { ...DEFAULT_ROOM_CONFIG },
-    round: 2,
-    phaseEndsAt: null,
-    you: { id: "v", name: "Vân", ready: true, connected: true, role: "VILLAGER", alive: true },
-    players: [
-      { id: "v", name: "Vân", alive: true, isBot: true },
-      { id: "w", name: "Wolf", alive: true, isBot: false },
-      { id: "s", name: "Sang", alive: true, isBot: false },
-    ],
-    night: null,
-    hunterShot: null,
-    trial: null,
-    lastTrial: null,
-    hasVoted: false,
-    myVote: null,
-    noEliminationVoteCount: 0,
-    serverNow: 0,
-    discussionSkip: null,
-    votesRevealed: false,
-    dayVoteHistory: [],
-    nightHistory: [],
-    hunterShots: [],
-    lastNightDeaths: [],
-    lastEliminated: null,
-    winner: null,
-    chatLog: [
-      { id: "1", channel: "day", playerId: "s", playerName: "Sang", text: "Tôi nghi Wolf", at: 1 },
-    ],
-    log: [],
-  };
-}
-
-/** Bị cáo đang được nói lời bào chữa: nhánh còn lại vẫn đọc chat thô. */
-function defenseView(over: Partial<RoomSnapshot> = {}): RoomSnapshot {
-  return {
-    ...villagerView(),
-    phase: "DEFENSE",
-    trial: {
-      accusedId: "v",
-      accusedName: "Vân",
-      guiltyVotes: 0,
-      innocentVotes: 0,
-      guiltyRequired: 2,
-      canVote: false,
-      hasVoted: false,
-      myVote: null,
-      canSpeak: true,
-    },
-    ...over,
-  };
-}
 
 /** Một ý định ban ngày ĐÃ CHỐT, đúng hình dạng mà lõi deterministic phát ra. */
 function speechRequest(over: Partial<SpeechRequest> = {}): SpeechRequest {
@@ -93,6 +33,26 @@ function speechRequest(over: Partial<SpeechRequest> = {}): SpeechRequest {
     recentSpeechSourceIds: [],
     ...over,
   };
+}
+
+/**
+ * Bị cáo không có gì để khai: `decideChatClaim` trả `null` và chỗ gọi
+ * (`scheduleDefenseBot` trong `machine.ts`) rơi về một ý định DISAGREE không
+ * chỉ đích danh ai, kèm `defense` mang số phiếu công khai của pha DEFENSE.
+ */
+function defenseRequest(over: Partial<SpeechRequest> = {}): SpeechRequest {
+  return speechRequest({
+    intention: {
+      kind: "DISAGREE",
+      topic: "SUSPICION",
+      confidence: 0.5,
+      evidence: [],
+      tone: "FIRM",
+    },
+    targetName: null,
+    defense: { votesAgainstMe: 3, alsoAccused: ["Sang"] },
+    ...over,
+  });
 }
 
 describe("ranh giới bảo mật của prompt", () => {
@@ -131,11 +91,50 @@ describe("ranh giới bảo mật của prompt", () => {
   });
 
   it("chat của người chơi được bọc là dữ liệu, không phải chỉ thị", () => {
-    // Các pha còn dùng snapshot (bào chữa, phiếu xác nhận) vẫn phải bọc chat.
-    const spec = buildDefensePrompt(defenseView());
-    expect(spec!.user).toContain("<chat>");
-    expect(spec!.user).toContain("</chat>");
-    expect(spec!.user).toContain("Tôi nghi Wolf");
+    // Pha bào chữa đi qua đúng buildDaySpeechPrompt như ban ngày, nên chat vẫn
+    // phải bọc trong <chat_data>, không phải thẻ <chat> trần của roleContext cũ.
+    const spec = buildDaySpeechPrompt(
+      defenseRequest({
+        chatWindow: [{ actorName: "Sang", text: "Tôi nghi Wolf", isSelf: false }],
+      }),
+    );
+
+    expect(spec.user).toContain("<chat_data>");
+    expect(spec.user).toContain("</chat_data>");
+    expect(spec.user).toContain("Tôi nghi Wolf");
+    expect(spec.user).toContain("KHÔNG đáng tin");
+  });
+
+  it("prompt bào chữa không mang vai thật của bị cáo", () => {
+    // Task 8: buildDefensePrompt(RoomSnapshot) cũ đưa roleContext(view) - vai
+    // THẬT của bị cáo - thẳng vào prompt. Giờ lượt bào chữa đi qua
+    // buildDaySpeechPrompt như mọi lời nói khác, và hàm đó chưa từng biết vai
+    // thật của ai cả.
+    const spec = buildDaySpeechPrompt(defenseRequest());
+    const text = `${spec.system}\n${spec.user}`;
+
+    // "Ma Sói" CỐ TÌNH không nằm trong danh sách: nó là tên VÁN ĐẤU
+    // ("...trong ván Ma Sói trực tuyến"), xuất hiện ở MỌI prompt bất kể vai -
+    // đưa nó vào đây sẽ luôn đỏ dù không có rò rỉ nào.
+    for (const role of ["Tiên Tri", "Phù Thuỷ", "Bảo Vệ", "Thợ Săn", "Kẻ Nguyền Rủa"]) {
+      expect(text).not.toContain(role);
+    }
+    expect(text).not.toContain("Vai của bạn");
+  });
+
+  it("prompt bào chữa mang số phiếu và danh sách đồng-bị-nhắm, cả hai đã công khai", () => {
+    const spec = buildDaySpeechPrompt(defenseRequest());
+
+    expect(spec.user).toContain("3 phiếu");
+    expect(spec.user).toContain("Sang");
+    expect(spec.user).toContain("lượt tự bào chữa");
+  });
+
+  it("không phải lượt bào chữa thì không có khung cảnh phiên xử", () => {
+    const spec = buildDaySpeechPrompt(speechRequest());
+
+    expect(spec.user).not.toContain("lượt tự bào chữa");
+    expect(spec.user).not.toContain("treo cổ");
   });
 });
 
@@ -200,6 +199,12 @@ describe("responseSchema", () => {
     expect(spec.schema.required).toEqual(["think", "chat"]);
   });
 
+  it("lượt bào chữa dùng CHUNG một schema think/chat, không có schema riêng", () => {
+    const spec = buildDaySpeechPrompt(defenseRequest());
+
+    expect(Object.keys(spec.schema.properties).sort()).toEqual(["chat", "think"]);
+  });
+
   it("interpreter từ chối phản hồi ngày có thêm trường mục tiêu", () => {
     const outcome = interpretDaySpeech(
       { think: "nghi Wolf", chat: "Tôi nghi Wolf", voteTargetId: "s" },
@@ -208,16 +213,5 @@ describe("responseSchema", () => {
     );
 
     expect(outcome).toEqual({ ok: false });
-  });
-});
-
-describe("personaFor", () => {
-  it("cùng một id luôn ra cùng persona", () => {
-    expect(personaFor("bot-1")).toBe(personaFor("bot-1"));
-  });
-
-  it("id khác nhau phủ được nhiều persona", () => {
-    const seen = new Set(["a", "b", "c", "d", "e", "f", "g", "h"].map(personaFor));
-    expect(seen.size).toBeGreaterThan(1);
   });
 });

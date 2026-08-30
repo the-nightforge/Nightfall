@@ -5,7 +5,11 @@ import { applySocialEvidence } from "./analysis/social-analysis";
 import { analyzeVoteRecap } from "./analysis/vote-analysis";
 import { applyEvidence, applyTrustEvidence, decayBeliefs } from "./belief/belief-state";
 import { applyPrivateInformation } from "./belief/private-info";
-import { decideRoleClaim, type BotClaimIntention } from "./decision/claim-decision";
+import {
+  decideChatClaim,
+  decideRoleClaim,
+  type BotClaimIntention,
+} from "./decision/claim-decision";
 import { decideGhostWhisper, type BotGhostWhisperIntention } from "./decision/ghost-decision";
 import { selectVote } from "./decision/vote-decision";
 import {
@@ -319,6 +323,56 @@ export class BotRuntime {
     });
     run.finish(context, "SPEECH", speech?.targetId ?? null, speech?.kind ?? "im lặng");
     return speech;
+  }
+
+  /**
+   * Có nên khai vai trong lượt tự bào chữa không — và nếu có, khai gì.
+   *
+   * Chỉ chạy đúng "bước 0" của `planSpeech` (xem `speech-planner.ts`), không
+   * chạy các nhánh trigger/ACCUSE/QUESTION phía sau: lượt bào chữa không phải
+   * lượt thảo luận, bị cáo không có gì để cáo buộc ai lúc này, chỉ có claim
+   * hoặc không.
+   *
+   * `null` là kết quả phổ biến nhất: hầu hết BOT bị treo không có gì để khai,
+   * và chỗ gọi (`apps/server`) phải tự dựng một ý định KHÔNG khai (kiểu
+   * DISAGREE) khi gặp `null` - đây KHÔNG phải một quyết định, chỉ là hình dạng
+   * cố định cho "tôi phản đối", nên nó không cần đi qua lõi.
+   *
+   * `voteTargetId: null` vì bị cáo không tự bỏ phiếu cho chính mình ở lượt
+   * này - phiếu Treo/Tha của những người KHÁC chưa mở, và nhánh duy nhất của
+   * `decideChatClaim` đọc tham số này (Sói khai láo chủ động) không áp dụng
+   * cho một bị cáo đang bị dồn.
+   */
+  decideDefenseClaim(context: BotDecisionContext): BotSpeechIntention | null {
+    const run = this.beginTracedDecision();
+    const claim = decideChatClaim(context, this.state, run.rng, null, this.weights);
+
+    const intention: BotSpeechIntention | null = claim
+      ? {
+          kind: claim.kind === "COUNTER" ? "COUNTER_CLAIM" : "CLAIM_ROLE",
+          targetId: claim.counterTargetId ?? claim.accusedId ?? undefined,
+          claimedRole: claim.role,
+          topic: "ROLE_CLAIM",
+          // Không có `vote.confidence` ở lượt bào chữa - đây là lá bài cuối
+          // cùng bị cáo còn, nên gán một mức tin cậy cao cố định thay vì suy ra
+          // từ một lá phiếu không tồn tại. Trường này không tự đi vào prompt
+          // (xem `BotSpeechIntention.confidence`), chỉ phục vụ trace/kiểm bất
+          // biến.
+          confidence: 0.9,
+          // Đường duy nhất sinh ra bằng chứng cho một claim (Tiên Tri đang cầm
+          // kết quả soi trúng Sói) là nhánh PROACTIVE, và nhánh đó luôn được
+          // xét TRƯỚC UNDER_FIRE ở mọi checkpoint - kể cả những checkpoint
+          // thảo luận trước lượt bào chữa. Tới được UNDER_FIRE nghĩa là cơ hội
+          // đó đã trôi qua hoặc chưa từng có, nên không có bằng chứng nào để
+          // mang theo ở đây.
+          evidence: [],
+          tone: "FIRM",
+          reason: claim.reason,
+        }
+      : null;
+
+    run.finish(context, "SPEECH", intention?.targetId ?? null, intention?.kind ?? "im lặng");
+    return intention;
   }
 
   /**

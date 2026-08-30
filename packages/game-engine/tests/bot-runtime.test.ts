@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DayVoteRecap, PublicVoteChoice, Role } from "@masoi/shared";
 import { BotRuntime } from "../src/bot/BotRuntime";
-import { BOT_WEIGHTS_V1 } from "../src/bot/config/weights";
+import { BOT_WEIGHTS_V1, BOT_WEIGHTS_V4 } from "../src/bot/config/weights";
 import { selectVote } from "../src/bot/decision/vote-decision";
 import { createSeededRng } from "../src/bot/rng";
 import type {
@@ -33,6 +33,7 @@ function context(options: {
   visibleChat?: BotChatObservation[];
   round?: number;
   selfRole?: Role;
+  trialAccusedId?: string | null;
 } = {}): BotDecisionContext {
   const legal = options.legal ?? ["b", "c"];
   const players = options.players ?? ["me", ...legal];
@@ -51,7 +52,7 @@ function context(options: {
       knownRoles: options.knownRoles ?? { me: options.selfRole ?? "VILLAGER" },
       seerResult: null,
       night: null,
-      trialAccusedId: null,
+      trialAccusedId: options.trialAccusedId ?? null,
       canFinalVote: false,
       hunterShot: null,
       publicVoteHistory: options.publicVoteHistory ?? [],
@@ -453,5 +454,90 @@ describe("bot speech intention", () => {
     for (const item of speech.evidence) {
       expect(runtime.state.seenEventIds).toContain(item.sourceId);
     }
+  });
+});
+
+/**
+ * Task 8: `apps/server` không còn tự dựng lời bào chữa - nó gọi thẳng
+ * phương thức này để hỏi lõi "có nên khai vai lúc bị dồn không". Đây là
+ * đường DUY NHẤT server còn cần từ `decideChatClaim` cho lượt bào chữa, nên
+ * bọc nó vào một method riêng (thay vì để server tự import `decideChatClaim`
+ * và tự cầm `state`/`rng`) giữ đúng ràng buộc "chỉ BotRuntime chạm state".
+ */
+describe("decideDefenseClaim", () => {
+  /**
+   * KHÔNG dùng `neutralRuntime()` hay bỏ trống `weights`: cả hai đều gieo một
+   * cấu hình tắt hẳn nhóm claim (`accusationWeight = 0`) - `neutralRuntime()`
+   * dùng thẳng `BOT_WEIGHTS_V1`, còn bỏ trống `weights` rơi về
+   * `DEFAULT_BOT_WEIGHTS`, hiện vẫn là `BOT_WEIGHTS_V3` (v1/v2/v3 kế thừa
+   * nguyên khối `claim` tắt của v1 để giữ tái lập bit-for-bit - xem
+   * `weights.ts`). `decideChatClaim` thoát ngay ở cổng đầu tiên với một trong
+   * hai cấu hình đó, nên mọi test claim phải xin đích danh `BOT_WEIGHTS_V4` -
+   * đúng cấu hình `bot-claim-decision.test.ts` đã dùng để đo nhóm này.
+   */
+  function claimEnabledRuntime(): BotRuntime {
+    return new BotRuntime({
+      playerId: "me",
+      rng: noJitter,
+      playerIds: ["me", "b", "c"],
+      personality: BALANCED,
+      weights: BOT_WEIGHTS_V4,
+    });
+  }
+
+  it("bị treo mà đang giữ vai chức năng thì lôi vai thật ra làm lá bài cuối", () => {
+    const runtime = claimEnabledRuntime();
+    const ctx = context({
+      selfRole: "GUARD",
+      knownRoles: { me: "GUARD" },
+      trialAccusedId: "me",
+    });
+
+    const speech = runtime.decideDefenseClaim(ctx);
+
+    expect(speech?.kind).toBe("CLAIM_ROLE");
+    expect(speech?.claimedRole).toBe("GUARD");
+  });
+
+  it("Dân Làng trần bị treo thì không có gì để khai", () => {
+    const runtime = claimEnabledRuntime();
+    const ctx = context({ trialAccusedId: "me" }); // selfRole mặc định VILLAGER
+
+    expect(runtime.decideDefenseClaim(ctx)).toBeNull();
+  });
+
+  it("không phải bị cáo thì không khai, dù đang giữ vai chức năng", () => {
+    const runtime = claimEnabledRuntime();
+    const ctx = context({ selfRole: "GUARD", knownRoles: { me: "GUARD" }, trialAccusedId: "b" });
+
+    expect(runtime.decideDefenseClaim(ctx)).toBeNull();
+  });
+
+  it("Sói bị dồn thì khai một vai chức năng chưa ai nhận, không khai WEREWOLF", () => {
+    const runtime = claimEnabledRuntime();
+    const ctx = context({
+      selfRole: "WEREWOLF",
+      knownRoles: { me: "WEREWOLF" },
+      trialAccusedId: "me",
+    });
+
+    const speech = runtime.decideDefenseClaim(ctx);
+
+    expect(speech?.kind).toBe("CLAIM_ROLE");
+    expect(speech?.claimedRole).not.toBe("WEREWOLF");
+  });
+
+  it("đã khai vai rồi thì không khai lần hai dù bị dồn tiếp ở một phiên xử sau", () => {
+    const runtime = claimEnabledRuntime();
+    const ctx = context({
+      selfRole: "GUARD",
+      knownRoles: { me: "GUARD" },
+      trialAccusedId: "me",
+    });
+
+    const first = runtime.decideDefenseClaim(ctx)!;
+    runtime.recordSpeech(first, 1, "Tôi là bảo vệ.");
+
+    expect(runtime.decideDefenseClaim(ctx)).toBeNull();
   });
 });

@@ -1,13 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { speechDefaults } from "./helpers/speech-request";
 import { FallbackBrain } from "../src/bots/fallback-brain";
-import type {
-  Attempt,
-  BotBrain,
-  DaySpeechDecision,
-  DefenseDecision,
-  SpeechRequest,
-} from "../src/bots/types";
+import type { Attempt, BotBrain, DaySpeechDecision, SpeechRequest } from "../src/bots/types";
 
 /** Não giả ghi lại số lần bị hỏi, để đếm xem chuỗi có đi tiếp hay không. */
 function stub(name: string, result: () => Attempt<DaySpeechDecision>) {
@@ -17,10 +11,6 @@ function stub(name: string, result: () => Attempt<DaySpeechDecision>) {
     async renderDaySpeech(): Promise<Attempt<DaySpeechDecision>> {
       calls.n += 1;
       return result();
-    },
-    async decideDefense(): Promise<Attempt<DefenseDecision>> {
-      calls.n += 1;
-      return { ok: false };
     },
   };
   return { brain, calls };
@@ -66,7 +56,6 @@ describe("FallbackBrain", () => {
       renderDaySpeech: async () => {
         throw new Error("mang hong");
       },
-      decideDefense: async () => ({ ok: false }),
     };
     const b = stub("b", () => ok("van chay"));
 

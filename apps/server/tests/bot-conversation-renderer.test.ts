@@ -52,6 +52,7 @@ function request(
       { id: "bot", name: "An", alive: true },
       { id: "c", name: "Chi", alive: true },
     ],
+    defense: null,
     ...over,
   };
 }
@@ -59,7 +60,6 @@ function request(
 const failing: BotBrain = {
   name: "always-fails",
   renderDaySpeech: async () => failed(),
-  decideDefense: async () => failed(),
 };
 
 const silent: BotBrain = { ...failing, renderDaySpeech: async () => nothingToDo() };

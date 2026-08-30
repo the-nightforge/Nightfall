@@ -1,5 +1,4 @@
 import type { BotSpeechIntention, BotSpeechStyle } from "@masoi/game-engine";
-import type { RoomSnapshot } from "@masoi/shared";
 
 /**
  * Hành động đêm engine chấp nhận.
@@ -94,6 +93,16 @@ export interface SpeechRequest {
    * giờ đi vào prompt.
    */
   players: Array<{ id: string; name: string; alive: boolean }>;
+  /**
+   * Khác `null` ĐÚNG ở lượt tự bào chữa (pha DEFENSE): số phiếu công khai đang
+   * đè lên chính bị cáo, và tên những người khác cũng đang bị nhắm.
+   *
+   * Cả hai đã công khai ở pha này - `RoomSnapshot`/`BotKnowledgeView` lộ số
+   * phiếu theo mục tiêu cho MỌI người chơi, không riêng gì bị cáo - nên đưa
+   * chúng vào prompt không phải một rò rỉ. Khác hẳn `roleContext` cũ (đã bị bỏ
+   * khỏi prompt bào chữa): cái đó đưa VAI THẬT vào, thứ không ai được thấy.
+   */
+  defense: { votesAgainstMe: number; alsoAccused: string[] } | null;
 }
 
 /** Kết quả một lượt diễn đạt, kèm nguồn gốc của câu chữ để còn đo được. */
@@ -109,11 +118,6 @@ export interface RenderedSpeech {
  */
 export interface DaySpeechDecision {
   chat: string | null;
-}
-
-/** Lời tự bào chữa của bị cáo, phát vào kênh day. */
-export interface DefenseDecision {
-  chat: string;
 }
 
 /**
@@ -156,16 +160,19 @@ export const failed = <T>(): Attempt<T> => ({ ok: false });
  * Đây là một ràng buộc về KIỂU, không phải một quy ước: không có chữ ký nào để
  * gọi, thì không có đường nào để một mô hình ngôn ngữ lái ván đấu.
  *
- * Đầu vào của `decideDefense` vẫn là snapshot đã lọc theo quyền của chính bot,
- * không bao giờ là state thô của engine.
+ * Lượt tự bào chữa KHÔNG còn method riêng (`decideDefense` cũ đã bỏ). Nó đi
+ * qua đúng `renderDaySpeech`, như mọi lời nói khác: lõi quyết ý định (khai vai
+ * hay không), gói nó vào một `SpeechRequest` bình thường - chỉ khác ở trường
+ * `defense` - rồi hỏi nhà cung cấp CÙNG một hàm. Nhờ vậy cổng `CLAIM_INTEGRITY`
+ * và bảng mẫu dự phòng ở `speech-renderer.ts` áp dụng cho cả lượt bào chữa,
+ * thứ trước đây hoàn toàn đứng ngoài hai lớp phòng thủ này.
  */
 export interface BotBrain {
   readonly name: string;
   /**
-   * Diễn đạt một ý định ban ngày đã chốt. Thay cho `decideDay` cũ: nhà cung cấp
-   * không còn được chọn mục tiêu hay lá phiếu nào nữa.
+   * Diễn đạt một ý định đã chốt - ban ngày hay bào chữa đều qua đây. Thay cho
+   * `decideDay` cũ: nhà cung cấp không còn được chọn mục tiêu hay lá phiếu nào
+   * nữa.
    */
   renderDaySpeech(request: SpeechRequest): Promise<Attempt<DaySpeechDecision>>;
-  /** Lời tự bào chữa của bị cáo. Là lời nói, không phải nước đi. */
-  decideDefense(view: RoomSnapshot, style?: BotSpeechStyle): Promise<Attempt<DefenseDecision>>;
 }

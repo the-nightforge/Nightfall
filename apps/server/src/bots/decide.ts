@@ -1,11 +1,14 @@
 import { z } from "zod";
-import type { RoomSnapshot } from "@masoi/shared";
-import type { Attempt, DaySpeechDecision, DefenseDecision } from "./types";
+import type { Attempt, DaySpeechDecision } from "./types";
 import { decided, failed } from "./types";
 
 /**
  * `.strict()` là hàng rào cuối: kể cả khi prompt bị sửa sai và model trả về
  * `voteTargetId`, schema từ chối thẳng thay vì âm thầm bỏ qua trường đó.
+ *
+ * Dùng chung cho CẢ lượt bào chữa: `buildDaySpeechPrompt` sinh cùng một hình
+ * dạng `{ think, chat }` dù `request.defense` có mặt hay không, nên không cần
+ * một schema `{ think, defense }` riêng nữa.
  */
 export const daySpeechSchema = z
   .object({
@@ -13,11 +16,6 @@ export const daySpeechSchema = z
     chat: z.string(),
   })
   .strict();
-
-export const defenseSchema = z.object({
-  think: z.string(),
-  defense: z.string(),
-});
 
 export const DEFAULT_CHAT_MAX = 300;
 
@@ -59,29 +57,4 @@ export function interpretDaySpeech(
   const chat = parsed.data.chat.trim();
   log("ok");
   return decided({ chat: chat.length === 0 ? null : chat.slice(0, chatMaxLength) });
-}
-
-export function interpretDefense(
-  view: RoomSnapshot,
-  raw: unknown,
-  chatMaxLength: number,
-  log: LogOutcome,
-): Attempt<DefenseDecision> {
-  const parsed = defenseSchema.safeParse(raw);
-  if (!parsed.success) {
-    log("bad_shape");
-    return failed();
-  }
-
-  // Im lặng KHÔNG phải một lời bào chữa hợp lệ: đó là thứ đường lui tạo ra, và
-  // nếu nó chiếm nhánh thành công thì chuỗi dự phòng không bao giờ được gọi.
-  const defense = parsed.data.defense.trim();
-  if (defense.length === 0) {
-    log("bad_shape");
-    return failed();
-  }
-
-  void view;
-  log("ok");
-  return decided({ chat: defense.slice(0, chatMaxLength) });
 }

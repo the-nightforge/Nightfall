@@ -42,5 +42,7 @@ export function speechDefaults(): Omit<
       { id: "bot", name: "Bot", alive: true },
       { id: "c", name: "Chi", alive: true },
     ],
+    // Chỉ khác null ở lượt tự bào chữa; fixture nào cần nó tự ghi đè.
+    defense: null,
   };
 }

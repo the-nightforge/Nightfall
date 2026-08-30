@@ -42,6 +42,7 @@ function requestFor(overrides: Partial<SpeechRequest> = {}): SpeechRequest {
       { id: "p2", name: "Bình", alive: true },
       { id: "p3", name: "Chi", alive: true },
     ],
+    defense: null,
     ...overrides,
   } as SpeechRequest;
 }

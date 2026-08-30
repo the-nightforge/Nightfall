@@ -16,7 +16,7 @@ import { broadcastRoom, emitToPlayers } from "../rooms/broadcast";
 import { destroyVoiceRoom, syncVoicePermissions } from "../voice/service";
 import { prisma } from "../db";
 import { buildSnapshot, dayRecipients, pushChat, resolveChat } from "../rooms/snapshot";
-import { botBrain, randomBrain, resetBotBudget } from "../bots";
+import { botBrain, resetBotBudget } from "../bots";
 import { buildBotDecisionContext } from "../bots/context";
 import { renderBotSpeech, speechTemplate } from "../bots/speech-renderer";
 import {
@@ -722,6 +722,9 @@ export function toSpeechRequest(
     seq: runtime.state.speechSequence,
     round: context.knowledge.round,
     players: context.knowledge.players,
+    // Chỉ lượt bào chữa mới cần trường này; mọi chỗ gọi khác của hàm này đều là
+    // lời nói ban ngày bình thường. `scheduleDefenseBot` tự ghi đè lại.
+    defense: null,
   };
 }
 
@@ -772,16 +775,54 @@ function scheduleDefenseBot(room: Room, accusedId: string): void {
 
   void (async () => {
     try {
-      // Bị cáo tự bào chữa bằng ĐÚNG giọng của chính nó, không phải một trong
-      // bốn nhãn cứng gieo từ ID.
-      const style = botSessionFor(room).runtimeFor(member.playerId).style;
-      const attempt = await botBrain().decideDefense(view, style);
-      // Chỉ lượt HỎNG mới đáng để đường lui nói thay: bot chủ động im lặng
-      // (đã chết, không còn là bị cáo) phải được tôn trọng.
-      const decision = attempt.ok ? attempt : await randomBrain.decideDefense(view);
-      if (!decision.ok || !decision.value) return;
+      const runtime = botSessionFor(room).runtimeFor(member.playerId);
+      const context = buildBotDecisionContext(room, member.playerId);
+      runtime.observe(context);
+
+      // Lõi quyết có khai vai hay không - đúng nhánh UNDER_FIRE của
+      // `decideChatClaim` (Task 3), dựng sẵn thành `BotSpeechIntention` bởi
+      // `decideDefenseClaim`. `null` là bị cáo không có gì để khai; lượt bào
+      // chữa vẫn phải nói gì đó, nên rơi về một ý định DISAGREE không chỉ đích
+      // danh ai - vote công khai lộ AI đang bị nhắm, không lộ AI đã bỏ phiếu,
+      // nên không có "kẻ tố cáo" cụ thể để phản bác. Đây KHÔNG phải một quyết
+      // định gameplay - hình dạng của nó cố định bất kể tính cách hay ván đấu -
+      // nên không cần đi qua một hàm lõi riêng; phần biến thiên duy nhất
+      // (giọng điệu) vẫn bám theo `style` như mọi speech act khác.
+      const speech: BotSpeechIntention = runtime.decideDefenseClaim(context) ?? {
+        kind: "DISAGREE",
+        topic: "SUSPICION",
+        confidence: 0.5,
+        evidence: [],
+        tone: runtime.style.harshness >= 0.6 ? "TENSE" : "FIRM",
+      };
+
+      // Số phiếu và danh sách đồng-bị-nhắm đã công khai ở pha DEFENSE (đúng dữ
+      // liệu `RoomSnapshot.players[].voteCount` cũ từng đọc) - khác hẳn vai
+      // thật, thứ `roleContext` từng đưa vào prompt và đã bị bỏ hẳn.
+      const votesAgainstMe = context.knowledge.currentVoteCounts.players[member.playerId] ?? 0;
+      const alsoAccused = context.knowledge.players
+        .filter(
+          (p) =>
+            p.alive &&
+            p.id !== member.playerId &&
+            (context.knowledge.currentVoteCounts.players[p.id] ?? 0) > 0,
+        )
+        .map((p) => p.name);
+
+      const request: SpeechRequest = {
+        ...toSpeechRequest(room, member, context, speech),
+        defense: { votesAgainstMe, alsoAccused },
+      };
+
+      // Cùng một hàm với mọi lời nói khác: cổng CLAIM_INTEGRITY và bảng mẫu dự
+      // phòng áp dụng ở đây y hệt ban ngày. Không còn `randomBrain.decideDefense`
+      // ("não chắc chắn trả lời được") - bảng mẫu tất định của `renderBotSpeech`
+      // đã phủ đúng chỗ trống đó, kể cả khi mọi nhà cung cấp hỏng.
+      const rendered = await renderBotSpeech(request);
+
       // Kết quả về muộn không được lọt sang pha sau.
       if (!stillDefending()) return;
+      if (!rendered.text) return;
 
       const resolved = resolveChat(room, member.playerId);
       if (!resolved.ok) return;
@@ -790,12 +831,18 @@ function scheduleDefenseBot(room: Room, accusedId: string): void {
         channel: resolved.channel,
         playerId: member.playerId,
         playerName: member.name,
-        text: decision.value.chat,
+        text: rendered.text,
         at: Date.now(),
       };
       pushChat(room, message);
       emitToPlayers(resolved.recipients, SERVER_EVENTS.CHAT_NEW, message);
       void persistRoom(room);
+
+      // Vào sổ SAU khi câu đã thật sự nằm trong log, không sớm hơn (cùng lý do
+      // discussion-scheduler.ts ghi ở đây). Nếu speech là một claim, việc này
+      // chốt `state.myClaim` - thiếu bước này, bị cáo có thể bị hỏi khai lần
+      // hai ở một phiên xử sau trong cùng ván.
+      runtime.recordSpeech(speech, context.knowledge.round, rendered.text);
     } catch {
       /* não bot lỗi (mạng, JSON hỏng,...) không được kéo sập cả tiến trình */
     }

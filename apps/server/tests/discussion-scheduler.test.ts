@@ -65,7 +65,6 @@ vi.mock("../src/bots", async () => {
         });
         return { ok: false as const };
       },
-      decideDefense: async () => ({ ok: false as const }),
     }),
   };
 });

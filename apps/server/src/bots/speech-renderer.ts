@@ -34,7 +34,15 @@ const NEEDS_SOMEONE = new Set([
 ]);
 
 export function speechTemplate(request: SpeechRequest): string | null {
+  // Lượt tự bào chữa không có "author" cụ thể để DISAGREE nhắm tới - vote lộ AI
+  // đang bị nhắm, không lộ AI đã bỏ phiếu (xem `intentLine` trong prompt.ts).
+  // Bắt buộc có người ở đây thì một bị cáo không claim gì sẽ RƠI VỀ IM LẶNG mỗi
+  // khi nhà cung cấp cũng hỏng - đúng thứ `random-brain.ts` từng tồn tại để
+  // tránh ("một bị cáo im lặng trông như màn hình hỏng"). `fill()` đã có sẵn
+  // chỗ trống chung ("người đó") cho đúng trường hợp thiếu target này.
+  const exemptFromTarget = request.defense !== null && request.intention.kind === "DISAGREE";
   if (
+    !exemptFromTarget &&
     NEEDS_SOMEONE.has(request.intention.kind) &&
     request.targetName === null &&
     request.replyTo === null
