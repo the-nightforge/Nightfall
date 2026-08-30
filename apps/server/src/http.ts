@@ -28,7 +28,14 @@ apiRouter.post("/players", async (req, res) => {
       data: { nickname: parsed.data, tokenHash },
     });
     res.json({ playerId: player.id, token, nickname: player.nickname });
-  } catch {
+  } catch (err) {
+    /*
+     * Bắt buộc phải log: catch rỗng ở đây từng làm mọi lần "Tạo phòng" trả 500
+     * mà log Render trắng tinh - schema.prisma thêm cột avatarUrl nhưng thiếu
+     * migration, Prisma báo "column does not exist" và không ai nhìn thấy.
+     * Client vẫn chỉ nhận thông báo chung chung, chi tiết chỉ nằm ở server.
+     */
+    console.error("[api] Tạo người chơi thất bại:", err);
     res.status(500).json({ error: "Không thể tạo người chơi lúc này" });
   }
 });
