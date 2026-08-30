@@ -49,7 +49,15 @@ export type InvariantId =
   /** Cùng seed cho ra khác nhau. */
   | "REPLAY_DIVERGENCE"
   /** Ván chạm trần số vòng. */
-  | "ROUND_LIMIT";
+  | "ROUND_LIMIT"
+  /**
+   * Một BOT để lại hai lời khai (`ROLE_CLAIM`) khác vai trong một ván.
+   *
+   * Lật claim không bị cấm bằng kiểu - `claim-credibility` tính giá cho nó -
+   * mà bị cấm ở LÕI: một BOT tự lật lời khai của chính mình là một bug, không
+   * phải một nước đi.
+   */
+  | "CLAIM_ONCE";
 
 export interface InvariantViolation {
   id: InvariantId;
@@ -243,6 +251,26 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
             ...at,
             expected: `kết quả soi ${result.targetId} phải khớp sự thật`,
             actual: `báo isWolf=${result.isWolf}`,
+          });
+        }
+      }
+
+      // --- Không tự lật lời khai vai của chính mình ---
+      //
+      // `state.myClaim` là cam kết đã chốt; `state.claims` là mọi ROLE_CLAIM /
+      // COUNTER_CLAIM mà BOT này quan sát được, kể cả của chính nó (chat của
+      // chính mình cũng đi qua `analyzeChat` như chat của bất kỳ ai). Hai lời
+      // khai của cùng một actorId mang hai vai khác nhau là một BUG ở lõi
+      // (xem `InvariantId.CLAIM_ONCE`), không phải một nước đi hợp lệ.
+      if (state.myClaim !== null) {
+        for (const claim of state.claims) {
+          if (claim.actorId !== self || claim.type !== "ROLE_CLAIM") continue;
+          const claimedRole = claim.data.role as Role | undefined;
+          if (claimedRole === undefined || claimedRole === state.myClaim.role) continue;
+          auditor.report("CLAIM_ONCE", {
+            ...at,
+            expected: `${self} đã cam kết vai ${state.myClaim.role} nên không được để lại một ROLE_CLAIM khác vai`,
+            actual: `thấy một ROLE_CLAIM khai ${claimedRole}`,
           });
         }
       }

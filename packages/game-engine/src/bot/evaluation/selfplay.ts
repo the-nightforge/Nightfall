@@ -109,6 +109,17 @@ export type SelfPlayEvent =
       textFingerprint: string;
       semanticFingerprint: string;
       evidenceSourceIds: string[];
+      /**
+       * Vai mà ý định `CLAIM_ROLE`/`COUNTER_CLAIM` này khai, hoặc `null` với mọi
+       * speech act khác.
+       *
+       * KHÔNG phải vai thật của người nói - một con Sói khai láo mang
+       * `claimedRole: "SEER"`. Chỉ tầng ĐO đọc trường này; lõi quyết định đã
+       * xong việc trước khi tới đây. Cần cho `claimAccuracy` (metrics.ts):
+       * không có nó, tầng đo không biết một `SPEECH` có phải là lời khai Tiên
+       * Tri hay không mà không phải đoán lại từ `speech.kind`.
+       */
+      claimedRole: Role | null;
     }
   | { kind: "NOMINATION"; round: number; accusedId: string | null }
   | { kind: "FINAL_VOTE"; round: number; voterId: string; guilty: boolean }
@@ -437,6 +448,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       textFingerprint: speechTextFingerprint(text),
       semanticFingerprint: speechSemanticFingerprint(speech),
       evidenceSourceIds: speech.evidence.map((item) => item.sourceId),
+      claimedRole: speech.claimedRole ?? null,
     });
 
     sink.push({ id: messageId, actorId: playerId, text, at: now });

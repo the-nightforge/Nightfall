@@ -123,6 +123,22 @@
       "value": 1,
       "numerator": 109,
       "denominator": 109
+    },
+    "claimsPerGame": 0,
+    "counterClaimRate": {
+      "value": 0,
+      "numerator": 0,
+      "denominator": 12
+    },
+    "claimFollowRate": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "claimAccuracy": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
     }
   },
   "metricsByTeam": {
