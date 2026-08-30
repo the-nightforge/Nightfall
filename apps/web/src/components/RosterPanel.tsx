@@ -87,7 +87,7 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
                   >
                     {player.name}
                   </span>
-                  <span className="flex items-center gap-1">
+                  <span className="flex flex-wrap items-center gap-1">
                   {snapshot.hostId === player.id && (
                     <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-bold text-amber-300">
                       <span aria-hidden="true">👑</span> Chủ phòng
@@ -109,6 +109,16 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
                       {roleLabel(player)}
                     </span>
                   )}
+                  {snapshot.activeEvent?.id === "DAY_OF_TRUTH" &&
+                    snapshot.dayOfTruthClaims &&
+                    snapshot.dayOfTruthClaims[player.id] !== undefined && (
+                      <span className="inline-flex items-center gap-0.5 rounded bg-sky-600/20 px-1 py-0.5 text-[9px] font-bold text-sky-200 ring-1 ring-sky-500/30">
+                        <span aria-hidden="true">🔍</span>{" "}
+                        {snapshot.dayOfTruthClaims[player.id] === null
+                          ? "Không tiết lộ"
+                          : (ROLE_META as any)[snapshot.dayOfTruthClaims[player.id]!]?.name ?? snapshot.dayOfTruthClaims[player.id]}
+                      </span>
+                    )}
                 </span>
               </span>
 
