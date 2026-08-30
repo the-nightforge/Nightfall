@@ -1,7 +1,7 @@
 "use client";
 
 import type { RoomSnapshot } from "@masoi/shared";
-import { eventIcon } from "./EventBanner";
+import { eventIcon } from "@/lib/event-art";
 
 interface Props {
   snapshot: RoomSnapshot | null;

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import type { ChatMessage, Phase } from "@masoi/shared";
 import { useChatUnread, unreadLabel } from "@/lib/chat-unread";
+import { useModalFocus } from "@/lib/useModalFocus";
 import { ChatBox } from "./ChatBox";
 
 interface Props {
@@ -40,17 +41,33 @@ export function MobileChatDock({
   const [open, setOpen] = useState(false);
   const unread = useChatUnread(messages, selfId, open);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const scrimRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
-  // Escape đóng tấm trượt: nó che gần hết màn hình nên phải có đường thoát
-  // không cần nhắm trúng một nút nhỏ.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  /*
+   * Tấm trượt là modal thật, không chỉ là một cái nhãn `aria-modal`.
+   *
+   * Bản cũ khai `aria-modal="true"` nhưng Tab vẫn đi thẳng xuống lưới bỏ phiếu
+   * nằm dưới tấm nền mờ: người dùng bàn phím gõ vài phím Tab là "ra khỏi" một
+   * tấm trượt đang che 72% màn hình mà không hề biết, rồi Enter trúng một nút
+   * họ không nhìn thấy. Hook này giữ Tab lại, tắt phần trang phía sau, và trả
+   * focus về nút mở chat lúc đóng.
+   *
+   * Tấm nền mờ đi cùng tấm trượt trong danh sách gốc: nó là anh em ruột của tấm
+   * trượt, và nếu bị `inert` thì chạm ra ngoài để đóng sẽ hết tác dụng.
+   *
+   * `restoreTo` là bắt buộc chứ không thừa: nút mở chat bị GỠ trong lúc tấm
+   * trượt mở (`{!open && ...}`), nên phần tử được nhớ lúc mở đã không còn trong
+   * tài liệu lúc đóng.
+   */
+  useModalFocus({
+    active: open,
+    roots: [sheetRef, scrimRef],
+    initialFocus: inputRef,
+    restoreTo: triggerRef,
+    onEscape: () => setOpen(false),
+  });
 
   // Ban ngày chat là hoạt động chính, nên nút đổi hẳn dáng thay vì chỉ đổi màu:
   // ở đó nó là lời mời, các pha khác nó chỉ là lối vào.
@@ -63,6 +80,7 @@ export function MobileChatDock({
           <>
             <m.div
               key="scrim"
+              ref={scrimRef}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -73,6 +91,7 @@ export function MobileChatDock({
             />
             <m.div
               key="sheet"
+              ref={sheetRef}
               role="dialog"
               aria-modal="true"
               aria-label="Khung chat"
@@ -105,8 +124,11 @@ export function MobileChatDock({
                   placeholder={placeholder}
                   draft={draft}
                   onDraftChange={onDraftChange}
+                  // Không còn `autoFocus`: focus lúc mở giờ do useModalFocus đặt,
+                  // và nó gọi focus({ preventScroll: true }) - autoFocus của React
+                  // thì không, nên nó cuộn trang ngay giữa lúc tấm trượt đang
+                  // trượt lên và làm nhịp mở giật một cái.
                   inputRef={inputRef}
-                  autoFocus
                 />
               </div>
             </m.div>
@@ -122,6 +144,7 @@ export function MobileChatDock({
         */}
       {!open && (
         <button
+          ref={triggerRef}
           type="button"
           onClick={() => setOpen(true)}
           aria-label={

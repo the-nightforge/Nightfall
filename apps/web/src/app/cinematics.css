@@ -49,6 +49,32 @@
   animation: cine-caption 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
+/*
+ * Dòng nhỏ và dòng phụ của cảnh sự kiện.
+ *
+ * Cả khối đã có nhịp vào của `.cine-caption`; hai dòng này chỉ mờ thêm một nhịp
+ * NGẮN nữa để mắt đọc tên sự kiện trước rồi mới tới phần chú thích. Cảnh sự
+ * kiện chỉ dài 900ms nên không có chỗ cho một nhịp thứ ba - 260ms là toàn bộ
+ * ngân sách, và cả hai phải đứng yên hẳn ở khung hình cuối vì overlay tháo ra
+ * đột ngột chứ không mờ dần.
+ */
+.cine-eyebrow,
+.cine-detail {
+  opacity: 0;
+  animation: cine-sub 260ms ease-out 220ms forwards;
+}
+
+@keyframes cine-sub {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes cine-caption {
   0% {
     opacity: 0;

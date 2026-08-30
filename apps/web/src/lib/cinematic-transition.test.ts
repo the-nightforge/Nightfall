@@ -9,7 +9,15 @@ import {
   type RoomSnapshot,
   type Winner,
 } from "@masoi/shared";
-import { CINEMATIC_CLIPS, cinematicFor, nextClips } from "./cinematic-transition";
+import {
+  CINEMATIC_CLIPS,
+  EVENT_CLIPS,
+  EVENT_DETAIL_MAX,
+  cinematicFor,
+  nextClips,
+  prefetchPlan,
+  shortDetail,
+} from "./cinematic-transition";
 
 function snap(patch: Partial<RoomSnapshot> = {}): RoomSnapshot {
   return {
@@ -43,7 +51,11 @@ function snap(patch: Partial<RoomSnapshot> = {}): RoomSnapshot {
   };
 }
 
-function event(id: GameEventId, round = 1): GameEventView {
+function event(
+  id: GameEventId,
+  round = 1,
+  patch: Partial<GameEventView> = {},
+): GameEventView {
   return {
     id,
     name: id,
@@ -52,6 +64,7 @@ function event(id: GameEventId, round = 1): GameEventView {
     round,
     beneficiary: "neutral",
     power: 3,
+    ...patch,
   };
 }
 
@@ -165,6 +178,211 @@ describe("cinematicFor", () => {
     const a = cinematicFor(snap({ phase: "NIGHT", round: 1 }), snap({ phase: "NIGHT_RESULT", round: 1 }));
     const b = cinematicFor(snap({ phase: "NIGHT", round: 2 }), snap({ phase: "NIGHT_RESULT", round: 2 }));
     assert.notEqual(a?.key, b?.key);
+  });
+});
+
+describe("cinematicFor: chữ trên màn hình", () => {
+  it("cảnh sự kiện nói tên THẬT của sự kiện, không phải nhãn của họ hình ảnh", () => {
+    const played = cinematicFor(
+      snap({ phase: "NIGHT", activeEvent: null }),
+      snap({
+        phase: "NIGHT",
+        activeEvent: event("CURFEW", 1, { name: "Giới Nghiêm" }),
+      }),
+    );
+    assert.equal(played?.title, "Giới Nghiêm");
+    // Nhãn họ vẫn còn, nhưng tụt xuống làm dòng nhỏ - nó chọn clip và màu sắc.
+    assert.equal(played?.kind, "RULE_CHANGE");
+    assert.equal(played?.label, "Luật làng thay đổi");
+  });
+
+  it("năm sự kiện cùng họ RULE_CHANGE cho ra năm tiêu đề khác nhau", () => {
+    const family: Array<[GameEventId, string]> = [
+      ["CURFEW", "Giới Nghiêm"],
+      ["SILENT_NIGHT", "Đêm Câm Lặng"],
+      ["AMNESTY_DAY", "Ngày Ân Xá"],
+      ["LAST_STAND", "Kháng Cự Cuối Cùng"],
+      ["DAY_OF_TRUTH", "Ngày Sự Thật"],
+    ];
+    const titles = new Set<string>();
+    for (const [id, name] of family) {
+      const played = cinematicFor(
+        snap({ phase: "NIGHT", activeEvent: null }),
+        snap({ phase: "NIGHT", activeEvent: event(id, 1, { name }) }),
+      );
+      assert.equal(played?.kind, "RULE_CHANGE", id);
+      assert.equal(played?.title, name, id);
+      titles.add(played!.title);
+    }
+    assert.equal(titles.size, family.length, "mỗi sự kiện phải có một tiêu đề riêng");
+  });
+
+  it("cạnh pha không có sự kiện thì tiêu đề chính là nhãn cảnh, không kèm icon", () => {
+    const played = cinematicFor(snap({ phase: "NIGHT" }), snap({ phase: "NIGHT_RESULT" }));
+    assert.equal(played?.title, played?.label);
+    assert.equal(played?.icon, null);
+    assert.equal(played?.detail, null);
+  });
+
+  it("sự kiện mang theo ký hiệu của chính nó", () => {
+    const played = cinematicFor(
+      snap({ phase: "NIGHT", activeEvent: null }),
+      snap({ phase: "NIGHT", activeEvent: event("DEAD_CAN_SPEAK") }),
+    );
+    assert.equal(played?.icon, "👻");
+  });
+
+  it("announcement được ưu tiên hơn description: đó là chuyện VỪA xảy ra", () => {
+    const played = cinematicFor(
+      snap({ phase: "DAY_DISCUSSION", activeEvent: null }),
+      snap({
+        phase: "DAY_DISCUSSION",
+        activeEvent: event("JUDGMENT_DAY", 2, {
+          name: "Ngày Phán Xét",
+          description: "Công khai kết quả soi gần nhất của Thám Tử.",
+          announcement: "Kết quả Thám Tử: Khải và Linh là KHÁC PHE!",
+          targetPhase: "DAY",
+        }),
+      }),
+    );
+    assert.equal(played?.detail, "Kết quả Thám Tử: Khải và Linh là KHÁC PHE!");
+  });
+
+  it("không có announcement thì lấy description", () => {
+    const played = cinematicFor(
+      snap({ phase: "NIGHT", activeEvent: null }),
+      snap({
+        phase: "NIGHT",
+        activeEvent: event("MOONLESS_NIGHT", 1, { description: "Tiên Tri mất khả năng soi." }),
+      }),
+    );
+    assert.equal(played?.detail, "Tiên Tri mất khả năng soi.");
+  });
+
+  it("mô tả rỗng không sinh ra một dòng phụ trống", () => {
+    const played = cinematicFor(
+      snap({ phase: "NIGHT", activeEvent: null }),
+      snap({ phase: "NIGHT", activeEvent: event("BLOOD_MOON", 1, { description: "   " }) }),
+    );
+    assert.equal(played?.detail, null);
+  });
+
+  it("sự kiện không tên thì lùi về nhãn họ chứ không hiện một dòng trống", () => {
+    const played = cinematicFor(
+      snap({ phase: "NIGHT", activeEvent: null }),
+      snap({ phase: "NIGHT", activeEvent: event("BLOOD_MOON", 1, { name: "  " }) }),
+    );
+    assert.equal(played?.title, "Bầy Sói trỗi dậy");
+  });
+
+  it("thêm chữ vào cinematic không phá luật chống phát lại trên cùng lần kích hoạt", () => {
+    // Cùng một lần kích hoạt, nhưng server gửi lại kèm announcement vừa tính
+    // xong: đây vẫn là MỘT lần kích hoạt, không được phát thêm lần nữa.
+    const before = snap({ phase: "DAY_DISCUSSION", activeEvent: event("JUDGMENT_DAY", 2) });
+    const after = snap({
+      phase: "DAY_DISCUSSION",
+      activeEvent: event("JUDGMENT_DAY", 2, { announcement: "Kết quả Thám Tử: ..." }),
+    });
+    assert.equal(cinematicFor(before, after), null);
+  });
+});
+
+describe("shortDetail", () => {
+  it("giữ nguyên đoạn ngắn", () => {
+    assert.equal(shortDetail("Tiên Tri mất khả năng soi."), "Tiên Tri mất khả năng soi.");
+  });
+
+  it("bỏ trắng thừa, và coi chuỗi trắng là không có gì", () => {
+    assert.equal(shortDetail("  Giới nghiêm.  "), "Giới nghiêm.");
+    assert.equal(shortDetail("   "), null);
+    assert.equal(shortDetail(undefined), null);
+    assert.equal(shortDetail(null), null);
+  });
+
+  it("đoạn dài bị cắt về đúng một dòng phụ và kết bằng dấu lược", () => {
+    const long = "Ma Sói ".repeat(40);
+    const cut = shortDetail(long)!;
+    assert.ok(cut.length <= EVENT_DETAIL_MAX + 1, `dài ${cut.length}`);
+    assert.ok(cut.endsWith("…"));
+
+    // Không được cắt giữa một từ: phần giữ lại phải là một tiền tố của bản gốc
+    // và phải dừng ngay trước một khoảng trắng.
+    const body = cut.slice(0, -1);
+    const source = long.trim();
+    assert.ok(source.startsWith(body), cut);
+    assert.equal(source[body.length], " ", cut);
+  });
+
+  it("chuỗi dài không có khoảng trắng nào vẫn bị cắt chứ không tràn màn hình", () => {
+    const cut = shortDetail("a".repeat(400))!;
+    assert.equal(cut.length, EVENT_DETAIL_MAX + 1);
+  });
+});
+
+describe("prefetchPlan", () => {
+  const base = { phase: "NIGHT" as Phase, mode: "video" as const, saveData: false, effectiveType: "4g" };
+
+  it("clip của pha kế tiếp vẫn được nạp ngay như cũ", () => {
+    assert.deepEqual(prefetchPlan(base).now, nextClips("NIGHT"));
+  });
+
+  it("bốn clip sự kiện đi ở luồng rảnh sau khi ván đã bắt đầu", () => {
+    assert.deepEqual(prefetchPlan(base).idle, EVENT_CLIPS);
+  });
+
+  it("phòng chờ chỉ nạp theo pha: chưa có ván thì chưa có sự kiện nào nổ được", () => {
+    assert.deepEqual(prefetchPlan({ ...base, phase: "LOBBY" }).idle, []);
+  });
+
+  it("hết ván thì không nạp thêm gì nữa", () => {
+    assert.deepEqual(prefetchPlan({ ...base, phase: "GAME_OVER" }), { now: [], idle: [] });
+  });
+
+  it("Save-Data thì không tải một byte nào", () => {
+    assert.deepEqual(prefetchPlan({ ...base, saveData: true }), { now: [], idle: [] });
+  });
+
+  it("chế độ CSS và chế độ tắt cũng không tải gì", () => {
+    for (const mode of ["css", "none"] as const) {
+      assert.deepEqual(prefetchPlan({ ...base, mode }), { now: [], idle: [] }, mode);
+    }
+  });
+
+  it("2G bỏ luồng phụ nhưng vẫn giữ clip của pha kế tiếp", () => {
+    for (const effectiveType of ["2g", "slow-2g"]) {
+      const plan = prefetchPlan({ ...base, effectiveType });
+      assert.deepEqual(plan.idle, [], effectiveType);
+      assert.deepEqual(plan.now, nextClips("NIGHT"), effectiveType);
+    }
+  });
+
+  it("trình duyệt không báo tốc độ thì cứ nạp bình thường, không đoán là mạng xấu", () => {
+    assert.deepEqual(prefetchPlan({ ...base, effectiveType: null }).idle, EVENT_CLIPS);
+  });
+
+  it("một clip không bao giờ nằm cả ở luồng ngay lẫn luồng rảnh", () => {
+    for (const phase of PHASES as readonly Phase[]) {
+      const plan = prefetchPlan({ ...base, phase });
+      for (const clip of plan.idle) {
+        assert.ok(!plan.now.includes(clip), `${phase} -> ${clip}`);
+      }
+    }
+  });
+
+  it("chỉ trả về clip có thật trong bộ", () => {
+    for (const phase of PHASES as readonly Phase[]) {
+      const plan = prefetchPlan({ ...base, phase });
+      for (const clip of [...plan.now, ...plan.idle]) {
+        assert.ok(CINEMATIC_CLIPS.includes(clip), `${phase} -> ${clip}`);
+      }
+    }
+  });
+
+  it("tổng số clip nạp trước không bao giờ chạm cả bộ mười", () => {
+    for (const phase of PHASES as readonly Phase[]) {
+      const plan = prefetchPlan({ ...base, phase });
+      assert.ok(plan.now.length + plan.idle.length < CINEMATIC_CLIPS.length, phase);
+    }
   });
 });
 

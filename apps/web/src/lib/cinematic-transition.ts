@@ -1,4 +1,5 @@
 import type { GameEventId, GameEventView, Phase, RoomSnapshot } from "@masoi/shared";
+import { eventIcon } from "./event-art";
 
 /**
  * Chuyển cảnh giữa hai snapshot.
@@ -41,8 +42,30 @@ export interface Cinematic {
   /** Tên file trong /cinematics, không kèm phần mở rộng. */
   clip: string;
   durationMs: number;
-  /** Câu mô tả; dùng cho aria-label và cho cả bản dựng bằng CSS. */
+  /**
+   * Nhãn của HỌ hình ảnh - "Luật làng thay đổi", "Màn đêm buông xuống".
+   *
+   * Đây là tên của đoạn phim, không phải tên của chuyện vừa xảy ra. Với cạnh
+   * pha thì hai thứ đó là một; với sự kiện thì không, và chỗ hiển thị chính là
+   * `title` chứ không phải trường này.
+   */
   label: string;
+  /**
+   * Dòng chữ LỚN trên màn hình.
+   *
+   * Với sự kiện đây là tên thật lấy từ snapshot ("Giới Nghiêm"), không phải nhãn
+   * họ. Bản cũ in `label` cho cả hai, nên năm sự kiện trong họ RULE_CHANGE đều
+   * hiện đúng một dòng "Luật làng thay đổi" - người chơi xem xong đoạn chuyển
+   * cảnh vẫn không biết luật nào vừa đổi, và phải đi tìm thẻ sự kiện để đọc lại.
+   */
+  title: string;
+  /**
+   * Dòng phụ ngắn dưới tên: `announcement` nếu sự kiện có kết quả công khai,
+   * không thì là mô tả. Đã cắt ngắn - xem `EVENT_DETAIL_MAX`.
+   */
+  detail: string | null;
+  /** Ký hiệu sự kiện. Cạnh pha không có sự kiện nào nên là null. */
+  icon: string | null;
 }
 
 /**
@@ -123,9 +146,45 @@ function eventKey(event: GameEventView | null | undefined): string | null {
   return event ? `${event.id}:${event.round}:${event.targetPhase}` : null;
 }
 
-function build(kind: CinematicKind, key: string): Cinematic {
+/**
+ * Trần độ dài dòng phụ.
+ *
+ * Mô tả sự kiện dài nhất trong game là hai câu, và đoạn chuyển cảnh chỉ sống
+ * 900ms. Ở 390px một dòng chứa được khoảng 40 ký tự, nên 96 ký tự là hai dòng
+ * rưỡi - vừa đủ để liếc, chưa đủ để đoạn chữ phủ kín màn hình và che mất chính
+ * cái cảnh nó đang chú thích. Ai muốn đọc kỹ đã có thẻ EventBanner ở lại cả
+ * vòng ngay sau đó.
+ */
+export const EVENT_DETAIL_MAX = 96;
+
+/** Cắt một đoạn mô tả về đúng một dòng phụ, cắt ở khoảng trắng gần nhất. */
+export function shortDetail(text: string | null | undefined): string | null {
+  const trimmed = text?.trim();
+  if (!trimmed) return null;
+  if (trimmed.length <= EVENT_DETAIL_MAX) return trimmed;
+  const cut = trimmed.slice(0, EVENT_DETAIL_MAX);
+  const space = cut.lastIndexOf(" ");
+  // Cắt giữa từ ra "Giới Nghiê..."; lùi về khoảng trắng gần nhất, trừ khi cả
+  // đoạn không có khoảng trắng nào (không xảy ra với tiếng Việt, nhưng đây là
+  // chuỗi từ server nên không hứa trước được gì).
+  return `${(space > EVENT_DETAIL_MAX / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
+function build(kind: CinematicKind, key: string, event?: GameEventView): Cinematic {
   const meta = KIND_META[kind];
-  return { kind, key, clip: meta.clip, durationMs: meta.durationMs, label: meta.label };
+  return {
+    kind,
+    key,
+    clip: meta.clip,
+    durationMs: meta.durationMs,
+    label: meta.label,
+    // Sự kiện nói tên của chính nó; cạnh pha thì nhãn họ đã là tên rồi.
+    title: event?.name?.trim() || meta.label,
+    // announcement trước description: nó là thứ VỪA xảy ra ("Kết quả Thám Tử:
+    // ..."), còn description chỉ nhắc lại luật chung của sự kiện.
+    detail: event ? shortDetail(event.announcement ?? event.description) : null,
+    icon: event ? eventIcon(event.id) : null,
+  };
 }
 
 /**
@@ -153,7 +212,7 @@ export function cinematicFor(prev: RoomSnapshot | null, next: RoomSnapshot): Cin
 
   const activeKey = eventKey(next.activeEvent);
   if (next.activeEvent && activeKey && activeKey !== eventKey(prev.activeEvent)) {
-    return build(EVENT_FAMILY[next.activeEvent.id], `event:${activeKey}`);
+    return build(EVENT_FAMILY[next.activeEvent.id], `event:${activeKey}`, next.activeEvent);
   }
 
   const kind = phaseKind(prev.phase, next.phase);
@@ -206,4 +265,60 @@ export function nextClips(phase: Phase): string[] {
     }
   })();
   return kinds.map((kind) => KIND_META[kind].clip);
+}
+
+/** Bốn clip của bốn họ sự kiện. */
+export const EVENT_CLIPS: string[] = ["WOLF_THREAT", "VILLAGE_BOON", "RULE_CHANGE", "SPIRIT"].map(
+  (kind) => KIND_META[kind as CinematicKind].clip,
+);
+
+export interface PrefetchInputs {
+  phase: Phase;
+  /** Kết quả của `playbackMode`. Chỉ chế độ "video" mới tải file. */
+  mode: "video" | "css" | "none";
+  saveData: boolean;
+  /** `navigator.connection.effectiveType`, hoặc null nếu trình duyệt không có. */
+  effectiveType: string | null;
+}
+
+export interface PrefetchPlan {
+  /** Nạp ngay: clip có thể tới ngay sau pha hiện tại. */
+  now: string[];
+  /** Nạp lúc máy rảnh: bốn clip sự kiện. Không bao giờ được tranh băng thông với `now`. */
+  idle: string[];
+}
+
+/** Mạng chậm tới mức không đáng tải thêm thứ chỉ CÓ THỂ dùng tới. */
+function tooSlow(effectiveType: string | null): boolean {
+  return effectiveType === "2g" || effectiveType === "slow-2g";
+}
+
+/**
+ * Những clip đáng nạp trước khi đang ở pha này.
+ *
+ * Sự kiện là chỗ khó nhất của toàn bộ hệ prefetch. Nó không nằm trên một cạnh
+ * pha nào đoán trước được - nó nổ giữa ván, và đoạn chuyển cảnh của nó chỉ dài
+ * 900ms. Bản cũ chỉ nạp theo pha, nên bốn clip `event-*` bắt đầu tải đúng lúc
+ * thẻ <video> được dựng: trên 4G một file 1MB mất hơn 900ms, nghĩa là clip sự
+ * kiện gần như KHÔNG BAO GIỜ kịp hiện, và cái người chơi luôn thấy là bản CSS.
+ *
+ * Nên bốn clip đó phải có mặt từ trước. Nhưng chúng cũng chỉ là "có thể cần":
+ * cả ván có khi không có sự kiện nào. Vì vậy chúng đi ở luồng `idle`, sau khi
+ * ván đã bắt đầu, và biến mất hoàn toàn trên mạng đo được là chậm.
+ */
+export function prefetchPlan(inputs: PrefetchInputs): PrefetchPlan {
+  const empty: PrefetchPlan = { now: [], idle: [] };
+  // Save-Data đã khiến playbackMode trả "css" nên nhánh này gần như không tới -
+  // nhưng "gần như" không đủ cho một cái cờ mà người dùng bật lên để KHÔNG bị
+  // tải hộ. Xét lại ở đây để chính sách prefetch tự đứng được, kể cả khi ai đó
+  // gọi nó từ chỗ khác.
+  if (inputs.mode !== "video" || inputs.saveData) return empty;
+
+  const now = nextClips(inputs.phase);
+  // Trang chủ không dựng CinematicOverlay nên không có gì tải từ đó; LOBBY là
+  // trong phòng nhưng chưa vào ván, còn GAME_OVER thì không còn sự kiện nào nổ
+  // được nữa. Hai chỗ đó chỉ nạp theo pha.
+  const started = inputs.phase !== "LOBBY" && inputs.phase !== "GAME_OVER";
+  if (!started || tooSlow(inputs.effectiveType)) return { now, idle: [] };
+  return { now, idle: EVENT_CLIPS.filter((clip) => !now.includes(clip)) };
 }

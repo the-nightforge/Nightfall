@@ -4,11 +4,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
 import {
   cinematicFor,
-  nextClips,
+  prefetchPlan,
   type Cinematic,
   type CinematicKind,
 } from "@/lib/cinematic-transition";
-import { playbackMode, readPlaybackInputs } from "@/lib/cinematic-settings";
+import {
+  playbackMode,
+  readNetworkHints,
+  readPlaybackInputs,
+  type NetworkHints,
+} from "@/lib/cinematic-settings";
+import { useModalFocus } from "@/lib/useModalFocus";
 import { VillageSilhouette } from "./VillageSilhouette";
 import { WolfMark } from "./WolfMark";
 
@@ -45,10 +51,13 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
   const previous = useRef<RoomSnapshot | null>(null);
   const played = useRef(new Set<string>());
   const [mode, setMode] = useState<"video" | "css" | "none">("none");
+  const [network, setNetwork] = useState<NetworkHints>({ saveData: false, effectiveType: null });
   // Bản sao trong ref để effect chọn cảnh chỉ phụ thuộc snapshot: cho `mode` vào
   // deps thì đổi thiết lập giữa pha sẽ chạy lại effect và ghi đè `previous`.
   const modeRef = useRef(mode);
   modeRef.current = mode;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const skipRef = useRef<HTMLButtonElement>(null);
 
   /*
    * Đọc thiết lập SAU khi hydrate, không phải trong lúc render: cả localStorage
@@ -57,7 +66,10 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
    * cùng lắm là bỏ lỡ một cảnh - không bao giờ là phát nhầm một cảnh.
    */
   useEffect(() => {
-    const apply = () => setMode(playbackMode(readPlaybackInputs()));
+    const apply = () => {
+      setMode(playbackMode(readPlaybackInputs()));
+      setNetwork(readNetworkHints());
+    };
     apply();
     if (typeof window.matchMedia !== "function") return;
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -105,39 +117,91 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
     return () => clearTimeout(timer);
   }, [playing, finish]);
 
-  useEffect(() => {
-    if (!playing) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" || event.key === "Enter" || event.key === " ") finish();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [playing, finish]);
+  /*
+   * Lớp phủ là modal thật trong lúc nó sống.
+   *
+   * Escape đi qua đây; Enter và Space thì KHÔNG. Bản cũ nghe cả ba trên
+   * `window`, nhưng focus vẫn nằm nguyên ở nút bên dưới lớp phủ - nên một phím
+   * Space vừa bỏ qua cảnh, vừa để trình duyệt bấm luôn nút "Bỏ phiếu" đang
+   * focus đằng sau. Giờ focus nằm ở "Bỏ qua", và Enter/Space chỉ bấm đúng nút
+   * đó theo đường mặc định của trình duyệt.
+   */
+  useModalFocus({
+    active: playing !== null,
+    roots: [rootRef],
+    initialFocus: skipRef,
+    onEscape: finish,
+  });
 
-  // Nạp trước chỉ những cảnh có thể tới ngay sau pha hiện tại, và chỉ sau khi đã
-  // vào phòng - trang chủ không chạm tới component này nên nó không tải gì cả.
+  // Nạp trước theo chính sách ở `prefetchPlan`, và chỉ sau khi đã vào phòng -
+  // trang chủ không chạm tới component này nên nó không tải gì cả.
   useEffect(() => {
-    if (mode !== "video" || !snapshot) return;
-    for (const clip of nextClips(snapshot.phase)) {
-      if (prefetched.has(clip) || brokenClips.has(clip)) continue;
+    if (!snapshot) return;
+    const plan = prefetchPlan({
+      phase: snapshot.phase,
+      mode,
+      saveData: network.saveData,
+      effectiveType: network.effectiveType,
+    });
+
+    const add = (clip: string) => {
+      // `prefetched` ở cấp module nên một clip chỉ sinh đúng một thẻ <link>
+      // trong cả phiên, dù effect này chạy lại ở mỗi snapshot.
+      if (prefetched.has(clip) || brokenClips.has(clip)) return;
       prefetched.add(clip);
       const link = document.createElement("link");
       link.rel = "prefetch";
       link.href = `${CLIP_BASE}/${clip}.webm`;
       document.head.append(link);
+    };
+
+    for (const clip of plan.now) add(clip);
+    if (plan.idle.length === 0) return;
+
+    /*
+     * Bốn clip sự kiện đi ở luồng rảnh.
+     *
+     * Chúng chỉ CÓ THỂ cần tới, nên không được tranh băng thông với clip của
+     * pha kế tiếp, và tuyệt đối không được làm chậm thao tác đang diễn ra.
+     * requestIdleCallback chưa có ở Safari nên có đường lui bằng setTimeout -
+     * chậm hơn thì thôi, không có nghĩa là bỏ hẳn.
+     */
+    const idle = (globalThis as typeof globalThis & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    });
+    const run = () => plan.idle.forEach(add);
+    if (typeof idle.requestIdleCallback === "function") {
+      const handle = idle.requestIdleCallback(run, { timeout: 4000 });
+      return () => idle.cancelIdleCallback?.(handle);
     }
-  }, [mode, snapshot]);
+    const timer = setTimeout(run, 2000);
+    return () => clearTimeout(timer);
+  }, [mode, network, snapshot]);
 
   if (!playing) return null;
 
   const useVideo = mode === "video" && !brokenClips.has(playing.clip);
 
+  // Sự kiện mang tên riêng nên nhãn họ tụt xuống làm dòng nhỏ phía trên; cạnh
+  // pha thì hai thứ trùng nhau và in hai lần chỉ tổ thừa.
+  const eyebrow = playing.title === playing.label ? null : playing.label;
+
   return (
     <div
+      ref={rootRef}
       // Trên cả nút chat nổi (z-40) và tấm trượt chat (z-50).
       className="fixed inset-0 z-[70] cine-root"
-      role="group"
-      aria-label={`Chuyển cảnh: ${playing.label}`}
+      /*
+       * dialog + aria-modal, không phải group: trình đọc màn hình đọc TÊN của
+       * dialog đúng một lần lúc focus rơi vào trong, nên không còn cần vùng
+       * aria-live riêng - bản cũ có cả aria-label lẫn một <p aria-live>, và
+       * NVDA đọc tên cảnh hai lượt liền nhau.
+       */
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={`cine-title-${playing.key}`}
+      aria-describedby={playing.detail ? `cine-detail-${playing.key}` : undefined}
       // Chạm chỗ nào cũng bỏ qua. Đây là lý do lớp phủ ăn click thay vì cho
       // xuyên qua: một cú chạm lạc trong 1,2 giây đó mà rơi trúng "Bỏ phiếu"
       // bên dưới thì tệ hơn nhiều so với việc mất một đoạn chuyển cảnh.
@@ -173,25 +237,46 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
         </video>
       )}
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 top-0 grid place-items-center px-6">
-        <p className="cine-caption font-display text-3xl font-bold text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.9)] sm:text-4xl">
-          {playing.label}
-        </p>
+      {/* max-w + px-6: ở 390px dòng phụ phải xuống dòng gọn giữa màn chứ không
+        * chạy sát hai mép, và cả khối vẫn nằm trong vùng an toàn giữa khung -
+        * đúng vùng mà clip object-cover không cắt mất. */}
+      <div className="pointer-events-none absolute inset-0 grid place-items-center px-6">
+        <div className="cine-caption max-w-md text-center">
+          {eyebrow && (
+            <p className="cine-eyebrow text-xs font-bold uppercase tracking-[0.2em] text-white/70">
+              {playing.icon && (
+                <span className="mr-1.5" aria-hidden="true">
+                  {playing.icon}
+                </span>
+              )}
+              {eyebrow}
+            </p>
+          )}
+          <p
+            id={`cine-title-${playing.key}`}
+            className="font-display text-3xl font-bold text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.9)] sm:text-4xl"
+          >
+            {playing.title}
+          </p>
+          {playing.detail && (
+            <p
+              id={`cine-detail-${playing.key}`}
+              className="cine-detail mt-2 text-sm leading-snug text-white/85 drop-shadow-[0_1px_10px_rgba(0,0,0,0.9)]"
+            >
+              {playing.detail}
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* Nhãn cho trình đọc màn hình. Phần hình ở trên đã aria-hidden, nên đây
-        * là chỗ duy nhất nói ra chuyện gì vừa xảy ra. */}
-      <p className="sr-only" aria-live="polite">
-        {playing.label}
-      </p>
-
       <button
+        ref={skipRef}
         type="button"
         onClick={(event) => {
           event.stopPropagation();
           finish();
         }}
-        className="absolute bottom-6 right-5 rounded-full border border-white/25 bg-black/50 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-black/70"
+        className="absolute bottom-6 right-5 rounded-full border border-white/25 bg-black/50 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
       >
         Bỏ qua
       </button>
