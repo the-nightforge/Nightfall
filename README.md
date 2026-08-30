@@ -91,6 +91,13 @@ NODE_ENV=production
 CORS_ORIGIN=https://YOUR-PROJECT.vercel.app
 BOT_AI_ENABLED=true
 
+# Voice chat (tuỳ chọn). Bỏ trống cả ba thì voice tắt và mọi thứ chạy như cũ;
+# điền một nửa thì server ném lỗi lúc khởi động thay vì âm thầm tắt.
+LIVEKIT_URL=wss://<project>.livekit.cloud
+LIVEKIT_API_KEY=<key>
+LIVEKIT_API_SECRET=<secret>
+LIVEKIT_ENV=prod
+
 # Chuỗi nhà cung cấp cho bot, thử lần lượt từ trên xuống.
 # Thiếu bất kỳ mảnh nào của một chặng thì chặng đó bị bỏ qua.
 # Không chặng nào cấu hình được thì bot chơi ngẫu nhiên và không chat.
@@ -142,6 +149,7 @@ Các gói miễn phí có giới hạn tài nguyên và có thể thay đổi. R
 | `npm run db:migrate` | Prisma migrate deploy |
 | `npm run test:e2e` | E2E smoke test qua Socket.IO; cần server local và hiện chưa dùng làm release gate cho tới khi luồng sẵn sàng được tự động hoá |
 | `npm run bot:probe` | Gọi Gemini một lần với ván giả để kiểm tra key và prompt (cần `GEMINI_API_KEY`) |
+| `npm run voice:probe` | Gọi LiveKit thật một lượt: kiểm credential, bộ grant của token, và cách nhận dạng lỗi (cần `LIVEKIT_*`) |
 
 `@masoi/shared` và `@masoi/game-engine` trỏ `main`/`types` vào `dist/`, mà `dist/` nằm trong `.gitignore`. Vì thế trên một bản clone sạch, hai package đó chưa tồn tại dưới dạng mà workspace khác import được, và bất kỳ lệnh nào chạy thẳng vào một workspace (`npm test --workspace @masoi/server`) sẽ đỏ hàng loạt với `has no exported member` — lỗi build artifact, không phải lỗi code. `npm test` và `npm run lint` ở thư mục gốc tự lo việc này; chạy thẳng workspace thì cần `npm run build:deps` trước.
 
@@ -172,6 +180,8 @@ Kết nối: `io(SERVER_URL, { auth: { playerId, token } })`.
 | `game:action` | `{ type: KILL\|SEE\|GUARD\|HEAL\|POISON, targetId?: string\|null }` | Đúng vai trò, còn sống, đang NIGHT |
 | `game:vote` | `{ targetId }` | Còn sống, đang VOTING |
 | `chat:send` | `{ text: string(≤300) }` | Server tự chọn kênh theo phase/trạng thái; rate limit 5 tin/5s |
+| `voice:token` | `{}` | Thành viên (không phải bot), phòng đã bật voice, server có LiveKit; rate limit 5 lần/10s |
+| `voice:ready` | `{}` | Báo đã vào room LiveKit xong, để server cấp quyền theo pha hiện tại |
 
 ### Server → Client
 
@@ -179,6 +189,7 @@ Kết nối: `io(SERVER_URL, { auth: { playerId, token } })`.
 |---|---|---|
 | `room:snapshot` | `RoomSnapshot` | Snapshot cá nhân hoá cho từng người nhận |
 | `chat:new` | `ChatMessage` | Chỉ gửi tới người có quyền xem kênh đó |
+| `voice:token` | `{ url, token, roomName }` | Token join LiveKit. Dùng server event chứ không dùng ack vì helper `handler` trong `ws.ts` chỉ nhận một tham số |
 | `error` | `{ message }` | Lỗi nghiệp vụ tiếng Việt |
 
 ### Các pha game
@@ -200,6 +211,38 @@ Kết nối: `io(SERVER_URL, { auth: { playerId, token } })`.
 - Sói thắng khi số Sói ≥ số phe làng còn sống; làng thắng khi hết Sói.
 - Server giữ trọn thời gian ban đêm đã cấu hình để mọi vai trò có cơ hội hành động.
 
+## Voice chat (LiveKit)
+
+Tắt mặc định. Chủ phòng bật bằng công tắc trong phòng chờ, và công tắc chỉ hiện
+khi server đã có `LIVEKIT_*`.
+
+**Chỉ có ban ngày.** Phe Sói ban đêm và người chết vẫn bàn bằng chữ. Đây là quyết
+định gốc chứ không phải hạn chế tạm thời: ban ngày không có kênh nào mang thông
+tin bí mật (ai chết, ai bị cáo đều công khai), nên "ai được nói" không hé lộ vai
+của ai. Nhờ vậy mỗi phòng chỉ cần **một** room LiveKit và không có bề mặt rò rỉ
+qua tầng signaling.
+
+| Pha | Ai được nói |
+|---|---|
+| `LOBBY`, `GAME_OVER` | tất cả |
+| `DAY_DISCUSSION`, `VOTING`, `FINAL_VOTE`, `NIGHT_RESULT`, `ELIMINATION` | người còn sống |
+| `DEFENSE` | chỉ bị cáo |
+| `NIGHT`, `ROLE_REVEAL`, `HUNTER_SHOT` | không ai |
+
+Người chết luôn **nghe** được, nhưng không nói được cho tới `GAME_OVER`.
+
+Hai điều quan trọng nếu bạn sửa phần này:
+
+1. **Token không bao giờ mang quyền nói.** Mọi token ký ra đều có
+   `canPublish: false`; quyền nói chỉ đến từ `updateParticipant` sau khi đã vào
+   room. Nhờ vậy dán lại một token cũ sau khi chết cũng không lấy lại được
+   quyền. Đừng "tối ưu" bằng cách ký sẵn quyền vào token.
+2. **`canPublishData` mặc định là `true` ở LiveKit.** Adapter đóng nó tường minh.
+   Bỏ dòng đó là mở lại một kênh dữ liệu không ai gác, đi vòng qua `resolveChat`.
+
+Thiết kế đầy đủ: `docs/superpowers/specs/2026-08-30-voice-chat-design.md`.
+Kiểm tra cấu hình thật: `npm run voice:probe`.
+
 ## Reconnect
 
 Client lưu `{ playerId, token, roomCode }` trong localStorage. Khi mất mạng/tải lại:
@@ -208,7 +251,7 @@ socket reconnect với cùng auth → server xác thực token (SHA-256 lookup),
 ## Hạn chế hiện tại (MVP)
 
 - Single-instance server: trạng thái phòng chính nằm trong RAM, Redis là bản sao phục vụ khôi phục phòng (phòng đang giữa trận khi restart sẽ được trả về LOBBY an toàn).
-- Chưa có voice/video, chưa có lịch sử ván chi tiết trong UI.
+- Voice chat **chỉ có ban ngày**; phe Sói ban đêm và người chết vẫn nhắn bằng chữ. Chưa có video, chưa có lịch sử ván chi tiết trong UI.
 - **Toàn bộ** quyết định của BOT — hành động đêm, đề cử, phiếu Treo/Tha, phát bắn Thợ Săn — do decision engine deterministic có memory/belief/chiến lược theo vai quyết định, tái lập được từ seed. LLM **chỉ** diễn đạt lời nói: `BotBrain` không còn chữ ký nào trả về một nước đi. Thiếu `GEMINI_API_KEY` hay hết quota chỉ làm BOT nói bằng câu mẫu, không đổi một nước đi nào.
 - BOT chưa biết tự nhận vai trong chat, nên phe làng chưa truyền được thông tin của Tiên Tri cho nhau; đo bằng harness thì phe làng thắng khoảng 17% (xem `docs/bot-ai-phase-2-verification.md`).
 - `BotBrainState` không được lưu: server restart giữa ván thì BOT mất trí nhớ của ván đó.

@@ -37,6 +37,11 @@ export interface RoomConfig {
   priest?: boolean;
   mayor?: boolean;
   mode?: RoomMode;
+  /**
+   * Bật voice chat cho phòng. Mặc định tắt: phòng không bật thì không có gì
+   * thay đổi so với trước khi có tính năng này.
+   */
+  voice?: boolean;
   /** giây */
   nightSeconds: number;
   discussionSeconds: number;

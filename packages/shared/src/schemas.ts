@@ -29,6 +29,7 @@ export const roomConfigSchema = z
     priest: bool.optional(),
     mayor: bool.optional(),
     mode: roomModeSchema.optional(),
+    voice: bool.optional(),
     nightSeconds: z.number().int().min(15).max(120),
     discussionSeconds: z.number().int().min(30).max(300),
     voteSeconds: z.number().int().min(15).max(120),
@@ -115,6 +116,8 @@ export const votePayload = z.object({ targetId: z.string().min(1).nullable() }).
 export const finalVotePayload = z.object({ guilty: z.boolean() }).strict();
 export const hunterShotPayload = z.object({ targetId: z.string().min(1).nullable() }).strict();
 export const skipDiscussionPayload = z.object({ skip: z.boolean() }).strict();
+export const voiceTokenPayload = z.object({}).strict();
+export const voiceReadyPayload = z.object({}).strict();
 export const dayOfTruthClaimPayload = z.object({ role: z.string().min(1).nullable() }).strict();
 export const updateAvatarPayload = z.object({ avatarUrl: z.string().nullable() }).strict();
 export const chatSendPayload = z.object({ text: z.string().trim().min(1).max(300) }).strict();

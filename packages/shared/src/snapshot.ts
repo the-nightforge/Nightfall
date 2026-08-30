@@ -306,6 +306,35 @@ export interface RoomSnapshot {
   balanceWarning?: BalanceWarningView | null;
   /** Claim Ngày Sự Thật: playerId -> role claim hoặc null là không tiết lộ */
   dayOfTruthClaims?: Record<string, string | null>;
+  /**
+   * Trạng thái voice cho riêng người nhận snapshot này.
+   *
+   * Optional vì web và server deploy rời nhau: client mới chạy với server cũ
+   * phải không vỡ.
+   */
+  voice?: VoiceView;
+}
+
+export interface VoiceView {
+  /**
+   * Máy chủ CÓ cấu hình LiveKit. Độc lập với việc phòng đã bật hay chưa.
+   *
+   * Tách khỏi `enabled` vì công tắc trong phòng chờ cần đúng tín hiệu này: dùng
+   * `enabled` sẽ thành vòng luẩn quẩn - công tắc chỉ hiện khi voice đã bật, mà
+   * voice chỉ bật được bằng công tắc.
+   */
+  available: boolean;
+  /** `available` VÀ phòng đã bật voice. */
+  enabled: boolean;
+  /**
+   * Người này có được nói ở pha hiện tại không.
+   *
+   * Dùng cho ĐÚNG HAI việc: tắt mic tức thì khi bị thu quyền, và vẽ UI. KHÔNG
+   * bao giờ dùng để mở mic - token không mang sẵn quyền nói, nên việc mở mic
+   * phải đợi sự kiện đổi quyền từ chính LiveKit.
+   */
+  canPublish: boolean;
+  roomName: string;
 }
 
 export interface ChatMessage {

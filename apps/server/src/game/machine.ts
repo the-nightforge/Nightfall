@@ -5,6 +5,7 @@ import type { PublicVoteChoice } from "@masoi/shared";
 import type { Room } from "../rooms/store";
 import { clearRoomTimers, persistRoom, setRoomTimer } from "../rooms/store";
 import { broadcastRoom, emitToPlayers } from "../rooms/broadcast";
+import { destroyVoiceRoom, syncVoicePermissions } from "../voice/service";
 import { prisma } from "../db";
 import { buildSnapshot, pushChat, resolveChat } from "../rooms/snapshot";
 import { botBrain, randomBrain, resetBotBudget } from "../bots";
@@ -47,6 +48,10 @@ function engine(room: Room): GameEngine {
 
 function sync(room: Room): void {
   void persistRoom(room);
+  // Không await: một lần LiveKit chậm không được làm cả bàn đứng hình chờ đổi
+  // pha. Client tự tắt mic ngay khi nhận snapshot là lớp nhanh; lời gọi này là
+  // lớp chắc.
+  void syncVoicePermissions(room);
   broadcastRoom(room.code);
 }
 
@@ -313,6 +318,10 @@ export function resetToLobby(room: Room): void {
   pendingEndFinalVote.delete(room.code);
   clearBotSession(room.code);
   resetBotBudget(room.code);
+  // Về lobby là xoá hẳn room voice: không ai được ngồi lại với quyền của ván
+  // cũ. CỐ Ý không làm điều này ở GAME_OVER - lúc lật bài xong là lúc đáng nói
+  // nhất cả ván, nên room vẫn sống tới khi phòng thật sự reset.
+  void destroyVoiceRoom(room.code, "về lại phòng chờ");
   sync(room);
 }
 

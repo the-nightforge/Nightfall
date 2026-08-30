@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { MIN_PLAYERS_TO_START, ROLE_META, type RoomSnapshot } from "@masoi/shared";
 import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
+import { useSpeakers } from "@/components/VoiceProvider";
 import { roleLabel } from "@/lib/cursed";
 import { Avatar } from "./Avatar";
 import { AvatarPicker } from "./AvatarPicker";
@@ -24,6 +25,7 @@ interface Props {
  * mọi thao tác chọn người đều ở cột kia.
  */
 export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
+  const speakers = useSpeakers();
   const meId = snapshot.you?.id ?? null;
   const roster = snapshot.players.map((p) => p.id).join(",");
   const avatars = useMemo(() => assignAvatars(roster ? roster.split(",") : []), [roster]);
@@ -48,11 +50,17 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
         {snapshot.players.map((player) => {
           const votes = player.voteCount ?? 0;
           const isMe = player.id === meId;
+          // Identity của LiveKit chính là playerId nên đối chiếu thẳng.
+          const speaking = speakers.has(player.id);
           return (
             <li
               key={player.id}
-              className={`group flex items-center gap-2 rounded-lg px-1.5 py-1 ${
-                isMe ? "bg-indigo-500/10 ring-1 ring-indigo-500/30" : ""
+              className={`group flex items-center gap-2 rounded-lg px-1.5 py-1 transition ${
+                speaking
+                  ? "bg-emerald-400/10 ring-1 ring-emerald-400/60"
+                  : isMe
+                    ? "bg-indigo-500/10 ring-1 ring-indigo-500/30"
+                    : ""
               }`}
             >
               <span className="relative shrink-0">
