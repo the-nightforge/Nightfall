@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { speechDefaults } from "./helpers/speech-request";
 import { renderBotSpeech } from "../src/bots/speech-renderer";
+import { FallbackBrain } from "../src/bots/fallback-brain";
+import { interpretDaySpeech } from "../src/bots/decide";
 import type { BotBrain, SpeechRequest } from "../src/bots/types";
 
 /**
@@ -107,5 +109,67 @@ describe("lượt bào chữa đi qua đúng renderBotSpeech, như mọi lời n
 
     expect(result.fromTemplate).toBe(true);
     expect(result.text).toBeTruthy();
+  });
+});
+
+/**
+ * Fix round 1, mục 2: `interpretDaySpeech` coi chuỗi rỗng là im lặng có chủ
+ * đích (`decided({chat:null})`), và với `FallbackBrain` đó là một nhánh
+ * THÀNH CÔNG - chuỗi dừng lại, não kế tiếp không bao giờ được hỏi. Đúng cho
+ * ban ngày, nhưng SAI cho lượt bào chữa: một câu trả lời rỗng từ não A không
+ * được phép chiếm mất lượt của não B. `gemini-brain.ts`/`openai-compat-brain.ts`
+ * truyền `treatEmptyAsFailure: request.defense !== null` để chữa đúng chỗ
+ * này; nhóm dưới đây kiểm hành vi GHÉP của interpretDaySpeech + FallbackBrain,
+ * không chỉ từng hàm riêng lẻ.
+ */
+function brainCalling(name: string, chat: string, calls: string[]): BotBrain {
+  return {
+    name,
+    async renderDaySpeech(request: SpeechRequest) {
+      calls.push(name);
+      // Mô phỏng ĐÚNG lời gọi thật của gemini-brain.ts/openai-compat-brain.ts,
+      // không tự suy ra { ok: true/false } bằng tay - nếu không test này có
+      // thể xanh dù chỗ nối thật đã đứt.
+      return interpretDaySpeech({ think: "x", chat }, 300, () => undefined, {
+        treatEmptyAsFailure: request.defense !== null,
+      });
+    },
+  };
+}
+
+describe("chuỗi dự phòng: chuỗi rỗng ở lượt bào chữa phải thử não kế tiếp", () => {
+  it("ban ngày: não A trả lời rỗng thì DỪNG ở đó, não B không được hỏi", async () => {
+    const calls: string[] = [];
+    const chain = new FallbackBrain([
+      brainCalling("A", "   ", calls),
+      brainCalling("B", "Tôi nghi Wolf.", calls),
+    ]);
+
+    const attempt = await chain.renderDaySpeech(
+      // Không phải lượt bào chữa - defenseRequest() ghi đè lại `defense: null`
+      // và một ý định không cần mục tiêu, để khác biệt DUY NHẤT với test dưới
+      // là cờ `defense`, không phải hình dạng ý định.
+      defenseRequest({
+        defense: null,
+        intention: { kind: "WITHHOLD", confidence: 0.2, evidence: [] },
+        targetName: null,
+      }),
+    );
+
+    expect(calls).toEqual(["A"]);
+    expect(attempt).toEqual({ ok: true, value: { chat: null } });
+  });
+
+  it("lượt bào chữa: não A trả lời rỗng thì não B ĐƯỢC hỏi tiếp", async () => {
+    const calls: string[] = [];
+    const chain = new FallbackBrain([
+      brainCalling("A", "   ", calls),
+      brainCalling("B", "Tôi không phải sói, đừng treo tôi.", calls),
+    ]);
+
+    const attempt = await chain.renderDaySpeech(defenseRequest());
+
+    expect(calls).toEqual(["A", "B"]);
+    expect(attempt).toEqual({ ok: true, value: { chat: "Tôi không phải sói, đừng treo tôi." } });
   });
 });

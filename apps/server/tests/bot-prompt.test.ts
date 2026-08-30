@@ -214,4 +214,24 @@ describe("responseSchema", () => {
 
     expect(outcome).toEqual({ ok: false });
   });
+
+  // Fix round 1: hai đường phải KHÔNG chung một nghĩa cho chuỗi rỗng, dù chung
+  // một hàm interpret. Xem `InterpretDaySpeechOptions.treatEmptyAsFailure`.
+  it("chuỗi rỗng ban ngày là im lặng có chủ đích, không phải một lượt hỏng", () => {
+    const outcome = interpretDaySpeech({ think: "x", chat: "   " }, 300, () => undefined);
+
+    // ok:true, value:{chat:null} - FallbackBrain dừng ở đây, không thử não kế
+    // tiếp: đúng ý "bot chủ động không nói gì thêm".
+    expect(outcome).toEqual({ ok: true, value: { chat: null } });
+  });
+
+  it("chuỗi rỗng ở lượt bào chữa là một lượt HỎNG, để chuỗi dự phòng còn được thử", () => {
+    const outcome = interpretDaySpeech({ think: "x", chat: "   " }, 300, () => undefined, {
+      treatEmptyAsFailure: true,
+    });
+
+    // Khác `interpretDefense` cũ chỉ ở TÊN hàm, không khác ở kết quả: im lặng
+    // vẫn không phải một lời bào chữa hợp lệ, nên vẫn phải rơi về failed().
+    expect(outcome).toEqual({ ok: false });
+  });
 });

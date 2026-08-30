@@ -1023,6 +1023,12 @@ export const BOT_WEIGHTS_V4: BotWeights = Object.freeze({
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
- * phải thay đổi chỉ vì cấu hình tồn tại.
+ * phải thay đổi chỉ vì cấu hình tồn tại - đây là cơ chế rollout: nâng
+ * `DEFAULT_BOT_WEIGHTS` lên bản mới, và mọi `new BotRuntime({...})` không tự
+ * truyền `weights` (bao gồm `session-registry.ts`, chỗ ván thật dựng runtime)
+ * lập tức chạy bản mới mà không phải sửa. v4.0.0 bật nhóm `claim` (Task 3-7):
+ * để nó nằm ngoài mặc định là để feature dựng xong mà cả ván thật không có bot
+ * nào từng khai vai. v1/v2/v3 không bị ảnh hưởng - test tái lập của chúng luôn
+ * truyền preset đích danh, không bao giờ dựa vào hằng số này.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V3;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V4;

@@ -636,7 +636,8 @@ describe("v2 là cấu hình production", () => {
    *
    * Kết quả được ghi nhớ theo phiên bản trọng số. `runSelfPlay` là hàm thuần
    * của `(seed, weights)`, nên chạy lại đúng cùng batch chỉ tốn thời gian mà
-   * không thêm thông tin - và hai test dưới đây cùng cần batch của v3.
+   * không thêm thông tin - và hai test dưới đây cùng cần batch của
+   * `DEFAULT_BOT_WEIGHTS` (v4.0.0 kể từ Task 8; trước đó là v3.0.0).
    */
   const cache = new Map<string, { village: number; wolves: number }>();
 
@@ -654,11 +655,15 @@ describe("v2 là cấu hình production", () => {
     return rates;
   }
 
-  it("mặc định trỏ tới v3", () => {
-    // Phase 4 thêm nhóm `conversation` và BẬT nó, nên cấu hình production đổi
-    // phiên bản. v2 vẫn tồn tại nguyên vẹn làm mốc so sánh của Phase 3.
-    expect(DEFAULT_BOT_WEIGHTS.version).toBe("3.0.0");
-    expect(weightsPreset("3.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+  it("mặc định trỏ tới v4", () => {
+    // Task 8 bật nhóm `claim` (Task 3-7) ở production bằng cách nâng chính
+    // hằng số này lên v4.0.0 - đúng cơ chế rollout mà docstring của
+    // `DEFAULT_BOT_WEIGHTS` mô tả, để `session-registry.ts` (chỗ ván thật
+    // dựng `BotRuntime`, không tự truyền `weights`) chạy bản mới mà không
+    // phải sửa. v3 vẫn tồn tại nguyên vẹn làm mốc so sánh của Phase 4.
+    expect(DEFAULT_BOT_WEIGHTS.version).toBe("4.0.0");
+    expect(weightsPreset("4.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    expect(weightsPreset("3.0.0")).toBe(BOT_WEIGHTS_V3);
     expect(weightsPreset("2.0.0")).toBe(BOT_WEIGHTS_V2);
   });
 
@@ -667,7 +672,11 @@ describe("v2 là cấu hình production", () => {
     () => {
       // Ngưỡng thật, không phải "mỗi phe thắng ít nhất một ván" như Phase 2 -
       // một tiêu chí mà 96% Sói thắng vẫn lọt qua.
-      // Đo được 41.3% ở v3; ngưỡng đặt ở 0.28/0.68 để chừa biên sai số lấy mẫu.
+      //
+      // Đo được 41.3% ở v3 (Phase 4). Task 8 nâng `DEFAULT_BOT_WEIGHTS` lên
+      // v4.0.0 (bật nhóm `claim`, Task 3-7) - đo lại đúng batch này ra 49.5%
+      // làng / 50.5% Sói, vẫn nằm gọn trong ngưỡng cũ nên không cần đổi số.
+      // Ngưỡng đặt ở 0.28/0.68 để chừa biên sai số lấy mẫu cho cả hai mốc.
       const rates = winRates(DEFAULT_BOT_WEIGHTS);
       expect(rates.village).toBeGreaterThan(0.28);
       expect(rates.village).toBeLessThan(0.68);
@@ -681,7 +690,9 @@ describe("v2 là cấu hình production", () => {
     "cải thiện thật so với v1 trên cùng bộ seed",
     () => {
       // Cùng seed, cùng engine, chỉ khác cấu hình: chênh lệch không thể là nhiễu
-      // seed. Đo được 11.5% (v1) so với 41.3% (v3).
+      // seed. Trước Task 8 (v3 mặc định): 11.5% (v1) so với 41.3% (v3). Sau
+      // Task 8 (v4 mặc định, nhóm `claim` bật): 16.5% (v1) so với 49.5% (v4) -
+      // biên +0.15 vẫn còn thừa rất nhiều so với chênh lệch đo được (~33 điểm).
       expect(winRates(DEFAULT_BOT_WEIGHTS).village).toBeGreaterThan(
         winRates(BOT_WEIGHTS_V1).village + 0.15,
       );

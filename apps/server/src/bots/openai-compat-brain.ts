@@ -197,7 +197,11 @@ export class OpenAiCompatBrain implements BotBrain {
       log(result.reason, result.detail);
       return failed();
     }
-    return interpretDaySpeech(result.raw, this.opts.chatMaxLength ?? DEFAULT_CHAT_MAX, log);
+    return interpretDaySpeech(result.raw, this.opts.chatMaxLength ?? DEFAULT_CHAT_MAX, log, {
+      // Lượt bào chữa: chuỗi rỗng không được coi là im lặng có chủ đích - nó
+      // phải rơi về failed() để FallbackBrain còn thử nhà cung cấp kế tiếp.
+      treatEmptyAsFailure: request.defense !== null,
+    });
   }
 }
 
