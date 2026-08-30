@@ -55,20 +55,11 @@ export function PlayerSeat({
       type="button"
       disabled={disabled}
       onClick={onSelect}
-      /*
-       * initial={false} nên ô vào thẳng tư thế của mình, không diễn lại cú đổ.
-       * Mở phòng giữa ván thì người đã chết từ vòng trước phải nằm sẵn nghiêng
-       * ở đó, chỉ ai chết NGAY BÂY GIỜ mới đổ xuống trước mắt.
-       */
       initial={false}
       animate={{ rotate: dead ? -6 : 0, y: dead ? 5 : 0, scale: dead ? 0.97 : 1 }}
-      // Chỉ transform, không layout: lưới này render lại theo từng lá phiếu, và
-      // layout animation trên 15 ô cùng lúc là chỗ giật đầu tiên trên máy yếu.
       whileTap={disabled ? undefined : { scale: 0.96 }}
-      // Damping thấp hơn phần còn lại để có một nhịp nảy nhẹ lúc chạm đáy: chết
-      // là biến cố nặng nhất trong lưới này, nó được phép chiếm lấy con mắt.
       transition={{ type: "spring", stiffness: 260, damping: 17 }}
-      className={`relative flex flex-col items-center gap-1.5 rounded-xl border px-1.5 pb-2 pt-2.5 transition-colors
+      className={`relative flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border p-2 transition-colors
         ${frame}
         ${!disabled ? "cursor-pointer hover:border-blood-500/80" : "cursor-default"}`}
     >
@@ -91,11 +82,12 @@ export function PlayerSeat({
 
       <span className="relative">
         <Avatar
-          avatar={avatar}
+          avatar={player.avatarUrl ? player.avatarUrl : avatar}
           tint={tint}
           alive={player.alive}
           breathOffset={breathOffsetFor(player.id)}
-          className="h-12 w-12"
+          className="h-16 w-16 sm:h-20 sm:w-20"
+          isCustom={!!player.avatarUrl}
         />
         {dead && (
           // Gạch chéo vắt qua chân dung: chỉ làm mờ thì ở lưới 3 cột trên điện

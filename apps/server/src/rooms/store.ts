@@ -17,6 +17,7 @@ export interface RoomMember {
    */
   disconnectedAt?: number | null;
   isBot: boolean;
+  avatarUrl?: string | null;
 }
 
 export type RoomStatus = "LOBBY" | "IN_GAME";

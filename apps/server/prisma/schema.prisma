@@ -11,6 +11,7 @@ model Player {
   id           String   @id @default(cuid())
   nickname     String
   tokenHash    String   @unique
+  avatarUrl    String?  @db.Text
   createdAt    DateTime @default(now())
   lastSeenAt   DateTime @default(now())
 }
