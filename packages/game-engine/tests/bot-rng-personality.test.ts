@@ -157,6 +157,7 @@ describe("bot seeded randomness and personality", () => {
       speechSequence: 0,
       repliedMessageIds: [],
       seenEventIds: [],
+      appliedClaimEvidenceIds: [],
     };
 
     // Giá trị thật của test này nằm ở typecheck: `npm run lint` chạy

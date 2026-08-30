@@ -49,7 +49,6 @@ export interface ClaimSignalInput {
   claims: readonly BotMemory[];
   round: number;
   lastNightDeaths: readonly { playerId: string; name: string }[];
-  voteCounts: Record<string, number>;
   publicVoteHistory: readonly DayVoteRecap[];
   seenEventIds: readonly string[];
 }

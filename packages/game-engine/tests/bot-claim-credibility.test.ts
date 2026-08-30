@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { claimEvidence } from "../src/bot/analysis/claim-credibility";
+import { BotRuntime } from "../src/bot/BotRuntime";
 import { BOT_WEIGHTS_V4 } from "../src/bot/config/weights";
-import type { BotMemory } from "../src/bot/types";
+import type { BotDecisionContext, BotMemory, BotPersonality } from "../src/bot/types";
 
 function claim(actorId: string, role: string, round: number, sourceId: string): BotMemory {
   return {
@@ -21,7 +22,6 @@ function claim(actorId: string, role: string, round: number, sourceId: string): 
 const BASE = {
   round: 2,
   lastNightDeaths: [],
-  voteCounts: {},
   publicVoteHistory: [],
   seenEventIds: ["m1", "m2", "night-death:2:p1", "night-death:2:p4"],
 };
@@ -135,5 +135,131 @@ describe("claimEvidence", () => {
     expect(found.every((item) => item.kind !== "COUNTER_CLAIM")).toBe(true);
     expect(found.every((item) => item.id.endsWith(":claimant") === false)).toBe(true);
     expect(found.every((item) => item.actorId === "p9")).toBe(true);
+  });
+});
+
+const BALANCED: BotPersonality = {
+  aggressiveness: 0.5,
+  talkativeness: 0.9,
+  riskTolerance: 0.5,
+  deceptionSkill: 0.5,
+  analyticalSkill: 1,
+  loyalty: 0.5,
+  stubbornness: 0.5,
+};
+
+/** Ngày Sự Thật: `p1` khai SEER, không đổi qua các lần `observe()`. */
+function dayOfTruthContext(round: number): BotDecisionContext {
+  return {
+    knowledge: {
+      dayOfTruthClaims: { p1: "SEER" },
+      activeEventId: null,
+      botId: "me",
+      round,
+      phase: "DAY_DISCUSSION",
+      phaseStartedAt: 0,
+      phaseEndsAt: 30_000,
+      selfRole: "VILLAGER",
+      players: [
+        { id: "me", name: "ME", alive: true },
+        { id: "p1", name: "P1", alive: true },
+        { id: "p9", name: "P9", alive: true },
+      ],
+      knownRoles: { me: "VILLAGER" },
+      seerResult: null,
+      night: null,
+      trialAccusedId: null,
+      canFinalVote: false,
+      hunterShot: null,
+      publicVoteHistory: [],
+      currentVoteCounts: { players: {}, noElimination: 0 },
+      hasVoted: false,
+      myVote: null,
+      legalVoteChoices: [],
+      lastNightDeaths: [],
+    },
+    visibleChat: [],
+  };
+}
+
+describe("BotRuntime.observe — claimEvidence không bị áp lại", () => {
+  it("năm lượt observe cùng một lời khai đứng yên cho ra cùng một delta như một lượt", () => {
+    const runtime = new BotRuntime({
+      playerId: "me",
+      rng: () => 0.5,
+      playerIds: ["me", "p1", "p9"],
+      personality: BALANCED,
+      weights: BOT_WEIGHTS_V4,
+    });
+
+    // Lượt quan sát đầu tiên: lời khai của p1 vào state.claims, sinh bằng
+    // chứng S1 (nửa tin cậy, vì SEER là vai quyền lực).
+    runtime.observe(dayOfTruthContext(1));
+    const afterFirst = {
+      suspicion: runtime.state.suspicion.p1?.score ?? 0,
+      trust: runtime.state.trust.p1?.score ?? 0,
+    };
+
+    // `claimEvidence` không tự nhớ gì; nó tính lại nguyên `state.claims` mỗi
+    // lần. Nếu BotRuntime áp thẳng kết quả mỗi lần observe() được gọi lại
+    // trong CÙNG một vòng - đúng như game engine làm ở mỗi checkpoint (vào
+    // ngày, mỗi lượt thảo luận, mỗi lượt bỏ phiếu) - bốn lượt gọi thêm dưới
+    // đây sẽ cộng dồn cùng một mảnh bằng chứng bốn lần nữa.
+    for (let i = 0; i < 4; i += 1) runtime.observe(dayOfTruthContext(1));
+
+    const afterFifth = {
+      suspicion: runtime.state.suspicion.p1?.score ?? 0,
+      trust: runtime.state.trust.p1?.score ?? 0,
+    };
+
+    expect(afterFifth).toEqual(afterFirst);
+    // Bằng chứng phải thật sự có tác dụng ở lượt đầu, nếu không phép so sánh
+    // ở trên xanh một cách vô nghĩa (0 === 0).
+    expect(afterFirst.trust).not.toBe(0);
+  });
+
+  it("chỉ mảnh gỡ tội (weight < 0) mới chạm trust — va chạm (weight > 0) chỉ đẩy suspicion", () => {
+    // p1 khai một mình: chỉ S1 nửa tin cậy nổ (weight < 0 - gỡ tội cho chính
+    // p1, nên chạm cả suspicion lẫn trust của p1).
+    const solo = new BotRuntime({
+      playerId: "me",
+      rng: () => 0.5,
+      playerIds: ["me", "p1", "p9"],
+      personality: BALANCED,
+      weights: BOT_WEIGHTS_V4,
+    });
+    solo.observe(dayOfTruthContext(1));
+
+    // p1 VÀ p2 cùng khai SEER: thêm S2 va chạm (weight > 0 cho cả hai, buộc
+    // tội - không gỡ tội), chồng lên đúng S1 nửa tin cậy ở trên.
+    const collided = new BotRuntime({
+      playerId: "me",
+      rng: () => 0.5,
+      playerIds: ["me", "p1", "p2", "p9"],
+      personality: BALANCED,
+      weights: BOT_WEIGHTS_V4,
+    });
+    collided.observe({
+      ...dayOfTruthContext(1),
+      knowledge: {
+        ...dayOfTruthContext(1).knowledge,
+        dayOfTruthClaims: { p1: "SEER", p2: "SEER" },
+        players: [
+          { id: "me", name: "ME", alive: true },
+          { id: "p1", name: "P1", alive: true },
+          { id: "p2", name: "P2", alive: true },
+          { id: "p9", name: "P9", alive: true },
+        ],
+      },
+    });
+
+    // Mảnh va chạm (weight > 0) phải đẩy suspicion của p1 lên cao hơn so với
+    // khi không có va chạm nào - nó vẫn qua applyEvidence bình thường.
+    expect(collided.state.suspicion.p1?.score ?? 0).toBeGreaterThan(
+      solo.state.suspicion.p1?.score ?? 0,
+    );
+    // Nhưng nó KHÔNG được chạm trust: trust của p1 trong hai ván phải bằng
+    // nhau, vì cả hai chỉ có đúng S1 nửa tin cậy đóng góp vào trust.
+    expect(collided.state.trust.p1?.score ?? 0).toBe(solo.state.trust.p1?.score ?? 0);
   });
 });

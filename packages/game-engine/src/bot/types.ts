@@ -479,6 +479,17 @@ export interface BotBrainState {
   /** Message đã phản hồi rồi, để không đáp hai lần cùng một câu. Có trần. */
   repliedMessageIds: string[];
   seenEventIds: string[];
+  /**
+   * ID bằng chứng lời khai đã áp vào belief rồi, để không áp lại. Có trần,
+   * cùng hình dạng với `repliedMessageIds`.
+   *
+   * `observe()` chạy nhiều lần một vòng (vào đêm, vào ngày, mỗi lượt bỏ phiếu,
+   * mỗi lượt thảo luận), và `claimEvidence` tính lại TOÀN BỘ `state.claims`
+   * mỗi lần được gọi - nó là hàm thuần, không tự nhớ đã phát cái gì. Không có
+   * trường này, cùng một mảnh bằng chứng bị cộng dồn vào belief mỗi lần
+   * `observe()` chạy, bão hoà thang suspicion/trust chỉ trong một vòng.
+   */
+  appliedClaimEvidenceIds: string[];
 }
 
 /**

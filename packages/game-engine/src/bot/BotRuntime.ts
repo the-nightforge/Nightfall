@@ -212,19 +212,39 @@ export class BotRuntime {
     // Phải chạy SAU `ingestDeaths`, `ingestRecaps` và `ingestChat`: cả ba đẩy
     // `sourceId` vào `seenEventIds`, và `claimEvidence` neo vào đúng những id
     // đó. Đảo thứ tự thì mọi mảnh bằng chứng bị bỏ lặng lẽ.
+    //
+    // `claimEvidence` là hàm THUẦN: nó tính lại toàn bộ `state.claims` mỗi lần
+    // được gọi, không tự nhớ đã phát cái gì. Nhưng `observe()` chạy nhiều lần
+    // một vòng - vào đêm, vào ngày, mỗi lượt bỏ phiếu, mỗi lượt thảo luận - nên
+    // nếu áp thẳng kết quả mỗi lần, cùng một mảnh bằng chứng bị cộng dồn vào
+    // belief nhiều lần trong một vòng và bão hoà thang suspicion/trust gần như
+    // ngay lập tức. Mỗi mảnh mang một `id` tất định
+    // (`${sourceId}:${kind}:${idSuffix}`), nên chặn trùng ở ĐÂY - nơi áp dụng -
+    // chứ không trong `claimEvidence`, để hàm đó vẫn thuần và gọi lại được bao
+    // nhiêu lần cũng an toàn.
     for (const item of claimEvidence(
       {
         claims: this.state.claims,
         round: knowledge.round,
         lastNightDeaths: knowledge.lastNightDeaths,
-        voteCounts: knowledge.currentVoteCounts.players,
         publicVoteHistory: knowledge.publicVoteHistory,
         seenEventIds: this.state.seenEventIds,
       },
       this.weights,
     )) {
+      if (this.state.appliedClaimEvidenceIds.includes(item.id)) continue;
+      this.state.appliedClaimEvidenceIds.push(item.id);
+      if (this.state.appliedClaimEvidenceIds.length > this.weights.limits.seenEvents) {
+        this.state.appliedClaimEvidenceIds.shift();
+      }
+
       applyEvidence(this.state, item, this.weights);
-      applyTrustEvidence(this.state, item, this.weights);
+      // Chỉ mảnh GỠ TỘI (weight < 0) mới chạm trust, đúng tiền lệ đã có ở
+      // `ingestChat`: `ACCUSE` (weight > 0) chỉ qua `applyEvidence`, còn
+      // `DEFEND` (weight < 0) qua cả hai. Buộc tội không tự nó đốt trust của
+      // người bị buộc tội - trust chỉ giảm vì THIẾU bằng chứng gỡ tội, không
+      // phải vì ai đó lên tiếng tố cáo.
+      if (item.weight < 0) applyTrustEvidence(this.state, item, this.weights);
     }
 
     // Decay TRƯỚC, thông tin riêng SAU.

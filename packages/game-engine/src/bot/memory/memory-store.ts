@@ -60,6 +60,7 @@ export function createBotBrainState(
     speechSequence: 0,
     repliedMessageIds: [],
     seenEventIds: [],
+    appliedClaimEvidenceIds: [],
   };
 }
 
