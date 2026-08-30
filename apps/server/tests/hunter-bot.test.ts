@@ -10,7 +10,6 @@ import type { Room } from "../src/rooms/store";
  */
 const brainControl = vi.hoisted(() => ({
   renderDaySpeech: vi.fn(),
-  decideDefense: vi.fn(),
 }));
 
 vi.mock("../src/rooms/store", () => ({
@@ -39,7 +38,6 @@ vi.mock("../src/bots", async () => {
     botBrain: () => ({
       name: "speech-only",
       renderDaySpeech: brainControl.renderDaySpeech,
-      decideDefense: brainControl.decideDefense,
     }),
   };
 });
@@ -108,7 +106,6 @@ describe("Hunter bot scheduling", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     brainControl.renderDaySpeech.mockReset();
-    brainControl.decideDefense.mockReset();
   });
 
   afterEach(() => {

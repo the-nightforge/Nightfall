@@ -7,39 +7,12 @@ import {
   type RoomSnapshot,
 } from "@masoi/shared";
 import { ROLE_ICON_PATHS } from "@/lib/role-art";
-import { BalanceMeter } from "./BalanceMeter";
-import { generateWarnings, PRESET_DECKS } from "@/lib/balance";
-
-/** Thứ tự hiển thị, không phải thứ tự hành động ban đêm. Dân Làng luôn đứng cuối. */
-const VILLAGE_ROLES: Role[] = [
-  "SEER",
-  "APPRENTICE_SEER",
-  "DETECTIVE",
-  "GUARD",
-  "GUARDIAN_ANGEL",
-  "PRIEST",
-  "WITCH",
-  "HUNTER",
-  "MAYOR",
-  "CURSED",
-];
-
-const WOLF_SPECIAL_ROLES: Role[] = ["WOLF_CUB"];
-
-/** Khoá cấu hình tương ứng với từng vai bật/tắt được. */
-const CONFIG_KEY: Record<string, keyof RoomConfig> = {
-  SEER: "seer",
-  APPRENTICE_SEER: "apprenticeSeer",
-  DETECTIVE: "detective",
-  GUARD: "guard",
-  GUARDIAN_ANGEL: "guardianAngel",
-  PRIEST: "priest",
-  WITCH: "witch",
-  HUNTER: "hunter",
-  MAYOR: "mayor",
-  CURSED: "cursed",
-  WOLF_CUB: "wolfCub",
-};
+import {
+  CONFIG_KEY,
+  VILLAGE_ROLES,
+  WOLF_SPECIAL_ROLES,
+  deckCounts,
+} from "@/lib/lobby-summary";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -49,27 +22,16 @@ interface Props {
 
 /**
  * Bộ bài của ván sắp tới.
+ *
+ * CHỈ có bộ bài. Thanh cân bằng, cảnh báo và công tắc Ranked/Chaos đã chuyển
+ * lên thẻ tóm tắt của phòng chờ: chúng là thứ phải nhìn thấy ngay, còn panel
+ * này giờ nằm trong một mục mở ra được và sẽ chôn mất chúng. Panel cũng không
+ * tự bọc `.card` nữa vì mục chứa nó đã là một thẻ.
  */
 export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
   const config = snapshot.config;
   const playerCount = snapshot.players.length;
-  const balance = snapshot.balanceWarning ?? generateWarnings(config, playerCount);
-  const presetForCount = PRESET_DECKS[playerCount];
-
-  const specials =
-    (config.seer ? 1 : 0) +
-    (config.apprenticeSeer ? 1 : 0) +
-    (config.detective ? 1 : 0) +
-    (config.guard ? 1 : 0) +
-    (config.guardianAngel ? 1 : 0) +
-    (config.priest ? 1 : 0) +
-    (config.witch ? 1 : 0) +
-    (config.hunter ? 1 : 0) +
-    (config.mayor ? 1 : 0) +
-    (config.cursed ? 1 : 0);
-  const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0);
-  // Dân Làng lấp phần còn lại, đúng như buildRoleDeck làm ở engine.
-  const villagers = Math.max(0, playerCount - wolfCount - specials);
+  const { villagers } = deckCounts(config, playerCount);
 
   const toggle = (role: Role) => {
     if (!isHost) return;
@@ -82,92 +44,11 @@ export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
     onUpdateConfig({ ...config, werewolves: n });
   };
 
-  const setMode = (mode: "ranked" | "chaos") => {
-    if (!isHost) return;
-    onUpdateConfig({ ...config, mode });
-  };
-
-  const currentMode = config.mode ?? "ranked";
-
   return (
-    <div className="card">
-      <BalanceMeter score={balance.score} />
-      {balance.warnings.length > 0 && (
-        <div
-          data-testid="balance-warning"
-          className={`mb-4 rounded-xl border px-3 py-2.5 ${
-            balance.blocking
-              ? "border-blood-500/40 bg-blood-600/15"
-              : "border-amber-500/30 bg-amber-500/10"
-          }`}
-        >
-          <p
-            className={`text-xs font-bold ${balance.blocking ? "text-blood-400" : "text-amber-300"}`}
-          >
-            {balance.blocking
-              ? "Cấu hình mất cân bằng — không thể bắt đầu ở Ranked"
-              : "Cảnh báo cân bằng"}
-          </p>
-          <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[11px] leading-snug text-mist/80">
-            {balance.warnings.map((w, i) => (
-              <li key={i}>{w}</li>
-            ))}
-          </ul>
-          {isHost && presetForCount && (
-            <button
-              type="button"
-              onClick={() => onUpdateConfig(presetForCount)}
-              className="mt-2 w-full rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/15"
-              data-testid="apply-preset"
-            >
-              Áp dụng preset chuẩn cho {playerCount} người
-            </button>
-          )}
-          {balance.blocking && (config.mode ?? "ranked") === "ranked" && (
-            <p className="mt-1.5 text-[11px] text-blood-300/80">
-              Chuyển sang Chaos hoặc sửa cấu hình để bắt đầu.
-            </p>
-          )}
-        </div>
-      )}
-      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
-        <div>
-          <h3 className="font-display text-xl font-bold text-white">Bộ bài của ván này</h3>
-          <p className="text-xs text-mist/60">
-            {isHost ? "Bấm để bật/tắt vai & chế độ chơi" : "Chủ phòng quyết định"}
-          </p>
-        </div>
-
-        {/* Chế độ chơi: Ranked / Chaos */}
-        <div className="flex items-center gap-1 rounded-xl border border-night-600/60 bg-night-800/60 p-1">
-          <button
-            type="button"
-            disabled={!isHost}
-            onClick={() => setMode("ranked")}
-            className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
-              currentMode === "ranked"
-                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                : "text-mist/60 hover:text-white"
-            } ${!isHost ? "cursor-default" : "cursor-pointer"}`}
-            title="Sự kiện chỉ kích hoạt khi một phe bị lấn lướt mạnh"
-          >
-            🛡️ Ranked
-          </button>
-          <button
-            type="button"
-            disabled={!isHost}
-            onClick={() => setMode("chaos")}
-            className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
-              currentMode === "chaos"
-                ? "bg-purple-500/20 text-purple-300 border border-purple-500/40"
-                : "text-mist/60 hover:text-white"
-            } ${!isHost ? "cursor-default" : "cursor-pointer"}`}
-            title="Sự kiện bất ngờ ngẫu nhiên kích hoạt mỗi vòng"
-          >
-            🌀 Chaos
-          </button>
-        </div>
-      </div>
+    <div>
+      <p className="mb-3 text-xs text-mist/70">
+        {isHost ? "Bấm để bật/tắt từng vai." : "Chủ phòng quyết định bộ bài này."}
+      </p>
 
       <Section label="Phe Dân Làng" tone="village">
         <RoleCard
@@ -209,7 +90,7 @@ export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
         ))}
         {isHost && (
           <div className="flex flex-col justify-center gap-1 rounded-xl border border-night-600/60 bg-night-800/40 px-3 py-2">
-            <span className="text-[10px] uppercase tracking-wider text-mist/50">Số Ma Sói</span>
+            <span className="text-[11px] uppercase tracking-wider text-mist/65">Số Ma Sói</span>
             <div className="flex gap-1">
               {[1, 2, 3, 4].map((n) => (
                 <button
@@ -310,7 +191,7 @@ function RoleCard({
 
       <span
         className={`mt-1.5 text-xs font-bold uppercase tracking-wide ${
-          enabled ? (wolf ? "text-blood-400" : "text-emerald-300") : "text-mist/50"
+          enabled ? (wolf ? "text-blood-400" : "text-emerald-300") : "text-mist/65"
         }`}
       >
         {meta.name}
@@ -320,9 +201,9 @@ function RoleCard({
         {meta.description}
       </span>
 
-      <span className="mt-1.5 flex items-center gap-1 text-[10px] font-bold">
+      <span className="mt-1.5 flex items-center gap-1 text-[11px] font-bold">
         <span className={`h-1.5 w-1.5 rounded-full ${enabled ? (wolf ? "bg-blood-500" : "bg-emerald-500") : "bg-mist/30"}`} aria-hidden="true" />
-        <span className={enabled ? "text-white" : "text-mist/40"}>
+        <span className={enabled ? "text-white" : "text-mist/60"}>
           {count > 0 ? `×${count}` : role === "VILLAGER" ? "lấp chỗ" : "—"}
         </span>
       </span>

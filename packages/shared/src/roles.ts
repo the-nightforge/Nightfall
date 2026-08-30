@@ -124,6 +124,29 @@ export function roleTeam(role: Role): Team {
   return ROLE_META[role].team;
 }
 
+/**
+ * "Vai quyền lực": vai phe làng có một sức nặng riêng ngoài lá phiếu.
+ *
+ * Định nghĩa suy ra từ `ROLE_META` chứ không phải một danh sách chép tay, nên
+ * thêm một vai làng mới vào `ROLES` là nó tự vào đây - không có cái danh sách
+ * thứ hai nào để quên cập nhật.
+ *
+ * Hai loại trừ, và cả hai đều có lý do:
+ * - `VILLAGER`: không có gì để lộ, nên khai ra cũng không đặt cược gì.
+ * - `CURSED`: ban đêm không làm gì và bầy Sói KHÔNG có lý do giết nó (cắn trúng
+ *   thì nó thành Sói). Nó nằm phe làng lúc chia bài nhưng không mang rủi ro của
+ *   một vai chức năng.
+ *
+ * Đọc tập này là "những vai mà bầy Sói có lý do phải cắn ngay khi lộ mặt" -
+ * đúng giả định mà tín hiệu kiểm chứng bằng đêm của mô hình uy tín dựa vào, và
+ * cũng đúng câu hỏi "khai ra thì có đang đặt cược gì không" của lõi quyết định.
+ * Một định nghĩa, hai nơi dùng: hai tập trùng nhau hôm nay là hai tập lệch nhau
+ * vào ngày mai.
+ */
+export function isPowerRole(role: Role): boolean {
+  return ROLE_META[role].team === "village" && role !== "VILLAGER" && role !== "CURSED";
+}
+
 export const ROLE_ORDER_FOR_NIGHT = (Object.values(ROLE_META) as RoleMeta[])
   .filter((r) => r.nightOrder !== undefined)
   .sort((a, b) => a.nightOrder! - b.nightOrder!)

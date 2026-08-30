@@ -29,7 +29,7 @@ export function BalanceMeter({ score }: Props) {
   return (
     <div className="mb-4" data-testid="balance-meter">
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-mist/50">
+        <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-mist/65">
           Cân bằng
         </span>
         <span className={`text-xs font-bold ${labelClass}`} data-testid="balance-label">
@@ -63,7 +63,7 @@ export function BalanceMeter({ score }: Props) {
           <span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-white" aria-hidden="true" />
         </div>
       </div>
-      <div className="mt-1 flex justify-between text-[10px] text-mist/60">
+      <div className="mt-1 flex justify-between text-[11px] text-mist/60">
         <span>0 Sói mạnh</span>
         <span>50</span>
         <span>Dân mạnh 100</span>

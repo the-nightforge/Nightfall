@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AnimatePresence, m } from "motion/react";
 import type { RoomSnapshot } from "@masoi/shared";
@@ -24,6 +24,8 @@ import { TrialPanel } from "@/components/TrialPanel";
 import { Lobby } from "@/components/Lobby";
 import { SoundControl } from "@/components/SoundControl";
 import { EventBanner } from "@/components/EventBanner";
+import { MobileChatDock } from "@/components/MobileChatDock";
+import { CinematicOverlay } from "@/components/CinematicOverlay";
 
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
@@ -32,6 +34,15 @@ export default function RoomPage() {
   const room = useRoomSocket(code);
   const snapshot = room.snapshot;
   useGameAudio(snapshot);
+  /*
+   * Bản nháp chat sống ở đây chứ không trong ChatBox.
+   *
+   * Trên điện thoại khung chat nằm trong tấm trượt đóng mở được, và đóng nó lại
+   * là tháo hẳn component. Nháp nằm trong ChatBox thì mỗi lần liếc ra xem lưới
+   * bỏ phiếu là mất câu đang gõ dở. Ở đây nó cũng dùng chung cho cả khung chat
+   * cột phải trên desktop, nên chuyển kích cỡ màn hình giữa chừng không mất chữ.
+   */
+  const [chatDraft, setChatDraft] = useState("");
 
   // Chưa đăng nhập -> về trang chủ kèm mã phòng
   useEffect(() => {
@@ -134,13 +145,23 @@ export default function RoomPage() {
         mood={snapshot ? moodFor(snapshot.phase) : "dusk"}
         event={snapshot?.config.mode === "ranked" ? null : (snapshot?.activeEvent ?? null)}
       />
-      <main className="mx-auto w-full max-w-lg px-3 py-4 lg:max-w-[1600px]">
+      {/*
+        * Đặt ngay đầu cây chứ không phải cuối: lớp phủ che cả màn hình, nên nút
+        * "Bỏ qua" phải nằm gần đầu thứ tự Tab. Nó cũng chỉ ĐỌC snapshot - không
+        * emit, không giữ, không hoãn - nên nội dung pha bên dưới đã là nội dung
+        * MỚI ngay từ khung hình đầu tiên của cảnh.
+        */}
+      <CinematicOverlay snapshot={snapshot} />
+
+      {/* pb-28 chừa chỗ cho nút chat nổi ở đáy - thiếu nó thì nút cuối trang
+        * (Bỏ phiếu, Rời phòng) nằm ngay dưới nút chat và bấm nhầm. */}
+      <main className="mx-auto w-full max-w-lg px-3 pb-28 pt-4 lg:max-w-[1600px] lg:pb-4">
         <header className="flex items-center justify-between">
           <button className="text-sm text-mist/60 hover:text-white" onClick={leaveRoom}>
             ← Rời phòng
           </button>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-mist/50">Mã phòng:</span>
+            <span className="text-xs text-mist/65">Mã phòng:</span>
             <button
               className="rounded-lg border border-night-600 bg-night-800 px-3 py-1 font-mono text-sm font-bold tracking-widest text-white"
               onClick={() => navigator.clipboard?.writeText(code)}
@@ -196,6 +217,13 @@ export default function RoomPage() {
             {snapshot && <EventBanner event={snapshot.activeEvent} />}
             {snapshot && <PhaseBanner snapshot={snapshot} />}
 
+            {/* Voice là thao tác trực tiếp, không phải thông tin phụ: trên điện
+              * thoại nó phải ở ngay đầu cột nội dung chứ không theo cột phải đi
+              * mất. Trên desktop bản này ẩn đi, cái trong cột phải mới hiện. */}
+            <div className="lg:hidden">
+              <VoiceControl snapshot={snapshot} />
+            </div>
+
             {/*
               * mode="wait" để hai pha không chồng lên nhau giữa chừng làm nhảy layout.
               * Đổi pha đã có nhịp riêng của nó rồi; 120ms chỉ đủ đánh dấu là "vừa
@@ -218,7 +246,13 @@ export default function RoomPage() {
             )}
           </div>
 
-          <div className="order-3 flex h-[38dvh] min-h-0 flex-col gap-3 lg:order-none lg:sticky lg:top-4 lg:flex lg:h-[calc(100dvh-2rem)] lg:flex-col">
+          {/*
+            * Cột phải chỉ tồn tại từ lg. Dưới đó nó từng bị đẩy xuống cuối trang,
+            * sau cả nội dung pha lẫn danh sách người chơi - trong màn bỏ phiếu
+            * khung chat rơi xuống quanh mốc 1800px. Trên điện thoại chat đi qua
+            * MobileChatDock ở cuối file này thay vì nằm chờ cuối trang.
+            */}
+          <div className="hidden lg:order-none lg:sticky lg:top-4 lg:flex lg:h-[calc(100dvh-2rem)] lg:min-h-0 lg:flex-col lg:gap-3">
             <RightMetaPanel snapshot={snapshot} />
             <VoiceControl snapshot={snapshot} />
             <div className="min-h-0 flex-1 lg:max-h-[520px] lg:min-h-[320px]">
@@ -226,11 +260,23 @@ export default function RoomPage() {
                 messages={room.messages}
                 onSend={(text) => room.emit("chat:send", { text })}
                 placeholder={chatPlaceholder}
+                draft={chatDraft}
+                onDraftChange={setChatDraft}
               />
             </div>
           </div>
         </div>
       </main>
+
+      <MobileChatDock
+        messages={room.messages}
+        onSend={(text) => room.emit("chat:send", { text })}
+        placeholder={chatPlaceholder}
+        draft={chatDraft}
+        onDraftChange={setChatDraft}
+        selfId={snapshot?.you?.id ?? null}
+        phase={snapshot?.phase ?? null}
+      />
     </VoiceProvider>
   );
 }

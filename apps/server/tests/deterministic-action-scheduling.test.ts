@@ -13,7 +13,6 @@ import { scheduleNightBots } from "../src/game/machine";
  */
 const brainControl = vi.hoisted(() => ({
   renderDaySpeech: vi.fn(),
-  decideDefense: vi.fn(),
 }));
 
 vi.mock("../src/rooms/store", () => ({
@@ -36,7 +35,6 @@ vi.mock("../src/bots", async () => {
     botBrain: () => ({
       name: "speech-only",
       renderDaySpeech: brainControl.renderDaySpeech,
-      decideDefense: brainControl.decideDefense,
     }),
   };
 });
@@ -103,7 +101,6 @@ describe("scheduleNightBots · deterministic", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     brainControl.renderDaySpeech.mockReset();
-    brainControl.decideDefense.mockReset();
     // Session sống ở một map cấp module theo mã phòng. Mọi fixture ở đây dùng
     // chung mã "NIGHT1", nên không dọn thì luồng RNG của test trước chảy tiếp
     // sang test sau và "cùng seed cho cùng kết quả" không còn kiểm được gì.
@@ -121,7 +118,6 @@ describe("scheduleNightBots · deterministic", () => {
     await vi.advanceTimersByTimeAsync(20_000);
 
     expect(brainControl.renderDaySpeech).not.toHaveBeenCalled();
-    expect(brainControl.decideDefense).not.toHaveBeenCalled();
   });
 
   it("Sói bỏ phiếu cắn một người ngoài phe Sói", async () => {

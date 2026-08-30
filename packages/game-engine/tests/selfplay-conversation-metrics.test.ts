@@ -52,6 +52,7 @@ function speech(
     textFingerprint: speechTextFingerprint(text),
     semanticFingerprint: `sem-${text}`,
     evidenceSourceIds: [],
+    claimedRole: null,
     ...over,
   };
 }

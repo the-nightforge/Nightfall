@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Be_Vietnam_Pro, Playfair_Display } from "next/font/google";
 import { MotionProvider } from "@/components/MotionProvider";
 import "./globals.css";
+// Hệ chuyển cảnh có bảng CSS riêng - xem đầu file đó về lý do tách.
+import "./cinematics.css";
 
 /**
  * Cả hai font đều khai báo subset "vietnamese".

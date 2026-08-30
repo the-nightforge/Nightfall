@@ -1,3 +1,4 @@
+import { ROLE_META } from "@masoi/shared";
 import {
   BOT_SPEECH_TONES,
   type BotSpeechIntention,
@@ -159,6 +160,102 @@ export const SPEECH_TEMPLATES: Record<BotSpeechKind, SpeechTemplatePool> = {
       "Chưa đủ căn cứ — có ai đọc ra gì chưa?",
       "Tôi mù rồi, mọi người thấy sao?",
       "Chưa chốt được, có ai chắc hơn không.",
+    ],
+  },
+
+  /**
+   * Hình dạng của những mẫu này bị PARSER ép, không phải do thẩm mỹ.
+   *
+   * `parseClause` chỉ nhận vai ở ĐẦU mệnh đề, ngay sau đúng chuỗi `"tôi là "`,
+   * và nó GIẾT cả mệnh đề nếu thấy một từ phủ định. Nên câu khai phải là một
+   * mệnh đề riêng, mở đầu bằng đúng ba chữ đó, và không được chứa "không",
+   * "chưa", "chẳng", "chả" trong cùng mệnh đề. Lời nhấn mạnh phải nằm ở mệnh
+   * đề KHÁC, sau một dấu câu.
+   *
+   * `{role}` do `fill()` thay bằng `ROLE_META[claimedRole].name` — cùng bảng
+   * chữ mà giao diện đang hiển thị, nên không có bảng thứ hai để trôi lệch.
+   */
+  CLAIM_ROLE: {
+    NEUTRAL: [
+      "Tôi là {role}.",
+      "Nói thật, tôi là {role}.",
+      "Thôi được rồi. Tôi là {role}.",
+      "Tôi là {role}, giờ nói ra đây.",
+    ],
+    FIRM: [
+      "Tôi là {role}.",
+      "Tôi là {role}, nghe cho rõ.",
+      "Khỏi đoán nữa. Tôi là {role}.",
+      "Tôi là {role}. Tin hay tuỳ mọi người.",
+    ],
+    TENSE: [
+      "Tôi là {role}, đủ rồi đấy.",
+      "Tôi là {role}. Ép tôi lộ ra thì đây.",
+      "Được, tôi là {role}.",
+      "Tôi là {role}, hài lòng chưa.",
+    ],
+    SOFT: [
+      "Mình xin nói thật, tôi là {role}.",
+      "Tôi là {role}, mình giấu nãy giờ.",
+      "Thật ra, tôi là {role}.",
+      "Tôi là {role}. Mong mọi người nghe mình.",
+    ],
+    PLAYFUL: [
+      "Lộ bài luôn: tôi là {role}.",
+      "Tôi là {role} đây, bất ngờ chưa.",
+      "Ừ thì, tôi là {role}.",
+      "Tôi là {role}, khai xong nhẹ cả người.",
+    ],
+    CURIOUS: [
+      "Tôi là {role}. Ai tin tôi nào?",
+      "Tôi là {role}, mọi người thấy sao?",
+      "Tôi là {role}. Có ai muốn hỏi gì không.",
+      "Tôi là {role} — giờ tính thế nào?",
+    ],
+  },
+
+  /**
+   * `parseCounterClaim` so trên CẢ tin nhắn và đòi hai mẩu cùng lúc:
+   * `" không thể là "` rồi `"tôi mới là "`. Nó cũng là mẫu DUY NHẤT được phép
+   * chứa từ phủ định, vì phủ định chính là nội dung của nó. Đừng đảo thứ tự
+   * hai vế và đừng bỏ dấu phẩy.
+   */
+  COUNTER_CLAIM: {
+    NEUTRAL: [
+      "{target} không thể là {role}, tôi mới là {role}.",
+      "Sai rồi, {target} không thể là {role}, tôi mới là {role}.",
+      "{target} không thể là {role} được, tôi mới là {role}.",
+      "Nghe này: {target} không thể là {role}, tôi mới là {role}.",
+    ],
+    FIRM: [
+      "{target} không thể là {role}, tôi mới là {role}.",
+      "{target} không thể là {role} đâu, tôi mới là {role}.",
+      "Dừng lại. {target} không thể là {role}, tôi mới là {role}.",
+      "{target} không thể là {role}, tôi mới là {role}, rõ chưa.",
+    ],
+    TENSE: [
+      "{target} không thể là {role}, tôi mới là {role}.",
+      "Láo. {target} không thể là {role}, tôi mới là {role}.",
+      "{target} không thể là {role} nhé, tôi mới là {role}.",
+      "Nó bịa đấy, {target} không thể là {role}, tôi mới là {role}.",
+    ],
+    SOFT: [
+      "Mình tiếc, {target} không thể là {role}, tôi mới là {role}.",
+      "{target} không thể là {role} đâu ạ, tôi mới là {role}.",
+      "Xin lỗi nhé, {target} không thể là {role}, tôi mới là {role}.",
+      "Mình phải nói: {target} không thể là {role}, tôi mới là {role}.",
+    ],
+    PLAYFUL: [
+      "Ơ hay, {target} không thể là {role}, tôi mới là {role}.",
+      "{target} không thể là {role} nha, tôi mới là {role}.",
+      "Cướp vai à? {target} không thể là {role}, tôi mới là {role}.",
+      "Vui nhỉ. {target} không thể là {role}, tôi mới là {role}.",
+    ],
+    CURIOUS: [
+      "{target} không thể là {role}, tôi mới là {role}. Tin ai đây?",
+      "Lạ nhỉ, {target} không thể là {role}, tôi mới là {role}.",
+      "{target} không thể là {role}, tôi mới là {role} — sao đây?",
+      "{target} không thể là {role}, tôi mới là {role}. Mọi người xử đi.",
     ],
   },
 
@@ -537,7 +634,10 @@ function fill(template: string, request: SpeechTemplateRequest): string {
   return template
     .replace(/\{target\}/g, request.targetName ?? "người đó")
     .replace(/\{author\}/g, request.replyToName ?? request.targetName ?? "bạn")
-    .replace(/\{evidence\}/g, first?.summary ?? "tôi thấy hơi lạ");
+    .replace(/\{evidence\}/g, first?.summary ?? "tôi thấy hơi lạ")
+    .replaceAll("{role}", request.intention.claimedRole
+      ? ROLE_META[request.intention.claimedRole].name
+      : "dân làng");
 }
 
 /**

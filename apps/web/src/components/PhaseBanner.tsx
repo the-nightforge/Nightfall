@@ -52,13 +52,18 @@ export function PhaseBanner({ snapshot }: { snapshot: RoomSnapshot }) {
             </h2>
           </div>
           {snapshot.round > 0 && (
-            <p className="mt-0.5 pl-3.5 text-xs uppercase tracking-[0.2em] text-mist/50">
+            <p className="mt-0.5 pl-3.5 text-xs uppercase tracking-[0.2em] text-mist/65">
               {unit} thứ {snapshot.round}
             </p>
           )}
         </m.div>
       </AnimatePresence>
-      <Timer endsAt={snapshot.phaseEndsAt} />
+      {/*
+        * Không hạn giờ thì KHÔNG dựng đồng hồ. Bản cũ luôn vẽ vòng đếm rồi in
+        * "--:--" vào giữa - trong phòng chờ nó trông y hệt một đồng hồ đã hỏng,
+        * và người chơi đi hỏi bao giờ nó chạy.
+        */}
+      {snapshot.phaseEndsAt !== null && <Timer endsAt={snapshot.phaseEndsAt} />}
     </div>
   );
 }

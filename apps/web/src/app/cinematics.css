@@ -1,0 +1,580 @@
+/*
+ * Chuyển cảnh - bản dựng bằng CSS.
+ *
+ * Tách khỏi globals.css vì nó là một hệ riêng và dài gần bằng cả phần còn lại;
+ * layout.tsx nạp hai file này cạnh nhau. KHÔNG có class Tailwind nào ở đây,
+ * nên thứ tự nạp so với @tailwind utilities không đổi được gì.
+ *
+ * Đây KHÔNG phải ảnh chờ tạm: chừng nào /public/cinematics chưa có clip thì
+ * đây chính là chuyển cảnh người chơi thấy, nên nó phải tự đứng được. Clip khi
+ * có sẽ mờ chồng lên trên và dùng chung đúng khung thời gian này.
+ *
+ * Mọi animation đều chạy MỘT lần và `forwards`: overlay tự tháo sau đúng thời
+ * lượng của cảnh, nên khung hình cuối phải giữ nguyên chứ không nhảy về đầu khi
+ * đồng hồ lệch vài chục ms.
+ */
+
+.cine-root {
+  overflow: hidden;
+  background: #04060c;
+  animation: cine-in 220ms ease-out;
+}
+
+/* Chỉ có nhịp vào, không có nhịp ra: cảnh nào cũng đã kết ở một khung hình
+ * tối hoặc sáng hẳn, thêm 200ms mờ dần nữa là kéo dài đúng cái thứ đang cố giữ
+ * cho thật ngắn. */
+@keyframes cine-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.cine-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.cine-scene > * {
+  position: absolute;
+}
+
+/* Tên cảnh vào trễ hơn phần hình một nhịp, để mắt bắt cảnh trước rồi mới đọc. */
+.cine-caption {
+  opacity: 0;
+  letter-spacing: 0.02em;
+  animation: cine-caption 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes cine-caption {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+    filter: blur(6px);
+  }
+  38% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+/* --- Nền từng cảnh ------------------------------------------------------- */
+
+.cine-nightfall {
+  background:
+    radial-gradient(120% 80% at 78% 8%, rgba(120, 150, 220, 0.22), transparent 62%),
+    linear-gradient(180deg, #0a1226 0%, #050914 55%, #02030a 100%);
+  animation: cine-darken 1200ms ease-in forwards;
+}
+
+.cine-dawn {
+  background:
+    radial-gradient(120% 70% at 50% 108%, rgba(255, 168, 92, 0.45), transparent 66%),
+    linear-gradient(180deg, #0a1020 0%, #1b1220 60%, #2a1414 100%);
+  animation: cine-brighten 1200ms ease-out forwards;
+}
+
+.cine-trial {
+  background: linear-gradient(180deg, #0b0c14 0%, #14060b 100%);
+}
+
+.cine-verdict {
+  background: linear-gradient(180deg, #14060b 0%, #060207 100%);
+}
+
+.cine-village-win {
+  background:
+    radial-gradient(120% 80% at 50% 30%, rgba(52, 200, 150, 0.28), transparent 68%),
+    linear-gradient(180deg, #04160f 0%, #030b12 100%);
+}
+
+.cine-wolves-win {
+  background:
+    radial-gradient(120% 80% at 50% 34%, rgba(220, 38, 64, 0.3), transparent 66%),
+    linear-gradient(180deg, #16030a 0%, #050206 100%);
+}
+
+.cine-wolf-threat {
+  background: linear-gradient(180deg, #180410 0%, #06020a 100%);
+}
+
+.cine-village-boon {
+  background: linear-gradient(180deg, #0d1424 0%, #060b16 100%);
+}
+
+.cine-rule-change {
+  background: linear-gradient(180deg, #16120a 0%, #07070f 100%);
+}
+
+.cine-spirit {
+  background: linear-gradient(180deg, #150e26 0%, #05040d 100%);
+}
+
+@keyframes cine-darken {
+  from {
+    filter: brightness(1.35);
+  }
+  to {
+    filter: brightness(0.72);
+  }
+}
+
+@keyframes cine-brighten {
+  from {
+    filter: brightness(0.55);
+  }
+  to {
+    filter: brightness(1.12);
+  }
+}
+
+/* --- Mảnh hình dùng lại giữa các cảnh ------------------------------------- */
+
+/* Bóng làng bám mép dưới, cao 46% khung. Cao hơn nữa thì nó thành phong cảnh
+ * và nuốt mất dòng chữ ở giữa. */
+.cine-village {
+  inset: auto 0 0 0;
+  width: 100%;
+  height: 46%;
+  animation: cine-village-rise 1100ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes cine-village-rise {
+  from {
+    transform: translateY(16%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.cine-moon {
+  top: 8%;
+  right: 12%;
+  width: min(26vh, 180px);
+  height: min(26vh, 180px);
+  border-radius: 9999px;
+  background: radial-gradient(circle at 38% 34%, #f2f6ff 0%, #c9d8f5 46%, #8fa6cf 78%, #6c82ad 100%);
+  box-shadow: 0 0 90px 30px rgba(150, 180, 240, 0.28);
+  animation: cine-moon-rise 1200ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes cine-moon-rise {
+  from {
+    transform: translateY(40px) scale(0.86);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Dải mây trôi ngang qua mặt trăng - thứ duy nhất cho biết cảnh này đang động
+ * chứ không phải một tấm hình đứng yên. */
+.cine-cloud {
+  top: 12%;
+  left: -40%;
+  width: 180%;
+  height: 22%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(10, 14, 30, 0.85) 40%,
+    rgba(10, 14, 30, 0.85) 60%,
+    transparent
+  );
+  filter: blur(18px);
+  animation: cine-drift 1200ms linear forwards;
+}
+
+@keyframes cine-drift {
+  from {
+    transform: translateX(-12%);
+  }
+  to {
+    transform: translateX(18%);
+  }
+}
+
+.cine-sun {
+  bottom: -14%;
+  left: 50%;
+  width: min(60vh, 420px);
+  height: min(60vh, 420px);
+  margin-left: min(-30vh, -210px);
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    rgba(255, 214, 150, 0.95) 0%,
+    rgba(255, 150, 70, 0.6) 42%,
+    transparent 70%
+  );
+  animation: cine-sun-rise 1200ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes cine-sun-rise {
+  from {
+    transform: translateY(26%) scale(0.7);
+    opacity: 0.2;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Nan quạt ánh sáng: quay chậm, đủ để thấy là đang động nhưng không đủ nhanh
+ * để thành cối xay gió. */
+.cine-rays {
+  inset: -50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg 8deg,
+    rgba(255, 255, 255, 0.07) 8deg 12deg,
+    transparent 12deg 26deg
+  );
+  mix-blend-mode: screen;
+  animation:
+    cine-spin 2600ms linear forwards,
+    cine-fade-in 700ms ease-out forwards;
+}
+
+@keyframes cine-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(46deg);
+  }
+}
+
+@keyframes cine-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Đầu sói lớn dần từ trong bóng tối. Không máu me gì, chỉ là một khối đen đang
+ * tiến lại gần. */
+.cine-wolf {
+  bottom: 6%;
+  left: 50%;
+  width: min(34vh, 240px);
+  height: min(34vh, 240px);
+  margin-left: min(-17vh, -120px);
+  animation: cine-wolf-approach 1200ms cubic-bezier(0.3, 0.9, 0.3, 1) forwards;
+}
+
+.cine-wolf-big {
+  bottom: 2%;
+  width: min(52vh, 340px);
+  height: min(52vh, 340px);
+  margin-left: min(-26vh, -170px);
+}
+
+@keyframes cine-wolf-approach {
+  from {
+    transform: scale(0.55) translateY(18%);
+    opacity: 0;
+    filter: blur(10px);
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+/* Đèn sân khấu khép dần vào giữa: mở phiên toà là lúc cả làng quay sang nhìn
+ * đúng một người. */
+.cine-spot {
+  inset: 0;
+  background: radial-gradient(circle at 50% 44%, rgba(255, 240, 210, 0.3) 0%, transparent 46%);
+  animation: cine-spot-narrow 1000ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes cine-spot-narrow {
+  from {
+    opacity: 0;
+    transform: scale(2.1);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.cine-gavel {
+  top: 26%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: min(22vh, 150px);
+  line-height: 1;
+  color: rgba(255, 226, 170, 0.9);
+  text-shadow: 0 0 40px rgba(255, 190, 110, 0.5);
+  animation: cine-gavel-drop 1000ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes cine-gavel-drop {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-40px) rotate(-14deg);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) rotate(6deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) rotate(0deg);
+  }
+}
+
+/* Song sắt quét ngang đúng một lần. */
+.cine-bars {
+  inset: 0;
+  background: repeating-linear-gradient(
+    100deg,
+    transparent 0 68px,
+    rgba(255, 220, 180, 0.06) 68px 74px
+  );
+  animation: cine-bars-sweep 1000ms ease-out forwards;
+}
+
+@keyframes cine-bars-sweep {
+  from {
+    transform: translateX(-70px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Ống kính khép lại rồi hé ra. Phán quyết đã tuyên - không cần vẽ ai chết cả. */
+.cine-iris {
+  inset: -20%;
+  background: radial-gradient(circle at 50% 50%, transparent 0%, transparent 34%, #050208 66%);
+  animation: cine-iris-close 1100ms cubic-bezier(0.5, 0, 0.2, 1) forwards;
+}
+
+@keyframes cine-iris-close {
+  0% {
+    transform: scale(2.4);
+  }
+  62% {
+    transform: scale(0.72);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.cine-slam {
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  margin-top: -2px;
+  background: linear-gradient(90deg, transparent, #dc2640 22%, #ff8ea0 50%, #dc2640 78%, transparent);
+  box-shadow: 0 0 34px 8px rgba(220, 38, 64, 0.45);
+  animation: cine-slam-in 1100ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes cine-slam-in {
+  0% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  40% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0.25;
+  }
+}
+
+.cine-burst {
+  inset: 0;
+  background: radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.4) 0%, transparent 40%);
+  animation: cine-burst-out 1600ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes cine-burst-out {
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0.28;
+  }
+}
+
+/* Ba vệt chéo quét qua. Gợi vuốt sói bằng nhịp và hướng chứ không vẽ vết
+ * thương - đây vẫn là một ván bài trên bàn, không phải phim kinh dị. */
+.cine-claws {
+  inset: -20%;
+  background:
+    linear-gradient(112deg, transparent 46%, rgba(255, 90, 110, 0.5) 47.4%, transparent 48.6%),
+    linear-gradient(112deg, transparent 52%, rgba(255, 90, 110, 0.42) 53.4%, transparent 54.6%),
+    linear-gradient(112deg, transparent 58%, rgba(255, 90, 110, 0.34) 59.2%, transparent 60.4%);
+  animation: cine-claw-swipe 900ms cubic-bezier(0.3, 0, 0.2, 1) forwards;
+}
+
+@keyframes cine-claw-swipe {
+  0% {
+    transform: translateX(-30%);
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(16%);
+    opacity: 0;
+  }
+}
+
+.cine-pulse {
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, transparent 32%, rgba(190, 24, 60, 0.55) 100%);
+  animation: cine-pulse-beat 900ms ease-out forwards;
+}
+
+@keyframes cine-pulse-beat {
+  0% {
+    opacity: 0;
+    transform: scale(1.3);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.75;
+    transform: scale(1.04);
+  }
+}
+
+.cine-bloom {
+  inset: 0;
+  background: radial-gradient(circle at 50% 46%, rgba(255, 226, 160, 0.5) 0%, transparent 44%);
+  animation: cine-bloom-open 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes cine-bloom-open {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+}
+
+/* Dải luật lệ chạy ngang: đổi luật là một thông báo, nên nó đi thẳng và dứt
+ * khoát chứ không toả ra bốn phía. */
+.cine-band {
+  top: 38%;
+  left: -20%;
+  width: 140%;
+  height: 24%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(251, 191, 36, 0.3) 35%,
+    rgba(251, 191, 36, 0.3) 65%,
+    transparent
+  );
+  filter: blur(2px);
+  animation: cine-band-run 900ms cubic-bezier(0.3, 0, 0.2, 1) forwards;
+}
+
+@keyframes cine-band-run {
+  from {
+    transform: translateX(-24%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(10%);
+    opacity: 1;
+  }
+}
+
+.cine-ring {
+  top: 50%;
+  left: 50%;
+  width: min(40vh, 280px);
+  height: min(40vh, 280px);
+  margin: min(-20vh, -140px) 0 0 min(-20vh, -140px);
+  border: 2px solid rgba(251, 191, 36, 0.5);
+  border-radius: 9999px;
+  animation: cine-ring-out 900ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes cine-ring-out {
+  from {
+    transform: scale(0.4);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.cine-mist {
+  inset: -10%;
+  background:
+    radial-gradient(60% 40% at 30% 80%, rgba(167, 139, 250, 0.3), transparent 70%),
+    radial-gradient(50% 36% at 72% 88%, rgba(196, 181, 253, 0.24), transparent 72%);
+  filter: blur(10px);
+  animation: cine-mist-rise 900ms ease-out forwards;
+}
+
+@keyframes cine-mist-rise {
+  from {
+    transform: translateY(16%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(-6%);
+    opacity: 1;
+  }
+}
+
+/*
+ * Chốt an toàn cuối cùng.
+ *
+ * CinematicOverlay đã tự không dựng gì khi hệ thống báo giảm chuyển động, nhưng
+ * cờ đó chỉ đọc được SAU khi hydrate. Luật này bịt luôn khoảnh khắc đó, và bịt
+ * cả trường hợp về sau có ai dựng overlay từ một đường khác.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .cine-root {
+    display: none !important;
+  }
+}

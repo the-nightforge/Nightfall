@@ -1,11 +1,14 @@
 import { z } from "zod";
-import type { RoomSnapshot } from "@masoi/shared";
-import type { Attempt, DaySpeechDecision, DefenseDecision } from "./types";
+import type { Attempt, DaySpeechDecision } from "./types";
 import { decided, failed } from "./types";
 
 /**
  * `.strict()` là hàng rào cuối: kể cả khi prompt bị sửa sai và model trả về
  * `voteTargetId`, schema từ chối thẳng thay vì âm thầm bỏ qua trường đó.
+ *
+ * Dùng chung cho CẢ lượt bào chữa: `buildDaySpeechPrompt` sinh cùng một hình
+ * dạng `{ think, chat }` dù `request.defense` có mặt hay không, nên không cần
+ * một schema `{ think, defense }` riêng nữa.
  */
 export const daySpeechSchema = z
   .object({
@@ -13,11 +16,6 @@ export const daySpeechSchema = z
     chat: z.string(),
   })
   .strict();
-
-export const defenseSchema = z.object({
-  think: z.string(),
-  defense: z.string(),
-});
 
 export const DEFAULT_CHAT_MAX = 300;
 
@@ -36,6 +34,23 @@ export type CallOutcome =
 
 export type LogOutcome = (outcome: CallOutcome, detail?: string) => void;
 
+export interface InterpretDaySpeechOptions {
+  /**
+   * Ban ngày: chuỗi rỗng là một quyết định hợp lệ — "chủ động không nói gì
+   * thêm" — nên nó `decided({ chat: null })` và KHÔNG kéo chuỗi dự phòng đi
+   * hỏi nhà cung cấp kế tiếp (`FallbackBrain` dừng ở nhánh `ok: true` đầu
+   * tiên, bất kể `value` có `chat` hay không).
+   *
+   * Lượt bào chữa thì khác: im lặng không phải một lựa chọn hợp lệ, nó là thứ
+   * đường lui (bảng mẫu) tạo ra khi không còn ai trả lời được. Nếu chuỗi rỗng
+   * ở đây cũng `decided(null)` thì nó chiếm mất nhánh thành công, và
+   * `FallbackBrain` không bao giờ thử nhà cung cấp kế tiếp cho một bị cáo -
+   * đúng người ít có cơ hội "được hỏi lại" nhất nên KHÔNG được bỏ lỡ nó. Bật
+   * cờ này để chuỗi rỗng quay lại là `failed()`, y hệt `interpretDefense` cũ.
+   */
+  treatEmptyAsFailure?: boolean;
+}
+
 /**
  * Diễn giải JSON thô thành lời thoại ban ngày, dùng chung cho mọi nhà cung cấp.
  *
@@ -47,6 +62,7 @@ export function interpretDaySpeech(
   raw: unknown,
   chatMaxLength: number,
   log: LogOutcome,
+  options: InterpretDaySpeechOptions = {},
 ): Attempt<DaySpeechDecision> {
   const parsed = daySpeechSchema.safeParse(raw);
   if (!parsed.success) {
@@ -57,31 +73,16 @@ export function interpretDaySpeech(
   // Không parse mục tiêu từ output. Kể cả khi model viết tên người khác trong
   // câu, quyết định gameplay vẫn là cái lõi deterministic đã chốt.
   const chat = parsed.data.chat.trim();
-  log("ok");
-  return decided({ chat: chat.length === 0 ? null : chat.slice(0, chatMaxLength) });
-}
 
-export function interpretDefense(
-  view: RoomSnapshot,
-  raw: unknown,
-  chatMaxLength: number,
-  log: LogOutcome,
-): Attempt<DefenseDecision> {
-  const parsed = defenseSchema.safeParse(raw);
-  if (!parsed.success) {
-    log("bad_shape");
-    return failed();
+  if (chat.length === 0) {
+    if (options.treatEmptyAsFailure) {
+      log("bad_shape");
+      return failed();
+    }
+    log("ok");
+    return decided({ chat: null });
   }
 
-  // Im lặng KHÔNG phải một lời bào chữa hợp lệ: đó là thứ đường lui tạo ra, và
-  // nếu nó chiếm nhánh thành công thì chuỗi dự phòng không bao giờ được gọi.
-  const defense = parsed.data.defense.trim();
-  if (defense.length === 0) {
-    log("bad_shape");
-    return failed();
-  }
-
-  void view;
   log("ok");
-  return decided({ chat: defense.slice(0, chatMaxLength) });
+  return decided({ chat: chat.slice(0, chatMaxLength) });
 }

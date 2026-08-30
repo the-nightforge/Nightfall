@@ -29,7 +29,7 @@ function Line({ actor, children }: { actor: string; children: React.ReactNode })
   return (
     <li className="flex items-baseline gap-2">
       <span
-        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+        className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ${
           ACTOR_STYLE[actor] ?? "bg-night-700 text-mist/70"
         }`}
       >

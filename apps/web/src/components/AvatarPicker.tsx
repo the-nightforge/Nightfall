@@ -104,7 +104,7 @@ export function AvatarPicker({ currentUrl, onSave }: Props) {
         </div>
       )}
       {error && <p className="text-xs text-blood-400">{error}</p>}
-      <p className="text-[11px] text-mist/40">JPG/PNG/WebP &lt;5MB, tự crop vuông 256px.</p>
+      <p className="text-[11px] text-mist/60">JPG/PNG/WebP &lt;5MB, tự crop vuông 256px.</p>
     </div>
   );
 }

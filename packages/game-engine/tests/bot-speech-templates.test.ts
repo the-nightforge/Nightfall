@@ -90,10 +90,12 @@ describe("bảng mẫu câu", () => {
     }
   });
 
-  it("chỉ có đúng ba chỗ trống được phép", () => {
+  it("chỉ có đúng bốn chỗ trống được phép", () => {
     // Một chỗ trống tự do là đường để một sự kiện bịa ra hoặc một cái tên khác
-    // lọt vào câu. Ba khoá này là toàn bộ những gì mẫu được biết.
-    const allowed = new Set(["{target}", "{author}", "{evidence}"]);
+    // lọt vào câu. Bốn khoá này là toàn bộ những gì mẫu được biết. `{role}` do
+    // Task 2 thêm cho CLAIM_ROLE/COUNTER_CLAIM, luôn được `fill()` thay bằng
+    // `ROLE_META[claimedRole].name` chứ không phải chuỗi tự do.
+    const allowed = new Set(["{target}", "{author}", "{evidence}", "{role}"]);
     for (const kind of BOT_SPEECH_KINDS) {
       for (const pool of Object.values(SPEECH_TEMPLATES[kind])) {
         for (const template of pool) {

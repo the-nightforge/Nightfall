@@ -60,7 +60,7 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
           wolvesWin ? "border-blood-500/70" : "border-emerald-500/60"
         }`}
       >
-        <p className="text-xs uppercase tracking-[0.35em] text-mist/50">Ván đấu kết thúc</p>
+        <p className="text-xs uppercase tracking-[0.35em] text-mist/65">Ván đấu kết thúc</p>
         <h2
           className={`mt-2 font-display text-4xl font-extrabold leading-tight ${
             wolvesWin ? "text-blood-400" : "text-emerald-300"
@@ -124,7 +124,7 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
         </button>
       </div>
       {!isHost && (
-        <p className="text-center text-xs text-mist/50">
+        <p className="text-center text-xs text-mist/65">
           {hostConnected
             ? "Chờ chủ phòng bấm chơi lại hoặc rời phòng."
             : "Chủ phòng mất kết nối - bạn có thể bấm chơi lại giúp phòng."}
@@ -167,7 +167,7 @@ function TeamPanel({
         >
           {title}
         </h3>
-        <span className="text-xs text-mist/50">
+        <span className="text-xs text-mist/65">
           {players.filter((p) => p.alive).length}/{players.length} còn sống
         </span>
       </div>
@@ -206,14 +206,14 @@ function TeamPanel({
               </span>
             </span>
             {!player.alive && (
-              <span className="shrink-0 text-[10px] uppercase tracking-wider text-mist/60">
+              <span className="shrink-0 text-[11px] uppercase tracking-wider text-mist/60">
                 đã chết
               </span>
             )}
           </li>
         ))}
         {players.length === 0 && (
-          <li className="rounded-lg bg-night-800/50 px-2 py-3 text-center text-sm text-mist/50">
+          <li className="rounded-lg bg-night-800/50 px-2 py-3 text-center text-sm text-mist/65">
             Không còn ai.
           </li>
         )}

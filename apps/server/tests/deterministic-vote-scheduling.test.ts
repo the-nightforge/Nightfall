@@ -56,7 +56,6 @@ vi.mock("../src/bots", async () => {
     botBrain: () => ({
       name: "should-never-be-asked-for-a-target",
       renderDaySpeech: brainControl.renderDaySpeech,
-      decideDefense: vi.fn(),
     }),
   };
 });

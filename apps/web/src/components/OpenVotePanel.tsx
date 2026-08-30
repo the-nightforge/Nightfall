@@ -13,7 +13,7 @@ export function OpenVotePanel({ snapshot }: { snapshot: RoomSnapshot }) {
 
   return (
     <div className="mt-3 border-t border-white/[0.08] pt-3">
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-mist/60">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-mist/60">
         Đang bỏ phiếu · {openBallots.length} phiếu
       </p>
       <div className="flex flex-wrap gap-1.5">
