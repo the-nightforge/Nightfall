@@ -1,5 +1,6 @@
 import type { DayVoteRecap, Role, VoteMutation } from "@masoi/shared";
 import { analyzeChat } from "./analysis/chat-analysis";
+import { claimEvidence } from "./analysis/claim-credibility";
 import { applySocialEvidence } from "./analysis/social-analysis";
 import { analyzeVoteRecap } from "./analysis/vote-analysis";
 import { applyEvidence, applyTrustEvidence, decayBeliefs } from "./belief/belief-state";
@@ -207,6 +208,24 @@ export class BotRuntime {
     this.ingestRoleClaims(knowledge);
     this.ingestRecaps(knowledge);
     this.ingestChat(context);
+
+    // Phải chạy SAU `ingestDeaths`, `ingestRecaps` và `ingestChat`: cả ba đẩy
+    // `sourceId` vào `seenEventIds`, và `claimEvidence` neo vào đúng những id
+    // đó. Đảo thứ tự thì mọi mảnh bằng chứng bị bỏ lặng lẽ.
+    for (const item of claimEvidence(
+      {
+        claims: this.state.claims,
+        round: knowledge.round,
+        lastNightDeaths: knowledge.lastNightDeaths,
+        voteCounts: knowledge.currentVoteCounts.players,
+        publicVoteHistory: knowledge.publicVoteHistory,
+        seenEventIds: this.state.seenEventIds,
+      },
+      this.weights,
+    )) {
+      applyEvidence(this.state, item, this.weights);
+      applyTrustEvidence(this.state, item, this.weights);
+    }
 
     // Decay TRƯỚC, thông tin riêng SAU.
     //
@@ -773,7 +792,16 @@ export class BotRuntime {
       phase: knowledge.phase,
       weights: this.weights,
     });
-    for (const memory of memories) remember(this.state, memory, this.weights);
+    for (const memory of memories) {
+      // Người khai có đang bị dồn phiếu ngay lúc mở miệng không. Ghi Ở ĐÂY chứ
+      // không tính lại sau: bảng phiếu đổi liên tục, và một tín hiệu về THỜI
+      // ĐIỂM mà lại đọc trạng thái của tương lai thì không còn là tín hiệu.
+      if (memory.type === "ROLE_CLAIM") {
+        memory.data.underFire =
+          (knowledge.currentVoteCounts.players[memory.actorId] ?? 0) > 0;
+      }
+      remember(this.state, memory, this.weights);
+    }
 
     // Kể cả câu bị parser bỏ qua cũng được đánh dấu đã đọc, để lần observe sau
     // không phân tích lại cùng một tin nhắn.
