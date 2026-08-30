@@ -233,6 +233,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
     chatLog: visibleChatLog(room, viewerId),
     log: gameView?.log ?? [],
     dayOfTruthClaims: gameView?.dayOfTruthClaims ?? {},
+    pendingLastStandVictim: gameView?.pendingLastStandVictim ?? null,
     // Chỉ `canAct`, đã tính riêng cho chính người nhận snapshot này. Danh tính
     // linh hồn nằm lại trong engine và không có đường nào ra đây.
     deadCanSpeak: gameView?.deadCanSpeak ?? null,

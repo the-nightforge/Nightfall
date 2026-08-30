@@ -2,7 +2,6 @@ import { GameEngine } from "@masoi/game-engine";
 import type { BotDecisionContext, BotSpeechIntention } from "@masoi/game-engine";
 import {
   DEAD_MESSAGE_MAX_LENGTH,
-  GAME_OVER_MS,
   GHOST_AUTHOR_ID,
   GHOST_AUTHOR_NAME,
   RESULT_MS,
@@ -372,7 +371,6 @@ function onGameOver(room: Room): void {
   resetBotBudget(room.code);
 
   sync(room);
-  setRoomTimer(room.code, () => resetToLobby(room), GAME_OVER_MS);
 }
 
 // ---- Bot ----

@@ -1,6 +1,5 @@
 import {
   DEAD_MESSAGE_MAX_LENGTH,
-  GAME_OVER_MS,
   RESULT_MS,
   ROLE_REVEAL_MS,
   ROLE_META,
@@ -122,6 +121,7 @@ export interface PlayerGameView {
   dayVoteHistory: DayVoteRecap[];
   log: string[];
   dayOfTruthClaims?: Record<string, string | null>;
+  pendingLastStandVictim?: { playerId: string; name: string } | null;
   /** Lượt nói của linh hồn, tính riêng cho người xem. Xem RoomSnapshot. */
   deadCanSpeak: { canAct: boolean } | null;
 }
@@ -317,25 +317,11 @@ export class GameEngine {
     this.state.phaseEndsAt = now + durationMs;
     if (phase === "NIGHT") {
       this.state.round += 1;
-      let pendingDeath: PublicDeath | null = null;
-      const pending = this.state.pendingLastStandVictim;
-      if (pending && pending.dieRound <= this.state.round) {
-        const victim = this.player(pending.playerId);
-        if (victim && victim.alive) {
-          victim.alive = false;
-          pendingDeath = { playerId: victim.id, name: victim.name };
-          this.state.log.push(`Tử Thủ: ${victim.name} đã không qua khỏi.`);
-          this.queueHunterReaction([{ playerId: victim.id }], "night");
-          if (victim.role === "WOLF_CUB") this.state.wolfCubRageNextNight = true;
-          if (victim.role === "SEER") this.state.apprenticeAwakened = true;
-        }
-        this.state.pendingLastStandVictim = null;
-      }
       const rageTonight = this.state.wolfCubRageNextNight;
       this.state.wolfCubRageNextNight = false;
       this.state.night = emptyNight(rageTonight);
       this.state.votes = {};
-      this.state.lastNightDeaths = pendingDeath ? [pendingDeath] : [];
+      this.state.lastNightDeaths = [];
     }
     if (phase === "DAY_DISCUSSION") {
       this.state.votes = {};
@@ -736,6 +722,21 @@ export class GameEngine {
       }
     };
 
+    // LAST_STAND: check pending victim at start of this night's resolution
+    if (this.state.pendingLastStandVictim && this.state.pendingLastStandVictim.dieRound <= this.state.round) {
+      const pending = this.state.pendingLastStandVictim;
+      const victim = this.player(pending.playerId);
+      if (victim && victim.alive) {
+        victim.alive = false;
+        addDeath({ playerId: victim.id, name: victim.name, cause: "wolf" });
+        this.state.log.push(`Tử Thủ: ${victim.name} đã gục sau khi kéo dài sự sống!`);
+        this.queueHunterReaction([{ playerId: victim.id }], "night");
+        if (victim.role === "WOLF_CUB") this.state.wolfCubRageNextNight = true;
+        if (victim.role === "SEER") this.state.apprenticeAwakened = true;
+      }
+      this.state.pendingLastStandVictim = null;
+    }
+
     // 1. Ghi nhận shields
     const guardedIds = new Set<string>();
     if (st.night.guardTarget) guardedIds.add(st.night.guardTarget);
@@ -799,8 +800,8 @@ export class GameEngine {
           if (victim.role === "CURSED") {
             cursedBitten = victim;
           } else {
-            // LAST_STAND: delay death until end of next day
-            if (st.activeEvent?.id === "LAST_STAND" && !st.pendingLastStandVictim) {
+            // LAST_STAND: delay death until end of next day, but not when cub rage double-kill is active
+            if (st.activeEvent?.id === "LAST_STAND" && !st.pendingLastStandVictim && !st.night.wolfCubRageTonight) {
               st.pendingLastStandVictim = { playerId: victim.id, dieRound: st.round + 1 };
               st.log.push(`Tử Thủ: ${victim.name} được kéo dài sự sống tới hết ngày mai!`);
             } else {
@@ -1324,7 +1325,8 @@ export class GameEngine {
   finishGame(winner: Exclude<Winner, null>, now = Date.now()) {
     this.state.winner = winner;
     this.state.phase = "GAME_OVER";
-    this.state.phaseEndsAt = now + GAME_OVER_MS;
+    // Không đặt hạn chót: ván chỉ về lobby khi chủ phòng bấm reset, không tự động.
+    this.state.phaseEndsAt = null;
     this.state.log.push(winner === "wolves" ? "Phe Ma Sói chiến thắng!" : "Phe Dân Làng chiến thắng!");
   }
 
@@ -1584,6 +1586,9 @@ export class GameEngine {
       lastEliminated: st.phase === "ELIMINATION" || st.phase === "CHECK_WIN" ? st.lastEliminated : null,
       log: st.log.slice(-10),
       dayOfTruthClaims: st.dayOfTruthClaims ? { ...st.dayOfTruthClaims } : undefined,
+      pendingLastStandVictim: st.pendingLastStandVictim
+        ? { playerId: st.pendingLastStandVictim.playerId, name: this.player(st.pendingLastStandVictim.playerId)?.name ?? "?" }
+        : null,
       deadCanSpeak: this.deadCanSpeakViewFor(viewerId),
     };
   }

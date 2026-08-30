@@ -166,6 +166,10 @@ export function selectEvent(
       if (state.night.wolfCubRageTonight || state.wolfCubRageNextNight) return false;
     }
 
+    if (event.id === "LAST_STAND" || event.id === "PEACEFUL_NIGHT") {
+      if (state.night.wolfCubRageTonight || state.wolfCubRageNextNight) return false;
+    }
+
     if (event.id === "BLOOD_MOON") {
       if (state.bloodMoonUsed || state.bloodMoonArmed) return false;
     }
