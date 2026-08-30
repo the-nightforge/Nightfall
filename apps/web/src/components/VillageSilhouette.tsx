@@ -1,21 +1,33 @@
 /**
  * Bóng ngôi làng, vẽ bằng tay trong SVG.
  *
- * Dùng chung cho hero trang chủ và cho hai cảnh NIGHTFALL / DAWN. Là SVG nội bộ
+ * Dùng chung cho nền trang chủ và cho hai cảnh NIGHTFALL / DAWN. Là SVG nội bộ
  * chứ không phải ảnh: nó phải đổi màu theo cảnh (đêm thì gần như đen, rạng đông
  * thì viền cam), và một file ảnh thì phải có hai bản. Cũng không phải asset tải
  * về, nên không có câu hỏi bản quyền nào cả.
  *
- * `meet` chứ không phải `slice`, và bám mép dưới: khung 800x200 rất bẹt, còn ô
- * chứa nó trên màn dọc thì gần vuông - `slice` phóng to gấp đôi và cắt cả làng
- * xuống còn đúng một mái nhà. `meet` giữ trọn dãy nhà thành một dải thấp đứng
- * trên mặt đất, đúng nghĩa một đường chân trời.
+ * Mặc định `meet` và bám mép dưới: khung 800x200 rất bẹt, còn ô chứa nó trong
+ * chuyển cảnh thì gần vuông - `slice` phóng to gấp đôi và cắt cả làng xuống còn
+ * đúng một mái nhà. `meet` giữ trọn dãy nhà thành một dải thấp đứng trên mặt
+ * đất, đúng nghĩa một đường chân trời.
+ *
+ * `preserveAspectRatio` mở ra được vì nền trang chủ cần đúng điều ngược lại:
+ * một dải chạy hết chiều ngang viewport. Ở đó tỷ lệ khung là 6-7:1 chứ không
+ * phải 4:1, nên `meet` sẽ thu làng lại thành một cụm 800px nằm giữa hai khoảng
+ * trống mênh mông. `xMidYMax slice` phóng theo chiều rộng và chỉ xén phần trời
+ * thừa phía trên nóc nhà - phần đó vốn trống.
  */
-export function VillageSilhouette({ className }: { className?: string }) {
+export function VillageSilhouette({
+  className,
+  preserveAspectRatio = "xMidYMax meet",
+}: {
+  className?: string;
+  preserveAspectRatio?: string;
+}) {
   return (
     <svg
       viewBox="0 0 800 200"
-      preserveAspectRatio="xMidYMax meet"
+      preserveAspectRatio={preserveAspectRatio}
       aria-hidden="true"
       className={className}
     >

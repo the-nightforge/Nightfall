@@ -42,12 +42,28 @@ export function attachRoomSocketSession(
   };
 }
 
-/** Chạy action đúng một lần sau khi listener connect đã được gắn. */
-export function runWhenSocketConnected(socket: Socket, action: () => void): void {
+/**
+ * Chạy action đúng một lần sau khi listener connect đã được gắn.
+ *
+ * Trả về hàm huỷ để bên gọi gỡ được listener đang chờ. Bắt buộc phải có: socket
+ * cấu hình reconnect vô hạn, nên một lượt thao tác đã thất bại mà còn để lại
+ * listener `connect` thì lần kết nối lại sau đó sẽ phát lại lệnh cũ - người
+ * dùng không bấm gì mà tự nhiên vào một phòng mới.
+ *
+ * `on` + gỡ tay chứ không `once`: `once` bọc action trong một wrapper, và bên
+ * gọi chỉ giữ tham chiếu tới action gốc thì không gỡ chắc chắn được. Handler
+ * đặt tên ở đây tự gỡ mình trước khi chạy, nên vẫn đúng nghĩa "một lần".
+ */
+export function runWhenSocketConnected(socket: Socket, action: () => void): () => void {
   if (socket.connected) {
     action();
-    return;
+    return () => undefined;
   }
-  socket.once("connect", action);
+  const onConnect = () => {
+    socket.off("connect", onConnect);
+    action();
+  };
+  socket.on("connect", onConnect);
   socket.connect();
+  return () => socket.off("connect", onConnect);
 }

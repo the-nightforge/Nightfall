@@ -151,4 +151,17 @@ describe("runWhenSocketConnected", () => {
     assert.equal(calls, 1);
     assert.equal(socket.listenerCount("connect"), 0);
   });
+
+  it("huỷ được lượt chờ, và connect tới sau đó không chạy action", () => {
+    const socket = new FakeSocket(false);
+    let calls = 0;
+
+    const cancel = runWhenSocketConnected(socket as unknown as Socket, () => { calls += 1; });
+    cancel();
+
+    socket.trigger("connect");
+
+    assert.equal(calls, 0);
+    assert.equal(socket.listenerCount("connect"), 0);
+  });
 });
