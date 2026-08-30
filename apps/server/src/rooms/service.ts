@@ -165,7 +165,11 @@ export const roomService = {
       // người sống tới hết ván.
       void dropVoiceParticipant(room.code, playerId, "rời phòng");
 
-      if (room.members.length === 0) {
+      // LOBBY toàn bot cũng vô dụng y hệt phòng rỗng: không còn ai để bấm "Bắt
+      // đầu", và người mới join sau đó cũng không tự thành host. Xoá hẳn thay
+      // vì rơi xuống room.members[0] và gán nhầm một bot làm host.
+      const noRealPlayerLeft = room.members.every((m) => m.isBot);
+      if (room.members.length === 0 || (room.status === "LOBBY" && noRealPlayerLeft)) {
         removeRoom(room.code);
         await updateSessionRoom(playerId, null);
         await deletePersistedRoom(room.code);
@@ -195,6 +199,9 @@ export const roomService = {
           p.alive = false;
         }
       }
+      // Rời hẳn là dứt khoát, không như rớt mạng còn cửa quay lại, nên kiểm
+      // tra bỏ hoang ngay, khỏi cần đợi ân hạn.
+      resetIfAbandoned(room);
       const discussionAdvanced = reconcileDiscussionSkip(room);
       await updateSessionRoom(playerId, null);
       await persistRoom(room);
