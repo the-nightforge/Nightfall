@@ -146,4 +146,27 @@ describe("CLAIM_INTEGRITY", () => {
     );
     expect(result.fromTemplate).toBe(true);
   });
+
+  it("vứt câu khai TRẦN khi chữ lại đọc ra một PHẢN BÁC — đúng vai không cứu được sai loại (regression cho Critical vòng 2)", async () => {
+    // CLAIM_ROLE(role=SEER) nhưng câu khớp mẫu counter-claim và nhắm vào Chi -
+    // parseCounterClaim chạy trước, không quan tâm ý định gọi nó là gì, nên nó
+    // đọc ra COUNTER_CLAIM{targetId: Chi, data.role: SEER} - đúng vai, sai loại
+    // và mang theo một mục tiêu lõi chưa từng chốt.
+    const result = await renderBotSpeech(
+      requestFor(),
+      brainSaying("Chi không thể là sói, tôi mới là tiên tri."),
+    );
+    expect(result.fromTemplate).toBe(true);
+  });
+
+  it("vứt câu PHẢN BÁC khi chữ lại đọc ra một khai TRẦN — đúng vai, mất luôn mục tiêu lõi đã chốt", async () => {
+    // COUNTER_CLAIM(role=SEER, targetId=Bình) nhưng câu chỉ là "Tôi là tiên
+    // tri." - đọc ra ROLE_CLAIM trần, đúng vai nhưng không mang targetId nào,
+    // nên phần "ai bị phản bác" mà lõi đã quyết biến mất khỏi câu.
+    const result = await renderBotSpeech(
+      counterClaimRequestFor(),
+      brainSaying("Tôi là tiên tri."),
+    );
+    expect(result.fromTemplate).toBe(true);
+  });
 });

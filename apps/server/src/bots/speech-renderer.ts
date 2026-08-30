@@ -139,33 +139,46 @@ function echoesRecentOwnLine(request: SpeechRequest, chat: string): boolean {
 }
 
 /**
- * Câu này có nói ĐÚNG lời khai mà lõi đã chốt không — và chỉ đúng lời khai đó?
+ * Câu này có nói ĐÚNG lời khai mà lõi đã chốt không — và CHỈ đúng lời khai đó,
+ * không hơn không kém?
  *
- * Gác HAI CHIỀU, vì hỏng theo hai chiều:
+ * So BA lớp theo thứ tự, và trượt lớp nào thì hỏng luôn, không xét tiếp:
  *
- * 1. Ý định có khai mà chữ không khai → lời khai bốc hơi trong im lặng. Người
- *    chơi đọc chat vẫn thấy BOT nói; các BOT khác thì không thấy gì, vì cái
- *    chúng đọc là `chat-analysis` chứ không phải ý định.
- * 2. Ý định không khai mà chữ có khai → nhà cung cấp vừa tự đi một nước cờ.
- *    Nó đặt cả bàn vào một lời khai mà lõi chưa bao giờ quyết, không seed nào
- *    dựng lại được, và `ROLE_CLAIM` thì được GHIM vĩnh viễn vào state.
+ * 1. LOẠI. `analyzeChat` không biết ý định đang là gì — nó chỉ đọc chữ.
+ *    `parseCounterClaim` so trên CẢ câu, chạy TRƯỚC mọi phân tích theo mệnh
+ *    đề, và không quan tâm câu đó sinh ra từ ý định nào (`chat-analysis.ts`,
+ *    hàm `analyzeChat`). Nghĩa là một câu cho ý định `CLAIM_ROLE` vẫn có thể
+ *    đọc ra một `COUNTER_CLAIM` nếu nó tình cờ khớp mẫu "X không thể là Y,
+ *    tôi mới là Y" — mang theo một mục tiêu lõi chưa từng chốt. Và một câu
+ *    cho ý định `COUNTER_CLAIM` vẫn có thể đọc ra một `ROLE_CLAIM` trần, làm
+ *    mất hẳn phần "ai bị phản bác" mà lõi đã quyết. Vì vậy loại memory đọc
+ *    được phải khớp ĐÚNG loại ý định — `CLAIM_ROLE` đòi `ROLE_CLAIM`,
+ *    `COUNTER_CLAIM` đòi `COUNTER_CLAIM` — trước khi so bất cứ trường nào bên
+ *    trong nó. So field mà bỏ qua loại là so nhầm chỗ: vai có thể khớp trong
+ *    khi cả CÂU vẫn là một phát ngôn khác hẳn cái lõi đã chốt.
+ * 2. VAI. `data.role` phải đúng `claimedRole` mà lõi đã chốt.
+ * 3. MỤC TIÊU (chỉ `COUNTER_CLAIM`). Lõi chốt cả người bị phản bác
+ *    (`intention.targetId`, từ `claim.counterTargetId` — `speech-planner.ts`),
+ *    không chỉ vai. Bỏ qua lớp này thì cổng vẫn lọt một câu đổi được TÊN
+ *    NGƯỜI BỊ TỐ dù loại và vai đều khớp.
+ *
+ * Vì sao cả ba lớp đều bắt buộc — hỏng theo hai chiều:
+ *
+ * 1. Ý định có khai mà chữ không khai đúng thứ (sai loại, sai vai, hoặc
+ *    không khai gì) → lời khai bốc hơi trong im lặng. Người chơi đọc chat vẫn
+ *    thấy BOT nói; các BOT khác thì không thấy gì, vì cái chúng đọc là
+ *    `chat-analysis` chứ không phải ý định.
+ * 2. Chữ khai ra một thứ mà ý định không hề khai — dù đúng vai, đúng người,
+ *    chỉ khác loại — → nhà cung cấp vừa tự đi một nước cờ. Nó đặt cả bàn vào
+ *    một lời khai hoặc một cáo buộc mà lõi chưa bao giờ quyết, không seed nào
+ *    dựng lại được, và cả `ROLE_CLAIM` lẫn `COUNTER_CLAIM` đều được GHIM vĩnh
+ *    viễn vào state.
  *
  * Chiều thứ hai là chiều nguy hiểm hơn, và nó đã mở sẵn từ trước Phase 5.
  *
  * Dùng chính `analyzeChat` chứ không so chuỗi: cổng phải hỏi đúng câu hỏi mà
  * các BOT khác sẽ hỏi. Một cổng có luật riêng sẽ trôi lệch khỏi parser, và nó
  * sẽ trôi lệch âm thầm.
- *
- * `COUNTER_CLAIM` mang HAI thứ do lõi chốt, không phải một: vai tự nhận VÀ
- * người bị phản bác (`intention.targetId`, từ `claim.counterTargetId` -
- * `speech-planner.ts`). So mỗi vai mà bỏ qua mục tiêu thì cổng vẫn lọt một câu
- * đổi được TÊN NGƯỜI BỊ TỐ trong khi vai vẫn khớp - "Chi không thể là sói, tôi
- * mới là tiên tri" lọt qua khi lõi đã chốt mục tiêu là Bình. Đó là một cáo buộc
- * công khai mà lõi chưa bao giờ quyết, ghim vĩnh viễn vào mọi BOT đang nghe -
- * đúng lỗ mà cổng này tồn tại để chặn, chỉ là lệch sang trường target thay vì
- * trường role. `CLAIM_ROLE` (khai trần, không phản bác ai) thì không có mục
- * tiêu để so: `parseClause` không gắn `targetId` cho nó, và mệnh đề tố cáo có
- * thể đi kèm - nếu có - là một memory `ACCUSE` riêng, ngoài phạm vi cổng này.
  */
 function claimSurvivesRoundTrip(request: SpeechRequest, chat: string): boolean {
   const { intention } = request;
@@ -183,7 +196,16 @@ function claimSurvivesRoundTrip(request: SpeechRequest, chat: string): boolean {
   );
 
   if (intended === null) return spoken === undefined;
-  if (spoken === undefined || spoken.data.role !== intended) return false;
+  if (spoken === undefined) return false;
 
+  // Lớp 1: loại memory phải khớp ĐÚNG loại ý định. `parseCounterClaim` không
+  // quan tâm ý định gọi nó là gì, nên "đúng vai" không đủ để suy ra "đúng câu".
+  const expectedType = intention.kind === "COUNTER_CLAIM" ? "COUNTER_CLAIM" : "ROLE_CLAIM";
+  if (spoken.type !== expectedType) return false;
+
+  // Lớp 2: vai.
+  if (spoken.data.role !== intended) return false;
+
+  // Lớp 3: chỉ COUNTER_CLAIM mới có mục tiêu để so.
   return intention.kind === "COUNTER_CLAIM" ? spoken.targetId === intention.targetId : true;
 }
