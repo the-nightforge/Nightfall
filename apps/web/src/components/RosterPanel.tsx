@@ -2,7 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
-import { MIN_PLAYERS_TO_START, ROLE_META, type RoomSnapshot } from "@masoi/shared";
+import {
+  MAX_PLAYERS_PER_ROOM,
+  MIN_PLAYERS_TO_START,
+  ROLE_META,
+  type RoomSnapshot,
+} from "@masoi/shared";
 import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { useSpeakers } from "@/components/VoiceProvider";
 import { roleLabel } from "@/lib/cursed";
@@ -23,6 +28,10 @@ interface Props {
  * một lưới y hệt ở đây thì người chơi không biết cái nào bấm được. Ở đây là
  * danh sách dọc hẹp chỉ để theo dõi - ai còn sống, ai đang bị dồn phiếu - còn
  * mọi thao tác chọn người đều ở cột kia.
+ *
+ * Cột chỉ rộng 15rem nên mỗi người chiếm hai dòng: dòng trên dành trọn chỗ
+ * trống cho cái tên, dòng dưới là các nhãn được phép xuống hàng. Nhồi nhãn vào
+ * cùng dòng với tên thì tên bị bóp lại còn đúng một chữ cái.
  */
 export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
   const speakers = useSpeakers();
@@ -36,13 +45,17 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
   // Ô trống có đánh số cho thấy còn thiếu bao nhiêu người, thay vì một dòng chữ
   // "cần thêm 4 người" mà mắt phải đọc mới biết.
   const emptySlots = lobby ? Math.max(0, MIN_PLAYERS_TO_START - count) : 0;
+  // Lời khai Ngày Sự Thật chỉ dán lên cột này trong đúng sự kiện đó.
+  const claims =
+    snapshot.activeEvent?.id === "DAY_OF_TRUTH" ? snapshot.dayOfTruthClaims : undefined;
 
   return (
     <section className="card p-3">
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <h3 className="font-display text-base font-bold text-white">Người chơi</h3>
+        {/* Đếm theo sức chứa phòng: "15/6" đọc như phòng đang quá tải. */}
         <span className="shrink-0 text-xs text-mist/50">
-          {lobby ? `${count}/${MIN_PLAYERS_TO_START}` : `${alive}/${count} sống`}
+          {lobby ? `${count}/${MAX_PLAYERS_PER_ROOM}` : `${alive}/${count} sống`}
         </span>
       </div>
 
@@ -50,12 +63,19 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
         {snapshot.players.map((player) => {
           const votes = player.voteCount ?? 0;
           const isMe = player.id === meId;
+          const isRoomHost = snapshot.hostId === player.id;
+          // Bot vốn không có kết nối, nên connected=false của nó không phải sự cố.
+          const offline = !player.isBot && player.connected === false;
+          // null là "không tiết lộ" - vẫn là một lời khai, khác hẳn chưa khai.
+          const claim = claims?.[player.id];
+          const claimed = claims ? player.id in claims : false;
+          const hasTags = isRoomHost || player.isBot || !!player.role || offline || claimed;
           // Identity của LiveKit chính là playerId nên đối chiếu thẳng.
           const speaking = speakers.has(player.id);
           return (
             <li
               key={player.id}
-              className={`group flex items-center gap-2 rounded-lg px-1.5 py-1 transition ${
+              className={`group rounded-lg px-1.5 py-1 transition ${
                 speaking
                   ? "bg-emerald-400/10 ring-1 ring-emerald-400/60"
                   : isMe
@@ -63,32 +83,65 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
                     : ""
               }`}
             >
-              <span className="relative shrink-0">
-                <Avatar
-                  avatar={player.avatarUrl ? player.avatarUrl : avatars[player.id]}
-                  tint={tintFor(player.id)}
-                  alive={player.alive}
-                  breathOffset={breathOffsetFor(player.id)}
-                  className="h-7 w-7 sm:h-8 sm:w-8"
-                  isCustom={!!player.avatarUrl}
-                />
-                {!player.alive && (
-                  <span className="pointer-events-none absolute inset-0 grid place-items-center">
-                    <span className="h-[1.5px] w-6 rotate-45 rounded bg-blood-500/70" />
-                  </span>
-                )}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="relative shrink-0">
+                  <Avatar
+                    avatar={player.avatarUrl ? player.avatarUrl : avatars[player.id]}
+                    tint={tintFor(player.id)}
+                    alive={player.alive}
+                    breathOffset={breathOffsetFor(player.id)}
+                    className="h-7 w-7 sm:h-8 sm:w-8"
+                    isCustom={!!player.avatarUrl}
+                  />
+                  {!player.alive && (
+                    <span className="pointer-events-none absolute inset-0 grid place-items-center">
+                      <span className="h-[1.5px] w-6 rotate-45 rounded bg-blood-500/70" />
+                    </span>
+                  )}
+                </span>
 
-              <span className="min-w-0 flex-1">
                 <span
-                    className={`block truncate text-sm font-semibold ${
-                      player.alive ? "text-white" : "text-mist/60 line-through"
-                    }`}
+                  className={`min-w-0 flex-1 truncate text-sm font-semibold ${
+                    player.alive ? "text-white" : "text-mist/60 line-through"
+                  }`}
+                  title={player.name}
+                >
+                  {player.name}
+                </span>
+
+                {lobby ? (
+                  !offline && <ReadyDot ready={player.isBot || (player.ready ?? false)} />
+                ) : (
+                  <AnimatePresence>
+                    {votes > 0 && (
+                      <m.span
+                        key="votes"
+                        initial={{ scale: 0.4, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.4, opacity: 0, transition: { duration: 0.12 } }}
+                        transition={{ type: "spring", stiffness: 600, damping: 22 }}
+                        className="grid h-5 min-w-[20px] shrink-0 place-items-center rounded-full bg-blood-600 px-1 text-[11px] font-bold text-white"
+                      >
+                        {votes}
+                      </m.span>
+                    )}
+                  </AnimatePresence>
+                )}
+
+                {lobby?.isHost && player.id !== meId && (
+                  <button
+                    className="inline-flex shrink-0 items-center gap-0.5 rounded bg-blood-600/15 px-1.5 py-0.5 text-[10px] font-bold text-blood-400 hover:bg-blood-600/25"
+                    aria-label={`Kick ${player.name}`}
+                    onClick={() => lobby.onKick(player.id)}
                   >
-                    {player.name}
-                  </span>
-                  <span className="flex flex-wrap items-center gap-1">
-                  {snapshot.hostId === player.id && (
+                    <span aria-hidden="true">✕</span> Kick
+                  </button>
+                )}
+              </div>
+
+              {hasTags && (
+                <div className="ml-9 mt-0.5 flex flex-wrap items-center gap-1 sm:ml-10">
+                  {isRoomHost && (
                     <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-bold text-amber-300">
                       <span aria-hidden="true">👑</span> Chủ phòng
                     </span>
@@ -100,7 +153,7 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
                   )}
                   {player.role && (
                     <span
-                      className={`truncate rounded px-1 text-[9px] font-semibold ${
+                      className={`max-w-full truncate rounded px-1 py-0.5 text-[9px] font-semibold ${
                         ROLE_META[player.role].team === "wolves"
                           ? "bg-blood-600/70 text-white"
                           : "bg-emerald-900/80 text-emerald-200"
@@ -109,49 +162,20 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
                       {roleLabel(player)}
                     </span>
                   )}
-                  {snapshot.activeEvent?.id === "DAY_OF_TRUTH" &&
-                    snapshot.dayOfTruthClaims &&
-                    snapshot.dayOfTruthClaims[player.id] !== undefined && (
-                      <span className="inline-flex items-center gap-0.5 rounded bg-sky-600/20 px-1 py-0.5 text-[9px] font-bold text-sky-200 ring-1 ring-sky-500/30">
-                        <span aria-hidden="true">🔍</span>{" "}
-                        {snapshot.dayOfTruthClaims[player.id] === null
-                          ? "Không tiết lộ"
-                          : (ROLE_META as any)[snapshot.dayOfTruthClaims[player.id]!]?.name ?? snapshot.dayOfTruthClaims[player.id]}
-                      </span>
-                    )}
-                </span>
-              </span>
-
-              {lobby ? (
-                <LobbyStatus
-                  ready={player.isBot || (player.ready ?? false)}
-                  offline={player.connected === false}
-                />
-              ) : (
-                <AnimatePresence>
-                  {votes > 0 && (
-                    <m.span
-                      key="votes"
-                      initial={{ scale: 0.4, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.4, opacity: 0, transition: { duration: 0.12 } }}
-                      transition={{ type: "spring", stiffness: 600, damping: 22 }}
-                      className="grid h-5 min-w-[20px] shrink-0 place-items-center rounded-full bg-blood-600 px-1 text-[11px] font-bold text-white"
-                    >
-                      {votes}
-                    </m.span>
+                  {claimed && (
+                    <span className="inline-flex max-w-full items-center gap-0.5 truncate rounded bg-sky-600/20 px-1 py-0.5 text-[9px] font-bold text-sky-200 ring-1 ring-sky-500/30">
+                      <span aria-hidden="true">🔍</span>{" "}
+                      {claim == null
+                        ? "Không tiết lộ"
+                        : ((ROLE_META as any)[claim]?.name ?? claim)}
+                    </span>
                   )}
-                </AnimatePresence>
-              )}
-
-              {lobby?.isHost && player.id !== meId && (
-                <button
-                  className="inline-flex shrink-0 items-center gap-0.5 rounded bg-blood-600/15 px-1.5 py-0.5 text-[10px] font-bold text-blood-400 hover:bg-blood-600/25"
-                  aria-label={`Kick ${player.name}`}
-                  onClick={() => lobby.onKick(player.id)}
-                >
-                  <span aria-hidden="true">✕</span> Kick
-                </button>
+                  {offline && (
+                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-bold text-amber-300 ring-1 ring-amber-500/30">
+                      <span aria-hidden="true">📴</span> Mất kết nối
+                    </span>
+                  )}
+                </div>
               )}
             </li>
           );
@@ -202,14 +226,7 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
   );
 }
 
-function LobbyStatus({ ready, offline }: { ready: boolean; offline: boolean }) {
-  if (offline) {
-    return (
-      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300 ring-1 ring-amber-500/30">
-        <span aria-hidden="true">📴</span> Mất kết nối
-      </span>
-    );
-  }
+function ReadyDot({ ready }: { ready: boolean }) {
   return (
     <span
       className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
