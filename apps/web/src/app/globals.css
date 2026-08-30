@@ -66,7 +66,8 @@ summary:focus-visible,
   position: absolute;
   /* Tràn ra ngoài khung để hai đầu dải không bao giờ lộ mép. */
   inset: -25% -60%;
-  z-index: 1;
+  /* Trên cùng trong .backdrop - xem chú thích ở .backdrop-vignette. */
+  z-index: 2;
   opacity: 0;
   background: linear-gradient(
     105deg,
@@ -198,10 +199,24 @@ summary:focus-visible,
     linear-gradient(180deg, #080d16 0%, #050810 100%);
 }
 
-/* Tối bốn góc để mắt bị kéo vào giữa. Đứng yên, không đổi theo pha. */
+/*
+ * Tối bốn góc để mắt bị kéo vào giữa. Đứng yên, không đổi theo pha.
+ *
+ * z-index ở đây là để sắp lại thứ tự vẽ bên trong .backdrop, và nó là một bản
+ * vá chứ không phải trang trí. Lớp nền sự kiện (EventEnvironment) nằm CUỐI
+ * trong DOM và để z-index tự động, nên trước đây nó vẽ ĐÈ lên vignette: sắc
+ * đỏ của Trăng Máu chạy đều ra tận bốn góc, đúng cái mà vignette sinh ra để
+ * ngăn. Thứ tự đúng từ dưới lên:
+ *
+ *   .backdrop-layer (nền theo pha) -> nền sự kiện -> vignette -> màn quét
+ *
+ * Nền sự kiện không cần z-index: nó đứng sau các .backdrop-layer trong DOM nên
+ * đã nằm trên rồi. Chỉ cần nâng hai lớp phải ở trên nó.
+ */
 .backdrop-vignette {
   position: absolute;
   inset: 0;
+  z-index: 1;
   background: radial-gradient(120% 78% at 50% 42%, transparent 42%, rgba(0, 0, 0, 0.62) 100%);
 }
 
