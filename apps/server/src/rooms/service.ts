@@ -18,7 +18,7 @@ import {
   loadRoomFromRedis,
   persistRoom,
   removeRoom,
-  setRoomTimer,
+  setAbandonCheckTimer,
   type Room,
   type RoomMember,
 } from "./store";
@@ -69,10 +69,17 @@ export function resetIfAbandoned(room: Room): void {
   resetToLobby(room);
 }
 
-/** Hẹn kiểm tra lại sau đúng khoảng ân hạn dùng chung với vote skip thảo luận: ai đã quay lại thì resetIfAbandoned tự bỏ qua. */
+/**
+ * Hẹn kiểm tra lại sau đúng khoảng ân hạn dùng chung với vote skip thảo luận:
+ * ai đã quay lại thì resetIfAbandoned tự bỏ qua.
+ *
+ * Dùng setAbandonCheckTimer (bucket riêng), KHÔNG dùng setRoomTimer: mọi lần
+ * chuyển pha trong machine.ts đều gọi clearRoomTimers xoá sạch bucket đó, nên
+ * lịch kiểm tra bỏ hoang sẽ bị xoá theo trước khi kịp chạy.
+ */
 export function scheduleAbandonedRoomCheck(room: Room): void {
   if (room.status !== "IN_GAME") return;
-  setRoomTimer(room.code, () => resetIfAbandoned(room), DISCONNECT_GRACE_MS + 500);
+  setAbandonCheckTimer(room.code, () => resetIfAbandoned(room), DISCONNECT_GRACE_MS + 500);
 }
 
 export const roomService = {
@@ -165,6 +172,14 @@ export const roomService = {
       // người sống tới hết ván.
       void dropVoiceParticipant(room.code, playerId, "rời phòng");
 
+      // Rời hẳn là dứt khoát, không như rớt mạng còn cửa quay lại, nên kiểm
+      // tra bỏ hoang NGAY TẠI ĐÂY, trước khi gán lại host: nếu không, người
+      // thật cuối cùng rời đi khiến room.members[0] (một bot) bị gán làm host
+      // trước, rồi resetIfAbandoned mới đưa phòng về LOBBY - kết quả là một
+      // phòng LOBBY do bot làm host, không ai bấm "Bắt đầu" được và không bao
+      // giờ bị dọn.
+      resetIfAbandoned(room);
+
       // LOBBY toàn bot cũng vô dụng y hệt phòng rỗng: không còn ai để bấm "Bắt
       // đầu", và người mới join sau đó cũng không tự thành host. Xoá hẳn thay
       // vì rơi xuống room.members[0] và gán nhầm một bot làm host.
@@ -199,9 +214,6 @@ export const roomService = {
           p.alive = false;
         }
       }
-      // Rời hẳn là dứt khoát, không như rớt mạng còn cửa quay lại, nên kiểm
-      // tra bỏ hoang ngay, khỏi cần đợi ân hạn.
-      resetIfAbandoned(room);
       const discussionAdvanced = reconcileDiscussionSkip(room);
       await updateSessionRoom(playerId, null);
       await persistRoom(room);

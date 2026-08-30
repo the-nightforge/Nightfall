@@ -7,7 +7,7 @@ import type { Room, RoomMember } from "../src/rooms/store";
 vi.mock("../src/rooms/store", () => ({
   clearRoomTimers: () => undefined,
   persistRoom: async () => undefined,
-  setRoomTimer: (_code: string, fn: () => void, ms: number) => setTimeout(fn, ms),
+  setAbandonCheckTimer: (_code: string, fn: () => void, ms: number) => setTimeout(fn, ms),
 }));
 
 vi.mock("../src/rooms/broadcast", () => ({
