@@ -4,6 +4,7 @@ import {
   BOT_WEIGHTS_V1,
   BOT_WEIGHTS_V2,
   BOT_WEIGHTS_V3,
+  BOT_WEIGHTS_V4,
   DEFAULT_BOT_WEIGHTS,
   resolveWeights,
   validateWeights,
@@ -824,5 +825,32 @@ describe("BotRuntime nhận weights", () => {
       decide(resolveWeights({ deceptionRisk: { abstainPressureCeiling: 0 } }, BOT_WEIGHTS_V1))
         .type,
     ).toBe("PLAYER");
+  });
+});
+
+describe("nhóm trọng số claim", () => {
+  it("tắt ở mọi preset cũ, nên v1/v2/v3 không đổi hành vi", () => {
+    for (const preset of [BOT_WEIGHTS_V1, BOT_WEIGHTS_V2, BOT_WEIGHTS_V3]) {
+      expect(preset.claim.accusationWeight).toBe(0);
+      expect(preset.claim.wolfBluffChance).toBe(0);
+    }
+  });
+
+  it("v4 bật cơ chế lên và mang đúng version", () => {
+    expect(BOT_WEIGHTS_V4.version).toBe("4.0.0");
+    expect(BOT_WEIGHTS_V4.claim.accusationWeight).toBeGreaterThan(0);
+  });
+
+  it("v4 khác v3 ĐÚNG ở nhóm claim và version", () => {
+    for (const key of Object.keys(BOT_WEIGHTS_V3) as Array<keyof typeof BOT_WEIGHTS_V3>) {
+      if (key === "version" || key === "claim") continue;
+      expect(BOT_WEIGHTS_V4[key]).toBe(BOT_WEIGHTS_V3[key]);
+    }
+  });
+
+  it("validateWeights bắt được hệ số ngoài [0,1]", () => {
+    expect(
+      validateWeights({ ...BOT_WEIGHTS_V4, claim: { ...BOT_WEIGHTS_V4.claim, underFireFactor: 1.5 } }).join(" "),
+    ).toContain("claim.underFireFactor");
   });
 });

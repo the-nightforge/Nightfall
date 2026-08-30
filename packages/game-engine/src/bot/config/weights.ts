@@ -356,6 +356,41 @@ export interface ConversationWeights {
   selfPlayTurnsPerRound: number;
 }
 
+/**
+ * Lời khai vai và cách làng phân xử nó.
+ *
+ * `accusationWeight === 0` TẮT toàn bộ cơ chế, và nó là cổng DUY NHẤT — mọi
+ * nhánh mới đều hỏi đúng nó rồi thoát ra trước khi rút số ngẫu nhiên. Tắt bằng
+ * một giá trị ngoài miền có ích thay vì bằng một cờ boolean là đúng thói quen
+ * đã có ở `deceptionRisk.bussingVoteShare`.
+ *
+ * Sức nặng ở đây nằm trên thang belief THẬT, nơi p90 ≈ 1.8 (xem
+ * `docs/bot-ai-phase-3-verification.md` §4), không phải thang 0–100 trên giấy.
+ * Đó chính là lỗi đã giết v1, nên đừng đọc những con số này như phần trăm.
+ */
+export interface ClaimWeights {
+  /** Nghi ngờ dồn lên người bị một lời khai chỉ mặt. `0` TẮT cả cơ chế. */
+  accusationWeight: number;
+  /** Tin tưởng cộng cho chính người khai, trước khi nhân hệ số thời điểm. */
+  claimantTrustWeight: number;
+  /** Nhân vào cả hai giá trị trên khi lời khai bật ra lúc người khai đang dẫn phiếu. */
+  underFireFactor: number;
+  /** Nghi ngờ cộng cho CẢ HAI người cùng khai một vai. */
+  collisionPenalty: number;
+  /** Nhân thêm cho người khai ĐẾN SAU trong một cú va chạm. `>= 1`. */
+  collisionLatePenaltyScale: number;
+  /** Người khai vai chức năng chết ngay đêm sau: thưởng tin tưởng. */
+  nightConfirmBonus: number;
+  /** Người khai còn sống trong khi người khác chết đêm đó: phạt tin tưởng. */
+  nightSurvivedPenalty: number;
+  /** Khai "X là sói" mà vòng sau không bỏ phiếu X. */
+  voteInconsistencyPenalty: number;
+  /** Xác suất con Sói được chỉ định dám khai láo, trước khi nhân tính cách. */
+  wolfBluffChance: number;
+  /** Vòng sớm nhất Sói được khai láo chủ động. */
+  wolfBluffFromRound: number;
+}
+
 export interface BotWeights {
   /** Semver. Đổi giá trị bất kỳ là phải đổi version. */
   readonly version: string;
@@ -377,6 +412,7 @@ export interface BotWeights {
   readonly personalityRange: PersonalityRange;
   readonly limits: MemoryLimits;
   readonly conversation: ConversationWeights;
+  readonly claim: ClaimWeights;
 }
 
 /** Cho phép ghi đè từng nhánh mà không phải khai lại cả cây. */
@@ -430,6 +466,10 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   ["conversation", "replyCeiling"],
   ["conversation", "humorChance"],
   ["conversation", "reactionChance"],
+  // Hai cái này được so THẲNG với `rng()` hoặc nhân vào một sức nặng đã chuẩn
+  // hoá. Một giá trị 1.5 ở đây không ném ở đâu cả, nó chỉ lặng lẽ làm sai.
+  ["claim", "underFireFactor"],
+  ["claim", "wolfBluffChance"],
 ];
 
 /** Nhóm mà mọi kiểm tra sâu bên dưới giả định là có mặt. */
@@ -452,6 +492,7 @@ const REQUIRED_GROUPS: ReadonlyArray<keyof BotWeights> = [
   "personalityRange",
   "limits",
   "conversation",
+  "claim",
 ];
 
 function isFiniteNumber(value: unknown): value is number {
@@ -748,6 +789,28 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     promptRecentOwnLines: 4,
     selfPlayTurnsPerRound: 1,
   }),
+
+  /**
+   * TẮT toàn bộ ở v1. v1 phải tái lập Phase 2 từng bit, và v2/v3 kế thừa nhóm
+   * này nguyên vẹn qua spread nên chúng cũng tắt — đó là điều kiện để bảng
+   * win-rate của Phase 3 và Phase 4 còn so sánh được với v4.
+   *
+   * `collisionLatePenaltyScale: 1` chứ không phải `0`: nó là một HỆ SỐ NHÂN,
+   * và một hệ số nhân bằng 0 là một giá trị vô nghĩa nằm chờ ai đó bật
+   * `collisionPenalty` lên rồi không hiểu vì sao không có gì xảy ra.
+   */
+  claim: Object.freeze({
+    accusationWeight: 0,
+    claimantTrustWeight: 0,
+    underFireFactor: 0,
+    collisionPenalty: 0,
+    collisionLatePenaltyScale: 1,
+    nightConfirmBonus: 0,
+    nightSurvivedPenalty: 0,
+    voteInconsistencyPenalty: 0,
+    wolfBluffChance: 0,
+    wolfBluffFromRound: 0,
+  }),
 }) as BotWeights;
 
 /**
@@ -920,6 +983,41 @@ export const BOT_WEIGHTS_V3: BotWeights = Object.freeze({
     selfPlayTurnsPerRound: 4,
   }),
 }) as BotWeights;
+
+/**
+ * v4 — lời khai vai trong chat.
+ *
+ * Khác v3 ở ĐÚNG một nhóm: `claim`. Mọi nhóm còn lại dùng chung tham chiếu với
+ * v3, nên chênh lệch win-rate giữa hai bản chỉ có đúng một nguyên nhân khả dĩ.
+ *
+ * Những con số này là GIÁ TRỊ KHỞI ĐẦU, không phải kết quả hiệu chỉnh. Task 7
+ * đo `claimAccuracy` và `claimsPerGame` rồi chỉnh lại; đừng coi chúng là đã
+ * chốt cho tới khi văn bản kiểm chứng nói vậy.
+ *
+ * - `accusationWeight: 12` — nặng gấp ba một `ACCUSE` trần (weight 4). Một lời
+ *   khai đáng tin PHẢI lấn át tiếng ồn hành vi, nếu không cả cơ chế vô hình.
+ * - `underFireFactor: 0.25` — khai lúc đang dẫn phiếu chỉ còn một phần tư sức
+ *   nặng. Không về 0: người bị dồn oan vẫn có thể đang nói thật.
+ * - `nightConfirmBonus` > `nightSurvivedPenalty` có chủ ý: chết sau khi khai là
+ *   bằng chứng mạnh, còn sống sót thì mơ hồ vì Bảo Vệ bẻ gãy nó (spec §6.3).
+ */
+export const BOT_WEIGHTS_V4: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V3,
+  version: "4.0.0",
+
+  claim: Object.freeze({
+    accusationWeight: 12,
+    claimantTrustWeight: 6,
+    underFireFactor: 0.25,
+    collisionPenalty: 7,
+    collisionLatePenaltyScale: 1.6,
+    nightConfirmBonus: 14,
+    nightSurvivedPenalty: 8,
+    voteInconsistencyPenalty: 5,
+    wolfBluffChance: 0.35,
+    wolfBluffFromRound: 2,
+  }),
+});
 
 /**
  * Cấu hình đang dùng cho production.
