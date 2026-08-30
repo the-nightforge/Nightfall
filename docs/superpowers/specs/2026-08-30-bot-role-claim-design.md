@@ -2,8 +2,8 @@
 
 **Ngày:** 2026-08-30
 **Trạng thái:** Đã duyệt qua đối thoại (5/5 phần thiết kế duyệt từng phần)
-**Nhánh nền:** `fix/roster-player-bar` @ `8d63dbe`
-**Tiền đề:** Phase 1–4 hoàn tất và xanh. Việc đang dở về *Ngày Sự Thật* nằm trong working tree (chưa commit); thiết kế này xây thẳng lên trên nó.
+**Nhánh nền:** `fix/roster-player-bar` @ `45f9043`
+**Tiền đề:** Phase 1–4 hoàn tất và xanh. Xây thẳng lên `fdd84ba` *"let bots take part in the events the room actually runs"* — commit mang claim Ngày Sự Thật, mục tiêu phụ ban đêm, và Tiếng Vọng Người Chết.
 
 ---
 
@@ -14,9 +14,11 @@ Kiểm tra trên `C:\Users\Admin\ma-soi-online`. Không reset, không checkout �
 | Lệnh | Kết quả |
 | --- | --- |
 | `git branch --show-current` | `fix/roster-player-bar` |
-| `git log --oneline -1` | `8d63dbe` merge `origin/main` vào `fix/roster-player-bar` |
-| `git status --short` | **25 file đã sửa + 3 file chưa theo dõi**, chưa commit — xem §0.3 |
-| `npm test` | **XANH** — engine 815 (42 file, 3.88s), server 510 (59 file, 1.82s), web 145. Tổng 1.470, 0 đỏ. |
+| `git log --oneline -1` | `45f9043` merge `fix/roster-player-bar` (mang `fdd84ba`) |
+| `git status --short` | sạch |
+| `npm test` | **XANH** — engine 815 (42 file, 3.78s), server 510 (59 file, 1.81s), web 145. Tổng 1.470, 0 đỏ. |
+
+Ba tiền đề chịu lực của thiết kế được kiểm lại tại đúng `45f9043`, sau khi `fdd84ba` đã vào: vai người chết vẫn không lộ (`snapshot.ts:34`), `BotKnowledgeView` vẫn không có thành phần vai, và `ingestChat` vẫn chỉ phát bằng chứng cho `ACCUSE` / `DEFEND` / `COUNTER_CLAIM` (`BotRuntime.ts:781,815,848`) — `ROLE_CLAIM` vẫn không phát gì.
 
 Đã đọc toàn bộ trong audit: `bot/types.ts`, `bot/BotRuntime.ts`, `bot/config/weights.ts`, `bot/analysis/chat-analysis.ts`, `bot/analysis/social-analysis.ts`, `bot/belief/belief-state.ts`, `bot/belief/evidence.ts`, `bot/memory/memory-store.ts`, `bot/conversation/{triggers,speech-planner,templates}.ts`, `bot/decision/{vote-decision,claim-decision}.ts`, `bot/roles/werewolf.ts`, `bot/knowledge.ts`, `apps/server/src/bots/{prompt,speech-renderer,context}.ts`, `apps/server/src/game/machine.ts`, `packages/shared/src/{roles,snapshot}.ts`, và `docs/bot-ai-phase-{2,4}-verification.md`.
 
@@ -123,6 +125,20 @@ BotRuntime.decideSpeech
 2. **Uy tín là hàm thuần của dữ liệu công khai.** Đầu vào chỉ gồm memory claim, `publicVoteHistory`, `lastNightDeaths`, `currentVoteCounts`. **Không bao giờ đọc `knownRoles`.** Có bất biến kiểm (§10).
 3. **Prompt ban ngày không biết vai thật.** `buildDaySpeechPrompt` hiện không chứa `roleContext` và sẽ tiếp tục không chứa. LLM chỉ nhận `claimedRole` — đúng cái sắp được nói to giữa phòng.
 4. **Pha bào chữa được kéo về lõi** (§8), đóng luôn A2.
+
+### 4.1b Hai kênh nạp claim — và tại sao đó không phải mâu thuẫn
+
+`fdd84ba` nói thẳng về claim Ngày Sự Thật: nạp *"structurally, as ROLE_CLAIM memories, **not** by round-tripping structured data through a Vietnamese text parser"*. Thiết kế này thì cho claim trong chat đi **qua đúng cái parser đó**. Nhìn cạnh nhau thì như hai luật đánh nhau. Không phải — cùng một nguyên tắc, hai kết luận ngược nhau vì hai xuất phát điểm khác nhau:
+
+| | Ngày Sự Thật | Claim trong chat |
+| --- | --- | --- |
+| Claim **sinh ra** dưới dạng gì | dữ liệu có cấu trúc (một ô chọn vai) | **chữ** — không có gì có cấu trúc ở thượng nguồn |
+| Nếu ép qua parser | dựng lại thứ đã biết chắc, chỉ để mất mát | — |
+| Nếu ép thành cấu trúc | — | đẻ ra hai hạng claim: của BOT là dữ liệu, của người là chữ phải đoán |
+
+Nguyên tắc chung của cả hai: **đừng chuyển đổi định dạng khi không cần.** Ngày Sự Thật giữ cấu trúc vì nó vốn có cấu trúc; chat giữ chữ vì nó vốn là chữ. Và ở kênh chat, giữ chữ mua thêm một thứ mà cấu trúc không mua được — G5: người thật gõ *"tôi là tiên tri, Nam là sói"* thì cả bàn BOT phản ứng y hệt như khi một BOT nói câu đó.
+
+Bù lại, kênh chat phải trả một cái giá mà kênh cấu trúc không phải trả: parser có thể đọc trượt. Đó chính là lý do §7.3 tồn tại.
 
 ### 4.2 File
 
