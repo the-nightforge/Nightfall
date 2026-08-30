@@ -5,12 +5,12 @@ import { CLIENT_EVENTS, SERVER_EVENTS, type VoiceTokenPayload, type VoiceView } 
 import type { Socket } from "socket.io-client";
 import { audioEngine } from "./audio-engine";
 import { createVoiceRoom, type VoiceRoomHandle } from "./voice-room";
+import { createMicSync, type MicSync } from "./voice-mic-sync";
 import {
   initialVoiceState,
   micShouldBeOpen,
   voiceReducer,
   voiceUi,
-  type VoiceAction,
   type VoiceUi,
 } from "./voice-state";
 
@@ -38,8 +38,20 @@ export function useVoice(socket: Socket | null, view: VoiceView | undefined): Us
   // listener mỗi lần state đổi.
   const stateRef = useRef(state);
   stateRef.current = state;
-  /** Chặn gọi chồng setMic, KHÔNG phải để huỷ kết quả. */
-  const micBusyRef = useRef(false);
+  const micSyncRef = useRef<MicSync | null>(null);
+  if (!micSyncRef.current) {
+    micSyncRef.current = createMicSync({
+      setMic: async (on) => {
+        await roomRef.current?.setMic(on);
+      },
+      onResult: (open) => dispatch({ type: open ? "mic_opened" : "mic_closed" }),
+      onError: (error) => {
+        console.error("[voice] không mở/đóng được mic:", error);
+        dispatch({ type: "mic_closed" });
+        dispatch({ type: "hold_end" });
+      },
+    });
+  }
 
   if (!roomRef.current) {
     roomRef.current = createVoiceRoom({
@@ -99,37 +111,12 @@ export function useVoice(socket: Socket | null, view: VoiceView | undefined): Us
   /**
    * Đồng bộ mic thật với thứ máy trạng thái nói là NÊN mở.
    *
-   * KHÔNG dùng cờ `cancelled` trong cleanup. Dependency là cả `state`, nên mọi
-   * dispatch - kể cả những cái chẳng liên quan gì tới mic như `speakers_changed`
-   * hay `audio_playback_ok` - đều chạy cleanup. Một cờ như vậy sẽ nuốt luôn
-   * `mic_opened` của lời gọi đang chạy dở, và nút ở lại màu xám vĩnh viễn dù mic
-   * đã mở thật. Đó chính là hồi quy quan sát được ngày 2026-08-30, ngay sau khi
-   * việc gắn audio làm `AudioPlaybackStatusChanged` bắt đầu bắn.
-   *
-   * Thay bằng một cờ "đang bận" để không gọi chồng, còn kết quả thì LUÔN được
-   * báo về. Người dùng nhả nút giữa chừng cũng không sao: vòng effect kế tiếp
-   * thấy `micShouldBeOpen` đã false và tự đóng lại.
+   * Toàn bộ phần khó nằm trong `createMicSync` - thuần, không React, và có test
+   * khoá hai bất biến mà tầng này từng vi phạm trên production. Effect ở đây chỉ
+   * còn là một lời gọi.
    */
   useEffect(() => {
-    const want = micShouldBeOpen(state);
-    if (want === state.micOpen || micBusyRef.current) return;
-    micBusyRef.current = true;
-    // Nhả cờ TRƯỚC khi dispatch: dispatch làm effect chạy lại, và nếu cờ còn bật
-    // lúc đó thì vòng chạy lại thoát sớm rồi không còn gì đánh thức nó nữa.
-    const done = (action: VoiceAction) => {
-      micBusyRef.current = false;
-      dispatch(action);
-    };
-    void roomRef.current
-      ?.setMic(want)
-      .then(() => done({ type: want ? "mic_opened" : "mic_closed" }))
-      .catch((err) => {
-        // Thiếu nhánh này thì mic hỏng là im lặng tuyệt đối: nút xám, không lỗi,
-        // không cách nào biết chuyện gì đang xảy ra.
-        console.error("[voice] không mở/đóng được mic:", err);
-        done({ type: "mic_closed" });
-        dispatch({ type: "hold_end" });
-      });
+    micSyncRef.current?.reconcile(micShouldBeOpen(state), state.micOpen);
   }, [state]);
 
   // Mọi đường nhả nút ngoài pointerup: rời tab, mất focus. Thiếu chúng thì mic

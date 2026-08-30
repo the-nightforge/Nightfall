@@ -1,6 +1,6 @@
 "use client";
 
-import { DisconnectReason, Room, RoomEvent, Track, type RemoteTrack } from "livekit-client";
+import { DisconnectReason, Room, RoomEvent, type RemoteTrack } from "livekit-client";
 
 /**
  * Lớp bọc mỏng quanh client LiveKit.
@@ -30,25 +30,82 @@ export interface VoiceRoomHandle {
 }
 
 /**
- * Nơi chứa các phần tử <audio> của người khác.
- *
- * LiveKit KHÔNG tự phát tiếng của người khác: nó nhận track về rồi thôi, việc
- * gắn track vào một phần tử media là của phía ứng dụng. Thiếu bước này thì mọi
- * thứ khác đều đúng - quyền, track, chỉ báo đang nói - mà không ai nghe được ai.
+ * Phần tử media mà track được gắn vào. Kiểu tối thiểu, không phải HTMLMediaElement,
+ * để test dựng được bản giả mà không cần DOM.
  */
-function audioSink(): HTMLElement {
-  const id = "voice-audio-sink";
-  let el = document.getElementById(id);
-  if (!el) {
-    el = document.createElement("div");
-    el.id = id;
-    el.style.display = "none";
-    document.body.appendChild(el);
-  }
-  return el;
+export interface VoiceAudioElement {
+  autoplay: boolean;
+  setAttribute(name: string, value: string): void;
+  remove(): void;
 }
 
-export function createVoiceRoom(handlers: VoiceRoomHandlers): VoiceRoomHandle {
+/** Nơi chứa các phần tử <audio> của người khác. */
+export interface VoiceAudioSink {
+  add(element: VoiceAudioElement): void;
+  clear(): void;
+}
+
+/** Phần API của track mà việc gắn/gỡ cần tới. */
+export interface VoiceAudioTrack {
+  kind: string;
+  attach(): VoiceAudioElement;
+  detach(): VoiceAudioElement[];
+}
+
+/**
+ * Gắn track âm thanh của người khác vào một phần tử để nó phát ra tiếng.
+ *
+ * LiveKit KHÔNG tự làm việc này: nó nhận track về rồi thôi. Thiếu bước gắn thì
+ * mọi thứ khác đều đúng - quyền, track, chỉ báo đang nói - mà không ai nghe được
+ * ai. Đó đúng là lỗi đã lên tới production ngày 2026-08-30.
+ *
+ * Tách ra khỏi phần đăng ký sự kiện, và nhận `sink` qua tham số, để kiểm chứng
+ * được bằng node:test - tầng này trước đó không có test nào.
+ *
+ * @returns có gắn hay không (track không phải audio thì bỏ qua)
+ */
+export function attachRemoteAudio(track: VoiceAudioTrack, sink: VoiceAudioSink): boolean {
+  if (track.kind !== "audio") return false;
+  const element = track.attach();
+  element.autoplay = true;
+  // Đặt bằng attribute vì `playsInline` chỉ có trong kiểu của thẻ video. Với
+  // audio thì nó thừa, nhưng Safari đỡ khó tính hơn khi có nó.
+  element.setAttribute("playsinline", "");
+  sink.add(element);
+  return true;
+}
+
+/** @returns số phần tử đã gỡ bỏ */
+export function detachRemoteAudio(track: VoiceAudioTrack): number {
+  if (track.kind !== "audio") return 0;
+  const elements = track.detach();
+  for (const element of elements) element.remove();
+  return elements.length;
+}
+
+/** Nơi chứa mặc định: một thẻ div ẩn cắm vào cuối body. */
+function domSink(): VoiceAudioSink {
+  const id = "voice-audio-sink";
+  const container = (): HTMLElement => {
+    let el = document.getElementById(id);
+    if (!el) {
+      el = document.createElement("div");
+      el.id = id;
+      el.style.display = "none";
+      document.body.appendChild(el);
+    }
+    return el;
+  };
+  return {
+    add: (element) => container().appendChild(element as unknown as Node),
+    clear: () => container().replaceChildren(),
+  };
+}
+
+export function createVoiceRoom(
+  handlers: VoiceRoomHandlers,
+  sink: VoiceAudioSink = domSink(),
+): VoiceRoomHandle {
   let room: Room | null = null;
 
   function reportPermission(): void {
@@ -70,17 +127,10 @@ export function createVoiceRoom(handlers: VoiceRoomHandlers): VoiceRoomHandle {
         handlers.onSpeakers(speakers.map((p) => p.identity));
       });
       next.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
-        if (track.kind !== Track.Kind.Audio) return;
-        const element = track.attach();
-        element.autoplay = true;
-        // Đặt bằng attribute vì `playsInline` chỉ có trong kiểu của thẻ video.
-        // Với audio thì nó thừa, nhưng Safari đỡ khó tính hơn khi có nó.
-        element.setAttribute("playsinline", "");
-        audioSink().appendChild(element);
+        attachRemoteAudio(track, sink);
       });
       next.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
-        if (track.kind !== Track.Kind.Audio) return;
-        for (const element of track.detach()) element.remove();
+        detachRemoteAudio(track);
       });
       next.on(RoomEvent.Disconnected, (reason) => {
         // Trùng danh tính nghĩa là chính người này vừa mở ở tab khác. Phải phân
@@ -117,7 +167,7 @@ export function createVoiceRoom(handlers: VoiceRoomHandlers): VoiceRoomHandle {
       current.removeAllListeners();
       await current.disconnect();
       // Dọn phần tử audio còn sót, nếu không mỗi lần vào lại sẽ chồng thêm một lớp.
-      audioSink().replaceChildren();
+      sink.clear();
     },
   };
 }

@@ -517,6 +517,62 @@ mới.
 | P1-5 | Bất biến "voice ⟹ text ok" | Bất biến theo **khán giả** (mục 11.1) | `resolveChat` trả ok:true cho người chết (kênh `dead`) nên test cũ vô dụng |
 | P1-6 | `voice:token` không có contract | Mục 10 | Helper `ws.ts` vứt ack callback nên không trả bằng ack được |
 
+## 14b. Ba lỗi phát hiện trên production, và vì sao chúng lọt
+
+Cả ba xuất hiện sau khi tính năng đã lên production ngày 2026-08-30, và cả ba
+đều nằm ở **tầng nối với trình duyệt** - lớp bọc SDK và hook React. Toàn bộ test
+web vẫn xanh suốt, vì chúng chỉ chạy trên máy trạng thái thuần, mà máy trạng thái
+thì đúng. Đọc mục 16 trước khi sửa bất cứ thứ gì trong `voice-room.ts` hay
+`useVoice.ts`.
+
+### 14b.1 Không ai nghe được ai (`3e62f76`)
+
+**Triệu chứng:** mic mở, quyền đúng, chỉ báo đang nói chạy - mà hai chiều đều câm.
+
+**Nguyên nhân:** LiveKit **không tự phát** tiếng của người khác. Nó nhận track về
+rồi thôi; gắn track vào một phần tử media là việc của phía ứng dụng. Code thiếu
+hẳn `RoomEvent.TrackSubscribed` → `track.attach()`.
+
+**Đừng bỏ lại:** nếu ai đó dọn `voice-room.ts` và thấy `audioSink()` "chẳng ai
+dùng tới", đó chính là thứ duy nhất làm cho có tiếng.
+
+### 14b.2 Nút giữ-để-nói không bao giờ đỏ (`062df51`)
+
+**Triệu chứng:** giữ nút, mic mở thật, nhưng nút ở lại màu xám.
+
+**Nguyên nhân:** effect đồng bộ mic dùng cờ `cancelled` trong cleanup, mà
+dependency là cả `state`. Mọi dispatch - kể cả `speakers_changed` hay
+`audio_playback_ok`, chẳng liên quan gì tới mic - đều chạy cleanup và nuốt luôn
+`mic_opened` của lời gọi đang chạy dở.
+
+**Đáng chú ý:** lỗi này nằm sẵn từ đầu nhưng chỉ lộ ra sau khi vá 14b.1, vì lúc
+đó mới có track được gắn vào và `AudioPlaybackStatusChanged` mới bắt đầu bắn.
+
+**Đừng bỏ lại:** cờ "đang bận" ở đó để chặn gọi chồng, KHÔNG phải để huỷ kết quả.
+Đổi nó thành cleanup-huỷ là dựng lại đúng lỗi này.
+
+### 14b.3 Không ai được cấp quyền nói (`73ca462`)
+
+**Triệu chứng:** phòng ở LOBBY - nơi ai cũng được nói - mà LiveKit báo cả hai
+người `canPublish=false`, `sources=[]`.
+
+**Nguyên nhân:** `syncVoiceForPlayer` đánh dấu "đã vào" nhưng không xoá cache
+`applied`. Người chơi tải lại trang → vào lại LiveKit bằng token mới (mà token
+không bao giờ mang quyền nói) → server thấy cache nói "đã cấp true rồi" → bỏ qua
+đúng người vừa cần được cấp lại.
+
+**Đừng bỏ lại:** cache `applied` là tối ưu hoá, và nó SAI ngay khoảnh khắc phiên
+LiveKit của người chơi khởi động lại. `voice:ready` chính là tín hiệu báo điều
+đó, nên nó phải xoá cache chứ không được tin cache. Test
+`voice-sync.test.ts` → "vào lại voice sau khi tải lại trang" khoá hành vi này.
+
+### Bài học chung
+
+`canPublish=false` **kèm** `sources=[]` là dấu vân tay của token: nó có nghĩa là
+người đó chưa từng nhận một `updateParticipant` nào. Đọc trạng thái thật từ
+LiveKit (`npm run voice:probe`, hoặc `listParticipants`) giải quyết trong ba mươi
+giây thứ mà suy luận từ triệu chứng đã đoán sai hai lần liên tiếp.
+
 ## 15. Ràng buộc toàn cục
 
 **Thu hồi token chỉ có trên LiveKit Cloud.** Bản tự host không thu hồi được
