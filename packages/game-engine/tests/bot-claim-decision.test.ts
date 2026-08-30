@@ -61,6 +61,37 @@ function seerResultMemory(targetId: string): BotMemory {
   };
 }
 
+/** Một "tôi là <role>" trơn — như `ROLE_CLAIM` do chat-analysis hoặc Ngày Sự Thật sinh ra. */
+function roleClaimMemory(actorId: string, role: string, round = 2): BotMemory {
+  return {
+    id: `ROLE_CLAIM:m-${actorId}:${actorId}:`,
+    sourceId: `m-${actorId}`,
+    round,
+    phase: "DAY_DISCUSSION",
+    type: "ROLE_CLAIM",
+    actorId,
+    importance: 5,
+    pinned: true,
+    data: { role },
+  };
+}
+
+/** Một "<targetId> không thể là X, tôi mới là <role>" — `COUNTER_CLAIM` chỉ đích danh `targetId`. */
+function counterClaimMemory(actorId: string, targetId: string, role: string, round = 2): BotMemory {
+  return {
+    id: `COUNTER_CLAIM:m-${actorId}:${actorId}:${targetId}`,
+    sourceId: `m-${actorId}`,
+    round,
+    phase: "DAY_DISCUSSION",
+    type: "COUNTER_CLAIM",
+    actorId,
+    targetId,
+    importance: 5,
+    pinned: true,
+    data: { role },
+  };
+}
+
 describe("decideChatClaim", () => {
   it("Tiên Tri cầm kết quả trúng Sói thì khai và chỉ đích danh", () => {
     const state = stateFor("p1");
@@ -178,5 +209,55 @@ describe("decideChatClaim", () => {
     expect(claim?.kind).toBe("PROACTIVE");
     expect(claim?.role).toBe("SEER");
     expect(claim?.accusedId).toBe("p4");
+  });
+
+  it("Tiên Tri thật gặp kẻ mạo danh thì phản bác chứ không khai như chưa có chuyện gì", () => {
+    const state = stateFor("p1");
+    // p1 chưa hề soi ra ai — nếu COUNTER không đứng trước PROACTIVE, hàm này sẽ
+    // đi thẳng tới nhánh informant, thấy không có kết quả và trả về null thay vì
+    // phản bác.
+    state.claims.push(roleClaimMemory("p2", "SEER"));
+    const claim = decideChatClaim(
+      contextFor("p1", "SEER"),
+      state,
+      createSeededRng("a"),
+      null,
+      BOT_WEIGHTS_V4,
+    );
+    expect(claim?.kind).toBe("COUNTER");
+    expect(claim?.role).toBe("SEER");
+    expect(claim?.counterTargetId).toBe("p2");
+    expect(claim?.accusedId).toBeNull();
+  });
+
+  it("Sói bị một lời khai gọi tên thì phản bác lại bằng đúng vai người kia vừa nhận", () => {
+    const state = stateFor("p2");
+    // p3 nói: "p2 không thể là Tiên Tri, tôi mới là Tiên Tri" — targetId chỉ p2.
+    state.claims.push(counterClaimMemory("p3", "p2", "SEER"));
+    const claim = decideChatClaim(
+      contextFor("p2", "WEREWOLF", { knownRoles: { p2: "WEREWOLF" } }),
+      state,
+      createSeededRng("a"),
+      null,
+      BOT_WEIGHTS_V4,
+    );
+    expect(claim?.kind).toBe("COUNTER");
+    expect(claim?.role).toBe("SEER");
+    expect(claim?.counterTargetId).toBe("p3");
+    expect(claim?.accusedId).toBeNull();
+  });
+
+  it("Dân Làng thấy người khác khai Dân Làng thì không phản bác — Dân Làng không phải vai chức năng", () => {
+    const state = stateFor("p1");
+    state.claims.push(roleClaimMemory("p2", "VILLAGER"));
+    expect(
+      decideChatClaim(
+        contextFor("p1", "VILLAGER"),
+        state,
+        createSeededRng("a"),
+        null,
+        BOT_WEIGHTS_V4,
+      ),
+    ).toBeNull();
   });
 });
