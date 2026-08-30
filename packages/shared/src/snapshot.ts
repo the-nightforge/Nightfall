@@ -210,6 +210,9 @@ export interface NightRecap {
     seer: RecapPlayer;
     target: RecapPlayer;
     isWolf: boolean;
+    /** Mục tiêu soi thứ 2 khi có sự kiện Màn Sương Tan; vắng mặt ở đêm thường. */
+    secondaryTarget?: RecapPlayer;
+    secondaryIsWolf?: boolean;
   }>;
   witch: {
     usedHeal: boolean;
@@ -225,6 +228,25 @@ export interface NightRecap {
    * Không bắt buộc vì lịch sử đêm lưu từ trước khi có role này thiếu trường đó.
    */
   cursedTurned?: RecapPlayer | null;
+  /**
+   * Các trường dưới đây thuộc vai trò mở rộng (Thiên Thần Hộ Mệnh, Thám Tử,
+   * Linh Mục, Sói Con), thêm sau bản gốc nên không bắt buộc - lịch sử đêm cũ
+   * không có role này thì thiếu trường tương ứng.
+   */
+  guardianAngelTarget?: RecapPlayer | null;
+  detectiveChecks?: Array<{
+    detective: RecapPlayer;
+    target1: RecapPlayer;
+    target2: RecapPlayer;
+    sameTeam: boolean;
+  }>;
+  priest?: {
+    priest: RecapPlayer;
+    target: RecapPlayer;
+    isWolf: boolean;
+  } | null;
+  /** Mục tiêu cắn thứ 2 khi bầy Sói cắn kép (Sói Con phẫn nộ / event Cuộc Săn Đẫm Máu). */
+  wolfSecondaryTarget?: RecapPlayer | null;
 }
 
 /** Snapshot toàn bộ trạng thái phòng + trận đấu dành cho MỘT người chơi cụ thể. */

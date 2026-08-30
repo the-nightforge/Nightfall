@@ -983,6 +983,10 @@ describe("Lịch sử diễn biến ban đêm", () => {
           cause: "poison",
         }],
         cursedTurned: null,
+        guardianAngelTarget: null,
+        detectiveChecks: [],
+        priest: null,
+        wolfSecondaryTarget: null,
       },
     ]);
   });

@@ -878,6 +878,7 @@ export class GameEngine {
 
     const wolfTarget = recapPlayer(st.night.killTarget ? this.player(st.night.killTarget) : undefined);
     const usedHeal = healApplied;
+    const priestResultEntry = Object.entries(st.night.priestResults)[0];
     const recap: NightRecap = {
       round: st.round,
       wolfTarget,
@@ -885,7 +886,17 @@ export class GameEngine {
       seerChecks: Object.entries(st.night.seerResults).flatMap(([seerId, result]) => {
         const seer = recapPlayer(this.player(seerId));
         const target = recapPlayer(this.player(result.targetId));
-        return seer && target ? [{ seer, target, isWolf: result.isWolf }] : [];
+        if (!seer || !target) return [];
+        const secondaryTarget = result.secondaryTargetId
+          ? (recapPlayer(this.player(result.secondaryTargetId)) ?? undefined)
+          : undefined;
+        return [{
+          seer,
+          target,
+          isWolf: result.isWolf,
+          secondaryTarget,
+          secondaryIsWolf: secondaryTarget ? result.secondaryIsWolf : undefined,
+        }];
       }),
       witch: {
         usedHeal,
@@ -897,6 +908,27 @@ export class GameEngine {
         cause: death.cause,
       })),
       cursedTurned: recapPlayer(cursedTurned ?? undefined),
+      guardianAngelTarget: recapPlayer(
+        st.night.guardianAngelTarget ? this.player(st.night.guardianAngelTarget) : undefined,
+      ),
+      detectiveChecks: Object.entries(st.night.detectiveResults).flatMap(([detectiveId, result]) => {
+        const detective = recapPlayer(this.player(detectiveId));
+        const target1 = recapPlayer(this.player(result.target1Id));
+        const target2 = recapPlayer(this.player(result.target2Id));
+        return detective && target1 && target2
+          ? [{ detective, target1, target2, sameTeam: result.sameTeam }]
+          : [];
+      }),
+      priest: (() => {
+        if (!priestResultEntry) return null;
+        const [priestId, result] = priestResultEntry;
+        const priest = recapPlayer(this.player(priestId));
+        const target = recapPlayer(this.player(result.targetId));
+        return priest && target ? { priest, target, isWolf: result.isWolf } : null;
+      })(),
+      wolfSecondaryTarget: recapPlayer(
+        secondaryTargetToProcess ? this.player(secondaryTargetToProcess) : undefined,
+      ),
     };
     st.nightHistory.push(recap);
 
