@@ -231,6 +231,23 @@ qua tầng signaling.
 
 Người chết luôn **nghe** được, nhưng không nói được cho tới `GAME_OVER`.
 
+**Hai cách dùng mic**, mỗi người tự chọn (lưu trong `localStorage`, không phải
+cấu hình phòng — đây là cách thao tác chứ không phải luật chơi):
+
+| Chế độ | Thao tác |
+|---|---|
+| `ptt` (mặc định) | Giữ nút mới phát, nhả ra là tắt |
+| `toggle` | Chạm một cái là bật, chạm lần nữa là tắt — tiện hơn hẳn trên điện thoại |
+
+Đổi bằng nút ngay dưới nút nói. Mặc định là `ptt` có chủ ý: người đang chơi
+không bị đổi hành vi dưới chân, và với một game mà nói hớ một câu là mất ván thì
+"phải chủ động giữ mới phát" an toàn hơn để làm mặc định.
+
+**Mất quyền nói luôn hạ cờ đang-nói**, ở cả hai chế độ. Với `ptt` nó gần như vô
+hình; với `toggle` nó là thứ giữ cho chế độ đó an toàn — bật mic ban ngày, đêm
+xuống bị thu quyền, nếu cờ còn bật thì sáng hôm sau mic tự mở mà người chơi
+không chạm gì.
+
 Hai điều quan trọng nếu bạn sửa phần này:
 
 1. **Token không bao giờ mang quyền nói.** Mọi token ký ra đều có

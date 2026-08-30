@@ -66,6 +66,7 @@ export type VoiceAction =
   | { type: "snapshot_can_publish"; canPublish: boolean }
   | { type: "hold_start" }
   | { type: "hold_end"; reason?: "pointerup" | "pointercancel" | "blur" | "hidden" }
+  | { type: "hold_toggle" }
   | { type: "mic_opened" }
   | { type: "mic_closed" }
   | { type: "audio_playback_blocked" }
@@ -94,14 +95,36 @@ export function voiceReducer(state: VoiceState, action: VoiceAction): VoiceState
       return { ...state, connection: "idle", holding: false, duplicate: true, speakers: [] };
     case "failed":
       return { ...state, connection: "failed", holding: false, error: action.error };
+    /**
+     * Mất quyền nói thì HẠ CỜ, không chỉ đóng mic.
+     *
+     * Với push-to-talk điều này gần như vô hình: nhấc ngón tay là xong. Với chế
+     * độ chạm bật/tắt thì nó là thứ giữ cho chế độ đó an toàn - bật mic ban
+     * ngày, đêm xuống server thu quyền, nếu cờ còn bật thì sáng hôm sau mic TỰ
+     * MỞ mà người chơi không chạm gì. Đúng kiểu phát sóng ngoài ý muốn mà latch
+     * sinh ra để tránh.
+     *
+     * Được cấp quyền lại thì phải chạm lại. Pha đã đổi, ý định cũng nên được
+     * nói lại.
+     */
     case "livekit_permission":
-      return { ...state, livekitCanPublish: action.canPublish };
+      return {
+        ...state,
+        livekitCanPublish: action.canPublish,
+        holding: action.canPublish ? state.holding : false,
+      };
     case "snapshot_can_publish":
-      return { ...state, snapshotCanPublish: action.canPublish };
+      return {
+        ...state,
+        snapshotCanPublish: action.canPublish,
+        holding: action.canPublish ? state.holding : false,
+      };
     case "hold_start":
       return { ...state, holding: true };
     case "hold_end":
       return { ...state, holding: false };
+    case "hold_toggle":
+      return { ...state, holding: !state.holding };
     case "mic_opened":
       return { ...state, micOpen: true };
     case "mic_closed":

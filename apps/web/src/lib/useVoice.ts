@@ -1,11 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { CLIENT_EVENTS, SERVER_EVENTS, type VoiceTokenPayload, type VoiceView } from "@masoi/shared";
 import type { Socket } from "socket.io-client";
 import { audioEngine } from "./audio-engine";
 import { createVoiceRoom, type VoiceRoomHandle } from "./voice-room";
 import { createMicSync, type MicSync } from "./voice-mic-sync";
+import {
+  DEFAULT_VOICE_SETTINGS,
+  loadVoiceSettings,
+  saveVoiceSettings,
+  type MicMode,
+} from "./voice-settings";
 import {
   initialVoiceState,
   micShouldBeOpen,
@@ -20,6 +26,10 @@ export interface UseVoice {
   activate(): void;
   holdStart(): void;
   holdEnd(): void;
+  /** Chế độ chạm bật/tắt: lật trạng thái nói. */
+  toggleHold(): void;
+  micMode: MicMode;
+  setMicMode(mode: MicMode): void;
   micOpen: boolean;
   /** Set chứ không phải mảng: mỗi ghế tra cứu một lần, danh sách đổi liên tục. */
   speakers: ReadonlySet<string>;
@@ -38,6 +48,14 @@ export function useVoice(socket: Socket | null, view: VoiceView | undefined): Us
   // listener mỗi lần state đổi.
   const stateRef = useRef(state);
   stateRef.current = state;
+  // Khởi tạo bằng mặc định chứ không đọc localStorage ngay: server render không
+  // có localStorage, đọc ở đây sẽ lệch giữa server và client. Cùng nếp
+  // SoundControl.
+  const [micMode, setMicModeState] = useState<MicMode>(DEFAULT_VOICE_SETTINGS.micMode);
+  useEffect(() => {
+    setMicModeState(loadVoiceSettings().micMode);
+  }, []);
+
   const micSyncRef = useRef<MicSync | null>(null);
   if (!micSyncRef.current) {
     micSyncRef.current = createMicSync({
@@ -159,6 +177,16 @@ export function useVoice(socket: Socket | null, view: VoiceView | undefined): Us
     activate,
     holdStart: useCallback(() => dispatch({ type: "hold_start" }), []),
     holdEnd: useCallback(() => dispatch({ type: "hold_end", reason: "pointerup" }), []),
+    toggleHold: useCallback(() => dispatch({ type: "hold_toggle" }), []),
+    micMode,
+    setMicMode: useCallback((mode: MicMode) => {
+      setMicModeState(mode);
+      saveVoiceSettings({ micMode: mode });
+      // Đổi chế độ giữa lúc đang nói thì đóng mic lại: người dùng vừa đổi cách
+      // thao tác, giữ nguyên trạng thái nói sẽ khiến họ không biết mình còn
+      // đang phát hay không.
+      dispatch({ type: "hold_end" });
+    }, []),
     micOpen: state.micOpen,
     speakers: useMemo(() => new Set(state.speakers), [state.speakers]),
   };

@@ -38,7 +38,11 @@ Còn đúng một hành vi phải chặn nghiêm ngặt: **người chết nói 
 - Voice cho phe Sói ban đêm, voice cho người chết.
 - TTS cho bot. Bàn chơi nhắm tới là đa số người thật, bot chỉ lấp chỗ; bot giữ
   nguyên chat text và không chiếm slot voice.
-- Turn-based / gậy phát biểu. Ban ngày dùng push-to-talk tự do.
+- Turn-based / gậy phát biểu. Ban ngày ai cũng nói tự do.
+- Mic mở sẵn cả pha (open mic). Đã cân nhắc ngày 2026-08-30 và bỏ: tiếng ồn nền,
+  nói chuyện với người bên cạnh, hoặc buột miệng đều lên sóng — rủi ro thật
+  trong một game bí mật. Chế độ `toggle` (chạm bật/tắt) giải quyết được sự bất
+  tiện trên điện thoại mà vẫn giữ tính chất "muốn nói thì phải chủ động bật".
 - Video, ghi âm, lọc ồn nâng cao.
 - Sửa `resolveChat` hoặc bất cứ thứ gì trong `game-engine`.
 - **`DEAD_CAN_SPEAK` vĩnh viễn là text-only.** Event này (`eventManager.ts:129`)

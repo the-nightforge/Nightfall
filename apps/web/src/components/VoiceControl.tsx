@@ -11,6 +11,9 @@ export function VoiceControl({ snapshot }: { snapshot: RoomSnapshot | null }) {
   const voice = useVoiceContext();
   const ui = voice?.ui ?? { visible: false, mode: "join" as const };
   const micOpen = voice?.micOpen ?? false;
+  const micMode = voice?.micMode ?? "ptt";
+  const toggleHold = voice?.toggleHold ?? (() => undefined);
+  const setMicMode = voice?.setMicMode ?? (() => undefined);
   const activate = voice?.activate ?? (() => undefined);
   const holdStart = voice?.holdStart ?? (() => undefined);
   const holdEnd = voice?.holdEnd ?? (() => undefined);
@@ -30,6 +33,10 @@ export function VoiceControl({ snapshot }: { snapshot: RoomSnapshot | null }) {
 
   if (!snapshot || !ui.visible) return null;
 
+  const talkClass = `w-full rounded-xl px-4 py-3 font-semibold transition ${
+    micOpen ? "bg-blood-500 text-white" : "bg-white/10 text-mist"
+  }`;
+
   return (
     <div className="card flex flex-col gap-2">
       {ui.mode === "join" && (
@@ -47,21 +54,36 @@ export function VoiceControl({ snapshot }: { snapshot: RoomSnapshot | null }) {
       )}
 
       {ui.mode === "talk" && (
-        <button
-          className={`w-full rounded-xl px-4 py-3 font-semibold transition ${
-            micOpen ? "bg-blood-500 text-white" : "bg-white/10 text-mist"
-          }`}
-          // pointer* bắt được cả chuột lẫn cảm ứng bằng một đường.
-          onPointerDown={holdStart}
-          onPointerUp={holdEnd}
-          // Thiếu pointercancel là mic kẹt mở khi trình duyệt cướp con trỏ
-          // (cuộn, kéo ra ngoài nút, cuộc gọi đến).
-          onPointerCancel={holdEnd}
-          onPointerLeave={holdEnd}
-          onContextMenu={(e) => e.preventDefault()}
-        >
-          {micOpen ? "🔴 Đang nói..." : "🎙️ Giữ để nói"}
-        </button>
+        <>
+          {micMode === "ptt" ? (
+            <button
+              className={talkClass}
+              // pointer* bắt được cả chuột lẫn cảm ứng bằng một đường.
+              onPointerDown={holdStart}
+              onPointerUp={holdEnd}
+              // Thiếu pointercancel là mic kẹt mở khi trình duyệt cướp con trỏ
+              // (cuộn, kéo ra ngoài nút, cuộc gọi đến).
+              onPointerCancel={holdEnd}
+              onPointerLeave={holdEnd}
+              onContextMenu={(e) => e.preventDefault()}
+            >
+              {micOpen ? "🔴 Đang nói..." : "🎙️ Giữ để nói"}
+            </button>
+          ) : (
+            // Chế độ chạm bật/tắt: onClick chứ không phải pointer*, để một cú
+            // chạm là một lần lật - không phụ thuộc ngón tay có xê dịch hay không.
+            <button className={talkClass} onClick={toggleHold}>
+              {micOpen ? "🔴 Đang nói — chạm để tắt" : "🎙️ Chạm để nói"}
+            </button>
+          )}
+
+          <button
+            className="text-xs text-mist/50 underline-offset-2 hover:underline"
+            onClick={() => setMicMode(micMode === "ptt" ? "toggle" : "ptt")}
+          >
+            {micMode === "ptt" ? "Chuyển sang chạm bật/tắt" : "Chuyển sang giữ để nói"}
+          </button>
+        </>
       )}
 
       {ui.mode === "listen" && (
