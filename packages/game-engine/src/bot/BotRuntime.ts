@@ -8,6 +8,7 @@ import { applyPrivateInformation } from "./belief/private-info";
 import {
   decideChatClaim,
   decideRoleClaim,
+  voteLeader,
   type BotClaimIntention,
 } from "./decision/claim-decision";
 import { decideGhostWhisper, type BotGhostWhisperIntention } from "./decision/ghost-decision";
@@ -870,9 +871,15 @@ export class BotRuntime {
       // Người khai có đang bị dồn phiếu ngay lúc mở miệng không. Ghi Ở ĐÂY chứ
       // không tính lại sau: bảng phiếu đổi liên tục, và một tín hiệu về THỜI
       // ĐIỂM mà lại đọc trạng thái của tương lai thì không còn là tín hiệu.
-      if (memory.type === "ROLE_CLAIM") {
-        memory.data.underFire =
-          (knowledge.currentVoteCounts.players[memory.actorId] ?? 0) > 0;
+      //
+      // "Bị dồn" = ĐANG DẪN PHIẾU, dùng chung `voteLeader` với `decideChatClaim`.
+      // Không phải "có ít nhất một phiếu": một phiếu phản đối lạc không phải áp
+      // lực, và từ vòng 3 trở đi hầu như ai cũng có một phiếu như thế.
+      //
+      // Đóng dấu cho CẢ `COUNTER_CLAIM`: một câu phản bác cũng là một lời khai
+      // vai, và `claim-credibility` giờ chấm điểm cả hai loại.
+      if (memory.type === "ROLE_CLAIM" || memory.type === "COUNTER_CLAIM") {
+        memory.data.underFire = voteLeader(knowledge.currentVoteCounts.players) === memory.actorId;
       }
       remember(this.state, memory, this.weights);
     }

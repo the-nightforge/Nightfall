@@ -13,15 +13,17 @@
 
 | Hạng mục | Lệnh | Kết quả |
 | --- | --- | --- |
-| Test toàn monorepo | `npm test` | XANH — engine **1.494**, server **518**, web **145** |
-| Test riêng engine | `npx vitest run --root packages/game-engine` | 46 file, 1.494/1.494, 4.75s |
-| Test riêng server | `npx vitest run --root apps/server` | 60 file, 518/518, 1.73s |
+| Test toàn monorepo | `npm test` | XANH — engine **1.499**, server **518**, web **145** |
+| Test riêng engine | `npx vitest run --root packages/game-engine` | 46 file, 1.499/1.499, 5.16s |
+| Test riêng server | `npx vitest run --root apps/server` | 60 file, 518/518, 1.90s |
 | Lint toàn monorepo | `npm run lint` (từ gốc) | XANH — game-engine, web, server |
-| Whitespace | `git diff --check f9ba93b..bb4f1e4` | SẠCH |
+| Whitespace | `git diff --check f9ba93b` | SẠCH |
 | Fingerprint v1 | `wolfWins === 22` trên 24 ván | XANH, không đổi |
 | Fixture self-play | `docs/fixtures/selfplay-sample.json` sinh lại | chỉ thêm khoá, không đổi con số cũ |
 
-Toàn bộ số trong tài liệu này lấy từ `task-7-report.md` (đo đạc gốc) trừ khi ghi chú khác; số test ở trên do phiên viết tài liệu này tự chạy lại ngày 2026-08-30, không lấy nguyên văn từ báo cáo task nào.
+Toàn bộ số trong tài liệu này lấy từ `task-7-report.md` (đo đạc gốc) trừ khi ghi chú khác; số test ở trên do đợt sửa cuối (review toàn nhánh) chạy lại ngày 2026-08-30. Engine 1.494 → 1.499 là năm test mới của đợt sửa đó.
+
+**Đợt sửa cuối đã làm dịch số đo cân bằng.** Mọi con số win-rate ở §5 là số ĐO TRƯỚC đợt sửa; §5.1 có số đo lại và giải thích cơ chế của phần chênh. Đọc §4 và §5 phải đọc kèm §4 (bảng đo lại) và §5.1.
 
 ---
 
@@ -71,6 +73,17 @@ Không mục tiêu nào trong G1–G6 là "không đạt" tuyệt đối, nhưng
 
 Cả bốn chỉ số vượt ngưỡng thiết kế: `claimsPerGame` trong dải 2–4 của G4, `counterClaimRate` nằm chặt trong (0,1), `claimFollowRate` rõ ràng khác 0 (đối chứng v3 = 0 tuyệt đối, vì v3 không có claim), `claimAccuracy` vượt xa sàn 50%.
 
+**Đo lại sau đợt sửa cuối (review toàn nhánh).** Đợt sửa đó cho mô hình uy tín đọc CẢ `COUNTER_CLAIM`, không chỉ `ROLE_CLAIM` (xem §10.7). Hành vi đổi, nên bốn con số đổi theo. Cùng seed, cùng preset:
+
+| Chỉ số | Bộ A trước | Bộ A sau | Bộ B trước | Bộ B sau |
+| --- | --- | --- | --- | --- |
+| `claimsPerGame` | 3.363 | **3.360** | 3.363 | **3.343** |
+| `counterClaimRate` | 0.560 | **0.573** | 0.560 | **0.563** |
+| `claimFollowRate` | 0.477 (218/457) | **0.454 (214/471)** | 0.476 (207/435) | **0.462 (210/455)** |
+| `claimAccuracy` | 0.888 (71/80) | **0.857 (66/77)** | 0.806 (54/67) | **0.786 (55/70)** |
+
+`claimAccuracy` vẫn cách xa sàn 50% ở cả hai bộ. Ba chỉ số còn lại gần như đứng yên — mật độ và tỉ lệ phản bác không đổi, vì đợt sửa chạm vào cách ĐỌC lời khai chứ không chạm vào cách quyết định khai.
+
 ### 4.1 Ba lựa chọn định nghĩa đằng sau `claimFollowRate`/`claimAccuracy` — không lệch cùng hướng
 
 Ba lựa chọn khi định nghĩa "làng đã tin/đi theo một lời khai" (`task-7-report.md`, Finding 5 vòng review):
@@ -101,6 +114,33 @@ Cả hai bộ nằm trong dải 28–68%. Cả hai chênh lệch vượt ngưỡ
 **Cơ chế được đặt tên:** lời khai chủ động của Tiên Tri thật (nhánh PROACTIVE của `decideChatClaim`) cho thông tin của nó một kênh đến cả bàn; `claim-credibility` (`accusationWeight: 12`, gấp ba một `ACCUSE` thường) khiến mô hình niềm tin của làng nặng đủ để thật sự đổi phiếu. `claimFollowRate` (47.7%, n=457) cho thấy làng đi theo khoảng một nửa số lời khai chỉ đích danh; `claimAccuracy` (80–89%, n=80 và n=67) cho thấy khi làng tin một lời khai Tiên Tri, gần như luôn là Tiên Tri thật. Độ chính xác phiếu bầu tăng ở cả hai bộ (`villageVoteAccuracy`) là xác nhận độc lập cho cùng cơ chế, không phải trùng hợp riêng của một chỉ số claim.
 
 **Nhưng một cơ chế khớp với dữ liệu không phải là một bằng chứng có kiểm soát.** Không có thí nghiệm nào ở đây cô lập biến — không batch nào tắt riêng `claim-credibility` mà giữ `decideChatClaim` bật để đo phần đóng góp của từng nửa cơ chế; không ai đo mức nhiễu nền của chênh lệch win-rate giữa hai bộ trọng số bất kỳ trên n=300. Câu chuyện cơ chế ở trên là lời giải thích hợp lý nhất cho những gì quan sát được, được hai bộ seed độc lập củng cố — không hơn.
+
+### 5.1 Đo lại sau đợt sửa cuối — lợi thế Dân thắng CO LẠI khoảng một nửa
+
+Đợt sửa cuối (§10.7) cho `claim-credibility` đọc cả `COUNTER_CLAIM`. Cùng seed, cùng preset, v3 không đổi một ván nào:
+
+| | Bộ seed A | Bộ seed B |
+| --- | --- | --- |
+| v3 Dân thắng (không đổi) | 41.00% (123/300) | 39.67% (119/300) |
+| v4 Dân thắng **trước** | 51.00% (153/300) | 51.67% (155/300) |
+| v4 Dân thắng **sau** | **45.00%** (135/300) | **46.00%** (138/300) |
+| Chênh lệch v4−v3 trước → sau | +10.0 → **+4.0** điểm | +12.0 → **+6.3** điểm |
+| `villageVoteAccuracy` v4 trước → sau | 50.5% → **47.5%** | 51.3% → **49.2%** |
+
+v4 vẫn thắng v3 ở cả hai bộ, và mọi tỉ lệ vẫn nằm trong dải 28–68% của spec. Nhưng chênh lệch không còn vượt ngưỡng ~5 điểm ở bộ A, nên **không được tiếp tục trích "+10/+12 điểm"**.
+
+**Cơ chế của phần mất, đã cô lập bằng batch riêng** (bốn biến thể, cùng seed):
+
+- Tắt riêng FIX 2 (`underFire` = "đang dẫn phiếu" thay vì "có ≥1 phiếu"): 41.67%/47.67% — FIX 2 tốn ~2 điểm.
+- Tắt riêng FIX 3 (tập vai quyền lực dùng chung): 39.67%/46.00% — **không đổi một ván nào**. Bàn 8 người của harness không chia `PRIEST`/`GUARDIAN_ANGEL`/`MAYOR`/`CURSED`, nên FIX 3 chưa được đo ở đây.
+- Giữ nguyên toàn bộ đợt sửa nhưng LOẠI `COUNTER_CLAIM` khỏi danh sách tín hiệu: 50.33%/50.00% — tức về gần đúng mốc cũ. **Toàn bộ phần mất đến từ việc tính `COUNTER_CLAIM`**, không phải từ việc sắp lại thứ tự hay từ FIX 2/FIX 3.
+- Loại `COUNTER_CLAIM` khỏi riêng S2: 44.67%/47.00%. Khỏi riêng S3: 42.33%/49.67%. Hai tín hiệu chia nhau phần mất, không tín hiệu nào một mình gây ra nó.
+
+**Vì sao tính phản bác lại làm Dân yếu đi.** Đếm trên 300 ván bộ A: **212/212 câu `COUNTER_CLAIM` là do người phe LÀNG nói, và tất cả đều khai đúng vai thật của mình.** Không một con Sói nào phản bác (nhánh COUNTER Case B của `decideChatClaim` gần như không nổ trong cấu hình này). Nói cách khác, người phản bác gần như luôn là Tiên Tri thật đứng lên đè lại một lời khai láo — và về cấu trúc, họ LUÔN là người nói THỨ HAI, vì con Sói khai trước.
+
+S2 phạt người đến sau nặng hơn (`collisionLatePenaltyScale: 1.6`), nên với `collisionPenalty: 7`, Tiên Tri thật ăn +11.2 nghi ngờ còn con Sói khai trước chỉ ăn +7. Cộng `claimantTrustWeight: 6` (cả hai cùng được) và `nightSurvivedPenalty: 8` (cả hai cùng chịu, vì Sói không cắn ai đêm đó cũng chẳng cắn chính mình), cán cân ròng là **người nói thật nghi ngờ cao hơn kẻ nói dối**. Trước đợt sửa, câu phản bác vô hình — không lợi cho ai, nhưng cũng không hại người nói thật.
+
+Đây là một tương tác thiết kế chưa được giải quyết, **không** phải một lỗi cài đặt: ruling của review là đúng (một câu phản bác *là* một lời khai, và bỏ qua nó khiến kẻ nói dối được thưởng còn người nói thật trắng tay), nhưng nó phơi ra rằng quy tắc "người đến sau đáng tin ít hơn" — hợp lý khi hai lời khai cùng loại — trở thành một hình phạt dành riêng cho người nói thật khi phản bác về cấu trúc luôn đến sau. Cân lại `collisionLatePenaltyScale` (hoặc cho nó chỉ áp giữa hai `ROLE_CLAIM`) là việc của một đợt hiệu chỉnh có chủ đích, có đo, chứ không phải một cú chỉnh số kèm theo đợt sửa này.
 
 ---
 
@@ -154,7 +194,7 @@ So với cú nhảy 2,6ms → 8,5ms (v1 → v3, Phase 4 §C8) — gấp 3,3 lầ
 
 - `appliedClaimEvidenceIds` dùng chung trần `weights.limits.seenEvents` (2000) với `seenEventIds`/`repliedMessageIds`. Đủ dùng ở quy mô thực tế (vài trăm mục), nhưng chế độ hỏng khi tràn **nặng hơn** hai danh sách anh em: tràn ở hai danh sách kia chỉ gây phân tích lại vô hại, còn tràn ở đây tái sinh đúng lỗi Critical đã bịt ở Task 6 (bằng chứng bị áp lại nhiều lần, kịch trần điểm belief). Chưa xảy ra hôm nay, đáng một chú thích nêu rõ bất đối xứng.
 - Test "v3 không bao giờ khai" ở Task 4 chỉ assert `kind !== "CLAIM_ROLE"`, nên cũng xanh nếu `planSpeech` trả `null` vì một lý do hoàn toàn khác. Được bù bởi test khác và suite vân tay, nhưng bản thân nó không chứng minh được điều nó quảng cáo.
-- `bot-weights.test.ts` có một test tên "v2 không thắng bằng cách nới ranh giới hiểu biết" nhưng gọi `runSelfPlay({ weights: DEFAULT_BOT_WEIGHTS })` — từ khi mặc định lật sang v4 (§10), test này giờ chạy trên v4, không phải v2 như tên và docstring của chính nó nói (docstring còn ghi sai "Task 8 sẽ đổi sang v2"). Có từ trước diff này, không do Phase 5 gây ra trực tiếp, nhưng đúng là cái bẫy "mặc định ngầm" đã làm cả tính năng nằm im tới tận Task 8. Nên ghim `BOT_WEIGHTS_V2` tường minh.
+- ~~`bot-weights.test.ts` có một test tên "v2 không thắng bằng cách nới ranh giới hiểu biết" nhưng gọi `runSelfPlay({ weights: DEFAULT_BOT_WEIGHTS })`~~ — **đã sửa ở đợt sửa cuối**: ghim `BOT_WEIGHTS_V2` tường minh, và sửa luôn docstring `V1_FINGERPRINT` ("Task 8 sẽ đổi sang v2" → đã đổi sang v4). Độ phủ v4 không mất, xem §10.6.
 - Task 6 phát hiện thêm: `enforcePinnedBudget` (`memory-store.ts`) **có** evict memory pinned (bao gồm `ROLE_CLAIM`) khi vượt `limits.pinned` (60), và `ROLE_CLAIM` sinh được theo từng tin chat chứ không chỉ một lần. Điều này quan trọng vì `task-6-report.md` lập luận sai ở đúng điểm này (xem §10).
 
 ---
@@ -191,7 +231,21 @@ Vòng review đầu của Task 6 phát hiện `observe()` chạy nhiều lần m
 
 Đây là lỗ nặng nhất của cả kế hoạch. Kế hoạch gốc có 8 bước triển khai, không bước nào nói "cho production dùng preset v4". `session-registry.ts` (nơi dựng `BotRuntime` cho phòng thật) không truyền `weights` khi khởi tạo, nên nó rơi về `DEFAULT_BOT_WEIGHTS` — mà cho tới hết Task 7, hằng số đó vẫn trỏ tới `BOT_WEIGHTS_V3`, tức `claim.accusationWeight = 0`. **Toàn bộ cơ chế claim đứng im trong mọi phòng thật** suốt bảy task đầu; con số +10/+12 điểm win-rate ở §5 chỉ tồn tại trong harness self-play, nơi trọng số được truyền tường minh vào `runSelfPlay`.
 
-Phát hiện ở Task 8, khi implementer đọc `session-registry.ts` để tìm chỗ nối pha bào chữa và nhận ra `decideChatClaim` không có đường nào tới được production. Sửa bằng cách nâng `DEFAULT_BOT_WEIGHTS` lên `BOT_WEIGHTS_V4`, không phải bằng cách ghim `weights` tường minh ở chỗ dựng `BotRuntime` — vì `weights.ts` tự viết rằng "mọi API nhận weights đều mặc định về hằng số này, nên không call site nào phải thay đổi chỉ vì cấu hình tồn tại"; nâng mặc định chính là cơ chế phát hành đã thiết kế sẵn, và cũng là cách v3 từng lên trước đó. Cú lật này chỉ làm đỏ đúng một test (`"mặc định trỏ tới v3"`, một khẳng định cơ học về giá trị cũ, không phải hành vi) — mọi test khác dùng mặc định ngầm vẫn xanh, vì các test đó hoặc ghim preset tường minh (vân tay v1/v2/v3) hoặc chạy qua `simulateGame()`, nơi speech bị tắt cứng nên đường claim không bao giờ được chạm tới bất kể trọng số nào.
+Phát hiện ở Task 8, khi implementer đọc `session-registry.ts` để tìm chỗ nối pha bào chữa và nhận ra `decideChatClaim` không có đường nào tới được production. Sửa bằng cách nâng `DEFAULT_BOT_WEIGHTS` lên `BOT_WEIGHTS_V4`, không phải bằng cách ghim `weights` tường minh ở chỗ dựng `BotRuntime` — vì `weights.ts` tự viết rằng "mọi API nhận weights đều mặc định về hằng số này, nên không call site nào phải thay đổi chỉ vì cấu hình tồn tại"; nâng mặc định chính là cơ chế phát hành đã thiết kế sẵn, và cũng là cách v3 từng lên trước đó. Cú lật này chỉ làm đỏ đúng một test (`"mặc định trỏ tới v3"`, một khẳng định cơ học về giá trị cũ, không phải hành vi).
+
+**Đính chính (đợt sửa cuối, review toàn nhánh).** Bản đầu của mục này viết rằng mọi test dùng mặc định ngầm vẫn xanh *vì* chúng "hoặc ghim preset tường minh, hoặc chạy qua `simulateGame()` nơi speech bị tắt cứng". Câu đó **không đúng**. Bốn tệp gọi `runSelfPlay({ seed })` với speech BẬT và không ghim preset — `selfplay.test.ts`, `selfplay-invariants.test.ts` (batch 30 ván `audit-*`), `selfplay-conversation.test.ts`, `selfplay-conversation-metrics.test.ts` (batch 12 ván `metric-real-*`) — nên kể từ Task 8 chúng chạy trên v4 với cơ chế claim BẬT. Chúng xanh, và đó là tin tốt đáng nói ra: toàn bộ bộ bất biến self-play (gồm `CLAIM_ONCE`, ranh giới hiểu biết, và các chỉ số hội thoại của Phase 3) nay phủ v4 mà không phải viết thêm một batch nào. Lý do đúng là "chúng xanh vì hành vi mới không phá bất biến nào", không phải "chúng không chạm tới v4".
+
+Một test thì đúng là đang nói dối về preset nó chạy: `bot-weights.test.ts` `"v2 không thắng bằng cách nới ranh giới hiểu biết"` gọi `runSelfPlay({ weights: DEFAULT_BOT_WEIGHTS })` nên đo v4 trong khi tên, docstring và `describe` bọc ngoài đều nói v2. Đợt sửa cuối ghim `BOT_WEIGHTS_V2` tường minh ở đó; độ phủ v4 không mất vì batch `audit-*` ở trên đã có.
+
+### 10.7 Mô hình uy tín mù đúng nửa sau của mọi cuộc cãi vai (review toàn nhánh)
+
+Chỉ nhìn thấy được khi đọc cả nhánh cùng lúc, nên không vòng review theo task nào bắt được. Ba khái niệm bị định nghĩa hai lần ở hai file, và cả ba đã lệch:
+
+1. **`claim-credibility.ts` lọc `type === "ROLE_CLAIM"`, nhưng `chat-analysis.ts` phát ra `COUNTER_CLAIM` rồi `continue` — một câu phản bác không bao giờ sinh kèm một `ROLE_CLAIM`.** Cộng thêm việc `decideChatClaim` xét COUNTER TRƯỚC PROACTIVE, người nói THỨ HAI trong mọi cuộc cãi vai rơi đúng vào loại mà mô hình uy tín bỏ qua. Đo trên 60 ván: 183 `CLAIM_ROLE` so với 49 `COUNTER_CLAIM`. Hệ quả cụ thể: Sói khai láo Tiên Tri ăn trọn thưởng tin cậy S1, Tiên Tri thật phản bác thì không sinh ra một mảnh bằng chứng nào. Sửa bằng cách chuẩn hoá CẢ HAI loại về một hình dạng chung rồi chạy tín hiệu trên đó — S1 nửa tin cậy, S2, S3 áp cho cả hai; S1 nửa buộc tội và S4 vẫn chỉ áp cho `ROLE_CLAIM`, vì `targetId` của một câu phản bác nghĩa là "người này khai láo vai", không phải "người này là Sói".
+2. **`underFire` mang hai nghĩa ở hai file.** `BotRuntime` đóng dấu khi người khai có ≥1 phiếu; `decideChatClaim` mở nhánh UNDER_FIRE khi bot đang DẪN phiếu; cả hai docstring đều viết "đang dẫn phiếu". Từ vòng 3 trở đi hầu như ai cũng cõng một phiếu lạc, nên `underFireFactor` (0.25) cắt thưởng tin cậy của gần như mọi lời khai xuống một phần tư. Thống nhất về "dẫn phiếu", và tách `voteLeader` ra một hàm dùng chung để hai chỗ không lệch lại được.
+3. **"Vai quyền lực" mang hai nghĩa ở hai file.** `claim-decision.ts` dùng `role !== "VILLAGER"` và cho Sói nấp sau `PRIEST`; `POWER_ROLES` của `claim-credibility.ts` chép tay và thiếu `PRIEST`, `GUARDIAN_ANGEL`, `MAYOR` — nên chỗ nấp AN TOÀN NHẤT của một con Sói bị dồn lại là chỗ mô hình uy tín mù hoàn toàn. Thay bằng một hàm duy nhất ở `@masoi/shared` (`isPowerRole`), suy ra từ `ROLE_META` chứ không chép tay: vai phe làng, không phải `VILLAGER`, không phải `CURSED`.
+
+Điểm 1 đổi hành vi và làm dịch số đo — xem §4 và §5.1. Điểm 3 không đổi một ván nào trong harness 8 người (những vai nó thêm không được chia ở cỡ bàn đó), nên nó chưa được đo, chỉ được lập luận.
 
 ---
 

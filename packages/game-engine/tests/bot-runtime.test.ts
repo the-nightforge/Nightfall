@@ -467,13 +467,16 @@ describe("bot speech intention", () => {
 describe("decideDefenseClaim", () => {
   /**
    * KHÔNG dùng `neutralRuntime()` hay bỏ trống `weights`: cả hai đều gieo một
-   * cấu hình tắt hẳn nhóm claim (`accusationWeight = 0`) - `neutralRuntime()`
-   * dùng thẳng `BOT_WEIGHTS_V1`, còn bỏ trống `weights` rơi về
-   * `DEFAULT_BOT_WEIGHTS`, hiện vẫn là `BOT_WEIGHTS_V3` (v1/v2/v3 kế thừa
-   * nguyên khối `claim` tắt của v1 để giữ tái lập bit-for-bit - xem
-   * `weights.ts`). `decideChatClaim` thoát ngay ở cổng đầu tiên với một trong
-   * hai cấu hình đó, nên mọi test claim phải xin đích danh `BOT_WEIGHTS_V4` -
-   * đúng cấu hình `bot-claim-decision.test.ts` đã dùng để đo nhóm này.
+   * cấu hình KHÔNG phải thứ test này muốn. `neutralRuntime()` dùng thẳng
+   * `BOT_WEIGHTS_V1`, tức nhóm claim tắt hẳn (`accusationWeight = 0`, v1/v2/v3
+   * kế thừa nguyên khối `claim` tắt của v1 để giữ tái lập bit-for-bit - xem
+   * `weights.ts`), nên `decideChatClaim` thoát ngay ở cổng đầu tiên. Bỏ trống
+   * `weights` thì rơi về `DEFAULT_BOT_WEIGHTS` - kể từ Task 8 hằng số đó LÀ
+   * `BOT_WEIGHTS_V4`, nên nhóm claim thật ra BẬT; nhưng một test claim mà phụ
+   * thuộc vào giá trị hiện thời của một mặc định dùng chung sẽ đổi nghĩa lặng lẽ
+   * ngay lần nâng preset kế tiếp - đúng cái bẫy đã làm cả tính năng nằm im suốt
+   * bảy task. Nên xin đích danh `BOT_WEIGHTS_V4` - đúng cấu hình
+   * `bot-claim-decision.test.ts` đã dùng để đo nhóm này.
    */
   function claimEnabledRuntime(): BotRuntime {
     return new BotRuntime({

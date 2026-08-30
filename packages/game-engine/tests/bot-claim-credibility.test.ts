@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { DayVoteRecap } from "@masoi/shared";
 import { describe, expect, it } from "vitest";
 import { claimEvidence } from "../src/bot/analysis/claim-credibility";
 import { BotRuntime } from "../src/bot/BotRuntime";
@@ -11,6 +14,28 @@ function claim(actorId: string, role: string, round: number, sourceId: string): 
     round,
     phase: "DAY_DISCUSSION",
     type: "ROLE_CLAIM",
+    actorId,
+    targetId: "p9",
+    importance: 8,
+    pinned: true,
+    data: { role, underFire: false },
+  };
+}
+
+/**
+ * Một câu PHẢN BÁC: "anh không thể là Tiên Tri, tôi mới là Tiên Tri".
+ *
+ * `targetId` ở đây là người bị phản bác - nghĩa "người này khai láo vai", KHÔNG
+ * phải "người này là Sói". Khác biệt đó là lý do S1 nửa buộc tội và S4 không
+ * được đọc trường này.
+ */
+function counter(actorId: string, role: string, round: number, sourceId: string): BotMemory {
+  return {
+    id: `COUNTER_CLAIM:${sourceId}:${actorId}`,
+    sourceId,
+    round,
+    phase: "DAY_DISCUSSION",
+    type: "COUNTER_CLAIM",
     actorId,
     targetId: "p9",
     importance: 8,
@@ -97,23 +122,134 @@ describe("claimEvidence", () => {
     for (const item of found) expect(BASE.seenEventIds).toContain(item.sourceId);
   });
 
+  /**
+   * Kịch bản đảo ngược mục đích của cả cơ chế, và là lỗi mà đợt sửa này bịt.
+   *
+   * Sói khai láo Tiên Tri ở vòng 2 rồi ăn trọn thưởng tin cậy của S1. Tiên Tri
+   * thật đứng lên phản bác - và trước đây câu phản bác đó không sinh ra MỘT mảnh
+   * bằng chứng nào, vì `chat-analysis` phát ra `COUNTER_CLAIM` (chứ không kèm
+   * một `ROLE_CLAIM`) còn mô hình uy tín thì chỉ lọc `ROLE_CLAIM`. Kẻ nói dối
+   * được lời, người nói thật trắng tay.
+   */
+  it("FIX: phản bác cũng là một lời khai — S1 tin cậy và S2 va chạm đều nổ", () => {
+    const found = claimEvidence(
+      { ...BASE, claims: [claim("p1", "SEER", 1, "m1"), counter("p2", "SEER", 2, "m2")] },
+      BOT_WEIGHTS_V4,
+    );
+
+    // S1 nửa tin cậy cho NGƯỜI PHẢN BÁC: đứng lên nhận Tiên Tri phơi mình trước
+    // bầy Sói y hệt người khai trước.
+    expect(found.some((item) => item.id === "m2:ROLE_CLAIM:claimant" && item.weight < 0)).toBe(true);
+
+    // S2 va chạm cho CẢ HAI: đây chính là cú va chạm mà tín hiệu sinh ra để bắt.
+    expect(found.some((item) => item.id.includes("collision:SEER:p1"))).toBe(true);
+    expect(found.some((item) => item.id.includes("collision:SEER:p2"))).toBe(true);
+  });
+
+  it("FIX: `targetId` của phản bác KHÔNG bị đọc thành một lời tố Sói", () => {
+    // Câu phản bác nói "p9 khai láo vai", không nói "p9 là Sói". Đổ nó vào kênh
+    // buộc tội sẽ dựng lên một cáo buộc chưa ai từng nói ra.
+    const found = claimEvidence(
+      { ...BASE, claims: [counter("p2", "SEER", 2, "m2")] },
+      BOT_WEIGHTS_V4,
+    );
+    expect(found.some((item) => item.actorId === "p9")).toBe(false);
+
+    // Và S4 cũng không được coi phản bác là "đã gọi tên một con Sói rồi không
+    // treo người đó".
+    const withRecap = claimEvidence(
+      {
+        ...BASE,
+        claims: [counter("p2", "SEER", 1, "m2")],
+        publicVoteHistory: [
+          {
+            round: 1,
+            mutations: [],
+            finalBallots: [],
+            nomination: { kind: "NONE", reason: "no-votes" },
+            finalJudgment: null,
+          } satisfies DayVoteRecap,
+        ],
+        seenEventIds: [...BASE.seenEventIds, "recap:1"],
+      },
+      BOT_WEIGHTS_V4,
+    );
+    expect(withRecap.some((item) => item.id.includes("inconsistent"))).toBe(false);
+  });
+
+  it("FIX: phản bác cũng bị đêm kiểm chứng", () => {
+    const found = claimEvidence(
+      {
+        ...BASE,
+        claims: [counter("p1", "SEER", 1, "m1")],
+        lastNightDeaths: [{ playerId: "p1", name: "An" }],
+      },
+      BOT_WEIGHTS_V4,
+    );
+    const confirm = found.find((item) => item.sourceId === "night-death:2:p1");
+    expect(confirm).toBeDefined();
+    expect(confirm!.weight).toBeLessThan(0);
+  });
+
+  /**
+   * FIX 3: `PRIEST` là chỗ nấp AN TOÀN NHẤT của một con Sói bị dồn (nó đứng
+   * trong `BLUFF_COVERS`), nhưng tập `POWER_ROLES` chép tay cũ của file này bỏ
+   * sót nó - nên đúng lời nói dối rẻ nhất lại là lời mô hình mù hoàn toàn.
+   */
+  it("FIX: PRIEST/GUARDIAN_ANGEL/MAYOR nay cũng là vai quyền lực", () => {
+    for (const role of ["PRIEST", "GUARDIAN_ANGEL", "MAYOR"]) {
+      const found = claimEvidence(
+        { ...BASE, claims: [claim("p1", role, 1, "m1"), claim("p2", role, 2, "m2")] },
+        BOT_WEIGHTS_V4,
+      );
+      expect({ role, collided: found.some((item) => item.id.includes(`collision:${role}`)) }).toEqual(
+        { role, collided: true },
+      );
+    }
+  });
+
   it("nhóm claim tắt thì không phát gì", () => {
     const off = { ...BOT_WEIGHTS_V4, claim: { ...BOT_WEIGHTS_V4.claim, accusationWeight: 0 } };
     expect(claimEvidence({ ...BASE, claims: [claim("p1", "SEER", 1, "m1")] }, off)).toEqual([]);
   });
 
-  it("CLAIM_BLINDNESS: đảo vai thật không đổi một chữ số nào của uy tín", () => {
-    const input = {
-      ...BASE,
-      claims: [claim("p1", "SEER", 1, "m1"), claim("p2", "SEER", 2, "m2")],
-      lastNightDeaths: [{ playerId: "p1", name: "An" }],
-    };
-    // `claimEvidence` không có tham số nào để nhận vai thật. Đây là test về
-    // KIỂU nhiều hơn về giá trị: nếu ai đó thêm một trường vai vào
-    // `ClaimSignalInput`, dòng dưới vẫn xanh nhưng review sẽ thấy nó.
-    const twice = [claimEvidence(input, BOT_WEIGHTS_V4), claimEvidence(input, BOT_WEIGHTS_V4)];
-    expect(twice[0]).toEqual(twice[1]);
-    expect(Object.keys(input)).not.toContain("knownRoles");
+  /**
+   * CLAIM_BLINDNESS được bảo đảm bởi ĐÚNG MỘT thứ: danh sách import của module.
+   *
+   * Bản trước của test này khẳng định một hàm thuần bằng chính nó và khẳng định
+   * một object literal tự viết trong test không có khoá `knownRoles` - cả hai
+   * đều xanh vĩnh viễn kể cả khi ai đó thêm một trường vai vào
+   * `ClaimSignalInput` RỒI ĐỌC NÓ. Một test báo an toàn mà không thể đỏ thì tệ
+   * hơn không có test: nó làm người đọc tiếp theo thôi không kiểm nữa.
+   *
+   * Nên đọc thẳng source. Nếu `claim-credibility.ts` bao giờ import
+   * `knownRoles`/`knownInformation` - hoặc kéo về `private-info`,
+   * `knowledge.ts`, hay bất cứ đường nào chở tri thức riêng - test này đỏ.
+   */
+  it("CLAIM_BLINDNESS: module không có đường nào chạm tới tri thức riêng", () => {
+    const source = readFileSync(
+      join(__dirname, "..", "src", "bot", "analysis", "claim-credibility.ts"),
+      "utf8",
+    );
+    // Bỏ chú thích trước khi soi: file này NÓI về `knownRoles` trong doc-comment
+    // để giải thích chính ranh giới đang được giữ, và một phép tìm chuỗi thô sẽ
+    // đỏ vì đúng câu văn mô tả ràng buộc.
+    const code = source
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "");
+
+    for (const forbidden of ["knownRoles", "knownInformation", "selfRole", "seerResults"]) {
+      expect({ forbidden, present: code.includes(forbidden) }).toEqual({
+        forbidden,
+        present: false,
+      });
+    }
+
+    // Danh sách import phải ngắn và chỉ gồm ba nguồn: kiểu vai công khai, bảng
+    // trọng số, và kiểu memory. Bất cứ import thứ tư nào cũng phải được người
+    // thêm nó nhìn thẳng vào dòng này.
+    const imports = [...code.matchAll(/^import[\s\S]*?from "([^"]+)";$/gm)].map((m) => m[1]);
+    expect(imports.sort()).toEqual(["../config/weights", "../types", "@masoi/shared"]);
   });
 
   it("RULING: khai VILLAGER hàng loạt ở Ngày Sự Thật không tự sinh nghi ngờ va chạm hay thưởng tin cậy", () => {
@@ -216,6 +352,50 @@ describe("BotRuntime.observe — claimEvidence không bị áp lại", () => {
     // Bằng chứng phải thật sự có tác dụng ở lượt đầu, nếu không phép so sánh
     // ở trên xanh một cách vô nghĩa (0 === 0).
     expect(afterFirst.trust).not.toBe(0);
+  });
+
+  /**
+   * FIX 2: "bị dồn" là ĐANG DẪN PHIẾU, không phải "có ít nhất một phiếu".
+   *
+   * Hai file từng hiểu hai kiểu: `decideChatClaim` mở nhánh UNDER_FIRE khi bot
+   * dẫn phiếu, còn chỗ đóng dấu ở đây thì chỉ cần một phiếu. Hệ quả: từ vòng 3
+   * trở đi hầu như ai cũng cõng một phiếu lạc, nên `underFireFactor` (0.25) cắt
+   * tin cậy của MỌI lời khai xuống một phần tư - đúng lúc lời khai quan trọng
+   * nhất. Nay hai chỗ gọi chung một hàm.
+   */
+  it("underFire chỉ bật cho NGƯỜI ĐANG DẪN PHIẾU, không phải ai có một phiếu lạc", () => {
+    function runWith(counts: Record<string, number>): boolean {
+      const runtime = new BotRuntime({
+        playerId: "me",
+        rng: () => 0.5,
+        playerIds: ["me", "p1", "p2", "p9"],
+        personality: BALANCED,
+        weights: BOT_WEIGHTS_V4,
+      });
+      const base = dayOfTruthContext(3);
+      runtime.observe({
+        knowledge: {
+          ...base.knowledge,
+          dayOfTruthClaims: {},
+          players: [
+            { id: "me", name: "ME", alive: true },
+            { id: "p1", name: "P1", alive: true },
+            { id: "p2", name: "P2", alive: true },
+            { id: "p9", name: "P9", alive: true },
+          ],
+          currentVoteCounts: { players: counts, noElimination: 0 },
+        },
+        visibleChat: [{ id: "chat-1", actorId: "p1", text: "tôi là tiên tri", at: 0 }],
+      });
+      return runtime.state.claims.some(
+        (memory) => memory.actorId === "p1" && memory.data.underFire === true,
+      );
+    }
+
+    // p1 cõng một phiếu lạc trong khi p2 đang thật sự bị dồn: KHÔNG phải áp lực.
+    expect(runWith({ p1: 1, p2: 3 })).toBe(false);
+    // p1 dẫn phiếu: đây mới là khai lúc bị dồn.
+    expect(runWith({ p1: 3, p2: 1 })).toBe(true);
   });
 
   it("chỉ mảnh gỡ tội (weight < 0) mới chạm trust — va chạm (weight > 0) chỉ đẩy suspicion", () => {

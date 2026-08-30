@@ -1,4 +1,4 @@
-import type { DayVoteRecap, Role } from "@masoi/shared";
+import { isPowerRole, type DayVoteRecap, type Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { BotEvidence, BotMemory } from "../types";
 
@@ -22,15 +22,16 @@ import type { BotEvidence, BotMemory } from "../types";
  * dấu, nên một mảnh gỡ tội tự động làm tin tưởng tăng.
  */
 
-/** Vai mà bầy Sói buộc phải cắn ngay khi nó lộ mặt. */
-const POWER_ROLES = new Set<Role>(["SEER", "APPRENTICE_SEER", "DETECTIVE", "WITCH", "GUARD", "HUNTER"]);
-
-/**
- * Cổng duy nhất cho "vai đủ nặng để nói lên điều gì đó về người khai".
+/*
+ * CỔNG "VAI QUYỀN LỰC" - `isPowerRole` của `@masoi/shared`.
  *
- * Dùng ở đúng hai chỗ: nửa tin cậy của S1 và toàn bộ S2. Cả hai đọc CÙNG một
- * câu hỏi - "lời khai này có cõng rủi ro thật không" - nên chúng dùng chung
- * một cổng thay vì mỗi chỗ tự lặp lại điều kiện.
+ * Tập đó được `claim-decision.ts` dùng CHUNG - xem chú thích ở đó. Trước đây
+ * mỗi file giữ một tập riêng và chúng đã lệch: `PRIEST` nằm trong danh sách vai
+ * Sói nấp sau nhưng không nằm trong tập của file này, nên đúng lời nói dối an
+ * toàn nhất lại là lời mô hình uy tín mù hoàn toàn.
+ *
+ * Dùng ở ba chỗ: nửa tin cậy của S1, toàn bộ S2, và toàn bộ S3. Cả ba đọc CÙNG
+ * một câu hỏi - "lời khai này có cõng rủi ro thật không".
  *
  * RULING (task 6): `decideRoleClaim` ("Ngày Sự Thật") làm gần cả bàn khai
  * VILLAGER - Sói lẫn vai quyền lực đều nấp sau nó, trừ đúng Tiên Tri đang cầm
@@ -41,8 +42,39 @@ const POWER_ROLES = new Set<Role>(["SEER", "APPRENTICE_SEER", "DETECTIVE", "WITC
  * không đi qua cổng này: nó đo việc lời khai có chỉ mặt ai không, chứ không đo
  * vai được khai là gì.
  */
-function isPowerRoleClaim(claim: BotMemory): boolean {
-  return POWER_ROLES.has(claim.data.role as Role);
+
+/**
+ * Một lời khai vai, đã gỡ khỏi hình dạng `BotMemory` mà nó tới.
+ *
+ * Tồn tại vì `ROLE_CLAIM` và `COUNTER_CLAIM` là HAI loại memory nhưng chỉ MỘT
+ * sự kiện xã hội: cả hai đều là "tôi là X" nói giữa bàn dân thiên hạ, chỉ khác
+ * là câu phản bác nói kèm "còn anh thì không". `chat-analysis` phát ra đúng một
+ * loại cho mỗi câu (nó `continue` ngay sau khi nhận ra một phản bác), và
+ * `claim-decision` xét COUNTER TRƯỚC PROACTIVE - nên người nói THỨ HAI trong
+ * mọi cuộc cãi vai luôn rơi vào `COUNTER_CLAIM`. Lọc theo loại như trước đây
+ * làm mô hình mù đúng nửa sau của mỗi cuộc cãi: Sói khai láo Tiên Tri trước thì
+ * ăn trọn thưởng tin cậy của S1, còn Tiên Tri thật đứng lên phản bác thì không
+ * sinh ra MỘT mảnh bằng chứng nào - không tin cậy, không va chạm, không kiểm
+ * chứng bằng đêm. Kẻ nói dối được lời, người nói thật trắng tay, đúng ngược
+ * chiều mục đích của cả cơ chế.
+ */
+interface NormalisedClaim {
+  type: "ROLE_CLAIM" | "COUNTER_CLAIM";
+  /** Người mở miệng nhận vai. */
+  claimantId: string;
+  role: Role;
+  round: number;
+  sourceId: string;
+  underFire: boolean;
+  /**
+   * Người mà lời khai chỉ mặt là Sói, hoặc `null` khi không chỉ ai.
+   *
+   * LUÔN `null` cho `COUNTER_CLAIM`, và đó là một quyết định chứ không phải một
+   * thiếu sót: `targetId` của một câu phản bác nghĩa là "người này đang nói dối
+   * về vai của họ", KHÔNG phải "người này là Sói". Đổ nó vào kênh buộc tội sẽ
+   * dựng lên một lời tố Sói mà không ai từng nói ra.
+   */
+  accusedId: string | null;
 }
 
 export interface ClaimSignalInput {
@@ -51,6 +83,38 @@ export interface ClaimSignalInput {
   lastNightDeaths: readonly { playerId: string; name: string }[];
   publicVoteHistory: readonly DayVoteRecap[];
   seenEventIds: readonly string[];
+}
+
+/**
+ * Gộp hai loại memory thành một danh sách, theo thứ tự TẤT ĐỊNH.
+ *
+ * Sắp ở đây một lần thay vì ở từng tín hiệu: thứ tự chèn của `state.claims` phụ
+ * thuộc lịch quan sát của từng BOT, mà một chuỗi phụ thuộc lịch thì không replay
+ * được. `claimantId` là khoá phá hoà cuối vì một tin nhắn có thể sinh ra nhiều
+ * memory cùng `sourceId`.
+ */
+function normalise(claims: readonly BotMemory[]): NormalisedClaim[] {
+  const found: NormalisedClaim[] = [];
+  for (const memory of claims) {
+    if (memory.type !== "ROLE_CLAIM" && memory.type !== "COUNTER_CLAIM") continue;
+    const role = memory.data.role as Role | undefined;
+    if (!role) continue;
+    found.push({
+      type: memory.type,
+      claimantId: memory.actorId,
+      role,
+      round: memory.round,
+      sourceId: memory.sourceId,
+      underFire: memory.data.underFire === true,
+      accusedId: memory.type === "ROLE_CLAIM" ? (memory.targetId ?? null) : null,
+    });
+  }
+  return found.sort(
+    (a, b) =>
+      a.round - b.round ||
+      a.sourceId.localeCompare(b.sourceId) ||
+      a.claimantId.localeCompare(b.claimantId),
+  );
 }
 
 function evidence(
@@ -94,46 +158,48 @@ export function claimEvidence(
     if (seen.has(item.sourceId)) found.push(item);
   };
 
-  const roleClaims = input.claims.filter((memory) => memory.type === "ROLE_CLAIM");
+  const claims = normalise(input.claims);
   const confidence = weights.evidence.ROLE_CLAIM.confidence;
 
   // ---- S1: thời điểm ----
-  for (const claim of roleClaims) {
-    const underFire = claim.data.underFire === true;
-    const factor = underFire ? tuning.underFireFactor : 1;
+  for (const claim of claims) {
+    const factor = claim.underFire ? tuning.underFireFactor : 1;
 
     // Nửa buộc tội: áp dụng cho MỌI lời khai chỉ mặt ai đó, không riêng vai
     // quyền lực. Đây là điều RULING giữ nguyên - nó đo việc bị nêu tên, không
-    // đo vai được khai.
-    if (claim.targetId) {
+    // đo vai được khai. `accusedId` của phản bác luôn `null` (xem
+    // `NormalisedClaim`), nên nhánh này không bao giờ chạy cho phản bác.
+    if (claim.accusedId) {
       push(
         evidence(
           "ROLE_CLAIM",
           claim.sourceId,
           "accused",
-          claim.targetId,
-          claim.actorId,
+          claim.accusedId,
+          claim.claimantId,
           claim.round,
           tuning.accusationWeight * factor,
           confidence,
-          underFire
-            ? "Bị một người đang bị dồn phiếu chỉ mặt khi họ khai vai."
+          claim.underFire
+            ? "Bị một người đang dẫn phiếu chỉ mặt khi họ khai vai."
             : "Bị một người tự nhận vai chức năng chỉ đích danh.",
         ),
       );
     }
 
     // Nửa tin cậy: chỉ vai quyền lực mới thật sự đặt cược mạng sống khi khai,
-    // nên chỉ nó mới đáng được thưởng tin cậy. Xem `isPowerRoleClaim`.
-    if (!isPowerRoleClaim(claim)) continue;
+    // nên chỉ nó mới đáng được thưởng tin cậy. Phản bác cũng được tính - đứng
+    // lên nói "tôi mới là Tiên Tri" phơi mình trước bầy Sói y hệt như khai
+    // trước.
+    if (!isPowerRole(claim.role)) continue;
 
     push(
       evidence(
         "ROLE_CLAIM",
         claim.sourceId,
         "claimant",
-        claim.actorId,
-        claim.actorId,
+        claim.claimantId,
+        claim.claimantId,
         claim.round,
         -tuning.claimantTrustWeight * factor,
         confidence,
@@ -144,24 +210,24 @@ export function claimEvidence(
 
   // ---- S2: va chạm ----
   //
-  // Chỉ xét vai quyền lực - xem `isPowerRoleClaim`. Mọi lời khai VILLAGER
-  // (gần cả bàn, mỗi Ngày Sự Thật) bị loại trước khi vào đây, nên chúng không
-  // bao giờ được đọc thành một cú va chạm.
+  // Chỉ xét vai quyền lực. Mọi lời khai VILLAGER (gần cả bàn, mỗi Ngày Sự Thật)
+  // bị loại trước khi vào đây, nên chúng không bao giờ được đọc thành va chạm.
   //
-  // Sắp theo (vòng, sourceId) chứ không theo thứ tự chèn: thứ tự chèn phụ thuộc
-  // lịch quan sát, mà một chuỗi phụ thuộc lịch thì không replay được.
-  const byRole = new Map<string, BotMemory[]>();
-  for (const claim of roleClaims) {
-    if (!isPowerRoleClaim(claim)) continue;
-    const role = String(claim.data.role);
-    byRole.set(role, [...(byRole.get(role) ?? []), claim]);
+  // Xét CẢ HAI loại: một câu phản bác đè lên một lời khai cùng vai CHÍNH LÀ cú
+  // va chạm mà tín hiệu này sinh ra để bắt - và trước đây nó là trường hợp duy
+  // nhất tín hiệu bỏ sót.
+  const byRole = new Map<string, NormalisedClaim[]>();
+  for (const claim of claims) {
+    if (!isPowerRole(claim.role)) continue;
+    byRole.set(claim.role, [...(byRole.get(claim.role) ?? []), claim]);
   }
-  for (const [role, group] of byRole) {
+  // `claims` đã sắp, nên mỗi nhóm giữ nguyên thứ tự đó; duyệt khoá theo alphabet
+  // để thứ tự chèn của Map không lọt vào kết quả.
+  for (const role of [...byRole.keys()].sort()) {
+    const group = byRole.get(role)!;
     if (group.length < 2) continue;
-    const ordered = [...group].sort(
-      (a, b) => a.round - b.round || a.sourceId.localeCompare(b.sourceId),
-    );
-    ordered.forEach((claim, index) => {
+    const last = group.at(-1)!;
+    group.forEach((claim, index) => {
       // Người đến sau chịu nặng hơn: phản ứng lại một lời khai rẻ hơn nhiều so
       // với việc đi trước, nên nó cũng đáng tin hơn ít.
       const scale = index === 0 ? 1 : tuning.collisionLatePenaltyScale;
@@ -169,11 +235,11 @@ export function claimEvidence(
         evidence(
           "COUNTER_CLAIM",
           // Neo vào lời khai ĐẾN SAU: va chạm chỉ tồn tại từ khoảnh khắc đó.
-          ordered.at(-1)!.sourceId,
-          `collision:${role}:${claim.actorId}`,
-          claim.actorId,
-          claim.actorId,
-          ordered.at(-1)!.round,
+          last.sourceId,
+          `collision:${role}:${claim.claimantId}`,
+          claim.claimantId,
+          claim.claimantId,
+          last.round,
           tuning.collisionPenalty * scale,
           confidence,
           `Có người khác cũng nhận là ${role}, nên ít nhất một trong hai đang nói dối.`,
@@ -186,22 +252,25 @@ export function claimEvidence(
   //
   // Không ai chết thì KHÔNG có tín hiệu, và đó là một quyết định chứ không phải
   // một thiếu sót: Bảo Vệ và Phù Thuỷ cũng làm ra đúng cảnh đó.
+  //
+  // Xét cả hai loại: người phản bác nhận vai Tiên Tri phơi mình trước bầy Sói
+  // đúng bằng người khai vai Tiên Tri, nên đêm sau kiểm chứng được cả hai.
   if (input.lastNightDeaths.length > 0) {
     const died = new Set(input.lastNightDeaths.map((death) => death.playerId));
-    for (const claim of roleClaims) {
-      if (!POWER_ROLES.has(claim.data.role as Role)) continue;
+    for (const claim of claims) {
+      if (!isPowerRole(claim.role)) continue;
       // Chỉ xét lời khai của các vòng TRƯỚC: khai xong đêm chưa qua thì chưa có
       // gì để kiểm.
       if (claim.round >= input.round) continue;
 
-      if (died.has(claim.actorId)) {
+      if (died.has(claim.claimantId)) {
         push(
           evidence(
             "ROLE_CLAIM",
-            `night-death:${input.round}:${claim.actorId}`,
+            `night-death:${input.round}:${claim.claimantId}`,
             "night-confirm",
-            claim.actorId,
-            claim.actorId,
+            claim.claimantId,
+            claim.claimantId,
             input.round,
             -tuning.nightConfirmBonus,
             confidence,
@@ -218,9 +287,9 @@ export function claimEvidence(
         evidence(
           "ROLE_CLAIM",
           `night-death:${input.round}:${other.playerId}`,
-          `night-survived:${claim.actorId}`,
-          claim.actorId,
-          claim.actorId,
+          `night-survived:${claim.claimantId}`,
+          claim.claimantId,
+          claim.claimantId,
           input.round,
           tuning.nightSurvivedPenalty,
           confidence,
@@ -231,24 +300,29 @@ export function claimEvidence(
   }
 
   // ---- S4: nhất quán với lịch sử phiếu ----
+  //
+  // Chỉ `ROLE_CLAIM`: tín hiệu này hỏi "đã gọi tên một con Sói rồi có bỏ phiếu
+  // treo đúng người đó không". Một câu phản bác không gọi tên Sói nào -
+  // `accusedId` của nó luôn `null` - nên nó không có gì để mà bất nhất.
   for (const recap of input.publicVoteHistory) {
     if (recap.round <= 0) continue;
-    for (const claim of roleClaims) {
-      if (!claim.targetId || claim.round > recap.round) continue;
+    for (const claim of claims) {
+      if (claim.type !== "ROLE_CLAIM") continue;
+      if (!claim.accusedId || claim.round > recap.round) continue;
       const votedRight = recap.mutations.some(
         (mutation) =>
-          mutation.voterId === claim.actorId &&
+          mutation.voterId === claim.claimantId &&
           mutation.choice.type === "PLAYER" &&
-          mutation.choice.targetId === claim.targetId,
+          mutation.choice.targetId === claim.accusedId,
       );
       if (votedRight) continue;
       push(
         evidence(
           "ROLE_CLAIM",
           `recap:${recap.round}`,
-          `inconsistent:${claim.actorId}`,
-          claim.actorId,
-          claim.actorId,
+          `inconsistent:${claim.claimantId}`,
+          claim.claimantId,
+          claim.claimantId,
           recap.round,
           tuning.voteInconsistencyPenalty,
           confidence,

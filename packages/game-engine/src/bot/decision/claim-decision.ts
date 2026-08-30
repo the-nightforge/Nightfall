@@ -1,4 +1,4 @@
-import { roleTeam, type Role } from "@masoi/shared";
+import { isPowerRole, roleTeam, type Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { BotBrainState, BotDecisionContext, BotMemory, BotRng } from "../types";
 
@@ -87,15 +87,16 @@ const INFORMANT_ROLES = new Set<Role>(["SEER", "APPRENTICE_SEER"]);
 const BLUFF_COVERS: readonly Role[] = ["GUARD", "WITCH", "HUNTER", "PRIEST"];
 
 /**
- * Vai chức năng của phe làng - mọi vai trừ Dân Làng trần.
+ * "Vai chức năng" ở file này là ĐÚNG tập `isPowerRole` của `@masoi/shared`, tập
+ * mà `claim-credibility.ts` cũng dùng.
  *
- * Cùng khái niệm đã dùng ngầm ở `INFORMANT_ROLES` (một tập con) và ở nhánh
- * UNDER_FIRE bên dưới (`role !== "VILLAGER"`); đặt tên ra để COUNTER Case A
- * dùng lại thay vì tự định nghĩa một khái niệm "vai chức năng" thứ hai.
+ * Trước đây mỗi file tự định nghĩa một tập riêng (`role !== "VILLAGER"` ở đây,
+ * một `POWER_ROLES` chép tay ở kia) và chúng đã lệch nhau: `PRIEST` nằm trong
+ * `BLUFF_COVERS` bên dưới nhưng KHÔNG nằm trong tập của mô hình uy tín, nên lời
+ * nói dối an toàn nhất lại là lời mô hình không nhìn thấy. Một định nghĩa dùng
+ * chung là cách duy nhất để chỗ QUYẾT ĐỊNH khai và chỗ ĐÁNH GIÁ lời khai không
+ * bao giờ nói về hai thứ khác nhau.
  */
-function isPowerRole(role: Role): boolean {
-  return role !== "VILLAGER";
-}
 
 /** `state.claims` theo thứ tự tất định, CŨ trước: vòng trước, rồi tới nguồn phát sinh. */
 function claimsInOrder(state: BotBrainState): BotMemory[] {
@@ -115,8 +116,17 @@ function claimsMostRecentFirst(state: BotBrainState): BotMemory[] {
   return claimsInOrder(state).reverse();
 }
 
-/** Ai đang dẫn phiếu ngay lúc này, hoặc `null` khi chưa ai bị dồn. */
-function voteLeader(counts: Record<string, number>): string | null {
+/**
+ * Ai đang dẫn phiếu ngay lúc này, hoặc `null` khi chưa ai bị dồn.
+ *
+ * EXPORT vì `BotRuntime.ingestChat` phải đóng dấu `underFire` lên lời khai bằng
+ * ĐÚNG định nghĩa này. Trước đây chỗ đó tự hỏi "có ít nhất một phiếu không",
+ * một câu hỏi khác hẳn: từ vòng 3 trở đi gần như ai cũng cõng một phiếu lạc, nên
+ * mô hình uy tín đọc mọi lời khai là "khai lúc bị dồn" và cắt tin cậy xuống một
+ * phần tư đúng lúc lời khai có giá trị nhất. Hai chỗ, một hàm - không phải hai
+ * cách cài đặt tình cờ giống nhau.
+ */
+export function voteLeader(counts: Record<string, number>): string | null {
   let leader: string | null = null;
   let best = 0;
   // Duyệt theo khoá đã sắp: hoà phiếu không được phụ thuộc thứ tự chèn.

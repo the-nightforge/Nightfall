@@ -542,9 +542,10 @@ describe("v1 là mốc so sánh đóng băng", () => {
    *    phiếu rồi không ván nào kiểm nó, và chỉ số "tỉ lệ đổi phiếu" luôn bằng 0
    *    vì lý do cấu trúc chứ không phải vì hành vi.
    *
-   * Task 8 sẽ đổi `DEFAULT_BOT_WEIGHTS` sang v2. Khẳng định dưới đây neo vào
-   * `BOT_WEIGHTS_V1` một cách tường minh, nên nó vẫn phải xanh sau lần đổi đó.
-   * Nếu nó đỏ, nghĩa là một thay đổi đã âm thầm chạm vào cái mốc.
+   * Task 8 đã đổi `DEFAULT_BOT_WEIGHTS` sang v4 (không phải v2 như dòng này
+   * từng dự đoán). Khẳng định dưới đây neo vào `BOT_WEIGHTS_V1` một cách tường
+   * minh, nên nó vẫn phải xanh sau lần đổi đó. Nếu nó đỏ, nghĩa là một thay đổi
+   * đã âm thầm chạm vào cái mốc.
    */
   const V1_FINGERPRINT = [
     "golden-0 village 3 44",
@@ -712,8 +713,14 @@ describe("v2 là cấu hình production", () => {
   it("v2 không thắng bằng cách nới ranh giới hiểu biết", () => {
     // Điều kiện quan trọng nhất của cả đợt hiệu chỉnh: cải thiện phải đến từ
     // chơi hay hơn, không phải từ việc cho BOT thấy nhiều hơn.
+    //
+    // GHIM `BOT_WEIGHTS_V2` tường minh. Trước đây dòng dưới đọc
+    // `DEFAULT_BOT_WEIGHTS`, nên từ lúc mặc định lên v4 (Task 8) test này đo v4
+    // trong khi tên nó, docstring nó và cả `describe` bọc ngoài đều nói v2 -
+    // một test nói dối về thứ nó chạy. Độ phủ v4 không mất: bộ bất biến đầy đủ
+    // ở `selfplay-invariants.test.ts` chạy trên mặc định, tức v4.
     for (const seed of SEEDS.slice(0, 20)) {
-      const result = runSelfPlay({ seed, weights: DEFAULT_BOT_WEIGHTS });
+      const result = runSelfPlay({ seed, weights: BOT_WEIGHTS_V2 });
       expect({ seed, violations: result.violations.map((item) => item.id) }).toEqual({
         seed,
         violations: [],
