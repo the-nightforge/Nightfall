@@ -801,8 +801,8 @@ export class GameEngine {
           if (victim.role === "CURSED") {
             cursedBitten = victim;
           } else {
-            // LAST_STAND: delay death until end of next day
-            if (st.activeEvent?.id === "LAST_STAND" && !st.pendingLastStandVictim) {
+            // LAST_STAND: delay death until end of next day, but not when cub rage double-kill is active
+            if (st.activeEvent?.id === "LAST_STAND" && !st.pendingLastStandVictim && !st.night.wolfCubRageTonight) {
               st.pendingLastStandVictim = { playerId: victim.id, dieRound: st.round + 1 };
               st.log.push(`Tử Thủ: ${victim.name} được kéo dài sự sống tới hết ngày mai!`);
             } else {
