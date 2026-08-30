@@ -1,6 +1,5 @@
 import {
   DEAD_MESSAGE_MAX_LENGTH,
-  GAME_OVER_MS,
   RESULT_MS,
   ROLE_REVEAL_MS,
   ROLE_META,
@@ -1326,7 +1325,8 @@ export class GameEngine {
   finishGame(winner: Exclude<Winner, null>, now = Date.now()) {
     this.state.winner = winner;
     this.state.phase = "GAME_OVER";
-    this.state.phaseEndsAt = now + GAME_OVER_MS;
+    // Không đặt hạn chót: ván chỉ về lobby khi chủ phòng bấm reset, không tự động.
+    this.state.phaseEndsAt = null;
     this.state.log.push(winner === "wolves" ? "Phe Ma Sói chiến thắng!" : "Phe Dân Làng chiến thắng!");
   }
 

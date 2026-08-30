@@ -899,6 +899,12 @@ describe("Snapshot không lộ thông tin bí mật", () => {
     }
   });
 
+  it("không đặt hạn chót tự động khi ván kết thúc, chờ chủ phòng xác nhận", () => {
+    const e = makeEngine(7);
+    e.finishGame("village");
+    expect(e.state.phaseEndsAt).toBeNull();
+  });
+
   it("sói thấy bảng phiếu rồi thấy nạn nhân đã chốt, dân không thấy gì", () => {
     const e = makeEngine(7);
     const wolves = findPlayersByRole(e, "WEREWOLF");

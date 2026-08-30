@@ -83,7 +83,6 @@ export const DEFAULT_ROOM_CONFIG: RoomConfig = {
  */
 export const ROLE_REVEAL_MS = 10_000;
 export const RESULT_MS = 8_000;
-export const GAME_OVER_MS = 30_000;
 
 /**
  * Trần độ dài lời nhắn của Tiếng Vọng Người Chết.
