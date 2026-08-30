@@ -60,6 +60,33 @@ export function playbackMode(inputs: PlaybackInputs): "video" | "css" | "none" {
   return "video";
 }
 
+export interface NetworkHints {
+  saveData: boolean;
+  /** "slow-2g" | "2g" | "3g" | "4g", hoặc null nếu trình duyệt không báo. */
+  effectiveType: string | null;
+}
+
+/**
+ * Những gì trình duyệt chịu nói về đường truyền.
+ *
+ * `navigator.connection` chỉ có ở Chromium. Thiếu nó thì coi như người dùng
+ * KHÔNG bật tiết kiệm dữ liệu và đường truyền là bình thường - đoán ngược lại
+ * sẽ tắt clip trên toàn bộ Safari và Firefox, tức là tắt vì thiếu một API chứ
+ * không phải vì mạng có vấn đề thật.
+ */
+export function readNetworkHints(): NetworkHints {
+  const connection = (
+    globalThis.navigator as
+      | (Navigator & { connection?: { saveData?: boolean; effectiveType?: string } })
+      | undefined
+  )?.connection;
+
+  return {
+    saveData: connection?.saveData === true,
+    effectiveType: connection?.effectiveType ?? null,
+  };
+}
+
 /** Đọc ba đầu vào trên từ trình duyệt hiện tại. */
 export function readPlaybackInputs(): PlaybackInputs {
   const settings = loadCinematicSettings();
@@ -67,15 +94,10 @@ export function readPlaybackInputs(): PlaybackInputs {
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  // `connection` chỉ có ở Chromium; thiếu nó thì coi như người dùng không bật
-  // tiết kiệm dữ liệu, chứ không phải coi như đang bật.
-  const connection = (
-    globalThis.navigator as Navigator & { connection?: { saveData?: boolean } } | undefined
-  )?.connection;
 
   return {
     reducedSetting: settings.reduced,
     prefersReducedMotion,
-    saveData: connection?.saveData === true,
+    saveData: readNetworkHints().saveData,
   };
 }

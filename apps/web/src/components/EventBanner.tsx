@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import type { GameEventView } from "@masoi/shared";
+import { eventIcon } from "@/lib/event-art";
 
 interface Props {
   event: GameEventView | null | undefined;
@@ -13,28 +14,6 @@ const BENEFICIARY_BADGE: Record<"wolves" | "village" | "neutral", { label: strin
   village: { label: "Phe Dân", cls: "bg-emerald-900/60 text-emerald-300 border-emerald-500/40" },
   neutral: { label: "Trung Lập", cls: "bg-night-700/60 text-indigo-200 border-indigo-500/40" },
 };
-
-export const EVENT_ICONS: Record<string, string> = {
-  CURFEW: "⏳",
-  SILENT_NIGHT: "🤫",
-  AMNESTY_DAY: "🕊️",
-  CLEARING_MIST: "🌫️",
-  PEACEFUL_NIGHT: "✨",
-  JUDGMENT_DAY: "⚖️",
-  LAST_STAND: "🛡️",
-  DAY_OF_TRUTH: "🔍",
-  MOONLESS_NIGHT: "🌑",
-  BLOODY_HUNT: "🩸",
-  HOWL_OF_THE_PACK: "🐺",
-  BLOOD_MOON: "🌕",
-  WOLF_SHADOW: "👤",
-  MORNING_REPORT: "📰",
-  DEAD_CAN_SPEAK: "👻",
-};
-
-export function eventIcon(id: string): string {
-  return EVENT_ICONS[id] ?? "⚡";
-}
 
 /**
  * Bao lâu thì thẻ tự thu lại. Đủ để đọc hết mô tả dài nhất một lượt bình thường,
