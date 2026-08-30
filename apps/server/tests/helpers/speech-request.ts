@@ -5,9 +5,10 @@ import type { SpeechRequest } from "../../src/bots/types";
 /**
  * Phần "khung" của một `SpeechRequest`, dùng chung cho mọi fixture test.
  *
- * Tồn tại vì Phase 4 nới `SpeechRequest` từ 7 lên 15 trường, và sáu file test
- * đang dựng nó bằng tay. Một helper chung nghĩa là lần nới tiếp theo sửa một
- * chỗ, chứ không phải sáu chỗ mà năm chỗ trong đó sẽ bị quên.
+ * Tồn tại vì Phase 4 nới `SpeechRequest` từ 7 lên 15 trường (nay là 16, sau khi
+ * Task 5 thêm `players`), và sáu file test đang dựng nó bằng tay. Một helper
+ * chung nghĩa là lần nới tiếp theo sửa một chỗ, chứ không phải sáu chỗ mà năm
+ * chỗ trong đó sẽ bị quên.
  */
 const PERSONALITY: BotPersonality = {
   aggressiveness: 0.5,

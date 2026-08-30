@@ -73,14 +73,24 @@ export async function renderBotSpeech(
   brain: BotBrain = botBrain(),
   chatMaxLength = DEFAULT_CHAT_MAX,
 ): Promise<RenderedSpeech> {
+  // `try` chỉ bọc LỜI GỌI NHÀ CUNG CẤP, không bọc cổng chạy sau nó. Nhà cung
+  // cấp hỏng (timeout, 429, JSON vỡ) là chuyện xảy ra hằng ngày và phải rơi êm
+  // về bảng mẫu. Nhưng nếu `claimSurvivesRoundTrip`/`echoesRecentOwnLine` ném -
+  // tức LỖI TRONG CHÍNH CỔNG, không phải trong nhà cung cấp - thì nuốt nó vào
+  // cùng một catch sẽ khiến một cổng gãy trông y hệt một nhà cung cấp đang hỏng:
+  // `fromTemplate` vẫn lên `true` như mọi khi, và một cổng gãy có thể chạy hàng
+  // tuần không ai biết. Hai loại lỗi phải KHÔNG dùng chung một quan sát.
+  let chat: string | null | undefined;
   try {
     const attempt = await brain.renderDaySpeech(request);
-    const chat = attempt.ok ? attempt.value?.chat : null;
-    if (chat && !echoesRecentOwnLine(request, chat) && claimSurvivesRoundTrip(request, chat)) {
-      return { text: chat.slice(0, chatMaxLength), fromTemplate: false };
-    }
+    chat = attempt.ok ? attempt.value?.chat : null;
   } catch {
     // Não ném lỗi ngoài dự kiến cũng chỉ là một lượt hỏng.
+    chat = null;
+  }
+
+  if (chat && !echoesRecentOwnLine(request, chat) && claimSurvivesRoundTrip(request, chat)) {
+    return { text: chat.slice(0, chatMaxLength), fromTemplate: false };
   }
 
   // Đường lui cũng phải theo đúng luật vừa dùng để từ chối nhà cung cấp.
@@ -145,11 +155,23 @@ function echoesRecentOwnLine(request: SpeechRequest, chat: string): boolean {
  * Dùng chính `analyzeChat` chứ không so chuỗi: cổng phải hỏi đúng câu hỏi mà
  * các BOT khác sẽ hỏi. Một cổng có luật riêng sẽ trôi lệch khỏi parser, và nó
  * sẽ trôi lệch âm thầm.
+ *
+ * `COUNTER_CLAIM` mang HAI thứ do lõi chốt, không phải một: vai tự nhận VÀ
+ * người bị phản bác (`intention.targetId`, từ `claim.counterTargetId` -
+ * `speech-planner.ts`). So mỗi vai mà bỏ qua mục tiêu thì cổng vẫn lọt một câu
+ * đổi được TÊN NGƯỜI BỊ TỐ trong khi vai vẫn khớp - "Chi không thể là sói, tôi
+ * mới là tiên tri" lọt qua khi lõi đã chốt mục tiêu là Bình. Đó là một cáo buộc
+ * công khai mà lõi chưa bao giờ quyết, ghim vĩnh viễn vào mọi BOT đang nghe -
+ * đúng lỗ mà cổng này tồn tại để chặn, chỉ là lệch sang trường target thay vì
+ * trường role. `CLAIM_ROLE` (khai trần, không phản bác ai) thì không có mục
+ * tiêu để so: `parseClause` không gắn `targetId` cho nó, và mệnh đề tố cáo có
+ * thể đi kèm - nếu có - là một memory `ACCUSE` riêng, ngoài phạm vi cổng này.
  */
 function claimSurvivesRoundTrip(request: SpeechRequest, chat: string): boolean {
+  const { intention } = request;
   const intended =
-    request.intention.kind === "CLAIM_ROLE" || request.intention.kind === "COUNTER_CLAIM"
-      ? (request.intention.claimedRole ?? null)
+    intention.kind === "CLAIM_ROLE" || intention.kind === "COUNTER_CLAIM"
+      ? (intention.claimedRole ?? null)
       : null;
 
   const memories = analyzeChat(
@@ -161,5 +183,7 @@ function claimSurvivesRoundTrip(request: SpeechRequest, chat: string): boolean {
   );
 
   if (intended === null) return spoken === undefined;
-  return spoken !== undefined && spoken.data.role === intended;
+  if (spoken === undefined || spoken.data.role !== intended) return false;
+
+  return intention.kind === "COUNTER_CLAIM" ? spoken.targetId === intention.targetId : true;
 }
