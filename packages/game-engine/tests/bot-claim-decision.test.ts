@@ -211,12 +211,17 @@ describe("decideChatClaim", () => {
     expect(claim?.accusedId).toBe("p4");
   });
 
-  it("Tiên Tri thật gặp kẻ mạo danh thì phản bác chứ không khai như chưa có chuyện gì", () => {
+  it("Tiên Tri thật gặp kẻ mạo danh thì phản bác chứ không khai như chưa có chuyện gì, và nhắm đúng kẻ mạo danh ĐẦU TIÊN", () => {
     const state = stateFor("p1");
     // p1 chưa hề soi ra ai — nếu COUNTER không đứng trước PROACTIVE, hàm này sẽ
     // đi thẳng tới nhánh informant, thấy không có kết quả và trả về null thay vì
     // phản bác.
-    state.claims.push(roleClaimMemory("p2", "SEER"));
+    //
+    // Hai kẻ mạo danh, hai vòng khác nhau, cố tình push SAU (p3, vòng 3) trước
+    // (p2, vòng 2) để chứng minh kết quả không phụ thuộc thứ tự chèn - Case A
+    // phải chọn CŨ NHẤT: p2 là người đã gài lời khai giả trước, p3 chỉ lặp lại.
+    state.claims.push(roleClaimMemory("p3", "SEER", 3));
+    state.claims.push(roleClaimMemory("p2", "SEER", 2));
     const claim = decideChatClaim(
       contextFor("p1", "SEER"),
       state,
@@ -244,6 +249,28 @@ describe("decideChatClaim", () => {
     expect(claim?.kind).toBe("COUNTER");
     expect(claim?.role).toBe("SEER");
     expect(claim?.counterTargetId).toBe("p3");
+    expect(claim?.accusedId).toBeNull();
+  });
+
+  it("Sói bị gọi tên hai lần thì phản bác lời buộc tội GẦN NHẤT, không phải lời đầu tiên", () => {
+    const state = stateFor("p2");
+    // p3 gọi tên p2 ở vòng 2 ("tôi mới là Tiên Tri"); p4 gọi tên p2 lại ở vòng 3
+    // ("tôi mới là Bảo Vệ"). Bàn đang chú ý tới lời buộc tội của p4 - mới hơn -
+    // nên p2 phải đáp lại đúng người đó, không phải p3. Push theo đúng thứ tự
+    // thời gian (p3 trước, p4 sau) để phép thử không tự nhiên đúng nhờ trùng
+    // với thứ tự mảng.
+    state.claims.push(counterClaimMemory("p3", "p2", "SEER", 2));
+    state.claims.push(counterClaimMemory("p4", "p2", "GUARD", 3));
+    const claim = decideChatClaim(
+      contextFor("p2", "WEREWOLF", { knownRoles: { p2: "WEREWOLF" }, round: 3 }),
+      state,
+      createSeededRng("a"),
+      null,
+      BOT_WEIGHTS_V4,
+    );
+    expect(claim?.kind).toBe("COUNTER");
+    expect(claim?.role).toBe("GUARD");
+    expect(claim?.counterTargetId).toBe("p4");
     expect(claim?.accusedId).toBeNull();
   });
 

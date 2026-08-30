@@ -97,12 +97,22 @@ function isPowerRole(role: Role): boolean {
   return role !== "VILLAGER";
 }
 
-/** `state.claims` theo thứ tự tất định: vòng trước, rồi tới nguồn phát sinh. */
+/** `state.claims` theo thứ tự tất định, CŨ trước: vòng trước, rồi tới nguồn phát sinh. */
 function claimsInOrder(state: BotBrainState): BotMemory[] {
   return [...state.claims].sort((a, b) => {
     if (a.round !== b.round) return a.round - b.round;
     return a.sourceId < b.sourceId ? -1 : a.sourceId > b.sourceId ? 1 : 0;
   });
+}
+
+/**
+ * `state.claims` theo thứ tự tất định, MỚI trước - đảo ngược `claimsInOrder`.
+ *
+ * Dùng cho COUNTER Case B: khi một Sói bị gọi tên hai lần trước khi tới lượt
+ * nói, bàn đang phản ứng với lời buộc tội GẦN NHẤT, không phải lời đầu tiên.
+ */
+function claimsMostRecentFirst(state: BotBrainState): BotMemory[] {
+  return claimsInOrder(state).reverse();
 }
 
 /** Ai đang dẫn phiếu ngay lúc này, hoặc `null` khi chưa ai bị dồn. */
@@ -170,6 +180,9 @@ export function decideChatClaim(
   // chuyện gì. Không rút số ngẫu nhiên: đúng vai của mình hay không là một sự
   // thật, không phải một canh bạc.
   if (!isWolf && isPowerRole(role)) {
+    // CŨ trước: kẻ mạo danh ĐẦU TIÊN là người đã gài lời khai giả; phản bác
+    // đúng người đó, những lần lặp lại sau chỉ là tiếng vang của cùng một lời
+    // nói dối chứ không phải một mối đe doạ mới.
     const impostor = claimsInOrder(state).find(
       (memory) =>
         memory.actorId !== me &&
@@ -194,7 +207,11 @@ export function decideChatClaim(
   // "không, tôi mới là Tiên Tri" - để câu chuyện rối lên thay vì để lời buộc
   // tội đứng một mình.
   if (isWolf) {
-    const challenger = claimsInOrder(state).find(
+    // MỚI trước: đây là lời buộc tội cả bàn đang thật sự chú ý tới. Đáp lại một
+    // lời gọi tên đã cũ trong khi một lời mới hơn đang treo lơ lửng đọc y như
+    // đang trả lời nhầm tin nhắn - đúng cái tật hội thoại mà tính năng này sinh
+    // ra để chữa.
+    const challenger = claimsMostRecentFirst(state).find(
       (memory) => memory.targetId === me && alivePlayers.has(memory.actorId),
     );
     if (challenger) {
@@ -258,7 +275,7 @@ export function decideChatClaim(
   const underFire =
     knowledge.trialAccusedId === me || voteLeader(knowledge.currentVoteCounts.players) === me;
   if (underFire) {
-    if (!isWolf && role !== "VILLAGER") {
+    if (!isWolf && isPowerRole(role)) {
       return {
         role,
         kind: "UNDER_FIRE",
