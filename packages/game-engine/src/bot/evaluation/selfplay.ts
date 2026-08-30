@@ -1,4 +1,4 @@
-import type { GamePhase, Phase, Role, RoomConfig, Winner } from "@masoi/shared";
+import { ROLE_META, type GamePhase, type Phase, type Role, type RoomConfig, type Winner } from "@masoi/shared";
 import { GameEngine } from "../../engine";
 import { detectCoalitions } from "../analysis/coalition";
 import { BotRuntime } from "../BotRuntime";
@@ -109,6 +109,17 @@ export type SelfPlayEvent =
       textFingerprint: string;
       semanticFingerprint: string;
       evidenceSourceIds: string[];
+      /**
+       * Vai mà ý định `CLAIM_ROLE`/`COUNTER_CLAIM` này khai, hoặc `null` với mọi
+       * speech act khác.
+       *
+       * KHÔNG phải vai thật của người nói - một con Sói khai láo mang
+       * `claimedRole: "SEER"`. Chỉ tầng ĐO đọc trường này; lõi quyết định đã
+       * xong việc trước khi tới đây. Cần cho `claimAccuracy` (metrics.ts):
+       * không có nó, tầng đo không biết một `SPEECH` có phải là lời khai Tiên
+       * Tri hay không mà không phải đoán lại từ `speech.kind`.
+       */
+      claimedRole: Role | null;
     }
   | { kind: "NOMINATION"; round: number; accusedId: string | null }
   | { kind: "FINAL_VOTE"; round: number; voterId: string; guilty: boolean }
@@ -180,6 +191,11 @@ export function renderIntentionText(
 ): string {
   const target = speech.targetId ? nameOf(speech.targetId) : "người đó";
   const author = speech.replyToActorId ? nameOf(speech.replyToActorId) : target;
+  // Nguồn chữ vai DUY NHẤT là ROLE_META - cùng bảng UI dùng để hiển thị. Một
+  // định danh Role thô ("SEER") không phải tiếng Việt và bộ phân tích chat
+  // (`roleAtStart`) không đọc được nó; nhánh tối giản này vẫn phải sinh ra câu
+  // có thể đọc ngược, dù chỉ dùng khi hội thoại tắt.
+  const roleName = speech.claimedRole ? ROLE_META[speech.claimedRole].name : "dân làng";
 
   // Bảng mẫu đầy đủ khi chỗ gọi cho biết đây là lượt nói thứ mấy của ai. Nhánh
   // dưới là dạng tối giản một-câu-một-loại, giữ lại cho các test khẳng định
@@ -218,6 +234,10 @@ export function renderIntentionText(
       return "Ừ.";
     case "HUMOR":
       return "Thôi tôi im.";
+    case "CLAIM_ROLE":
+      return `Tôi là ${roleName}.`;
+    case "COUNTER_CLAIM":
+      return `${target} không thể là ${roleName}, tôi mới là ${roleName}.`;
     default: {
       // Không bao giờ chạy tới. Tồn tại để việc thêm một speech act mà quên
       // nhánh render là một LỖI BIÊN DỊCH, chứ không phải một `undefined` lặng
@@ -428,6 +448,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       textFingerprint: speechTextFingerprint(text),
       semanticFingerprint: speechSemanticFingerprint(speech),
       evidenceSourceIds: speech.evidence.map((item) => item.sourceId),
+      claimedRole: speech.claimedRole ?? null,
     });
 
     sink.push({ id: messageId, actorId: playerId, text, at: now });

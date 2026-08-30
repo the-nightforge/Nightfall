@@ -4,6 +4,7 @@ import {
   BOT_WEIGHTS_V1,
   BOT_WEIGHTS_V2,
   BOT_WEIGHTS_V3,
+  BOT_WEIGHTS_V4,
   DEFAULT_BOT_WEIGHTS,
   resolveWeights,
   validateWeights,
@@ -541,9 +542,10 @@ describe("v1 là mốc so sánh đóng băng", () => {
    *    phiếu rồi không ván nào kiểm nó, và chỉ số "tỉ lệ đổi phiếu" luôn bằng 0
    *    vì lý do cấu trúc chứ không phải vì hành vi.
    *
-   * Task 8 sẽ đổi `DEFAULT_BOT_WEIGHTS` sang v2. Khẳng định dưới đây neo vào
-   * `BOT_WEIGHTS_V1` một cách tường minh, nên nó vẫn phải xanh sau lần đổi đó.
-   * Nếu nó đỏ, nghĩa là một thay đổi đã âm thầm chạm vào cái mốc.
+   * Task 8 đã đổi `DEFAULT_BOT_WEIGHTS` sang v4 (không phải v2 như dòng này
+   * từng dự đoán). Khẳng định dưới đây neo vào `BOT_WEIGHTS_V1` một cách tường
+   * minh, nên nó vẫn phải xanh sau lần đổi đó. Nếu nó đỏ, nghĩa là một thay đổi
+   * đã âm thầm chạm vào cái mốc.
    */
   const V1_FINGERPRINT = [
     "golden-0 village 3 44",
@@ -635,7 +637,8 @@ describe("v2 là cấu hình production", () => {
    *
    * Kết quả được ghi nhớ theo phiên bản trọng số. `runSelfPlay` là hàm thuần
    * của `(seed, weights)`, nên chạy lại đúng cùng batch chỉ tốn thời gian mà
-   * không thêm thông tin - và hai test dưới đây cùng cần batch của v3.
+   * không thêm thông tin - và hai test dưới đây cùng cần batch của
+   * `DEFAULT_BOT_WEIGHTS` (v4.0.0 kể từ Task 8; trước đó là v3.0.0).
    */
   const cache = new Map<string, { village: number; wolves: number }>();
 
@@ -653,11 +656,15 @@ describe("v2 là cấu hình production", () => {
     return rates;
   }
 
-  it("mặc định trỏ tới v3", () => {
-    // Phase 4 thêm nhóm `conversation` và BẬT nó, nên cấu hình production đổi
-    // phiên bản. v2 vẫn tồn tại nguyên vẹn làm mốc so sánh của Phase 3.
-    expect(DEFAULT_BOT_WEIGHTS.version).toBe("3.0.0");
-    expect(weightsPreset("3.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+  it("mặc định trỏ tới v4", () => {
+    // Task 8 bật nhóm `claim` (Task 3-7) ở production bằng cách nâng chính
+    // hằng số này lên v4.0.0 - đúng cơ chế rollout mà docstring của
+    // `DEFAULT_BOT_WEIGHTS` mô tả, để `session-registry.ts` (chỗ ván thật
+    // dựng `BotRuntime`, không tự truyền `weights`) chạy bản mới mà không
+    // phải sửa. v3 vẫn tồn tại nguyên vẹn làm mốc so sánh của Phase 4.
+    expect(DEFAULT_BOT_WEIGHTS.version).toBe("4.0.0");
+    expect(weightsPreset("4.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    expect(weightsPreset("3.0.0")).toBe(BOT_WEIGHTS_V3);
     expect(weightsPreset("2.0.0")).toBe(BOT_WEIGHTS_V2);
   });
 
@@ -666,7 +673,11 @@ describe("v2 là cấu hình production", () => {
     () => {
       // Ngưỡng thật, không phải "mỗi phe thắng ít nhất một ván" như Phase 2 -
       // một tiêu chí mà 96% Sói thắng vẫn lọt qua.
-      // Đo được 41.3% ở v3; ngưỡng đặt ở 0.28/0.68 để chừa biên sai số lấy mẫu.
+      //
+      // Đo được 41.3% ở v3 (Phase 4). Task 8 nâng `DEFAULT_BOT_WEIGHTS` lên
+      // v4.0.0 (bật nhóm `claim`, Task 3-7) - đo lại đúng batch này ra 49.5%
+      // làng / 50.5% Sói, vẫn nằm gọn trong ngưỡng cũ nên không cần đổi số.
+      // Ngưỡng đặt ở 0.28/0.68 để chừa biên sai số lấy mẫu cho cả hai mốc.
       const rates = winRates(DEFAULT_BOT_WEIGHTS);
       expect(rates.village).toBeGreaterThan(0.28);
       expect(rates.village).toBeLessThan(0.68);
@@ -680,7 +691,9 @@ describe("v2 là cấu hình production", () => {
     "cải thiện thật so với v1 trên cùng bộ seed",
     () => {
       // Cùng seed, cùng engine, chỉ khác cấu hình: chênh lệch không thể là nhiễu
-      // seed. Đo được 11.5% (v1) so với 41.3% (v3).
+      // seed. Trước Task 8 (v3 mặc định): 11.5% (v1) so với 41.3% (v3). Sau
+      // Task 8 (v4 mặc định, nhóm `claim` bật): 16.5% (v1) so với 49.5% (v4) -
+      // biên +0.15 vẫn còn thừa rất nhiều so với chênh lệch đo được (~33 điểm).
       expect(winRates(DEFAULT_BOT_WEIGHTS).village).toBeGreaterThan(
         winRates(BOT_WEIGHTS_V1).village + 0.15,
       );
@@ -700,8 +713,14 @@ describe("v2 là cấu hình production", () => {
   it("v2 không thắng bằng cách nới ranh giới hiểu biết", () => {
     // Điều kiện quan trọng nhất của cả đợt hiệu chỉnh: cải thiện phải đến từ
     // chơi hay hơn, không phải từ việc cho BOT thấy nhiều hơn.
+    //
+    // GHIM `BOT_WEIGHTS_V2` tường minh. Trước đây dòng dưới đọc
+    // `DEFAULT_BOT_WEIGHTS`, nên từ lúc mặc định lên v4 (Task 8) test này đo v4
+    // trong khi tên nó, docstring nó và cả `describe` bọc ngoài đều nói v2 -
+    // một test nói dối về thứ nó chạy. Độ phủ v4 không mất: bộ bất biến đầy đủ
+    // ở `selfplay-invariants.test.ts` chạy trên mặc định, tức v4.
     for (const seed of SEEDS.slice(0, 20)) {
-      const result = runSelfPlay({ seed, weights: DEFAULT_BOT_WEIGHTS });
+      const result = runSelfPlay({ seed, weights: BOT_WEIGHTS_V2 });
       expect({ seed, violations: result.violations.map((item) => item.id) }).toEqual({
         seed,
         violations: [],
@@ -824,5 +843,32 @@ describe("BotRuntime nhận weights", () => {
       decide(resolveWeights({ deceptionRisk: { abstainPressureCeiling: 0 } }, BOT_WEIGHTS_V1))
         .type,
     ).toBe("PLAYER");
+  });
+});
+
+describe("nhóm trọng số claim", () => {
+  it("tắt ở mọi preset cũ, nên v1/v2/v3 không đổi hành vi", () => {
+    for (const preset of [BOT_WEIGHTS_V1, BOT_WEIGHTS_V2, BOT_WEIGHTS_V3]) {
+      expect(preset.claim.accusationWeight).toBe(0);
+      expect(preset.claim.wolfBluffChance).toBe(0);
+    }
+  });
+
+  it("v4 bật cơ chế lên và mang đúng version", () => {
+    expect(BOT_WEIGHTS_V4.version).toBe("4.0.0");
+    expect(BOT_WEIGHTS_V4.claim.accusationWeight).toBeGreaterThan(0);
+  });
+
+  it("v4 khác v3 ĐÚNG ở nhóm claim và version", () => {
+    for (const key of Object.keys(BOT_WEIGHTS_V3) as Array<keyof typeof BOT_WEIGHTS_V3>) {
+      if (key === "version" || key === "claim") continue;
+      expect(BOT_WEIGHTS_V4[key]).toBe(BOT_WEIGHTS_V3[key]);
+    }
+  });
+
+  it("validateWeights bắt được hệ số ngoài [0,1]", () => {
+    expect(
+      validateWeights({ ...BOT_WEIGHTS_V4, claim: { ...BOT_WEIGHTS_V4.claim, underFireFactor: 1.5 } }).join(" "),
+    ).toContain("claim.underFireFactor");
   });
 });

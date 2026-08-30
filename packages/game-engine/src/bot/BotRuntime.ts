@@ -1,10 +1,16 @@
 import type { DayVoteRecap, Role, VoteMutation } from "@masoi/shared";
 import { analyzeChat } from "./analysis/chat-analysis";
+import { claimEvidence } from "./analysis/claim-credibility";
 import { applySocialEvidence } from "./analysis/social-analysis";
 import { analyzeVoteRecap } from "./analysis/vote-analysis";
 import { applyEvidence, applyTrustEvidence, decayBeliefs } from "./belief/belief-state";
 import { applyPrivateInformation } from "./belief/private-info";
-import { decideRoleClaim, type BotClaimIntention } from "./decision/claim-decision";
+import {
+  decideChatClaim,
+  decideRoleClaim,
+  voteLeader,
+  type BotClaimIntention,
+} from "./decision/claim-decision";
 import { decideGhostWhisper, type BotGhostWhisperIntention } from "./decision/ghost-decision";
 import { selectVote } from "./decision/vote-decision";
 import {
@@ -208,6 +214,44 @@ export class BotRuntime {
     this.ingestRecaps(knowledge);
     this.ingestChat(context);
 
+    // Phải chạy SAU `ingestDeaths`, `ingestRecaps` và `ingestChat`: cả ba đẩy
+    // `sourceId` vào `seenEventIds`, và `claimEvidence` neo vào đúng những id
+    // đó. Đảo thứ tự thì mọi mảnh bằng chứng bị bỏ lặng lẽ.
+    //
+    // `claimEvidence` là hàm THUẦN: nó tính lại toàn bộ `state.claims` mỗi lần
+    // được gọi, không tự nhớ đã phát cái gì. Nhưng `observe()` chạy nhiều lần
+    // một vòng - vào đêm, vào ngày, mỗi lượt bỏ phiếu, mỗi lượt thảo luận - nên
+    // nếu áp thẳng kết quả mỗi lần, cùng một mảnh bằng chứng bị cộng dồn vào
+    // belief nhiều lần trong một vòng và bão hoà thang suspicion/trust gần như
+    // ngay lập tức. Mỗi mảnh mang một `id` tất định
+    // (`${sourceId}:${kind}:${idSuffix}`), nên chặn trùng ở ĐÂY - nơi áp dụng -
+    // chứ không trong `claimEvidence`, để hàm đó vẫn thuần và gọi lại được bao
+    // nhiêu lần cũng an toàn.
+    for (const item of claimEvidence(
+      {
+        claims: this.state.claims,
+        round: knowledge.round,
+        lastNightDeaths: knowledge.lastNightDeaths,
+        publicVoteHistory: knowledge.publicVoteHistory,
+        seenEventIds: this.state.seenEventIds,
+      },
+      this.weights,
+    )) {
+      if (this.state.appliedClaimEvidenceIds.includes(item.id)) continue;
+      this.state.appliedClaimEvidenceIds.push(item.id);
+      if (this.state.appliedClaimEvidenceIds.length > this.weights.limits.seenEvents) {
+        this.state.appliedClaimEvidenceIds.shift();
+      }
+
+      applyEvidence(this.state, item, this.weights);
+      // Chỉ mảnh GỠ TỘI (weight < 0) mới chạm trust, đúng tiền lệ đã có ở
+      // `ingestChat`: `ACCUSE` (weight > 0) chỉ qua `applyEvidence`, còn
+      // `DEFEND` (weight < 0) qua cả hai. Buộc tội không tự nó đốt trust của
+      // người bị buộc tội - trust chỉ giảm vì THIẾU bằng chứng gỡ tội, không
+      // phải vì ai đó lên tiếng tố cáo.
+      if (item.weight < 0) applyTrustEvidence(this.state, item, this.weights);
+    }
+
     // Decay TRƯỚC, thông tin riêng SAU.
     //
     // Thứ tự này quan trọng: nếu áp thông tin riêng trước rồi mới decay, kết quả
@@ -280,6 +324,56 @@ export class BotRuntime {
     });
     run.finish(context, "SPEECH", speech?.targetId ?? null, speech?.kind ?? "im lặng");
     return speech;
+  }
+
+  /**
+   * Có nên khai vai trong lượt tự bào chữa không — và nếu có, khai gì.
+   *
+   * Chỉ chạy đúng "bước 0" của `planSpeech` (xem `speech-planner.ts`), không
+   * chạy các nhánh trigger/ACCUSE/QUESTION phía sau: lượt bào chữa không phải
+   * lượt thảo luận, bị cáo không có gì để cáo buộc ai lúc này, chỉ có claim
+   * hoặc không.
+   *
+   * `null` là kết quả phổ biến nhất: hầu hết BOT bị treo không có gì để khai,
+   * và chỗ gọi (`apps/server`) phải tự dựng một ý định KHÔNG khai (kiểu
+   * DISAGREE) khi gặp `null` - đây KHÔNG phải một quyết định, chỉ là hình dạng
+   * cố định cho "tôi phản đối", nên nó không cần đi qua lõi.
+   *
+   * `voteTargetId: null` vì bị cáo không tự bỏ phiếu cho chính mình ở lượt
+   * này - phiếu Treo/Tha của những người KHÁC chưa mở, và nhánh duy nhất của
+   * `decideChatClaim` đọc tham số này (Sói khai láo chủ động) không áp dụng
+   * cho một bị cáo đang bị dồn.
+   */
+  decideDefenseClaim(context: BotDecisionContext): BotSpeechIntention | null {
+    const run = this.beginTracedDecision();
+    const claim = decideChatClaim(context, this.state, run.rng, null, this.weights);
+
+    const intention: BotSpeechIntention | null = claim
+      ? {
+          kind: claim.kind === "COUNTER" ? "COUNTER_CLAIM" : "CLAIM_ROLE",
+          targetId: claim.counterTargetId ?? claim.accusedId ?? undefined,
+          claimedRole: claim.role,
+          topic: "ROLE_CLAIM",
+          // Không có `vote.confidence` ở lượt bào chữa - đây là lá bài cuối
+          // cùng bị cáo còn, nên gán một mức tin cậy cao cố định thay vì suy ra
+          // từ một lá phiếu không tồn tại. Trường này không tự đi vào prompt
+          // (xem `BotSpeechIntention.confidence`), chỉ phục vụ trace/kiểm bất
+          // biến.
+          confidence: 0.9,
+          // Đường duy nhất sinh ra bằng chứng cho một claim (Tiên Tri đang cầm
+          // kết quả soi trúng Sói) là nhánh PROACTIVE, và nhánh đó luôn được
+          // xét TRƯỚC UNDER_FIRE ở mọi checkpoint - kể cả những checkpoint
+          // thảo luận trước lượt bào chữa. Tới được UNDER_FIRE nghĩa là cơ hội
+          // đó đã trôi qua hoặc chưa từng có, nên không có bằng chứng nào để
+          // mang theo ở đây.
+          evidence: [],
+          tone: "FIRM",
+          reason: claim.reason,
+        }
+      : null;
+
+    run.finish(context, "SPEECH", intention?.targetId ?? null, intention?.kind ?? "im lặng");
+    return intention;
   }
 
   /**
@@ -557,6 +651,16 @@ export class BotRuntime {
    * đáp" khi nó thật sự được PHÁT, không phải khi nó được nghĩ ra rồi bị bỏ.
    */
   recordSpeech(speech: BotSpeechIntention, round: number, text?: string): void {
+    // Cam kết lời khai vào state ngay khi ý định được ghi nhận, không đợi câu
+    // chữ. Nếu đợi, hai checkpoint sát nhau sẽ cùng thấy `myClaim === null` và
+    // BOT khai hai lần trong một vòng.
+    if (
+      (speech.kind === "CLAIM_ROLE" || speech.kind === "COUNTER_CLAIM") &&
+      speech.claimedRole &&
+      this.state.myClaim === null
+    ) {
+      this.state.myClaim = { role: speech.claimedRole, round };
+    }
     recordSpeechIntention(this.state, speech, round, this.weights, text);
     if (speech.replyToMessageId) {
       markReplied(this.state, speech.replyToMessageId, this.weights);
@@ -763,7 +867,22 @@ export class BotRuntime {
       phase: knowledge.phase,
       weights: this.weights,
     });
-    for (const memory of memories) remember(this.state, memory, this.weights);
+    for (const memory of memories) {
+      // Người khai có đang bị dồn phiếu ngay lúc mở miệng không. Ghi Ở ĐÂY chứ
+      // không tính lại sau: bảng phiếu đổi liên tục, và một tín hiệu về THỜI
+      // ĐIỂM mà lại đọc trạng thái của tương lai thì không còn là tín hiệu.
+      //
+      // "Bị dồn" = ĐANG DẪN PHIẾU, dùng chung `voteLeader` với `decideChatClaim`.
+      // Không phải "có ít nhất một phiếu": một phiếu phản đối lạc không phải áp
+      // lực, và từ vòng 3 trở đi hầu như ai cũng có một phiếu như thế.
+      //
+      // Đóng dấu cho CẢ `COUNTER_CLAIM`: một câu phản bác cũng là một lời khai
+      // vai, và `claim-credibility` giờ chấm điểm cả hai loại.
+      if (memory.type === "ROLE_CLAIM" || memory.type === "COUNTER_CLAIM") {
+        memory.data.underFire = voteLeader(knowledge.currentVoteCounts.players) === memory.actorId;
+      }
+      remember(this.state, memory, this.weights);
+    }
 
     // Kể cả câu bị parser bỏ qua cũng được đánh dấu đã đọc, để lần observe sau
     // không phân tích lại cùng một tin nhắn.

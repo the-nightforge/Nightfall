@@ -105,6 +105,30 @@ export interface SelfPlayMetrics {
   silenceRate: Ratio;
   /** Câu do bảng mẫu sinh ra. Trong self-play luôn bằng 1 theo thiết kế. */
   fallbackTemplateRate: Ratio;
+
+  // ---- Lời khai vai (Phase 5) ----
+
+  /** Số lời khai trung bình mỗi ván. Thiết kế nhắm 2–4 ở bàn 12–14. */
+  claimsPerGame: number | null;
+  /** Tỉ lệ ván có ít nhất một lời phản bác. Phải `> 0` và `< 1`. */
+  counterClaimRate: Ratio;
+  /**
+   * Phiếu chuyển sang người bị một lời khai chỉ mặt, trong vòng ngay sau đó.
+   *
+   * `≈ 0` nghĩa là mô hình uy tín chỉ là số chạy ngầm: người chơi sẽ không thấy
+   * lời khai thay đổi được điều gì, và đó là hỏng đúng mục tiêu của Phase 5.
+   */
+  claimFollowRate: Ratio;
+  /**
+   * Trong những lần làng TIN một lời khai Tiên Tri, bao nhiêu lần người đó là
+   * Tiên Tri thật.
+   *
+   * Chỉ số quan trọng nhất của Phase 5, và là chỉ số duy nhất chỉ tồn tại được
+   * ở harness - chỉ đây mới biết vai thật để đối chiếu. Dưới 50% nghĩa là cơ
+   * chế đang giúp Sói nhiều hơn giúp làng, tức phần Sói khai láo đã nuốt chửng
+   * phần thông tin của làng.
+   */
+  claimAccuracy: Ratio;
 }
 
 export interface RoleMetrics {
@@ -151,6 +175,39 @@ function finalVotesByRound(
   return byRound;
 }
 
+/**
+ * Có lá phiếu nào ĐỔI sang `targetId`, trong vòng của lời khai hoặc vòng ngay
+ * sau đó, mà người bỏ phiếu thuộc phe làng - hay không.
+ *
+ * Chỉ xét phiếu ĐỔI (`changed`): một lá phiếu giữ nguyên không phải là làng
+ * "chuyển sang" ai cả, nó là một lá đã có từ trước lời khai. Chỉ xét phiếu của
+ * phe làng: một con Sói bỏ phiếu theo mục tiêu của một lời khai (bussing, hay
+ * chính lời khai đó là của Sói) không phải là làng bị thuyết phục - đưa cả hai
+ * phe vào chung một mẫu số sẽ làm `claimAccuracy` không còn đo được điều nó cần
+ * đo.
+ *
+ * Quét TỚI (không quét lùi) từ vị trí lời khai: chỉ phiếu xảy ra SAU lời khai
+ * mới là làng phản ứng lại nó, không phải trùng hợp ngẫu nhiên trước đó.
+ */
+function claimWasFollowed(
+  events: readonly SelfPlayEvent[],
+  fromIndex: number,
+  claimRound: number,
+  targetId: string,
+  roles: Record<string, Role>,
+): boolean {
+  for (let index = fromIndex + 1; index < events.length; index += 1) {
+    const event = events[index];
+    if (event.kind !== "VOTE" || !event.changed) continue;
+    if (event.targetId !== targetId) continue;
+    if (event.round !== claimRound && event.round !== claimRound + 1) continue;
+    const voterRole = roles[event.voterId];
+    if (voterRole === undefined || roleTeam(voterRole) !== "village") continue;
+    return true;
+  }
+  return false;
+}
+
 export function collectMetrics(
   games: readonly SelfPlayGame[],
   weights: BotWeights = DEFAULT_BOT_WEIGHTS,
@@ -190,6 +247,16 @@ export function collectMetrics(
   let silenceOpportunities = 0;
   let silentBotDays = 0;
   const botDaySamples: number[] = [];
+
+  // ---- Lời khai vai (Phase 5) ----
+  const claimCounts: number[] = [];
+  let counterClaimGames = 0;
+  /** Lời khai có chỉ mặt ai đó (`targetId !== null`) - mẫu số của `claimFollowRate`. */
+  let claimPointTotal = 0;
+  let claimPointFollowed = 0;
+  /** Lời khai Tiên Tri (`claimedRole === "SEER"`) mà làng đã TIN - mẫu số của `claimAccuracy`. */
+  let seerClaimsBelieved = 0;
+  let seerClaimsAccurate = 0;
 
   const roleGames = new Map<Role, number>();
   const roleWins = new Map<Role, number>();
@@ -300,7 +367,11 @@ export function collectMetrics(
       return repeated;
     };
 
-    for (const event of game.events) {
+    /** Ván này có ít nhất một lời phản bác (`COUNTER_CLAIM`) hay không. */
+    let gameHasCounterClaim = false;
+    let gameClaimCount = 0;
+
+    for (const [eventIndex, event] of game.events.entries()) {
       if (event.kind === "SPEECH") {
         speechTotal += 1;
         const signature = `${event.speech}:${event.targetId ?? "-"}`;
@@ -359,11 +430,41 @@ export function collectMetrics(
         } else if (actorTeam === "wolves" && event.speech === "ACCUSE") {
           wolfSignals += 1;
         }
+
+        // --- Lời khai vai (Phase 5) ---
+        if (event.speech === "CLAIM_ROLE" || event.speech === "COUNTER_CLAIM") {
+          gameClaimCount += 1;
+          if (event.speech === "COUNTER_CLAIM") gameHasCounterClaim = true;
+
+          if (event.targetId !== null) {
+            claimPointTotal += 1;
+            const followed = claimWasFollowed(
+              game.events,
+              eventIndex,
+              event.round,
+              event.targetId,
+              game.roles,
+            );
+            if (followed) claimPointFollowed += 1;
+
+            // `claimAccuracy` chỉ xét lời khai TIÊN TRI - `claimedRole` là vai
+            // được KHAI, không phải vai thật; một con Sói khai láo cũng mang
+            // "SEER" ở đây, và đó chính xác là trường hợp cần đối chiếu.
+            if (event.claimedRole === "SEER" && followed) {
+              seerClaimsBelieved += 1;
+              if (game.roles[event.actorId] === "SEER") seerClaimsAccurate += 1;
+            }
+          }
+        }
+
         continue;
       }
 
       if (event.kind === "COALITION") cohesionSamples.push(event.cohesion);
     }
+
+    claimCounts.push(gameClaimCount);
+    if (gameHasCounterClaim) counterClaimGames += 1;
 
     directQuestionTotal += directQuestions.size;
     directQuestionAnswered += answeredQuestions.size;
@@ -435,6 +536,11 @@ export function collectMetrics(
      * cấp để mà hỏng.
      */
     fallbackTemplateRate: ratio(speechTotal, speechTotal),
+
+    claimsPerGame: mean(claimCounts),
+    counterClaimRate: ratio(counterClaimGames, games.length),
+    claimFollowRate: ratio(claimPointFollowed, claimPointTotal),
+    claimAccuracy: ratio(seerClaimsAccurate, seerClaimsBelieved),
   };
 
   const byTeam: Record<Team, TeamMetrics> = {

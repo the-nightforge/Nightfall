@@ -105,7 +105,7 @@ export interface BotNightIntention {
  * hành vi *trả lời một người*. Một BOT chỉ có ba loại đó buộc phải phát biểu
  * độc lập, và đó chính là triệu chứng mà Phase 4 phải chữa.
  *
- * Không BOT nào cần dùng đủ mười hai loại trong một ván.
+ * Không BOT nào cần dùng đủ mười bốn loại trong một ván.
  */
 export const BOT_SPEECH_KINDS = [
   "ACCUSE",
@@ -120,6 +120,13 @@ export const BOT_SPEECH_KINDS = [
   "CHANGE_MIND",
   "REACTION",
   "HUMOR",
+  /**
+   * Tự nhận vai. Hai kind này là ĐƯỜNG DUY NHẤT để một lời khai của BOT ra
+   * khỏi lõi; không có đường nào khác, và cổng ở `speech-renderer` bảo đảm nhà
+   * cung cấp không mở thêm được đường thứ hai.
+   */
+  "CLAIM_ROLE",
+  "COUNTER_CLAIM",
 ] as const;
 
 export type BotSpeechKind = (typeof BOT_SPEECH_KINDS)[number];
@@ -170,6 +177,15 @@ export interface BotSpeechIntention {
   /** Tác giả của câu đó. */
   replyToActorId?: string;
   topic?: BotSpeechTopic;
+  /**
+   * Vai được nói TO giữa phòng. Bắt buộc với `CLAIM_ROLE`/`COUNTER_CLAIM`, vô
+   * nghĩa với mọi kind khác.
+   *
+   * KHÔNG phải vai thật: một con Sói khai láo mang `claimedRole: "SEER"`. Đây
+   * cũng chính là lý do trường này an toàn để đưa vào prompt — nó là thứ sắp
+   * được công bố, không phải thứ đang được giấu.
+   */
+  claimedRole?: Role;
   confidence: number;
   evidence: BotEvidence[];
   /**
@@ -418,6 +434,17 @@ export interface BotBrainState {
   trust: Record<string, BeliefEntry>;
   knownInformation: { knownRoles: Record<string, Role>; seerResults: BotMemory[] };
   claims: BotMemory[];
+  /**
+   * Vai chính BOT này đã công khai nhận, hoặc `null`.
+   *
+   * Một BOT khai đúng MỘT vai cả ván. Lật claim không bị cấm bằng kiểu — nó bị
+   * tính giá ở `claim-credibility` — nhưng lõi thì không bao giờ tự lật, vì
+   * một người chơi đổi lời khai giữa ván là đang tự thua.
+   *
+   * Tách khỏi `claims` (kho lời khai của NGƯỜI KHÁC) vì hai câu hỏi khác nhau:
+   * "ai đã khai gì" và "tôi đã cam kết điều gì".
+   */
+  myClaim: { role: Role; round: number } | null;
   memories: BotMemory[];
   relationships: Record<string, SocialEdge>;
   currentTheory: { summary: string; evidenceIds: string[] } | null;
@@ -452,6 +479,17 @@ export interface BotBrainState {
   /** Message đã phản hồi rồi, để không đáp hai lần cùng một câu. Có trần. */
   repliedMessageIds: string[];
   seenEventIds: string[];
+  /**
+   * ID bằng chứng lời khai đã áp vào belief rồi, để không áp lại. Có trần,
+   * cùng hình dạng với `repliedMessageIds`.
+   *
+   * `observe()` chạy nhiều lần một vòng (vào đêm, vào ngày, mỗi lượt bỏ phiếu,
+   * mỗi lượt thảo luận), và `claimEvidence` tính lại TOÀN BỘ `state.claims`
+   * mỗi lần được gọi - nó là hàm thuần, không tự nhớ đã phát cái gì. Không có
+   * trường này, cùng một mảnh bằng chứng bị cộng dồn vào belief mỗi lần
+   * `observe()` chạy, bão hoà thang suspicion/trust chỉ trong một vòng.
+   */
+  appliedClaimEvidenceIds: string[];
 }
 
 /**

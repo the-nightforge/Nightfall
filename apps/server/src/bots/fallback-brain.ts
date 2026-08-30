@@ -1,12 +1,4 @@
-import type { BotSpeechStyle } from "@masoi/game-engine";
-import type { RoomSnapshot } from "@masoi/shared";
-import type {
-  Attempt,
-  BotBrain,
-  DaySpeechDecision,
-  DefenseDecision,
-  SpeechRequest,
-} from "./types";
+import type { Attempt, BotBrain, DaySpeechDecision, SpeechRequest } from "./types";
 import { failed } from "./types";
 
 /**
@@ -44,9 +36,4 @@ export class FallbackBrain implements BotBrain {
   renderDaySpeech(request: SpeechRequest): Promise<Attempt<DaySpeechDecision>> {
     return this.first((b) => b.renderDaySpeech(request));
   }
-
-  decideDefense(view: RoomSnapshot): Promise<Attempt<DefenseDecision>> {
-    return this.first((b) => b.decideDefense(view));
-  }
-
 }

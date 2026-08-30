@@ -1,118 +1,175 @@
-import { describe, expect, it, vi } from "vitest";
-import type { RoomSnapshot } from "@masoi/shared";
-import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
-import { buildDefensePrompt } from "../src/bots/prompt";
-import { interpretDefense } from "../src/bots/decide";
-import { randomBrain } from "../src/bots/random-brain";
+import { describe, expect, it } from "vitest";
+import { speechDefaults } from "./helpers/speech-request";
+import { renderBotSpeech } from "../src/bots/speech-renderer";
+import { FallbackBrain } from "../src/bots/fallback-brain";
+import { interpretDaySpeech } from "../src/bots/decide";
+import type { BotBrain, SpeechRequest } from "../src/bots/types";
 
-const DEFENSE_TEXT = "Tôi soi ra Wolf là sói, treo tôi là làng thua đấy.";
-
-function trialView(over: Partial<RoomSnapshot> = {}): RoomSnapshot {
+/**
+ * Task 8: trước đây `buildDefensePrompt`/`decideDefense` là đường DUY NHẤT
+ * không đi qua cổng `CLAIM_INTEGRITY` - nhà cung cấp có thể tự bịa hoặc phá
+ * một lời khai vai ngay ở lượt bào chữa mà không ai kiểm. Nhóm test này thay
+ * cho `buildDefensePrompt`/`interpretDefense`/`RandomBrain.decideDefense` cũ:
+ * chúng kiểm rằng lượt bào chữa giờ chỉ còn MỘT cửa ra, giống hệt mọi lời nói
+ * khác trong ngày.
+ */
+function defenseRequest(over: Partial<SpeechRequest> = {}): SpeechRequest {
   return {
-    code: "ABCDE",
-    hostId: "v",
-    phase: "FINAL_VOTE",
-    config: { ...DEFAULT_ROOM_CONFIG },
-    round: 2,
-    phaseEndsAt: null,
-    you: { id: "v", name: "Vân", ready: true, connected: true, role: "VILLAGER", alive: true },
-    players: [
-      { id: "v", name: "Vân", alive: true, isBot: true, voteCount: 0 },
-      { id: "w", name: "Wolf", alive: true, isBot: false, voteCount: 0 },
-      { id: "s", name: "Sang", alive: true, isBot: false, voteCount: 3 },
-    ],
-    night: null,
-    hunterShot: null,
-    trial: {
-      accusedId: "s",
-      accusedName: "Sang",
-      guiltyVotes: 1,
-      innocentVotes: 0,
-      guiltyRequired: 2,
-      canVote: true,
-      hasVoted: false,
-      myVote: null,
-      canSpeak: false,
+    roomCode: "ABCDE",
+    // Khớp id/tên "bot" mà speechDefaults().players đã khai, để cổng
+    // CLAIM_INTEGRITY nhận ra đúng actor khi chạy analyzeChat trên câu thử -
+    // nếu speaker không có trong players thì analyzeChat không gán được lời
+    // khai cho ai cả, và cổng "trôi" theo hướng ngược lại với cái đang kiểm.
+    speaker: { id: "bot", name: "Bot" },
+    ...speechDefaults(),
+    intention: {
+      kind: "DISAGREE",
+      topic: "SUSPICION",
+      confidence: 0.5,
+      evidence: [],
+      tone: "FIRM",
     },
-    lastTrial: null,
-    hasVoted: true,
-    myVote: "s",
-    noEliminationVoteCount: 0,
-    serverNow: 0,
-    discussionSkip: null,
-    votesRevealed: true,
-    nightHistory: [],
-    hunterShots: [],
-    lastNightDeaths: [],
-    lastEliminated: null,
-    winner: null,
-    chatLog: [
-      { id: "1", channel: "day", playerId: "v", playerName: "Vân", text: "Tôi nghi Sang", at: 1 },
-      { id: "2", channel: "day", playerId: "s", playerName: "Sang", text: DEFENSE_TEXT, at: 2 },
-    ],
-    log: [],
+    evidence: [],
+    targetName: null,
+    recentSpeechSourceIds: [],
+    defense: { votesAgainstMe: 3, alsoAccused: [] },
+    ...over,
   };
 }
 
-/** Snapshot của chính bị cáo trong pha biện hộ. */
-function accusedView(): RoomSnapshot {
-  const base = trialView();
+function brainSaying(text: string): BotBrain {
   return {
-    ...base,
-    phase: "DEFENSE",
-    you: { id: "s", name: "Sang", ready: true, connected: true, role: "VILLAGER", alive: true },
-    trial: { ...base.trial!, canVote: false, canSpeak: true },
+    name: "stub",
+    renderDaySpeech: async () => ({ ok: true, value: { chat: text } }),
   };
 }
 
-const noop = () => undefined;
+describe("lượt bào chữa đi qua đúng renderBotSpeech, như mọi lời nói khác", () => {
+  it("nhà cung cấp không tự bịa được một lời khai vai khi lõi không hề chốt claim", async () => {
+    // Ý định là DISAGREE (không claim gì) - đúng nhánh "bị cáo không có gì để
+    // khai". Nếu nhà cung cấp lén nhét một lời khai vai vào câu bào chữa, cổng
+    // CLAIM_INTEGRITY (`claimSurvivesRoundTrip`) phải vứt nó, y như nó vứt một
+    // lời khai lạc đề ở ban ngày.
+    const result = await renderBotSpeech(
+      defenseRequest(),
+      brainSaying("Tôi là tiên tri, đừng treo tôi, các bạn sẽ hối hận."),
+    );
 
-describe("prompt phiên toà", () => {
-  it("dựng prompt biện hộ cho bị cáo và chỉ cho bị cáo", () => {
-    const spec = buildDefensePrompt(accusedView());
-    expect(spec).not.toBeNull();
-    expect(spec!.user).toContain("3 phiếu");
-    expect(spec!.schema.required).toEqual(expect.arrayContaining(["defense"]));
-    expect(buildDefensePrompt(trialView())).toBeNull();
-  });
-});
-
-describe("interpretDefense", () => {
-  it("cắt lời bào chữa theo giới hạn chat", () => {
-    const long = "a".repeat(400);
-    const result = interpretDefense(accusedView(), { think: "x", defense: long }, 300, noop);
-    expect(result).toEqual({ ok: true, value: { chat: "a".repeat(300) } });
+    expect(result.fromTemplate).toBe(true);
   });
 
-  it("bào chữa rỗng là lượt hỏng chứ không phải im lặng có chủ đích", () => {
-    expect(interpretDefense(accusedView(), { think: "x", defense: "   " }, 300, noop)).toEqual({
-      ok: false,
+  it("khi lõi ĐÃ chốt một claim, câu khai đúng vai được giữ nguyên", async () => {
+    // Mô phỏng nhánh UNDER_FIRE: BotRuntime.decideDefenseClaim đã chốt
+    // CLAIM_ROLE(GUARD) trước khi hỏi nhà cung cấp - đúng như scheduleDefenseBot
+    // dựng trong machine.ts.
+    const request = defenseRequest({
+      intention: {
+        kind: "CLAIM_ROLE",
+        claimedRole: "GUARD",
+        topic: "ROLE_CLAIM",
+        confidence: 0.9,
+        evidence: [],
+        tone: "FIRM",
+      },
     });
+
+    const result = await renderBotSpeech(
+      request,
+      brainSaying("Tôi là bảo vệ. Treo tôi thì làng mất luôn chốt chặn đêm nay."),
+    );
+
+    expect(result.fromTemplate).toBe(false);
+    expect(result.text).toContain("bảo vệ");
+  });
+
+  it("nhà cung cấp không đổi được vai khi lõi đã chốt một claim khác", async () => {
+    const request = defenseRequest({
+      intention: {
+        kind: "CLAIM_ROLE",
+        claimedRole: "GUARD",
+        topic: "ROLE_CLAIM",
+        confidence: 0.9,
+        evidence: [],
+        tone: "FIRM",
+      },
+    });
+
+    const result = await renderBotSpeech(
+      request,
+      brainSaying("Tôi là tiên tri, không phải bảo vệ."),
+    );
+
+    expect(result.fromTemplate).toBe(true);
+  });
+
+  it("nhà cung cấp hỏng thì rơi về bảng mẫu tất định, bị cáo không bao giờ im lặng", async () => {
+    const failing: BotBrain = { name: "broken", renderDaySpeech: async () => ({ ok: false }) };
+
+    const result = await renderBotSpeech(defenseRequest(), failing);
+
+    expect(result.fromTemplate).toBe(true);
+    expect(result.text).toBeTruthy();
   });
 });
 
-describe("RandomBrain trong phiên toà", () => {
-  it("bị cáo luôn có một lời bào chữa", async () => {
-    const result = await randomBrain.decideDefense(accusedView());
-    expect(result.value?.chat).toBeTruthy();
+/**
+ * Fix round 1, mục 2: `interpretDaySpeech` coi chuỗi rỗng là im lặng có chủ
+ * đích (`decided({chat:null})`), và với `FallbackBrain` đó là một nhánh
+ * THÀNH CÔNG - chuỗi dừng lại, não kế tiếp không bao giờ được hỏi. Đúng cho
+ * ban ngày, nhưng SAI cho lượt bào chữa: một câu trả lời rỗng từ não A không
+ * được phép chiếm mất lượt của não B. `gemini-brain.ts`/`openai-compat-brain.ts`
+ * truyền `treatEmptyAsFailure: request.defense !== null` để chữa đúng chỗ
+ * này; nhóm dưới đây kiểm hành vi GHÉP của interpretDaySpeech + FallbackBrain,
+ * không chỉ từng hàm riêng lẻ.
+ */
+function brainCalling(name: string, chat: string, calls: string[]): BotBrain {
+  return {
+    name,
+    async renderDaySpeech(request: SpeechRequest) {
+      calls.push(name);
+      // Mô phỏng ĐÚNG lời gọi thật của gemini-brain.ts/openai-compat-brain.ts,
+      // không tự suy ra { ok: true/false } bằng tay - nếu không test này có
+      // thể xanh dù chỗ nối thật đã đứt.
+      return interpretDaySpeech({ think: "x", chat }, 300, () => undefined, {
+        treatEmptyAsFailure: request.defense !== null,
+      });
+    },
+  };
+}
+
+describe("chuỗi dự phòng: chuỗi rỗng ở lượt bào chữa phải thử não kế tiếp", () => {
+  it("ban ngày: não A trả lời rỗng thì DỪNG ở đó, não B không được hỏi", async () => {
+    const calls: string[] = [];
+    const chain = new FallbackBrain([
+      brainCalling("A", "   ", calls),
+      brainCalling("B", "Tôi nghi Wolf.", calls),
+    ]);
+
+    const attempt = await chain.renderDaySpeech(
+      // Không phải lượt bào chữa - defenseRequest() ghi đè lại `defense: null`
+      // và một ý định không cần mục tiêu, để khác biệt DUY NHẤT với test dưới
+      // là cờ `defense`, không phải hình dạng ý định.
+      defenseRequest({
+        defense: null,
+        intention: { kind: "WITHHOLD", confidence: 0.2, evidence: [] },
+        targetName: null,
+      }),
+    );
+
+    expect(calls).toEqual(["A"]);
+    expect(attempt).toEqual({ ok: true, value: { chat: null } });
   });
 
-  it("người không phải bị cáo thì im lặng có chủ đích", async () => {
-    expect(await randomBrain.decideDefense(trialView())).toEqual({ ok: true, value: null });
-  });
-});
+  it("lượt bào chữa: não A trả lời rỗng thì não B ĐƯỢC hỏi tiếp", async () => {
+    const calls: string[] = [];
+    const chain = new FallbackBrain([
+      brainCalling("A", "   ", calls),
+      brainCalling("B", "Tôi không phải sói, đừng treo tôi.", calls),
+    ]);
 
-describe("chuỗi dự phòng phủ lời bào chữa", () => {
-  it("FallbackBrain chuyển tiếp decideDefense", async () => {
-    const { FallbackBrain } = await import("../src/bots/fallback-brain");
-    const broken = {
-      name: "broken",
-      renderDaySpeech: vi.fn(),
-      decideDefense: vi.fn(async () => ({ ok: false as const })),
-    };
-    const chain = new FallbackBrain([broken, randomBrain]);
+    const attempt = await chain.renderDaySpeech(defenseRequest());
 
-    expect((await chain.decideDefense(accusedView())).ok).toBe(true);
-    expect(broken.decideDefense).toHaveBeenCalledOnce();
+    expect(calls).toEqual(["A", "B"]);
+    expect(attempt).toEqual({ ok: true, value: { chat: "Tôi không phải sói, đừng treo tôi." } });
   });
 });

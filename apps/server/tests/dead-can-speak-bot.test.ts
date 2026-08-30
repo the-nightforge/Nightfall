@@ -14,7 +14,7 @@ import { scheduleDeadCanSpeakBot, submitGhostMessage } from "../src/game/machine
  */
 
 const emitted = vi.hoisted(() => ({ calls: [] as Array<{ recipients: string[]; message: any }> }));
-const brainControl = vi.hoisted(() => ({ renderDaySpeech: vi.fn(), decideDefense: vi.fn() }));
+const brainControl = vi.hoisted(() => ({ renderDaySpeech: vi.fn() }));
 
 vi.mock("../src/rooms/store", () => ({
   clearRoomTimers: () => undefined,
@@ -38,7 +38,6 @@ vi.mock("../src/bots", async () => {
     botBrain: () => ({
       name: "test",
       renderDaySpeech: brainControl.renderDaySpeech,
-      decideDefense: brainControl.decideDefense,
     }),
   };
 });

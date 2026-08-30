@@ -1,4 +1,5 @@
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import { decideChatClaim } from "../decision/claim-decision";
 import type { BotSpeechStyle } from "../personality/speech-style";
 import type { DecisionProbeCollector } from "../trace/trace";
 import type {
@@ -179,6 +180,35 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
       ? null
       : intention;
 
+  // ---- 0. Có đáng khai vai lúc này không ----
+  //
+  // Đứng TRÊN cả hai đường kia: một lời khai là nước đi nặng nhất mà lời nói
+  // làm được, và một con Tiên Tri đang cầm bằng chứng mà lại đi đáp một câu
+  // khích bác vặt là một con BOT đọc sai tình thế.
+  //
+  // `decideChatClaim` tự thoát ra trước khi rút số khi nhóm claim tắt, nên
+  // cấu hình v1/v2/v3 đi qua đây mà không lệch một bit nào của chuỗi RNG.
+  const voteTargetId = vote.choice.type === "PLAYER" ? vote.choice.targetId : null;
+  const claim = decideChatClaim(context, state, rng, voteTargetId, weights);
+  if (claim) {
+    const intention = fresh({
+      kind: claim.kind === "COUNTER" ? "COUNTER_CLAIM" : "CLAIM_ROLE",
+      targetId: claim.counterTargetId ?? claim.accusedId ?? undefined,
+      claimedRole: claim.role,
+      topic: "ROLE_CLAIM",
+      confidence: vote.confidence,
+      // Bằng chứng soi đi CÙNG lời khai, không đi trước. Xem `holdSeerEvidence`
+      // ngay dưới: trước lúc này nó bị giữ lại có chủ ý.
+      evidence: vote.evidence
+        .filter((item) => item.kind === "SEER_RESULT_WOLF")
+        .slice(0, weights.limits.intentionEvidence)
+        .map((item) => ({ ...item })),
+      tone: toneFor("ACCUSE", style),
+      reason: claim.reason,
+    });
+    if (intention) return intention;
+  }
+
   // ---- 1. Có ai đang nói với mình không ----
   for (const trigger of findConversationTriggers(context, state, weights)) {
     for (const kind of candidatesFor(trigger, style)) {
@@ -215,12 +245,22 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
   const spoken = new Set(state.speechMemory.flatMap((entry) => entry.sourceIds));
 
   /**
-   * Tiên Tri giữ kín kết quả soi trong những vòng đầu.
+   * Bằng chứng soi mở khoá theo LỜI KHAI, không theo số vòng.
    *
-   * Soi trúng Sói ngay đêm đầu rồi hô lên ở vòng 1 là cách nhanh nhất để chết ở
-   * đêm 2. Lá phiếu vẫn nhắm đúng người - thứ bị giữ lại là LÝ DO.
+   * Nói "tôi soi thấy Nam là sói" mà chưa hề nhận mình là Tiên Tri là một câu
+   * vô nghĩa: cả làng không biết dựa vào đâu, và bầy Sói thì biết thừa phải cắn
+   * ai. Giữ lại tới đúng lúc khai thì cả hai bung ra một lượt, và lời khai
+   * thành một khoảnh khắc thay vì một dòng tin rỉ ra dần.
+   *
+   * Nhánh `else` giữ NGUYÊN luật cũ cho v1/v2/v3. Đổi thẳng sẽ đảo ngược hành
+   * vi của chúng: ở đó không BOT nào khai vai bao giờ, nên "chưa khai" luôn
+   * đúng và bằng chứng soi sẽ không bao giờ được nói ra — trong khi hôm nay
+   * `seerRevealRound = 0` nghĩa là nó LUÔN được nói ra.
    */
-  const holdSeerEvidence = round < weights.deceptionRisk.seerRevealRound;
+  const holdSeerEvidence =
+    weights.claim.accusationWeight > 0
+      ? state.myClaim === null
+      : round < weights.deceptionRisk.seerRevealRound;
   const usable = vote.evidence
     .filter((item) => !spoken.has(item.sourceId))
     .filter(
