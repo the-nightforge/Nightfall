@@ -1,17 +1,19 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { MIN_PLAYERS_TO_START, ROLE_META, type RoomSnapshot } from "@masoi/shared";
 import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { useSpeakers } from "@/components/VoiceProvider";
 import { roleLabel } from "@/lib/cursed";
 import { Avatar } from "./Avatar";
+import { AvatarPicker } from "./AvatarPicker";
 
 interface Props {
   snapshot: RoomSnapshot;
   /** Chỉ ở phòng chờ: trạng thái sẵn sàng, ô còn trống, và quyền loại người. */
   lobby?: { isHost: boolean; onKick: (playerId: string) => void };
+  onUpdateAvatar?: (avatarUrl: string | null) => void;
 }
 
 /**
@@ -22,11 +24,12 @@ interface Props {
  * danh sách dọc hẹp chỉ để theo dõi - ai còn sống, ai đang bị dồn phiếu - còn
  * mọi thao tác chọn người đều ở cột kia.
  */
-export function RosterPanel({ snapshot, lobby }: Props) {
+export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
   const speakers = useSpeakers();
   const meId = snapshot.you?.id ?? null;
   const roster = snapshot.players.map((p) => p.id).join(",");
   const avatars = useMemo(() => assignAvatars(roster ? roster.split(",") : []), [roster]);
+  const [showPicker, setShowPicker] = useState(false);
 
   const count = snapshot.players.length;
   const alive = snapshot.players.filter((p) => p.alive).length;
@@ -62,11 +65,12 @@ export function RosterPanel({ snapshot, lobby }: Props) {
             >
               <span className="relative shrink-0">
                 <Avatar
-                  avatar={avatars[player.id]}
+                  avatar={player.avatarUrl ? player.avatarUrl : avatars[player.id]}
                   tint={tintFor(player.id)}
                   alive={player.alive}
                   breathOffset={breathOffsetFor(player.id)}
                   className="h-7 w-7 sm:h-8 sm:w-8"
+                  isCustom={!!player.avatarUrl}
                 />
                 {!player.alive && (
                   <span className="pointer-events-none absolute inset-0 grid place-items-center">
@@ -85,13 +89,13 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                   </span>
                   <span className="flex items-center gap-1">
                   {snapshot.hostId === player.id && (
-                    <span className="text-[11px] leading-none" title="Chủ phòng" aria-label="Chủ phòng">
-                      👑
+                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-bold text-amber-300">
+                      <span aria-hidden="true">👑</span> Chủ phòng
                     </span>
                   )}
                   {player.isBot && (
-                    <span className="text-[11px] leading-none" title="Bot" aria-label="Bot">
-                      🤖
+                    <span className="inline-flex items-center gap-0.5 rounded bg-slate-700/60 px-1 py-0.5 text-[9px] font-bold text-slate-200">
+                      <span aria-hidden="true">🤖</span> Bot
                     </span>
                   )}
                   {player.role && (
@@ -132,11 +136,11 @@ export function RosterPanel({ snapshot, lobby }: Props) {
 
               {lobby?.isHost && player.id !== meId && (
                 <button
-                  className="shrink-0 rounded px-1 text-xs text-mist/30 hover:bg-blood-600/20 hover:text-blood-400"
-                  title={`Loại ${player.name}`}
+                  className="inline-flex shrink-0 items-center gap-0.5 rounded bg-blood-600/15 px-1.5 py-0.5 text-[10px] font-bold text-blood-400 hover:bg-blood-600/25"
+                  aria-label={`Kick ${player.name}`}
                   onClick={() => lobby.onKick(player.id)}
                 >
-                  ✕
+                  <span aria-hidden="true">✕</span> Kick
                 </button>
               )}
             </li>
@@ -156,6 +160,29 @@ export function RosterPanel({ snapshot, lobby }: Props) {
         ))}
       </ul>
 
+      {onUpdateAvatar && snapshot.you && (
+        <div className="mt-3 border-t border-white/[0.06] pt-3">
+          <button
+            type="button"
+            className="w-full rounded-lg bg-white/5 px-3 py-1.5 text-xs font-semibold text-mist/80 hover:bg-white/10 hover:text-white"
+            onClick={() => setShowPicker((v) => !v)}
+          >
+            {showPicker ? "Đóng" : "📷 Đổi ảnh đại diện"}
+          </button>
+          {showPicker && (
+            <div className="mt-2">
+              <AvatarPicker
+                currentUrl={(snapshot.you as any)?.avatarUrl ?? null}
+                onSave={(url) => {
+                  onUpdateAvatar(url);
+                  setShowPicker(false);
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
       {snapshot.noEliminationVoteCount > 0 && (
         <p className="mt-2 border-t border-white/[0.06] pt-2 text-xs text-mist/60">
           Không treo ai: <b className="text-white">{snapshot.noEliminationVoteCount}</b>
@@ -168,8 +195,8 @@ export function RosterPanel({ snapshot, lobby }: Props) {
 function LobbyStatus({ ready, offline }: { ready: boolean; offline: boolean }) {
   if (offline) {
     return (
-      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blood-600/20 text-blood-400" aria-label="Mất kết nối">
-        ✕
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300 ring-1 ring-amber-500/30">
+        <span aria-hidden="true">📴</span> Mất kết nối
       </span>
     );
   }

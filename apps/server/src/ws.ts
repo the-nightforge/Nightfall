@@ -22,6 +22,7 @@ import {
   addBotPayload,
   hunterShotPayload,
   dayOfTruthClaimPayload,
+  updateAvatarPayload,
 } from "@masoi/shared";
 import { config } from "./config";
 import { GameError } from "@masoi/game-engine";
@@ -156,6 +157,12 @@ export function setupSocket(io: SocketServer): void {
     handler(CLIENT_EVENTS.ROOM_UPDATE_CONFIG, async (payload) => {
       const { config: cfg } = updateConfigPayload.parse(payload);
       roomService.updateConfig(playerId, cfg);
+    });
+
+    handler(CLIENT_EVENTS.ROOM_UPDATE_AVATAR, async (payload) => {
+      const { avatarUrl } = updateAvatarPayload.parse(payload);
+      if (!allowAction(`avatar:${playerId}`, 5, 10_000)) throw new RoomError("Thao tác quá nhanh");
+      await roomService.updateAvatar(playerId, avatarUrl);
     });
 
     handler(CLIENT_EVENTS.ROOM_ADD_BOT, async (payload) => {

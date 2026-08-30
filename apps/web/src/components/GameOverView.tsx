@@ -68,13 +68,14 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
           {winners.map((player) => (
             <div key={player.id} className="w-20">
               <Avatar
-                avatar={avatars[player.id]}
+                avatar={player.avatarUrl ? player.avatarUrl : avatars[player.id]}
                 tint={tintFor(player.id)}
                 alive
                 breathOffset={breathOffsetFor(player.id)}
                 className={`mx-auto h-12 w-12 ring-1 ${
                   wolvesWin ? "ring-blood-500/50" : "ring-emerald-500/50"
                 }`}
+                isCustom={!!player.avatarUrl}
               />
               <p className="mt-1 truncate text-[11px] font-semibold text-white">{player.name}</p>
             </div>
@@ -171,11 +172,12 @@ function TeamPanel({
           >
             <span className="relative shrink-0">
               <Avatar
-                avatar={avatars[player.id]}
+                avatar={player.avatarUrl ? player.avatarUrl : avatars[player.id]}
                 tint={tintFor(player.id)}
                 alive={player.alive}
                 breathOffset={breathOffsetFor(player.id)}
                 className="h-9 w-9"
+                isCustom={!!player.avatarUrl}
               />
               {!player.alive && (
                 <span className="pointer-events-none absolute inset-0 grid place-items-center">

@@ -119,7 +119,7 @@ export const skipDiscussionPayload = z.object({ skip: z.boolean() }).strict();
 export const voiceTokenPayload = z.object({}).strict();
 export const voiceReadyPayload = z.object({}).strict();
 export const dayOfTruthClaimPayload = z.object({ role: z.string().min(1).nullable() }).strict();
-
+export const updateAvatarPayload = z.object({ avatarUrl: z.string().nullable() }).strict();
 export const chatSendPayload = z.object({ text: z.string().trim().min(1).max(300) }).strict();
 
 export const addBotPayload = z.object({}).strict();
