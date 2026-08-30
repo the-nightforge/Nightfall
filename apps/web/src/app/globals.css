@@ -243,3 +243,397 @@ summary:focus-visible,
     @apply inline-block rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider;
   }
 }
+
+/* ============================================================================
+ * TRANG CHỦ - khung cảnh ngôi làng và cổng vào
+ *
+ * Cả khối này là NỀN, không phải một tấm hero đặt trong khung: nó `fixed` phủ
+ * kín viewport ở z-index âm nên không chiếm một pixel bố cục nào, và nội dung
+ * trang đứng bên trong nó. Đó là lý do trên điện thoại không phải giấu đi phần
+ * nào cả - không có gì để đẩy ô nhập chữ xuống.
+ *
+ * Đường chân trời (mép trên của .village-near) là đường cơ sở của cả trang:
+ * panel form chồng nhẹ lên nóc nhà, nên nó đứng TRONG cảnh chứ không nổi lên
+ * như một tấm thẻ dán.
+ * ========================================================================= */
+
+.village-scene {
+  position: fixed;
+  inset: 0;
+  /* -9 chứ không phải -10: nằm ngay TRÊN .backdrop để dùng lại bầu trời đêm
+   * gốc, thay vì vẽ lại một cái nền thứ hai gần giống. */
+  z-index: -9;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Trời: quầng trăng lạnh lệch phải, đáy hơi ấm lên vì ánh đèn làng. */
+.village-sky {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(78% 58% at 82% 6%, rgba(146, 178, 236, 0.2), transparent 64%),
+    radial-gradient(120% 46% at 50% 104%, rgba(176, 106, 58, 0.13), transparent 70%),
+    linear-gradient(180deg, rgba(7, 11, 22, 0.5) 0%, rgba(3, 5, 12, 0.8) 100%);
+}
+
+/*
+ * Trăng.
+ *
+ * clamp() theo vw chứ không phải một cỡ cố định: mặt trăng 96px trên màn 2560
+ * trông ra một hạt cườm, còn 150px trên màn 390 thì chiếm nửa bầu trời.
+ *
+ * Quầng sáng phải dùng ĐÚNG công thức vị trí và kích thước của đĩa trăng rồi
+ * phóng bằng transform, chứ không khai báo một cỡ riêng: hai công thức khác
+ * nhau thì hai lớp lệch tâm nhau ở một cỡ màn hình nào đó.
+ */
+.village-moon,
+.village-moon-halo {
+  position: absolute;
+  /* Sát mép trên - phải và cố ý nhỏ.
+   *
+   * Bản đầu treo trăng ở 11vh, đúng chỗ nhãn "BƯỚC VÀO NGÔI LÀNG" và mép trên
+   * panel form: một đĩa sáng trắng nằm đè lên chữ. Trăng phải ở TRÊN toàn bộ
+   * nội dung ở mọi cỡ màn - trên 390 nó lọt vào khoảng trống bên phải khối chữ,
+   * trên 2560 nó nằm ngoài hẳn mép phải của panel. */
+  right: clamp(1.75rem, 9vw, 13%);
+  top: clamp(0.5rem, 2.5vh, 2.5rem);
+  width: clamp(4rem, 6.6vw, 8.5rem);
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+.village-moon {
+  /* Mép dưới - trái tối hẳn đi: một đĩa sáng đều là một cái chấm tròn, còn có
+   * đường phân giới thì mới ra một khối cầu, và mắt đọc luôn ra hướng ánh sáng
+   * mà panel form bên dưới đang nhận. */
+  background: radial-gradient(circle at 36% 30%, #f7faff 0%, #dbe6fa 38%, #9fb3d6 72%, #55668c 100%);
+  box-shadow:
+    inset -6px -8px 18px -6px rgba(12, 20, 40, 0.65),
+    /* Vành sáng sát mép để đĩa trăng không cắt vào trời bằng một đường sắc lẻm. */
+    0 0 26px 5px rgba(196, 218, 255, 0.3),
+    0 0 120px 34px rgba(150, 180, 240, 0.13);
+}
+
+.village-moon-halo {
+  transform: scale(4.2);
+  background: radial-gradient(circle, rgba(164, 196, 252, 0.2) 0%, rgba(120, 156, 226, 0.07) 34%, transparent 64%);
+}
+
+/*
+ * Trên màn hẹp trăng phải nhỏ lại và mờ đi.
+ *
+ * Cảnh nền `fixed` còn nội dung thì cuộn, nên sau khi cuộn vài chục pixel câu
+ * mở đầu (chữ trắng, nét đậm, serif) trượt qua ngay dưới đĩa trăng. Ở cỡ và độ
+ * sáng của desktop, đoạn chữ chồng lên trăng mất sạch tương phản. Nhỏ và mờ
+ * hơn thì phần chồng nhau chỉ còn là một quầng sáng sau chữ.
+ */
+@media (max-width: 639px) {
+  .village-moon,
+  .village-moon-halo {
+    width: clamp(2.75rem, 13vw, 4rem);
+  }
+
+  /* Chỉ đĩa trăng. Quầng sáng đang được animate opacity nên đặt opacity ở đây
+   * là vô nghĩa - khung hình của animation ghi đè ngay. */
+  .village-moon {
+    opacity: 0.7;
+  }
+}
+
+.village-star {
+  position: absolute;
+  border-radius: 50%;
+  background: #dce8ff;
+}
+
+/*
+ * Bóng sói trong trời đêm.
+ *
+ * 0.035 nghe như bằng không, nhưng trên nền #05080f nó vừa đủ để mắt bắt được
+ * một hình khối ở ngoại vi mà chưa đọc ra ngay là con gì. Đậm hơn là thành một
+ * cái logo dán lên nền và cả trang tụt xuống hạng poster.
+ */
+.village-wolf {
+  position: absolute;
+  /* Xén hẳn một phần ra ngoài mép trái, và blur nặng.
+   *
+   * Ở 0.035 với blur 2px nó đọc ra trọn vẹn một cái mặt - hai con mắt thành hai
+   * hình thoi đen nằm giữa cột chữ, và cả trang tụt xuống hạng poster. Cắt mất
+   * một phần đầu thì mắt chỉ còn bắt được một khối tối ở ngoại vi, đúng cái nó
+   * cần làm. */
+  left: clamp(-40rem, -26vw, -8rem);
+  top: 28%;
+  width: clamp(26rem, 52vw, 66rem);
+  height: auto;
+  fill: #9db2d5;
+  opacity: 0.026;
+  filter: blur(14px);
+}
+
+/* Hai dải làng. `slice` xén phần trời thừa phía trên nóc chứ không thu cả làng
+ * về một cụm 800px giữa màn hình - xem chú thích trong VillageSilhouette.tsx. */
+.village-far {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: clamp(5.5rem, 13vh, 11rem);
+  width: 100%;
+  height: clamp(6rem, 15vh, 13rem);
+  fill: #0a1122;
+  opacity: 0.62;
+  filter: blur(1.5px);
+  /* Tan dần ở mép trên.
+   *
+   * `slice` phóng SVG theo chiều rộng rồi xén phần thừa phía trên, mà dải này
+   * bẹt hơn dải gần nhiều nên đường xén rơi thẳng xuống giữa mái nhà: cả rặng
+   * làng xa biến thành một thanh chữ nhật phẳng lì vắt ngang màn hình, thấy rõ
+   * mép ở 1920 trở lên. Mask xoá hẳn đường đó và đổi lại được đúng thứ cần có -
+   * một rặng làng nhô lên từ trong sương. */
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 46%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 46%);
+}
+
+.village-near {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  /* 26vh chứ không phải 24vh: dưới 26vh đường xén của `slice` rơi vào đúng nóc
+   * căn nhà cao nhất và cắt cụt cả nóc lẫn ống khói. */
+  height: clamp(9rem, 26vh, 22rem);
+  fill: #02040a;
+}
+
+/* Ánh lửa hắt lên từ sau nóc nhà: cùng tông cam với .backdrop-dusk nên trang
+ * chủ và phòng chờ nghe ra cùng một bảng màu. */
+.village-hearth {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: clamp(11rem, 30vh, 24rem);
+  background: radial-gradient(90% 100% at 46% 100%, rgba(196, 116, 58, 0.16), transparent 68%);
+}
+
+/* Nằm SAU .village-near trong DOM nên đọc ra là cửa sổ trên khối nhà tối, chứ
+ * không phải đom đóm lơ lửng trước mặt. */
+.village-window {
+  position: absolute;
+  border-radius: 1px;
+  background: #ffcf8a;
+  box-shadow: 0 0 10px 3px rgba(255, 186, 104, 0.42);
+}
+
+.village-ember {
+  position: absolute;
+  bottom: clamp(4rem, 12vh, 9rem);
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: #ffb765;
+  /* Bắt đầu ở 0: không có animation (reduced motion) thì không thấy gì cả,
+   * đúng hơn là bốn đốm cam đứng chết một chỗ. */
+  opacity: 0;
+  box-shadow: 0 0 6px 2px rgba(255, 160, 74, 0.35);
+}
+
+.village-fog {
+  position: absolute;
+  /* Tràn hẳn ra ngoài hai mép để hai đầu dải không bao giờ lộ ra khi trôi. */
+  left: -14%;
+  right: -14%;
+  background: linear-gradient(90deg, transparent, rgba(198, 216, 248, 0.07), transparent);
+  filter: blur(22px);
+}
+
+.village-fog-back {
+  bottom: clamp(7rem, 18vh, 14rem);
+  height: clamp(4rem, 9vh, 8rem);
+}
+
+.village-fog-front {
+  bottom: clamp(1rem, 4vh, 4rem);
+  height: clamp(5rem, 12vh, 10rem);
+  background: linear-gradient(90deg, transparent, rgba(198, 216, 248, 0.055), transparent);
+  animation-direction: reverse;
+  animation-duration: 34s;
+}
+
+.village-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(118% 76% at 56% 40%, transparent 38%, rgba(0, 0, 0, 0.72) 100%);
+}
+
+/* ---------------------------------------------------------------------------
+ * Cổng vào làng - panel chứa form.
+ *
+ * Không dùng .card: .card là thẻ trong phòng chơi, sáng đều bốn phía và cố ý
+ * trung tính. Ở đây panel phải nhận ánh sáng từ ĐÚNG chỗ mặt trăng đang treo
+ * (trên - phải) và ánh lửa từ phía làng (dưới); thiếu hai thứ đó nó lại thành
+ * một thẻ đăng nhập dán đè lên ảnh nền.
+ *
+ * Bo góc trên lớn hơn hẳn góc dưới: đó là hình một cái cổng, đọc ra được mà
+ * không phải vẽ thêm cột hay mái.
+ * ------------------------------------------------------------------------- */
+.gate-panel {
+  position: relative;
+  border-radius: 2.25rem 2.25rem 1.15rem 1.15rem;
+  border: 1px solid rgba(157, 178, 213, 0.16);
+  background:
+    radial-gradient(120% 62% at 84% 0%, rgba(150, 182, 240, 0.19), transparent 58%),
+    radial-gradient(110% 52% at 34% 100%, rgba(190, 112, 56, 0.14), transparent 62%),
+    linear-gradient(180deg, rgba(26, 39, 67, 0.62) 0%, rgba(8, 13, 26, 0.9) 100%);
+  backdrop-filter: blur(14px);
+  box-shadow:
+    inset 0 1px 0 0 rgba(207, 224, 255, 0.2),
+    0 40px 90px -40px rgba(0, 0, 0, 1),
+    0 0 70px -30px rgba(120, 152, 214, 0.5);
+}
+
+/*
+ * Luồng trăng đổ chéo xuống mặt panel.
+ *
+ * Đây là thứ khâu panel vào khung cảnh: cùng một mặt trăng ở góc trên phải vừa
+ * tạo quầng trên trời vừa để lại vệt sáng này. Bỏ nó đi thì panel rời ra ngay.
+ */
+.gate-panel::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(196deg, rgba(206, 224, 255, 0.13) 0%, transparent 34%);
+}
+
+/* Vệt sáng dọc mép trên, đậm nhất ở phía mặt trăng rồi tắt dần sang trái. */
+.gate-panel::after {
+  content: "";
+  position: absolute;
+  left: 14%;
+  right: 5%;
+  top: -1px;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(214, 230, 255, 0.5), rgba(214, 230, 255, 0.12));
+}
+
+/*
+ * CTA chính.
+ *
+ * Không dùng .btn-primary vì `disabled:opacity-40` của nó kéo cả nút xuống mức
+ * gần như không đọc được, mà trên trang này bị tắt là trạng thái MẶC ĐỊNH lúc
+ * mới vào - chưa ai kịp nhập biệt danh. Nút phải còn ra hình một cái nút và chữ
+ * trên nó phải còn đọc được.
+ */
+/*
+ * Cỡ chữ và đệm bên trong panel đều clamp theo vw, không phải chỉ bề rộng panel.
+ *
+ * Kéo panel từ 400px lên 544px trên màn 2K mà giữ nguyên chữ 16px thì được một
+ * cái hộp rộng đựng chữ bé - đúng cảm giác "nội dung quá nhỏ" mà việc nới khung
+ * định chữa. Cận dưới của mọi clamp ở đây là 1rem: dưới 16px là Safari iOS tự
+ * phóng to cả trang khi focus vào ô nhập.
+ */
+.gate-label {
+  @apply mb-1.5 block font-semibold text-white/90;
+  font-size: clamp(0.875rem, 0.92vw, 1.05rem);
+}
+
+.gate-cta {
+  @apply relative inline-flex w-full items-center justify-center gap-2.5 rounded-xl px-5
+    font-bold tracking-wide text-white transition;
+  padding-block: clamp(0.85rem, 0.95vw, 1.15rem);
+  font-size: clamp(1rem, 1.05vw, 1.25rem);
+  background: linear-gradient(180deg, #e13350 0%, #b91c33 100%);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
+    0 14px 34px -14px rgba(220, 38, 64, 0.85);
+}
+
+.gate-cta:hover:not(:disabled) {
+  background: linear-gradient(180deg, #f04760 0%, #cb2038 100%);
+}
+
+.gate-cta:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.gate-cta:disabled {
+  cursor: not-allowed;
+  /* Xám hẳn thay vì mờ đi: nút xám vẫn là một cái nút, còn opacity 40% thì mờ
+   * cả chữ lẫn viền và trông như một lỗi dựng hình. */
+  background: linear-gradient(180deg, rgba(58, 74, 106, 0.9) 0%, rgba(34, 46, 72, 0.92) 100%);
+  color: rgba(207, 224, 255, 0.75);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
+}
+
+.gate-secondary {
+  @apply inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-night-600
+    bg-night-800/70 px-4 font-semibold text-mist transition;
+  padding-block: clamp(0.75rem, 0.85vw, 1rem);
+  font-size: clamp(0.875rem, 0.92vw, 1.05rem);
+}
+
+.gate-secondary:hover:not(:disabled) {
+  @apply bg-night-700 text-white;
+}
+
+.gate-secondary:disabled {
+  cursor: not-allowed;
+  /* Nút tắt vẫn phải ĐỌC được: người dùng cần biết nó ghi gì thì mới hiểu dòng
+   * hướng dẫn ngay bên dưới đang nói về cái gì. Dấu hiệu "đang tắt" nằm ở nền
+   * chìm và con trỏ, không nằm ở việc làm mờ chữ. */
+  @apply border-night-700 bg-night-900/60 text-mist/75;
+}
+
+/* Ô nhập của trang chủ. text-base là bắt buộc chứ không phải thẩm mỹ: Safari
+ * trên iOS tự phóng to cả trang khi focus vào input có cỡ chữ dưới 16px. */
+/*
+ * placeholder ở mist/70 chứ không phải /50.
+ *
+ * /50 chỉ đạt 3.2:1 trên nền ô nhập (đo trên ảnh chụp thật ở 1440x900), dưới
+ * ngưỡng AA. Nâng lên /70 được 4.8:1 mà vẫn không có nguy cơ bị nhầm là đã
+ * nhập: chữ thật ở đây là #fff nguyên chất, tương phản 15:1 - cách nhau một
+ * quãng quá xa để lẫn.
+ */
+.gate-input {
+  @apply w-full rounded-xl border border-night-600 bg-night-900/70 px-3.5 text-white
+    transition placeholder:text-mist/70;
+  padding-block: clamp(0.75rem, 0.85vw, 1rem);
+  font-size: clamp(1rem, 1.02vw, 1.15rem);
+}
+
+.gate-input:focus {
+  @apply border-blood-500/70 bg-night-900/90;
+}
+
+.gate-chip {
+  @apply inline-flex items-center gap-2 rounded-full border border-white/[0.09] bg-white/[0.045]
+    px-3.5 py-2 text-mist backdrop-blur-sm;
+  font-size: clamp(0.875rem, 0.9vw, 1.05rem);
+}
+
+.gate-spinner {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  animation: gate-spin 720ms linear infinite;
+}
+
+@keyframes gate-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Vòng quay đứng im trông như hỏng. Chữ "Đang mở phòng..." ngay bên cạnh đã
+   * nói đủ, nên bỏ hẳn cái vòng đi. */
+  .gate-spinner {
+    display: none;
+  }
+}

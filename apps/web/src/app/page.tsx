@@ -1,20 +1,55 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { EntryAttemptManager } from "@/lib/entry-attempt";
+import { runEntryAttempt, type CreatePlayerOutcome, type EntryPorts } from "@/lib/home-entry";
 import { getIdentity, saveIdentity, clearIdentity } from "@/lib/identity";
-import { runWhenSocketConnected } from "@/lib/room-socket-session";
+import type { RoomEntryRequest } from "@/lib/room-entry";
 import { disconnectSocket } from "@/lib/socket";
 import type { Identity } from "@/lib/identity";
 import { Backdrop } from "@/components/Backdrop";
-import { BrandMark, HomeHero } from "@/components/HomeHero";
+import { BrandMark, VillageScene } from "@/components/HomeHero";
+
+/** Hành động đang chạy, hoặc null khi rảnh. */
+type Pending = "create" | "join" | null;
+
+/**
+ * POST /api/players, có thể huỷ giữa chừng.
+ *
+ * `signal` là bắt buộc chứ không phải tuỳ chọn: người dùng bấm "Xoá phiên" hay
+ * rời trang giữa lúc request đang bay thì nó phải chết theo, chứ không được về
+ * muộn rồi ghi một phiên mới vào máy họ.
+ */
+async function createPlayer(nickname: string, signal: AbortSignal): Promise<CreatePlayerOutcome> {
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_SERVER_URL ?? "http://localhost:4000"}/api/players`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nickname }),
+      signal,
+    },
+  );
+  const data = await res.json();
+  if (!res.ok) return { ok: false, message: data.error ?? "Có lỗi xảy ra" };
+  return { ok: true, identity: data as Identity };
+}
 
 function HomeInner() {
   const router = useRouter();
   const params = useSearchParams();
   const [nickname, setNickname] = useState("");
   const [joinCode, setJoinCode] = useState(params.get("code") ?? "");
-  const [busy, setBusy] = useState(false);
+  /*
+   * Một biến `pending` thay cho `busy` boolean cũ.
+   *
+   * Hai nút dùng chung một cờ bận thì nút KIA cũng phải hiện "Đang mở phòng..."
+   * - người bấm "Vào phòng" lại thấy nút tạo phòng đang quay. Giữ tên hành động
+   * thì mỗi nút tự biết có phải mình đang chạy không, mà vẫn chỉ một nguồn sự
+   * thật để khoá cả hai.
+   */
+  const [pending, setPending] = useState<Pending>(null);
   const [error, setError] = useState<string | null>(null);
   /*
    * Có phiên đã lưu hay không phải là STATE, không được đọc thẳng localStorage
@@ -24,6 +59,65 @@ function HomeInner() {
    * dưới mới bật lên sau khi hydrate xong.
    */
   const [hasIdentity, setHasIdentity] = useState(false);
+  const busy = pending !== null;
+
+  /*
+   * Cùng một cờ bận, giữ ở hai chỗ, vì hai chỗ đó trả lời hai câu khác nhau.
+   *
+   * `pending` (state) là thứ để VẼ: nút nào đang quay, nút nào đang khoá.
+   * `pendingRef` là thứ để CHẶN, và nó phải đúng ngay trong cùng một tick.
+   * State của React chỉ đổi ở lần render sau, nên hai lần Enter liên tiếp
+   * trong ô mã phòng - ô này không bị disabled - đều đọc ra `busy === false`
+   * và mở hai lượt kết nối chồng nhau.
+   */
+  const pendingRef = useRef<Pending>(null);
+
+  /*
+   * Quản lý vòng đời của lượt vào phòng đang chạy.
+   *
+   * Lười khởi tạo qua ref chứ không `useState`: đây là một object mệnh lệnh,
+   * không phải state để vẽ, và nó phải sống đúng bằng đời của component.
+   */
+  const managerRef = useRef<EntryAttemptManager | null>(null);
+  if (managerRef.current === null) managerRef.current = new EntryAttemptManager();
+  const attempts = managerRef.current;
+
+  /*
+   * Component còn sống hay không. Chỉ dùng để quyết định có được setState.
+   *
+   * Phải nằm ở đây chứ không nằm trong `EntryAttemptManager`: manager sống
+   * trong `useRef` nên nó sống sót qua chu kỳ mount -> cleanup -> mount mà
+   * `reactStrictMode` chạy ở dev, còn cờ này thì effect bên dưới bật lại ở đầu
+   * MỖI lần mount. Đã thử để cờ trong manager và hỏng đúng kiểu đó: sau lần
+   * cleanup đầu của StrictMode, mọi lượt đều chết ngay lúc sinh ra và nút kẹt
+   * ở "Đang mở phòng..." mà không một dòng lỗi nào.
+   */
+  const mountedRef = useRef(true);
+
+  const startPending = useCallback((kind: Exclude<Pending, null>) => {
+    pendingRef.current = kind;
+    setPending(kind);
+  }, []);
+
+  const stopPending = useCallback(() => {
+    pendingRef.current = null;
+    setPending(null);
+  }, []);
+
+  /*
+   * Một đường huỷ duy nhất, dùng chung cho đăng xuất và unmount.
+   *
+   * Gọi bao nhiêu lần cũng được, và không bao giờ đụng vào một lượt mới hơn -
+   * `EntryAttemptManager` so số thứ tự lượt trước mỗi thao tác.
+   *
+   * Chỉ chạm vào state khi component còn sống. Ở nhánh unmount, cờ `mountedRef`
+   * đã tắt trước khi gọi vào đây nên `setPending` tự bỏ qua.
+   */
+  const cancelActiveEntry = useCallback(() => {
+    attempts.cancelActive();
+    pendingRef.current = null;
+    if (mountedRef.current) setPending(null);
+  }, [attempts]);
 
   useEffect(() => {
     const existing = getIdentity();
@@ -33,96 +127,98 @@ function HomeInner() {
     }
   }, []);
 
-  async function ensurePlayer(): Promise<Identity | null> {
-    const existing = getIdentity();
-    // Đã có session và không đổi tên -> dùng lại để giữ khả năng reconnect
-    if (existing && existing.nickname === nickname.trim()) return existing;
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_SERVER_URL ?? "http://localhost:4000"}/api/players`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nickname: nickname.trim() }),
+  /*
+   * Rời trang giữa chừng thì lượt đang chạy phải chết hẳn.
+   *
+   * Bản trước chỉ gọi `entryCleanup.current` - hàm gỡ listener socket. Nhưng
+   * nếu người dùng rời trang trong lúc còn đang `await` POST /api/players thì
+   * hàm đó CHƯA TỒN TẠI, và request vẫn về đích rồi lưu danh tính, dựng socket,
+   * gắn listener và gọi `router.push` cho một thao tác đã bị bỏ.
+   *
+   * Tắt cờ `mountedRef` TRƯỚC khi dọn, nên đường dọn dùng chung bên dưới biết
+   * là không được chạm vào state nữa.
+   */
+  useEffect(() => {
+    // Bật lại ở đầu mỗi lần mount: StrictMode ở dev chạy effect này hai lần,
+    // và lần mount thứ hai phải khởi đầu với cờ đang bật.
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      cancelActiveEntry();
+    };
+  }, [cancelActiveEntry]);
+
+  /*
+   * Một đường duy nhất cho cả "tạo phòng" lẫn "vào phòng".
+   *
+   * Phần thân của luồng nằm ở `runEntryAttempt` trong src/lib, không phải ở
+   * đây: bộ test chạy bằng `tsx --test src/lib/*.test.ts` nên chỉ những gì
+   * nằm trong src/lib mới có test hồi quy. Component chỉ còn là chỗ nối dây -
+   * fetch, localStorage, socket và router - và mọi chốt kiểm tra "lượt còn
+   * hợp lệ không" đều do `runEntryAttempt` giữ.
+   */
+  async function beginEntry(request: RoomEntryRequest) {
+    if (pendingRef.current !== null) return;
+    setError(null);
+    startPending(request.kind);
+
+    const attempt = attempts.begin();
+    const ports: EntryPorts = {
+      readStoredIdentity: getIdentity,
+      storeIdentity: saveIdentity,
+      createPlayer,
+      openSocket: async (identity) => {
+        disconnectSocket();
+        const { getSocket } = await import("@/lib/socket");
+        return getSocket(identity);
       },
-    );
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error ?? "Có lỗi xảy ra");
-      return null;
-    }
-    const identity: Identity = data;
-    saveIdentity(identity);
-    setHasIdentity(true);
-    return identity;
+      onIdentityStored: () => setHasIdentity(true),
+      onFailed: (message) => {
+        setError(message);
+        stopPending();
+      },
+      // Cố ý KHÔNG hạ cờ bận: đang điều hướng, để nút quay tiếp cho tới khi
+      // trang phòng thay chỗ. Hạ xuống là nút sáng lại một nhịp và mời người
+      // dùng bấm thêm lần nữa.
+      onEntered: (code) => router.push(`/room/${code}`),
+    };
+
+    await runEntryAttempt(attempt, request, nickname, ports);
   }
 
-  async function handleCreate() {
-    setError(null);
-    setBusy(true);
-    try {
-      const identity = await ensurePlayer();
-      if (!identity) return;
-      disconnectSocket();
-      const { getSocket } = await import("@/lib/socket");
-      const socket = getSocket(identity);
-      const onError = (e: { message: string }) => {
-        socket.off("room:snapshot", onSnapshot);
-        setError(e.message);
-        setBusy(false);
-      };
-      const onSnapshot = (snap: { code: string }) => {
-        socket.off("error", onError);
-        router.push(`/room/${snap.code}`);
-      };
-      socket.once("room:snapshot", onSnapshot);
-      socket.once("error", onError);
-      runWhenSocketConnected(socket, () => socket.emit("room:create", {}));
-    } catch {
-      setError("Không kết nối được server");
-      setBusy(false);
-    }
+  function handleCreate() {
+    void beginEntry({ kind: "create" });
   }
 
-  async function handleJoin() {
-    setError(null);
+  function handleJoin() {
     const code = joinCode.trim().toUpperCase();
     if (code.length !== 5) {
       setError("Mã phòng gồm đúng 5 ký tự");
       return;
     }
-    setBusy(true);
-    try {
-      const identity = await ensurePlayer();
-      if (!identity) return;
-      disconnectSocket();
-      const { getSocket } = await import("@/lib/socket");
-      const socket = getSocket(identity);
-      const onError = (e: { message: string }) => {
-        socket.off("room:snapshot", onSnapshot);
-        setError(e.message);
-        setBusy(false);
-      };
-      const onSnapshot = () => {
-        socket.off("error", onError);
-        router.push(`/room/${code}`);
-      };
-      socket.once("error", onError);
-      socket.once("room:snapshot", onSnapshot);
-      runWhenSocketConnected(socket, () => socket.emit("room:join", { code }));
-    } catch {
-      setError("Không kết nối được server");
-      setBusy(false);
-    }
+    void beginEntry({ kind: "join", code });
   }
 
   function handleLogout() {
-    clearIdentity();
+    /*
+     * Thứ tự ở đây là bản vá, không phải sở thích.
+     *
+     * Trước: hàm này gọi thẳng `disconnectSocket()`. Socket chết thì
+     * `connect_error` không bao giờ được bắn ra, mà đó lại là thứ duy nhất hạ
+     * cờ bận xuống - nút kẹt ở "Đang mở phòng..." vĩnh viễn. Phải huỷ lượt
+     * TRƯỚC: abort request đang bay, gỡ listener, vô hiệu hoá callback cũ, hạ
+     * cờ bận. Ngắt socket là việc cuối.
+     */
+    cancelActiveEntry();
     disconnectSocket();
+    clearIdentity();
     setNickname("");
     // Bắt buộc phải có: nút này từng ẩn đi nhờ setNickname("") làm render lại,
     // nhưng khi ô biệt danh vốn đã rỗng thì React bỏ qua lần set đó và nút vẫn
     // hiện dù phiên đã xoá.
     setHasIdentity(false);
+    // Lỗi của lượt vừa bị huỷ không còn nghĩa gì sau khi đã đăng xuất.
+    setError(null);
   }
 
   /*
@@ -143,143 +239,238 @@ function HomeInner() {
 
   return (
     <>
-      <Backdrop mood="dusk" />
       {/*
-        * lg:items-start chứ không phải items-center.
+        * Hai lớp nền chồng nhau chứ không phải một.
         *
-        * Cột trái cao 785px còn thẻ form chỉ 367px, nên căn giữa để lại 209px
-        * trống ĐỀU Ở TRÊN VÀ DƯỚI thẻ: nửa trái đặc kín từ trên xuống, nửa phải
-        * là một cái hộp nhỏ lửng lơ giữa chừng. Khối vẫn cân chính xác về mặt
-        * pixel, nhưng mắt đọc ra một đường chéo nặng dưới-trái. Cho hai mép trên
-        * thẳng hàng là hết.
-        *
-        * xl:max-w-6xl: trên màn 1650px, chốt ở 1024px để lại hai vệt tối 313px
-        * mỗi bên và cả cụm thành một hòn đảo giữa màn hình.
-        *
-        * lg:content-center là bắt buộc đi kèm, không phải trang trí thêm:
-        * `justify-center` của bản cũ là justify-CONTENT, mà ở grid nó chỉ căn
-        * theo trục ngang. Theo trục dọc, grid có min-h-screen và hàng cỡ auto sẽ
-        * GIÃN ra lấp hết chỗ thừa - dải ba mục bị đẩy rơi xuống cách ảnh hero
-        * 225px thay vì 56px. content-center giữ nguyên cỡ hàng rồi căn cả cụm
-        * vào giữa.
+        * Backdrop lo bầu trời đêm và vignette - đúng cái nền mà phòng chơi dùng,
+        * nên bước từ trang chủ vào phòng không đổi tông màu. VillageScene chồng
+        * lên đó trăng, sao, sương và hai dải làng. Cả hai đều `fixed` ở z-index
+        * âm: chúng không chiếm một pixel bố cục nào, nên trên điện thoại không
+        * có gì phải giấu đi để lấy chỗ cho ô nhập chữ.
         */}
-      <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-6 px-4 py-10 lg:max-w-5xl lg:grid lg:grid-cols-[minmax(0,1fr)_25rem] lg:content-center lg:items-start lg:gap-14 xl:max-w-6xl">
+      <Backdrop mood="night" />
+      <VillageScene />
+
+      {/*
+        * Cột dọc trên điện thoại, hai cột từ lg.
+        *
+        * Không `justify-center` trên mobile: căn giữa một cột cao hơn màn hình
+        * thì đỉnh nó bị đẩy lên trên mép trên và logo biến mất. Bám mép trên,
+        * để phần thừa rơi xuống dưới - chỗ đó là làng, không phải nội dung.
+        *
+        * pt-24 dưới ngưỡng sm là để chừa trời cho mặt trăng. Trên màn 390 tiêu
+        * đề chạy gần hết bề ngang và góc trên phải là chỗ duy nhất còn trống
+        * cho trăng; pt-9 của bản trước đẩy chữ "ONLINE" đè thẳng lên đĩa trăng.
+        * 96px đủ để hai thứ rời nhau mà nút "Tạo phòng mới" vẫn nằm trong màn
+        * hình đầu tiên, không phải cuộn.
+        */}
+      <main className="relative mx-auto flex min-h-[100svh] w-full flex-col items-center px-5 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-24 sm:px-6 sm:pt-12 lg:justify-center lg:px-8 lg:pt-0">
         {/*
-          * Nửa trái chỉ là nhận diện, và trên desktop nó gánh luôn khoảng trống
-          * mà bản cũ để không hai bên form. Trên điện thoại phần khung cảnh và
-          * ba dòng giới thiệu bị cắt: ở đó chỗ trên màn hình thuộc về ô biệt
-          * danh và ô mã phòng, không thuộc về trang trí.
+          * lg:row-span-2 trên panel form là thứ khâu hai cột lại với nhau.
+          *
+          * Panel cao hơn khối thương hiệu, và vì nó trải qua cả hai hàng nên
+          * chính nó quyết định chiều cao của lưới. Khối thương hiệu `self-start`
+          * bám mép TRÊN panel, dải chip `self-end` bám mép DƯỚI panel: hai cột
+          * dùng chung đúng hai đường cơ sở, thay vì mỗi bên trôi một kiểu.
+          *
+          * Bề rộng khoá bằng min(84vw, 108rem). Trần 1728px là con số đo được
+          * chứ không phải chọn bừa: ở 96rem trên màn 2560 cả cụm chỉ chiếm 60%
+          * bề ngang và đọc ra một hòn đảo nhỏ giữa màn hình; 108rem đưa nó lên
+          * ~68%, còn 84vw giữ cho màn 1280-1440 vẫn có lề tử tế. Phần bù còn
+          * lại nằm ở clamp() của cỡ chữ và bề rộng panel, không dồn hết vào
+          * việc kéo khung rộng thêm.
           */}
-        <section>
-          <header className="flex items-center gap-4 lg:block">
-            <BrandMark className="h-16 w-16 shrink-0 lg:h-20 lg:w-20" />
-            <div className="min-w-0 lg:mt-5">
-              <h1 className="font-display bg-gradient-to-r from-blood-400 via-white to-indigo-300 bg-clip-text text-3xl font-extrabold leading-tight text-transparent sm:text-4xl lg:text-6xl">
+        <div className="flex w-full max-w-[34rem] flex-col gap-8 lg:grid lg:w-[min(84vw,108rem)] lg:max-w-none lg:grid-cols-[minmax(0,1fr)_clamp(25rem,24vw,33rem)] lg:gap-x-[clamp(3rem,6vw,7rem)] lg:gap-y-10">
+          <section className="lg:col-start-1 lg:row-start-1 lg:self-start">
+            <div className="flex items-center gap-4 sm:gap-5 lg:gap-6">
+              <BrandMark className="aspect-square w-[clamp(3.25rem,4.4vw,6.75rem)]" />
+              {/* Chuyển sắc bạc -> máu: ánh trăng rơi vào tên game rồi đọng
+                * lại thành màu máu ở cuối. Cùng hai nguồn sáng của cả cảnh. */}
+              <h1 className="font-display min-w-0 bg-gradient-to-br from-[#f6faff] via-[#a9c3ee] via-[58%] to-[#c81c34] bg-clip-text text-[clamp(2rem,5.6vw,7.25rem)] font-black leading-[0.94] tracking-tight text-transparent">
                 MA SÓI ONLINE
               </h1>
-              <p className="mt-1 text-sm text-mist/75 lg:mt-3 lg:text-base">
-                Ngôi làng huyền bí - ai là Ma Sói? Tạo phòng và mời bạn bè cùng chơi.
-              </p>
             </div>
-          </header>
 
-          {/* xl:aspect-[16/10]: khung nới lên 1152px làm cột trái rộng thêm ~130px,
-            * và aspect-[5/4] sẽ biến đúng số đó thành ~100px CHIỀU CAO - tức là
-            * kéo lại đúng cái chênh lệch vừa sửa. Rộng ra thì bẹt lại. */}
-          <HomeHero className="mt-8 hidden lg:block xl:aspect-[16/10]" />
-        </section>
+            <p className="font-display mt-6 max-w-[26ch] text-[clamp(1.25rem,1.75vw,2.45rem)] font-medium leading-[1.3] text-white/90 lg:mt-9 lg:max-w-[25ch]">
+              Đêm buông, cổng làng khép lại. Trong số những người ngồi quanh đống lửa, có kẻ không
+              phải người.
+            </p>
 
-        <section className="card space-y-4">
-          <label className="block">
-            <span className="text-sm font-semibold text-mist">Biệt danh của bạn</span>
-            <input
-              className="input mt-1"
-              value={nickname}
-              maxLength={20}
-              placeholder="VD: Thợ săn đêm"
-              onChange={(e) => setNickname(e.target.value)}
-            />
-          </label>
+            <p className="mt-4 max-w-[46ch] text-sm leading-relaxed text-mist/75 lg:mt-6 lg:max-w-[42ch] lg:text-[clamp(0.95rem,1.05vw,1.2rem)]">
+              Mỗi đêm Sói chọn một người. Mỗi ngày cả làng bỏ phiếu. Ai đọc được kẻ nói dối trước,
+              phe đó thắng.
+            </p>
+          </section>
 
-          <div>
-            <button
-              className="btn-primary w-full"
-              disabled={busy || !nameReady}
-              onClick={handleCreate}
-            >
-              Tạo phòng mới
-            </button>
-            {createHint && <p className="mt-1.5 text-xs text-mist/70">{createHint}</p>}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="h-px flex-1 bg-night-600" />
-            <span className="text-xs text-mist/65">hoặc tham gia bằng mã</span>
-            <span className="h-px flex-1 bg-night-600" />
-          </div>
-
-          <div>
-            <div className="flex gap-2">
-              <input
-                className="input uppercase tracking-widest"
-                value={joinCode}
-                maxLength={5}
-                placeholder="ABCDE"
-                aria-label="Mã phòng"
-                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === "Enter" && handleJoin()}
+          {/* motion-safe: chỉ một lần fade + trượt lên khi vào trang. Tắt
+            * chuyển động thì panel hiện thẳng, không mất gì cả. */}
+          <section className="lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:self-start motion-safe:animate-riseIn">
+            <p className="mb-3.5 flex items-center gap-3 text-[0.68rem] font-bold uppercase tracking-[0.32em] text-mist/80">
+              <span
+                aria-hidden="true"
+                className="h-px w-8 bg-gradient-to-r from-transparent to-mist/45"
               />
-              <button
-                className="btn-secondary shrink-0"
-                disabled={busy || !nameReady || !codeReady}
-                onClick={handleJoin}
-              >
-                Vào phòng
-              </button>
+              Bước vào ngôi làng
+            </p>
+
+            <div className="gate-panel p-6 sm:p-7 lg:p-[clamp(1.75rem,2vw,2.5rem)]">
+              {/* relative để nội dung nằm TRÊN hai lớp ánh sáng ::before và
+                * ::after của panel - chúng là phần tử định vị nên mặc định vẽ
+                * đè lên chữ trong luồng. */}
+              <div className="relative space-y-5">
+                <div>
+                  <label
+                    htmlFor="nickname"
+                    className="gate-label"
+                  >
+                    Biệt danh của bạn
+                  </label>
+                  <input
+                    id="nickname"
+                    className="gate-input"
+                    value={nickname}
+                    maxLength={20}
+                    autoComplete="nickname"
+                    placeholder="VD: Thợ săn đêm"
+                    onChange={(e) => setNickname(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <button
+                    className="gate-cta"
+                    disabled={busy || !nameReady}
+                    aria-describedby={createHint ? "create-hint" : undefined}
+                    onClick={handleCreate}
+                  >
+                    {pending === "create" ? (
+                      <>
+                        <span className="gate-spinner" aria-hidden="true" />
+                        Đang mở phòng...
+                      </>
+                    ) : (
+                      "Tạo phòng mới"
+                    )}
+                  </button>
+                  {createHint && (
+                    <p id="create-hint" className="mt-2 text-xs text-mist/80">
+                      {createHint}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3" aria-hidden="true">
+                  <span className="h-px flex-1 bg-white/10" />
+                  <span className="text-[0.68rem] uppercase tracking-[0.18em] text-mist/85">
+                    hoặc đã có mã phòng
+                  </span>
+                  <span className="h-px flex-1 bg-white/10" />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="join-code"
+                    className="gate-label"
+                  >
+                    Mã phòng
+                  </label>
+                  <div className="flex gap-2.5">
+                    <input
+                      id="join-code"
+                      className="gate-input uppercase tracking-[0.35em]"
+                      value={joinCode}
+                      maxLength={5}
+                      autoComplete="off"
+                      autoCapitalize="characters"
+                      placeholder="ABCDE"
+                      aria-describedby={joinHint ? "join-hint" : undefined}
+                      onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => e.key === "Enter" && handleJoin()}
+                    />
+                    <button
+                      className="gate-secondary"
+                      disabled={busy || !nameReady || !codeReady}
+                      aria-describedby={joinHint ? "join-hint" : undefined}
+                      onClick={handleJoin}
+                    >
+                      {pending === "join" ? (
+                        <>
+                          <span className="gate-spinner" aria-hidden="true" />
+                          Đang vào...
+                        </>
+                      ) : (
+                        "Vào phòng"
+                      )}
+                    </button>
+                  </div>
+                  {joinHint && (
+                    <p id="join-hint" className="mt-2 text-xs text-mist/80">
+                      {joinHint}
+                    </p>
+                  )}
+                </div>
+
+                {/* Dấu chấm than là bắt buộc, không phải trang trí: một khối
+                  * đỏ nhạt là màu, và màu một mình thì người mù màu đọc ra
+                  * đúng bằng một dòng chữ bình thường. */}
+                {error && (
+                  <p
+                    role="alert"
+                    className="flex items-start gap-2.5 rounded-xl border border-blood-500/40 bg-blood-600/15 px-3.5 py-2.5 text-sm text-blood-400"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="mt-px grid h-4 w-4 shrink-0 place-items-center rounded-full bg-blood-500 text-[0.6rem] font-black leading-none text-white"
+                    >
+                      !
+                    </span>
+                    <span>{error}</span>
+                  </p>
+                )}
+
+                <p className="border-t border-white/[0.07] pt-4 text-xs leading-relaxed text-mist/75">
+                  Tối thiểu 6 người mỗi ván - thiếu thì thêm bot ngay trong phòng chờ.
+                </p>
+
+                {/* Nhạt hơn hẳn CTA và không có nền: đây là việc người ta làm
+                  * một lần trong đời chứ không phải hành động chính. */}
+                {hasIdentity && (
+                  <button
+                    className="w-full rounded-lg py-1 text-center text-xs text-mist/75 underline-offset-4 transition hover:text-white hover:underline"
+                    onClick={handleLogout}
+                  >
+                    Xoá phiên đăng nhập trên thiết bị này
+                  </button>
+                )}
+              </div>
             </div>
-            {joinHint && <p className="mt-1.5 text-xs text-mist/70">{joinHint}</p>}
-          </div>
+          </section>
 
-          {error && (
-            <p className="rounded-lg bg-blood-600/20 px-3 py-2 text-sm text-blood-400">{error}</p>
-          )}
-          {hasIdentity && (
-            <button
-              className="w-full text-center text-xs text-mist/60 hover:text-mist"
-              onClick={handleLogout}
-            >
-              Xoá phiên đăng nhập trên thiết bị này
-            </button>
-          )}
-
-          <p className="border-t border-white/[0.06] pt-3 text-center text-xs text-mist/60">
-            MVP phiên bản chat - tối thiểu 6 người mỗi ván. Chơi thử một mình? Tạo phòng rồi bấm
-            &quot;Thêm bot&quot;.
-          </p>
-        </section>
-
-        {/*
-          * Ba mục này trước nằm trong cột trái và đẩy nó cao thêm 105px so với
-          * thẻ form. Trải ngang cả hai cột thì cột trái ngắn lại, và chúng thành
-          * một dải chân trang buộc hai cột vào nhau thay vì kéo lệch một bên.
-          *
-          * Nằm SAU thẻ form trong DOM cũng là thứ tự đọc đúng hơn: người vào
-          * trang cần ô biệt danh trước, phần giới thiệu sau.
-          */}
-        <ul className="hidden gap-4 text-sm text-mist/75 lg:col-span-2 lg:grid lg:grid-cols-3">
-          <li>
-            <b className="block text-white">6 - 15 người</b>
-            Một mã phòng năm ký tự là đủ để cả nhóm vào.
-          </li>
-          <li>
-            <b className="block text-white">Chơi thử một mình</b>
-            Thêm bot cho đủ bàn, luật chạy y như ván thật.
-          </li>
-          <li>
-            <b className="block text-white">Chat theo pha</b>
-            Làng, phe Sói và người chết mỗi bên một kênh riêng.
-          </li>
-        </ul>
+          {/*
+            * Ba mục giới thiệu, gom thành chip.
+            *
+            * Nằm SAU panel trong DOM vì thứ tự đọc đúng là thương hiệu -> form
+            * -> thông tin phụ; trên desktop grid mới đặt nó về lại cột trái.
+            * Bản cũ trải chúng thành ba cột chữ nhỏ vắt ngang chân trang, đúng
+            * hình dạng của một cái footer.
+            */}
+          <ul className="flex flex-wrap gap-2.5 lg:col-start-1 lg:row-start-2 lg:gap-3 lg:self-end">
+            {[
+              ["6 - 15 người", "#9db2d5"],
+              ["Chơi được với bot", "#e0a35c"],
+              ["Chat riêng theo phe", "#f04760"],
+            ].map(([label, dot]) => (
+              <li key={label} className="gate-chip">
+                <span
+                  aria-hidden="true"
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ background: dot, boxShadow: `0 0 8px 1px ${dot}80` }}
+                />
+                {label}
+              </li>
+            ))}
+          </ul>
+        </div>
       </main>
     </>
   );

@@ -2,7 +2,7 @@ import { VillageSilhouette } from "./VillageSilhouette";
 import { WolfMark } from "./WolfMark";
 
 /**
- * Nhận diện của trang chủ.
+ * Nhận diện và khung cảnh của trang chủ.
  *
  * Dựng bằng SVG và gradient nội bộ, không một ảnh từ xa nào: trang chủ là thứ
  * đo Core Web Vitals, và một tấm hero tải về là thêm một lượt request nằm chắn
@@ -11,67 +11,123 @@ import { WolfMark } from "./WolfMark";
 export function BrandMark({ className }: { className?: string }) {
   return (
     <span
-      className={`relative grid place-items-center rounded-2xl border border-blood-500/30 bg-gradient-to-br from-blood-600/25 via-night-800 to-night-900 shadow-lg shadow-blood-950/40 ${className ?? ""}`}
+      className={`relative grid shrink-0 place-items-center rounded-[28%] border border-blood-500/30 bg-gradient-to-br from-blood-600/25 via-night-800 to-night-900 shadow-[0_18px_40px_-18px_rgba(0,0,0,0.9)] ${className ?? ""}`}
     >
       <span
         aria-hidden="true"
-        className="absolute inset-0 rounded-2xl bg-blood-500/10 blur-md motion-safe:animate-moonGlow"
+        className="absolute inset-0 rounded-[28%] bg-blood-500/10 blur-md motion-safe:animate-moonGlow"
       />
       <WolfMark className="relative h-3/5 w-3/5 fill-blood-400 drop-shadow-[0_2px_10px_rgba(220,38,64,0.45)]" />
     </span>
   );
 }
 
-/**
- * Khung cảnh ngôi làng dưới trăng.
+/*
+ * Toạ độ cố định chứ không random: random thì server và client dựng ra hai bầu
+ * trời khác nhau, hydrate lệch, và React dựng lại cả nhánh.
  *
- * Chỉ dựng từ `lg` trở lên: trên điện thoại chỗ trên màn hình là để cho biệt
- * danh và mã phòng, còn màn desktop thì có nguyên nửa trái bỏ không.
+ * [trái %, trên %, cạnh px, độ mờ, trễ giây] - ba cỡ sao khác nhau để bầu trời
+ * có chiều sâu; một dải sao đều tăm tắp trông ra một tấm lưới chứ không ra trời.
  */
-export function HomeHero({ className }: { className?: string }) {
+const STARS: [number, number, number, number, number][] = [
+  [6, 14, 2, 0.5, 0], [11, 31, 1, 0.35, 2.4], [17, 8, 2, 0.62, 1.1],
+  [23, 22, 1, 0.3, 3.6], [29, 11, 3, 0.75, 0.6], [34, 34, 1, 0.28, 4.8],
+  [41, 6, 2, 0.55, 2.9], [46, 26, 1, 0.34, 1.7], [52, 16, 2, 0.6, 5.2],
+  [58, 4, 1, 0.32, 3.1], [63, 29, 2, 0.48, 0.9], [69, 12, 1, 0.36, 4.2],
+  [76, 33, 2, 0.52, 2.1], [84, 6, 1, 0.3, 5.7], [88, 24, 2, 0.58, 1.4],
+  [93, 15, 1, 0.33, 3.9], [97, 36, 2, 0.42, 0.3],
+];
+
+/** Đèn cửa sổ trong khối làng: [trái %, dưới %, cạnh px, trễ giây]. */
+const WINDOWS: [number, number, number, number][] = [
+  [13, 5.5, 3, 0], [21, 3.5, 2, 1.8], [37, 7, 3, 3.4],
+  [44, 4, 2, 0.9], [58, 6, 3, 2.6], [67, 3.5, 2, 4.1], [81, 5, 3, 1.2],
+];
+
+/** Tàn lửa bay lên từ phía làng: [trái %, trễ giây, chu kỳ giây]. */
+const EMBERS: [number, number, number][] = [
+  [18, 0, 13], [39, 5.5, 16], [61, 2.5, 14], [78, 8, 18],
+];
+
+/**
+ * Khung cảnh ngôi làng dưới trăng, phủ kín viewport.
+ *
+ * Không phải một tấm ảnh đặt trong khung: nó là NỀN của cả trang, và nội dung
+ * đứng bên trong nó. Đặt `fixed` với z-index âm nên không tốn một pixel nào
+ * trong luồng bố cục - trên điện thoại chỗ trên màn hình vẫn thuộc trọn về ô
+ * biệt danh và ô mã phòng, đúng như khi chưa có cảnh này.
+ *
+ * z-index -9 để nằm ngay TRÊN `Backdrop` (-10) chứ không thay thế nó: bầu trời
+ * gốc và vignette của `.backdrop-night` dùng lại nguyên, ở đây chỉ chồng thêm
+ * trăng, sao, sương và hai lớp làng.
+ */
+export function VillageScene() {
   return (
-    <div
-      aria-hidden="true"
-      className={`relative aspect-[5/4] overflow-hidden rounded-3xl border border-white/[0.07] ${className ?? ""}`}
-      style={{
-        background:
-          "radial-gradient(120% 80% at 78% 12%, rgba(150, 180, 240, 0.18), transparent 62%)," +
-          "radial-gradient(100% 70% at 20% 105%, rgba(180, 108, 60, 0.14), transparent 68%)," +
-          "linear-gradient(180deg, #0c1424 0%, #060a14 100%)",
-      }}
-    >
-      {/* Sao. Toạ độ cố định chứ không random: random thì mỗi lần server và
-        * client dựng ra hai bầu trời khác nhau và React dựng lại cả nhánh. */}
-      {[
-        [14, 18], [28, 9], [41, 26], [57, 13], [68, 31], [82, 20], [91, 38], [22, 41], [50, 6],
-      ].map(([left, top]) => (
+    <div className="village-scene" aria-hidden="true">
+      <div className="village-sky" />
+
+      {/* Trăng lệch hẳn về phải: nguồn sáng của cả trang nằm ở đó, và mọi vệt
+        * sáng trên panel form bên dưới đều đổ theo đúng hướng này. */}
+      <div className="village-moon-halo motion-safe:animate-moonGlow" />
+      <div className="village-moon" />
+
+      {STARS.map(([left, top, size, opacity, delay]) => (
         <span
           key={`${left}-${top}`}
-          className="absolute h-[2px] w-[2px] rounded-full bg-white/70"
-          style={{ left: `${left}%`, top: `${top}%` }}
+          className="village-star"
+          style={{
+            left: `${left}%`,
+            top: `${top}%`,
+            width: `${size}px`,
+            height: `${size}px`,
+            opacity,
+            animationDelay: `${delay}s`,
+          }}
         />
       ))}
 
-      <span className="absolute right-[14%] top-[12%] h-24 w-24 rounded-full bg-gradient-to-br from-[#f2f6ff] via-[#c9d8f5] to-[#7d93bd] shadow-[0_0_70px_20px_rgba(150,180,240,0.22)] motion-safe:animate-moonGlow" />
+      {/* Bóng sói chìm trong trời đêm. Mờ tới mức phải nhìn kỹ mới ra - nó là
+        * một điềm báo chứ không phải một cái logo dán lên nền. */}
+      <WolfMark className="village-wolf" />
 
-      {/* Hai dải sương trôi ngược chiều nhau: một dải đơn trông như cả khung
-        * hình đang trượt, hai dải mới ra chiều sâu. */}
-      <span className="absolute inset-x-[-10%] bottom-[26%] h-24 bg-gradient-to-r from-transparent via-white/[0.07] to-transparent blur-xl motion-safe:animate-fogDrift" />
-      <span
-        className="absolute inset-x-[-10%] bottom-[8%] h-28 bg-gradient-to-r from-transparent via-white/[0.05] to-transparent blur-lg motion-safe:animate-fogDrift"
-        style={{ animationDirection: "reverse", animationDuration: "34s" }}
-      />
+      {/* Rặng làng xa: nhỏ hơn, xanh hơn, blur nhẹ. Đứng cao hơn dãy gần nên
+        * đọc ra một sườn đồi phía sau. */}
+      <VillageSilhouette preserveAspectRatio="xMidYMax slice" className="village-far" />
 
-      <VillageSilhouette className="absolute inset-x-0 bottom-0 h-[46%] w-full fill-[#03060d]" />
+      <span className="village-fog village-fog-back motion-safe:animate-fogDrift" />
 
-      {/* Tối bốn góc, cùng thủ pháp với Backdrop trong phòng, để khung cảnh
-        * chìm vào nền trang thay vì nổi lên như một tấm ảnh dán. */}
-      <span
-        className="absolute inset-0"
-        style={{
-          background: "radial-gradient(120% 78% at 50% 44%, transparent 40%, rgba(0,0,0,0.6) 100%)",
-        }}
-      />
+      {/* Quầng sáng ấm hắt lên từ sau nóc nhà - làng có người ở. */}
+      <div className="village-hearth" />
+
+      <VillageSilhouette preserveAspectRatio="xMidYMax slice" className="village-near" />
+
+      {WINDOWS.map(([left, bottom, size, delay]) => (
+        <span
+          key={`w-${left}`}
+          className="village-window motion-safe:animate-moonGlow"
+          style={{
+            left: `${left}%`,
+            bottom: `${bottom}%`,
+            width: `${size}px`,
+            height: `${size}px`,
+            animationDelay: `${delay}s`,
+          }}
+        />
+      ))}
+
+      {EMBERS.map(([left, delay, duration]) => (
+        <span
+          key={`e-${left}`}
+          className="village-ember motion-safe:animate-emberFloat"
+          style={{ left: `${left}%`, animationDelay: `${delay}s`, animationDuration: `${duration}s` }}
+        />
+      ))}
+
+      {/* Sương lớp trước trôi ngược chiều lớp sau: một dải đơn trông như cả
+        * khung hình đang trượt, hai dải mới ra chiều sâu. */}
+      <span className="village-fog village-fog-front motion-safe:animate-fogDrift" />
+
+      <div className="village-vignette" />
     </div>
   );
 }

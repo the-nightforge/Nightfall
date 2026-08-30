@@ -36,11 +36,27 @@ const config: Config = {
           "0%, 100%": { opacity: "0.75" },
           "50%": { opacity: "1" },
         },
+        // Tàn lửa bay lên từ phía làng ở nền trang chủ. Mờ ở cả hai đầu chu kỳ
+        // nên không bao giờ thấy một đốm sáng bật ra hay tắt phụt giữa trời.
+        emberFloat: {
+          "0%": { transform: "translate3d(0, 0, 0)", opacity: "0" },
+          "18%": { opacity: "0.55" },
+          "72%": { opacity: "0.35" },
+          "100%": { transform: "translate3d(18px, -46vh, 0)", opacity: "0" },
+        },
+        // Panel form hiện lên khi vào trang. `both` để giữ nguyên trạng thái
+        // cuối, không nhảy về opacity gốc sau khi chạy xong.
+        riseIn: {
+          from: { opacity: "0", transform: "translate3d(0, 22px, 0)" },
+          to: { opacity: "1", transform: "translate3d(0, 0, 0)" },
+        },
       },
       animation: {
         pulseSlow: "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         fogDrift: "fogDrift 26s ease-in-out infinite",
         moonGlow: "moonGlow 7s ease-in-out infinite",
+        emberFloat: "emberFloat 14s linear infinite",
+        riseIn: "riseIn 640ms cubic-bezier(0.22, 0.61, 0.36, 1) both",
       },
     },
   },
