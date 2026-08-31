@@ -188,20 +188,44 @@ def frame_drum(freq: float = 92.0, dur: float = 1.1, hardness: float = 0.5,
     return out / max(np.max(np.abs(out)), 1e-9)
 
 
-def war_drum(freq: float = 58.0, dur: float = 1.6, seed: int = 0) -> np.ndarray:
-    """Trống trận sâu: dùng cho pha bỏ phiếu, nặng và chắc."""
+def war_drum(freq: float = 58.0, dur: float = 1.6, seed: int = 0,
+             stick: float = 0.40, shell: float = 0.0, shell_freq: float = 320.0,
+             harmonics: float = 0.35) -> np.ndarray:
+    """Trống trận sâu: dùng cho pha bỏ phiếu, nặng và chắc.
+
+    Bốn tham số cuối đều mặc định về đúng giá trị cũ, nên mọi chỗ gọi không nêu
+    chúng cho ra tín hiệu y hệt trước - đó là điều kiện để chỉnh riêng cú trống
+    của `vote` mà không đụng tới nhịp tim của `night`.
+
+    - `stick`: tiếng dùi gõ mặt, dải 1.2-5kHz. Đây là phần DUY NHẤT của cú
+      trống mà loa điện thoại tái tạo được trọn vẹn.
+    - `harmonics`: sức nặng của bồi âm bậc hai. Bồi âm bậc hai của một cú trống
+      68Hz nằm ở 136Hz, vẫn dưới ngưỡng loa nhỏ, nên nó KHÔNG thay được stick.
+    - `shell`: thân trống gỗ. Ba mode quanh `shell_freq` (mặc định 320Hz), tắt
+      nhanh. Đây là thứ cho tai biết đây là một cái trống có kích thước, và nó
+      rơi đúng vào dải 250Hz-2kHz mà loa điện thoại phát tốt nhất.
+    """
     n = int(dur * SR)
     t = _t(n)
     rng = np.random.default_rng(seed)
     bend = freq * (1.0 + 0.55 * np.exp(-t / 0.045))
     phase = 2 * np.pi * np.cumsum(bend) / SR
     low = np.sin(phase) * np.exp(-t / 0.42)
-    low += 0.35 * np.sin(2 * phase) * np.exp(-t / 0.16)
+    low += harmonics * np.sin(2 * phase) * np.exp(-t / 0.16)
     thump = fft_shape(rng.standard_normal(n), bp_curve(60, 420)) * expdecay(n, 0.07, 1.0)
-    stick = fft_shape(rng.standard_normal(n), bp_curve(1200, 5000)) * expdecay(n, 0.008, 0.5)
+    stick_sig = fft_shape(rng.standard_normal(n), bp_curve(1200, 5000)) * expdecay(n, 0.008, 0.5)
     # Loa dien thoai khong tai duoc <150Hz: khong co phan dui go thi
     # tren mobile cu danh nay bien mat hoan toan.
-    out = low + 0.45 * thump + 0.40 * stick
+    out = low + 0.45 * thump + stick * stick_sig
+
+    if shell > 0.0:
+        # Ba mode gỗ lệch nhau chút ít; tỉ lệ không nguyên để thân trống không
+        # nghe ra là một nốt nhạc.
+        for i, (ratio, amp, dec) in enumerate(((1.00, 1.00, 0.13), (1.47, 0.62, 0.09),
+                                               (2.13, 0.34, 0.06))):
+            f = shell_freq * ratio * (1.0 + rng.uniform(-0.01, 0.01))
+            out += shell * amp * np.sin(2 * np.pi * f * t + rng.uniform(0, 6.28)) * expdecay(n, dec, 2.0)
+
     out = np.tanh(out * 1.4) / 1.4
     return out / max(np.max(np.abs(out)), 1e-9)
 

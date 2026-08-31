@@ -237,16 +237,27 @@ def build_vote():
         return b * bar + b_beat * beat
 
     # Nền tối hơn hai track kia, có độ gằn.
-    c.bed(ins.drone(note("D1"), n, cut=190.0, buzz=0.0, voices=2, seed=31), gain=0.030, send=0.05)
-    c.bed(ins.drone(note("D2"), n, cut=2400.0, buzz=0.24, voices=4, seed=33, fund=0.34),
-          gain=0.235, pan=-0.12, send=0.22)
-    c.bed(ins.drone(note("A2"), n, cut=2000.0, buzz=0.15, voices=3, seed=37, fund=0.34),
-          gain=0.115, pan=0.22, send=0.26)
+    #
+    # Ba drone dưới đây từng dồn quá nửa năng lượng của cả track xuống dải
+    # 60-120Hz - đúng dải mà loa điện thoại không phát ra được. `fund` bị hạ
+    # mạnh (nút hạ riêng hoà âm cơ bản) thay vì hạ `gain`: hạ gain làm cả drone
+    # nhỏ đi, còn hạ `fund` giữ nguyên phần bồi âm nghe được và chỉ bỏ đi phần
+    # không nghe được. Drone Rê quãng tám ba là lớp MỚI, nó gánh phần thân âm
+    # mà hai drone trầm vừa nhường lại.
+    c.bed(ins.drone(note("D1"), n, cut=190.0, buzz=0.0, voices=2, seed=31), gain=0.012, send=0.05)
+    c.bed(ins.drone(note("D2"), n, cut=2800.0, buzz=0.24, voices=4, seed=33, fund=0.15),
+          gain=0.190, pan=-0.12, send=0.22)
+    c.bed(ins.drone(note("A2"), n, cut=2600.0, buzz=0.15, voices=3, seed=37, fund=0.21),
+          gain=0.125, pan=0.22, send=0.26)
+    c.bed(ins.drone(note("D3"), n, cut=3400.0, buzz=0.20, voices=3, seed=39, fund=0.62),
+          gain=0.105, pan=0.06, send=0.24)
 
-    rumble = wind_bed(n, seed=41, low=110.0, high=2600.0,
+    # Nền ầm: đẩy dải lên khỏi vùng bass. Ở 110Hz nó chỉ làm dày thêm đúng chỗ
+    # đã thừa, còn từ 200Hz trở lên nó thành hơi thở của căn phòng.
+    rumble = wind_bed(n, seed=41, low=200.0, high=4200.0,
                       lfos=[(21.428571, 0.40, 0.0), (17.142857, 0.25, 2.2)])
-    c.dry += rumble * 0.070
-    c.wet += rumble * 0.032
+    c.dry += rumble * 0.052
+    c.wet += rumble * 0.030
 
     # Cường độ theo câu: 1 vào, 2 dựng, 3 đầy, 4 nín thở, 5 dựng lại về mốc lặp.
     def phrase(b: int) -> int:
@@ -263,8 +274,12 @@ def build_vote():
         for bt, vel in hits:
             swing = 0.004 * np.sin(b * 2.3 + bt)
             gain = 0.26 * vel * (0.72 if p == 0 else 1.0) * (0.62 if p == 3 else 1.0)
-            c.add(ins.war_drum(68.0, 1.7, seed=200 + b % 5), at_bar(b, bt) + swing,
-                  gain=gain, pan=0.0, send=0.16)
+            # `stick` và `shell` là phần cú trống còn sống sót qua loa điện
+            # thoại. Không đổi `freq`: sức nặng ở 68Hz vẫn là thứ làm nên cú
+            # trống trên loa tử tế, chỉ là nó không được phép là TẤT CẢ.
+            c.add(ins.war_drum(68.0, 1.7, seed=200 + b % 5, stick=0.85,
+                               shell=0.42, shell_freq=310.0),
+                  at_bar(b, bt) + swing, gain=gain, pan=0.0, send=0.16)
 
         # Trống khung móc đơn: từ câu 2, nghỉ hẳn ở câu 4.
         if p in (1, 2, 4):
@@ -275,46 +290,77 @@ def build_vote():
                 if e in (3, 6):
                     accent = 0.78
                 swing = 0.006 * np.sin(b * 3.1 + e * 1.3)
-                c.add(ins.frame_drum(104.0, 0.62, hardness=0.55, tone=0.42, seed=220 + (b + e) % 6),
+                # 104Hz -> 156Hz và tay đánh cứng hơn: mode màng chuyển từ
+                # 104/166/222Hz lên 156/249/333Hz, tức là từ dưới ngưỡng loa
+                # nhỏ lên hẳn trên nó. Vẫn là trống khung, không phải trống rê.
+                c.add(ins.frame_drum(156.0, 0.62, hardness=0.66, tone=0.42, seed=220 + (b + e) % 6),
                       at_bar(b, bt) + swing,
-                      gain=0.140 * accent * dense, pan=-0.28 + 0.1 * (e % 3), send=0.22)
+                      gain=0.165 * accent * dense, pan=-0.28 + 0.1 * (e % 3), send=0.22)
 
         # Dây trầm kéo ngắn: pedal Rê, câu 3 và 5 nhích lên Fa/Mi cho sức ép.
+        #
+        # Cùng một câu được kéo ở HAI quãng tám. Dòng trầm giữ nguyên cao độ cũ
+        # nhưng nhỏ đi; dòng trung ở trên nó một quãng tám và sáng hơn, nên câu
+        # nhạc vẫn còn nguyên khi dải trầm bị loa nhỏ cắt mất. Đây là cách một
+        # dàn dây thật vẫn làm, không phải một thủ thuật để qua phép đo.
         if p >= 1:
             line = {1: ["D2", "D2", "D2", "C3"], 2: ["D2", "F2", "D2", "E2"],
                     3: ["D2", "D2", "D2", "D2"], 4: ["D2", "F2", "E2", "F2"]}[p]
+            octave_up = {"D2": "D3", "F2": "F3", "E2": "E3", "C3": "C4"}
             name = line[pos_in % 4]
             dur = 1.9 if p == 3 else 0.62
             sig = ins.bowed(note(name), dur, attack=0.05 if p != 3 else 0.7,
                             release=dur * 0.45, brightness=0.50, vib=0.2,
                             players=2, seed=240 + b % 4)
-            c.add(sig, at_bar(b), gain=0.190 if p != 3 else 0.140, pan=-0.18,
+            c.add(sig, at_bar(b), gain=0.115 if p != 3 else 0.085, pan=-0.18,
                   send=0.34, spread_ms=8.0)
 
+            tenor = ins.bowed(note(octave_up[name]), dur, attack=0.05 if p != 3 else 0.7,
+                              release=dur * 0.45, brightness=0.64, vib=0.24,
+                              players=2, seed=250 + b % 4)
+            c.add(tenor, at_bar(b), gain=0.165 if p != 3 else 0.120, pan=0.16,
+                  send=0.38, spread_ms=9.0)
+
     # Mảng dây trên: câu 4 giữ hợp âm Rê thứ, câu 5 dựng lên rồi tràn qua mốc lặp.
-    c.add(ins.bowed(note("A3"), 18.0, attack=6.0, release=8.0, brightness=0.48,
-                    vib=0.28, players=3, seed=260), at_bar(23), gain=0.150, pan=0.26,
+    c.add(ins.bowed(note("A3"), 18.0, attack=6.0, release=8.0, brightness=0.54,
+                    vib=0.28, players=3, seed=260), at_bar(23), gain=0.185, pan=0.26,
           send=0.55, spread_ms=11.0)
-    c.add(ins.bowed(note("F3"), 16.0, attack=5.0, release=7.0, brightness=0.46,
-                    vib=0.25, players=3, seed=261), at_bar(26), gain=0.130, pan=-0.30,
+    c.add(ins.bowed(note("F3"), 16.0, attack=5.0, release=7.0, brightness=0.52,
+                    vib=0.25, players=3, seed=261), at_bar(26), gain=0.165, pan=-0.30,
           send=0.55, spread_ms=11.0)
-    c.add(ins.bowed(note("D3"), 14.0, attack=4.5, release=6.0, brightness=0.52,
-                    vib=0.30, players=3, seed=262), at_bar(34), gain=0.160, pan=0.05,
+    c.add(ins.bowed(note("D3"), 14.0, attack=4.5, release=6.0, brightness=0.58,
+                    vib=0.30, players=3, seed=262), at_bar(34), gain=0.195, pan=0.05,
           send=0.50, spread_ms=10.0)
 
-    # Chuông: đánh dấu đầu câu 3 và câu 5.
-    for i, b in enumerate([16, 32]):
-        c.add(ins.bell(note("D3" if i == 0 else "A3"), 12.0, decay=4.2, seed=280 + i),
-              at_bar(b), gain=0.140, pan=-0.35 if i == 0 else 0.38, send=0.8, spread_ms=14.0)
+    # Chuông: đánh dấu đầu câu 2, 3 và 5. Bồi âm chuông nằm gần hết trên 250Hz,
+    # nên nó vừa là mốc cấu trúc vừa là phần track nghe rõ nhất trên loa nhỏ.
+    for i, (b, name) in enumerate([(8, "A3"), (16, "D3"), (32, "A3")]):
+        c.add(ins.bell(note(name), 12.0, decay=4.2, seed=280 + i),
+              at_bar(b), gain=(0.110, 0.155, 0.155)[i],
+              pan=(0.30, -0.35, 0.38)[i], send=0.8, spread_ms=14.0)
 
-    eq = chain(shelf_curve(3800.0, -1.5, "high"), peak_curve(95.0, 1.5, 0.7),
-               peak_curve(430.0, -1.0, 1.0), lp_curve(13000.0, 1.2))
-    return master(c, hall(), wet_gain=0.72, eq=eq, drive=1.15, hp=58.0), length
+    # Master: bỏ hẳn cú đội 95Hz và đảo cú cắt 430Hz thành cú đội thân âm.
+    #
+    # Bản trước cộng thêm 1.5dB ở 95Hz rồi cắt 1dB ở 430Hz - tức là EQ đang
+    # khoét đi đúng dải mà loa điện thoại phát tốt nhất để bơm thêm vào dải mà
+    # nó không phát được. Ba đường cong dưới đây làm ngược lại, nhưng chúng chỉ
+    # là bước cuối: phần lớn thân âm đến từ phối khí ở trên, nên tắt cả khối EQ
+    # này đi thì track vẫn qua được ngưỡng loa điện thoại.
+    eq = chain(shelf_curve(3600.0, -0.8, "high"), peak_curve(540.0, 1.6, 0.8),
+               peak_curve(1500.0, 1.2, 0.9), lp_curve(13000.0, 1.2))
+    return master(c, hall(), wet_gain=0.72, eq=eq, drive=1.15, hp=74.0), length
 
 
 # ==========================================================================
 
-BUILDERS = {"night": (build_night, -24.0), "day": (build_day, -24.7), "vote": (build_vote, -23.7)}
+# Mức đích của từng track, tính bằng LUFS đo trên chính file mp3.
+#
+# `verify_music.py` import đúng bảng này thay vì chép lại ba con số: một bản
+# chép sẽ im lặng trôi lệch khỏi bản dựng, và khi đó bộ kiểm chứng vẫn báo xanh
+# trong lúc đo sai mục tiêu.
+TARGET_LUFS = {"night": -24.0, "day": -24.7, "vote": -23.7}
+
+BUILDERS = {"night": build_night, "day": build_day, "vote": build_vote}
 
 # 160 chu khong phai 128: nhac ambient nhieu duoi vang la thu mp3 ma hoa kem
 # nhat, va o 128 nhieu luong tu du de lam chong chenh chinh cho noi vong lap.
@@ -352,9 +398,10 @@ def main() -> None:
         with open(points_path, encoding="utf-8") as fh:
             points = json.load(fh)
 
-    for name, (builder, target) in BUILDERS.items():
+    for name, builder in BUILDERS.items():
         if args.only and name != args.only:
             continue
+        target = TARGET_LUFS[name]
         print(f"[{name}] dựng...", flush=True)
         raw, length = builder()
         n = raw.shape[0]
