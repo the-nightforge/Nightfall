@@ -1079,7 +1079,7 @@ export async function processAvatar(
 - [ ] **Step 5: Chạy test cho chắc là xanh**
 
 Run: `npm run test --workspace @masoi/server -- avatar-image`
-Expected: PASS, 16 test.
+Expected: PASS, 15 test.
 
 - [ ] **Step 6: Lint**
 
@@ -1418,10 +1418,13 @@ describe("setAvatar", () => {
   });
 
   it("hai upload đồng thời để lại đúng một object, không có object mồ côi", async () => {
-    await Promise.all([
-      setAvatar("p1", await jpeg({ r: 200, g: 60, b: 60 })),
-      setAvatar("p1", await jpeg({ r: 60, g: 200, b: 60 })),
-    ]);
+    // Dựng SẴN cả hai buffer rồi mới gọi: nếu để `await jpeg(...)` trong mảng
+    // của Promise.all thì lần gọi thứ hai chỉ bắt đầu sau khi buffer thứ hai
+    // mã hoá xong, và hai luồng có thể không hề chồng nhau - test sẽ xanh mà
+    // không hề chạm tới compare-and-swap.
+    const [a, b] = [await jpeg({ r: 200, g: 60, b: 60 }), await jpeg({ r: 60, g: 200, b: 60 })];
+
+    await Promise.all([setAvatar("p1", a), setAvatar("p1", b)]);
 
     expect(storage.objects.size).toBe(1);
     expect(storage.objects.has(row("p1").avatarKey!)).toBe(true);
@@ -2880,7 +2883,7 @@ export async function deleteAvatar(identity: Identity): Promise<void> {
 - [ ] **Step 4: Chạy test cho chắc là xanh**
 
 Run: `npx tsx --test apps/web/src/lib/avatar-upload.test.ts`
-Expected: PASS, 9 test.
+Expected: PASS, 8 test.
 
 - [ ] **Step 5: Lint**
 
