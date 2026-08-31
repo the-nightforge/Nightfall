@@ -5,6 +5,8 @@ import {
   BOT_WEIGHTS_V2,
   BOT_WEIGHTS_V3,
   BOT_WEIGHTS_V4,
+  BOT_WEIGHTS_V5,
+  BOT_WEIGHTS_V6,
   DEFAULT_BOT_WEIGHTS,
   resolveWeights,
   validateWeights,
@@ -382,7 +384,7 @@ describe("trọng số được nối vào quyết định", () => {
   it("confidence.hunterMargin đổi ngưỡng bắn của Thợ Săn", () => {
     const state = stateFor();
     state.seenEventIds.push("src1");
-    // Đủ để vượt ngưỡng phiếu thường nhưng KHÔNG đủ để vượt ngưỡng bắn mặc định.
+    // Đủ để vượt ngưỡng phiếu thường, nên chỉ còn `hunterMargin` quyết định.
     state.suspicion.a = { score: 62, reasons: [evidence()], lastUpdatedRound: 1 };
 
     const shoot = (weights?: BotWeights): string | null =>
@@ -393,7 +395,11 @@ describe("trọng số được nối vào quyết định", () => {
         weights,
       ).targetId;
 
-    expect(shoot()).toBeNull();
+    // Hai giá trị TƯỜNG MINH, không so với mặc định: bài này kiểm núm vặn có
+    // được nối vào quyết định hay không, và nó phải còn đúng khi
+    // `DEFAULT_BOT_WEIGHTS` đổi. Trước v5 nó đọc mặc định làm vế "không bắn",
+    // nên việc hạ `hunterMargin` ở v5 làm hỏng một bài không liên quan.
+    expect(shoot(resolveWeights({ confidence: { hunterMargin: 80 } }))).toBeNull();
     expect(shoot(resolveWeights({ confidence: { hunterMargin: 0 } }))).toBe("a");
   });
 
@@ -438,7 +444,10 @@ describe("trọng số được nối vào quyết định", () => {
         createSeededRng("w"),
       );
 
-    expect(act()!.action).toBe("SKIP");
+    // Tường minh cả hai vế, cùng lý do như bài `hunterMargin` ở trên.
+    expect(
+      act(resolveWeights({ roleThresholds: { witchPoisonSuspicion: 95 } }))!.action,
+    ).toBe("SKIP");
     expect(
       act(resolveWeights({ roleThresholds: { witchPoisonSuspicion: 10 } }))!.action,
     ).toBe("POISON");
@@ -463,7 +472,8 @@ describe("trọng số được nối vào quyết định", () => {
         createSeededRng("p"),
       );
 
-    expect(act()).toBeNull();
+    // Tường minh cả hai vế, cùng lý do như hai bài trên.
+    expect(act(resolveWeights({ roleThresholds: { priestSuspicion: 95 } }))).toBeNull();
     expect(act(resolveWeights({ roleThresholds: { priestSuspicion: 10 } }))!.action).toBe(
       "HOLY_WATER",
     );
@@ -656,14 +666,16 @@ describe("v2 là cấu hình production", () => {
     return rates;
   }
 
-  it("mặc định trỏ tới v4", () => {
-    // Task 8 bật nhóm `claim` (Task 3-7) ở production bằng cách nâng chính
-    // hằng số này lên v4.0.0 - đúng cơ chế rollout mà docstring của
-    // `DEFAULT_BOT_WEIGHTS` mô tả, để `session-registry.ts` (chỗ ván thật
-    // dựng `BotRuntime`, không tự truyền `weights`) chạy bản mới mà không
-    // phải sửa. v3 vẫn tồn tại nguyên vẹn làm mốc so sánh của Phase 4.
-    expect(DEFAULT_BOT_WEIGHTS.version).toBe("4.0.0");
-    expect(weightsPreset("4.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+  it("mặc định trỏ tới v6", () => {
+    // Cùng cơ chế rollout mà docstring của `DEFAULT_BOT_WEIGHTS` mô tả: nâng
+    // chính hằng số này lên bản mới để `session-registry.ts` (chỗ ván thật
+    // dựng `BotRuntime`, không tự truyền `weights`) chạy bản mới mà không phải
+    // sửa. v5 đưa ngưỡng của Phù Thuỷ và Thợ Săn về thang belief thật; v2-v4
+    // vẫn tồn tại nguyên vẹn làm mốc so sánh.
+    expect(DEFAULT_BOT_WEIGHTS.version).toBe("6.0.0");
+    expect(weightsPreset("6.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    expect(weightsPreset("5.0.0")).toBe(BOT_WEIGHTS_V5);
+    expect(weightsPreset("4.0.0")).toBe(BOT_WEIGHTS_V4);
     expect(weightsPreset("3.0.0")).toBe(BOT_WEIGHTS_V3);
     expect(weightsPreset("2.0.0")).toBe(BOT_WEIGHTS_V2);
   });
@@ -864,6 +876,51 @@ describe("nhóm trọng số claim", () => {
       if (key === "version" || key === "claim") continue;
       expect(BOT_WEIGHTS_V4[key]).toBe(BOT_WEIGHTS_V3[key]);
     }
+  });
+
+  it("v5 khác v4 ĐÚNG ở hai nhóm ngưỡng và version", () => {
+    for (const key of Object.keys(BOT_WEIGHTS_V4) as Array<keyof typeof BOT_WEIGHTS_V4>) {
+      if (key === "version" || key === "confidence" || key === "roleThresholds") continue;
+      expect(BOT_WEIGHTS_V5[key]).toBe(BOT_WEIGHTS_V4[key]);
+    }
+  });
+
+  it("v6 khác v5 ĐÚNG ở nhóm roleThresholds và version", () => {
+    for (const key of Object.keys(BOT_WEIGHTS_V5) as Array<keyof typeof BOT_WEIGHTS_V5>) {
+      if (key === "version" || key === "roleThresholds") continue;
+      expect(BOT_WEIGHTS_V6[key]).toBe(BOT_WEIGHTS_V5[key]);
+    }
+  });
+
+  it("v6 giữ Nước thánh khó hơn bình độc, đúng vì nó có phản đòn", () => {
+    // Không phải một con số đẹp: ném trượt thì chính Linh Mục chết còn mục tiêu
+    // vẫn sống, nên ngưỡng của nó PHẢI cao hơn bình độc - thứ chỉ mất một
+    // người. Quan hệ này là điều `roles/priest.ts` tuyên bố, và nó dễ bị phá vỡ
+    // âm thầm ở lần hiệu chỉnh sau nếu không có ai kiểm.
+    expect(BOT_WEIGHTS_V6.roleThresholds.priestSuspicion).toBeGreaterThan(
+      BOT_WEIGHTS_V6.roleThresholds.witchPoisonSuspicion,
+    );
+    // Nhưng vẫn phải nằm trong tầm với của thang thật, nếu không thì nó chỉ đổi
+    // từ "không bao giờ ném" sang "không bao giờ ném".
+    expect(BOT_WEIGHTS_V6.roleThresholds.priestSuspicion).toBeLessThan(8.6);
+    // v5 vẫn giữ nguyên: nó là mốc so sánh, không phải một bản bị sửa lại.
+    expect(BOT_WEIGHTS_V5.roleThresholds.priestSuspicion).toBe(95);
+  });
+
+  it("v5 đưa ba ngưỡng của Phù Thuỷ và Thợ Săn vào tầm với của thang belief", () => {
+    // Mốc so sánh không phải một con số đẹp mà là thang belief THẬT: p99 của
+    // suspicion đo trên self-play là 8.6. Một ngưỡng nằm trên mốc đó là một
+    // ngưỡng không bao giờ chạy - đúng thứ đã làm hai vai này bất động ở v4.
+    const REACHABLE = 8.6;
+    expect(BOT_WEIGHTS_V5.roleThresholds.witchPoisonSuspicion).toBeLessThan(REACHABLE);
+    expect(BOT_WEIGHTS_V5.roleThresholds.witchHealTrust).toBeLessThan(REACHABLE);
+    expect(BOT_WEIGHTS_V5.roleThresholds.witchPoisonTrustVeto).toBeLessThan(REACHABLE);
+    // Ngưỡng bắn = voteThreshold + hunterMargin, nên chỉ cần margin không tự nó
+    // đẩy tổng ra ngoài tầm với.
+    expect(BOT_WEIGHTS_V5.confidence.hunterMargin).toBeLessThan(REACHABLE);
+    // v4 vẫn giữ nguyên: nó là mốc so sánh, không phải một bản bị sửa lại.
+    expect(BOT_WEIGHTS_V4.roleThresholds.witchPoisonSuspicion).toBe(95);
+    expect(BOT_WEIGHTS_V4.confidence.hunterMargin).toBe(80);
   });
 
   it("validateWeights bắt được hệ số ngoài [0,1]", () => {

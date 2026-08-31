@@ -613,9 +613,22 @@ function applyNight(room: Room, botId: string, decision: NightDecision | null): 
  *
  * Vẫn giữ độ trễ rải đều để người thật không thấy cả bầy bot hành động cùng
  * một khoảnh khắc, nhưng độ trễ gieo từ RNG của session thay vì `Math.random`.
+ *
+ * Độ trễ rải theo thời gian CÒN LẠI của pha, không theo `nightSeconds`. Đêm có
+ * hai chặng với hai hạn chót khác nhau: chặng Sói dài `nightSeconds`, còn chặng
+ * Phù Thuỷ chỉ dài `WITCH_WINDOW_MS`. Tính theo `nightSeconds` thì với cấu hình
+ * đêm dài (schema cho tới 120s) mốc hẹn của Phù Thuỷ rơi ra SAU `endNight`, và
+ * cô ta mất trắng lượt dù lõi đã quyết đúng. `phaseEndsAt` đã được `extendPhase`
+ * dời về đúng hạn chót của chặng đang mở, nên nó là nguồn duy nhất đúng cho cả
+ * hai chặng.
  */
 export function scheduleNightBots(room: Room): void {
   const session = botSessionFor(room);
+  const now = Date.now();
+  const remainingMs = Math.max(
+    0,
+    (room.engine?.state.phaseEndsAt ?? now + room.config.nightSeconds * 1_000) - now,
+  );
 
   for (const member of room.members) {
     if (!member.isBot) continue;
@@ -626,7 +639,7 @@ export function scheduleNightBots(room: Room): void {
     if (!view.night?.canAct || view.night.acted) continue;
 
     const rng = session.rngFor(member.playerId, "night-schedule");
-    const delay = Math.floor((0.1 + rng() * 0.2) * room.config.nightSeconds * 1_000);
+    const delay = Math.floor((0.1 + rng() * 0.2) * remainingMs);
 
     setRoomTimer(room.code, () => {
       try {
