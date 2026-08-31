@@ -31,6 +31,31 @@ const CHANNEL_STYLE: Record<string, string> = {
 };
 const DEFAULT_CHANNEL_STYLE = "bg-night-800/70 border-white/[0.05]";
 
+/**
+ * Bong bóng hội thoại đặt trong ô nhập.
+ *
+ * Vẽ tay thay vì kéo về một bộ icon: cả web mới chỉ cần đúng một hình này, và
+ * thêm hẳn một dependency cho một thẻ <svg> thì phần tải về đắt hơn phần dùng.
+ * Nét theo đúng dựng hình của Lucide MessageCircle (lưới 24, stroke 2) để sau
+ * này có lắp bộ icon thật thì hình không nhảy.
+ */
+function MessageCircleIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+    </svg>
+  );
+}
+
 interface Props {
   messages: ChatMessage[];
   onSend: (text: string) => void;
@@ -81,7 +106,16 @@ export function ChatBox({
     // min-h-0 là bắt buộc, thiếu nó thì flex item không co được và phần tin nhắn
     // tràn ra ngoài thay vì cuộn.
     <div className="flex h-full min-h-0 flex-col rounded-xl border border-night-600/60 bg-night-900/70">
-      <div ref={boxRef} className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2.5">
+      {/*
+        * overscroll-contain: trên điện thoại khung này nằm trong một tấm trượt
+        * đè lên trang phòng. Thiếu nó thì vuốt tới đáy danh sách rồi vuốt tiếp
+        * sẽ "xuyên" xuống trang phía sau, kéo trang trôi đi trong khi mắt vẫn
+        * đang ở khung chat - và lúc đóng tấm trượt thì trang đã ở chỗ khác.
+        */}
+      <div
+        ref={boxRef}
+        className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2.5"
+      >
         {messages.length === 0 && (
           <p className="text-sm text-mist/60">Chưa có tin nhắn nào.</p>
         )}
@@ -127,17 +161,25 @@ export function ChatBox({
         })}
       </div>
       <div className="flex gap-2 border-t border-night-600/60 p-2">
-        <input
-          className="input"
-          ref={inputRef}
-          autoFocus={autoFocus}
-          aria-label="Nội dung tin nhắn"
-          value={text}
-          maxLength={300}
-          placeholder={placeholder ?? "Nhập tin nhắn..."}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
-        />
+        {/*
+          * Icon nằm chồng lên ô nhập chứ không đứng cạnh: đặt cạnh thì nó ăn
+          * mất chiều ngang của ô, mà trên điện thoại ô này đã hẹp sẵn.
+          * pointer-events-none để chạm vào icon vẫn là chạm vào ô nhập.
+          */}
+        <div className="relative min-w-0 flex-1">
+          <MessageCircleIcon className="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-mist/55" />
+          <input
+            className="input pl-10"
+            ref={inputRef}
+            autoFocus={autoFocus}
+            aria-label="Nội dung tin nhắn"
+            value={text}
+            maxLength={300}
+            placeholder={placeholder ?? "Nhập tin nhắn..."}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+          />
+        </div>
         <button className="btn-primary shrink-0" onClick={submit} disabled={!text.trim()}>
           Gửi
         </button>
