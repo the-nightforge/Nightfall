@@ -1,6 +1,7 @@
 import { ROLE_POWER } from "@masoi/shared";
 import type { RoomConfig } from "@masoi/shared";
 import type { EnginePlayer } from "../types";
+import { specialRoleList } from "../assignRoles";
 import { PRESET_DECKS } from "./presets";
 import type { BalanceWarningView } from "@masoi/shared";
 
@@ -28,19 +29,7 @@ function villagerCount(config: RoomConfig, playerCount: number): number {
 }
 
 function deckRoles(config: RoomConfig, playerCount: number): Role[] {
-  const roles: Role[] = [];
-  for (let i = 0; i < config.werewolves; i++) roles.push("WEREWOLF");
-  if (config.wolfCub) roles.push("WOLF_CUB");
-  if (config.seer) roles.push("SEER");
-  if (config.apprenticeSeer) roles.push("APPRENTICE_SEER");
-  if (config.detective) roles.push("DETECTIVE");
-  if (config.guard) roles.push("GUARD");
-  if (config.guardianAngel) roles.push("GUARDIAN_ANGEL");
-  if (config.priest) roles.push("PRIEST");
-  if (config.witch) roles.push("WITCH");
-  if (config.hunter) roles.push("HUNTER");
-  if (config.mayor) roles.push("MAYOR");
-  if (config.cursed) roles.push("CURSED");
+  const roles: Role[] = specialRoleList(config);
   const vCount = villagerCount(config, playerCount);
   for (let i = 0; i < vCount; i++) roles.push("VILLAGER");
   return roles;
@@ -150,15 +139,6 @@ export function generateWarnings(
       blocking = true;
     }
 
-    // Suggestion diff
-    if (warnings.length === 0) {
-      // No warning, but still could suggest if config != preset?
-    } else {
-      // Add suggestion to apply preset if blocking or warning
-      if (score < 45 || score > 55 || ratioDiff > 0.08 || infoDiff >= 2) {
-        // keep warning list as is, no extra blocking
-      }
-    }
   } else {
     warnings.push(`Không có preset cho ${playerCount} người chơi`);
   }

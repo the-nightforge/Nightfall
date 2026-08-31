@@ -10,11 +10,6 @@ export function setIo(io: Server): void {
   ioRef = io;
 }
 
-export function getIo(): Server {
-  if (!ioRef) throw new Error("Socket.IO chưa được khởi tạo");
-  return ioRef;
-}
-
 export function trackSocket(playerId: string, socket: Socket): void {
   const set = socketsByPlayer.get(playerId) ?? new Set();
   set.add(socket);

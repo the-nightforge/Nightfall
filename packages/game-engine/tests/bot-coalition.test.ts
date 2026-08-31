@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   detectCoalitions,
-  influenceScore,
   isolationScore,
 } from "../src/bot/analysis/coalition";
 import { createSeededRng } from "../src/bot/rng";
@@ -114,22 +113,6 @@ describe("detectCoalitions", () => {
     // knownRoles sẽ phá đúng ranh giới Phase 1 dựng lên.
     expect(JSON.stringify(detectCoalitions(state))).not.toContain("WEREWOLF");
     expect(state.knownInformation.knownRoles).toEqual({});
-  });
-});
-
-describe("influenceScore", () => {
-  it("người được nhiều người đi theo có điểm cao nhất", () => {
-    const state = stateFor();
-    for (const follower of ["a", "b", "c"]) {
-      state.relationships[`${follower}->d`] = edge({ voteAlignment: 1 });
-    }
-    state.relationships["a->e"] = edge({ voteAlignment: 0.1 });
-
-    expect(influenceScore(state, "d")).toBeGreaterThan(influenceScore(state, "e"));
-  });
-
-  it("người không ai đi theo có điểm 0", () => {
-    expect(influenceScore(stateFor(), "a")).toBe(0);
   });
 });
 

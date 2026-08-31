@@ -1,10 +1,7 @@
 import { roleTeam } from "@masoi/shared";
-import { calculateFactionPower } from "../balance/analyzer";
 import type { GameState } from "../types";
 
 export function calculateMomentum(state: GameState): number {
-  // Use shared analyzer as single source of truth for faction power (keeps balanceScore & momentum aligned)
-  void calculateFactionPower(state.players);
   const alivePlayers = state.players.filter((p) => p.alive);
   const totalAlive = alivePlayers.length;
   const aliveWolves = alivePlayers.filter((p) => roleTeam(p.role) === "wolves").length;

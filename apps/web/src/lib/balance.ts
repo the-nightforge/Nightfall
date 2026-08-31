@@ -114,7 +114,7 @@ export const PRESET_DECKS: Record<number, RoomConfig> = {
 
 type RoleKey = keyof typeof ROLE_POWER;
 
-function clamp(value: number, min: number, max: number): number {
+export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
@@ -175,7 +175,7 @@ function infoPower(roles: RoleKey[]): number {
   }, 0);
 }
 
-export function calculateBalanceScore(
+function calculateBalanceScore(
   config: RoomConfig,
   playerCount: number,
 ): { score: number; villagePower: number; wolfPower: number } {

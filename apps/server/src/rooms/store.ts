@@ -1,6 +1,6 @@
 import { GameEngine } from "@masoi/game-engine";
 import type { ChatMessage, RoomConfig } from "@masoi/shared";
-import { DEFAULT_ROOM_CONFIG, MAX_PLAYERS_PER_ROOM } from "@masoi/shared";
+import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import { redis } from "../redis";
 import { destroyVoiceRoom } from "../voice/service";
 import { cleanupRoomBotState } from "../game/bot-room-state";
@@ -186,8 +186,4 @@ export async function loadRoomFromRedis(code: string): Promise<Room | null> {
   } catch {
     return null;
   }
-}
-
-export function maxPlayers(): number {
-  return MAX_PLAYERS_PER_ROOM;
 }

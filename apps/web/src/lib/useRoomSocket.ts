@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ChatMessage, RoomSnapshot, SocketError } from "@masoi/shared";
-import { CLIENT_EVENTS } from "@masoi/shared";
 import { recordServerTime } from "./clock";
 import { getIdentity, type Identity } from "./identity";
 import { attachRoomSocketSession } from "./room-socket-session";
@@ -73,5 +72,3 @@ export function useRoomSocket(code: string) {
 
   return { ...state, emit };
 }
-
-export const EVENTS = { ...CLIENT_EVENTS };

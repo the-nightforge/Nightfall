@@ -295,12 +295,6 @@ export class GameEngine {
     return this.alivePlayers().filter((p) => roleTeam(p.role) === "wolves");
   }
 
-  aliveWolfsTargets(): string[] {
-    return this.alivePlayers()
-      .filter((p) => roleTeam(p.role) === "wolves")
-      .map((p) => p.id);
-  }
-
   private queueHunterReaction(deaths: Array<{ playerId: string }>, source: "night" | "vote"): void {
     if (this.state.hunterReaction) return;
     const hunter = deaths
@@ -1746,8 +1740,7 @@ export class GameEngine {
       legalActions.push("KILL");
       // Khớp đúng điều kiện `submitNightAction` case "KILL": cả bầy Sói bị loại,
       // theo PHE chứ không theo mã vai - Kẻ Nguyền Rủa đã hoá Sói và Sói Con
-      // đều được miễn. (`aliveWolfsTargets` trả về chính bầy Sói, không phải
-      // mục tiêu của chúng; tên hàm dễ gây hiểu nhầm nên không dùng ở đây.)
+      // đều được miễn.
       legalTargets.KILL = alive
         .filter((player) => roleTeam(player.role) !== "wolves")
         .map((player) => player.id);
