@@ -1,276 +1,436 @@
-# Ma Sói Online 🐺
+<div align="center">
 
-Game Ma Sói (Werewolf) online multiplayer theo thời gian thực - MVP bản chat.
+# 🐺 Ma Sói Online
 
-- Tạo phòng, tham gia bằng mã phòng 5 ký tự.
-- Chơi realtime qua Socket.IO, giao diện tiếng Việt, tối ưu điện thoại.
-- Vai trò: **Ma Sói, Dân Làng, Tiên Tri, Bảo Vệ, Phù Thủy** - engine thiết kế dạng registry để thêm vai trò mới dễ dàng.
-- Chế độ bot để một người có thể test toàn bộ ván.
+**A real-time multiplayer Werewolf (Mafia) game — 13 roles, 15 dynamic events, voice chat, and AI bots that actually reason.**
 
-## Kiến trúc
+[![CI](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-2313%20passing-brightgreen)](#testing)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
+[![Socket.IO](https://img.shields.io/badge/Socket.IO-4.7-010101?logo=socket.io)](https://socket.io)
+
+[**▶ Play the demo**](https://ma-soi-online-nu.vercel.app) · [**Health check**](https://ma-soi-server-xzhv.onrender.com/api/health) · [**Design docs**](docs/)
+
+</div>
+
+---
+
+> **Note on language.** The game interface is in **Vietnamese** — it is built for Vietnamese players, and role names, chat and all player-facing copy are Vietnamese by design. This README, the code and the source comments' intent are documented in English for contributors.
+
+## Table of contents
+
+- [What this is](#what-this-is)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+- [Game rules](#game-rules)
+- [Voice chat](#voice-chat)
+- [Bot AI](#bot-ai)
+- [API reference](#api-reference)
+- [Scripts](#scripts)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Security model](#security-model)
+- [Known limitations](#known-limitations)
+
+## What this is
+
+A full-stack, production-deployed Werewolf game. Players create a room, share a 5-character code, and play a complete social-deduction match in the browser — with optional daytime voice chat and AI-controlled bots that can fill any empty seat.
+
+The interesting parts are not the CRUD. They are:
+
+- **A pure game engine** (`packages/game-engine`) with no IO dependencies, so the entire rule set is unit-testable and replayable from a seed.
+- **A deterministic bot brain** with memory, belief state and per-role strategy. Every bot *decision* is reproducible from a seed; an LLM is used only to phrase what the bot says, never to choose a move.
+- **Per-viewer snapshot filtering** — secret roles are stripped server-side before anything reaches a client, so the wire never carries information a player is not entitled to.
+
+## Features
+
+|  | Feature |
+|---|---|
+| 🎭 | **13 roles** across two teams, with a role registry designed for adding more |
+| 🎲 | **15 dynamic events** that reshape a round (Curfew, Blood Moon, Day of Truth, …) |
+| ⚖️ | **Balance analyzer** that scores a deck against per-player-count presets and blocks unfair ranked configs |
+| 🗳️ | **Two-stage voting** — nomination, defense speech, then a final Hang/Spare trial |
+| 🤖 | **AI bots** with deterministic decision-making and LLM-phrased speech, including role claims and counter-claims |
+| 🎙️ | **Daytime voice chat** via LiveKit, with server-enforced speaking rights |
+| 📱 | **Mobile-first UI** with cinematic phase transitions |
+| 🔁 | **Reconnect support** — refresh or drop out and rejoin the same match |
+| 📜 | **Full night recap** at game over: every role action, every death, and why |
+
+## Architecture
 
 ```
 ma-soi-online/
 ├── apps/
-│   ├── web/          # Next.js 16 + React 19 + Tailwind (App Router)
-│   └── server/       # Express + Socket.IO + Prisma + Redis
+│   ├── web/               # Next.js 16 · React 19 · Tailwind (App Router)
+│   └── server/            # Express · Socket.IO · Prisma · Redis
 ├── packages/
-│   ├── game-engine/  # Luật chơi thuần (không phụ thuộc IO) + Vitest
-│   └── shared/       # Types, Zod schemas, hằng số dùng chung
-└── docker-compose.yml # PostgreSQL + Redis
+│   ├── game-engine/       # Pure rules + bot brain. No IO. Vitest.
+│   └── shared/            # Types, Zod schemas, balance rules, constants
+├── docs/                  # Design specs and verification reports
+└── docker-compose.yml     # PostgreSQL + Redis for local dev
 ```
 
-**Nguyên tắc bảo mật:** server là nguồn dữ liệu duy nhất. Vai trò bí mật được lọc trong `game-engine.snapshotFor(viewerId)` trước khi gửi xuống client. Mọi socket payload đều validate bằng Zod. Chat bí mật (Sói / người chết) chỉ emit tới đúng người có quyền xem.
+**Dependency direction is strictly one-way:** `web` and `server` both depend on `shared`; `server` additionally depends on `game-engine`. `shared` depends on nothing but Zod, which is why rules needed by *both* the browser and the server (balance scoring, voice permissions, role metadata) live there — a single implementation neither side can drift from.
 
-## Yêu cầu
+```mermaid
+flowchart LR
+    B["Browser<br/>Next.js"] <-->|"Socket.IO<br/>+ REST"| S["Server<br/>Express"]
+    B <-.->|"WebRTC"| L["LiveKit<br/>(optional)"]
+    S --> E["game-engine<br/>(pure)"]
+    S --> P[("PostgreSQL")]
+    S --> R[("Redis")]
+    S -.->|"speech only"| A["LLM provider<br/>(optional)"]
+```
 
-- Node.js >= 20.19
-- Docker Desktop (cho PostgreSQL & Redis)
+## Quick start
 
-## Cài đặt & chạy local
+**Requirements:** Node.js ≥ 20.19 and Docker (for PostgreSQL + Redis).
 
-```powershell
-# 1. Cài dependencies
+```bash
+# 1. Install dependencies
 npm install
 
-# 2. Khởi động PostgreSQL + Redis
-docker compose up -d
+# 2. Start PostgreSQL + Redis
+npm run dev:infra
 
-# 3. Cấu hình môi trường
-Copy-Item .env.example apps/server/.env     # sửa nếu cần
-"NEXT_PUBLIC_SERVER_URL=http://localhost:4100" | Set-Content apps/web/.env.local
+# 3. Configure the server
+cp .env.example apps/server/.env
 
-# 4. Tạo bảng database
+# 4. Point the web app at the server
+echo "NEXT_PUBLIC_SERVER_URL=http://localhost:4100" > apps/web/.env.local
+
+# 5. Create the database schema
 npm run db:migrate
-
-# 5. Chạy server (cổng 4100) và web (cổng 3000) - 2 terminal
-npm run dev:server
-npm run dev:web
 ```
 
-Mở http://localhost:3000 → nhập biệt danh → **Tạo phòng mới** → bấm **+ Thêm bot** đủ 6 người → **Bắt đầu trận đấu**.
+Then run the two dev servers in separate terminals:
 
-> Lưu ý: nếu cổng 4000 bị chiếm (WSL...), đổi `SERVER_PORT=4100` trong `apps/server/.env` và `NEXT_PUBLIC_SERVER_URL` tương ứng.
-
-## Triển khai bản dùng thử miễn phí
-
-Kiến trúc triển khai: **Vercel (web) → Render (server) → Neon (PostgreSQL) + Upstash (Redis)**. Backend chỉ chạy **một instance** vì trạng thái ván đang chơi được giữ trong RAM.
-
-Bản đang chạy:
-
-- Frontend: <https://ma-soi-online-nu.vercel.app>
-- Backend health: <https://ma-soi-server-xzhv.onrender.com/api/health>
-
-`/api/health` trả về `version` (7 ký tự đầu của commit đang chạy, lấy từ
-`RENDER_GIT_COMMIT`) và `startedAt`. Đối chiếu `version` với `git rev-parse --short HEAD`
-để biết Render đã build commit mới hay chưa; chạy ngoài môi trường deploy thì
-`version` là `dev`.
-
-### 1. Neon PostgreSQL
-
-1. Tạo project và database PostgreSQL trên Neon.
-2. Mở phần connection details, chọn pooled connection và sao chép chuỗi kết nối.
-3. Chuỗi này sẽ được lưu dưới tên `DATABASE_URL` trong Render; không đưa vào Git hoặc Vercel.
-
-### 2. Upstash Redis
-
-1. Tạo Redis database cùng khu vực gần backend nhất có thể.
-2. Sao chép TLS connection string bắt đầu bằng `rediss://`.
-3. Chuỗi này sẽ được lưu dưới tên `REDIS_URL` trong Render; không đưa vào Git.
-
-### 3. Render backend
-
-1. Tạo **Web Service** từ repository GitHub này, chọn môi trường Docker, nhánh `main` và Dockerfile `Dockerfile.server`.
-2. Dùng một instance và đặt Health Check Path là `/api/health`. Render tự cấp biến `PORT`, không cần tạo thủ công.
-3. Thêm các biến môi trường:
-
-```text
-DATABASE_URL=<Neon pooled connection string>
-REDIS_URL=<Upstash rediss:// connection string>
-NODE_ENV=production
-CORS_ORIGIN=https://YOUR-PROJECT.vercel.app
-BOT_AI_ENABLED=true
-
-# Voice chat (tuỳ chọn). Bỏ trống cả ba thì voice tắt và mọi thứ chạy như cũ;
-# điền một nửa thì server ném lỗi lúc khởi động thay vì âm thầm tắt.
-LIVEKIT_URL=wss://<project>.livekit.cloud
-LIVEKIT_API_KEY=<key>
-LIVEKIT_API_SECRET=<secret>
-LIVEKIT_ENV=prod
-
-# Chuỗi nhà cung cấp cho bot, thử lần lượt từ trên xuống.
-# Thiếu bất kỳ mảnh nào của một chặng thì chặng đó bị bỏ qua.
-# Không chặng nào cấu hình được thì bot chơi ngẫu nhiên và không chat.
-BOT_AI_BASE_URL=<endpoint OpenAI-compatible, kèm /v1>
-BOT_AI_API_KEY=<key của endpoint đó>
-BOT_AI_MODEL=gemini-3.7-flash
-OPENAI_API_KEY=<key OpenAI>
-OPENAI_MODEL=gpt-5.6-luna
-GEMINI_API_KEY=<API key Google AI Studio, dạng AIza...>
-GEMINI_MODEL=gemini-3.5-flash-lite
+```bash
+npm run dev:server   # http://localhost:4100
 ```
 
-Mỗi chặng có hạn nghỉ riêng sau khi bị 429, nên hết quota ở một nhà cung cấp không làm treo các nhà cung cấp còn lại. Trần `BOT_AI_MAX_CALLS_PER_GAME` thì dùng chung cho cả chuỗi vì nó nói về chi phí của một ván.
+```bash
+npm run dev:web      # http://localhost:3000
+```
 
-Không phải endpoint OpenAI-compatible nào cũng thực sự cài đặt `response_format`: có nơi nhận rồi bỏ qua và trả văn xuôi. Chặng `BOT_AI_*` vì thế mô tả JSON ngay trong lời nhắc rồi parse khoan dung, còn chặng OpenAI dùng `json_schema` strict.
+Open <http://localhost:3000>, enter a nickname, click **Tạo phòng mới** (*Create room*), press **+ Thêm bot** (*Add bot*) until you have 6 players, then **Bắt đầu trận đấu** (*Start match*).
 
-`BOT_AI_ENABLED` là công tắc tắt nhanh: đặt `false` để toàn bộ bot quay lại chọn ngẫu nhiên ngay lập tức mà không cần deploy lại hay đổi `GEMINI_API_KEY`. Mặc định bật khi đã có key.
+> [!TIP]
+> On a clean clone, run `npm run build:deps` before invoking a single workspace directly (e.g. `npm test --workspace @masoi/server`). `@masoi/shared` and `@masoi/game-engine` resolve `main`/`types` to `dist/`, which is gitignored — without it you get a wall of `has no exported member` errors that look like broken code but are just a missing build. The root `npm test` and `npm run lint` handle this for you.
 
-Server ưu tiên biến `PORT` do Render cấp và dùng cổng `4000` khi chạy container cục bộ. Lần khởi động container sẽ chạy `prisma migrate deploy` trước khi mở server. Ghi lại HTTPS origin của backend, ví dụ `https://ma-soi-server-xzhv.onrender.com`.
+## Configuration
 
-### 4. Vercel frontend
+All server configuration is environment-driven. See [`.env.example`](.env.example) for the full annotated list.
 
-1. Import cùng repository vào Vercel và giữ Root Directory là thư mục gốc repository; file `vercel.json` đã chứa lệnh build monorepo.
-2. Thêm biến môi trường `NEXT_PUBLIC_SERVER_URL` bằng chính xác HTTPS origin của Render, không có dấu `/` cuối.
-3. Deploy frontend và ghi lại origin Vercel.
-4. Quay lại Render, đổi `CORS_ORIGIN` thành origin Vercel chính xác rồi redeploy backend.
+### Core
 
-### 5. Kiểm tra sau triển khai
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | — | PostgreSQL connection string (**required**) |
+| `REDIS_URL` | `redis://127.0.0.1:6380` | Redis connection string |
+| `PORT` / `SERVER_PORT` | `4000` | `PORT` wins; platforms like Render set it automatically |
+| `NODE_ENV` | `development` | |
+| `CORS_ORIGIN` | `*` | Comma-separated origins, or `*` |
 
-- Mở `https://<backend>/api/health`; trạng thái đầy đủ là HTTP 200 với `{ "ok": true, "db": true, "redis": true }`.
-- Nếu PostgreSQL lỗi, endpoint trả HTTP 503. Nếu chỉ Redis tạm lỗi, endpoint vẫn trả HTTP 200 với `redis: false` vì server còn có thể phục vụ phòng đang nằm trong RAM.
-- Mở frontend Vercel, tạo người chơi và phòng mới, thêm bot rồi xác nhận Socket.IO kết nối được.
-- Không lưu `DATABASE_URL`, `REDIS_URL` hoặc token người chơi trong file được commit.
+### Anti-abuse
 
-Các gói miễn phí có giới hạn tài nguyên và có thể thay đổi. Render Free có thể tạm ngủ khi không hoạt động nên lần truy cập đầu tiên có thể khởi động chậm. Đây là cấu hình phù hợp cho MVP dùng thử, không phải tải production lớn. Nếu backend restart giữa trận, phòng được đưa về lobby an toàn thay vì khôi phục timer/hành động dang dở.
+| Variable | Default | Description |
+|---|---|---|
+| `CHAT_MAX_LENGTH` | `300` | Max characters per chat message |
+| `CHAT_RATE_LIMIT_COUNT` | `5` | Messages allowed per window |
+| `CHAT_RATE_LIMIT_WINDOW_MS` | `5000` | Chat rate-limit window |
+| `SIGNUP_RATE_LIMIT_COUNT` | `10` | Guest registrations per IP per window |
+| `SIGNUP_RATE_LIMIT_WINDOW_MS` | `60000` | Signup rate-limit window |
+| `TRUST_PROXY` | `1` | Proxy hops to trust. Keep `1` behind Render; set `0` when self-hosting with the port exposed directly, where `X-Forwarded-For` is client-controlled |
+
+### Voice chat (optional)
+
+Leave all three empty to disable voice entirely. Setting only some of them makes the server **fail fast at startup** rather than silently running without voice.
+
+| Variable | Description |
+|---|---|
+| `LIVEKIT_URL` | `wss://<project>.livekit.cloud` |
+| `LIVEKIT_API_KEY` | LiveKit API key |
+| `LIVEKIT_API_SECRET` | LiveKit API secret |
+| `LIVEKIT_ENV` | Namespace prefix, so `dev` and `prod` rooms never collide |
+
+### Bot AI (optional)
+
+Providers are tried top to bottom. A stage is skipped when any of its parts is missing; if no stage is configured, bots still play — they just use canned phrasing instead of generated speech.
+
+| Variable | Description |
+|---|---|
+| `BOT_AI_BASE_URL` · `BOT_AI_API_KEY` · `BOT_AI_MODEL` | Any OpenAI-compatible endpoint (include `/v1`) |
+| `OPENAI_API_KEY` · `OPENAI_MODEL` | OpenAI, using strict `json_schema` |
+| `GEMINI_API_KEY` · `GEMINI_MODEL` | Google AI Studio |
+| `BOT_AI_ENABLED` | `false` disables generated speech instantly, no redeploy needed |
+| `BOT_AI_MAX_CALLS_PER_GAME` | Cost ceiling shared across the whole provider chain (default `180`) |
+
+Each stage has its own cooldown after a `429`, so exhausting one provider's quota does not stall the others.
+
+## Game rules
+
+### Roles
+
+Village wins by eliminating every wolf. Wolves win once they equal or outnumber the village.
+
+<details open>
+<summary><b>Wolf team</b></summary>
+
+| Role | Vietnamese | Ability |
+|---|---|---|
+| Werewolf | Ma Sói | Collectively choose one victim each night |
+| Wolf Cub | Sói Con | Wakes with the pack. When it dies, the pack bites **two** targets the following night |
+
+</details>
+
+<details open>
+<summary><b>Village team</b></summary>
+
+| Role | Vietnamese | Ability |
+|---|---|---|
+| Seer | Tiên Tri | Inspect one player's team each night |
+| Apprentice Seer | Tiên Tri Tập Sự | Powerless until the Seer dies, then inherits the inspection |
+| Detective | Thám Tử | Check whether two living players are on the same team |
+| Guard | Bảo Vệ | Protect one player; cannot repeat the same target two nights running |
+| Guardian Angel | Thiên Thần Hộ Mệnh | Two shields per match, no consecutive repeats |
+| Priest | Linh Mục | One vial of holy water: kills a wolf, but backfires and kills the Priest if used on a villager |
+| Witch | Phù Thủy | One heal and one poison, each usable once per match |
+| Hunter | Thợ Săn | On death, may shoot one living player — or nobody |
+| Mayor | Thị Trưởng | Daytime votes count double |
+| Cursed | Kẻ Nguyền Rủa | No night action. Surviving a first wolf bite turns them **into a wolf** |
+| Villager | Dân Làng | No ability — discussion and voting only |
+
+</details>
+
+Rooms hold **6–15 players**. Villagers fill whatever seats the configured special roles leave over.
+
+### Phase flow
+
+```
+LOBBY → ROLE_REVEAL → NIGHT → NIGHT_RESULT → CHECK_WIN
+      → DAY_DISCUSSION → VOTING → DEFENSE → FINAL_VOTE → ELIMINATION
+      → HUNTER_SHOT? → CHECK_WIN → … → GAME_OVER
+```
+
+Countdowns are driven by `phaseEndsAt`, an epoch timestamp issued by the server. Clients only render it — they never decide when a phase ends, and the snapshot carries the server clock so device clock skew cannot desynchronise a match.
+
+### Voting rules
+
+- `VOTING` **nominates** a defendant; it no longer kills anyone directly. Every daytime death goes through `FINAL_VOTE`.
+- **Votes are changeable until the deadline.** Only the final choice counts, which is exactly why the voting phase does *not* end early when everyone has voted — ending early would lock in the last voter's click.
+- **Ballots become public once the round closes.** During voting you see only tallies; afterwards you see who voted for whom and when they switched. Trial Hang/Spare ballots are revealed after the verdict.
+- A tie eliminates nobody.
+- **Dead players' roles stay hidden until `GAME_OVER`** — for humans and bots alike. Death reveals nothing.
+
+### Dynamic events
+
+15 events can fire to reshape a round, each with a beneficiary and a power rating the balance analyzer accounts for:
+
+`CURFEW` · `SILENT_NIGHT` · `AMNESTY_DAY` · `CLEARING_MIST` · `PEACEFUL_NIGHT` · `JUDGMENT_DAY` · `LAST_STAND` · `DAY_OF_TRUTH` · `MOONLESS_NIGHT` · `BLOODY_HUNT` · `HOWL_OF_THE_PACK` · `BLOOD_MOON` · `WOLF_SHADOW` · `MORNING_REPORT` · `DEAD_CAN_SPEAK`
+
+## Voice chat
+
+Disabled by default. The host toggles it in the lobby, and the toggle only appears when the server has LiveKit credentials.
+
+**Daytime only.** Wolves at night and the dead still coordinate over text. This is a design decision, not a temporary gap: during the day no channel carries secret information — who died and who stands accused are both public — so "who is allowed to speak" reveals nobody's role. That lets each room use exactly **one** LiveKit room with no leakage surface in the signaling layer.
+
+| Phase | Who may speak |
+|---|---|
+| `LOBBY`, `GAME_OVER` | Everyone |
+| `DAY_DISCUSSION`, `VOTING`, `FINAL_VOTE`, `NIGHT_RESULT`, `ELIMINATION` | The living |
+| `DEFENSE` | The defendant only |
+| `NIGHT`, `ROLE_REVEAL`, `HUNTER_SHOT` | Nobody |
+
+The dead can always **listen**, but cannot speak until `GAME_OVER`.
+
+Each player picks their own mic mode (stored in `localStorage` — it is an input preference, not a room rule): `ptt` (hold to talk, the default) or `toggle` (tap on, tap off, far friendlier on phones). Push-to-talk is the default deliberately: in a game where one careless sentence loses the match, "you must actively hold it" is the safer default.
+
+> [!WARNING]
+> Two invariants to preserve if you touch this code:
+>
+> 1. **Tokens never carry speaking rights.** Every issued token has `canPublish: false`; permission arrives only via `updateParticipant` after joining. That is what makes replaying an old token after dying useless. Do not "optimise" by baking the grant into the token.
+> 2. **`canPublishData` defaults to `true` in LiveKit.** The adapter closes it explicitly. Removing that line reopens an unguarded data channel that bypasses `resolveChat` entirely.
+
+Full design: [`docs/superpowers/specs/2026-08-30-voice-chat-design.md`](docs/superpowers/specs/2026-08-30-voice-chat-design.md). Verify real credentials with `npm run voice:probe`.
+
+## Bot AI
+
+**Every bot decision is deterministic.** Night actions, nominations, Hang/Spare ballots and Hunter shots all come from a decision engine with memory, belief state and per-role strategy — reproducible from a seed. `BotBrain` has no signature that returns a move.
+
+**The LLM only phrases speech.** Missing `GEMINI_API_KEY` or a blown quota makes bots fall back to canned lines; it does not change a single move.
+
+Bots can claim roles in chat (a Seer announcing a wolf hit, a wolf claiming falsely, counter-claim scenes), and the village weighs claims using four public signals. See [`docs/bot-ai-phase-5-verification.md`](docs/bot-ai-phase-5-verification.md).
+
+<details>
+<summary><b>Honest limitations of the bot conversation layer</b></summary>
+
+- A Guard genuinely covering a real Seer reads identically to a bluff. Deliberately unpatched — patching it would require leaking who was protected.
+- The claim parser misses phrasings real players actually type (regional slang, abbreviations).
+- Within a wolf pack, the same seat always steps up to bluff.
+- Because the game never reveals dead players' roles, the village has no anchor to confirm a claim against.
+- **The final gate — a human reading a full match and judging conversation quality — has not been run.** Every number currently available measures statistical behaviour through self-play, not perceived quality.
+
+</details>
+
+Run a self-play batch with `npm run selfplay`, or probe a live provider with `npm run bot:probe`.
+
+## API reference
+
+### REST
+
+| Method | Path | Body | Response | Notes |
+|---|---|---|---|---|
+| `POST` | `/api/players` | `{ nickname }` | `{ playerId, token, nickname }` | Guest registration. The client keeps the token; the server stores only its SHA-256. Rate-limited per IP. |
+| `GET` | `/api/health` | — | `{ ok, db, redis, version, startedAt }` | `503` when PostgreSQL is down. Redis trouble reports `redis: false` but still returns `200`, since in-memory rooms remain playable. |
+
+`version` is the first 7 characters of the running commit (from `RENDER_GIT_COMMIT`), or `dev` outside a deploy environment — compare it against `git rev-parse --short HEAD` to confirm what is actually live.
+
+### Socket.IO
+
+Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Zod-validated with `.strict()`.
+
+<details>
+<summary><b>Client → Server</b></summary>
+
+| Event | Payload | Requires |
+|---|---|---|
+| `room:create` | `{}` | — |
+| `room:join` | `{ code }` | Unique nickname; must leave any current room; cannot join a match in progress |
+| `room:leave` | `{}` | Membership |
+| `room:set-ready` | `{ ready }` | Member, outside a match |
+| `room:kick` | `{ targetId }` | Host, before start |
+| `room:update-config` | `{ config }` | Host, outside a match |
+| `room:add-bot` | `{}` | Host, outside a match |
+| `room:update-avatar` | `{ avatarUrl }` | Member; `data:image/*`, ≤ 5 MB |
+| `room:start` | `{}` | Host; ≥ 6 players, valid config, all humans ready |
+| `room:reset` | `{}` | Host after `GAME_OVER` → back to lobby |
+| `game:action` | `{ type, targetId?, targetId1?, targetId2? }` | Correct role, alive, during `NIGHT` |
+| `game:vote` | `{ targetId }` | Alive, during `VOTING`. `null` means *nobody* — a deliberate choice, not a blank |
+| `game:final-vote` | `{ guilty }` | Alive, not the defendant, during `FINAL_VOTE` |
+| `game:hunter-shot` | `{ targetId }` | The Hunter, during `HUNTER_SHOT` |
+| `game:skip-discussion` | `{}` | Alive, during `DAY_DISCUSSION`; unanimous consent ends the phase |
+| `game:day-of-truth-claim` | `{ role }` | During the `DAY_OF_TRUTH` event |
+| `game:dead-message` | `{ text }` | The chosen ghost, during `DEAD_CAN_SPEAK` |
+| `chat:send` | `{ text }` | Channel chosen server-side from phase and alive state |
+| `voice:token` | `{}` | Human member, voice enabled, LiveKit configured |
+| `voice:ready` | `{}` | Signals the LiveKit room was joined, so the server can grant phase-appropriate rights |
+
+`game:action` types: `KILL` · `SEE` · `GUARD` · `HEAL` · `POISON` · `SKIP` · `DETECTIVE_CHECK` · `GUARDIAN_PROTECT` · `HOLY_WATER`
+
+</details>
+
+<details>
+<summary><b>Server → Client</b></summary>
+
+| Event | Payload | Notes |
+|---|---|---|
+| `room:snapshot` | `RoomSnapshot` | Personalised per recipient — secrets are filtered before sending |
+| `chat:new` | `ChatMessage` | Delivered only to players entitled to that channel |
+| `voice:token` | `{ url, token, roomName }` | A server event rather than an ack, because the `handler` helper in `ws.ts` takes exactly one argument |
+| `error` | `{ message }` | Business-rule errors, in Vietnamese |
+
+</details>
 
 ## Scripts
 
-| Lệnh | Mô tả |
+| Command | Description |
 |---|---|
-| `npm run dev:server` | Server dev (tsx watch, cổng 4100) |
-| `npm run dev:web` | Next.js dev (cổng 3000) |
-| `npm test` | Toàn bộ test: engine (Vitest) + server (Vitest) + web (node:test). Tự build `shared`/`engine` trước qua `pretest` |
-| `npm test --workspace @masoi/server` | Chỉ test backend. Cần `npm run build:deps` trước nếu `dist/` chưa có |
-| `npm run lint` | Typecheck toàn bộ; tự build `shared`/`engine` trước qua `prelint` |
+| `npm run dev:infra` | Start PostgreSQL + Redis via Docker |
+| `npm run dev:server` | Server in watch mode |
+| `npm run dev:web` | Next.js dev server |
 | `npm run build` | Build shared → engine → server → web |
-| `npm run build:deps` | Chỉ build `shared` → `engine`, đủ cho test/lint |
-| `npm run db:generate` | Prisma generate client |
-| `npm run db:migrate` | Prisma migrate deploy |
-| `npm run test:e2e` | E2E smoke test qua Socket.IO; cần server local và hiện chưa dùng làm release gate cho tới khi luồng sẵn sàng được tự động hoá |
-| `npm run bot:probe` | Gọi Gemini một lần với ván giả để kiểm tra key và prompt (cần `GEMINI_API_KEY`) |
-| `npm run voice:probe` | Gọi LiveKit thật một lượt: kiểm credential, bộ grant của token, và cách nhận dạng lỗi (cần `LIVEKIT_*`) |
+| `npm run build:deps` | Build only `shared` → `engine` (enough for tests and lint) |
+| `npm test` | Full suite across all three packages |
+| `npm run lint` | Typecheck every workspace |
+| `npm run db:migrate` | `prisma migrate deploy` |
+| `npm run db:generate` | `prisma generate` |
+| `npm run selfplay` | Run bot self-play batches and print a report |
+| `npm run bot:probe` | One real LLM call against a fake match, to validate keys and prompts |
+| `npm run voice:probe` | One real LiveKit round trip, to validate credentials and token grants |
+| `npm run test:e2e` | Socket.IO smoke test; needs a running local server. Not yet a release gate |
 
-`@masoi/shared` và `@masoi/game-engine` trỏ `main`/`types` vào `dist/`, mà `dist/` nằm trong `.gitignore`. Vì thế trên một bản clone sạch, hai package đó chưa tồn tại dưới dạng mà workspace khác import được, và bất kỳ lệnh nào chạy thẳng vào một workspace (`npm test --workspace @masoi/server`) sẽ đỏ hàng loạt với `has no exported member` — lỗi build artifact, không phải lỗi code. `npm test` và `npm run lint` ở thư mục gốc tự lo việc này; chạy thẳng workspace thì cần `npm run build:deps` trước.
+## Testing
 
-## REST API
-
-| Method | Path | Body | Response | Mô tả |
-|---|---|---|---|---|
-| POST | `/api/players` | `{ nickname }` | `{ playerId, token, nickname }` | Đăng ký người chơi khách. Token giữ ở client (localStorage), server chỉ lưu SHA-256 |
-| GET | `/api/health` | - | `{ ok, db, redis }` | Kiểm tra PostgreSQL và Redis; trả 503 khi PostgreSQL lỗi, Redis lỗi được báo bằng `redis: false` |
-
-## Socket.IO events
-
-Kết nối: `io(SERVER_URL, { auth: { playerId, token } })`.
-
-### Client → Server
-
-| Event | Payload (Zod validated) | Quyền |
+| Package | Runner | Tests |
 |---|---|---|
-| `room:create` | `{}` | - |
-| `room:join` | `{ code: string(5) }` | Biệt danh không trùng; phải rời phòng cũ; người mới không thể vào trận đang chạy |
-| `room:leave` | `{}` | Thành viên |
-| `room:set-ready` | `{ ready: boolean }` | Thành viên, ngoài trận |
-| `room:kick` | `{ targetId }` | Chủ phòng, trước khi bắt đầu |
-| `room:update-config` | `{ config: RoomConfig }` | Chủ phòng, ngoài trận |
-| `room:add-bot` | `{}` | Chủ phòng, ngoài trận |
-| `room:start` | `{}` | Chủ phòng; cần ≥6 người, config hợp lệ và mọi khách thật đã sẵn sàng |
-| `room:reset` | `{}` | Chủ phòng, sau GAME_OVER → về phòng chờ |
-| `game:action` | `{ type: KILL\|SEE\|GUARD\|HEAL\|POISON, targetId?: string\|null }` | Đúng vai trò, còn sống, đang NIGHT |
-| `game:vote` | `{ targetId }` | Còn sống, đang VOTING |
-| `chat:send` | `{ text: string(≤300) }` | Server tự chọn kênh theo phase/trạng thái; rate limit 5 tin/5s |
-| `voice:token` | `{}` | Thành viên (không phải bot), phòng đã bật voice, server có LiveKit; rate limit 5 lần/10s |
-| `voice:ready` | `{}` | Báo đã vào room LiveKit xong, để server cấp quyền theo pha hiện tại |
+| `@masoi/game-engine` | Vitest | **1499** |
+| `@masoi/server` | Vitest | **541** |
+| `@masoi/web` | `node:test` | **273** |
+| | | **2313 total** |
 
-### Server → Client
+The engine suite includes seeded self-play runs that assert invariants across hundreds of full matches — no illegal move is ever accepted, no bot ever learns a role it should not know, and the same seed reproduces a match bit-for-bit.
 
-| Event | Payload | Ghi chú |
-|---|---|---|
-| `room:snapshot` | `RoomSnapshot` | Snapshot cá nhân hoá cho từng người nhận |
-| `chat:new` | `ChatMessage` | Chỉ gửi tới người có quyền xem kênh đó |
-| `voice:token` | `{ url, token, roomName }` | Token join LiveKit. Dùng server event chứ không dùng ack vì helper `handler` trong `ws.ts` chỉ nhận một tham số |
-| `error` | `{ message }` | Lỗi nghiệp vụ tiếng Việt |
+```bash
+npm test                                  # everything
+npm test --workspace @masoi/game-engine   # one package (run build:deps first)
+```
 
-### Các pha game
+## Deployment
 
-`LOBBY → ROLE_REVEAL → NIGHT → NIGHT_RESULT → CHECK_WIN → DAY_DISCUSSION → VOTING → ELIMINATION → CHECK_WIN → ... → GAME_OVER`
+The live setup is **Vercel (web) → Render (server) → Neon (PostgreSQL) + Upstash (Redis)**.
 
-Đồng hồ đếm ngược tính bằng `phaseEndsAt` (epoch ms do server cấp); client chỉ hiển thị.
+> [!IMPORTANT]
+> Run the backend as a **single instance**. Live match state is held in memory, with Redis as a write-through copy used for room recovery. Scaling horizontally will split players across processes that cannot see each other's rooms.
 
-## Luật MVP
+<details>
+<summary><b>Step-by-step deployment</b></summary>
 
-- Sói cắn 1 người mỗi đêm (quyết định chung cả bọn).
-- Tiên Tri soi 1 người, chỉ mình Tiên Tri thấy kết quả.
-- Bảo Vệ bảo vệ 1 người, không lặp lại mục tiêu đêm liền trước.
-- Phù Thủy: 1 bình cứu (cứu nạn nhân của sói) + 1 bình độc, mỗi bình dùng 1 lần cả ván.
-- Ban ngày: thảo luận → bỏ phiếu; nhiều phiếu nhất bị loại; **hoà phiếu không ai bị loại**.
-- **Đổi phiếu được tới hết hạn**: phiếu đề cử ban ngày sửa lại bao nhiêu lần cũng được, chỉ lựa chọn cuối cùng được tính. Vì thế pha bỏ phiếu **không** kết thúc sớm dù mọi người đã bỏ phiếu — kết thúc sớm sẽ khoá phiếu ngay lúc người cuối cùng bấm.
-- **Danh tính phiếu công khai sau khi vòng đề cử chốt**: trong lúc đang bỏ phiếu chỉ thấy số đếm, chốt xong mới thấy ai bỏ cho ai và ai đã đổi phiếu lúc nào. Phiếu Treo/Tha ở phiên toà cũng được công khai sau khi tuyên án.
-- **Vai của người chết vẫn ẩn tới `GAME_OVER`**: chết không lật bài, kể cả với người đang sống lẫn với BOT.
-- Sói thắng khi số Sói ≥ số phe làng còn sống; làng thắng khi hết Sói.
-- Server giữ trọn thời gian ban đêm đã cấu hình để mọi vai trò có cơ hội hành động.
+**1 · Neon PostgreSQL** — create a project, copy the **pooled** connection string. It becomes `DATABASE_URL` on Render. Never commit it or add it to Vercel.
 
-## Voice chat (LiveKit)
+**2 · Upstash Redis** — create a database in the region closest to the backend and copy the TLS string (`rediss://`). It becomes `REDIS_URL` on Render.
 
-Tắt mặc định. Chủ phòng bật bằng công tắc trong phòng chờ, và công tắc chỉ hiện
-khi server đã có `LIVEKIT_*`.
+**3 · Render backend** — create a **Web Service** from this repository using the Docker environment, branch `main`, and `Dockerfile.server`. Use one instance and set the health check path to `/api/health`; Render provides `PORT` automatically. Set at minimum:
 
-**Chỉ có ban ngày.** Phe Sói ban đêm và người chết vẫn bàn bằng chữ. Đây là quyết
-định gốc chứ không phải hạn chế tạm thời: ban ngày không có kênh nào mang thông
-tin bí mật (ai chết, ai bị cáo đều công khai), nên "ai được nói" không hé lộ vai
-của ai. Nhờ vậy mỗi phòng chỉ cần **một** room LiveKit và không có bề mặt rò rỉ
-qua tầng signaling.
+```bash
+DATABASE_URL=<Neon pooled connection string>
+REDIS_URL=<Upstash rediss:// string>
+NODE_ENV=production
+CORS_ORIGIN=https://YOUR-PROJECT.vercel.app
+```
 
-| Pha | Ai được nói |
-|---|---|
-| `LOBBY`, `GAME_OVER` | tất cả |
-| `DAY_DISCUSSION`, `VOTING`, `FINAL_VOTE`, `NIGHT_RESULT`, `ELIMINATION` | người còn sống |
-| `DEFENSE` | chỉ bị cáo |
-| `NIGHT`, `ROLE_REVEAL`, `HUNTER_SHOT` | không ai |
+Container start runs `prisma migrate deploy` before opening the port. Note the resulting HTTPS origin.
 
-Người chết luôn **nghe** được, nhưng không nói được cho tới `GAME_OVER`.
+**4 · Vercel frontend** — import the same repository, keep the root directory at the repo root (`vercel.json` already contains the monorepo build command), and set `NEXT_PUBLIC_SERVER_URL` to the Render origin **without** a trailing slash. Deploy, then go back to Render and set `CORS_ORIGIN` to the exact Vercel origin and redeploy.
 
-**Hai cách dùng mic**, mỗi người tự chọn (lưu trong `localStorage`, không phải
-cấu hình phòng — đây là cách thao tác chứ không phải luật chơi):
+**5 · Verify** — `https://<backend>/api/health` should return `200` with `{ "ok": true, "db": true, "redis": true }`. Then open the frontend, create a room, add bots, and confirm the socket connects.
 
-| Chế độ | Thao tác |
-|---|---|
-| `ptt` (mặc định) | Giữ nút mới phát, nhả ra là tắt |
-| `toggle` | Chạm một cái là bật, chạm lần nữa là tắt — tiện hơn hẳn trên điện thoại |
+</details>
 
-Đổi bằng nút ngay dưới nút nói. Mặc định là `ptt` có chủ ý: người đang chơi
-không bị đổi hành vi dưới chân, và với một game mà nói hớ một câu là mất ván thì
-"phải chủ động giữ mới phát" an toàn hơn để làm mặc định.
+CI runs build → test → lint on every push and pull request, and deploys previews to Vercel. Render Free instances sleep when idle, so the first request after a quiet period is slow. If the backend restarts mid-match, rooms are returned to the lobby safely rather than resuming half-finished timers.
 
-**Mất quyền nói luôn hạ cờ đang-nói**, ở cả hai chế độ. Với `ptt` nó gần như vô
-hình; với `toggle` nó là thứ giữ cho chế độ đó an toàn — bật mic ban ngày, đêm
-xuống bị thu quyền, nếu cờ còn bật thì sáng hôm sau mic tự mở mà người chơi
-không chạm gì.
+## Security model
 
-Hai điều quan trọng nếu bạn sửa phần này:
+**The server is the single source of truth.** Nothing about the game state is trusted from a client.
 
-1. **Token không bao giờ mang quyền nói.** Mọi token ký ra đều có
-   `canPublish: false`; quyền nói chỉ đến từ `updateParticipant` sau khi đã vào
-   room. Nhờ vậy dán lại một token cũ sau khi chết cũng không lấy lại được
-   quyền. Đừng "tối ưu" bằng cách ký sẵn quyền vào token.
-2. **`canPublishData` mặc định là `true` ở LiveKit.** Adapter đóng nó tường minh.
-   Bỏ dòng đó là mở lại một kênh dữ liệu không ai gác, đi vòng qua `resolveChat`.
+- Secret roles are filtered inside `snapshotFor(viewerId)` **before** serialization, so the wire never carries a role the viewer is not entitled to see.
+- Private chat (wolves, the dead) is emitted only to the exact set of entitled recipients — it is not broadcast and filtered client-side.
+- Every socket payload is validated with strict Zod schemas; unknown keys are rejected.
+- Session tokens are stored as SHA-256 hashes; the plaintext token exists only on the client.
+- Voice speaking rights are granted after joining, never encoded in a token, so an old token cannot restore a dead player's mic.
+- Guest signup is rate-limited per IP. This one matters more than it looks: every socket rate limit is keyed by `playerId`, so unlimited free `playerId`s would have made all of them decorative.
 
-Thiết kế đầy đủ: `docs/superpowers/specs/2026-08-30-voice-chat-design.md`.
-Kiểm tra cấu hình thật: `npm run voice:probe`.
+## Known limitations
 
-## Reconnect
+Stated plainly, because knowing where the edges are is more useful than pretending they do not exist.
 
-Client lưu `{ playerId, token, roomCode }` trong localStorage. Khi mất mạng/tải lại:
-socket reconnect với cùng auth → server xác thực token (SHA-256 lookup), tìm phòng qua Redis `player-room:{id}`, đánh dấu `connected`, gửi lại snapshot phù hợp quyền.
+- **Single instance only.** Room state lives in RAM; Redis is a recovery copy. A restart mid-match returns the room to the lobby rather than resuming it.
+- **`BotBrainState` is not persisted.** A restart mid-match wipes what the bots had learned that game.
+- **No chat persistence** and no in-UI match history yet.
+- **Voice is daytime-only** and audio-only — no video.
+- **Rate limiting is in-memory**, so it is per-process and resets on deploy.
+- **The bot conversation layer has not passed a human quality review** — see the expandable section under [Bot AI](#bot-ai).
 
-## Hạn chế hiện tại (MVP)
+## Documentation
 
-- Single-instance server: trạng thái phòng chính nằm trong RAM, Redis là bản sao phục vụ khôi phục phòng (phòng đang giữa trận khi restart sẽ được trả về LOBBY an toàn).
-- Voice chat **chỉ có ban ngày**; phe Sói ban đêm và người chết vẫn nhắn bằng chữ. Chưa có video, chưa có lịch sử ván chi tiết trong UI.
-- **Toàn bộ** quyết định của BOT — hành động đêm, đề cử, phiếu Treo/Tha, phát bắn Thợ Săn — do decision engine deterministic có memory/belief/chiến lược theo vai quyết định, tái lập được từ seed. LLM **chỉ** diễn đạt lời nói: `BotBrain` không còn chữ ký nào trả về một nước đi. Thiếu `GEMINI_API_KEY` hay hết quota chỉ làm BOT nói bằng câu mẫu, không đổi một nước đi nào.
-- BOT khai vai được trong chat (Tiên Tri hô lên khi soi trúng Sói, Sói khai láo chủ động, có cảnh phản bác vai) và làng phân xử claim bằng bốn tín hiệu công khai — xem `docs/bot-ai-phase-5-verification.md`. Còn giới hạn thật: Bảo Vệ che đúng một Tiên Tri thật vẫn đọc y hệt một lời khai láo (cố ý không vá — vá đòi rò rỉ ai được che); parser bỏ sót cách người thật hay gõ ("tui tiên tri nè"); trong một bầy Sói luôn cùng một ghế đứng ra khai láo; và game không lật vai người chết nên làng không có điểm neo nào để xác nhận một lời khai. Cổng cuối của kế hoạch — người thật ngồi đọc một ván trọn vẹn và phán chất lượng hội thoại — **chưa chạy**; mọi số liệu hiện có chỉ đo hành vi thống kê qua self-play.
-- `BotBrainState` không được lưu: server restart giữa ván thì BOT mất trí nhớ của ván đó.
-- Chưa có persistence cho chat/khôi phục trận dở sau khi server chết giữa chừng.
-- Rate limit chống spam dựa trên bộ nhớ đơn giản.
+Design specifications and verification reports live in [`docs/`](docs/) — including the bot AI phase reports, the roles and events balance design, and the voice chat spec.
+
+---
+
+<div align="center">
+<sub>Built with TypeScript, and an unreasonable number of tests.</sub>
+</div>
