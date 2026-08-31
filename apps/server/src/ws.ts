@@ -64,6 +64,18 @@ export function setupSocket(io: SocketServer): void {
         return;
       }
       (socket as AuthedSocket).data.playerId = player.id;
+      /*
+       * `lastSeenAt` tồn tại từ đầu nhưng chưa từng được ghi, nên nó luôn bằng
+       * `createdAt` và không trả lời được câu hỏi duy nhất nó sinh ra để trả
+       * lời: tài khoản khách nào đã bỏ đi và dọn được.
+       *
+       * Đặt ở đây vì bắt tay socket là chỗ DUY NHẤT mọi phiên đều đi qua.
+       * Không await: một lần ghi chậm không được làm chậm bắt tay, và mất một
+       * lần cập nhật thì lần kết nối sau ghi đè lại.
+       */
+      void prisma.player
+        .update({ where: { id: player.id }, data: { lastSeenAt: new Date() } })
+        .catch(() => undefined);
       next();
     } catch {
       next(new Error("Lỗi xác thực"));

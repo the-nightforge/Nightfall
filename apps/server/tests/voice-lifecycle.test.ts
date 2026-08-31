@@ -34,7 +34,7 @@ vi.mock("../src/rooms/broadcast", () => ({
 }));
 
 vi.mock("../src/db", () => ({
-  prisma: { roomRecord: { updateMany: async () => undefined } },
+  prisma: {},
 }));
 
 const { roomService } = await import("../src/rooms/service");
