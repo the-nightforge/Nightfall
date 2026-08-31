@@ -16,6 +16,9 @@ async function main(): Promise<void> {
   const corsOrigin = config.corsOrigin === "*" ? true : config.corsOrigin.split(",");
 
   const app = express();
+  // Rate limit của /api/players khoá theo req.ip, mà sau proxy của Render thì
+  // req.ip là IP load balancer nếu không khai báo - cả thiên hạ chung một rổ.
+  app.set("trust proxy", config.trustProxy);
   app.use(cors({ origin: corsOrigin }));
   app.use(express.json());
 
