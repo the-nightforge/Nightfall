@@ -16,14 +16,6 @@ model Player {
   lastSeenAt   DateTime @default(now())
 }
 
-model RoomRecord {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  hostName  String
-  createdAt DateTime @default(now())
-  closedAt  DateTime?
-}
-
 model GameResult {
   id          String   @id @default(cuid())
   roomCode    String
