@@ -377,3 +377,29 @@ export interface ChatMessage {
   text: string;
   at: number;
 }
+
+/**
+ * Một ván đã kết thúc, đọc lại từ lịch sử.
+ *
+ * Ván đã xong nên không còn bí mật nào để lọc: toàn bộ vai được trả về đúng
+ * như màn kết thúc đã hiện. Đây là lý do lịch sử KHÔNG đi qua `buildSnapshot`.
+ */
+export interface MatchHistoryPlayer {
+  id?: string;
+  name: string;
+  role: Role;
+  alive: boolean;
+}
+
+export interface MatchHistoryEntry {
+  roomCode: string;
+  winner: Winner | "unknown";
+  rounds: number;
+  durationSec: number;
+  /** epoch ms */
+  endedAt: number;
+  /** Vai của chính người đang hỏi; null với ván cũ chưa lưu id người chơi. */
+  myRole: Role | null;
+  mySurvived: boolean | null;
+  players: MatchHistoryPlayer[];
+}

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "./db";
 import { newToken, sha256 } from "./util";
-import { nicknameSchema } from "@masoi/shared";
+import { nicknameSchema, type MatchHistoryEntry, type MatchHistoryPlayer } from "@masoi/shared";
 import { redis } from "./redis";
 import { config } from "./config";
 import { allowAction } from "./rate-limit";
@@ -11,6 +11,35 @@ export const apiRouter = Router();
 
 /** Mốc khởi động, để phân biệt "đã deploy lại" với "chỉ restart". */
 const STARTED_AT = Date.now();
+
+interface GameResultRow {
+  roomCode: string;
+  winner: string;
+  round: number;
+  durationSec: number;
+  playerRoles: unknown;
+  createdAt: Date;
+}
+
+export function toHistoryEntry(row: GameResultRow, viewerId: string): MatchHistoryEntry {
+  // Cột Json nên hình dạng do bản ghi lúc đó quyết định, không do type hiện tại:
+  // ván lưu trước khi có `id` vẫn phải đọc được thay vì làm hỏng cả trang.
+  const players: MatchHistoryPlayer[] = Array.isArray(row.playerRoles)
+    ? (row.playerRoles as MatchHistoryPlayer[])
+    : [];
+  const me = players.find((p) => p.id === viewerId) ?? null;
+
+  return {
+    roomCode: row.roomCode,
+    winner: row.winner as MatchHistoryEntry["winner"],
+    rounds: row.round,
+    durationSec: row.durationSec,
+    endedAt: row.createdAt.getTime(),
+    myRole: me?.role ?? null,
+    mySurvived: me ? me.alive : null,
+    players,
+  };
+}
 
 /**
  * Đăng ký người chơi khách: nhận playerId + session token.
@@ -51,6 +80,47 @@ apiRouter.post("/players", async (req, res) => {
      */
     console.error("[api] Tạo người chơi thất bại:", err);
     res.status(500).json({ error: "Không thể tạo người chơi lúc này" });
+  }
+});
+
+/**
+ * Lịch sử ván của chính người gọi.
+ *
+ * `GameResult` được ghi ở mỗi lần kết thúc ván ngay từ đầu dự án nhưng chưa
+ * từng có đường đọc ra - đây là đường đó.
+ *
+ * Lọc bằng toán tử `@>` của jsonb chứ không lấy N ván gần nhất rồi lọc trong
+ * JS: cách sau nhìn thì gọn hơn nhưng sai ở mọi quy mô thật - N ván gần nhất
+ * của TOÀN SERVER có thể không chứa ván nào của người đang hỏi, và giao diện
+ * sẽ lặng lẽ báo "chưa có ván nào".
+ */
+apiRouter.get("/players/me/matches", async (req, res) => {
+  const auth = req.header("authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  if (!token) {
+    res.status(401).json({ error: "Thiếu thông tin xác thực" });
+    return;
+  }
+
+  try {
+    const player = await prisma.player.findUnique({ where: { tokenHash: sha256(token) } });
+    if (!player) {
+      res.status(401).json({ error: "Phiên đăng nhập không hợp lệ" });
+      return;
+    }
+
+    const rows = await prisma.$queryRaw<GameResultRow[]>`
+      SELECT "roomCode", "winner", "round", "durationSec", "playerRoles", "createdAt"
+      FROM "GameResult"
+      WHERE "playerRoles" @> ${JSON.stringify([{ id: player.id }])}::jsonb
+      ORDER BY "createdAt" DESC
+      LIMIT 20
+    `;
+
+    res.json({ matches: rows.map((row) => toHistoryEntry(row, player.id)) });
+  } catch (err) {
+    console.error("[api] Đọc lịch sử ván thất bại:", err);
+    res.status(500).json({ error: "Không thể đọc lịch sử lúc này" });
   }
 });
 
