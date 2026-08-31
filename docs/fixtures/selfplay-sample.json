@@ -52,6 +52,46 @@
       "numerator": 12,
       "denominator": 60
     },
+    "hunterShotRate": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "hunterShotAccuracy": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "witchHealRate": {
+      "value": 0.10344827586206896,
+      "numerator": 3,
+      "denominator": 29
+    },
+    "witchHealSelfRate": {
+      "value": 1,
+      "numerator": 3,
+      "denominator": 3
+    },
+    "witchPoisonRate": {
+      "value": 0,
+      "numerator": 0,
+      "denominator": 29
+    },
+    "witchPoisonAccuracy": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "priestHolyWaterRate": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "priestHolyWaterAccuracy": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
     "voteChangeRate": {
       "value": 0.3188405797101449,
       "numerator": 88,
