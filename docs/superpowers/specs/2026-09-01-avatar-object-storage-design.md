@@ -227,6 +227,7 @@ ngưỡng 5 MB được chặn ngay ở tầng parser, trước khi có buffer �
 |---|---|
 | 400 | Không phải JPEG/PNG/WebP, hoặc ảnh hỏng, hoặc thiếu field `file` |
 | 401 | Thiếu hoặc sai Bearer token |
+| 409 | CAS thua ba lượt liên tiếp — ảnh vừa bị đổi ở nơi khác |
 | 413 | Quá 5 MB |
 | 429 | Quá 5 lần trong 60 giây (`allowAction`) |
 | 503 | Storage chưa cấu hình hoặc nhà cung cấp lỗi |
