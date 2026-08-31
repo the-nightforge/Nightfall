@@ -392,6 +392,86 @@ describe("Wolf Cub Rage Mechanics", () => {
     expect(deaths.map((d) => d.playerId)).toContain("v1");
     expect(deaths.map((d) => d.playerId)).toContain("v2");
   });
+
+  // Ô cắn phụ dùng chung cho cả bầy chứ không nằm trong phiếu bầu, nên phiếu
+  // chính hoàn toàn có thể chốt trúng đúng người đã bị đánh dấu cắn thêm. Trước
+  // đây đêm đó chỉ chết một người: `addDeath` lọc trùng và bầy sói mất trắng
+  // vết cắn thứ hai mà phẫn nộ Sói Con vừa cho.
+  it("đẩy đòn cắn phụ sang mục tiêu khác khi phiếu chính chốt trúng chính nó", () => {
+    const state = createTestState([
+      { id: "w1", role: "WEREWOLF" },
+      { id: "w2", role: "WEREWOLF" },
+      { id: "w3", role: "WEREWOLF" },
+      { id: "v1", role: "VILLAGER" },
+      { id: "v2", role: "VILLAGER" },
+      { id: "v3", role: "VILLAGER" },
+      { id: "v4", role: "VILLAGER" },
+      { id: "v5", role: "VILLAGER" },
+    ]);
+    state.night.wolfCubRageTonight = true;
+    const engine = new GameEngine(state);
+
+    // v2 thắng phiếu chính 2-1, nhưng cũng đang là mục tiêu phụ của w1.
+    engine.submitNightAction("w1", "KILL", "v1", "v2");
+    engine.submitNightAction("w2", "KILL", "v2");
+    engine.submitNightAction("w3", "KILL", "v2");
+
+    expect(engine.lockWolves()).toBe("v2");
+    expect(engine.state.night.wolfSecondaryTarget).toBe("v1");
+
+    const deaths = engine.resolveNight();
+    expect(deaths.map((d) => d.playerId).sort()).toEqual(["v1", "v2"]);
+  });
+
+  // Cùng gốc lỗi ở phía ngược lại: một Sói bầu trúng người đang nằm ở ô phụ thì
+  // trước đây ô phụ bị xoá ngay lúc gửi phiếu, kể cả khi phiếu chính cuối cùng
+  // chốt sang người khác và hai vết cắn vẫn còn chỗ để rơi xuống.
+  it("giữ đòn cắn phụ khi một Sói khác bầu trùng người đang bị đánh dấu", () => {
+    const state = createTestState([
+      { id: "w1", role: "WEREWOLF" },
+      { id: "w2", role: "WEREWOLF" },
+      { id: "w3", role: "WEREWOLF" },
+      { id: "v1", role: "VILLAGER" },
+      { id: "v2", role: "VILLAGER" },
+      { id: "v3", role: "VILLAGER" },
+      { id: "v4", role: "VILLAGER" },
+      { id: "v5", role: "VILLAGER" },
+    ]);
+    state.night.wolfCubRageTonight = true;
+    const engine = new GameEngine(state);
+
+    engine.submitNightAction("w1", "KILL", "v1", "v2");
+    engine.submitNightAction("w2", "KILL", "v2");
+    engine.submitNightAction("w3", "KILL", "v1");
+
+    expect(engine.state.night.wolfSecondaryTarget).toBe("v2");
+    expect(engine.lockWolves()).toBe("v1");
+
+    const deaths = engine.resolveNight();
+    expect(deaths.map((d) => d.playerId).sort()).toEqual(["v1", "v2"]);
+  });
+
+  // Cả bầy chỉ bầu đúng một người: không có nạn nhân thứ hai để đẩy sang, và
+  // recap không được phép khoe một cú cắn kép không tồn tại.
+  it("xoá đòn cắn phụ khi phiếu bầy không còn ứng viên nào khác", () => {
+    const state = createTestState([
+      { id: "w1", role: "WEREWOLF" },
+      { id: "v1", role: "VILLAGER" },
+      { id: "v2", role: "VILLAGER" },
+      { id: "v3", role: "VILLAGER" },
+    ]);
+    state.night.wolfCubRageTonight = true;
+    const engine = new GameEngine(state);
+
+    engine.submitNightAction("w1", "KILL", "v1", "v2");
+    engine.submitNightAction("w1", "KILL", "v2");
+
+    expect(engine.lockWolves()).toBe("v2");
+    expect(engine.state.night.wolfSecondaryTarget).toBeNull();
+
+    const deaths = engine.resolveNight();
+    expect(deaths.map((d) => d.playerId)).toEqual(["v2"]);
+  });
 });
 
 describe("Night Recap - đủ diễn biến vai trò mở rộng", () => {

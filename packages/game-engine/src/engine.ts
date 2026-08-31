@@ -474,9 +474,6 @@ export class GameEngine {
           if (roleTeam(secTarget.role) === "wolves") throw new GameError("Không thể cắn đồng bọn");
           if (targetId === secondaryTargetId) throw new GameError("Không thể cắn cùng một người 2 lần");
           st.night.wolfSecondaryTarget = secondaryTargetId;
-        } else if (st.night.wolfSecondaryTarget && st.night.wolfSecondaryTarget === targetId) {
-          // Đổi phiếu chính trùng mục tiêu phụ trước đó -> hủy phụ để tránh trùng lặp
-          st.night.wolfSecondaryTarget = null;
         }
         break;
       }
@@ -657,23 +654,36 @@ export class GameEngine {
     st.night.wolvesLocked = true;
     const tally = this.wolfVoteTally();
     const alive = new Set(this.alivePlayers().map((p) => p.id));
-    const candidates: (string | null)[] = [];
-    let best = 0;
-    const consider = (choice: string | null, count: number) => {
-      if (count < best || count === 0) return;
-      if (count > best) {
-        best = count;
-        candidates.length = 0;
+    // `skipAllowed` tách riêng vì chỉ phiếu chính mới được quyền "không cắn";
+    // `excludeId` để đòn cắn phụ không chốt trùng nạn nhân của phiếu chính.
+    const pickTop = (skipAllowed: boolean, excludeId?: string | null): string | null => {
+      const candidates: (string | null)[] = [];
+      let best = 0;
+      const consider = (choice: string | null, count: number) => {
+        if (count < best || count === 0) return;
+        if (count > best) {
+          best = count;
+          candidates.length = 0;
+        }
+        candidates.push(choice);
+      };
+      for (const [targetId, count] of Object.entries(tally.players)) {
+        if (alive.has(targetId) && targetId !== excludeId) consider(targetId, count);
       }
-      candidates.push(choice);
+      if (skipAllowed) consider(null, tally.skip);
+      return candidates.length === 0 ? null : candidates[Math.floor(rng() * candidates.length)];
     };
-    for (const [targetId, count] of Object.entries(tally.players)) {
-      if (alive.has(targetId)) consider(targetId, count);
-    }
-    consider(null, tally.skip);
 
-    st.night.killTarget =
-      candidates.length === 0 ? null : candidates[Math.floor(rng() * candidates.length)];
+    st.night.killTarget = pickTop(true);
+
+    // Ô cắn phụ dùng chung cho cả bầy nên không đi qua kiểm phiếu: phiếu chính
+    // vẫn có thể chốt trúng đúng người đã bị đánh dấu cắn thêm, và bộ lọc trùng
+    // trong `addDeath` sẽ nuốt mất vết cắn thứ hai. Đẩy đòn phụ sang ứng viên
+    // còn lại trong phiếu bầy để phẫn nộ Sói Con không mất oan một mạng; bầy
+    // chỉ bầu đúng một người thì mới thật sự không có nạn nhân thứ hai.
+    if (st.night.wolfSecondaryTarget && st.night.wolfSecondaryTarget === st.night.killTarget) {
+      st.night.wolfSecondaryTarget = pickTop(false, st.night.killTarget);
+    }
     return st.night.killTarget;
   }
 
