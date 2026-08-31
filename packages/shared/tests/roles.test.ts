@@ -99,11 +99,17 @@ describe("Shared Game Events", () => {
       "CLEARING_MIST",
       "PEACEFUL_NIGHT",
       "JUDGMENT_DAY",
+      "LAST_STAND",
+      "DAY_OF_TRUTH",
       "MOONLESS_NIGHT",
       "BLOODY_HUNT",
-      "SHROUDED_ECLIPSE",
+      "HOWL_OF_THE_PACK",
+      "BLOOD_MOON",
+      "WOLF_SHADOW",
+      "MORNING_REPORT",
+      "DEAD_CAN_SPEAK",
     ];
-    expect(events.length).toBe(9);
+    expect(events.length).toBe(15);
   });
 });
 

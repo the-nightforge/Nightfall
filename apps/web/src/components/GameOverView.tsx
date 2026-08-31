@@ -1,12 +1,14 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { m } from "motion/react";
-import { ROLE_META, type PlayerView, type RoomSnapshot, type Team } from "@masoi/shared";
+import { buildCaseFile, ROLE_META, type PlayerView, type RoomSnapshot, type Team } from "@masoi/shared";
 import type { AvatarId } from "@/lib/avatar-art";
 import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { roleLabel } from "@/lib/cursed";
 import { Avatar } from "./Avatar";
+import { CaseFileCard } from "./CaseFileCard";
+import { CaseShareCard } from "./CaseShareCard";
 import { HunterShotTimeline } from "./HunterShotTimeline";
 import { NightRecapTimeline } from "./NightRecapTimeline";
 
@@ -35,6 +37,20 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
   const wolves = byTeam("wolves");
   const village = byTeam("village");
   const winners = wolvesWin ? wolves : village;
+
+  /*
+   * Hồ sơ vụ án. `buildCaseFile` tự gác pha và trả null nếu ván chưa thật sự
+   * kết thúc, nên ở đây KHÔNG kiểm tra pha lần nữa - một cổng, một chỗ.
+   */
+  const caseFile = useMemo(() => buildCaseFile(snapshot), [snapshot]);
+
+  // Diễn biến chi tiết mặc định đóng: màn kết thúc phải đọc được trong một màn
+  // hình, còn ai muốn soi từng đêm thì mở ra.
+  const [showFullTimeline, setShowFullTimeline] = useState(false);
+
+  // Chỉ có ở trình duyệt. Trên server render thì để rỗng và lời mời rơi về
+  // đúng đường dẫn tương đối thay vì một origin bịa ra.
+  const shareOrigin = typeof window === "undefined" ? "" : window.location.origin;
 
   return (
     <div className="space-y-3">
@@ -110,8 +126,26 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
         />
       </div>
 
-      <NightRecapTimeline nights={snapshot.nightHistory} />
-      <HunterShotTimeline shots={snapshot.hunterShots} />
+      {caseFile && <CaseFileCard file={caseFile} />}
+
+      <button
+        className="btn-secondary min-h-11 w-full"
+        onClick={() => setShowFullTimeline((open) => !open)}
+        aria-expanded={showFullTimeline}
+        aria-controls="full-timeline"
+      >
+        {showFullTimeline ? "Ẩn diễn biến chi tiết" : "Xem toàn bộ diễn biến"}
+      </button>
+
+      {showFullTimeline && (
+        <div id="full-timeline" className="space-y-3">
+          {/* Server cũ deploy lệch có thể thiếu hẳn hai mảng này. */}
+          <NightRecapTimeline nights={snapshot.nightHistory ?? []} />
+          <HunterShotTimeline shots={snapshot.hunterShots ?? []} />
+        </div>
+      )}
+
+      {caseFile && <CaseShareCard file={caseFile} shareOrigin={shareOrigin} />}
 
       <div className="flex gap-2">
         {canReset && (
