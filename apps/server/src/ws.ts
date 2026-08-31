@@ -201,7 +201,7 @@ export function setupSocket(io: SocketServer): void {
       );
       maybeEndWitchWindow(room);
       broadcastRoom(roomCode);
-      void import("./rooms/store").then((m) => m.persistRoom(room));
+      void persistRoom(room);
     });
 
     handler(CLIENT_EVENTS.GAME_VOTE, async (payload) => {
@@ -214,7 +214,7 @@ export function setupSocket(io: SocketServer): void {
 
       room.engine.submitVote(playerId, targetId);
       broadcastRoom(roomCode);
-      void import("./rooms/store").then((m) => m.persistRoom(room));
+      void persistRoom(room);
     });
 
     handler(CLIENT_EVENTS.GAME_FINAL_VOTE, async (payload) => {
@@ -228,7 +228,7 @@ export function setupSocket(io: SocketServer): void {
       room.engine.submitFinalVote(playerId, guilty);
       maybeEndFinalVoteEarly(room);
       broadcastRoom(roomCode);
-      void import("./rooms/store").then((m) => m.persistRoom(room));
+      void persistRoom(room);
     });
 
     handler(CLIENT_EVENTS.GAME_SKIP_DISCUSSION, async (payload) => {
@@ -267,7 +267,7 @@ export function setupSocket(io: SocketServer): void {
       if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
       room.engine.submitDayOfTruthClaim(playerId, role);
       broadcastRoom(roomCode);
-      void import("./rooms/store").then((m) => m.persistRoom(room));
+      void persistRoom(room);
     });
 
     handler(CLIENT_EVENTS.GAME_DEAD_MESSAGE, async (payload) => {
