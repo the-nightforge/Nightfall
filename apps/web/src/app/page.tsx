@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { EntryAttemptManager } from "@/lib/entry-attempt";
 import { runEntryAttempt, type CreatePlayerOutcome, type EntryPorts } from "@/lib/home-entry";
 import { getIdentity, saveIdentity, clearIdentity } from "@/lib/identity";
@@ -10,6 +10,7 @@ import { disconnectSocket } from "@/lib/socket";
 import type { Identity } from "@/lib/identity";
 import { Backdrop } from "@/components/Backdrop";
 import { BrandMark, VillageScene } from "@/components/HomeHero";
+import { JoinCodeFromQuery } from "@/components/JoinCodeFromQuery";
 import { MatchHistoryPanel } from "@/components/MatchHistoryPanel";
 
 /** Hành động đang chạy, hoặc null khi rảnh. */
@@ -37,11 +38,19 @@ async function createPlayer(nickname: string, signal: AbortSignal): Promise<Crea
   return { ok: true, identity: data as Identity };
 }
 
-function HomeInner() {
+export default function Home() {
   const router = useRouter();
-  const params = useSearchParams();
   const [nickname, setNickname] = useState("");
-  const [joinCode, setJoinCode] = useState(params.get("code") ?? "");
+  /*
+   * Khởi tạo rỗng, đúng bằng thứ server dựng ra.
+   *
+   * Mã phòng từ `?code=` không được đọc trong lúc render nữa. Bản trước gọi
+   * `useSearchParams()` ngay ở đây, và hook đó đẩy cả cây client tính tới
+   * `<Suspense>` gần nhất ra khỏi HTML tĩnh - mà boundary gần nhất lại bọc cả
+   * trang. `JoinCodeFromQuery` bên dưới rót mã vào sau khi hydrate xong; xem
+   * file đó về lý do đầy đủ.
+   */
+  const [joinCode, setJoinCode] = useState("");
   /*
    * Một biến `pending` thay cho `busy` boolean cũ.
    *
@@ -369,6 +378,21 @@ function HomeInner() {
                 </div>
 
                 <div>
+                  {/*
+                    * Người rót `?code=` vào ô ngay bên dưới. Không vẽ gì cả.
+                    *
+                    * Đặt ngay cạnh ô nhập chứ không ở đầu trang: nó chỉ tồn tại
+                    * vì cái input này, và đọc tới đây là thấy ngay ai chạm vào
+                    * `joinCode`.
+                    *
+                    * `fallback={null}` không phải là bỏ trống cho xong - nó là
+                    * bản sao chính xác của một component render null, nên
+                    * boundary này không có gì để nhấp nháy lúc hydrate và không
+                    * có bản giao diện thứ hai nào phải giữ cho khớp.
+                    */}
+                  <Suspense fallback={null}>
+                    <JoinCodeFromQuery onCode={setJoinCode} />
+                  </Suspense>
                   <label
                     htmlFor="join-code"
                     className="gate-label"
@@ -484,13 +508,5 @@ function HomeInner() {
         </div>
       </main>
     </>
-  );
-}
-
-export default function Home() {
-  return (
-    <Suspense>
-      <HomeInner />
-    </Suspense>
   );
 }
