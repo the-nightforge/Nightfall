@@ -2,37 +2,42 @@
 
 ## Nhạc nền
 
-`music/night.mp3`, `music/day.mp3`, `music/vote.mp3` là **tác phẩm gốc của
-chính dự án này**, không lấy từ nguồn ngoài.
+Ba file `music/night.mp3`, `music/day.mp3`, `music/vote.mp3` là **nhạc của bên
+thứ ba**, không phải tác phẩm của dự án này và **không do AI tạo ra**.
 
-- Tên bộ: *Dark Medieval Folk Ambient* cho Ma Sói Online
-- Tác giả: dự án Ma Sói Online
+- Tác giả: **Ragnar Random**
+- Bộ nhạc: *Orchestral and World Music for Games*
+- Nguồn chính thức (nơi đã tải):
+  https://ragnarrandom.itch.io/orchestral-and-world-music-for-games
 - Giấy phép: **CC0 1.0 Universal** (phạm vi công cộng) —
   https://creativecommons.org/publicdomain/zero/1.0/
-- Không bắt buộc ghi công, được dùng lại cho mục đích bất kỳ.
+  Trang nguồn ghi ở mục *Asset license*: "Creative Commons Zero v1.0 Universal".
+- Không dùng AI: trang nguồn ghi ở mục *Content*: **"No generative AI was used"**.
 
-Ba track được tổng hợp bằng script trong `tools/audio/` chứ không thu âm và
-cũng không sample từ bản ghi nào. Mọi nguồn ngẫu nhiên đều gieo hạt cố định,
-nên `python tools/audio/make_music.py --out apps/web/public/audio` dựng lại
-đúng ba file này **khi chạy bằng đúng bộ phiên bản trong
-`tools/audio/requirements.txt`** — xem mục "Dựng lại nhạc" trong `README.md`
-cho phạm vi chính xác của lời hứa đó. Vì toàn bộ mẫu âm sinh ra từ code trong
-repo, nguồn gốc kiểm chứng được và không có ràng buộc bản quyền của bên thứ ba.
+CC0 **không bắt buộc ghi công**. Phần ghi công ở đây là tự nguyện, và giữ lại
+vì nó trả lời được câu hỏi quan trọng hơn giấy phép: ba file này ở đâu ra.
 
-Bảng nhạc cụ dùng chung cho cả ba track, nên chuyển pha không lệch tông:
-
-| Nhạc cụ | Cách tổng hợp |
+| File trong repo | Bài gốc |
 | --- | --- |
-| Đàn gảy (luýt/thụ cầm) | Karplus-Strong, dây trễ nội suy tuyến tính |
-| Dây kéo (viol/fiddle) | Cộng hưởng bồi âm + nhiễu vĩ + vibrato, 2-3 người kéo |
-| Drone đàn quay tay | Nhiều giọng lệch nhau, hoà âm cơ bản hạ thấp, có tiếng cọ |
-| Chuông | Bồi âm phi điều hoà (0.5, 1, 1.183, 1.506, 2, 2.514...) |
-| Trống khung / trống trận | Mode màng tròn theo tỉ lệ Bessel + tiếng vỗ và tiếng dùi |
-| Sáo gỗ | Sóng cơ bản + hơi thở dải rộng |
-| Gió, không khí | Nhiễu nâu lọc dải, biên độ đưa theo LFO chậm |
-| Vang | Convolution với đáp ứng xung sảnh đá tự dựng |
+| `music/day.mp3` | `02 - the town where i got the magic bottle.ogg` |
+| `music/night.mp3` | `05 - tower of the vampire.ogg` |
+| `music/vote.mp3` | `01 - it is dangerous to be lonely without a sword.ogg` |
 
-Cả ba đều lấy Rê làm tâm âm: đêm và bỏ phiếu ở Rê thứ, ngày ở Rê Dorian.
+File gốc tải trực tiếp từ trang itch.io ở trên, định dạng OGG Vorbis. Không
+lấy từ YouTube, Spotify, Apple Music hay bất kỳ trang tải lại nào.
+
+### Dự án đã làm gì với chúng
+
+Chỉ ba việc, không việc nào tạo ra nội dung âm nhạc mới:
+
+1. **Cắt vòng lặp.** Mỗi track lấy một đoạn rơi đúng vào bội số nguyên của ô
+   nhịp, nối thành vòng bằng crossfade equal-power.
+2. **Cắt hạ âm.** Lọc thông cao 40-70Hz tuỳ track, bỏ phần năng lượng nằm dưới
+   ngưỡng nghe của loa điện thoại.
+3. **Chuẩn hoá độ to** về -26.5 / -25.5 LUFS và chuyển sang MP3 160kbps.
+
+Không nén động, không limiter, không thêm nhạc cụ, không sinh thêm nốt nào.
+Toàn bộ nằm trong `tools/audio/build_music.py`; xem `README.md` để chạy lại.
 
 ## Hiệu ứng
 
@@ -48,8 +53,13 @@ phủ liên bang Hoa Kỳ, thuộc phạm vi công cộng, không bắt buộc g
 
 ## Lịch sử
 
-Bộ nhạc trước đây dùng "Dark Pad", "Anxiety" và "Chase Pulse Faster" của Kevin
-MacLeod (incompetech.com) theo giấy phép CC BY 4.0. Bộ đó đã được thay hoàn
-toàn và **không còn file nào của Kevin MacLeod trong repo**, nên phần ghi công
-CC BY kèm theo cũng đã được gỡ. Nếu khôi phục lại bất kỳ file nào trong ba
-file đó thì phải khôi phục cả phần ghi công.
+Bộ nhạc **trước đó** là tác phẩm tổng hợp bằng code của chính dự án
+("Dark Medieval Folk Ambient", dựng bằng `tools/audio/make_music.py`). Bộ đó
+đã được thay hoàn toàn bằng nhạc người sáng tác ở trên; script dựng nhạc
+procedural cùng các khối tổng hợp âm chỉ nó dùng đã bị xoá khỏi repo để không
+ghi đè lại asset mới.
+
+Trước đó nữa là "Dark Pad", "Anxiety" và "Chase Pulse Faster" của Kevin MacLeod
+(incompetech.com) theo CC BY 4.0. **Không còn file nào của Kevin MacLeod trong
+repo**, nên phần ghi công CC BY kèm theo cũng đã được gỡ. Nếu khôi phục lại bất
+kỳ file nào trong ba file đó thì phải khôi phục cả phần ghi công.

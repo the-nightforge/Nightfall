@@ -43,7 +43,7 @@ for _s in (sys.stdout, sys.stderr):
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from dsp import bp_curve, fft_shape
-from make_music import TARGET_LUFS
+from targets import TARGET_LUFS, TRUE_PEAK_CEILING
 from studio import true_peak_db, loudness
 
 SR = 44100
@@ -63,7 +63,7 @@ BODY_SPLIT_HZ = 200.0
 THRESHOLDS = dict(
     lufs_tolerance=0.2,        # LU, lệch mục tiêu của từng track
     lufs_spread=1.5,           # LU, chênh lệch lớn nhất giữa ba track
-    true_peak_db=-2.0,         # dBFS
+    true_peak_db=TRUE_PEAK_CEILING,  # dBTP, khớp trần lúc chuẩn hoá
     total_mib=6.0,             # MiB, cả thư mục audio
     periodicity_corr=0.995,    # tối thiểu
     periodicity_err_db=-20.0,  # tối đa

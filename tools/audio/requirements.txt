@@ -1,10 +1,16 @@
-# Dependency của bộ công cụ dựng nhạc nền (tools/audio).
+# Dependency của bộ công cụ nhạc nền (tools/audio).
+#
+# Bộ công cụ này KHÔNG sinh ra nhạc. Nó nhận file OGG gốc của Ragnar Random
+# (CC0, xem apps/web/public/audio/CREDITS.md), cắt vòng lặp, chuẩn hoá độ to
+# và encode MP3 — rồi kiểm chứng lại kết quả trên chính file đã encode.
+#
+# Không cần ffmpeg: miniaudio giải mã OGG và MP3, lameenc mã hoá MP3.
 #
 # Mọi phiên bản dưới đây lấy từ `pip show` của chính môi trường đã dựng ba file
 # trong apps/web/public/audio/music, không phải phiên bản mới nhất trên PyPI và
-# không phải phiên bản đoán ra từ tài liệu. Ghim bằng `==` là có chủ đích: đây
-# là điều kiện của lời hứa "dựng lại ra đúng cùng file" trong
-# apps/web/public/audio/README.md. Nới thành `>=` là bỏ lời hứa đó.
+# không phải phiên bản đoán ra từ tài liệu. Ghim bằng `==` là có chủ đích: cùng
+# file OGG vào và cùng bộ phiên bản này thì ra cùng file mp3. Nới thành `>=` là
+# bỏ lời hứa đó.
 #
 #   python -m venv .venv-audio
 #   .venv-audio\Scripts\activate          # Windows
@@ -13,9 +19,9 @@
 
 # --- Bắt buộc: thiếu một trong bốn thứ này thì không dựng được file nào ------
 numpy==2.5.2          # toàn bộ DSP
-scipy==1.18.1         # resample_poly (true peak), wavfile
+scipy==1.18.1         # resample_poly (true peak)
 pyloudnorm==0.2.0     # đo LUFS theo ITU-R BS.1770
-miniaudio==1.71       # giải mã mp3 để đo trên chính file đã encode
+miniaudio==1.71       # giải mã OGG (nguồn) và MP3 (để đo trên file đã encode)
 lameenc==1.8.4        # mã hoá mp3
 
 # --- Tuỳ chọn: chỉ cần khi xuất ảnh -----------------------------------------

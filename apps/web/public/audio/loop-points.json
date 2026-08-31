@@ -1,26 +1,29 @@
 {
   "night": {
     "loopStart": 0.5,
-    "loopEnd": 72.5,
-    "loopLen": 72.0,
-    "fileLen": 73.0,
-    "loopSamples": 3175200,
-    "kb": 1426.5
+    "loopEnd": 67.7,
+    "loopLen": 67.2,
+    "fileLen": 68.2,
+    "loopSamples": 2963520,
+    "kb": 1332.7,
+    "source": "05 - tower of the vampire"
   },
   "day": {
     "loopStart": 0.5,
-    "loopEnd": 96.5,
-    "loopLen": 96.0,
-    "fileLen": 97.0,
-    "loopSamples": 4233600,
-    "kb": 1895.4
+    "loopEnd": 52.8639,
+    "loopLen": 52.3639,
+    "fileLen": 53.3639,
+    "loopSamples": 2309248,
+    "kb": 1042.9,
+    "source": "02 - the town where i got the magic bottle"
   },
   "vote": {
     "loopStart": 0.5,
-    "loopEnd": 86.214286,
-    "loopLen": 85.714286,
-    "fileLen": 86.714286,
-    "loopSamples": 3780000,
-    "kb": 1694.4
+    "loopEnd": 58.1,
+    "loopLen": 57.6,
+    "fileLen": 58.6,
+    "loopSamples": 2540160,
+    "kb": 1145.4,
+    "source": "01 - it is dangerous to be lonely without a sword"
   }
 }

@@ -58,8 +58,8 @@ def main() -> None:
     for name, loop in loops.items():
         write_mp3(os.path.join(args.out, f"{name}-3loops.mp3"), np.vstack([loop] * 3))
 
-    # Chuỗi chuyển pha giống một ván thật: chờ -> đêm -> ngày -> bỏ phiếu -> đêm.
-    plan = [("day", 14.0), ("night", 16.0), ("day", 14.0), ("vote", 18.0), ("night", 12.0)]
+    # Chuỗi chuyển pha giống một ván thật: đêm -> ngày -> bỏ phiếu -> đêm.
+    plan = [("night", 16.0), ("day", 16.0), ("vote", 16.0), ("night", 14.0)]
     total = sum(d for _, d in plan) + FADE
     out = np.zeros((int(total * SR) + SR, 2))
 
@@ -77,7 +77,7 @@ def main() -> None:
     write_mp3(os.path.join(args.out, "phase-transitions.mp3"), out)
     print(f"đã ghi {len(loops) + 1} file nghe thử vào {args.out}")
     print("  *-3loops.mp3        - ba vòng liên tiếp, kiểm chỗ nối")
-    print("  phase-transitions.mp3 - ngày->đêm->ngày->bỏ phiếu->đêm, crossfade 600ms")
+    print("  phase-transitions.mp3 - đêm->ngày->bỏ phiếu->đêm, crossfade 600ms")
 
 
 if __name__ == "__main__":
