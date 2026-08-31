@@ -35,6 +35,24 @@ export function PhaseBanner({ snapshot }: { snapshot: RoomSnapshot }) {
 
   return (
     <div className="card flex items-center justify-between gap-3 py-3">
+      {/*
+        * Thông báo đổi pha cho trình đọc màn hình.
+        *
+        * Tên pha bên dưới đổi qua AnimatePresence: node cũ bị THÁO, node mới
+        * được CHÈN. Với mắt đó là một chuyển cảnh; với trình đọc màn hình thì
+        * không có gì xảy ra cả - một vùng vừa bị tháo khỏi DOM không thông báo
+        * được gì. Vì vậy vùng này phải đứng yên và chỉ đổi chữ bên trong, chứ
+        * không phải gắn aria-live thẳng lên <h2> trong AnimatePresence.
+        *
+        * Lớp phủ chuyển cảnh KHÔNG thay thế được chỗ này: nó tự tắt hẳn khi hệ
+        * điều hành bật prefers-reduced-motion (xem `playbackMode`), nên đúng
+        * nhóm người cần được nghe thông báo nhất lại là nhóm mất nó. Nó cũng
+        * chỉ phủ một phần các cạnh chuyển pha.
+        */}
+      <p className="sr-only" aria-live="polite">
+        {snapshot.round > 0 ? `${meta.label}, ${unit} thứ ${snapshot.round}` : meta.label}
+      </p>
+
       {/* Tên pha là thứ đổi nghĩa cả màn hình, nên nó được một nhịp riêng. */}
       <AnimatePresence mode="wait" initial={false}>
         <m.div
