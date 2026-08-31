@@ -41,19 +41,8 @@ import {
 } from "./game/machine";
 import { getPlayerRoom, updateSessionRoom } from "./redis";
 import { reconnectPlayer } from "./rooms/reconnect";
+import { allowAction } from "./rate-limit";
 import { issueVoiceToken, syncVoiceForPlayer } from "./voice/service";
-
-// ---- Rate limit đơn giản (sliding window trong bộ nhớ) ----
-const actionLog = new Map<string, number[]>();
-
-function allowAction(key: string, limit: number, windowMs: number): boolean {
-  const now = Date.now();
-  const list = (actionLog.get(key) ?? []).filter((t) => now - t < windowMs);
-  if (list.length >= limit) return false;
-  list.push(now);
-  actionLog.set(key, list);
-  return true;
-}
 
 interface AuthedSocket extends Socket {
   data: { playerId: string };

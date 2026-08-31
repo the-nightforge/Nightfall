@@ -35,6 +35,27 @@ export function resolveBotAiMaxCallsPerGame(env: NodeJS.ProcessEnv): number {
   return value;
 }
 
+/**
+ * Số hop proxy tin được cho `app.set("trust proxy", ...)`.
+ *
+ * KHÔNG ném lỗi như resolvePort: đặt sai biến này chỉ làm rate limit khoá nhầm
+ * IP chứ không làm hỏng ván đấu, nên chặn cả server khởi động là phản ứng quá
+ * tay. Nhận thêm "true"/"false" vì đó là cách viết ai cũng thử trước tiên.
+ */
+export function resolveTrustProxy(env: NodeJS.ProcessEnv): number {
+  const raw = env.TRUST_PROXY?.trim().toLowerCase();
+  if (raw === undefined || raw === "") return 1;
+  if (raw === "true") return 1;
+  if (raw === "false") return 0;
+
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) {
+    console.warn(`[config] TRUST_PROXY="${env.TRUST_PROXY}" không hợp lệ, dùng mặc định 1`);
+    return 1;
+  }
+  return value;
+}
+
 export type VoiceConfigResult =
   | { enabled: false }
   | { enabled: true; url: string; apiKey: string; apiSecret: string; env: string };
@@ -80,6 +101,23 @@ export const config = {
   chatMaxLength: Number(process.env.CHAT_MAX_LENGTH ?? 300),
   chatRateLimitCount: Number(process.env.CHAT_RATE_LIMIT_COUNT ?? 5),
   chatRateLimitWindowMs: Number(process.env.CHAT_RATE_LIMIT_WINDOW_MS ?? 5000),
+  // Tạo người chơi là endpoint DUY NHẤT không cần đăng nhập, nên nó cũng là cửa
+  // duy nhất ai cũng gõ được. Khoá theo IP: xem `trustProxy` bên dưới.
+  signupRateLimitCount: Number(process.env.SIGNUP_RATE_LIMIT_COUNT ?? 10),
+  signupRateLimitWindowMs: Number(process.env.SIGNUP_RATE_LIMIT_WINDOW_MS ?? 60_000),
+  /**
+   * Số hop proxy tin được, truyền thẳng cho `app.set("trust proxy", ...)`.
+   *
+   * Mặc định 1 vì server chạy sau proxy của Render: để 0 ở đó thì `req.ip` là
+   * IP của load balancer, cả thiên hạ dùng chung một rổ và người chơi thật chặn
+   * lẫn nhau. Ngược lại, nếu bạn tự host và phơi cổng thẳng ra Internet thì đặt
+   * 0, vì lúc đó client tự bịa được header X-Forwarded-For.
+   *
+   * Về 1 khi giá trị không phải số: `TRUST_PROXY=true` là cách viết dễ đoán
+   * nhầm, và `Number("true")` cho NaN - Express nhận NaN thì hành vi không xác
+   * định, tệ hơn hẳn so với việc quay về mặc định.
+   */
+  trustProxy: resolveTrustProxy(process.env),
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
   geminiModel: process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite",
   // Nhà cung cấp chính: endpoint OpenAI-compatible. Thiếu bất kỳ mảnh nào thì
