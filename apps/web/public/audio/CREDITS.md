@@ -1,43 +1,50 @@
 # Ghi công âm thanh
 
-## Nhạc nền
+## Nhạc nền / không gian âm thanh
 
-Ba file `music/night.mp3`, `music/day.mp3`, `music/vote.mp3` là **nhạc của bên
-thứ ba**, không phải tác phẩm của dự án này và **không do AI tạo ra**.
+Ba asset mới dùng các bản thu thực địa và nhạc cụ truyền thống được đăng trên
+Freesound. Đây là nội dung của bên thứ ba; dự án chỉ cắt vòng lặp, crossfade,
+EQ nhẹ, hạ mức âm và chuyển mã. Không dùng Claude hay mô hình sinh nhạc để tạo
+thêm tiếng, nốt hoặc nhạc cụ.
 
-- Tác giả: **Ragnar Random**
-- Bộ nhạc: *Orchestral and World Music for Games*
-- Nguồn chính thức (nơi đã tải):
-  https://ragnarrandom.itch.io/orchestral-and-world-music-for-games
-- Giấy phép: **CC0 1.0 Universal** (phạm vi công cộng) —
+### `music/day.mp3`
+
+- Tác phẩm: **BR_017_VN_QuietFields.mp3**
+- Người thu: **Kevin Luce (kevp888)**
+- Nguồn: https://freesound.org/people/kevp888/sounds/578503/
+- Bản dùng để dựng: official HQ preview MP3 từ máy chủ Freesound
+- Giấy phép: **CC BY 4.0** — https://creativecommons.org/licenses/by/4.0/
+- Mô tả nguồn: cánh đồng yên tĩnh ở miền Bắc Việt Nam, thu tháng 10/2008;
+  có côn trùng và chim trong một buổi chiều nóng ẩm.
+- Thay đổi: lấy vùng ổn định 38 giây; crossfade 6 giây; lọc dưới 55Hz và trên
+  9kHz; hạ nhẹ dải 2.8–6kHz; chuẩn hoá -28 LUFS; encode MP3 256kbps.
+
+### `music/night.mp3`
+
+- Tác phẩm: **BR_041_VN_FluteInNight.mp3**
+- Người thu: **Kevin Luce (kevp888)**
+- Nguồn: https://freesound.org/people/kevp888/sounds/578505/
+- Bản dùng để dựng: official HQ preview MP3 từ máy chủ Freesound
+- Giấy phép: **CC BY 4.0** — https://creativecommons.org/licenses/by/4.0/
+- Mô tả nguồn: tiếng sáo truyền thống vọng từ nhà hàng xóm trong một ngôi làng
+  Việt Nam vào ban đêm, kèm côn trùng; thu tháng 10/2008.
+- Thay đổi: lấy 37 giây; crossfade 6 giây; lọc dưới 50Hz và trên 10kHz; hạ
+  nhẹ vùng sáo 1–3kHz; chuẩn hoá -28 LUFS; encode MP3 256kbps.
+
+### `music/vote.mp3`
+
+- Tác phẩm: **ZOOM0005.WAV**
+- Người đăng/thu: **molinsky**
+- Nguồn: https://freesound.org/people/molinsky/sounds/497058/
+- Bản dùng để dựng: official HQ preview MP3 từ máy chủ Freesound
+- Giấy phép: **CC0 1.0** —
   https://creativecommons.org/publicdomain/zero/1.0/
-  Trang nguồn ghi ở mục *Asset license*: "Creative Commons Zero v1.0 Universal".
-- Không dùng AI: trang nguồn ghi ở mục *Content*: **"No generative AI was used"**.
+- Mô tả nguồn: bản thu một số nhạc cụ truyền thống Việt Nam.
+- Thay đổi: bỏ giây mở đầu, lấy 51 giây; crossfade 6 giây; lọc dưới 45Hz và
+  trên 11kHz; hạ rất nhẹ vùng 3–6kHz; chuẩn hoá -27 LUFS; encode MP3 256kbps.
 
-CC0 **không bắt buộc ghi công**. Phần ghi công ở đây là tự nguyện, và giữ lại
-vì nó trả lời được câu hỏi quan trọng hơn giấy phép: ba file này ở đâu ra.
-
-| File trong repo | Bài gốc |
-| --- | --- |
-| `music/day.mp3` | `02 - the town where i got the magic bottle.ogg` |
-| `music/night.mp3` | `05 - tower of the vampire.ogg` |
-| `music/vote.mp3` | `01 - it is dangerous to be lonely without a sword.ogg` |
-
-File gốc tải trực tiếp từ trang itch.io ở trên, định dạng OGG Vorbis. Không
-lấy từ YouTube, Spotify, Apple Music hay bất kỳ trang tải lại nào.
-
-### Dự án đã làm gì với chúng
-
-Chỉ ba việc, không việc nào tạo ra nội dung âm nhạc mới:
-
-1. **Cắt vòng lặp.** Mỗi track lấy một đoạn rơi đúng vào bội số nguyên của ô
-   nhịp, nối thành vòng bằng crossfade equal-power.
-2. **Cắt hạ âm.** Lọc thông cao 40-70Hz tuỳ track, bỏ phần năng lượng nằm dưới
-   ngưỡng nghe của loa điện thoại.
-3. **Chuẩn hoá độ to** về -26.5 / -25.5 LUFS và chuyển sang MP3 160kbps.
-
-Không nén động, không limiter, không thêm nhạc cụ, không sinh thêm nốt nào.
-Toàn bộ nằm trong `tools/audio/build_music.py`; xem `README.md` để chạy lại.
+`music-sources.json` giữ URL, giấy phép và SHA-256 của cả file nguồn lẫn asset
+đã dựng. `verify_music.py` từ chối asset bị thay mà manifest chưa cập nhật.
 
 ## Hiệu ứng
 
@@ -45,21 +52,13 @@ Không đổi trong lần thay nhạc này.
 
 `sfx/turn.mp3`, `sfx/ballot.mp3`, `sfx/death.mp3`, `sfx/win.mp3`, `sfx/lose.mp3`
 dựng từ bộ Interface Sounds, Impact Sounds và Jingles của Kenney
-(https://kenney.nl) — giấy phép CC0 1.0, không bắt buộc ghi công.
+(https://kenney.nl) — giấy phép CC0 1.0.
 
 `sfx/howl.mp3` cắt từ "Wolf howls" của U.S. Fish and Wildlife Service
 (https://commons.wikimedia.org/wiki/File:Wolf_howls.ogg) — tác phẩm của chính
-phủ liên bang Hoa Kỳ, thuộc phạm vi công cộng, không bắt buộc ghi công.
+phủ liên bang Hoa Kỳ, thuộc phạm vi công cộng.
 
 ## Lịch sử
 
-Bộ nhạc **trước đó** là tác phẩm tổng hợp bằng code của chính dự án
-("Dark Medieval Folk Ambient", dựng bằng `tools/audio/make_music.py`). Bộ đó
-đã được thay hoàn toàn bằng nhạc người sáng tác ở trên; script dựng nhạc
-procedural cùng các khối tổng hợp âm chỉ nó dùng đã bị xoá khỏi repo để không
-ghi đè lại asset mới.
-
-Trước đó nữa là "Dark Pad", "Anxiety" và "Chase Pulse Faster" của Kevin MacLeod
-(incompetech.com) theo CC BY 4.0. **Không còn file nào của Kevin MacLeod trong
-repo**, nên phần ghi công CC BY kèm theo cũng đã được gỡ. Nếu khôi phục lại bất
-kỳ file nào trong ba file đó thì phải khôi phục cả phần ghi công.
+Bộ trước đó dùng ba bài CC0 của Ragnar Random. Các file Ragnar đã được thay
+hoàn toàn; không còn asset nào của bộ đó trong thư mục `music/`.

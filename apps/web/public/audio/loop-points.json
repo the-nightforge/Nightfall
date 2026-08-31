@@ -1,29 +1,29 @@
 {
   "night": {
     "loopStart": 0.5,
-    "loopEnd": 67.7,
-    "loopLen": 67.2,
-    "fileLen": 68.2,
-    "loopSamples": 2963520,
-    "kb": 1332.7,
-    "source": "05 - tower of the vampire"
+    "loopEnd": 37.5,
+    "loopLen": 37.0,
+    "fileLen": 38.0,
+    "loopSamples": 1631700,
+    "kb": 1188.6,
+    "source": "BR_041_VN_FluteInNight.mp3"
   },
   "day": {
     "loopStart": 0.5,
-    "loopEnd": 52.8639,
-    "loopLen": 52.3639,
-    "fileLen": 53.3639,
-    "loopSamples": 2309248,
-    "kb": 1042.9,
-    "source": "02 - the town where i got the magic bottle"
+    "loopEnd": 38.5,
+    "loopLen": 38.0,
+    "fileLen": 39.0,
+    "loopSamples": 1675800,
+    "kb": 1219.6,
+    "source": "BR_017_VN_QuietFields.mp3"
   },
   "vote": {
     "loopStart": 0.5,
-    "loopEnd": 58.1,
-    "loopLen": 57.6,
-    "fileLen": 58.6,
-    "loopSamples": 2540160,
-    "kb": 1145.4,
-    "source": "01 - it is dangerous to be lonely without a sword"
+    "loopEnd": 51.5,
+    "loopLen": 51.0,
+    "fileLen": 52.0,
+    "loopSamples": 2249100,
+    "kb": 1626.1,
+    "source": "ZOOM0005.WAV"
   }
 }

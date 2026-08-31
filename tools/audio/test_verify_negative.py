@@ -2,7 +2,7 @@
 
 Một bộ kiểm chứng luôn báo xanh thì không phân biệt được với việc không có bộ
 kiểm chứng nào. Script này chứng minh điều ngược lại: nó làm hỏng một bản SAO
-của thư mục audio theo bốn cách khác nhau và đòi `verify_music.py` bắt được
+của thư mục audio theo sáu cách khác nhau và đòi `verify_music.py` bắt được
 từng cách, đúng bằng thông báo tương ứng.
 
 Mọi thao tác diễn ra trong thư mục tạm do `tempfile` cấp phát. Asset thật
@@ -16,6 +16,7 @@ Chạy:  python tools/audio/test_verify_negative.py --audio apps/web/public/audi
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -40,11 +41,15 @@ def run_verify(audio_dir: str) -> tuple[int, str]:
 
 
 # --------------------------------------------------------------------------
-# Bốn cách làm hỏng
+# Sáu cách làm hỏng
 # --------------------------------------------------------------------------
 
 def break_missing_track(audio: str) -> None:
     os.remove(os.path.join(audio, "music", "vote.mp3"))
+
+
+def break_missing_manifest(audio: str) -> None:
+    os.remove(os.path.join(audio, "music-sources.json"))
 
 
 def break_missing_loop_point(audio: str) -> None:
@@ -77,13 +82,46 @@ def break_level(audio: str) -> None:
     from studio import decode_mp3, write_mp3
     path = os.path.join(audio, "music", "day.mp3")
     write_mp3(path, decode_mp3(path) * (10.0 ** (1.2 / 20.0)), bitrate=160)
+    manifest_path = os.path.join(audio, "music-sources.json")
+    with open(manifest_path, encoding="utf-8") as fh:
+        manifest = json.load(fh)
+    with open(path, "rb") as asset:
+        manifest["tracks"]["day"]["assetSha256"] = hashlib.sha256(
+            asset.read()).hexdigest()
+    with open(manifest_path, "w", encoding="utf-8") as fh:
+        json.dump(manifest, fh, indent=2, ensure_ascii=False)
+
+
+def break_source_hash(audio: str) -> None:
+    """Khai một manifest nguồn hợp lệ về hình thức nhưng sai mã băm asset.
+
+    Ca này bảo vệ cả nguồn gốc lẫn thao tác thay file: một MP3 khác tên giống
+    hệt không được phép lọt qua kiểm chứng chỉ vì các số đo âm thanh vẫn đẹp.
+    """
+    tracks = {}
+    for name in ("night", "day", "vote"):
+        tracks[name] = {
+            "title": f"fixture {name}",
+            "creator": "fixture creator",
+            "sourcePage": "https://example.invalid/source",
+            "sourceFileUrl": "https://example.invalid/source.mp3",
+            "license": "CC0-1.0",
+            "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+            "sourceSha256": "1" * 64,
+            "assetSha256": "0" * 64,
+        }
+    path = os.path.join(audio, "music-sources.json")
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump({"schemaVersion": 1, "tracks": tracks}, fh, indent=2)
 
 
 CASES = [
+    ("thiếu manifest nguồn", break_missing_manifest, "thiếu music-sources.json"),
     ("thiếu track", break_missing_track, "thiếu track music/vote.mp3"),
     ("thiếu mốc lặp", break_missing_loop_point, "thiếu mốc lặp cho day"),
     ("mốc lặp sai 40ms", break_loop_point, "night: tương quan tuần hoàn"),
     ("mức âm lệch 1.2 dB", break_level, "day: LUFS lệch mục tiêu"),
+    ("mã băm asset sai", break_source_hash, "night: SHA-256 không khớp manifest"),
 ]
 
 
@@ -97,8 +135,8 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="masoi-audio-verify-") as tmp:
         # Đối chứng dương: bản sao NGUYÊN VẸN phải qua được. Không có nó thì
-        # bốn ca dưới đây không chứng minh được gì - một script luôn trả 1 cũng
-        # sẽ "đạt" cả bốn.
+        # sáu ca dưới đây không chứng minh được gì - một script luôn trả 1 cũng
+        # sẽ "đạt" cả sáu.
         pristine = os.path.join(tmp, "pristine")
         shutil.copytree(source, pristine)
         code, out = run_verify(pristine)

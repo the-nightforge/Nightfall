@@ -28,6 +28,7 @@ Chạy:  python tools/audio/verify_music.py --audio apps/web/public/audio
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -48,6 +49,10 @@ from studio import true_peak_db, loudness
 
 SR = 44100
 TRACKS = ("night", "day", "vote")
+ALLOWED_LICENSES = {
+    "CC0-1.0": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "CC-BY-4.0": "https://creativecommons.org/licenses/by/4.0/",
+}
 
 # Mô phỏng loa điện thoại ---------------------------------------------------
 #
@@ -88,6 +93,62 @@ def db(x: float) -> float:
 
 def rms(x: np.ndarray) -> float:
     return float(np.sqrt(np.mean(x ** 2)))
+
+
+def sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def provenance_errors(audio_dir: str) -> list[str]:
+    """Kiểm tra giấy phép khai báo và khoá mã băm của ba asset đang phát."""
+    path = os.path.join(audio_dir, "music-sources.json")
+    if not os.path.exists(path):
+        return ["thiếu music-sources.json"]
+    try:
+        with open(path, encoding="utf-8") as fh:
+            manifest = json.load(fh)
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"music-sources.json không đọc được: {exc}"]
+
+    if not isinstance(manifest, dict) or manifest.get("schemaVersion") != 1 \
+            or not isinstance(manifest.get("tracks"), dict):
+        return ["music-sources.json sai schemaVersion hoặc thiếu tracks"]
+
+    required = {
+        "title", "creator", "sourcePage", "sourceFileUrl", "license",
+        "licenseUrl", "sourceSha256", "assetSha256",
+    }
+    errors = []
+    for name in TRACKS:
+        item = manifest["tracks"].get(name)
+        if not isinstance(item, dict):
+            errors.append(f"{name}: thiếu nguồn trong manifest")
+            continue
+        missing = sorted(required - item.keys())
+        if missing:
+            errors.append(f"{name}: manifest thiếu {', '.join(missing)}")
+            continue
+        license_id = str(item["license"])
+        if license_id not in ALLOWED_LICENSES:
+            errors.append(f"{name}: giấy phép không được chấp nhận: {license_id}")
+        elif item["licenseUrl"] != ALLOWED_LICENSES[license_id]:
+            errors.append(f"{name}: URL giấy phép không khớp {license_id}")
+        if not str(item["sourcePage"]).startswith("https://"):
+            errors.append(f"{name}: sourcePage phải dùng HTTPS")
+        if not str(item["sourceFileUrl"]).startswith("https://"):
+            errors.append(f"{name}: sourceFileUrl phải dùng HTTPS")
+        for key in ("sourceSha256", "assetSha256"):
+            value = str(item[key]).lower()
+            if len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
+                errors.append(f"{name}: {key} không phải SHA-256")
+        asset = os.path.join(audio_dir, "music", f"{name}.mp3")
+        if os.path.exists(asset) and sha256(asset) != str(item["assetSha256"]).lower():
+            errors.append(f"{name}: SHA-256 không khớp manifest")
+    return errors
 
 
 def periodicity(d: np.ndarray, n_loop: int) -> tuple[float, float, float]:
@@ -210,6 +271,15 @@ def main() -> int:
     args = ap.parse_args()
 
     checks = Checks()
+
+    source_errors = provenance_errors(args.audio)
+    if source_errors:
+        print("kiểm tra nguồn gốc")
+        print("-" * 78)
+        for item in source_errors:
+            print(f"  FAIL  {item}")
+        print(f"\n{len(source_errors)} điều kiện nguồn gốc KHÔNG đạt.")
+        return 1 if args.strict else 0
 
     points_path = os.path.join(args.audio, "loop-points.json")
     if not os.path.exists(points_path):

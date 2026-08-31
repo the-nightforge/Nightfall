@@ -1,35 +1,32 @@
-"""Dựng ba track nhạc nền từ file OGG gốc của Ragnar Random.
+"""Dựng bộ âm thanh "kinh dị làng quê" từ ba bản thu Việt Nam.
 
-Nguồn duy nhất: https://ragnarrandom.itch.io/orchestral-and-world-music-for-games
-(CC0 1.0, trang chính thức ghi rõ "No generative AI was used"). Script này
-KHÔNG sinh ra nốt nhạc nào — nó chỉ cắt vòng lặp, chỉnh EQ nhẹ, chuẩn hoá độ
-to và encode. Mọi nội dung âm nhạc là của tác giả gốc.
+Nguồn là các bản thu người thật/hiện trường được đăng trên Freesound theo
+CC BY 4.0 hoặc CC0. Script KHÔNG sinh nốt nhạc hay thêm nhạc cụ: nó chỉ cắt
+vòng lặp, crossfade, chỉnh EQ nhẹ, chuẩn hoá độ to và encode.
 
 Bốn bước cho mỗi track:
 
-1. Chọn vùng lặp. `t0`/`loop` lấy từ phép dò tự tương quan (xem README), rơi
-   đúng vào bội số nguyên của ô nhịp nên không cắt giữa câu nhạc.
-2. Căn pha đến từng mẫu. Độ dài vòng lặp được tinh chỉnh trong ±150ms quanh
-   giá trị danh nghĩa để tương quan chéo giữa đoạn đầu vòng và đoạn nối tiếp
-   sau cuối vòng đạt cực đại. Không có bước này thì crossfade hai đoạn lệch
-   pha sẽ triệt tiêu dải thấp thay vì hoà vào nhau.
-3. Crossfade equal-power. Đầu vòng lặp được trộn với phần nhạc chạy tiếp SAU
+1. Chọn vùng ổn định, không có tiếng nói. Bản thu môi trường không có ô nhịp,
+   nên mốc lặp là số mẫu cố định đã nghe/đo trước chứ không ép theo nhịp.
+2. Crossfade equal-power dài 6 giây. Đầu vòng được trộn với phần chạy tiếp SAU
    cuối vòng, nên khi vòng lặp quay lại, thứ tai nghe được ở chỗ nối chính là
    đoạn nối tiếp tự nhiên của bản nhạc. Bộ đệm thu được tuần hoàn theo đúng
    nghĩa toán học: lặp nó chính là lặp lại cùng một mảng.
-4. EQ nhẹ + chuẩn hoá + đệm + encode. Toàn bộ EQ chạy bằng FFT vòng
-   (`fft_shape`) nên không phá tính tuần hoàn ở bước 3.
+3. EQ nhẹ + chuẩn hoá + đệm + encode. Toàn bộ EQ chạy bằng FFT vòng
+   (`fft_shape`) nên không phá tính tuần hoàn ở bước 2.
 
 Chạy:
-  python tools/audio/build_music.py --src <thư mục ogg> --out apps/web/public/audio
+  python tools/audio/build_music.py --src <thư mục mp3 nguồn> --out apps/web/public/audio
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
+import tempfile
 
 import numpy as np
 
@@ -41,7 +38,7 @@ for _s in (sys.stdout, sys.stderr):
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from dsp import SR, chain, fft_shape, hp_curve, peak_curve, shelf_curve
+from dsp import SR, chain, fft_shape, hp_curve, lp_curve, peak_curve, shelf_curve
 from studio import PAD_SEC, loudness, normalise, true_peak_db, with_padding, write_mp3
 from targets import BITRATE_KBPS, TARGET_LUFS, TRUE_PEAK_CEILING
 
@@ -60,59 +57,60 @@ from targets import BITRATE_KBPS, TARGET_LUFS, TRUE_PEAK_CEILING
 
 SOURCES = {
     "night": dict(
-        file="05 - tower of the vampire.ogg",
-        title="05 - tower of the vampire",
-        t0=55.10, loop=67.20, xfade=3.0,
-        hp=70.0, shelf_db=0.0, dip_db=0.0,
+        file="night-source.mp3", title="BR_041_VN_FluteInNight.mp3",
+        creator="Kevin Luce (kevp888)",
+        source_page="https://freesound.org/people/kevp888/sounds/578505/",
+        source_url="https://cdn.freesound.org/previews/578/578505_9034501-hq.mp3",
+        license="CC-BY-4.0",
+        license_url="https://creativecommons.org/licenses/by/4.0/",
+        source_sha256="ed1875c246bc113b9ed775dfb7cccf2fd4c6deee6e4314b6a914e51b6fc218c4",
+        t0=0.0, loop=37.0, xfade=6.0,
+        hp=50.0, lp=10000.0, shelf_hz=3000.0, shelf_db=-3.0,
+        dip_hz=1900.0, dip_db=-2.0,
     ),
     "day": dict(
-        file="02 - the town where i got the magic bottle.ogg",
-        title="02 - the town where i got the magic bottle",
-        t0=24.70, loop=52.35, xfade=2.5,
-        hp=40.0, shelf_db=0.0, dip_db=0.0,
+        file="day-source.mp3", title="BR_017_VN_QuietFields.mp3",
+        creator="Kevin Luce (kevp888)",
+        source_page="https://freesound.org/people/kevp888/sounds/578503/",
+        source_url="https://cdn.freesound.org/previews/578/578503_9034501-hq.mp3",
+        license="CC-BY-4.0",
+        license_url="https://creativecommons.org/licenses/by/4.0/",
+        source_sha256="4190c0937a09cc3ca3d6d34dca414cf64b9b1622ba2c9ec139e0abbe45a50c0c",
+        t0=0.0, loop=38.0, xfade=6.0,
+        hp=55.0, lp=9000.0, shelf_hz=2800.0, shelf_db=-4.0,
+        dip_hz=4200.0, dip_db=-2.0,
     ),
     "vote": dict(
-        file="01 - it is dangerous to be lonely without a sword.ogg",
-        title="01 - it is dangerous to be lonely without a sword",
-        t0=19.15, loop=57.60, xfade=2.5,
-        hp=40.0, shelf_db=0.0, dip_db=0.0,
+        file="vote-source.mp3", title="ZOOM0005.WAV",
+        creator="molinsky",
+        source_page="https://freesound.org/people/molinsky/sounds/497058/",
+        source_url="https://cdn.freesound.org/previews/497/497058_729547-hq.mp3",
+        license="CC0-1.0",
+        license_url="https://creativecommons.org/publicdomain/zero/1.0/",
+        source_sha256="91180cae6e643ea22b7324a9c7a5c9f69f300cae096b0cce7e658c9c747940de",
+        t0=1.0, loop=51.0, xfade=6.0,
+        hp=45.0, lp=11000.0, shelf_hz=5000.0, shelf_db=-1.5,
+        dip_hz=3200.0, dip_db=-1.0,
     ),
 }
 
 HP_ORDER = 2.5
-SHELF_HZ = 200.0
-DIP_HZ, DIP_Q = 3200.0, 0.7
+DIP_Q = 0.8
 
 
-def decode_ogg(path: str) -> np.ndarray:
+def decode_source(path: str) -> np.ndarray:
     import miniaudio
     dec = miniaudio.decode_file(path, output_format=miniaudio.SampleFormat.FLOAT32,
                                 nchannels=2, sample_rate=SR)
     return np.array(dec.samples, dtype=np.float64).reshape(-1, 2)
 
 
-def refine_loop(x: np.ndarray, s0: int, n_nom: int, n_x: int,
-                span: float = 0.15) -> tuple[int, float]:
-    """Tinh chỉnh độ dài vòng lặp để hai đoạn được crossfade khớp pha.
-
-    Trả về (số mẫu một vòng, hệ số tương quan đạt được). Cửa sổ so khớp chính
-    là vùng crossfade, vì đó mới là chỗ hai đoạn thực sự chồng lên nhau.
-    """
-    m = x.mean(axis=1)
-    a = m[s0:s0 + n_x]
-    a = a - a.mean()
-    denom_a = np.sqrt(np.sum(a ** 2)) + 1e-12
-
-    best_n, best_c = n_nom, -2.0
-    for n in range(n_nom - int(span * SR), n_nom + int(span * SR) + 1):
-        b = m[s0 + n:s0 + n + n_x]
-        if b.shape[0] < n_x:
-            continue
-        b = b - b.mean()
-        c = float(np.dot(a, b) / (denom_a * (np.sqrt(np.sum(b ** 2)) + 1e-12)))
-        if c > best_c:
-            best_n, best_c = n, c
-    return best_n, best_c
+def sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def build_loop(x: np.ndarray, s0: int, n_loop: int, n_x: int) -> np.ndarray:
@@ -160,72 +158,106 @@ def encode_calibrated(path: str, loop: np.ndarray, target: float, bitrate: int,
         if abs(got - target) <= tol:
             return got, tp, i
         gain *= 10.0 ** ((target - got) / 20.0)
-    return got, tp, iters
+    raise RuntimeError(f"không hội tụ LUFS sau {iters} vòng: đo được {got:.2f}, "
+                       f"mục tiêu {target:.2f}")
 
 
-def eq_curve(hp: float, shelf_db: float, dip_db: float):
-    curves = [hp_curve(hp, HP_ORDER)]
-    if shelf_db:
-        curves.append(shelf_curve(SHELF_HZ, shelf_db, kind="low"))
-    if dip_db:
-        curves.append(peak_curve(DIP_HZ, dip_db, DIP_Q))
+def eq_curve(cfg: dict):
+    curves = [hp_curve(cfg["hp"], HP_ORDER), lp_curve(cfg["lp"], 2.0)]
+    if cfg["shelf_db"]:
+        curves.append(shelf_curve(cfg["shelf_hz"], cfg["shelf_db"], kind="high"))
+    if cfg["dip_db"]:
+        curves.append(peak_curve(cfg["dip_hz"], cfg["dip_db"], DIP_Q))
     return chain(*curves)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--src", required=True, help="thư mục chứa file .ogg gốc")
+    ap.add_argument("--src", required=True, help="thư mục chứa ba file MP3 nguồn")
     ap.add_argument("--out", required=True, help="thư mục audio của web app")
     args = ap.parse_args()
 
     music_dir = os.path.join(args.out, "music")
+
+    # Kiểm tra đủ nguồn và đúng mã băm trước khi ghi bất kỳ asset nào.
+    source_paths = {}
+    for name, cfg in SOURCES.items():
+        path = os.path.join(args.src, cfg["file"])
+        if not os.path.exists(path):
+            raise SystemExit(f"thiếu file nguồn: {path}")
+        got_hash = sha256(path)
+        if got_hash != cfg["source_sha256"]:
+            raise SystemExit(f"{name}: SHA-256 file nguồn không khớp\n"
+                             f"  nhận: {got_hash}\n  cần:  {cfg['source_sha256']}")
+        source_paths[name] = path
+
     os.makedirs(music_dir, exist_ok=True)
     points: dict[str, dict[str, float]] = {}
+    manifest = {"schemaVersion": 1, "tracks": {}}
 
-    hdr = (f"{'track':6s} {'loop s':>10s} {'khớp pha':>9s} {'LUFS':>7s} {'TP dB':>7s} "
+    hdr = (f"{'track':6s} {'loop s':>10s} {'xfade s':>9s} {'LUFS':>7s} {'TP dB':>7s} "
            f"{'kB':>8s} {'vòng':>5s} {'nguồn':s}")
     print(hdr)
     print("-" * 104)
     print("(LUFS và TP đo trên chính file mp3 đã encode, không phải trên bộ đệm)")
 
-    for name, cfg in SOURCES.items():
-        path = os.path.join(args.src, cfg["file"])
-        if not os.path.exists(path):
-            raise SystemExit(f"thiếu file nguồn: {path}")
+    with tempfile.TemporaryDirectory(prefix="masoi-music-build-", dir=args.out) as stage:
+        for name, cfg in SOURCES.items():
+            x = decode_source(source_paths[name])
+            s0 = int(round(cfg["t0"] * SR))
+            n_x = int(round(cfg["xfade"] * SR))
+            n_loop = int(round(cfg["loop"] * SR))
+            if s0 + n_loop + n_x > x.shape[0]:
+                raise SystemExit(f"{name}: nguồn quá ngắn cho loop + crossfade")
 
-        x = decode_ogg(path)
-        s0 = int(round(cfg["t0"] * SR))
-        n_x = int(round(cfg["xfade"] * SR))
-        n_loop, corr = refine_loop(x, s0, int(round(cfg["loop"] * SR)), n_x)
+            loop = build_loop(x, s0, n_loop, n_x)
+            loop = fft_shape(loop, eq_curve(cfg))
+            loop = normalise(loop, TARGET_LUFS[name], TRUE_PEAK_CEILING)
 
-        loop = build_loop(x, s0, n_loop, n_x)
-        loop = fft_shape(loop, eq_curve(cfg["hp"], cfg["shelf_db"], cfg["dip_db"]))
-        loop = normalise(loop, TARGET_LUFS[name], TRUE_PEAK_CEILING)
+            out_path = os.path.join(stage, f"{name}.mp3")
+            lufs, tp, rounds = encode_calibrated(out_path, loop, TARGET_LUFS[name],
+                                                 BITRATE_KBPS)
+            if tp > TRUE_PEAK_CEILING:
+                raise SystemExit(f"{name}: true peak {tp:.2f} dBTP vượt trần "
+                                 f"{TRUE_PEAK_CEILING} dBTP")
 
-        out_path = os.path.join(music_dir, f"{name}.mp3")
-        lufs, tp, rounds = encode_calibrated(out_path, loop, TARGET_LUFS[name],
-                                             BITRATE_KBPS)
-        if tp > TRUE_PEAK_CEILING:
-            raise SystemExit(f"{name}: true peak {tp:.2f} dBTP vượt trần "
-                             f"{TRUE_PEAK_CEILING} dBTP")
+            loop_sec = n_loop / SR
+            kb = os.path.getsize(out_path) / 1024.0
+            points[name] = dict(
+                loopStart=PAD_SEC,
+                loopEnd=round(PAD_SEC + loop_sec, 6),
+                loopLen=round(loop_sec, 6),
+                fileLen=round(loop_sec + 2 * PAD_SEC, 6),
+                loopSamples=int(n_loop),
+                kb=round(kb, 1),
+                source=cfg["title"],
+            )
+            manifest["tracks"][name] = {
+                "title": cfg["title"], "creator": cfg["creator"],
+                "sourcePage": cfg["source_page"],
+                "sourceFileUrl": cfg["source_url"],
+                "license": cfg["license"], "licenseUrl": cfg["license_url"],
+                "sourceSha256": cfg["source_sha256"],
+                "assetSha256": sha256(out_path),
+            }
+            print(f"{name:6s} {loop_sec:10.6f} {cfg['xfade']:9.1f} {lufs:7.2f} "
+                  f"{tp:7.2f} {kb:8.1f} {rounds:5d} {cfg['title']}")
 
-        loop_sec = n_loop / SR
-        kb = os.path.getsize(out_path) / 1024.0
-        points[name] = dict(
-            loopStart=PAD_SEC,
-            loopEnd=round(PAD_SEC + loop_sec, 6),
-            loopLen=round(loop_sec, 6),
-            fileLen=round(loop_sec + 2 * PAD_SEC, 6),
-            loopSamples=int(n_loop),
-            kb=round(kb, 1),
-            source=cfg["title"],
-        )
-        print(f"{name:6s} {loop_sec:10.6f} {corr:9.4f} {lufs:7.2f} "
-              f"{tp:7.2f} {kb:8.1f} {rounds:5d} {cfg['title']}")
+        points_path = os.path.join(stage, "loop-points.json")
+        manifest_path = os.path.join(stage, "music-sources.json")
+        with open(points_path, "w", encoding="utf-8") as fh:
+            json.dump(points, fh, indent=2, ensure_ascii=False)
+            fh.write("\n")
+        with open(manifest_path, "w", encoding="utf-8") as fh:
+            json.dump(manifest, fh, indent=2, ensure_ascii=False)
+            fh.write("\n")
 
-    with open(os.path.join(args.out, "loop-points.json"), "w", encoding="utf-8") as fh:
-        json.dump(points, fh, indent=2, ensure_ascii=False)
-        fh.write("\n")
+        # Chỉ thay asset thật sau khi cả ba bản dựng và toàn bộ metadata xong.
+        for name in SOURCES:
+            os.replace(os.path.join(stage, f"{name}.mp3"),
+                       os.path.join(music_dir, f"{name}.mp3"))
+        os.replace(points_path, os.path.join(args.out, "loop-points.json"))
+        os.replace(manifest_path, os.path.join(args.out, "music-sources.json"))
 
     total = sum(p["kb"] for p in points.values())
     print(f"\nnhạc: {total:.1f} kB ({total / 1024.0:.2f} MiB)")

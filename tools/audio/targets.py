@@ -6,7 +6,7 @@ vào nhau: `build_music.py` *đặt* mức này khi dựng asset, `verify_music.
 dựng thì bộ kiểm chứng không chạy được nếu thiếu script dựng — và script dựng
 là thứ có thể bị thay khi đổi nguồn nhạc.
 
-Ba mức nằm trong khoảng -27..-25 LUFS: nhạc nền phải chìm dưới hiệu ứng chứ
+Ba mức nằm trong khoảng -28..-27 LUFS: nhạc nền phải chìm dưới hiệu ứng chứ
 không tranh chỗ với nó. `vote` được để cao hơn hai track kia đúng 1.0 LU để
 pha bỏ phiếu có thêm sức ép mà không phải đổi mix.
 """
@@ -14,11 +14,13 @@ pha bỏ phiếu có thêm sức ép mà không phải đổi mix.
 from __future__ import annotations
 
 # LUFS tích hợp (ITU-R BS.1770) đo trên đúng một vòng lặp.
-TARGET_LUFS = {"night": -26.5, "day": -26.5, "vote": -25.5}
+TARGET_LUFS = {"night": -28.0, "day": -28.0, "vote": -27.0}
 
 # Trần true peak khi chuẩn hoá, dBTP. Bỏ xa mức 0 để mp3 và bộ resample của
 # thiết bị không đẩy đỉnh qua điểm cắt.
 TRUE_PEAK_CEILING = -3.0
 
-# Bitrate CBR của mp3 xuất ra.
-BITRATE_KBPS = 160
+# Bản thu môi trường có nhiều nhiễu rộng (côn trùng, gió), 160kbps làm hai
+# chu kỳ giống nhau bị lượng tử hoá khác nhau đủ để bộ kiểm seam bắt lỗi.
+# 256kbps giữ sai số tuần hoàn dưới -20dB mà cả thư mục vẫn dưới 6MiB.
+BITRATE_KBPS = 256
