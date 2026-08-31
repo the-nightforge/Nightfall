@@ -4,20 +4,19 @@ import { PHASES } from "@masoi/shared";
 import { trackFor, type Track } from "./audio-track";
 
 describe("trackFor", () => {
-  it("ban đêm có track riêng", () => {
-    assert.equal(trackFor("NIGHT"), "night");
+  it("mọi pha chơi được đều dùng cùng một track", () => {
+    const playable = PHASES.filter((phase) => phase !== "GAME_OVER");
+    const tracks = new Set(playable.map(trackFor));
+
+    assert.deepEqual([...tracks], ["theme"]);
   });
 
-  it("phòng chờ và các pha ban ngày dùng chung track ngày", () => {
-    for (const phase of ["LOBBY", "ROLE_REVEAL", "NIGHT_RESULT", "DAY_DISCUSSION"] as const) {
-      assert.equal(trackFor(phase), "day", phase);
-    }
-  });
-
-  it("các pha quanh bỏ phiếu dùng chung track bỏ phiếu", () => {
-    for (const phase of ["VOTING", "ELIMINATION", "HUNTER_SHOT", "CHECK_WIN"] as const) {
-      assert.equal(trackFor(phase), "vote", phase);
-    }
+  it("phòng chờ và pha cuối cùng trước khi kết thúc cũng là track đó", () => {
+    // Hai đầu của dải LOBBY..CHECK_WIN, nêu tên hẳn ra để một lần đổi ánh xạ
+    // làm hụt một đầu không lọt qua chỉ vì tập hợp ở trên vẫn có đúng một phần
+    // tử.
+    assert.equal(trackFor("LOBBY"), "theme");
+    assert.equal(trackFor("CHECK_WIN"), "theme");
   });
 
   it("kết thúc ván thì tắt nhạc để tiếng win/lose vang một mình", () => {
@@ -25,7 +24,7 @@ describe("trackFor", () => {
   });
 
   it("không sót pha nào", () => {
-    const allowed: (Track | null)[] = ["night", "day", "vote", null];
+    const allowed: (Track | null)[] = ["theme", null];
     for (const phase of PHASES) {
       assert.ok(allowed.includes(trackFor(phase)), phase);
     }

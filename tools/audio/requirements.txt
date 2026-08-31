@@ -1,16 +1,16 @@
 # Dependency của bộ công cụ nhạc nền (tools/audio).
 #
-# Bộ công cụ này KHÔNG sinh ra nhạc. Nó nhận file OGG gốc của Ragnar Random
-# (CC0, xem apps/web/public/audio/CREDITS.md), cắt vòng lặp, chuẩn hoá độ to
-# và encode MP3 — rồi kiểm chứng lại kết quả trên chính file đã encode.
+# Bộ công cụ này KHÔNG sinh ra nhạc. Nó nhận file nhạc nguồn (xem
+# apps/web/public/audio/CREDITS.md), cắt vòng lặp, chuẩn hoá độ to và encode
+# MP3 — rồi kiểm chứng lại kết quả trên chính file đã encode.
 #
 # Không cần ffmpeg: miniaudio giải mã OGG và MP3, lameenc mã hoá MP3.
 #
-# Mọi phiên bản dưới đây lấy từ `pip show` của chính môi trường đã dựng ba file
+# Mọi phiên bản dưới đây lấy từ `pip show` của chính môi trường đã dựng file
 # trong apps/web/public/audio/music, không phải phiên bản mới nhất trên PyPI và
 # không phải phiên bản đoán ra từ tài liệu. Ghim bằng `==` là có chủ đích: cùng
-# file OGG vào và cùng bộ phiên bản này thì ra cùng file mp3. Nới thành `>=` là
-# bỏ lời hứa đó.
+# file nguồn vào và cùng bộ phiên bản này thì ra cùng file mp3. Nới thành `>=`
+# là bỏ lời hứa đó.
 #
 #   python -m venv .venv-audio
 #   .venv-audio\Scripts\activate          # Windows

@@ -2,6 +2,13 @@
 
 Ngày: 2026-08-28
 
+> **Đã bị thay một phần (2026-08-31).** Phần "ba track đổi theo pha" không còn
+> đúng: mọi pha từ `LOBBY` tới `CHECK_WIN` giờ dùng chung một track duy nhất,
+> `music/werewolf-theme.mp3`, và nhạc chạy liên tục qua các lần đổi pha. Mọi
+> quy tắc còn lại (sáu hiệu ứng, nút loa, hai thanh âm lượng, `localStorage`,
+> mở khoá sau cử chỉ đầu tiên, thiếu file thì im lặng) vẫn nguyên. Thiết kế
+> hiện hành: `apps/web/public/audio/README.md`.
+
 ## Mục tiêu
 
 Thêm nhạc nền đổi theo pha và một bộ hiệu ứng ngắn cho client web, để ván đấu có không khí và để người chơi biết tới lượt mình mà không phải dán mắt vào màn hình. Toàn bộ tính năng nằm trong `apps/web`; server và engine không đổi một dòng nào.

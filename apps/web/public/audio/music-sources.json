@@ -1,35 +1,17 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tracks": {
-    "night": {
-      "title": "BR_041_VN_FluteInNight.mp3",
-      "creator": "Kevin Luce (kevp888)",
-      "sourcePage": "https://freesound.org/people/kevp888/sounds/578505/",
-      "sourceFileUrl": "https://cdn.freesound.org/previews/578/578505_9034501-hq.mp3",
-      "license": "CC-BY-4.0",
-      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-      "sourceSha256": "ed1875c246bc113b9ed775dfb7cccf2fd4c6deee6e4314b6a914e51b6fc218c4",
-      "assetSha256": "8a2ead5197cd0b56e7ece1ba46d8072443cb45df14f8c60162127a5086b5cf5a"
-    },
-    "day": {
-      "title": "BR_017_VN_QuietFields.mp3",
-      "creator": "Kevin Luce (kevp888)",
-      "sourcePage": "https://freesound.org/people/kevp888/sounds/578503/",
-      "sourceFileUrl": "https://cdn.freesound.org/previews/578/578503_9034501-hq.mp3",
-      "license": "CC-BY-4.0",
-      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
-      "sourceSha256": "4190c0937a09cc3ca3d6d34dca414cf64b9b1622ba2c9ec139e0abbe45a50c0c",
-      "assetSha256": "5a3a4b08a48a578774278f95fda2d5d3b7d09451616bca40d0484f511c34b41a"
-    },
-    "vote": {
-      "title": "ZOOM0005.WAV",
-      "creator": "molinsky",
-      "sourcePage": "https://freesound.org/people/molinsky/sounds/497058/",
-      "sourceFileUrl": "https://cdn.freesound.org/previews/497/497058_729547-hq.mp3",
-      "license": "CC0-1.0",
-      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
-      "sourceSha256": "91180cae6e643ea22b7324a9c7a5c9f69f300cae096b0cce7e658c9c747940de",
-      "assetSha256": "c9f172e9e47f35fc2cef894b09da80e67dc6966b8b1b0cf3f871e0fda106ed81"
+    "theme": {
+      "asset": "werewolf-theme.mp3",
+      "title": "NHẠC NỀN MA SÓI ONLINE",
+      "creator": "Nguyễn Hữu Hiếu",
+      "sourcePage": "https://www.youtube.com/",
+      "sourceFileUrl": "local://downloads/theme-source.mp3",
+      "license": "UNVERIFIED",
+      "licenseUrl": "https://creativecommons.org/unverified",
+      "rightsNote": "Bản tải về từ YouTube, chưa có văn bản cấp quyền của tác giả. Chỉ dùng nội bộ/thử nghiệm cho tới khi xin được phép. Chạy verify_music.py --require-cleared-rights trước khi phát hành công khai.",
+      "sourceSha256": "9654dafdbd1e660e4ad574b6e77a984387773892c649b6ff813fa5e3fe18bbb2",
+      "assetSha256": "17f18b0055944840b3c15cb4436e1977c9e70f2ec537ed530a8e2cd5ebba84a0"
     }
   }
 }

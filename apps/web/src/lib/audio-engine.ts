@@ -5,9 +5,7 @@ import type { Track } from "./audio-track";
 import { DEFAULT_SETTINGS, type AudioSettings } from "./audio-settings";
 
 const MUSIC_SRC: Record<Track, string> = {
-  night: "/audio/music/night.mp3",
-  day: "/audio/music/day.mp3",
-  vote: "/audio/music/vote.mp3",
+  theme: "/audio/music/werewolf-theme.mp3",
 };
 
 const SFX_SRC: Record<Cue, string> = {
@@ -105,8 +103,8 @@ function fadeOutPlaying(audio: AudioContext): void {
   previous.gain.gain.setValueAtTime(previous.gain.gain.value, now);
   previous.gain.gain.linearRampToValueAtTime(0, now + FADE_SEC);
   previous.source.stop(now + FADE_SEC);
-  // Ngắt kết nối để buffer PCM được thu hồi. Giữ cả ba track cùng lúc là hơn
-  // trăm MB trên máy người chơi.
+  // Ngắt kết nối để buffer PCM được thu hồi. Một vòng 48 giây giải nén ra hơn
+  // 30 MB float trong bộ nhớ; giữ lại nguồn đã tắt là giữ luôn chỗ đó.
   previous.source.onended = () => {
     previous.source.disconnect();
     previous.gain.disconnect();
@@ -175,6 +173,9 @@ export const audioEngine = {
   setTrack(track: Track | null): void {
     wanted = track;
     // Chưa có cử chỉ nào thì chỉ ghi nhớ; unlock() sẽ phát track đang chờ.
+    // `track === current` là chỗ giữ lời hứa "chuyển pha không phát lại nhạc":
+    // mọi pha chơi được đều trả về cùng một track, nên lời gọi thứ hai trở đi
+    // không đụng gì tới nguồn đang chạy.
     if (!unlocked || track === current) return;
     current = track;
 

@@ -1,50 +1,41 @@
 # Ghi công âm thanh
 
-## Nhạc nền / không gian âm thanh
+## Nhạc nền
 
-Ba asset mới dùng các bản thu thực địa và nhạc cụ truyền thống được đăng trên
-Freesound. Đây là nội dung của bên thứ ba; dự án chỉ cắt vòng lặp, crossfade,
-EQ nhẹ, hạ mức âm và chuyển mã. Không dùng Claude hay mô hình sinh nhạc để tạo
-thêm tiếng, nốt hoặc nhạc cụ.
+Cả ván dùng đúng một file. Đây là nội dung của bên thứ ba; dự án chỉ cắt vòng
+lặp, crossfade, EQ nhẹ, hạ mức âm và chuyển mã. Không dùng Claude hay mô hình
+sinh nhạc để tạo thêm tiếng, nốt hoặc nhạc cụ.
 
-### `music/day.mp3`
+### `music/werewolf-theme.mp3`
 
-- Tác phẩm: **BR_017_VN_QuietFields.mp3**
-- Người thu: **Kevin Luce (kevp888)**
-- Nguồn: https://freesound.org/people/kevp888/sounds/578503/
-- Bản dùng để dựng: official HQ preview MP3 từ máy chủ Freesound
-- Giấy phép: **CC BY 4.0** — https://creativecommons.org/licenses/by/4.0/
-- Mô tả nguồn: cánh đồng yên tĩnh ở miền Bắc Việt Nam, thu tháng 10/2008;
-  có côn trùng và chim trong một buổi chiều nóng ẩm.
-- Thay đổi: lấy vùng ổn định 38 giây; crossfade 6 giây; lọc dưới 55Hz và trên
-  9kHz; hạ nhẹ dải 2.8–6kHz; chuẩn hoá -28 LUFS; encode MP3 256kbps.
+- Tác phẩm: **NHẠC NỀN MA SÓI ONLINE**
+- Tác giả/người đăng: **Nguyễn Hữu Hiếu**
+- Nguồn: YouTube
+- Bản dùng để dựng: file MP3 tải về máy, SHA-256
+  `9654dafdbd1e660e4ad574b6e77a984387773892c649b6ff813fa5e3fe18bbb2`
+  (409.2s, 15.61 MiB). File này KHÔNG nằm trong repo.
+- Giấy phép: **chưa xác định** — xem cảnh báo bên dưới.
+- Thay đổi: lấy vòng 48.475 giây từ mốc 189.15s của bản gốc; crossfade
+  equal-power 6 giây giữa đầu vòng và phần chạy tiếp sau cuối vòng; lọc dưới
+  80Hz (bậc 2.5) và trên 14kHz; không shelf, không dip, không nén động, không
+  limiter; chuẩn hoá -27.0 LUFS với trần -3 dBTP (đo được -12.97 dBTP); encode
+  MP3 CBR 192kbps.
 
-### `music/night.mp3`
+### ⚠️ Cảnh báo quyền sử dụng
 
-- Tác phẩm: **BR_041_VN_FluteInNight.mp3**
-- Người thu: **Kevin Luce (kevp888)**
-- Nguồn: https://freesound.org/people/kevp888/sounds/578505/
-- Bản dùng để dựng: official HQ preview MP3 từ máy chủ Freesound
-- Giấy phép: **CC BY 4.0** — https://creativecommons.org/licenses/by/4.0/
-- Mô tả nguồn: tiếng sáo truyền thống vọng từ nhà hàng xóm trong một ngôi làng
-  Việt Nam vào ban đêm, kèm côn trùng; thu tháng 10/2008.
-- Thay đổi: lấy 37 giây; crossfade 6 giây; lọc dưới 50Hz và trên 10kHz; hạ
-  nhẹ vùng sáo 1–3kHz; chuẩn hoá -28 LUFS; encode MP3 256kbps.
+**Chưa xin được phép của tác giả.** File nguồn là bản tải về từ YouTube, không
+kèm giấy phép mở nào và chưa có văn bản cấp quyền. Asset này chỉ dùng cho chạy
+nội bộ và thử nghiệm.
 
-### `music/vote.mp3`
+Trước khi phát hành công khai, cần một trong hai:
 
-- Tác phẩm: **ZOOM0005.WAV**
-- Người đăng/thu: **molinsky**
-- Nguồn: https://freesound.org/people/molinsky/sounds/497058/
-- Bản dùng để dựng: official HQ preview MP3 từ máy chủ Freesound
-- Giấy phép: **CC0 1.0** —
-  https://creativecommons.org/publicdomain/zero/1.0/
-- Mô tả nguồn: bản thu một số nhạc cụ truyền thống Việt Nam.
-- Thay đổi: bỏ giây mở đầu, lấy 51 giây; crossfade 6 giây; lọc dưới 45Hz và
-  trên 11kHz; hạ rất nhẹ vùng 3–6kHz; chuẩn hoá -27 LUFS; encode MP3 256kbps.
+1. Xin phép tác giả bằng văn bản, rồi cập nhật `license`, `licenseUrl` và
+   `sourceFileUrl` trong `music-sources.json` cho khớp; hoặc
+2. Thay bằng nhạc có giấy phép mở (CC0 hoặc CC BY) và dựng lại.
 
-`music-sources.json` giữ URL, giấy phép và SHA-256 của cả file nguồn lẫn asset
-đã dựng. `verify_music.py` từ chối asset bị thay mà manifest chưa cập nhật.
+`music-sources.json` khai `"license": "UNVERIFIED"` kèm `rightsNote`, và
+`verify_music.py --require-cleared-rights` trả exit 1 chừng nào trạng thái đó
+còn nguyên. Đó là chốt chặn: đừng gỡ nó để cho build phát hành đi qua.
 
 ## Hiệu ứng
 
@@ -60,5 +51,10 @@ phủ liên bang Hoa Kỳ, thuộc phạm vi công cộng.
 
 ## Lịch sử
 
-Bộ trước đó dùng ba bài CC0 của Ragnar Random. Các file Ragnar đã được thay
-hoàn toàn; không còn asset nào của bộ đó trong thư mục `music/`.
+- Bộ đầu tiên: ba bài CC0 của Ragnar Random. Đã gỡ hoàn toàn.
+- Bộ thứ hai ("kinh dị làng quê Việt Nam"): `day` và `night` là bản thu thực
+  địa của Kevin Luce (kevp888) trên Freesound theo CC BY 4.0, `vote` là bản thu
+  của molinsky theo CC0 1.0. Ba file `music/day.mp3`, `music/night.mp3`,
+  `music/vote.mp3` đã bị xoá khỏi repo; không còn asset nào của bộ đó, nên
+  nghĩa vụ ghi công CC BY của bộ đó cũng đã chấm dứt.
+- Bộ hiện tại: một track duy nhất, xem trên.

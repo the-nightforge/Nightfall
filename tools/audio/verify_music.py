@@ -1,4 +1,4 @@
-"""Kiểm chứng ba track nhạc nền trên chính file mp3 đã encode.
+"""Kiểm chứng track nhạc nền trên chính file mp3 đã encode.
 
 Không kiểm trên bộ đệm trong bộ nhớ mà giải mã lại mp3, vì thứ trình duyệt
 nghe là file, không phải mảng float trong lúc dựng.
@@ -18,9 +18,22 @@ Bốn phép đo:
    một track dồn năng lượng xuống dải thấp sẽ *biến mất* đúng ở nơi nó được
    nghe nhiều nhất - trong khi mọi phép đo ở trên vẫn đẹp.
 
+Từ 2026-08-31 chỉ còn MỘT track (`targets.TRACK`) chạy suốt ván, nên hai điều
+kiện cũ vốn so ba track với nhau đã đi theo bộ ba track. Chúng KHÔNG bị bỏ mà
+được thay bằng điều kiện tương đương cho một track:
+
+- "chênh lệch LUFS giữa ba track" -> "LUFS nằm trong cửa sổ thiết kế"
+  (`targets.LUFS_WINDOW`), tức vẫn khẳng định nhạc chìm dưới hiệu ứng và voice.
+- "vote so với day qua loa điện thoại" -> điều kiện mất mát và năng lượng thân
+  âm áp thẳng cho track duy nhất, không còn cần track khác làm mốc so.
+
 Mặc định chạy ở chế độ NGHIÊM NGẶT: mỗi ngưỡng ở `THRESHOLDS` là một điều kiện
 phải đạt, và script trả exit code 1 kèm danh sách điều kiện hỏng nếu có bất kỳ
 điều kiện nào không đạt. `--no-strict` chỉ in báo cáo (dùng khi đang dò tìm).
+
+`--require-cleared-rights` biến trạng thái quyền "UNVERIFIED" thành lỗi. Dùng
+cờ này trong quy trình phát hành công khai: nhạc chưa xin được phép thì vẫn
+chạy được ở local, nhưng không lọt lên bản public.
 
 Chạy:  python tools/audio/verify_music.py --audio apps/web/public/audio
 """
@@ -44,15 +57,23 @@ for _s in (sys.stdout, sys.stderr):
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from dsp import bp_curve, fft_shape
-from targets import TARGET_LUFS, TRUE_PEAK_CEILING
+from targets import ASSET_FILE, LUFS_WINDOW, TARGET_LUFS, TRACK, TRUE_PEAK_CEILING
 from studio import true_peak_db, loudness
 
 SR = 44100
-TRACKS = ("night", "day", "vote")
+TRACKS = (TRACK,)
+
+# Giấy phép đã đủ để phát hành công khai.
 ALLOWED_LICENSES = {
     "CC0-1.0": "https://creativecommons.org/publicdomain/zero/1.0/",
     "CC-BY-4.0": "https://creativecommons.org/licenses/by/4.0/",
 }
+# Trạng thái "chưa xác định được quyền". Không phải một giấy phép - nó là lời
+# thừa nhận rằng chưa có giấy phép nào, và nó phải đi kèm `rightsNote` giải
+# thích. Manifest được phép mang trạng thái này để chạy nội bộ; muốn phát hành
+# thì `--require-cleared-rights` sẽ chặn lại.
+PENDING_LICENSE = "UNVERIFIED"
+PENDING_LICENSE_URL = "https://creativecommons.org/unverified"
 
 # Mô phỏng loa điện thoại ---------------------------------------------------
 #
@@ -66,18 +87,20 @@ PHONE_LOW, PHONE_HIGH, PHONE_ORDER = 180.0, 8000.0, 3.0
 BODY_SPLIT_HZ = 200.0
 
 THRESHOLDS = dict(
-    lufs_tolerance=0.2,        # LU, lệch mục tiêu của từng track
-    lufs_spread=1.5,           # LU, chênh lệch lớn nhất giữa ba track
+    lufs_tolerance=0.2,        # LU, lệch mục tiêu của track
     true_peak_db=TRUE_PEAK_CEILING,  # dBTP, khớp trần lúc chuẩn hoá
-    total_mib=6.0,             # MiB, cả thư mục audio
+    total_mib=3.0,             # MiB, cả thư mục audio
     periodicity_corr=0.995,    # tối thiểu
     periodicity_err_db=-20.0,  # tối đa
     seam_jump_db=-35.0,        # dBFS, tối đa
     hf_z=3.0,                  # tối đa
-    phone_loss_lu=2.2,         # LU, tối đa cho track vote
-    phone_body_pct=50.0,       # %, tối thiểu cho track vote
-    phone_gap_vs_day=0.5,      # LU, vote không được nhỏ hơn day quá mức này
+    phone_loss_lu=2.2,         # LU, tối đa
+    phone_body_pct=50.0,       # %, tối thiểu
 )
+
+
+def asset_path(audio_dir: str, name: str) -> str:
+    return os.path.join(audio_dir, "music", ASSET_FILE if name == TRACK else f"{name}.mp3")
 
 
 def decode(path: str) -> np.ndarray:
@@ -103,26 +126,35 @@ def sha256(path: str) -> str:
     return digest.hexdigest()
 
 
-def provenance_errors(audio_dir: str) -> list[str]:
-    """Kiểm tra giấy phép khai báo và khoá mã băm của ba asset đang phát."""
+def read_manifest(audio_dir: str) -> tuple[dict | None, list[str]]:
     path = os.path.join(audio_dir, "music-sources.json")
     if not os.path.exists(path):
-        return ["thiếu music-sources.json"]
+        return None, ["thiếu music-sources.json"]
     try:
         with open(path, encoding="utf-8") as fh:
             manifest = json.load(fh)
     except (OSError, json.JSONDecodeError) as exc:
-        return [f"music-sources.json không đọc được: {exc}"]
-
-    if not isinstance(manifest, dict) or manifest.get("schemaVersion") != 1 \
+        return None, [f"music-sources.json không đọc được: {exc}"]
+    if not isinstance(manifest, dict) or manifest.get("schemaVersion") != 2 \
             or not isinstance(manifest.get("tracks"), dict):
-        return ["music-sources.json sai schemaVersion hoặc thiếu tracks"]
+        return None, ["music-sources.json sai schemaVersion hoặc thiếu tracks"]
+    return manifest, []
 
+
+def provenance_errors(audio_dir: str, manifest: dict) -> list[str]:
+    """Kiểm tra giấy phép khai báo và khoá mã băm của asset đang phát."""
     required = {
-        "title", "creator", "sourcePage", "sourceFileUrl", "license",
+        "asset", "title", "creator", "sourcePage", "sourceFileUrl", "license",
         "licenseUrl", "sourceSha256", "assetSha256",
     }
     errors = []
+
+    extra = sorted(set(manifest["tracks"]) - set(TRACKS))
+    if extra:
+        # Metadata mô tả track không còn được dùng là metadata sai. Bắt ở đây
+        # để không ai đọc manifest rồi tưởng game vẫn phát ba bài.
+        errors.append(f"manifest còn track không dùng: {', '.join(extra)}")
+
     for name in TRACKS:
         item = manifest["tracks"].get(name)
         if not isinstance(item, dict):
@@ -132,23 +164,51 @@ def provenance_errors(audio_dir: str) -> list[str]:
         if missing:
             errors.append(f"{name}: manifest thiếu {', '.join(missing)}")
             continue
+
+        asset = str(item["asset"])
+        if asset != os.path.basename(asset) or asset != os.path.basename(
+                asset_path(audio_dir, name)):
+            errors.append(f"{name}: asset phải là {os.path.basename(asset_path(audio_dir, name))}")
+
         license_id = str(item["license"])
-        if license_id not in ALLOWED_LICENSES:
+        pending = license_id == PENDING_LICENSE
+        if pending:
+            if item["licenseUrl"] != PENDING_LICENSE_URL:
+                errors.append(f"{name}: URL giấy phép không khớp {PENDING_LICENSE}")
+            if not str(item.get("rightsNote", "")).strip():
+                errors.append(f"{name}: trạng thái {PENDING_LICENSE} phải kèm rightsNote")
+        elif license_id not in ALLOWED_LICENSES:
             errors.append(f"{name}: giấy phép không được chấp nhận: {license_id}")
         elif item["licenseUrl"] != ALLOWED_LICENSES[license_id]:
             errors.append(f"{name}: URL giấy phép không khớp {license_id}")
+
         if not str(item["sourcePage"]).startswith("https://"):
             errors.append(f"{name}: sourcePage phải dùng HTTPS")
-        if not str(item["sourceFileUrl"]).startswith("https://"):
+        # Nguồn đã có giấy phép thì phải tải lại được để dựng lại; nguồn chưa rõ
+        # quyền chỉ nằm trên máy người dựng nên được phép dùng lược đồ local://.
+        source_url = str(item["sourceFileUrl"])
+        if not source_url.startswith("https://") and not (
+                pending and source_url.startswith("local://")):
             errors.append(f"{name}: sourceFileUrl phải dùng HTTPS")
+
         for key in ("sourceSha256", "assetSha256"):
             value = str(item[key]).lower()
             if len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
                 errors.append(f"{name}: {key} không phải SHA-256")
-        asset = os.path.join(audio_dir, "music", f"{name}.mp3")
-        if os.path.exists(asset) and sha256(asset) != str(item["assetSha256"]).lower():
+        path = asset_path(audio_dir, name)
+        if os.path.exists(path) and sha256(path) != str(item["assetSha256"]).lower():
             errors.append(f"{name}: SHA-256 không khớp manifest")
     return errors
+
+
+def pending_rights(manifest: dict) -> list[tuple[str, str]]:
+    """Danh sách (track, ghi chú) của các track chưa xác định được quyền."""
+    out = []
+    for name in TRACKS:
+        item = manifest["tracks"].get(name)
+        if isinstance(item, dict) and str(item.get("license")) == PENDING_LICENSE:
+            out.append((name, str(item.get("rightsNote", "")).strip()))
+    return out
 
 
 def periodicity(d: np.ndarray, n_loop: int) -> tuple[float, float, float]:
@@ -242,6 +302,11 @@ class Checks:
     def ge(self, value: float, limit: float, label: str, unit: str = "") -> None:
         self.add(value >= limit, label, f"{value:.3f}{unit} (sàn {limit:g}{unit})")
 
+    def within(self, value: float, low: float, high: float, label: str,
+               unit: str = "") -> None:
+        self.add(low <= value <= high, label,
+                 f"{value:.3f}{unit} (cửa sổ {low:g}..{high:g}{unit})")
+
     @property
     def failed(self) -> list[tuple[bool, str, str]]:
         return [r for r in self.rows if not r[0]]
@@ -268,11 +333,15 @@ def main() -> int:
     ap.add_argument("--auditions", default=None, help="thư mục lưu file nghe thử 3 vòng")
     ap.add_argument("--no-strict", dest="strict", action="store_false",
                     help="chỉ in báo cáo, luôn trả exit 0")
+    ap.add_argument("--require-cleared-rights", action="store_true",
+                    help="coi trạng thái quyền UNVERIFIED là lỗi (dùng khi phát hành)")
     args = ap.parse_args()
 
     checks = Checks()
 
-    source_errors = provenance_errors(args.audio)
+    manifest, source_errors = read_manifest(args.audio)
+    if manifest is not None:
+        source_errors = provenance_errors(args.audio, manifest)
     if source_errors:
         print("kiểm tra nguồn gốc")
         print("-" * 78)
@@ -280,6 +349,8 @@ def main() -> int:
             print(f"  FAIL  {item}")
         print(f"\n{len(source_errors)} điều kiện nguồn gốc KHÔNG đạt.")
         return 1 if args.strict else 0
+
+    pending = pending_rights(manifest)
 
     points_path = os.path.join(args.audio, "loop-points.json")
     if not os.path.exists(points_path):
@@ -292,13 +363,17 @@ def main() -> int:
     # trong bảng: mọi phép đo phía dưới đều cần cả hai thứ đó tồn tại.
     missing = []
     for name in TRACKS:
-        if not os.path.exists(os.path.join(args.audio, "music", f"{name}.mp3")):
-            missing.append(f"thiếu track music/{name}.mp3")
+        path = asset_path(args.audio, name)
+        if not os.path.exists(path):
+            missing.append(f"thiếu track music/{os.path.basename(path)}")
         p = points.get(name)
         if not isinstance(p, dict):
             missing.append(f"thiếu mốc lặp cho {name}")
         elif not all(k in p for k in ("loopStart", "loopEnd")):
             missing.append(f"mốc lặp {name} thiếu loopStart/loopEnd")
+    extra_points = sorted(set(points) - set(TRACKS))
+    if extra_points:
+        missing.append(f"loop-points.json còn track không dùng: {', '.join(extra_points)}")
     if missing:
         print("kiểm tra nghiêm ngặt")
         print("-" * 78)
@@ -306,6 +381,12 @@ def main() -> int:
             print(f"  FAIL  {item}")
         print(f"\n{len(missing)} điều kiện KHÔNG đạt.")
         return 1 if args.strict else 0
+
+    # Thư mục music không được còn file thừa: một track cũ bị bỏ quên vẫn nằm
+    # trong bundle và vẫn tốn băng thông của người chơi dù không ai phát nó.
+    music_dir = os.path.join(args.audio, "music")
+    expected_files = {os.path.basename(asset_path(args.audio, n)) for n in TRACKS}
+    stray = sorted(set(os.listdir(music_dir)) - expected_files)
 
     if args.plots:
         os.makedirs(args.plots, exist_ok=True)
@@ -315,7 +396,7 @@ def main() -> int:
     rows = []
     total_kb = 0.0
     for name in TRACKS:
-        path = os.path.join(args.audio, "music", f"{name}.mp3")
+        path = asset_path(args.audio, name)
         p = points[name]
         d = decode(path)
         n_loop = int(round((p["loopEnd"] - p["loopStart"]) * SR))
@@ -364,11 +445,8 @@ def main() -> int:
         print(f"{r['name']:6s} {r['lufs']:10.2f} {r['lufs_phone']:10.2f} "
               f"{r['phone_loss']:8.2f} {r['body_pct']:10.1f}%")
 
-    lufs = [r["lufs"] for r in rows]
-    spread = max(lufs) - min(lufs)
     max_tp = max(r["tp"] for r in rows)
-    print(f"\nnhạc: {total_kb:.1f} kB   chênh lệch độ to lớn nhất: "
-          f"{spread:.2f} LU   true peak cao nhất: {max_tp:.2f} dBFS")
+    print(f"\nnhạc: {total_kb:.1f} kB   true peak cao nhất: {max_tp:.2f} dBFS")
 
     sfx = os.path.join(args.audio, "sfx")
     sfx_kb = sum(os.path.getsize(os.path.join(sfx, f)) for f in os.listdir(sfx)) / 1024.0
@@ -376,12 +454,13 @@ def main() -> int:
     print(f"tổng thư mục audio: {total_mib:.2f} MiB (nhạc "
           f"{total_kb / 1024.0:.2f} MiB + hiệu ứng {sfx_kb / 1024.0:.2f} MiB)")
 
-    by_name = {r["name"]: r for r in rows}
     for r in rows:
         name = r["name"]
         target = TARGET_LUFS[name]
         checks.le(abs(r["lufs"] - target), THRESHOLDS["lufs_tolerance"],
                   f"{name}: LUFS lệch mục tiêu {target:g}", " LU")
+        checks.within(r["lufs"], LUFS_WINDOW[0], LUFS_WINDOW[1],
+                      f"{name}: LUFS trong cửa sổ thiết kế", " LUFS")
         checks.le(r["tp"], THRESHOLDS["true_peak_db"], f"{name}: true peak", " dBFS")
         checks.ge(r["corr"], THRESHOLDS["periodicity_corr"], f"{name}: tương quan tuần hoàn")
         checks.le(r["err_db"], THRESHOLDS["periodicity_err_db"],
@@ -389,23 +468,32 @@ def main() -> int:
         checks.le(r["jump_db"], THRESHOLDS["seam_jump_db"],
                   f"{name}: bước nhảy chỗ nối", " dBFS")
         checks.le(r["hf_z"], THRESHOLDS["hf_z"], f"{name}: năng lượng cao tần chỗ nối")
+        # Hai điều kiện loa điện thoại: nhạc nền game phần lớn nghe qua loa
+        # điện thoại, một track dồn hết xuống dải thấp sẽ biến mất ở đó.
+        checks.le(r["phone_loss"], THRESHOLDS["phone_loss_lu"],
+                  f"{name}: mất mát qua loa điện thoại", " LU")
+        checks.ge(r["body_pct"], THRESHOLDS["phone_body_pct"],
+                  f"{name}: năng lượng trên 200Hz", "%")
 
-    checks.le(spread, THRESHOLDS["lufs_spread"], "chênh lệch LUFS giữa ba track", " LU")
     checks.le(total_mib, THRESHOLDS["total_mib"], "tổng thư mục audio", " MiB")
-
-    # Ba điều kiện dưới đây chỉ áp cho `vote`, và đó là có chủ đích: nó là track
-    # duy nhất có nhiệm vụ tạo cao trào. `night` được phép tối và trầm - đó là
-    # công việc của nó. Áp cùng một ngưỡng cho cả ba sẽ ép `night` sáng lên và
-    # phá đúng thứ khiến nó dùng được.
-    vote, day = by_name["vote"], by_name["day"]
-    checks.le(vote["phone_loss"], THRESHOLDS["phone_loss_lu"],
-              "vote: mất mát qua loa điện thoại", " LU")
-    checks.ge(vote["body_pct"], THRESHOLDS["phone_body_pct"],
-              "vote: năng lượng trên 200Hz", "%")
-    checks.ge(vote["lufs_phone"] - day["lufs_phone"], -THRESHOLDS["phone_gap_vs_day"],
-              "vote: LUFS qua loa so với day", " LU")
+    checks.add(not stray, "music/ không còn file thừa",
+               "sạch" if not stray else f"thừa: {', '.join(stray)}")
+    if args.require_cleared_rights:
+        checks.add(not pending, "quyền sử dụng đã được xác minh",
+                   "đã xác minh" if not pending
+                   else f"còn chờ: {', '.join(n for n, _ in pending)}")
 
     ok = checks.report()
+
+    if pending:
+        print()
+        print("*" * 78)
+        print("CẢNH BÁO QUYỀN SỬ DỤNG - chưa đủ điều kiện phát hành công khai")
+        for name, note in pending:
+            print(f"  {name}: {note}")
+        print("  Chạy lại với --require-cleared-rights để chặn build phát hành.")
+        print("*" * 78)
+
     if not args.strict:
         print("\n(--no-strict: luôn trả exit 0)")
         return 0
@@ -428,10 +516,10 @@ def plot_seam(outdir: str, name: str, loop: np.ndarray) -> None:
         t = (np.arange(-w, w) / SR) * 1000.0
         ax.plot(t, seg, lw=0.6 if ms > 10 else 1.4, color="#3b6ea5")
         ax.axvline(0, color="#c0392b", lw=1.0, ls="--")
-        ax.set_title(f"{name}.mp3 — {title}", fontsize=9)
+        ax.set_title(f"{name} — {title}", fontsize=9)
         ax.set_xlabel("ms")
         ax.grid(alpha=0.25)
-    fig.suptitle(f"Chỗ nối vòng lặp {name}.mp3 (đường đỏ = loopEnd nối về loopStart)")
+    fig.suptitle(f"Chỗ nối vòng lặp {name} (đường đỏ = loopEnd nối về loopStart)")
     fig.tight_layout()
     fig.savefig(os.path.join(outdir, f"seam-{name}.png"), dpi=110)
     plt.close(fig)

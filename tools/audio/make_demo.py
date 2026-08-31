@@ -1,9 +1,13 @@
 """Dựng file nghe thử mô phỏng đúng cách engine phát nhạc.
 
 Tái hiện `audio-engine.ts`: nguồn mới bắt đầu tại loopStart, lặp giữa
-loopStart/loopEnd, và crossfade 600ms bằng `linearRampToValueAtTime` - tức là
-gain tuyến tính, không phải equal-power. Nhờ vậy nghe được cả chỗ nối vòng lặp
-lẫn chỗ chuyển pha đúng như trong game.
+loopStart/loopEnd, và fade 600ms bằng `linearRampToValueAtTime` - tức là gain
+tuyến tính, không phải equal-power.
+
+Từ 2026-08-31 chỉ còn một track chạy suốt ván, nên bản nghe thử "chuyển pha"
+không còn là ba bài nối nhau nữa. Nó dựng đúng thứ thiết kế mới hứa: nhạc chạy
+LIÊN TỤC qua các lần đổi pha (không có chỗ nối, không có lần khởi động lại),
+rồi fade-out một lần duy nhất ở GAME_OVER.
 
 Chạy:  python tools/audio/make_demo.py --audio apps/web/public/audio --out <thư mục>
 """
@@ -26,9 +30,15 @@ for _s in (sys.stdout, sys.stderr):
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from studio import decode_mp3, write_mp3
+from targets import ASSET_FILE, TRACK
 
 SR = 44100
 FADE = 0.6          # khớp FADE_SEC trong audio-engine.ts
+
+# Một chuỗi pha như trong ván thật. Ranh giới pha chỉ để đánh dấu trong bản in;
+# nhạc không được đổi gì ở những mốc này - đó chính là điều cần nghe.
+PHASES = [("LOBBY", 10.0), ("NIGHT", 14.0), ("DAY_DISCUSSION", 14.0),
+          ("VOTING", 14.0), ("ELIMINATION", 8.0), ("CHECK_WIN", 6.0)]
 
 
 def looped(loop: np.ndarray, seconds: float) -> np.ndarray:
@@ -46,38 +56,33 @@ def main() -> None:
     with open(os.path.join(args.audio, "loop-points.json"), encoding="utf-8") as fh:
         points = json.load(fh)
 
-    loops = {}
-    for name in ("night", "day", "vote"):
-        d = decode_mp3(os.path.join(args.audio, "music", f"{name}.mp3"))
-        p = points[name]
-        s0 = int(round(p["loopStart"] * SR))
-        n = int(round((p["loopEnd"] - p["loopStart"]) * SR))
-        loops[name] = d[s0:s0 + n]
+    d = decode_mp3(os.path.join(args.audio, "music", ASSET_FILE))
+    p = points[TRACK]
+    s0 = int(round(p["loopStart"] * SR))
+    n = int(round((p["loopEnd"] - p["loopStart"]) * SR))
+    loop = d[s0:s0 + n]
 
-    # Nghe thử ba vòng liên tiếp: chỗ nối rơi vào giữa file, dễ bắt lỗi.
-    for name, loop in loops.items():
-        write_mp3(os.path.join(args.out, f"{name}-3loops.mp3"), np.vstack([loop] * 3))
+    # Ba vòng liên tiếp: chỗ nối rơi vào giữa file, dễ bắt lỗi.
+    write_mp3(os.path.join(args.out, f"{TRACK}-3loops.mp3"), np.vstack([loop] * 3))
 
-    # Chuỗi chuyển pha giống một ván thật: đêm -> ngày -> bỏ phiếu -> đêm.
-    plan = [("night", 16.0), ("day", 16.0), ("vote", 16.0), ("night", 14.0)]
-    total = sum(d for _, d in plan) + FADE
-    out = np.zeros((int(total * SR) + SR, 2))
+    # Một ván: fade-in ở lần đầu có nhạc, chạy thẳng qua mọi lần đổi pha, fade
+    # out ở GAME_OVER.
+    total = sum(sec for _, sec in PHASES)
+    body = looped(loop, total)
+    env = np.ones(body.shape[0])
+    f = int(FADE * SR)
+    env[:f] = np.linspace(0.0, 1.0, f)
+    env[-f:] = np.linspace(1.0, 0.0, f)
+    write_mp3(os.path.join(args.out, "match-one-track.mp3"), body * env[:, None])
 
-    t = 0.0
-    for name, dur in plan:
-        seg = looped(loops[name], dur + FADE)
-        env = np.ones(seg.shape[0])
-        f = int(FADE * SR)
-        env[:f] = np.linspace(0.0, 1.0, f)
-        env[-f:] = np.linspace(1.0, 0.0, f)
-        start = int(t * SR)
-        out[start:start + seg.shape[0]] += seg * env[:, None]
-        t += dur
-
-    write_mp3(os.path.join(args.out, "phase-transitions.mp3"), out)
-    print(f"đã ghi {len(loops) + 1} file nghe thử vào {args.out}")
-    print("  *-3loops.mp3        - ba vòng liên tiếp, kiểm chỗ nối")
-    print("  phase-transitions.mp3 - đêm->ngày->bỏ phiếu->đêm, crossfade 600ms")
+    print(f"đã ghi 2 file nghe thử vào {args.out}")
+    print(f"  {TRACK}-3loops.mp3      - ba vòng liên tiếp, kiểm chỗ nối")
+    print("  match-one-track.mp3  - một ván đủ pha, nhạc không đứt ở chỗ đổi pha:")
+    at = 0.0
+    for name, sec in PHASES:
+        print(f"      {at:6.1f}s  {name}")
+        at += sec
+    print(f"      {at:6.1f}s  GAME_OVER (fade-out {FADE}s)")
 
 
 if __name__ == "__main__":

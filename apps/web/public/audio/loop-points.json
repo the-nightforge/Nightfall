@@ -1,29 +1,12 @@
 {
-  "night": {
+  "theme": {
+    "asset": "werewolf-theme.mp3",
     "loopStart": 0.5,
-    "loopEnd": 37.5,
-    "loopLen": 37.0,
-    "fileLen": 38.0,
-    "loopSamples": 1631700,
-    "kb": 1188.6,
-    "source": "BR_041_VN_FluteInNight.mp3"
-  },
-  "day": {
-    "loopStart": 0.5,
-    "loopEnd": 38.5,
-    "loopLen": 38.0,
-    "fileLen": 39.0,
-    "loopSamples": 1675800,
-    "kb": 1219.6,
-    "source": "BR_017_VN_QuietFields.mp3"
-  },
-  "vote": {
-    "loopStart": 0.5,
-    "loopEnd": 51.5,
-    "loopLen": 51.0,
-    "fileLen": 52.0,
-    "loopSamples": 2249100,
-    "kb": 1626.1,
-    "source": "ZOOM0005.WAV"
+    "loopEnd": 48.975011,
+    "loopLen": 48.475011,
+    "fileLen": 49.475011,
+    "loopSamples": 2137748,
+    "kb": 1160.2,
+    "source": "NHẠC NỀN MA SÓI ONLINE"
   }
 }
