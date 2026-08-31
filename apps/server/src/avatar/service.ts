@@ -59,9 +59,18 @@ async function swapAvatar(playerId: string, next: StoredObject | null): Promise<
 
     if (count === 1) {
       if (previousKey && previousKey !== next?.key) {
-        await objectStorage()
-          .delete(previousKey)
-          .catch((err) => console.error("[avatar] Không dọn được object cũ:", err));
+        // try/catch, KHÔNG phải .catch(): nếu delete() ném ĐỒNG BỘ (không kịp
+        // trả về promise) thì .catch() không bắt được gì, và lỗi đó thoát
+        // khỏi swapAvatar SAU KHI dòng DB đã commit - rơi vào catch của
+        // storeAvatar rồi xoá nhầm object mà DB vừa mới trỏ tới. Cả hai
+        // adapter hiện có đều async, nhưng lời hứa ở đầu hàm này - dọn KHÔNG
+        // được phép báo lỗi cho một thao tác đã thành công - phải đúng vô
+        // điều kiện, không phụ thuộc adapter nào đang chạy.
+        try {
+          await objectStorage().delete(previousKey);
+        } catch (err) {
+          console.error("[avatar] Không dọn được object cũ:", err);
+        }
       }
       return;
     }
@@ -106,11 +115,23 @@ export async function storeAvatar(playerId: string, file: Buffer): Promise<strin
     );
   }
 
+  const key = avatarObjectKey(playerId);
   let stored: StoredObject;
   try {
-    stored = await storage.put(avatarObjectKey(playerId), processed.data, "image/webp");
+    stored = await storage.put(key, processed.data, "image/webp");
   } catch (err) {
     console.error("[avatar] Upload lên object storage thất bại:", err);
+    // put() ném không có nghĩa là object CHẮC CHẮN chưa lên bucket: với S3,
+    // lỗi có thể chỉ nằm trên đường về (timeout đọc response) sau khi server
+    // đã nhận xong request - dọn best-effort ở đây để không mồ côi vĩnh viễn
+    // trong trường hợp đó. Sinh key TRƯỚC khi gọi put() (thay vì lấy từ giá
+    // trị trả về) chính là điều cho phép làm việc này: put() thất bại thì
+    // không có StoredObject nào để lấy .key từ đó.
+    try {
+      await storage.delete(key);
+    } catch (cleanupErr) {
+      console.error("[avatar] Không dọn được object upload lỗi:", cleanupErr);
+    }
     throw new AvatarError("Không lưu được ảnh lúc này, thử lại sau ít phút", 503);
   }
 
@@ -130,7 +151,14 @@ export async function storeAvatar(playerId: string, file: Buffer): Promise<strin
 
 export async function setAvatar(playerId: string, file: Buffer): Promise<{ avatarUrl: string }> {
   const avatarUrl = await storeAvatar(playerId, file);
-  await applyAvatarToRoom(playerId, avatarUrl);
+  // DB và bucket đã cập nhật xong ở đây - phát lại snapshot chỉ để phòng khác
+  // NHÌN THẤY avatar mới ngay, không phải điều kiện để coi upload là thành
+  // công. Để nó ném thẳng ra thì client thấy lỗi cho một thao tác đã thành
+  // công, rồi thử lại và tạo thêm một object thừa - bọc catch + log, cùng
+  // hình dạng với việc dọn object cũ trong swapAvatar.
+  await applyAvatarToRoom(playerId, avatarUrl).catch((err) =>
+    console.error("[avatar] Phát lại snapshot phòng thất bại:", err),
+  );
   return { avatarUrl };
 }
 

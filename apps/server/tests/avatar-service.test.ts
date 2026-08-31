@@ -59,11 +59,12 @@ const applied = vi.hoisted(() => ({ fn: vi.fn(async () => undefined) }));
 vi.mock("../src/rooms/apply-avatar", () => ({ applyAvatarToRoom: applied.fn }));
 
 import { AvatarError } from "../src/avatar/errors";
-import { avatarObjectKey, clearAvatar, setAvatar } from "../src/avatar/service";
+import { MAX_AVATAR_UPLOAD_BYTES, avatarObjectKey, clearAvatar, setAvatar } from "../src/avatar/service";
 import { createMemoryStorage, type MemoryObjectStorage } from "../src/storage/memory";
 import { resetObjectStorage, setObjectStorage } from "../src/storage";
 
 let storage: MemoryObjectStorage;
+let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
 async function jpeg(color = { r: 200, g: 60, b: 60 }): Promise<Buffer> {
   return sharp({ create: { width: 400, height: 300, channels: 3, background: color } })
@@ -85,10 +86,16 @@ beforeEach(() => {
   storage = createMemoryStorage("https://cdn.test/masoi");
   setObjectStorage(storage);
   applied.fn.mockClear();
+  // service.ts CỐ Ý console.error trên mọi nhánh lỗi (đó là tầng duy nhất
+  // được log, image.ts không tự log) - năm test dưới đây đi đúng những nhánh
+  // đó, nên không câm log thì mỗi lần chạy suite lại phun cả chồng stderr vô
+  // hại nhưng gây nhiễu. Câm ở ĐÂY (test), không đụng vào service.ts.
+  consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {
   resetObjectStorage();
+  consoleErrorSpy.mockRestore();
 });
 
 describe("avatarObjectKey", () => {
@@ -147,7 +154,7 @@ describe("setAvatar", () => {
     expect(storage.objects.size).toBe(0);
   });
 
-  it("ảnh hỏng bị từ chối với mã 400 và không để lại object", async () => {
+  it("ảnh hỏng bị từ chối với mã 400, mang đúng câu của image.ts chứ không phải câu chung", async () => {
     const png = await sharp({
       create: { width: 100, height: 100, channels: 3, background: { r: 1, g: 2, b: 3 } },
     })
@@ -155,21 +162,70 @@ describe("setAvatar", () => {
       .toBuffer();
     const broken = Buffer.concat([png.subarray(0, 40), Buffer.from("rác")]);
 
-    await expect(setAvatar("p1", broken)).rejects.toMatchObject({ status: 400 });
+    // Buffer này QUA được sniffImageType (8 byte đầu vẫn đúng chữ ký PNG) nên
+    // thật sự chạm tới processAvatar, và processAvatar ném AvatarImageError
+    // với câu "Không đọc được ảnh, file có thể đã hỏng" (khác câu chung "Không
+    // đọc được ảnh NÀY, hãy thử ảnh khác" ở service.ts) - assert đúng câu đó
+    // để nếu ai xoá nhánh `err instanceof AvatarImageError ? …` trong
+    // service.ts thì test này đỏ ngay, vì hai câu khác nhau ở chữ.
+    await expect(setAvatar("p1", broken)).rejects.toMatchObject({
+      status: 400,
+      message: "Không đọc được ảnh, file có thể đã hỏng",
+    });
     expect(storage.objects.size).toBe(0);
   });
 
-  it("thông điệp lỗi cụ thể từ image.ts phải tới người gọi, không bị gộp chung", async () => {
-    // GIF không nằm trong danh sách định dạng chấp nhận: sniffImageType trả về
-    // null nên processAvatar (thật ra là service.storeAvatar, vì sniff đã chặn
-    // trước khi tới processAvatar) phải ném đúng câu "chỉ chấp nhận..." - không
-    // phải câu chung "Không đọc được ảnh này, hãy thử ảnh khác".
+  it(
+    "ảnh vượt trần điểm ảnh bị từ chối với đúng câu \"quá lớn\", không phải câu ảnh hỏng",
+    async () => {
+      // Đây chính là ví dụ mở đầu cho luật ở Task 5: người upload ảnh
+      // 9000x9000 không được nghe rằng file của họ "có thể đã hỏng" - đó là
+      // một lời khuyên sai, ảnh này không hỏng, nó chỉ quá to. 7100x7100 =
+      // 50.410.000 điểm ảnh, vượt trần MAX_INPUT_PIXELS = 50.000.000 của
+      // image.ts một chút - đủ để trượt trần mà không phải dựng ảnh khổng lồ
+      // tốn thời gian test.
+      const huge = await sharp({
+        create: { width: 7100, height: 7100, channels: 3, background: { r: 5, g: 5, b: 5 } },
+      })
+        .jpeg()
+        .toBuffer();
+
+      await expect(setAvatar("p1", huge)).rejects.toMatchObject({
+        status: 400,
+        message: "Ảnh có kích thước quá lớn, hãy thử ảnh nhỏ hơn",
+      });
+      expect(storage.objects.size).toBe(0);
+    },
+    20_000,
+  );
+
+  it("file giả mạo định dạng qua sniff bị chặn trước khi kịp đụng tới processAvatar", async () => {
+    // sniffImageType (không phải processAvatar) là nơi chặn GIF - test này
+    // không chứng minh gì về nhánh gộp/không-gộp thông điệp lỗi của
+    // processAvatar (hai test ở trên mới làm việc đó); nó chỉ xác nhận rằng
+    // hàng rào sniff nằm ở TRƯỚC decode, nên không có định dạng lạ nào chạm
+    // được tới sharp.
     const gif = Buffer.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x00, 0x00]);
 
     await expect(setAvatar("p1", gif)).rejects.toMatchObject({
       status: 400,
       message: "Chỉ chấp nhận ảnh JPG, PNG hoặc WebP",
     });
+  });
+
+  it("ảnh vượt 5MB bị từ chối với mã 413, không chạm tới sniff/process/storage", async () => {
+    // Cố tình KHÔNG phải ảnh thật: nhánh trần dung lượng nằm TRƯỚC
+    // sniffImageType trong storeAvatar, nên một buffer rác đúng kích thước là
+    // đủ - nếu hằng số MAX_AVATAR_UPLOAD_BYTES bị gõ nhầm (vd đổi đơn vị),
+    // test này đỏ mà không cần mã hoá một ảnh 5MB thật.
+    const tooBig = Buffer.alloc(MAX_AVATAR_UPLOAD_BYTES + 1);
+
+    await expect(setAvatar("p1", tooBig)).rejects.toMatchObject({
+      status: 413,
+      message: "Ảnh quá lớn, tối đa 5MB",
+    });
+    expect(row("p1").avatarUrl).toBeNull();
+    expect(storage.objects.size).toBe(0);
   });
 
   it("storage lỗi thì DB không đổi - avatar cũ còn nguyên", async () => {
@@ -245,6 +301,12 @@ describe("setAvatar", () => {
     // bị chốt giữ lại - avatarKey nó đọc được (oldKey) đang bị đóng băng ở
     // đây, KHÔNG await toàn bộ uploadA nên test tiếp tục chạy song song.
     const uploadA = setAvatar("p1", bufferA);
+    // Gắn một handler câm ngay bây giờ, KHÔNG phải để nuốt lỗi thật: lỗi thật
+    // (nếu có) vẫn được báo bởi `await uploadA` bên dưới, promise gốc không
+    // đổi trạng thái vì gắn thêm handler. Đây chỉ là chặn "unhandled
+    // rejection" của Node xen ngang report khi assertion thật sự thất bại,
+    // vì uploadA cố tình bị bỏ chưa await một đoạn trong lúc B chạy.
+    uploadA.catch(() => {});
     await gateEntered;
 
     // Lượt B chạy trọn vẹn trong lúc A còn bị chặn: B đọc thấy oldKey y hệt A
@@ -315,6 +377,24 @@ describe("clearAvatar", () => {
 
     await expect(clearAvatar("p1")).resolves.toBeUndefined();
     expect(row("p1").avatarUrl).toBeNull();
+  });
+
+  it("storage chưa cấu hình vẫn xoá được cả khi có avatarKey thật - delete() no-op không được ném", async () => {
+    // Test ở trên đặt avatarKey: null nên swapAvatar không bao giờ gọi
+    // objectStorage().delete() - nhánh "không ném" của adapter tắt (xem
+    // disabledStorage trong storage/index.ts) chưa hề chạy, dù đó mới là lý
+    // do THẬT khiến ràng buộc "clearAvatar luôn thành công" đứng vững. Ở đây
+    // có avatarKey thật, nên swapAvatar CHẮC CHẮN đi vào nhánh gọi delete();
+    // storage đã bị reset về "chưa cấu hình" nên đó là delete() no-op của
+    // disabledStorage - đúng cái bất đối xứng put-ném/delete-im-lặng mà
+    // clearAvatar dựa vào.
+    await setAvatar("p1", await jpeg());
+    expect(row("p1").avatarKey).not.toBeNull();
+    resetObjectStorage();
+
+    await expect(clearAvatar("p1")).resolves.toBeUndefined();
+    expect(row("p1").avatarUrl).toBeNull();
+    expect(row("p1").avatarKey).toBeNull();
   });
 
   it("xoá data URL cũ (không có avatarKey) chạy được", async () => {
