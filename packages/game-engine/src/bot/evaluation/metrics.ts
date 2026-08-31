@@ -67,6 +67,25 @@ export interface SelfPlayMetrics {
   witchPoisonRate: Ratio;
   /** Bình độc trúng một con Sói thật. Mẫu số là số bình độc đã dùng. */
   witchPoisonAccuracy: Ratio;
+  /**
+   * Lượt Linh Mục kết thúc bằng một bình Nước thánh.
+   *
+   * Mẫu số gộp cả lượt GIỮ BÌNH, và lượt giữ bình đến đây dưới dạng `SKIP`
+   * chứ không phải `NIGHT_ACTION`: chiến lược Linh Mục trả `null` khi không ai
+   * đáng ném, và nhân mô phỏng ghi lại một `SKIP` cho mỗi lượt bị bỏ như vậy.
+   * Bỏ nhánh đó ra thì mẫu số chỉ còn đúng những lượt đã ném, và tỉ lệ này
+   * luôn bằng 1.
+   */
+  priestHolyWaterRate: Ratio;
+  /**
+   * Nước thánh trúng một con Sói thật.
+   *
+   * Chỉ số này nghiêm khắc hơn hai chỉ số trúng-Sói ở trên, vì kỹ năng có phản
+   * đòn: ném trượt thì chính Linh Mục chết còn mục tiêu vẫn sống. Một tỉ lệ
+   * chỉ ngang mốc chọn bừa ở đây không phải là "kém hiệu quả" - nó là làng tự
+   * mất một lá bài.
+   */
+  priestHolyWaterAccuracy: Ratio;
   /** Lá phiếu thay cho một lá đã bỏ trước đó trong cùng vòng. */
   voteChangeRate: Ratio;
   /** Mức đồng thuận trung bình: phiếu cho ứng viên dẫn đầu / số người bỏ phiếu. */
@@ -291,6 +310,9 @@ export function collectMetrics(
   let witchSelfHeals = 0;
   let witchPoisons = 0;
   let witchPoisonsOnWolf = 0;
+  let priestTurns = 0;
+  let priestHolyWaters = 0;
+  let priestHolyWatersOnWolf = 0;
 
   const roleGames = new Map<Role, number>();
   const roleWins = new Map<Role, number>();
@@ -401,7 +423,24 @@ export function collectMetrics(
         continue;
       }
 
+      // Lượt GIỮ BÌNH của Linh Mục không sinh ra `NIGHT_ACTION` nào - chiến
+      // lược trả `null` - nên nó phải được nhặt từ nhánh `SKIP`.
+      if (event.kind === "SKIP") {
+        if (event.at === "NIGHT" && game.roles[event.actorId] === "PRIEST") priestTurns += 1;
+        continue;
+      }
+
       if (event.kind !== "NIGHT_ACTION") continue;
+
+      if (game.roles[event.actorId] === "PRIEST" && event.action === "HOLY_WATER") {
+        priestTurns += 1;
+        priestHolyWaters += 1;
+        if (event.targetId !== null && teamOf(event.targetId) === "wolves") {
+          priestHolyWatersOnWolf += 1;
+        }
+        continue;
+      }
+
       if (game.roles[event.actorId] !== "WITCH") continue;
       // SKIP nằm TRONG mẫu số: nó là một lượt Phù Thuỷ đã được hỏi và đã trả
       // lời. Bỏ nó ra thì tỉ lệ dùng bình luôn bằng 1 và không đo được gì.
@@ -589,6 +628,8 @@ export function collectMetrics(
     witchHealSelfRate: ratio(witchSelfHeals, witchHeals),
     witchPoisonRate: ratio(witchPoisons, witchTurns),
     witchPoisonAccuracy: ratio(witchPoisonsOnWolf, witchPoisons),
+    priestHolyWaterRate: ratio(priestHolyWaters, priestTurns),
+    priestHolyWaterAccuracy: ratio(priestHolyWatersOnWolf, priestHolyWaters),
     voteChangeRate: ratio(voteChanges, voteTotal),
     consensus: mean(consensusSamples),
     coalitionCohesion: mean(cohesionSamples),

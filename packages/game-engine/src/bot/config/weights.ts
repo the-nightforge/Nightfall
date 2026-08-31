@@ -1095,16 +1095,68 @@ export const BOT_WEIGHTS_V5: BotWeights = Object.freeze({
 });
 
 /**
+ * v6 — ngưỡng Nước thánh của Linh Mục, cùng lỗi thang đo với v5.
+ *
+ * `priestSuspicion: 95` là ngưỡng CUỐI CÙNG còn sót lại của nhóm mà v2 để lại
+ * trên thang giấy, và nó hỏng theo đúng kiểu: Linh Mục không soi, nên không
+ * bao giờ có mục tiêu bị ghim 100, nên bình Nước thánh chưa từng được ném
+ * trong một ván thật nào.
+ *
+ * Nhưng con số thay thế KHÔNG phải là 5 như bình độc, vì kỹ năng này có phản
+ * đòn: ném trúng Sói thì Sói chết, ném trúng Dân thì chính LINH MỤC chết còn
+ * mục tiêu vẫn sống. Một phát ném ở mức chọn bừa không phải là "kém hiệu quả",
+ * nó là làng tự mất một lá bài. Chú thích đầu `roles/priest.ts` đã nói ngưỡng
+ * ở đây phải cao hơn bình độc; 8 so với 5 là đúng quan hệ đó, lần này trên
+ * thang thật.
+ *
+ * Đo trên 500 ván × 2 seed base (12 người, 3 Sói, đủ Linh Mục/Phù Thuỷ/Thợ Săn):
+ *
+ * | ngưỡng | bình/ván | trúng Sói | mốc chọn bừa | làng thắng |
+ * | ------ | -------- | --------- | ------------ | ---------- |
+ * | 95 (v5)| 0.00     | -         | -            | 37.6 / 40.6 |
+ * | 8      | 0.12     | 40.7 / 36.9% | ~29.7%    | 37.8 / 41.2 |
+ * | 7      | 0.21     | 33.0 / 35.8% | ~29.2%    | 36.6 / 41.0 |
+ * | 6      | 0.29     | 29.9 / 32.0% | ~28.4%    | 34.8 / 40.0 |
+ *
+ * Xuống dưới 8 là hỏng đều theo một chiều: độ chính xác tụt về đúng mốc chọn
+ * bừa VÀ làng thắng đi xuống. 8 là mức duy nhất vừa nằm rõ trên mốc đó vừa
+ * không lấy đi win-rate, nên nó là mức duy nhất tự trả được giá của mình.
+ *
+ * Cần nói thẳng một điều mà bảng trên không tự nói: 0.12 bình/ván nghĩa là
+ * khoảng tám ván mới có một lần ném. Đó là HIẾM, và đó là đúng - nhưng ai đọc
+ * chỉ số này để trả lời câu hỏi "vì sao BOT Linh Mục không làm gì" thì phải
+ * biết trước rằng câu trả lời sẽ vẫn là "hiếm", chỉ khác là không còn "không
+ * bao giờ".
+ */
+export const BOT_WEIGHTS_V6: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V5,
+  version: "6.0.0",
+
+  roleThresholds: Object.freeze({
+    ...BOT_WEIGHTS_V5.roleThresholds,
+    priestSuspicion: 8,
+    /**
+     * Đưa về cùng thang với `witchPoisonTrustVeto`. Đo được: KHÔNG đổi kết quả
+     * nào trên 1000 ván - cùng lý do như bên Phù Thuỷ, một mục tiêu vừa đủ
+     * đáng ngờ để bị ném vừa có trust ≥ 2 là trường hợp chưa từng xảy ra. Sửa
+     * vì ở mức 30 nó là một chốt chặn không bao giờ chặn.
+     */
+    priestTrustVeto: 2,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
  * phải thay đổi chỉ vì cấu hình tồn tại - đây là cơ chế rollout: nâng
  * `DEFAULT_BOT_WEIGHTS` lên bản mới, và mọi `new BotRuntime({...})` không tự
  * truyền `weights` (bao gồm `session-registry.ts`, chỗ ván thật dựng runtime)
- * lập tức chạy bản mới mà không phải sửa. v5.0.0 đưa ba ngưỡng của Phù Thuỷ và
- * Thợ Săn về thang belief thật: để chúng nằm ngoài mặc định là để hai vai đó
- * dựng xong mà cả ván thật không bao giờ dùng tới bình hay phát bắn.
- * v1/v2/v3/v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset
- * đích danh, không bao giờ dựa vào hằng số này.
+ * lập tức chạy bản mới mà không phải sửa. v5.0.0 và v6.0.0 đưa ngưỡng của ba
+ * vai có quyền năng dùng-một-lần (Phù Thuỷ, Thợ Săn, Linh Mục) về thang belief
+ * thật: để chúng nằm ngoài mặc định là để ba vai đó dựng xong mà cả ván thật
+ * không bao giờ dùng tới bình hay phát bắn. v1-v4 không bị ảnh hưởng - test
+ * tái lập của chúng luôn truyền preset đích danh, không bao giờ dựa vào hằng
+ * số này.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V5;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V6;

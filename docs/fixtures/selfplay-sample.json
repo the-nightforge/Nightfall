@@ -82,6 +82,16 @@
       "numerator": 0,
       "denominator": 0
     },
+    "priestHolyWaterRate": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "priestHolyWaterAccuracy": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
     "voteChangeRate": {
       "value": 0.3188405797101449,
       "numerator": 88,
