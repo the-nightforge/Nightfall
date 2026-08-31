@@ -13,7 +13,7 @@ import type { GameEventId } from "@masoi/shared";
  * kiện mới mà quên ký hiệu là lỗi biên dịch, thay vì một sự kiện âm thầm hiện
  * dấu "⚡" mặc định trên toàn bộ giao diện.
  */
-export const EVENT_ICONS: Record<GameEventId, string> = {
+const EVENT_ICONS: Record<GameEventId, string> = {
   CURFEW: "⏳",
   SILENT_NIGHT: "🤫",
   AMNESTY_DAY: "🕊️",

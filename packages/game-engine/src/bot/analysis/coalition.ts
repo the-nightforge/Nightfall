@@ -93,22 +93,6 @@ export function detectCoalitions(
 }
 
 /**
- * Ai đang lái được đám đông.
- *
- * Đo bằng tổng `voteAlignment` ĐI VÀO một người: người mà nhiều người khác bỏ
- * phiếu trùng theo là người dẫn dắt. Đây là in-degree có trọng số, chuẩn hoá
- * theo số cạnh để không thiên vị ván đông người.
- */
-export function influenceScore(state: BotBrainState, playerId: string): number {
-  let total = 0;
-  for (const [key, edge] of Object.entries(state.relationships)) {
-    if (!key.endsWith(`->${playerId}`)) continue;
-    total += edge.voteAlignment;
-  }
-  return total;
-}
-
-/**
  * Ai đang bị cả làng nhắm mà không ai bênh.
  *
  * Người cô lập là mục tiêu treo dễ nhất - vừa là thông tin cho phe làng (có thể

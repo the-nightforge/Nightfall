@@ -23,7 +23,6 @@ import { selectVote, voteHysteresis, voteThreshold } from "../src/bot/decision/v
 import { decideFinalVote, decideHunterShot } from "../src/bot/decision/trial-decision";
 import { strategyFor } from "../src/bot/roles/registry";
 import { applyPrivateInformation } from "../src/bot/belief/private-info";
-import { simulateGame } from "../src/bot/evaluation/simulate";
 import { runSelfPlay } from "../src/bot/evaluation/selfplay";
 import type {
   BotBrainState,
@@ -587,7 +586,7 @@ describe("v1 là mốc so sánh đóng băng", () => {
   it("tái lập chính xác cấu hình v1 trên 24 ván", () => {
     const actual = V1_FINGERPRINT.map((_, i) => {
       const seed = `golden-${i}`;
-      const result = simulateGame({ seed, playerCount: 8, weights: BOT_WEIGHTS_V1 });
+      const result = runSelfPlay({ seed, playerCount: 8, weights: BOT_WEIGHTS_V1, speech: false });
       return `${seed} ${result.winner} ${result.rounds} ${result.actions}`;
     });
     expect(actual).toEqual(V1_FINGERPRINT);
@@ -639,11 +638,8 @@ describe("v2 là cấu hình production", () => {
   const BATCH_TIMEOUT_MS = 60_000;
 
   /**
-   * Dùng `runSelfPlay` chứ không `simulateGame`.
-   *
-   * `simulateGame` là mặt tiền tương thích của Phase 2 và nó tắt lời nói, nên
-   * số liệu của nó KHÔNG phải số liệu của hành vi đang chạy ở production. Đo
-   * bằng một cấu hình không ai chơi là cách chắc chắn nhất để hiệu chỉnh nhầm.
+   * Đo bằng `runSelfPlay` mặc định (có lời nói): đo bằng một cấu hình không ai
+   * chơi là cách chắc chắn nhất để hiệu chỉnh nhầm.
    *
    * Kết quả được ghi nhớ theo phiên bản trọng số. `runSelfPlay` là hàm thuần
    * của `(seed, weights)`, nên chạy lại đúng cùng batch chỉ tốn thời gian mà

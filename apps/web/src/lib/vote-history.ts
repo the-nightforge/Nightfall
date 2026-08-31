@@ -19,12 +19,6 @@ export function formatVoteMutations(recap: DayVoteRecap, names: Map<string, stri
   });
 }
 
-export function formatFinalBallots(recap: DayVoteRecap, names: Map<string, string>): string[] {
-  return (recap.finalJudgment?.ballots ?? []).map(
-    (ballot) => `${playerName(ballot.voterId, names)}: ${ballot.guilty ? "HANG" : "SPARE"}`,
-  );
-}
-
 /**
  * Bảng phiếu ĐANG MỞ, đọc thẳng từ snapshot.
  *

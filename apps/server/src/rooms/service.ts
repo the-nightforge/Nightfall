@@ -12,6 +12,7 @@ import { botName, generateRoomCode, newId } from "../util";
 import { broadcastRoom, emitToPlayers } from "./broadcast";
 import { buildSnapshot, resolveChat, pushChat } from "./snapshot";
 import {
+  allRooms,
   createRoom,
   deletePersistedRoom,
   getRoom,
@@ -22,7 +23,7 @@ import {
   type Room,
   type RoomMember,
 } from "./store";
-import { getRoomSyncByPlayer, getRoomsCache } from "./index-helpers";
+import { getRoomSyncByPlayer } from "./index-helpers";
 import { reconcileDiscussionSkip, startGame, resetToLobby } from "../game/machine";
 import { DISCONNECT_GRACE_MS } from "../game/discussion-skip";
 import { allRequiredPlayersReady, roomEntryError } from "./rules";
@@ -222,7 +223,7 @@ export const roomService = {
   },
 
   async findRoomOf(playerId: string): Promise<string | null> {
-    for (const room of [...getRoomsCache()]) {
+    for (const room of [...allRooms()]) {
       if (room.members.some((m) => m.playerId === playerId)) return room.code;
     }
     const persistedCode = await getPlayerRoom(playerId);

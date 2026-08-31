@@ -41,19 +41,8 @@ import {
 } from "./game/machine";
 import { getPlayerRoom, updateSessionRoom } from "./redis";
 import { reconnectPlayer } from "./rooms/reconnect";
+import { allowAction } from "./rate-limit";
 import { issueVoiceToken, syncVoiceForPlayer } from "./voice/service";
-
-// ---- Rate limit đơn giản (sliding window trong bộ nhớ) ----
-const actionLog = new Map<string, number[]>();
-
-function allowAction(key: string, limit: number, windowMs: number): boolean {
-  const now = Date.now();
-  const list = (actionLog.get(key) ?? []).filter((t) => now - t < windowMs);
-  if (list.length >= limit) return false;
-  list.push(now);
-  actionLog.set(key, list);
-  return true;
-}
 
 interface AuthedSocket extends Socket {
   data: { playerId: string };
@@ -201,7 +190,7 @@ export function setupSocket(io: SocketServer): void {
       );
       maybeEndWitchWindow(room);
       broadcastRoom(roomCode);
-      void import("./rooms/store").then((m) => m.persistRoom(room));
+      void persistRoom(room);
     });
 
     handler(CLIENT_EVENTS.GAME_VOTE, async (payload) => {
@@ -214,7 +203,7 @@ export function setupSocket(io: SocketServer): void {
 
       room.engine.submitVote(playerId, targetId);
       broadcastRoom(roomCode);
-      void import("./rooms/store").then((m) => m.persistRoom(room));
+      void persistRoom(room);
     });
 
     handler(CLIENT_EVENTS.GAME_FINAL_VOTE, async (payload) => {
@@ -228,7 +217,7 @@ export function setupSocket(io: SocketServer): void {
       room.engine.submitFinalVote(playerId, guilty);
       maybeEndFinalVoteEarly(room);
       broadcastRoom(roomCode);
-      void import("./rooms/store").then((m) => m.persistRoom(room));
+      void persistRoom(room);
     });
 
     handler(CLIENT_EVENTS.GAME_SKIP_DISCUSSION, async (payload) => {
@@ -267,7 +256,7 @@ export function setupSocket(io: SocketServer): void {
       if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
       room.engine.submitDayOfTruthClaim(playerId, role);
       broadcastRoom(roomCode);
-      void import("./rooms/store").then((m) => m.persistRoom(room));
+      void persistRoom(room);
     });
 
     handler(CLIENT_EVENTS.GAME_DEAD_MESSAGE, async (payload) => {

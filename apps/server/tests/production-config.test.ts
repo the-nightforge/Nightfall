@@ -2,7 +2,31 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildVersion, healthHttpStatus, redisConnectionHealthy } from "../src/health";
-import { resolveBotAiMaxCallsPerGame, resolvePort } from "../src/config";
+import { resolveBotAiMaxCallsPerGame, resolvePort, resolveTrustProxy } from "../src/config";
+
+describe("resolveTrustProxy", () => {
+  it("mặc định 1: server chạy sau proxy của Render", () => {
+    expect(resolveTrustProxy({})).toBe(1);
+  });
+
+  it("đọc được số hop", () => {
+    expect(resolveTrustProxy({ TRUST_PROXY: "0" })).toBe(0);
+    expect(resolveTrustProxy({ TRUST_PROXY: "2" })).toBe(2);
+  });
+
+  it("nhận true/false vì đó là cách viết ai cũng thử trước", () => {
+    expect(resolveTrustProxy({ TRUST_PROXY: "true" })).toBe(1);
+    expect(resolveTrustProxy({ TRUST_PROXY: "False" })).toBe(0);
+  });
+
+  it("về mặc định thay vì trả NaN cho Express", () => {
+    // NaN lọt vào app.set("trust proxy") là hành vi không xác định - tệ hơn hẳn
+    // so với việc quay về mặc định và ghi cảnh báo.
+    for (const bad of ["yes", "-1", "1.5", "abc"]) {
+      expect(resolveTrustProxy({ TRUST_PROXY: bad })).toBe(1);
+    }
+  });
+});
 
 describe("resolvePort", () => {
   it("prefers the platform-provided PORT", () => {

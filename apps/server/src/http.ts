@@ -3,6 +3,8 @@ import { prisma } from "./db";
 import { newToken, sha256 } from "./util";
 import { nicknameSchema } from "@masoi/shared";
 import { redis } from "./redis";
+import { config } from "./config";
+import { allowAction } from "./rate-limit";
 import { buildVersion, healthHttpStatus, redisConnectionHealthy } from "./health";
 
 export const apiRouter = Router();
@@ -15,6 +17,18 @@ const STARTED_AT = Date.now();
  * Token lưu dạng SHA-256 trong DB, token gốc chỉ client giữ.
  */
 apiRouter.post("/players", async (req, res) => {
+  /*
+   * Đây là endpoint DUY NHẤT không cần đăng nhập, nên không chặn ở đây thì:
+   * 1) bảng Player phình vô hạn bằng một vòng lặp curl, và
+   * 2) MỌI rate limit của socket bị vô hiệu - tất cả đều khoá theo playerId,
+   *    mà playerId mới thì lấy bao nhiêu cũng có.
+   * Vế (2) mới là vế đáng sợ: nó biến các giới hạn kia thành trang trí.
+   */
+  if (!allowAction(`signup:${req.ip}`, config.signupRateLimitCount, config.signupRateLimitWindowMs)) {
+    res.status(429).json({ error: "Tạo người chơi quá nhanh, thử lại sau ít phút" });
+    return;
+  }
+
   const parsed = nicknameSchema.safeParse(req.body?.nickname);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Biệt danh không hợp lệ" });

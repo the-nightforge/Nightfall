@@ -1,4 +1,6 @@
 import type { Role } from "./roles";
+import type { RoomConfig } from "./phases";
+import type { BalanceWarningView } from "./snapshot";
 
 export const ROLE_POWER: Record<Role, number> = {
   WEREWOLF: 5,
@@ -15,3 +17,267 @@ export const ROLE_POWER: Record<Role, number> = {
   CURSED: 3,
   VILLAGER: 0.5,
 };
+
+/**
+ * Luật cân bằng sống ở `shared` chứ không ở `game-engine`, vì nó có ĐÚNG HAI
+ * người dùng ở hai đầu: server dùng để CHẶN cấu hình lệch, còn sảnh chờ dùng để
+ * xem trước tức thì lúc host bật/tắt vai.
+ *
+ * Trước đây mỗi bên giữ một bản chép tay (`apps/web/src/lib/balance.ts` ghi rõ
+ * là nhân bản để né việc kéo `game-engine` vào bundle Next). Hai bản khớp nhau
+ * ở thời điểm chép, nhưng chỉnh một bên là sảnh chờ báo "Cân bằng" trong khi
+ * server chặn - lệch mà không ai thấy. `shared` chỉ phụ thuộc `zod` nên web
+ * import được mà không đụng tới lõi engine hay bộ não BOT.
+ */
+
+const BASE_TIMINGS: Pick<
+  RoomConfig,
+  "nightSeconds" | "discussionSeconds" | "voteSeconds" | "defenseSeconds" | "finalVoteSeconds"
+> = {
+  nightSeconds: 30,
+  discussionSeconds: 60,
+  voteSeconds: 30,
+  defenseSeconds: 25,
+  finalVoteSeconds: 20,
+};
+
+function preset(overrides: Partial<RoomConfig>): RoomConfig {
+  return {
+    werewolves: 2,
+    seer: false,
+    guard: false,
+    witch: false,
+    hunter: false,
+    cursed: false,
+    wolfCub: false,
+    apprenticeSeer: false,
+    detective: false,
+    guardianAngel: false,
+    priest: false,
+    mayor: false,
+    mode: "ranked",
+    ...BASE_TIMINGS,
+    ...overrides,
+  } as RoomConfig;
+}
+
+// Spec §4 Presets 6-15 (from 2026-08-29 design)
+// Deck details:
+// 6: WEREWOLF x2, SEER, GUARD, HUNTER, VILLAGER
+// 7: WEREWOLF x2, SEER, WITCH, HUNTER, MAYOR, VILLAGER
+// 8: WEREWOLF x2, SEER, WITCH, GUARD, HUNTER, DETECTIVE, VILLAGER
+// 9: WEREWOLF x2, WOLF_CUB, SEER, WITCH, GUARD, DETECTIVE, HUNTER, VILLAGER
+// 10: WEREWOLF x2, WOLF_CUB, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, HUNTER, VILLAGER
+// 11: WEREWOLF x2, WOLF_CUB, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, VILLAGER x2
+// 12: WEREWOLF x3, WOLF_CUB, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, VILLAGER x2
+// 13: WEREWOLF x3, WOLF_CUB, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, VILLAGER x2
+// 14: WEREWOLF x3, WOLF_CUB, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, PRIEST, VILLAGER x2
+// 15: WEREWOLF x3, WOLF_CUB, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, PRIEST, VILLAGER
+
+export const PRESET_DECKS: Record<number, RoomConfig> = {
+  6: preset({ werewolves: 2, seer: true, guard: true, hunter: true }),
+  7: preset({ werewolves: 2, seer: true, witch: true, hunter: true, mayor: true }),
+  8: preset({ werewolves: 2, seer: true, witch: true, guard: true, hunter: true, detective: true }),
+  9: preset({ werewolves: 2, wolfCub: true, seer: true, witch: true, guard: true, detective: true, hunter: true }),
+  10: preset({
+    werewolves: 2,
+    wolfCub: true,
+    cursed: true,
+    seer: true,
+    apprenticeSeer: true,
+    witch: true,
+    guard: true,
+    hunter: true,
+  }),
+  11: preset({
+    werewolves: 2,
+    wolfCub: true,
+    seer: true,
+    witch: true,
+    guard: true,
+    detective: true,
+    hunter: true,
+    mayor: true,
+  }),
+  12: preset({
+    werewolves: 3,
+    wolfCub: true,
+    seer: true,
+    witch: true,
+    guard: true,
+    detective: true,
+    hunter: true,
+    mayor: true,
+  }),
+  13: preset({
+    werewolves: 3,
+    wolfCub: true,
+    seer: true,
+    witch: true,
+    guard: true,
+    detective: true,
+    hunter: true,
+    mayor: true,
+    guardianAngel: true,
+  }),
+  14: preset({
+    werewolves: 3,
+    wolfCub: true,
+    seer: true,
+    witch: true,
+    guard: true,
+    detective: true,
+    hunter: true,
+    mayor: true,
+    guardianAngel: true,
+    priest: true,
+  }),
+  15: preset({
+    werewolves: 3,
+    wolfCub: true,
+    cursed: true,
+    seer: true,
+    apprenticeSeer: true,
+    witch: true,
+    guard: true,
+    detective: true,
+    hunter: true,
+    mayor: true,
+    guardianAngel: true,
+    priest: true,
+  }),
+};
+
+export function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * Danh sách vai đặc biệt theo cấu hình, CHƯA có Dân Làng lấp chỗ trống.
+ *
+ * Dùng chung giữa bộ chia bài (`buildRoleDeck`) và bộ chấm cân bằng: chấm điểm
+ * một bộ bài khác với bộ bài thật sự được chia là cách chắc chắn nhất để bảng
+ * cân bằng nói dối.
+ */
+export function specialRoleList(config: RoomConfig): Role[] {
+  const roles: Role[] = [];
+  for (let i = 0; i < config.werewolves; i++) roles.push("WEREWOLF");
+  if (config.wolfCub) roles.push("WOLF_CUB");
+  if (config.seer) roles.push("SEER");
+  if (config.apprenticeSeer) roles.push("APPRENTICE_SEER");
+  if (config.detective) roles.push("DETECTIVE");
+  if (config.guard) roles.push("GUARD");
+  if (config.guardianAngel) roles.push("GUARDIAN_ANGEL");
+  if (config.priest) roles.push("PRIEST");
+  if (config.witch) roles.push("WITCH");
+  if (config.hunter) roles.push("HUNTER");
+  if (config.mayor) roles.push("MAYOR");
+  // Tối đa một Kẻ Nguyền Rủa mỗi ván: một lá duy nhất trong bộ bài.
+  if (config.cursed) roles.push("CURSED");
+  return roles;
+}
+
+function villagerCount(config: RoomConfig, playerCount: number): number {
+  const count = playerCount - specialRoleList(config).length;
+  return count < 0 ? 0 : count;
+}
+
+function deckRoles(config: RoomConfig, playerCount: number): Role[] {
+  const roles = specialRoleList(config);
+  const vCount = villagerCount(config, playerCount);
+  for (let i = 0; i < vCount; i++) roles.push("VILLAGER");
+  return roles;
+}
+
+function sumPower(roles: Role[]): number {
+  return roles.reduce((acc, r) => acc + (ROLE_POWER[r] ?? 0), 0);
+}
+
+function wolfRoles(roles: Role[]): Role[] {
+  return roles.filter((r) => r === "WEREWOLF" || r === "WOLF_CUB");
+}
+
+function villageRoles(roles: Role[]): Role[] {
+  return roles.filter((r) => r !== "WEREWOLF" && r !== "WOLF_CUB");
+}
+
+function infoPower(roles: Role[]): number {
+  return roles.reduce((acc, r) => {
+    if (r === "SEER") return acc + ROLE_POWER["SEER"];
+    if (r === "APPRENTICE_SEER") return acc + ROLE_POWER["APPRENTICE_SEER"];
+    if (r === "DETECTIVE") return acc + ROLE_POWER["DETECTIVE"];
+    return acc;
+  }, 0);
+}
+
+export function calculateBalanceScore(
+  config: RoomConfig,
+  playerCount: number,
+): { score: number; villagePower: number; wolfPower: number } {
+  const roles = deckRoles(config, playerCount);
+  const wolfPower = sumPower(wolfRoles(roles));
+  const villagePower = sumPower(villageRoles(roles));
+
+  const presetDeck = PRESET_DECKS[playerCount];
+  let score: number;
+  if (presetDeck) {
+    const presetRoles = deckRoles(presetDeck, playerCount);
+    const presetDiff = sumPower(villageRoles(presetRoles)) - sumPower(wolfRoles(presetRoles));
+    const rawDiff = villagePower - wolfPower;
+    // Scale factor: spec says 10, but diff-of-preset centers score at 50;
+    // use 3 to make moderate deviations block near 40/60.
+    const SCALE = 3;
+    score = clamp(50 + (rawDiff - presetDiff) * SCALE, 0, 100);
+  } else {
+    score = clamp(50 + (villagePower - wolfPower) * 2, 0, 100);
+  }
+  // Round to 1 decimal
+  score = Math.round(score * 10) / 10;
+  return { score, villagePower, wolfPower };
+}
+
+export function generateWarnings(config: RoomConfig, playerCount: number): BalanceWarningView {
+  const { score, villagePower, wolfPower } = calculateBalanceScore(config, playerCount);
+  const warnings: string[] = [];
+  let blocking = false;
+
+  // Score thresholds
+  if (score < 40 || score > 60) {
+    warnings.push(`Cân bằng lệch: BalanceScore ${score} ngoài ngưỡng 40-60`);
+    blocking = true;
+  } else if (score < 45 || score > 55) {
+    warnings.push(`Cảnh báo cân bằng: BalanceScore ${score} ngoài ngưỡng 45-55`);
+  }
+
+  const presetDeck = PRESET_DECKS[playerCount];
+  if (presetDeck) {
+    const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0);
+    const presetWolfCount = presetDeck.werewolves + (presetDeck.wolfCub ? 1 : 0);
+    const wolfRatio = playerCount > 0 ? wolfCount / playerCount : 0;
+    const presetRatio = playerCount > 0 ? presetWolfCount / playerCount : 0;
+    const ratioDiff = Math.abs(wolfRatio - presetRatio);
+    if (ratioDiff > 0.15) {
+      warnings.push(
+        `Tỉ lệ Sói lệch ${(ratioDiff * 100).toFixed(1)}% so với preset chuẩn (${presetWolfCount}/${playerCount})`,
+      );
+      blocking = true;
+    }
+
+    const cfgInfo = infoPower(deckRoles(config, playerCount));
+    const presetInfo = infoPower(deckRoles(presetDeck, playerCount));
+    const infoDiff = Math.abs(cfgInfo - presetInfo);
+    if (infoDiff >= 3) {
+      warnings.push(`Năng lực soi lệch ${infoDiff.toFixed(1)} điểm so với preset chuẩn`);
+      blocking = true;
+    }
+  } else {
+    warnings.push(`Không có preset cho ${playerCount} người chơi`);
+  }
+
+  // Ensure at least one warning when blocking due to score but no other
+  if (warnings.length === 0 && blocking) {
+    warnings.push(`Cấu hình mất cân bằng`);
+  }
+
+  return { score, warnings, blocking, villagePower, wolfPower };
+}

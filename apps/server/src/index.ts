@@ -13,8 +13,13 @@ import { createLiveKitAdmin } from "./voice/livekit";
 import { setVoiceAdmin } from "./voice/service";
 
 async function main(): Promise<void> {
+  const corsOrigin = config.corsOrigin === "*" ? true : config.corsOrigin.split(",");
+
   const app = express();
-  app.use(cors({ origin: config.corsOrigin === "*" ? true : config.corsOrigin.split(",") }));
+  // Rate limit của /api/players khoá theo req.ip, mà sau proxy của Render thì
+  // req.ip là IP load balancer nếu không khai báo - cả thiên hạ chung một rổ.
+  app.set("trust proxy", config.trustProxy);
+  app.use(cors({ origin: corsOrigin }));
   app.use(express.json());
 
   // Không bao giờ log payload chứa dữ liệu bí mật ở production
@@ -29,7 +34,7 @@ async function main(): Promise<void> {
 
   const server = http.createServer(app);
   const io = new Server(server, {
-    cors: { origin: config.corsOrigin === "*" ? true : config.corsOrigin.split(",") },
+    cors: { origin: corsOrigin },
   });
 
   setIo(io);
