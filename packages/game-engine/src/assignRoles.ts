@@ -1,3 +1,4 @@
+import { specialRoleList } from "@masoi/shared";
 import type { Role } from "@masoi/shared";
 import type { RoomConfig } from "@masoi/shared";
 
@@ -8,29 +9,6 @@ export function shuffle<T>(items: T[], rng: () => number = Math.random): T[] {
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
-}
-
-/**
- * Danh sách vai đặc biệt (không tính Dân Làng lấp chỗ trống) theo cấu hình.
- * Dùng chung giữa `buildRoleDeck` và bộ phân tích cân bằng ở `balance/analyzer.ts`
- * để khỏi lặp đúng 11 dòng `if (config.x) push(...)` ở hai nơi.
- */
-export function specialRoleList(config: RoomConfig): Role[] {
-  const roles: Role[] = [];
-  for (let i = 0; i < config.werewolves; i++) roles.push("WEREWOLF");
-  if (config.wolfCub) roles.push("WOLF_CUB");
-  if (config.seer) roles.push("SEER");
-  if (config.apprenticeSeer) roles.push("APPRENTICE_SEER");
-  if (config.detective) roles.push("DETECTIVE");
-  if (config.guard) roles.push("GUARD");
-  if (config.guardianAngel) roles.push("GUARDIAN_ANGEL");
-  if (config.priest) roles.push("PRIEST");
-  if (config.witch) roles.push("WITCH");
-  if (config.hunter) roles.push("HUNTER");
-  if (config.mayor) roles.push("MAYOR");
-  // Tối đa một Kẻ Nguyền Rủa mỗi ván: một lá duy nhất trong bộ bài.
-  if (config.cursed) roles.push("CURSED");
-  return roles;
 }
 
 /**
