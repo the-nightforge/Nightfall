@@ -59,6 +59,7 @@ The interesting parts are not the CRUD. They are:
 | 📱 | **Mobile-first UI** with cinematic phase transitions |
 | 🔁 | **Reconnect support** — refresh or drop out and rejoin the same match |
 | 📜 | **Full night recap** at game over: every role action, every death, and why |
+| 🗂️ | **Case file** at game over: 3-5 turning points picked from authoritative match data, with a shareable 9:16 card |
 
 ## Architecture
 
@@ -69,12 +70,12 @@ ma-soi-online/
 │   └── server/            # Express · Socket.IO · Prisma · Redis
 ├── packages/
 │   ├── game-engine/       # Pure rules + bot brain. No IO. Vitest.
-│   └── shared/            # Types, Zod schemas, balance rules, constants
+│   └── shared/            # Types, Zod schemas, balance rules, case-file builder, constants
 ├── docs/                  # Design specs and verification reports
 └── docker-compose.yml     # PostgreSQL + Redis for local dev
 ```
 
-**Dependency direction is strictly one-way:** `web` and `server` both depend on `shared`; `server` additionally depends on `game-engine`. `shared` depends on nothing but Zod, which is why rules needed by *both* the browser and the server (balance scoring, voice permissions, role metadata) live there — a single implementation neither side can drift from.
+**Dependency direction is strictly one-way:** `web` and `server` both depend on `shared`; `server` additionally depends on `game-engine`. `shared` depends on nothing but Zod, which is why rules needed by *both* the browser and the server (balance scoring, voice permissions, role metadata, case-file construction) live there — a single implementation neither side can drift from.
 
 ```mermaid
 flowchart LR
@@ -358,10 +359,11 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 
 | Package | Runner | Tests |
 |---|---|---|
-| `@masoi/game-engine` | Vitest | **1499** |
-| `@masoi/server` | Vitest | **541** |
-| `@masoi/web` | `node:test` | **273** |
-| | | **2313 total** |
+| `@masoi/shared` | Vitest | **72** |
+| `@masoi/game-engine` | Vitest | **1503** |
+| `@masoi/server` | Vitest | **553** |
+| `@masoi/web` | `node:test` | **336** |
+| | | **2464 total** |
 
 The engine suite includes seeded self-play runs that assert invariants across hundreds of full matches — no illegal move is ever accepted, no bot ever learns a role it should not know, and the same seed reproduces a match bit-for-bit.
 
