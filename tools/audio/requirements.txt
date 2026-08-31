@@ -1,0 +1,24 @@
+# Dependency của bộ công cụ dựng nhạc nền (tools/audio).
+#
+# Mọi phiên bản dưới đây lấy từ `pip show` của chính môi trường đã dựng ba file
+# trong apps/web/public/audio/music, không phải phiên bản mới nhất trên PyPI và
+# không phải phiên bản đoán ra từ tài liệu. Ghim bằng `==` là có chủ đích: đây
+# là điều kiện của lời hứa "dựng lại ra đúng cùng file" trong
+# apps/web/public/audio/README.md. Nới thành `>=` là bỏ lời hứa đó.
+#
+#   python -m venv .venv-audio
+#   .venv-audio\Scripts\activate          # Windows
+#   source .venv-audio/bin/activate       # macOS / Linux
+#   python -m pip install -r tools/audio/requirements.txt
+
+# --- Bắt buộc: thiếu một trong bốn thứ này thì không dựng được file nào ------
+numpy==2.5.2          # toàn bộ DSP
+scipy==1.18.1         # resample_poly (true peak), wavfile
+pyloudnorm==0.2.0     # đo LUFS theo ITU-R BS.1770
+miniaudio==1.71       # giải mã mp3 để đo trên chính file đã encode
+lameenc==1.8.4        # mã hoá mp3
+
+# --- Tuỳ chọn: chỉ cần khi xuất ảnh -----------------------------------------
+# Duy nhất `verify_music.py --plots` dùng tới, và nó import matplotlib bên
+# trong hàm vẽ chứ không ở đầu file. Không cài thì mọi lệnh khác vẫn chạy.
+matplotlib==3.10.9

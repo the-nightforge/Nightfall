@@ -12,10 +12,12 @@ chính dự án này**, không lấy từ nguồn ngoài.
 - Không bắt buộc ghi công, được dùng lại cho mục đích bất kỳ.
 
 Ba track được tổng hợp bằng script trong `tools/audio/` chứ không thu âm và
-cũng không sample từ bản ghi nào. Chạy lại `python tools/audio/make_music.py
---out apps/web/public/audio` sẽ dựng lại đúng ba file này — mọi nguồn ngẫu
-nhiên đều gieo hạt cố định. Vì toàn bộ mẫu âm sinh ra từ code trong repo,
-nguồn gốc kiểm chứng được và không có ràng buộc bản quyền của bên thứ ba.
+cũng không sample từ bản ghi nào. Mọi nguồn ngẫu nhiên đều gieo hạt cố định,
+nên `python tools/audio/make_music.py --out apps/web/public/audio` dựng lại
+đúng ba file này **khi chạy bằng đúng bộ phiên bản trong
+`tools/audio/requirements.txt`** — xem mục "Dựng lại nhạc" trong `README.md`
+cho phạm vi chính xác của lời hứa đó. Vì toàn bộ mẫu âm sinh ra từ code trong
+repo, nguồn gốc kiểm chứng được và không có ràng buộc bản quyền của bên thứ ba.
 
 Bảng nhạc cụ dùng chung cho cả ba track, nên chuyển pha không lệch tông:
 
