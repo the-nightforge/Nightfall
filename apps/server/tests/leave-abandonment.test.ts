@@ -28,7 +28,7 @@ vi.mock("../src/rooms/broadcast", () => ({
 }));
 
 vi.mock("../src/db", () => ({
-  prisma: { roomRecord: { updateMany: async () => undefined } },
+  prisma: {},
 }));
 
 vi.mock("../src/voice/service", () => ({

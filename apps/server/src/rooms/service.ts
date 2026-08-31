@@ -104,13 +104,6 @@ export const roomService = {
         avatarUrl: (playerRecord as any)?.avatarUrl ?? null,
       };
       const room = createRoom(code, member);
-      try {
-        await prisma.roomRecord.create({
-          data: { id: newId(), code, hostName: name },
-        });
-      } catch {
-        /* DB lỗi không chặn chơi */
-      }
       await persistRoom(room);
       await updateSessionRoom(playerId, code);
       broadcastRoom(code);
@@ -189,14 +182,6 @@ export const roomService = {
         removeRoom(room.code);
         await updateSessionRoom(playerId, null);
         await deletePersistedRoom(room.code);
-        try {
-          await prisma.roomRecord.updateMany({
-            where: { code: room.code, closedAt: null },
-            data: { closedAt: new Date() },
-          });
-        } catch {
-          /* ignore */
-        }
         return;
       }
 

@@ -361,7 +361,16 @@ function onGameOver(room: Room): void {
         roomCode: room.code,
         round: st.round,
         winner: st.winner ?? "unknown",
-        playerRoles: st.players.map((p) => ({ name: p.name, role: p.role, alive: p.alive })),
+        // `id` để nối được kết quả về đúng người chơi. Thiếu nó thì bảng này
+        // chỉ ghi được chứ không tra ngược được - đó là lý do nó nằm im từ đầu.
+        // `playerRoles` là cột Json nên thêm trường không cần migration; ván cũ
+        // thiếu `id` đơn giản là không khớp truy vấn nào.
+        playerRoles: st.players.map((p) => ({
+          id: p.id,
+          name: p.name,
+          role: p.role,
+          alive: p.alive,
+        })),
         durationSec: Math.round((Date.now() - room.createdAt) / 1000),
       },
     })

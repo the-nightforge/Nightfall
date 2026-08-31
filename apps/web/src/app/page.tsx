@@ -10,6 +10,7 @@ import { disconnectSocket } from "@/lib/socket";
 import type { Identity } from "@/lib/identity";
 import { Backdrop } from "@/components/Backdrop";
 import { BrandMark, VillageScene } from "@/components/HomeHero";
+import { MatchHistoryPanel } from "@/components/MatchHistoryPanel";
 
 /** Hành động đang chạy, hoặc null khi rảnh. */
 type Pending = "create" | "join" | null;
@@ -445,6 +446,16 @@ function HomeInner() {
               </div>
             </div>
           </section>
+
+          {/*
+            * Lịch sử ván, ngay dưới panel vào phòng.
+            *
+            * Tự ẩn hoàn toàn khi chưa đăng nhập hoặc chưa có ván nào, nên
+            * người mới vào không thấy một khung rỗng nói rằng họ chưa làm gì.
+            */}
+          <div className="lg:col-start-2 lg:row-start-2 lg:self-start">
+            <MatchHistoryPanel />
+          </div>
 
           {/*
             * Ba mục giới thiệu, gom thành chip.
