@@ -116,7 +116,13 @@ describe("processAvatar", () => {
   it("hết bậc mà vẫn vượt trần thì TỪ CHỐI chứ không trả file quá lớn", async () => {
     await expect(
       processAvatar(await noisy().jpeg().toBuffer(), { maxBytes: 1 }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/Không nén được ảnh xuống dưới \d+ KB/);
+  });
+
+  it("từ chối GIF dù sharp giải mã được - sniffImageType là chốt chặn thật", async () => {
+    await expect(processAvatar(await flat().gif().toBuffer())).rejects.toThrow(
+      /Chỉ chấp nhận ảnh JPG, PNG hoặc WebP/,
+    );
   });
 
   it("tự xoay theo EXIF trước khi crop", async () => {
@@ -141,7 +147,7 @@ describe("processAvatar", () => {
     const png = await flat().png().toBuffer();
     const broken = Buffer.concat([png.subarray(0, 40), Buffer.from("rác rác rác")]);
 
-    await expect(processAvatar(broken)).rejects.toThrow();
+    await expect(processAvatar(broken)).rejects.toThrow(/Không đọc được ảnh, file có thể đã hỏng/);
   });
 
   it("từ chối ảnh vượt trần điểm ảnh thay vì làm cạn RAM", async () => {
@@ -152,6 +158,6 @@ describe("processAvatar", () => {
       .png({ compressionLevel: 9 })
       .toBuffer();
 
-    await expect(processAvatar(huge)).rejects.toThrow();
+    await expect(processAvatar(huge)).rejects.toThrow(/Ảnh có kích thước quá lớn/);
   }, 60_000);
 });
