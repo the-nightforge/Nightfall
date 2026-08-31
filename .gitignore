@@ -18,3 +18,7 @@ prisma/migrations/dev.db*
 
 # Bao cao self-play: chi commit fixture mau nho o docs/fixtures/
 reports/
+
+# Python (tools/audio)
+__pycache__/
+*.pyc

@@ -1,26 +1,26 @@
 {
   "night": {
     "loopStart": 0.5,
-    "loopEnd": 61.6224,
-    "loopLen": 61.122,
-    "fileLen": 62.122,
-    "seam_z": -0.19,
-    "kb": 728.9
+    "loopEnd": 72.5,
+    "loopLen": 72.0,
+    "fileLen": 73.0,
+    "loopSamples": 3175200,
+    "kb": 1426.5
   },
   "day": {
     "loopStart": 0.5,
-    "loopEnd": 101.6959,
-    "loopLen": 101.196,
-    "fileLen": 102.196,
-    "seam_z": 1.31,
-    "kb": 1198.5
+    "loopEnd": 96.5,
+    "loopLen": 96.0,
+    "fileLen": 97.0,
+    "loopSamples": 4233600,
+    "kb": 1895.4
   },
   "vote": {
     "loopStart": 0.5,
-    "loopEnd": 91.5286,
-    "loopLen": 91.029,
-    "fileLen": 92.029,
-    "seam_z": 3.58,
-    "kb": 1079.1
+    "loopEnd": 86.214286,
+    "loopLen": 85.714286,
+    "fileLen": 86.714286,
+    "loopSamples": 3780000,
+    "kb": 1694.4
   }
 }
