@@ -128,7 +128,16 @@ export const roomService = {
         existing.connected = true;
         existing.disconnectedAt = null;
         existing.name = name;
-        existing.avatarUrl = avatarUrl ?? existing.avatarUrl ?? null;
+        // avatarUrl ở đây đến từ DB - nguồn sự thật DUY NHẤT kể từ khi nhánh
+        // này chuyển avatar sang object storage. null là một sự thật ("người
+        // này không có avatar"), không phải "chưa biết" - gán thẳng, KHÔNG
+        // dùng ?? existing.avatarUrl để "giữ tạm" giá trị cũ trong phòng: bản
+        // ghi phòng có thể còn avatarUrl cũ từ trước khi bị xoá (ví dụ phòng
+        // chỉ sống trong Redis lúc server restart, applyAvatarToRoom no-op vì
+        // getRoomSyncByPlayer miss), và DB + bucket đã dọn sạch object đó rồi.
+        // Rớt về giá trị cũ ở đây phục sinh một avatar đã xoá, và trình duyệt
+        // sẽ hiện ảnh vỡ vì object thật sự không còn.
+        existing.avatarUrl = avatarUrl;
       } else {
         if (room.members.length >= MAX_PLAYERS_PER_ROOM) throw new RoomError("Phòng đã đầy");
         const dupName = room.members.some(
