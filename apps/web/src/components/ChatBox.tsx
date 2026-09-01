@@ -92,6 +92,15 @@ interface Props {
    * luôn cả khung chat thay vì chỉ đóng bảng.
    */
   onEmojiOpenChange?: (open: boolean) => void;
+  /**
+   * Tiêu đề khung chat, chỉ dùng ở cột phải trên desktop.
+   *
+   * Trên điện thoại khung này sống trong tấm trượt vốn đã có thanh tiêu đề
+   * riêng, nên bỏ trống cặp prop này là khung không mọc thêm một cái đầu thứ
+   * hai ngay dưới cái đầu kia.
+   */
+  title?: string;
+  subtitle?: string;
 }
 
 /** Đúng bằng maxLength của ô nhập bên dưới - server cũng cắt ở mốc này. */
@@ -107,6 +116,8 @@ export function ChatBox({
   inputRef,
   autoFocus,
   onEmojiOpenChange,
+  title,
+  subtitle,
 }: Props) {
   const [ownText, setOwnText] = useState("");
   const text = draft ?? ownText;
@@ -183,6 +194,21 @@ export function ChatBox({
     // min-h-0 là bắt buộc, thiếu nó thì flex item không co được và phần tin nhắn
     // tràn ra ngoài thay vì cuộn.
     <div className="flex h-full min-h-0 flex-col rounded-xl border border-night-600/60 bg-night-900/70">
+      {/*
+        * Cột phải phải TỰ GIỚI THIỆU là khu chat.
+        *
+        * Trước đây thứ nằm trên cùng cột này là một thẻ thống kê phiếu, nên cả
+        * cột đọc ra như một bảng số liệu có ô nhập chữ ở đáy. Dòng phụ nói KÊNH
+        * đang gõ - thông tin an toàn quan trọng nhất trong khung này, vì người
+        * chết đọc được cả kênh Sói lẫn kênh Làng - chứ không chép lại tiến độ
+        * phiếu mà thanh pha đã in.
+        */}
+      {title && (
+        <div className="flex shrink-0 items-baseline justify-between gap-2 border-b border-night-600/60 px-3 py-2">
+          <h3 className="font-display text-base font-bold text-white">{title}</h3>
+          {subtitle && <p className="truncate text-[13px] text-mist-strong">{subtitle}</p>}
+        </div>
+      )}
       {/*
         * overscroll-contain: trên điện thoại khung này nằm trong một tấm trượt
         * đè lên trang phòng. Thiếu nó thì vuốt tới đáy danh sách rồi vuốt tiếp

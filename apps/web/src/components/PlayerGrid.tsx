@@ -15,6 +15,8 @@ interface Props {
   selectable?: boolean;
   selectedId?: string | null;
   selectedIds?: string[];
+  /** Ô đang giữ lá phiếu ĐÃ GỬI của người xem; xem PlayerSeat.confirmed. */
+  confirmedId?: string | null;
   onSelect?: (playerId: string) => void;
   disabledIds?: string[];
   /** Bảo Vệ được tự bảo vệ mình, nên vài lưới đêm phải mở ô của chính người chơi. */
@@ -26,6 +28,7 @@ export function PlayerGrid({
   selectable,
   selectedId,
   selectedIds,
+  confirmedId = null,
   onSelect,
   disabledIds = [],
   allowSelf = false,
@@ -144,6 +147,7 @@ export function PlayerGrid({
               isMe={isMe}
               isHost={snapshot.hostId === player.id}
               selected={isSelected}
+              confirmed={isSelected && player.id === confirmedId}
               disabled={disabled}
               disabledReason={disabledReason}
             onSelect={onSelect ? () => onSelect(player.id) : undefined}

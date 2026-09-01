@@ -314,7 +314,7 @@ summary:focus-visible,
    *
    * /40 chìm hẳn vào nền night-800, còn /55 đo được khoảng 3.4:1 - dưới ngưỡng
    * AA, và ô chat trong ván thì gợi ý kênh đang gõ ("Chat phe Sói...") lại là
-   * thông tin phải đọc được chứ không phải chữ trang trí. /75 lên khoảng 4.8:1
+   * thông tin phải đọc được chứ không phải chữ trang trí. /85 lên khoảng 5.6:1
    * mà vẫn nhạt hơn hẳn chữ thật (trắng nguyên, 15:1) nên không bao giờ bị
    * nhầm là đã nhập.
    *
@@ -323,7 +323,7 @@ summary:focus-visible,
    */
   .input {
     @apply w-full rounded-lg border border-night-600 bg-night-800/80 px-3 py-2.5 text-white
-      transition-colors placeholder:text-mist/75 hover:border-night-600/60 focus:border-blood-500
+      transition-colors placeholder:text-mist/85 hover:border-night-600/60 focus:border-blood-500
       disabled:cursor-not-allowed disabled:border-night-700 disabled:bg-night-900/70
       disabled:text-mist-strong;
   }
