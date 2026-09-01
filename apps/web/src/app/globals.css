@@ -157,11 +157,10 @@ summary:focus-visible,
     transition: none;
   }
 
-  /* Nhịp thở không mang tin gì cả, tắt là xong. Màn quét thì Backdrop tự chặn
-   * từ đầu chứ không dựng rồi giấu - dựng rồi giấu thì animationend không bao
-   * giờ chạy và phần tử nằm lại vĩnh viễn. */
-  .avatar-breathe,
-  .backdrop-vignette {
+  /* Nhịp thở của ảnh đại diện không mang tin gì cả, tắt là xong. Màn quét thì
+   * Backdrop tự chặn từ đầu chứ không dựng rồi giấu - dựng rồi giấu thì
+   * animationend không bao giờ chạy và phần tử nằm lại vĩnh viễn. */
+  .avatar-breathe {
     animation: none;
   }
 }
@@ -255,6 +254,14 @@ summary:focus-visible,
   50% {
     opacity: 0.96;
     transform: scale(1.015);
+  }
+}
+
+/* Cùng độ đặc hiệu thì luật đứng SAU thắng, nên guard phải nằm dưới chính khai báo
+ * animation ở dòng 246, chứ không lẫn với các guard khác ở đầu tệp. */
+@media (prefers-reduced-motion: reduce) {
+  .backdrop-vignette {
+    animation: none;
   }
 }
 
