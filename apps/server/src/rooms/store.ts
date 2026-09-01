@@ -60,6 +60,14 @@ export interface Room {
    * thứ duy nhất phân biệt được hai chặng của cùng một pha đêm.
    */
   phaseSeq: number;
+  /**
+   * Ai đã bị chủ phòng đuổi khỏi phòng NÀY.
+   *
+   * Không có danh sách này thì `kick` chỉ là trang trí: nó gỡ người ta khỏi
+   * `members`, nhưng phòng vẫn ở sảnh chờ nên lần `join` ngay sau đó rơi vào
+   * nhánh "thành viên mới" và nhận họ lại. Bấm F5 là vào lại được.
+   */
+  kickedPlayerIds: string[];
 }
 
 const rooms = new Map<string, Room>();
@@ -87,6 +95,7 @@ export function createRoom(code: string, host: RoomMember): Room {
     resultWritten: false,
     pendingStep: null,
     phaseSeq: 0,
+    kickedPlayerIds: [],
   };
   rooms.set(code, room);
   return room;

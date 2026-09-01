@@ -79,6 +79,7 @@ function roomWith(members: Array<{ id: string; avatarUrl: string | null }>): Roo
     engine: null,
     chatLog: [],
     createdAt: 0,
+    kickedPlayerIds: [],
   };
 }
 

@@ -45,6 +45,8 @@ export function restoreRoomFromEnvelope(envelope: RoomEnvelopeV1): Room {
     resultWritten: data.resultWritten,
     pendingStep: data.pendingStep,
     phaseSeq: data.phaseSeq,
+    // Snapshot cũ chưa có trường này - đọc lên thành phòng chưa đuổi ai.
+    kickedPlayerIds: data.kickedPlayerIds ?? [],
   };
 
   if (data.botSession) {

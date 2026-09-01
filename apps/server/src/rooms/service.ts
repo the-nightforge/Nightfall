@@ -146,6 +146,13 @@ export const roomService = {
       const code = rawCode.trim().toUpperCase();
       const room = getRoom(code) ?? assertLoadedRoom(await loadAndResumeRoom(code));
 
+      // Đuổi rồi thì đuổi hẳn. Không có chốt này, `kick` chỉ gỡ người ta khỏi
+      // danh sách một lần rồi lần `join` kế tiếp nhận lại ngay - bấm F5 là vào
+      // lại được đúng cái phòng vừa đuổi mình.
+      if (room.kickedPlayerIds.includes(playerId)) {
+        throw new RoomError("Bạn đã bị loại khỏi phòng này");
+      }
+
       // Reconnect: đã là thành viên
       const existing = room.members.find((m) => m.playerId === playerId);
       const entryError = roomEntryError(await this.findRoomOf(playerId), code, room.status, !!existing);
@@ -297,6 +304,13 @@ export const roomService = {
       const target = room.members.find((m) => m.playerId === targetId);
       if (!target) throw new RoomError("Người chơi không tồn tại");
       room.members = room.members.filter((m) => m.playerId !== targetId);
+      room.kickedPlayerIds.push(targetId);
+      // Nói cho người bị đuổi biết. Họ không còn trong `members` nên
+      // `broadcastRoom` bỏ qua họ: im lặng ở đây là bỏ họ ngồi trước một sảnh
+      // chờ đông cứng, không hiểu vì sao ván mãi không bắt đầu.
+      emitToPlayers([targetId], SERVER_EVENTS.ERROR, {
+        message: "Bạn đã bị chủ phòng loại khỏi phòng",
+      });
       // Bị đuổi cũng không đi qua sync(): người bị đuổi vẫn nói được vào phòng
       // vừa đuổi họ nếu không đá khỏi voice ở đây.
       void dropVoiceParticipant(room.code, targetId, "bị đuổi");
