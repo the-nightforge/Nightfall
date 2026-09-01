@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { GHOST_AUTHOR_ID, type ChatMessage } from "@masoi/shared";
 import { getIdentity } from "@/lib/identity";
+import { canSendMessage } from "@/lib/chat-draft";
 import { insertEmoji } from "@/lib/chat-emoji";
 import { EmojiPicker } from "./EmojiPicker";
 
@@ -155,9 +156,10 @@ export function ChatBox({
   }, [messages.length]);
 
   const submit = () => {
-    const t = text.trim();
-    if (!t) return;
-    onSend(t);
+    // Cùng một luật với thuộc tính `disabled` của nút Gửi - Enter không đi qua
+    // cái nút, nên hai đường phải hỏi chung một hàm.
+    if (!canSendMessage(text)) return;
+    onSend(text.trim());
     setText("");
     // Gửi xong là hết câu: để bảng mở thì nó che mất chính dòng vừa gửi.
     changeEmojiOpen(false);
@@ -307,8 +309,19 @@ export function ChatBox({
           {/* pr-11 chừa chỗ cho nút biểu tượng nằm đè bên phải, y như pl-10
             * chừa chỗ cho bong bóng bên trái - thiếu nó thì chữ chui xuống dưới
             * nút đúng lúc câu vừa đủ dài. */}
+          {/*
+            * Placeholder sáng hơn mặc định của `.input`.
+            *
+            * `.input` đặt `placeholder:text-mist/55` cho cả trang, đo được
+            * 3.36:1 trên nền ô nhập - dưới ngưỡng AA 4.5:1 cho chữ thường.
+            * /75 đưa lên 5.09:1. Chỉ nâng ở ô chat chứ không sửa `.input`:
+            * lớp đó còn dùng cho các ô số trong Cài đặt nâng cao và cho ô tải
+            * ảnh, nên đổi nó là đổi cả những màn hình không nằm trong vòng này.
+            * Chữ thật vẫn là trắng nguyên (15:1) nên không có nguy cơ nhầm
+            * placeholder với nội dung đã nhập.
+            */}
           <input
-            className="input pl-10 pr-11"
+            className="input pl-10 pr-11 placeholder:text-mist/75"
             ref={attachInput}
             autoFocus={autoFocus}
             aria-label="Nội dung tin nhắn"
@@ -326,18 +339,30 @@ export function ChatBox({
           />
         </div>
         {/*
-          * Nút Gửi lúc chưa gõ gì phải còn ĐỌC được.
+          * Nút Gửi lúc chưa gõ gì phải còn ĐỌC được, mà vẫn không mời bấm.
           *
           * `.btn` mặc định hạ opacity xuống 40%: nền đỏ nhạt đi thành hồng
           * xám và chữ "Gửi" gần như biến mất - trông như một nút đang hỏng chứ
-          * không phải một nút chưa tới lượt. Ba lớp disabled: dưới đây đổi hẳn
-          * sang xám trung tính mà chữ vẫn rõ, cùng cách `.btn-cta` và
-          * `.gate-cta` đã xử lý.
+          * không phải một nút chưa tới lượt. Nên các lớp dưới đây đổi hẳn sang
+          * nền trung tính và giữ opacity 1, cùng cách `.btn-cta` và `.gate-cta`
+          * đã xử lý.
+          *
+          * night-800 chứ không phải night-700. Đo trên nền khung chat: night-700
+          * sáng hơn chính ô nhập bên cạnh (1.19:1), nên nó đọc ra như một khối
+          * NỔI LÊN - tức là bấm được. night-800 nằm ngang mặt ô nhập (1.02:1)
+          * nên cả cụm đọc ra là một hàng nhập liệu đang chờ chữ; vòng viền mảnh
+          * giữ cho nó vẫn ra hình một cái nút chứ không thành một lỗ thủng.
+          * Chữ ở `mist` vẫn 8.1:1 - đọc thoải mái, mà nhạt hơn hẳn chữ trắng
+          * trên nền đỏ của trạng thái bấm được.
+          *
+          * Không cần chặn hover: `.btn-primary:hover` nằm ở tầng component còn
+          * các lớp `disabled:` nằm ở tầng utility phía sau, nên utility thắng.
+          * Đã kiểm bằng computed style khi con trỏ đang ở trên nút tắt.
           */}
         <button
-          className="btn-primary shrink-0 disabled:bg-night-700 disabled:text-mist-strong disabled:opacity-100 disabled:shadow-none"
+          className="btn-primary shrink-0 disabled:bg-night-800 disabled:text-mist disabled:opacity-100 disabled:shadow-none disabled:ring-1 disabled:ring-inset disabled:ring-white/10"
           onClick={submit}
-          disabled={!text.trim()}
+          disabled={!canSendMessage(text)}
         >
           Gửi
         </button>

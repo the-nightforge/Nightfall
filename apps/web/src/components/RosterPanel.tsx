@@ -328,9 +328,20 @@ export function RosterPanel({ snapshot, lobby }: Props) {
         * còn mười một chỗ. Dòng này là chỗ duy nhất nói ra con số đó.
         */}
       {lobby && freeSeats > 0 && (
+        /*
+         * Câu này phải vừa MỘT dòng trong cột 18rem.
+         *
+         * Bản đầy đủ - "Còn 14 chỗ trống · phòng nhận tối đa 15 người" - tràn
+         * sang dòng thứ hai và bỏ lại đúng một chữ "người" nằm trơ dưới cùng
+         * thẻ. Cắt "trống" và "phòng nhận" không mất nghĩa nào: "chỗ" trong
+         * ngữ cảnh danh sách người chơi đã là chỗ trống, và "tối đa 15 người"
+         * tự nói ra đó là sức chứa.
+         *
+         * Vẫn cho xuống dòng được (không `whitespace-nowrap`): ở cột hẹp hơn
+         * hoặc khi người dùng phóng chữ, xuống dòng vẫn hơn là tràn ngang.
+         */
         <p className="mt-2.5 shrink-0 border-t border-white/[0.08] pt-2.5 text-[13px] text-mist-strong">
-          Còn <b className="text-white">{freeSeats}</b> chỗ trống · phòng nhận tối đa{" "}
-          {MAX_PLAYERS_PER_ROOM} người
+          Còn <b className="text-white">{freeSeats}</b> chỗ · tối đa {MAX_PLAYERS_PER_ROOM} người
         </p>
       )}
 
