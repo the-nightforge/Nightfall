@@ -5,7 +5,7 @@
 **A real-time multiplayer Werewolf (Mafia) game — 13 roles, 15 dynamic events, voice chat, and AI bots that actually reason.**
 
 [![CI](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-2481%20passing-brightgreen)](#testing)
+[![Tests](https://img.shields.io/badge/tests-2718%20passing-brightgreen)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
@@ -61,7 +61,7 @@ The interesting parts are not the CRUD. They are:
 | 🔁 | **Reconnect support** — refresh or drop out and rejoin the same match |
 | 📜 | **Full night recap** at game over: every role action, every death, and why |
 | 🗂️ | **Case file** at game over: 3-5 turning points picked from authoritative match data, with a shareable 9:16 card |
-| 🕘 | **Match history** on the home page: your recent games, your role in each, and the full final roster |
+| 🕘 | **Match history** on the home page: your recent games, your role in each, the final roster, and the turning points that decided them |
 
 ## Architecture
 
@@ -371,7 +371,7 @@ Operational details — keys, TTLs, log lines, deploy checklist, when to bump
 | Method | Path | Body | Response | Notes |
 |---|---|---|---|---|
 | `POST` | `/api/players` | `{ nickname }` | `{ playerId, token, nickname }` | Guest registration. The client keeps the token; the server stores only its SHA-256. Rate-limited per IP. |
-| `GET` | `/api/players/me/matches` | — | `{ matches: MatchHistoryEntry[] }` | The caller's 20 most recent finished matches. Requires `Authorization: Bearer <token>`; answers `401` without a valid one. Matched by player id inside the stored roster, so games recorded before ids were stored do not appear. |
+| `GET` | `/api/players/me/matches` | — | `{ matches: MatchHistoryEntry[] }` | The caller's 20 most recent finished matches, each with its stored case file when one exists. Requires `Authorization: Bearer <token>`; answers `401` without a valid one. Matched by player id inside the stored roster, so games recorded before ids were stored do not appear. |
 | `PUT` | `/api/players/me/avatar` | `multipart/form-data`, field `file` | `{ avatarUrl }` | Bearer auth. ≤ 5 MB. Format is decided by magic bytes (JPEG/PNG/WebP), never by the client-declared MIME type. The server auto-rotates by EXIF, crops to a centred square, resizes to 256×256 and encodes WebP under 200 KB. `503` when object storage is not configured. |
 | `DELETE` | `/api/players/me/avatar` | — | `204` | Bearer auth. Clears the avatar and deletes the stored object. Succeeds even when object storage is not configured — the database is the source of truth for "has an avatar". |
 | `GET` | `/api/health` | — | `{ ok, db, redis, version, startedAt }` | `503` when PostgreSQL is down. Redis trouble reports `redis: false` but still returns `200`, since in-memory rooms remain playable. |
@@ -512,8 +512,8 @@ Stated plainly, because knowing where the edges are is more useful than pretendi
 - **Recovery is best-effort on the Redis side.** If Redis is down *at the moment* the process dies, the match is lost. That is a deliberate trade: a slow Redis must never stall a live table.
 - **Rooms wake up lazily**, when someone reconnects. A match left with only bots stays frozen until a human returns or the 6-hour TTL expires.
 - **LLM speech is not replayed.** After a restore, bots say new sentences; only their *decisions* are deterministic.
-- **No chat persistence.** Match history records the result and the final roster, not the conversation.
-- **History does not carry the case file.** Turning points are built from the live snapshot at game over and are not stored, so a past match shows who played what but not what turned it.
+- **No chat persistence.** Match history records the result, the final roster and the case file, not the conversation.
+- **Case files only exist from the match that introduced them onward.** Games finished before the column was added show their roster but no turning points; the ingredients live only in the room's memory, so they cannot be reconstructed after the fact.
 - **Voice is daytime-only** and audio-only — no video.
 - **Rate limiting is in-memory**, so it is per-process and resets on deploy.
 - **The bot conversation layer has not passed a human quality review** — see the expandable section under [Bot AI](#bot-ai).

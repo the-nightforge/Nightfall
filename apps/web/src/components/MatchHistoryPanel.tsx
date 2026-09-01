@@ -105,7 +105,15 @@ function MatchRow({ match }: { match: MatchHistoryEntry }) {
               </span>
             )}
           </span>
-          <span className="mt-0.5 block truncate text-[11px] text-mist/55">
+          {/*
+            * Cho XUỐNG DÒNG, không cắt bằng `truncate`.
+            *
+            * Bốn mẩu thông tin này cần 276px mà khung điện thoại 375px chỉ chừa
+            * 234px, nên `truncate` nuốt mất phần đuôi - đúng chỗ đặt mốc thời
+            * gian, thứ người ta quét mắt tìm trước nhất ở một danh sách lịch
+            * sử. Thà hai dòng còn hơn mất câu trả lời cho "ván này từ bao giờ".
+            */}
+          <span className="mt-0.5 block text-[11px] leading-snug text-mist/55">
             {wolvesWon ? "Ma Sói thắng" : "Dân Làng thắng"} · {match.rounds} vòng ·{" "}
             {formatDuration(match.durationSec)} · {formatWhen(match.endedAt)}
           </span>
