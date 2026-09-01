@@ -22,6 +22,7 @@
     "pretest": "npm run build:deps",
     "test": "npm run test --workspace @masoi/shared && npm run test --workspace @masoi/game-engine && npm run test --workspace @masoi/server && npm run test --workspace @masoi/web",
     "test:e2e": "tsx apps/server/scripts/e2e.ts",
+    "test:e2e:recovery": "tsx apps/server/scripts/e2e-recovery.ts",
     "bot:probe": "tsx apps/server/scripts/bot-probe.ts",
     "voice:probe": "tsx apps/server/scripts/voice-probe.ts",
     "preselfplay": "npm run build:deps",

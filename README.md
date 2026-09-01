@@ -29,6 +29,7 @@
 - [Game rules](#game-rules)
 - [Voice chat](#voice-chat)
 - [Bot AI](#bot-ai)
+- [Crash recovery](#crash-recovery)
 - [API reference](#api-reference)
 - [Scripts](#scripts)
 - [Testing](#testing)
@@ -332,6 +333,37 @@ Bots can claim roles in chat (a Seer announcing a wolf hit, a wolf claiming fals
 
 Run a self-play batch with `npm run selfplay`, or probe a live provider with `npm run bot:probe`.
 
+## Crash recovery
+
+A backend restart no longer ends the match. Every authoritative state transition
+writes a versioned snapshot to Redis (`room:{CODE}`); when a player reconnects,
+the room is validated with Zod, rebuilt, and resumed — same round, same phase,
+same votes, same bot memories, same clock.
+
+Three details carry most of the weight:
+
+- **No timer handle is ever persisted.** What gets stored is the *pending step*
+  — a name plus an absolute `runAt` — so a fresh process knows what the match is
+  waiting for without having to infer it from the phase. Inferring would break
+  on night, where one `NIGHT` phase has two stages.
+- **A phase token guards every transition** (`round:phase:phaseSeq`). A step
+  carrying a stale token is a step from a situation that no longer exists, so it
+  is dropped. This is what makes "no phase and no side effect runs twice" a
+  structural property rather than a hope — it holds for the leftover timer, the
+  re-armed timer, and the deadline catch-up alike.
+- **Bot RNG stores a cursor, not a state.** The generator is counter-based, so
+  one integer reopens the exact stream. Bots therefore do not change their minds
+  just because the process died.
+
+A snapshot that fails validation is **quarantined**, never guessed at: the key
+is moved aside for 24 hours, a structured `snapshot.invalid` line is logged, and
+the player is told plainly. Redis being unreachable is kept distinct from the
+room not existing — one asks the player to retry and changes nothing, the other
+cleans up.
+
+Operational details — keys, TTLs, log lines, deploy checklist, when to bump
+`persistenceVersion` — are in [`docs/operations-recovery.md`](docs/operations-recovery.md).
+
 ## API reference
 
 ### REST
@@ -409,16 +441,17 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `npm run bot:probe` | One real LLM call against a fake match, to validate keys and prompts |
 | `npm run voice:probe` | One real LiveKit round trip, to validate credentials and token grants |
 | `npm run test:e2e` | Socket.IO smoke test; needs a running local server. Not yet a release gate |
+| `npm run test:e2e:recovery` | Starts a server, SIGKILLs it mid-match, restarts it, and asserts the match resumes. Needs `dev:infra` |
 
 ## Testing
 
 | Package | Runner | Tests |
 |---|---|---|
-| `@masoi/shared` | Vitest | **72** |
-| `@masoi/game-engine` | Vitest | **1506** |
-| `@masoi/server` | Vitest | **553** |
-| `@masoi/web` | `node:test` | **350** |
-| | | **2481 total** |
+| `@masoi/shared` | Vitest | **75** |
+| `@masoi/game-engine` | Vitest | **1514** |
+| `@masoi/server` | Vitest | **759** |
+| `@masoi/web` | `node:test` | **362** |
+| | | **2710 total** |
 
 The engine suite includes seeded self-play runs that assert invariants across hundreds of full matches — no illegal move is ever accepted, no bot ever learns a role it should not know, and the same seed reproduces a match bit-for-bit.
 
@@ -475,8 +508,10 @@ CI runs build → test → lint on every push and pull request, and deploys prev
 
 Stated plainly, because knowing where the edges are is more useful than pretending they do not exist.
 
-- **Single instance only.** Room state lives in RAM; Redis is a recovery copy. A restart mid-match returns the room to the lobby rather than resuming it.
-- **`BotBrainState` is not persisted.** A restart mid-match wipes what the bots had learned that game.
+- **Single instance only.** Room state lives in RAM; Redis is a recovery copy. There is no distributed lock, so two processes serving the same room code would fight over it — the `opSeq` compare-and-set limits the damage but does not solve it.
+- **Recovery is best-effort on the Redis side.** If Redis is down *at the moment* the process dies, the match is lost. That is a deliberate trade: a slow Redis must never stall a live table.
+- **Rooms wake up lazily**, when someone reconnects. A match left with only bots stays frozen until a human returns or the 6-hour TTL expires.
+- **LLM speech is not replayed.** After a restore, bots say new sentences; only their *decisions* are deterministic.
 - **No chat persistence.** Match history records the result and the final roster, not the conversation.
 - **History does not carry the case file.** Turning points are built from the live snapshot at game over and are not stored, so a past match shows who played what but not what turned it.
 - **Voice is daytime-only** and audio-only — no video.
@@ -485,7 +520,7 @@ Stated plainly, because knowing where the edges are is more useful than pretendi
 
 ## Documentation
 
-Design specifications and verification reports live in [`docs/`](docs/) — including the bot AI phase reports, the roles and events balance design, and the voice chat spec.
+Design specifications and verification reports live in [`docs/`](docs/) — including the bot AI phase reports, the roles and events balance design, the voice chat spec, and the [crash recovery runbook](docs/operations-recovery.md).
 
 ---
 

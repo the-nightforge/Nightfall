@@ -371,15 +371,18 @@ describe("quyền xem sau khi khôi phục", () => {
     await playUntil("RCSEC", "DAY_DISCUSSION");
     const { room: after, modules } = await restartAndLoad("RCSEC");
 
-    const villager = after.engine!.state.players.find(
-      (p) => p.role === "VILLAGER" && p.alive && !p.isBot,
+    // Chọn theo TIÊU CHÍ chứ không theo một vai cụ thể: việc chia vai dùng
+    // `Math.random`, nên "phải có một Dân Làng còn sống" là một điều kiện có
+    // thể không xảy ra, và một test chỉ xanh ở vài lần chạy là một test hỏng.
+    const viewer = after.engine!.state.players.find(
+      (p) => p.alive && p.role !== "WEREWOLF" && p.role !== "WOLF_CUB",
     )!;
-    const view = modules.buildSnapshot(after, villager.id);
+    const view = modules.buildSnapshot(after, viewer.id);
 
     // Khẳng định KHÔNG rỗng trước: nếu snapshot không hề có trường vai thì hai
     // dòng dưới đây xanh mà chẳng chứng minh được gì.
-    expect(view.you?.role).toBe("VILLAGER");
-    const revealed = view.players.filter((p) => p.role !== undefined && p.id !== villager.id);
+    expect(view.you?.role).toBe(viewer.role);
+    const revealed = view.players.filter((p) => p.role !== undefined && p.id !== viewer.id);
     expect(revealed).toHaveLength(0);
     expect(JSON.stringify(view)).not.toContain("WEREWOLF");
   });
@@ -388,8 +391,10 @@ describe("quyền xem sau khi khôi phục", () => {
     await playUntil("RCWIR", "NIGHT");
     const { room: after, modules } = await restartAndLoad("RCWIR");
 
-    const villager = after.engine!.state.players.find((p) => p.role === "VILLAGER")!;
-    const view = modules.buildSnapshot(after, villager.id);
+    const viewer = after.engine!.state.players.find(
+      (p) => p.role !== "WEREWOLF" && p.role !== "WOLF_CUB",
+    )!;
+    const view = modules.buildSnapshot(after, viewer.id);
 
     expect(JSON.stringify(view)).not.toContain("deadCanSpeakChosenId");
     expect(JSON.stringify(view)).not.toContain("botSession");
