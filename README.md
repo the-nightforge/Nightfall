@@ -5,7 +5,7 @@
 **A real-time multiplayer Werewolf (Mafia) game — 13 roles, 15 dynamic events, voice chat, and AI bots that actually reason.**
 
 [![CI](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-2718%20passing-brightgreen)](#testing)
+[![Tests](https://img.shields.io/badge/tests-2720%20passing-brightgreen)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
@@ -60,6 +60,7 @@ The interesting parts are not the CRUD. They are:
 | 📱 | **Mobile-first UI** with cinematic phase transitions |
 | 🔁 | **Reconnect support** — refresh or drop out and rejoin the same match |
 | 📜 | **Full night recap** at game over: every role action, every death, and why |
+| 💬 | **Full chat reveal** at game over — the wolves' den and the dead's channel open up once roles are public |
 | 🗂️ | **Case file** at game over: 3-5 turning points picked from authoritative match data, with a shareable 9:16 card |
 | 🕘 | **Match history** on the home page: your recent games, your role in each, the final roster, and the turning points that decided them |
 
@@ -449,9 +450,9 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 |---|---|---|
 | `@masoi/shared` | Vitest | **75** |
 | `@masoi/game-engine` | Vitest | **1514** |
-| `@masoi/server` | Vitest | **767** |
+| `@masoi/server` | Vitest | **769** |
 | `@masoi/web` | `node:test` | **362** |
-| | | **2718 total** |
+| | | **2720 total** |
 
 The engine suite includes seeded self-play runs that assert invariants across hundreds of full matches — no illegal move is ever accepted, no bot ever learns a role it should not know, and the same seed reproduces a match bit-for-bit.
 
@@ -498,9 +499,10 @@ CI runs build → test → lint on every push and pull request, and deploys prev
 **The server is the single source of truth.** Nothing about the game state is trusted from a client.
 
 - Secret roles are filtered inside `snapshotFor(viewerId)` **before** serialization, so the wire never carries a role the viewer is not entitled to see.
-- Private chat (wolves, the dead) is emitted only to the exact set of entitled recipients — it is not broadcast and filtered client-side.
+- Private chat (wolves, the dead) is emitted only to the exact set of entitled recipients — it is not broadcast and filtered client-side. It opens to everyone at `GAME_OVER`, and only there, because that is the same phase in which the engine reveals every role.
 - Every socket payload is validated with strict Zod schemas; unknown keys are rejected.
 - Session tokens are stored as SHA-256 hashes; the plaintext token exists only on the client.
+- Stored match history is filtered element by element on read. A `Json` column keeps the shape the build that wrote it chose, so a role later renamed or removed would otherwise reach `ROLE_META[role].team` as `undefined` and take down the home page for whoever played it — permanently, since the data lives in the database.
 - Voice speaking rights are granted after joining, never encoded in a token, so an old token cannot restore a dead player's mic.
 - Guest signup is rate-limited per IP. This one matters more than it looks: every socket rate limit is keyed by `playerId`, so unlimited free `playerId`s would have made all of them decorative.
 
@@ -512,7 +514,7 @@ Stated plainly, because knowing where the edges are is more useful than pretendi
 - **Recovery is best-effort on the Redis side.** If Redis is down *at the moment* the process dies, the match is lost. That is a deliberate trade: a slow Redis must never stall a live table.
 - **Rooms wake up lazily**, when someone reconnects. A match left with only bots stays frozen until a human returns or the 6-hour TTL expires.
 - **LLM speech is not replayed.** After a restore, bots say new sentences; only their *decisions* are deterministic.
-- **No chat persistence.** Match history records the result, the final roster and the case file, not the conversation.
+- **No chat persistence.** Match history records the result, the final roster and the case file, not the conversation. The end-of-match reveal reads the room's in-memory log, which is capped at the last 100 messages across all channels, so a long and talkative game reveals its final stretch rather than the whole thing.
 - **Case files only exist from the match that introduced them onward.** Games finished before the column was added show their roster but no turning points; the ingredients live only in the room's memory, so they cannot be reconstructed after the fact.
 - **Voice is daytime-only** and audio-only — no video.
 - **Rate limiting is in-memory**, so it is per-process and resets on deploy.

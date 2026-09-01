@@ -148,7 +148,18 @@ export function visibleChatLog(room: Room, viewerId: string): ChatMessage[] {
 
   const view = room.engine.snapshotFor(viewerId);
   if (!view.you) return [];
-  if (view.phase === "GAME_OVER") return messagesFor("lobby");
+  /*
+   * Ván xong thì mở TOÀN BỘ log, kể cả hang Sói và kênh người chết.
+   *
+   * Bản cũ chỉ trả kênh `lobby`, nên đúng vào giây kết thúc, khung chat của mọi
+   * người trắng trơn - chỉ còn lại mấy câu tán gẫu TRƯỚC trận, còn cả ván vừa
+   * chơi thì biến mất. Đó là đúng lúc người ta muốn đọc lại nhất.
+   *
+   * Không lộ gì thêm: `snapshotFor` đặt revealAll ở GAME_OVER, tức mọi vai đã
+   * công khai rồi. Đọc lại xem phe Sói bàn nhau ra sao chính là phần thưởng của
+   * một ván suy luận, và ChatBox vốn đã tô màu/gắn nhãn sẵn cho từng kênh.
+   */
+  if (view.phase === "GAME_OVER") return messagesFor("lobby", ...SPECTATOR_CHANNELS);
   if (!view.you.alive) {
     // Người chết theo dõi được cả trận, chỉ mất quyền nói với người sống.
     return isHunterReactionParticipant(room, viewerId) ? [] : messagesFor(...SPECTATOR_CHANNELS);

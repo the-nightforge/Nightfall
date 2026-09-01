@@ -69,4 +69,36 @@ describe("toHistoryEntry", () => {
       expect(entry.myRole).toBeNull();
     }
   });
+
+  it("bỏ người chơi mang vai mà bản build này không còn biết", () => {
+    /*
+     * Kịch bản thật: một vai bị đổi tên hoặc gỡ đi, nhưng những ván CŨ trong DB
+     * vẫn giữ nguyên chuỗi cũ. Người xem tra `ROLE_META[player.role]` để lấy
+     * tên và phe, nên lọt qua được là ném lỗi giữa lúc render TRANG CHỦ - và
+     * vì dữ liệu nằm trong DB, nạn nhân gặp lại nó mọi lần vào.
+     */
+    const entry = toHistoryEntry(
+      row([
+        { id: "me", name: "Tôi", role: "SEER", alive: true },
+        { id: "ghost", name: "Vai đã gỡ", role: "ALCHEMIST", alive: false },
+        { id: "broken", name: "Thiếu vai", alive: true },
+        null,
+      ]),
+      "me",
+    );
+
+    expect(entry.players.map((p) => p.id)).toEqual(["me"]);
+    expect(entry.myRole).toBe("SEER");
+  });
+
+  it("người đang hỏi mất vai thì hàng vẫn đọc được, chỉ trung tính đi", () => {
+    const entry = toHistoryEntry(
+      row([{ id: "me", name: "Tôi", role: "ALCHEMIST", alive: true }]),
+      "me",
+    );
+
+    expect(entry.myRole).toBeNull();
+    expect(entry.mySurvived).toBeNull();
+    expect(entry.players).toEqual([]);
+  });
 });
