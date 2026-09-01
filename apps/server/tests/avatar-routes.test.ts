@@ -44,6 +44,27 @@ vi.mock("../src/db", () => ({
 
 vi.mock("../src/rooms/apply-avatar", () => ({ applyAvatarToRoom: async () => undefined }));
 
+// Đếm số lần setAvatar (tầng service, có kiểm byte riêng ở storeAvatar) thực
+// sự được gọi tới - vẫn chạy code thật bên dưới (importOriginal), chỉ thêm bộ
+// đếm. Dùng để phân biệt một 413 đến từ multer.limits.fileSize (chặn TRƯỚC khi
+// route handler chạy, nên setAvatar không hề được gọi) với một 413 đến từ
+// nhánh `file.length > MAX_AVATAR_UPLOAD_BYTES` bên trong storeAvatar (phải
+// gọi setAvatar rồi mới biết). Hai đường cho ra cùng status và cùng câu chữ
+// nên không thể phân biệt bằng response - phải soi vào việc service có được
+// chạm tới hay không.
+const serviceSpies = vi.hoisted(() => ({ setAvatarCalls: 0 }));
+
+vi.mock("../src/avatar/service", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/avatar/service")>();
+  return {
+    ...actual,
+    setAvatar: async (...args: Parameters<typeof actual.setAvatar>) => {
+      serviceSpies.setAvatarCalls++;
+      return actual.setAvatar(...args);
+    },
+  };
+});
+
 import { avatarRouter } from "../src/avatar/routes";
 import { resetRateLimit } from "../src/rate-limit";
 import { sha256 } from "../src/util";
@@ -71,6 +92,7 @@ beforeEach(() => {
   db.players.clear();
   db.tokenHashes.clear();
   db.forceUpdateError = false;
+  serviceSpies.setAvatarCalls = 0;
   db.players.set("p1", { id: "p1", avatarUrl: null, avatarKey: null });
   db.tokenHashes.set(sha256(TOKEN), "p1");
   storage = createMemoryStorage("https://cdn.test/masoi");
@@ -122,11 +144,35 @@ describe("PUT /api/players/me/avatar", () => {
     expect(db.players.get("p1")!.avatarUrl).toBe(res.body.avatarUrl);
   });
 
-  it("thiếu field file thì 400", async () => {
+  it("gửi field văn bản thay vì file thì 400 (limits.fields: 0 chặn ngay từ field đầu tiên)", async () => {
+    // Trước khi limits.fields: 0 được thêm vào, request này lọt qua parser
+    // (field "khác" bị multer gom vào req.body), req.file rỗng, và route tự
+    // trả "Thiếu file ảnh". Giờ busboy chặn luôn ở field đầu tiên bằng
+    // LIMIT_FIELD_COUNT - vẫn 400, nhưng KHÔNG còn cùng lý do: một request với
+    // hàng trăm field văn bản sẽ bị chặn ở đây, chứ không còn được multer gom
+    // hết vào req.body trước khi route kịp từ chối.
     const res = await request(app())
       .put("/api/players/me/avatar")
       .set("authorization", `Bearer ${TOKEN}`)
       .field("khác", "1");
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBeTruthy();
+  });
+
+  it("nhiều field văn bản (giả lập tấn công OOM) bị chặn ở tầng parser, không bị gom vào body", async () => {
+    // limits.fields: 0 làm busboy ném fieldsLimit ngay ở field văn bản đầu
+    // tiên, bất kể sau đó còn bao nhiêu field nữa - nên request với hàng trăm
+    // field 1MB/field (thứ multer trước đây sẽ gom hết vào req.body vì fields
+    // mặc định là Infinity) không bao giờ được cấp phát đủ bộ nhớ để trở thành
+    // vấn đề.
+    let req = request(app())
+      .put("/api/players/me/avatar")
+      .set("authorization", `Bearer ${TOKEN}`);
+    for (let i = 0; i < 500; i++) {
+      req = req.field(`f${i}`, "x".repeat(1024));
+    }
+    const res = await req;
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBeTruthy();
@@ -152,6 +198,21 @@ describe("PUT /api/players/me/avatar", () => {
 
     expect(res.status).toBe(413);
     expect(res.body.error).toMatch(/5MB/);
+  });
+
+  it("413 đến từ multer.limits.fileSize (tầng parser), không phải kiểm byte riêng trong storeAvatar", async () => {
+    const tooBig = Buffer.alloc(5 * 1024 * 1024 + 1024, 0x41);
+    const res = await request(app())
+      .put("/api/players/me/avatar")
+      .set("authorization", `Bearer ${TOKEN}`)
+      .attach("file", tooBig, "to.jpg");
+
+    expect(res.status).toBe(413);
+    // Nếu multer.limits.fileSize từng bị gỡ khỏi routes.ts, request 5MB+1KB
+    // này sẽ lọt qua parser, chạy tới setAvatar, và bị storeAvatar tự chặn ở
+    // đó thay - assertion dưới đây sẽ fail trong tình huống đó, chứng minh cái
+    // 413 hiện tại KHÔNG đến từ nhánh service.
+    expect(serviceSpies.setAvatarCalls).toBe(0);
   });
 
   it("gọi quá nhanh thì 429", async () => {

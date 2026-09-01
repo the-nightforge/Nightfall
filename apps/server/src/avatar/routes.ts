@@ -13,10 +13,19 @@ export const avatarRouter = Router();
  *
  * Trần 5MB đặt ngay ở tầng parser: multer ngắt luồng khi vượt, nên một request
  * 500MB không bao giờ được cấp phát đủ bộ nhớ để trở thành vấn đề.
+ *
+ * fileSize/files chỉ khoá PHẦN FILE. Busboy - thứ multer dùng bên dưới - mặc
+ * định fields và parts là Infinity, còn fieldSize là 1MB: một request với 500
+ * field văn bản 1MB mỗi field vẫn bị multer gom hết vào req.body, không đụng
+ * tới fileSize ở trên. Endpoint này chỉ cần Bearer token hợp lệ (mint được từ
+ * POST /api/players đang mở), nên một request như vậy đủ sức OOM cả server -
+ * fields: 0 buộc busboy ném fieldsLimit ngay ở field văn bản đầu tiên (client
+ * hợp lệ chỉ gửi đúng phần file, không gửi field nào khác), còn parts: 2 chặn
+ * luôn ở tầng part bất kể loại part là gì.
  */
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_AVATAR_UPLOAD_BYTES, files: 1 },
+  limits: { fileSize: MAX_AVATAR_UPLOAD_BYTES, files: 1, fields: 0, parts: 2 },
 });
 
 function uploadSingleFile(req: Request, res: Response, next: NextFunction): void {
