@@ -33,12 +33,12 @@ function Line({ actor, children }: { actor: string; children: React.ReactNode })
     <li className="flex items-baseline gap-2">
       <span
         className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ${
-          ACTOR_STYLE[actor] ?? "bg-night-700 text-mist/70"
+          ACTOR_STYLE[actor] ?? "bg-night-700 text-mist-bright"
         }`}
       >
         {actor}
       </span>
-      <span className="min-w-0 text-mist/80">{children}</span>
+      <span className="min-w-0 text-mist-strong">{children}</span>
     </li>
   );
 }
@@ -55,7 +55,7 @@ export function NightRecapTimeline({ nights }: { nights: NightRecap[] }) {
     <div className="card">
       <h3 className="mb-3 font-display text-lg font-bold text-white">Diễn biến các đêm</h3>
       {nights.length === 0 ? (
-        <p className="text-sm text-mist/60">Ván đấu kết thúc trước khi có diễn biến ban đêm.</p>
+        <p className="text-sm text-mist-strong">Ván đấu kết thúc trước khi có diễn biến ban đêm.</p>
       ) : (
         // Thanh dọc bên trái nối các đêm thành một mạch thời gian thay vì mấy
         // khối rời nhau.

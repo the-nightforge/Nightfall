@@ -6,7 +6,7 @@ export function HunterShotTimeline({ shots }: { shots: HunterShotRecap[] }) {
   return (
     <div className="card">
       <h3 className="mb-3 font-semibold text-white">Phản kích của Thợ Săn</h3>
-      <ul className="space-y-2 text-sm text-mist/80">
+      <ul className="space-y-2 text-sm text-mist-strong">
         {shots.map((shot, index) => (
           <li
             key={`${shot.round}-${shot.hunter.id}-${index}`}
