@@ -12,6 +12,10 @@ model Player {
   nickname     String
   tokenHash    String   @unique
   avatarUrl    String?  @db.Text
+  /// Khoá của object avatar trong bucket. Nguồn sự thật DUY NHẤT cho việc xoá:
+  /// server không bao giờ nhận khoá từ client, nên không ai xoá được object của
+  /// người khác bằng một URL giả. avatarUrl chỉ để hiển thị.
+  avatarKey    String?
   createdAt    DateTime @default(now())
   lastSeenAt   DateTime @default(now())
 }

@@ -135,7 +135,14 @@ export const dayOfTruthClaimPayload = z.object({ role: z.string().min(1).nullabl
 export const deadMessagePayload = z
   .object({ text: z.string().trim().min(1).max(DEAD_MESSAGE_MAX_LENGTH) })
   .strict();
-export const updateAvatarPayload = z.object({ avatarUrl: z.string().nullable() }).strict();
+/**
+ * Chỉ còn nhận null, tức là "xoá ảnh". Ảnh đi lên qua PUT /api/players/me/avatar.
+ *
+ * Không xoá hẳn sự kiện vì Vercel còn phục vụ bản client đã cache: client cũ
+ * bấm "Xóa" vẫn phải chạy được, còn client cũ bấm "Lưu" thì phải nhận lỗi rõ
+ * ràng thay vì im lặng hỏng.
+ */
+export const updateAvatarPayload = z.object({ avatarUrl: z.null() }).strict();
 export const chatSendPayload = z.object({ text: z.string().trim().min(1).max(300) }).strict();
 
 export const addBotPayload = z.object({}).strict();

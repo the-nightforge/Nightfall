@@ -9,7 +9,7 @@ interface Props {
   className?: string;
   /** Độ lệch nhịp thở 0..1, lấy từ breathOffsetFor. Xem .avatar-breathe. */
   breathOffset?: number;
-  /** Nếu là base64 data URL thì render ảnh thay vì SVG */
+  /** Nếu là ảnh người chơi tự tải lên thì render <img> thay vì SVG */
   isCustom?: boolean;
 }
 
@@ -21,8 +21,11 @@ interface Props {
  * hình thì hai tầng thông tin đè lên nhau. Cá nhân hoá nằm ở sắc nền của đĩa.
  */
 export function Avatar({ avatar, tint, alive, className = "", isCustom }: Props) {
-  const isDataUrl = typeof avatar === "string" && avatar.startsWith("data:image");
-  const isCustomUrl = isCustom || isDataUrl;
+  // http(s) là ảnh trên object storage; data: là avatar cũ chưa kịp di trú và
+  // vẫn phải hiện được trong giai đoạn chuyển tiếp.
+  const isUploaded =
+    typeof avatar === "string" && /^(https?:|data:image)/.test(avatar);
+  const isCustomUrl = isCustom || isUploaded;
   return (
     <span
       className={`grid place-items-center overflow-hidden rounded-full border border-white/10 transition-colors ${className}`}
