@@ -58,9 +58,16 @@ component mà không đụng file nào.
 chuyển pha, nâng lên thành token thay vì chép lại).
 
 **A1.2 - Micro-interaction, sửa tại chỗ trong `@layer components`.**
-`.card` nhận `transition` + nhấc viền/đổ bóng nhẹ khi hover. `.btn*` đổi
-`transition` trần thành token, thêm `active:` lún xuống ~1px. Con trỏ bàn phím
-(`:focus-visible`) đi cùng đường với hover, không phải một nhánh riêng.
+`.btn*` đổi `transition` trần thành token, thêm `active:` lún xuống ~1px. Con
+trỏ bàn phím (`:focus-visible`) đi cùng đường với hover, không phải một nhánh
+riêng.
+
+`.card` KHÔNG nhận hover. Phần lớn thẻ trong app là khung thông tin đứng yên -
+bảng phiếu, bảng vai, hồ sơ - và cho chúng nhấc lên khi rê chuột là hứa một cú
+bấm không tồn tại. Thẻ bấm được nhận một class riêng `.card-interactive` và chỉ
+những chỗ thật sự bấm được mới gắn nó. Đây là lý do bước đầu tiên khi triển khai
+là ĐẾM xem có bao nhiêu thẻ bấm được; nếu chỉ một hai chỗ thì class riêng là
+thừa và gắn thẳng utility vào chỗ đó.
 
 **A1.3 - Stagger.** Một object `variants` dùng chung, xuất từ
 `apps/web/src/lib/motion.ts` (file mới, chỉ chứa token và variants - không có
@@ -74,10 +81,17 @@ nhỏ `useValueFlash(value)` trong `lib/motion.ts`, gắn vào số phiếu và 
 mà một con số đứng im không nói được. Timer đã có sẵn trạng thái `danger` đổi
 màu - thêm nhịp đập vào đúng trạng thái đó, không tạo trạng thái mới.
 
-**A1.5 - Ambient.** Nối vào `Backdrop` đã có, không dựng lớp mới. Biên độ theo
-đúng chuẩn mà `avatar-breathe` đã đặt ra trong file này: *"nhỏ tới mức không
-nhìn thẳng thì không thấy"*. Người yêu cầu đã được cảnh báo về mỏi mắt sau 20
-phút và vẫn chọn - nên nó được làm, ở biên độ đó.
+**A1.5 - Ambient.** Nối vào `Backdrop` đã có, không dựng lớp mới. Cụ thể: lớp
+gradient của phông nền nhận một nhịp thở rất chậm (chu kỳ ~14s) đổi nhẹ độ mờ và
+vị trí tâm sáng, dùng lại đúng biến `--sweep-color` theo mood mà `Backdrop` đã
+có - nên đêm thở khác ngày mà không cần bảng màu mới.
+
+Biên độ theo đúng chuẩn `avatar-breathe` đã đặt ra trong chính file này:
+*"nhỏ tới mức không nhìn thẳng thì không thấy"*. Cụ thể là opacity dao động
+trong khoảng ±0.04 và tâm sáng dịch không quá 2% chiều rộng. Chu kỳ dài và biên
+độ nhỏ là cách duy nhất để một chuyển động chạy suốt 20 phút không trở thành thứ
+gây khó chịu - người yêu cầu đã được cảnh báo về điểm này và vẫn chọn ambient,
+nên nó được làm, ở biên độ đó.
 
 **Reduced-motion.** CSS keyframes KHÔNG tự theo `MotionConfig reducedMotion`
 của `MotionProvider` - cái đó chỉ chi phối `motion/react`. `globals.css` đang
@@ -88,7 +102,8 @@ Thiếu nó thì phần "tắt hết vẫn chơi đủ" mà `MotionProvider` h�
 ### Nửa B - màn kết thúc (B1 + B2 làm lưới an toàn)
 
 **B1 - bố cục lại + giấu bớt.** Hero giữ nguyên, chạy ngang trên cùng. Dưới đó
-hai cột từ `lg`: đội hình hai phe bên trái, hồ sơ vụ án bên phải. Thẻ chia sẻ
+hai cột từ `lg` theo tỷ lệ `minmax(0,1fr) minmax(0,1fr)`: đội hình hai phe bên
+trái, hồ sơ vụ án bên phải. Dưới `lg` vẫn đúng một cột xếp dọc như hiện tại. Thẻ chia sẻ
 9:16 chui vào một nút bấm - nó là HÀNH ĐỘNG, không phải thứ để nhìn - đúng cách
 "Xem toàn bộ diễn biến" đã làm trong chính file đó.
 
