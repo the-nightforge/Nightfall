@@ -18,6 +18,7 @@ interface GameResultRow {
   round: number;
   durationSec: number;
   playerRoles: unknown;
+  caseFile: unknown;
   createdAt: Date;
 }
 
@@ -38,6 +39,7 @@ export function toHistoryEntry(row: GameResultRow, viewerId: string): MatchHisto
     myRole: me?.role ?? null,
     mySurvived: me ? me.alive : null,
     players,
+    caseFile: row.caseFile ?? null,
   };
 }
 
@@ -110,7 +112,7 @@ apiRouter.get("/players/me/matches", async (req, res) => {
     }
 
     const rows = await prisma.$queryRaw<GameResultRow[]>`
-      SELECT "roomCode", "winner", "round", "durationSec", "playerRoles", "createdAt"
+      SELECT "roomCode", "winner", "round", "durationSec", "playerRoles", "caseFile", "createdAt"
       FROM "GameResult"
       WHERE "playerRoles" @> ${JSON.stringify([{ id: player.id }])}::jsonb
       ORDER BY "createdAt" DESC
