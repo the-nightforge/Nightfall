@@ -104,7 +104,10 @@ export function LobbyHeader({ snapshot, code }: Props) {
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="mt-1.5 text-xs text-mist/80">
+          {/* 13px + mist-strong: câu này là hướng dẫn duy nhất nói phải LÀM gì
+            * khi phòng chưa đủ người, mà ở 12px/mist-80% nó chìm dưới thanh
+            * tiến độ ngay trên nó. */}
+          <p className="mt-1.5 text-[13px] leading-relaxed text-mist-strong">
             Cần thêm <b className="text-white">{missing}</b> người nữa để bắt đầu — gửi mã{" "}
             <b className="font-mono tracking-wider text-white">{code}</b> cho bạn bè.
           </p>

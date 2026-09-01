@@ -88,7 +88,7 @@ export function Lobby({
       <section className="card space-y-4 p-4 lg:p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <h2 className="font-display text-xl font-bold text-white lg:text-2xl">Thiết lập trận</h2>
-          <span className="text-sm text-mist/80">{stage.summary}</span>
+          <span className="text-sm text-mist-strong/85">{stage.summary}</span>
         </div>
 
         {/*
@@ -140,7 +140,7 @@ export function Lobby({
         ) : (
           <p
             data-testid="balance-pending"
-            className="rounded-xl border border-night-600/60 bg-night-900/50 px-3.5 py-3 text-[13px] leading-relaxed text-mist/85"
+            className="rounded-xl border border-night-600/60 bg-night-900/50 px-3.5 py-3 text-[13px] leading-relaxed text-mist-strong"
           >
             {stage.pending}
           </p>
@@ -219,7 +219,7 @@ export function Lobby({
           <BlockReason block={block} isHost={isHost} />
 
           {isHost && count < MAX_PLAYERS_PER_ROOM && (
-            <p className="mt-2 text-center text-xs text-mist/70">
+            <p className="mt-2 text-center text-[13px] leading-relaxed text-mist-strong/85">
               Bot dùng để chơi thử một mình — người thật vẫn vào được cho tới khi đủ{" "}
               {MAX_PLAYERS_PER_ROOM} người.
             </p>
@@ -311,7 +311,7 @@ function Disclosure({
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg transition hover:text-white">
         <span>
           <span className="font-display text-lg font-semibold text-white">{summary}</span>
-          <span className="block text-sm text-mist/80">{hint}</span>
+          <span className="block text-sm text-mist-strong/85">{hint}</span>
         </span>
         <span
           aria-hidden="true"
@@ -421,7 +421,10 @@ function ModeToggle({
           } ${isHost ? "cursor-pointer" : "cursor-default"}`}
         >
           <span className="block">{option.label}</span>
-          <span className="mt-0.5 block text-[11px] font-medium opacity-80">{option.hint}</span>
+          {/* 11px là cỡ chữ nhỏ nhất trên trang này và nó nằm ngay dưới nhãn
+            * đậm 14px - ở khoảng cách ngồi chơi thật thì nó chỉ còn là một vệt
+            * xám. Lên 12px và bớt mờ đi một nấc. */}
+          <span className="mt-0.5 block text-xs font-medium opacity-90">{option.hint}</span>
         </button>
       ))}
     </div>
