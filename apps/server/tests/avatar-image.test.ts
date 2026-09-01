@@ -151,7 +151,7 @@ describe("processAvatar", () => {
   });
 
   it("từ chối ảnh vượt trần điểm ảnh thay vì làm cạn RAM", async () => {
-    // 9000x9000 = 81 triệu điểm ảnh, vượt trần 50 triệu.
+    // 9000x9000 = 81 triệu điểm ảnh, vượt trần 25 triệu.
     const huge = await sharp({
       create: { width: 9000, height: 9000, channels: 3, background: { r: 1, g: 2, b: 3 } },
     })

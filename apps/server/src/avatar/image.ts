@@ -22,10 +22,19 @@ export class AvatarImageError extends Error {
 
 /**
  * Trần điểm ảnh đầu vào. Một file PNG 2 KB có thể khai kích thước 30000x30000
- * và làm sharp cấp phát hàng GB - "bom nén". Trần 50 triệu điểm ảnh (khoảng
- * 7000x7000) rộng hơn mọi ảnh máy ảnh thật nhưng chặn được kiểu tấn công đó.
+ * và làm sharp cấp phát hàng GB - "bom nén".
+ *
+ * 25 triệu điểm ảnh (khoảng 5000x5000) đã rộng gấp bốn lần một ảnh 6 megapixel
+ * từ điện thoại - không camera thật nào ra ảnh gần tới ngưỡng này. Con số ban
+ * đầu là 50 triệu, nhưng "shrink-on-load" của sharp (thứ khiến JPEG lớn giải mã
+ * rẻ vì libjpeg tự thu nhỏ NGAY khi decode) không áp dụng cho PNG - libvips
+ * luôn giải mã trọn vẹn raster PNG trước khi resize. Một PNG đặc màu 7000x7000
+ * (đúng mức trần cũ) nén dưới xa trần 5MB của multer nhưng giải mã ra khoảng
+ * 196MB RGBA; rate limit theo từng người chơi không chặn được hai chục tài
+ * khoản miễn phí cùng gửi song song. Hạ xuống 25 triệu giảm một nửa mức tệ
+ * nhất đó trong khi vẫn còn dư sức cho mọi ảnh thật.
  */
-const MAX_INPUT_PIXELS = 50_000_000;
+const MAX_INPUT_PIXELS = 25_000_000;
 
 /** Bậc chất lượng WebP, thử từ cao xuống thấp cho tới khi lọt trần dung lượng. */
 const QUALITY_LADDER = [82, 70, 58];

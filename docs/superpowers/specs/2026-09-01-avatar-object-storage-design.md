@@ -119,8 +119,15 @@ tự khai.
 
 `processAvatar` dùng `sharp`:
 
-1. `sharp(buf, { limitInputPixels: 50_000_000 })` — ảnh vượt ngưỡng bị từ chối
-   thay vì làm cạn RAM và sập tiến trình.
+1. `sharp(buf, { limitInputPixels: 25_000_000 })` — ảnh vượt ngưỡng bị từ chối
+   thay vì làm cạn RAM và sập tiến trình. (Con số ban đầu ở bản thiết kế này là
+   50 triệu; hạ còn 25 triệu sau khi review toàn nhánh chỉ ra "shrink-on-load"
+   của sharp - lý do JPEG lớn giải mã rẻ vì libjpeg tự thu nhỏ ngay khi decode -
+   KHÔNG áp dụng cho PNG, nơi libvips luôn giải mã trọn vẹn raster trước khi
+   resize. Ở mức 50 triệu, một PNG đặc màu ~7000×7000 vẫn lọt dưới trần 5MB của
+   multer nhưng giải mã ra khoảng 196MB RGBA; rate limit theo từng người chơi
+   không chặn được nhiều tài khoản miễn phí cùng gửi song song. 25 triệu
+   (~5000×5000) vẫn rộng gấp bốn một ảnh 6 megapixel từ điện thoại.)
 2. `.rotate()` — tự xoay theo EXIF. Gọi trước khi resize.
 3. `.resize(256, 256, { fit: "cover", position: "centre" })` — crop vuông giữa ảnh.
 4. `.webp({ quality })` với thang giảm dần `[82, 70, 58]`, dừng ở bậc đầu tiên
