@@ -79,6 +79,7 @@ export function isPresetDeck(config: RoomConfig, playerCount: number): boolean {
 
 export type StartBlock =
   | { kind: "need-players"; missing: number }
+  | { kind: "balance" }
   | { kind: "config"; message: string }
   | { kind: "unready"; names: string[] }
   | null;
@@ -87,6 +88,15 @@ export interface StartBlockInput {
   playerCount: number;
   /** Kết quả `validateRoomConfig`; null là hợp lệ. */
   configError: string | null;
+  /**
+   * `blocking` của `generateWarnings` - ưu tiên bản server gửi trong snapshot.
+   *
+   * Chỉ là ĐẦU VÀO: luật cân bằng nằm ở `@masoi/shared` và không có bản thứ hai
+   * ở đây.
+   */
+  balanceBlocking: boolean;
+  /** Chaos bỏ qua chặn cân bằng - đúng như server làm. */
+  mode: "ranked" | "chaos";
   /** Khách mời người thật chưa bấm sẵn sàng. */
   unreadyNames: string[];
 }
@@ -95,16 +105,59 @@ export interface StartBlockInput {
  * Lý do ĐANG chặn nút bắt đầu, hoặc null nếu bấm được.
  *
  * Trả về đúng một lý do chứ không phải danh sách: chúng đến theo thứ tự người
- * chơi thực sự gặp phải, và in cả ba cùng lúc thì hai cái sau chỉ là nhiễu -
+ * chơi thực sự gặp phải, và in cả bốn cùng lúc thì ba cái sau chỉ là nhiễu -
  * chưa đủ người thì cân bằng chưa có ý nghĩa gì.
  *
- * Thứ tự này giữ nguyên từ bản phòng chờ cũ. Đổi nó là đổi luật, không phải đổi
- * giao diện.
+ * Thứ tự BÁM theo `RoomService.start` trong apps/server/src/rooms/service.ts:
+ *
+ *   1. cân bằng (chỉ khi đã đủ người, và chỉ ở Ranked) -> BALANCE_UNSTABLE
+ *   2. validateRoomConfig
+ *   3. allRequiredPlayersReady
+ *
+ * "Chưa đủ người" đứng đầu ở đây vì server gói nó vào `validateRoomConfig`,
+ * đồng thời rào chốt cân bằng sau `members.length >= 6` - nên với bàn chưa đủ
+ * người, lý do server thực sự trả về cũng chính là lý do thiếu người.
+ *
+ * Sai khớp ở đây không phải chuyện thẩm mỹ: nút sáng mà server từ chối thì
+ * người chơi bấm và nhận về một dòng lỗi đỏ không nói được phải sửa gì.
  */
 export function startBlock(input: StartBlockInput): StartBlock {
   const missing = Math.max(0, MIN_PLAYERS_TO_START - input.playerCount);
   if (missing > 0) return { kind: "need-players", missing };
+  if (input.balanceBlocking && input.mode === "ranked") return { kind: "balance" };
   if (input.configError) return { kind: "config", message: input.configError };
   if (input.unreadyNames.length > 0) return { kind: "unready", names: input.unreadyNames };
   return null;
+}
+
+export interface DeckStage {
+  /** Số người đã đủ để việc chấm cân bằng có nghĩa chưa. */
+  rated: boolean;
+  /** Dòng chữ bên phải tiêu đề thẻ thiết lập. */
+  summary: string;
+  /** Câu đứng thay thanh cân bằng khi chưa đủ người; null khi đã đủ. */
+  pending: string | null;
+}
+
+/**
+ * Bộ bài đang ở giai đoạn nào của phòng chờ.
+ *
+ * Dưới `MIN_PLAYERS_TO_START`, mọi con số cân bằng đều là chấm điểm cho một bàn
+ * chưa tồn tại: `calculateBalanceScore` vẫn chạy và vẫn trả về một con số, còn
+ * `PRESET_DECKS` phủ đúng 6..15 nên nó luôn kèm theo "Không có preset". Phòng 1
+ * người vì thế từng hiện cùng lúc "Cần thêm 5 người nữa để bắt đầu", "Bộ bài
+ * cho 1 người", một thanh cân bằng 58 điểm, và một câu bảo "Bạn vẫn chơi được".
+ *
+ * Ở giai đoạn đó cấu hình vẫn là cấu hình - host chỉnh trước được, và chỉnh
+ * xong vẫn đúng - nhưng nó chưa phải một BỘ BÀI cho số người hiện tại.
+ */
+export function deckStage(playerCount: number): DeckStage {
+  if (playerCount >= MIN_PLAYERS_TO_START) {
+    return { rated: true, summary: `Bộ bài cho ${playerCount} người`, pending: null };
+  }
+  return {
+    rated: false,
+    summary: "Đang chờ đủ người để chốt bộ bài",
+    pending: `Cân bằng đội hình sẽ được đánh giá khi phòng có đủ ${MIN_PLAYERS_TO_START} người.`,
+  };
 }

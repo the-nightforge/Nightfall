@@ -63,6 +63,16 @@ interface Props {
   onSend: (text: string) => void;
   placeholder?: string;
   /**
+   * Dòng gợi ý dưới "Chưa có tin nhắn nào".
+   *
+   * Khung này sống ở CẢ ba giai đoạn - phòng chờ, giữa ván, và sau khi hết ván -
+   * nên một câu cố định là một câu sai ở hai trong ba chỗ: bản trước mời "chào
+   * cả phòng một câu trong lúc chờ đủ người" ngay giữa pha bỏ phiếu. Chỗ đặt
+   * biết đang ở pha nào, còn khung thì không, nên câu chữ đi từ ngoài vào. Bỏ
+   * trống thì rơi về một câu đúng ở mọi pha.
+   */
+  emptyHint?: string;
+  /**
    * Bản nháp do bên ngoài giữ.
    *
    * Trên điện thoại khung này sống trong một tấm trượt đóng mở được, và tấm
@@ -91,6 +101,7 @@ export function ChatBox({
   messages,
   onSend,
   placeholder,
+  emptyHint,
   draft,
   onDraftChange,
   inputRef,
@@ -204,7 +215,7 @@ export function ChatBox({
             />
             <p className="mt-2.5 text-sm font-semibold text-mist-bright">Chưa có tin nhắn nào</p>
             <p className="mt-1 text-[13px] leading-relaxed text-mist-strong">
-              Chào cả phòng một câu trong lúc chờ đủ người.
+              {emptyHint ?? "Hãy bắt đầu cuộc trò chuyện."}
             </p>
           </div>
         )}

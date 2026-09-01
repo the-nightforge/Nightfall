@@ -65,7 +65,17 @@ export function LobbyHeader({ snapshot, code }: Props) {
           )}
         </div>
 
-        <div className="shrink-0">
+        {/*
+          * `shrink-0` KHÔNG được đứng một mình ở đây.
+          *
+          * Cụm mời tự xuống dòng bên trong (mã phòng, "Mời bạn bè", "Mã QR"),
+          * nhưng một flex item không co được thì kích thước cơ sở của nó là bề
+          * rộng max-content - tức là cả ba nút nằm trên MỘT hàng, khoảng 288px.
+          * Trong thẻ ở màn 320 chỉ còn 264px, nên nó đẩy tràn ngang 24px thay vì
+          * xuống hàng. Chiếm trọn một dòng ở màn hẹp thì phần wrap bên trong mới
+          * có chỗ làm việc; từ sm trở lên nó về lại nằm cạnh tiêu đề.
+          */}
+        <div className="w-full min-w-0 sm:w-auto sm:shrink-0">
           <RoomInvite code={code} size="lg" />
         </div>
       </div>

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { BalanceWarningView } from "@masoi/shared";
+import {
+  MAX_PLAYERS_PER_ROOM,
+  MIN_PLAYERS_TO_START,
+  type BalanceWarningView,
+} from "@masoi/shared";
 import { balanceCopy } from "./balance-copy";
 
 function view(patch: Partial<BalanceWarningView> = {}): BalanceWarningView {
@@ -83,9 +87,33 @@ describe("balanceCopy", () => {
     assert.match(copy.advice[0], /Tiên Tri/);
   });
 
-  it("thiếu preset thì nhắc đúng số người đang có", () => {
-    const copy = balanceCopy(view({ warnings: ["Không có preset cho 16 người chơi"] }), 16);
-    assert.match(copy.advice[0], /16 người/);
+  /*
+   * `PRESET_DECKS` phủ kín 6..15, tức là ĐÚNG khoảng người chơi hợp lệ, nên
+   * "Không có preset" chỉ xảy ra khi phòng chưa đủ người - không bao giờ vì
+   * thừa người (sức chứa là 15). Câu chữ phải nói theo đúng miền đó.
+   */
+  it("thiếu preset là vì chưa đủ người, và nói đúng khoảng hợp lệ", () => {
+    const copy = balanceCopy(
+      view({ warnings: [`Không có preset cho 1 người chơi`] }),
+      1,
+    );
+    assert.match(copy.advice[0], new RegExp(String(MIN_PLAYERS_TO_START)));
+    assert.match(copy.advice[0], new RegExp(String(MAX_PLAYERS_PER_ROOM)));
+  });
+
+  it('không được hứa "Bạn vẫn chơi được" khi phòng chưa đủ người', () => {
+    for (let count = 1; count < MIN_PLAYERS_TO_START; count += 1) {
+      const copy = balanceCopy(
+        view({ score: 58, warnings: [`Không có preset cho ${count} người chơi`] }),
+        count,
+      );
+      for (const line of copy.advice) {
+        assert.ok(
+          !/vẫn chơi được/.test(line),
+          `phòng ${count} người vẫn hứa chơi được: ${line}`,
+        );
+      }
+    }
   });
 
   it("hai cảnh báo quy về cùng một lời khuyên chỉ hiện một lần", () => {
@@ -106,5 +134,40 @@ describe("balanceCopy", () => {
   it("cảnh báo lạ thì giữ nguyên văn thay vì nuốt mất", () => {
     const copy = balanceCopy(view({ warnings: ["Một luật mới nào đó"] }), 8);
     assert.deepEqual(copy.advice, ["Một luật mới nào đó"]);
+  });
+
+  /*
+   * Cảnh báo cân bằng vẫn ĐÚNG ở Chaos - đội hình lệch thật - nhưng nó không
+   * chặn ván nữa, và server cũng không chặn. Câu tiêu đề phải nói theo cái đang
+   * xảy ra trên màn hình: bảo "chưa vào trận được" ngay bên trên một nút "Bắt
+   * đầu trận đấu" đang sáng thì một trong hai đang nói dối.
+   */
+  describe("Chaos hạ cấp cảnh báo xuống mức nhắc nhở", () => {
+    it("Ranked: mất cân bằng là đang chặn", () => {
+      const copy = balanceCopy(view({ blocking: true, warnings: ["x"] }), 8, "ranked");
+      assert.equal(copy.blocksStart, true);
+      assert.match(copy.headline, /chưa vào trận được/);
+    });
+
+    it("Chaos: vẫn cảnh báo nhưng không phải là đang chặn", () => {
+      const copy = balanceCopy(view({ blocking: true, warnings: ["x"] }), 8, "chaos");
+      assert.equal(copy.blocksStart, false);
+      assert.ok(!/chưa vào trận được/.test(copy.headline));
+    });
+
+    it("cờ blocking của engine vẫn đi thẳng qua, không bị Chaos viết lại", () => {
+      const copy = balanceCopy(view({ blocking: true, warnings: ["x"] }), 8, "chaos");
+      assert.equal(copy.blocking, true);
+    });
+
+    it("không mất cân bằng thì Chaos hay Ranked đều không chặn", () => {
+      for (const mode of ["ranked", "chaos"] as const) {
+        assert.equal(balanceCopy(view({ warnings: ["x"] }), 8, mode).blocksStart, false);
+      }
+    });
+
+    it("bỏ trống chế độ thì coi như Ranked - mặc định chặt hơn", () => {
+      assert.equal(balanceCopy(view({ blocking: true, warnings: ["x"] }), 8).blocksStart, true);
+    });
   });
 });

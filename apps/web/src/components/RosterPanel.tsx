@@ -275,9 +275,13 @@ export function RosterPanel({ snapshot, lobby }: Props) {
           <li
             key={`empty-${i}`}
             style={{ "--slot-index": i } as React.CSSProperties}
-            className="lobby-slot-waiting flex items-center gap-2.5 rounded-lg border border-dashed border-night-600/70 px-2 py-1.5"
+            /* Viền và nền do `.lobby-slot-waiting` cầm (nó là thứ duy nhất
+             * nhấp nháy), nên ở đây chỉ còn kiểu nét và bề dày. */
+            className="lobby-slot-waiting flex items-center gap-2.5 rounded-lg border border-dashed px-2 py-1.5"
           >
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-night-800/70 text-sm font-bold text-mist/50 sm:h-10 sm:w-10">
+            {/* Hai dòng chữ này KHÔNG mờ theo nhịp chờ nữa - xem chú thích ở
+              * `.lobby-slot-waiting` trong globals.css. */}
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-night-800/70 text-sm font-bold text-mist/80 sm:h-10 sm:w-10">
               {count + i + 1}
             </span>
             <span className="text-sm text-mist-strong/80">Đang chờ người vào...</span>

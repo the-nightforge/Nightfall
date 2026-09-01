@@ -1,4 +1,4 @@
-import type { BalanceWarningView } from "@masoi/shared";
+import { MAX_PLAYERS_PER_ROOM, MIN_PLAYERS_TO_START, type BalanceWarningView } from "@masoi/shared";
 
 /**
  * Dịch cảnh báo cân bằng sang tiếng người.
@@ -21,6 +21,16 @@ import type { BalanceWarningView } from "@masoi/shared";
 export interface BalanceCopy {
   /** Đúng bằng `blocking` của đầu vào. Không diễn giải lại. */
   blocking: boolean;
+  /**
+   * Cảnh báo này có đang thực sự CHẶN nút bắt đầu không.
+   *
+   * `blocking` là phán quyết của luật cân bằng; `blocksStart` là hệ quả của nó ở
+   * chế độ đang chơi. Chaos bỏ qua chặn cân bằng (server cũng vậy), nên ở đó một
+   * đội hình lệch vẫn đáng cảnh báo nhưng không được xưng là đang chặn - in
+   * "Đội hình chưa vào trận được" ngay trên một nút "Bắt đầu trận đấu" đang sáng
+   * thì một trong hai câu đang nói dối.
+   */
+  blocksStart: boolean;
   /** Câu tiêu đề của thẻ cảnh báo. */
   headline: string;
   /** Mỗi cảnh báo một câu hành động, giữ nguyên thứ tự. */
@@ -60,7 +70,17 @@ function friendly(warning: string, score: number, playerCount: number): string {
     return "Các vai soi tin (Tiên Tri, Học Việc, Thám Tử) đang lệch so với bộ bài chuẩn. Hãy bật hoặc tắt bớt một vai soi.";
   }
   if (warning.startsWith("Không có preset")) {
-    return `Chưa có bộ bài chuẩn cho ${playerCount} người. Bạn vẫn chơi được, nhưng nên tự cân lại vai trò trước khi bắt đầu.`;
+    /*
+     * `PRESET_DECKS` phủ đúng 6..15 - tức là trọn khoảng người chơi hợp lệ - nên
+     * cảnh báo này chỉ nổ khi phòng CHƯA ĐỦ người, không bao giờ vì thừa người.
+     * Bản cũ nói "Bạn vẫn chơi được", hứa đúng cái điều mà `validateRoomConfig`
+     * đang từ chối ngay dòng bên cạnh.
+     *
+     * `Lobby` giờ giấu hẳn thẻ cân bằng dưới mốc đó (xem `deckStage`), nên câu
+     * này gần như không còn đường ra màn hình; nó ở lại để nếu ngưỡng của engine
+     * đổi thì chữ vẫn đúng thay vì sai một cách tự tin.
+     */
+    return `Phòng cần ${MIN_PLAYERS_TO_START}-${MAX_PLAYERS_PER_ROOM} người mới có bộ bài chuẩn; hiện mới có ${playerCount}.`;
   }
   if (warning.startsWith("Cấu hình mất cân bằng")) {
     return tiltAdvice(score);
@@ -68,7 +88,13 @@ function friendly(warning: string, score: number, playerCount: number): string {
   return warning;
 }
 
-export function balanceCopy(balance: BalanceWarningView, playerCount: number): BalanceCopy {
+export function balanceCopy(
+  balance: BalanceWarningView,
+  playerCount: number,
+  /** Bỏ trống là Ranked - mặc định chặt hơn, khớp với `config.mode ?? "ranked"`. */
+  mode: "ranked" | "chaos" = "ranked",
+): BalanceCopy {
+  const blocksStart = balance.blocking && mode === "ranked";
   const advice: string[] = [];
   for (const warning of balance.warnings) {
     const line = friendly(warning, balance.score, playerCount);
@@ -78,7 +104,8 @@ export function balanceCopy(balance: BalanceWarningView, playerCount: number): B
   }
   return {
     blocking: balance.blocking,
-    headline: balance.blocking ? "Đội hình chưa vào trận được" : "Đội hình hơi lệch",
+    blocksStart,
+    headline: blocksStart ? "Đội hình chưa vào trận được" : "Đội hình hơi lệch",
     advice,
     technical: [...balance.warnings],
   };
