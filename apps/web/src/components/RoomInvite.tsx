@@ -28,8 +28,14 @@ import { useModalFocus } from "@/lib/useModalFocus";
  * Hồ sơ vụ án gửi kèm ảnh PNG dựng bằng canvas và chỉ tồn tại ở màn kết thúc;
  * lời mời là một dòng link phải sống suốt cả ván. Ghép chúng lại thì mỗi lần
  * sửa câu chữ của bên này lại phải kiểm bên kia.
+ *
+ * `size` chỉ đổi cỡ hiển thị, không đổi một hành vi nào: "sm" là cụm nhỏ trong
+ * thanh đầu trang lúc đang chơi, "lg" dành cho đầu trang phòng chờ - ở đó mã
+ * phòng là thứ người ta phải đọc to lên cho bạn bè chép, mà ở cỡ sm nó là một
+ * nút cùng cỡ với mọi nút khác và mắt không tìm ra.
  */
-export function RoomInvite({ code }: { code: string }) {
+export function RoomInvite({ code, size = "sm" }: { code: string; size?: "sm" | "lg" }) {
+  const large = size === "lg";
   /*
    * Origin đọc trong effect chứ không trong lúc render.
    *
@@ -153,9 +159,11 @@ export function RoomInvite({ code }: { code: string }) {
           * phòng, ba nút mời và nút âm thanh. Ô mã phòng đã tự nói nó là gì
           * bằng phông monospace và giãn chữ, còn trình đọc màn hình thì đọc
           * `aria-label` của nút chứ không đọc nhãn này. */}
-        <span className="hidden text-xs text-mist/65 sm:inline">Mã phòng:</span>
+        <span className="hidden text-xs text-mist/80 sm:inline">Mã phòng:</span>
         <button
-          className="min-h-9 rounded-lg border border-night-600 bg-night-800 px-3 py-1 font-mono text-sm font-bold tracking-widest text-white hover:border-night-500 hover:bg-night-700"
+          className={`rounded-lg border border-night-600 bg-night-800 font-mono font-bold tracking-widest text-white transition hover:border-mist/40 hover:bg-night-700 active:bg-night-800 ${
+            large ? "min-h-11 px-4 py-1.5 text-xl" : "min-h-9 px-3 py-1 text-sm"
+          }`}
           onClick={() => void copy(code, "copied-code")}
           title="Bấm để sao chép mã phòng"
           aria-label={`Sao chép mã phòng ${code}`}
@@ -164,7 +172,7 @@ export function RoomInvite({ code }: { code: string }) {
         </button>
 
         <button
-          className="btn-secondary min-h-9 px-3 py-1 text-sm"
+          className={`btn-secondary px-3 py-1 ${large ? "min-h-11 text-sm" : "min-h-9 text-sm"}`}
           onClick={() => void handleInvite()}
           disabled={!payload}
         >
@@ -173,7 +181,7 @@ export function RoomInvite({ code }: { code: string }) {
 
         <button
           ref={qrButtonRef}
-          className="btn-secondary min-h-9 px-3 py-1 text-sm"
+          className={`btn-secondary px-3 py-1 ${large ? "min-h-11 text-sm" : "min-h-9 text-sm"}`}
           onClick={() => setQrOpen(true)}
           disabled={!payload}
           aria-haspopup="dialog"
