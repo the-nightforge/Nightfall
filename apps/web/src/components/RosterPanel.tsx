@@ -28,9 +28,14 @@ interface Props {
  * danh sách dọc hẹp chỉ để theo dõi - ai còn sống, ai đang bị dồn phiếu - còn
  * mọi thao tác chọn người đều ở cột kia.
  *
- * Cột chỉ rộng 15rem nên mỗi người chiếm hai dòng: dòng trên dành trọn chỗ
- * trống cho cái tên, dòng dưới là các nhãn được phép xuống hàng. Nhồi nhãn vào
- * cùng dòng với tên thì tên bị bóp lại còn đúng một chữ cái.
+ * Cột hẹp nên mỗi người chiếm hai dòng: dòng trên dành trọn chỗ trống cho cái
+ * tên, dòng dưới là các nhãn được phép xuống hàng. Nhồi nhãn vào cùng dòng với
+ * tên thì tên bị bóp lại còn đúng một chữ cái.
+ *
+ * Nút đổi ảnh đại diện chỉ còn ở đây trong lúc ĐANG CHƠI. Ở phòng chờ nó lên
+ * `LobbyHeader`: nó là việc riêng của một người chứ không phải thao tác quản lý
+ * danh sách, mà nằm ngay dưới danh sách thì nó đọc ra như "đổi ảnh cho người
+ * vừa chọn" - và nó cũng đẩy phần cuộn của danh sách 15 người xuống dưới.
  */
 export function RosterPanel({ snapshot, lobby }: Props) {
   const speakers = useSpeakers();
@@ -41,24 +46,35 @@ export function RosterPanel({ snapshot, lobby }: Props) {
 
   const count = snapshot.players.length;
   const alive = snapshot.players.filter((p) => p.alive).length;
-  // Ô trống có đánh số cho thấy còn thiếu bao nhiêu người, thay vì một dòng chữ
-  // "cần thêm 4 người" mà mắt phải đọc mới biết.
+  // Ô trống có đánh số cho thấy còn thiếu bao nhiêu người để BẮT ĐẦU, thay vì
+  // một dòng chữ "cần thêm 4 người" mà mắt phải đọc mới biết. Sức chứa thật của
+  // phòng (15) nằm ở dòng chân thẻ - chỉ vẽ tới 6 ô mà không nói gì thêm thì
+  // phòng đọc ra như chỉ nhận được sáu người.
   const emptySlots = lobby ? Math.max(0, MIN_PLAYERS_TO_START - count) : 0;
+  const freeSeats = Math.max(0, MAX_PLAYERS_PER_ROOM - count);
   // Lời khai Ngày Sự Thật chỉ dán lên cột này trong đúng sự kiện đó.
   const claims =
     snapshot.activeEvent?.id === "DAY_OF_TRUTH" ? snapshot.dayOfTruthClaims : undefined;
 
   return (
-    <section className="card p-3">
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <h3 className="font-display text-base font-bold text-white">Người chơi</h3>
+    <section className="card p-3.5 lg:p-4">
+      <div className="mb-2.5 flex items-baseline justify-between gap-2">
+        <h3 className="font-display text-lg font-bold text-white">Người chơi</h3>
         {/* Đếm theo sức chứa phòng: "15/6" đọc như phòng đang quá tải. */}
-        <span className="shrink-0 text-xs text-mist/65">
+        <span className="shrink-0 text-sm font-semibold text-mist/85">
           {lobby ? `${count}/${MAX_PLAYERS_PER_ROOM}` : `${alive}/${count} sống`}
         </span>
       </div>
 
-      <ul className="space-y-1">
+      {/*
+        * Vùng cuộn riêng cho danh sách.
+        *
+        * Phòng chứa tới 15 người, còn cột này thì `sticky` theo màn hình: không
+        * bó chiều cao lại thì một phòng đầy đẩy thẻ dài quá khung nhìn và mấy
+        * người cuối không bao giờ thấy được. Chỉ bó từ lg - dưới đó cột nằm
+        * trong dòng chảy của trang và cuộn cùng trang là đúng.
+        */}
+      <ul className="lobby-roster-scroll space-y-1 lg:max-h-[calc(100dvh-16rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
         {snapshot.players.map((player) => {
           const votes = player.voteCount ?? 0;
           const isMe = player.id === meId;
@@ -75,7 +91,7 @@ export function RosterPanel({ snapshot, lobby }: Props) {
           return (
             <li
               key={player.id}
-              className={`group rounded-lg px-1.5 py-1 transition ${
+              className={`group rounded-lg px-2 py-1.5 transition ${
                 speaking
                   ? "bg-emerald-400/10 ring-1 ring-emerald-400/60"
                   : isMe
@@ -83,26 +99,36 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                     : ""
               }`}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <span className="relative shrink-0">
                   <Avatar
                     avatar={player.avatarUrl ? player.avatarUrl : avatars[player.id]}
                     tint={tintFor(player.id)}
                     alive={player.alive}
                     breathOffset={breathOffsetFor(player.id)}
-                    className="h-7 w-7 sm:h-8 sm:w-8"
+                    /*
+                     * Vòng vàng quanh ảnh của chủ phòng.
+                     *
+                     * Cái vương miện ở dòng nhãn bên dưới là chữ cao 10px nằm
+                     * lẫn giữa các nhãn khác; ở cỡ đó nó không đọc ra được từ
+                     * khoảng cách ngồi chơi thật. Vòng sáng quanh ảnh thì thấy
+                     * ngay cả khi chỉ liếc qua cột.
+                     */
+                    className={`h-9 w-9 sm:h-10 sm:w-10 ${
+                      isRoomHost ? "ring-2 ring-amber-400/70 ring-offset-1 ring-offset-night-900" : ""
+                    }`}
                     isCustom={!!player.avatarUrl}
                   />
                   {!player.alive && (
                     <span className="pointer-events-none absolute inset-0 grid place-items-center">
-                      <span className="h-[1.5px] w-6 rotate-45 rounded bg-blood-500/70" />
+                      <span className="h-[1.5px] w-7 rotate-45 rounded bg-blood-500/70" />
                     </span>
                   )}
                 </span>
 
                 <span
-                  className={`min-w-0 flex-1 truncate text-sm font-semibold ${
-                    player.alive ? "text-white" : "text-mist/60 line-through"
+                  className={`min-w-0 flex-1 truncate text-[15px] font-semibold ${
+                    player.alive ? "text-white" : "text-mist/70 line-through"
                   }`}
                   title={player.name}
                 >
@@ -130,7 +156,7 @@ export function RosterPanel({ snapshot, lobby }: Props) {
 
                 {lobby?.isHost && player.id !== meId && (
                   <button
-                    className="inline-flex shrink-0 items-center gap-0.5 rounded bg-blood-600/15 px-1.5 py-0.5 text-[11px] font-bold text-blood-400 hover:bg-blood-600/25"
+                    className="inline-flex shrink-0 items-center gap-0.5 rounded-md bg-blood-600/15 px-1.5 py-1 text-[11px] font-bold text-blood-400 transition hover:bg-blood-600/30 hover:text-blood-300"
                     aria-label={`Kick ${player.name}`}
                     onClick={() => lobby.onKick(player.id)}
                   >
@@ -140,20 +166,20 @@ export function RosterPanel({ snapshot, lobby }: Props) {
               </div>
 
               {hasTags && (
-                <div className="ml-9 mt-0.5 flex flex-wrap items-center gap-1 sm:ml-10">
+                <div className="ml-[46px] mt-1 flex flex-wrap items-center gap-1 sm:ml-[50px]">
                   {isRoomHost && (
-                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1 py-0.5 text-[10px] font-bold text-amber-300">
+                    <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[11px] font-bold text-amber-200 ring-1 ring-amber-400/40">
                       <span aria-hidden="true">👑</span> Chủ phòng
                     </span>
                   )}
                   {player.isBot && (
-                    <span className="inline-flex items-center gap-0.5 rounded bg-slate-700/60 px-1 py-0.5 text-[10px] font-bold text-slate-200">
+                    <span className="inline-flex items-center gap-1 rounded bg-slate-700/70 px-1.5 py-0.5 text-[11px] font-bold text-slate-100">
                       <span aria-hidden="true">🤖</span> Bot
                     </span>
                   )}
                   {player.role && (
                     <span
-                      className={`max-w-full truncate rounded px-1 py-0.5 text-[10px] font-semibold ${
+                      className={`max-w-full truncate rounded px-1.5 py-0.5 text-[11px] font-semibold ${
                         ROLE_META[player.role].team === "wolves"
                           ? "bg-blood-600/70 text-white"
                           : "bg-emerald-900/80 text-emerald-200"
@@ -163,7 +189,7 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                     </span>
                   )}
                   {claimed && (
-                    <span className="inline-flex max-w-full items-center gap-0.5 truncate rounded bg-sky-600/20 px-1 py-0.5 text-[10px] font-bold text-sky-200 ring-1 ring-sky-500/30">
+                    <span className="inline-flex max-w-full items-center gap-0.5 truncate rounded bg-sky-600/20 px-1.5 py-0.5 text-[11px] font-bold text-sky-200 ring-1 ring-sky-500/30">
                       <span aria-hidden="true">🔍</span>{" "}
                       {claim == null
                         ? "Không tiết lộ"
@@ -171,12 +197,12 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                     </span>
                   )}
                   {offline && (
-                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1 py-0.5 text-[10px] font-bold text-amber-300 ring-1 ring-amber-500/30">
+                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-bold text-amber-300 ring-1 ring-amber-500/30">
                       <span aria-hidden="true">📴</span> Mất kết nối
                     </span>
                   )}
                   {isPending && (
-                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/20 px-1 py-0.5 text-[10px] font-bold text-amber-300 ring-1 ring-amber-500/30">
+                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/20 px-1.5 py-0.5 text-[11px] font-bold text-amber-300 ring-1 ring-amber-500/30">
                       <span aria-hidden="true">🛡️</span> Tử Thủ
                     </span>
                   )}
@@ -189,21 +215,38 @@ export function RosterPanel({ snapshot, lobby }: Props) {
         {Array.from({ length: emptySlots }, (_, i) => (
           <li
             key={`empty-${i}`}
-            className="flex items-center gap-2 rounded-lg border border-dashed border-night-600/60 px-1.5 py-1"
+            style={{ "--slot-index": i } as React.CSSProperties}
+            className="lobby-slot-waiting flex items-center gap-2.5 rounded-lg border border-dashed border-night-600/70 px-2 py-1.5"
           >
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-night-800/60 text-xs font-bold text-mist/30 sm:h-8 sm:w-8">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-night-800/70 text-sm font-bold text-mist/50 sm:h-10 sm:w-10">
               {count + i + 1}
             </span>
-            <span className="text-sm text-mist/30">Đang chờ...</span>
+            <span className="text-sm text-mist/60">Đang chờ người vào...</span>
           </li>
         ))}
       </ul>
 
-      {snapshot.you && (
-        <div className="mt-3 border-t border-white/[0.06] pt-3">
+      {/*
+        * Sức chứa thật của phòng, nói bằng chữ.
+        *
+        * Danh sách chỉ vẽ ô trống tới mốc bắt đầu được (6), nên nếu dừng ở đó
+        * thì một phòng 4 người trông như đã lấp hai phần ba - trong khi thực tế
+        * còn mười một chỗ. Dòng này là chỗ duy nhất nói ra con số đó.
+        */}
+      {lobby && freeSeats > 0 && (
+        <p className="mt-2.5 border-t border-white/[0.08] pt-2.5 text-xs text-mist/75">
+          Còn <b className="text-white">{freeSeats}</b> chỗ trống · phòng nhận tối đa{" "}
+          {MAX_PLAYERS_PER_ROOM} người
+        </p>
+      )}
+
+      {/* Ở phòng chờ nút này nằm trên `LobbyHeader`; đây là bản dùng trong ván. */}
+      {!lobby && snapshot.you && (
+        <div className="mt-3 border-t border-white/[0.08] pt-3">
           <button
             type="button"
-            className="w-full rounded-lg bg-white/5 px-3 py-1.5 text-xs font-semibold text-mist/80 hover:bg-white/10 hover:text-white"
+            className="btn-tertiary w-full"
+            aria-expanded={showPicker}
             onClick={() => setShowPicker((v) => !v)}
           >
             {showPicker ? "Đóng" : "📷 Đổi ảnh đại diện"}
@@ -220,7 +263,7 @@ export function RosterPanel({ snapshot, lobby }: Props) {
       )}
 
       {snapshot.noEliminationVoteCount > 0 && (
-        <p className="mt-2 border-t border-white/[0.06] pt-2 text-xs text-mist/60">
+        <p className="mt-2 border-t border-white/[0.08] pt-2 text-xs text-mist/75">
           Không treo ai: <b className="text-white">{snapshot.noEliminationVoteCount}</b>
         </p>
       )}
@@ -231,8 +274,10 @@ export function RosterPanel({ snapshot, lobby }: Props) {
 function ReadyDot({ ready }: { ready: boolean }) {
   return (
     <span
-      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-        ready ? "bg-emerald-600 text-white" : "bg-white/10 text-mist/60 ring-1 ring-white/10"
+      className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+        ready
+          ? "bg-emerald-600 text-white"
+          : "bg-white/[0.08] text-mist/75 ring-1 ring-white/15"
       }`}
       aria-label={ready ? "Sẵn sàng" : "Chưa sẵn sàng"}
       title={ready ? "Sẵn sàng" : "Chưa sẵn sàng"}

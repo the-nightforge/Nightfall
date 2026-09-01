@@ -9,6 +9,7 @@ import {
 } from "@masoi/shared";
 import type { Identity } from "@/lib/identity";
 import { generateWarnings, PRESET_DECKS } from "@/lib/balance";
+import { balanceCopy } from "@/lib/balance-copy";
 import { deckCounts, isPresetDeck, startBlock, type StartBlock } from "@/lib/lobby-summary";
 import { BalanceMeter } from "./BalanceMeter";
 import { RoleDeckPanel } from "./RoleDeckPanel";
@@ -19,7 +20,6 @@ interface Props {
   onReady: (ready: boolean) => void;
   onStart: () => void;
   onAddBot: () => void;
-  onLeave: () => void;
   onUpdateConfig: (config: RoomConfig) => void;
 }
 
@@ -28,7 +28,8 @@ interface Props {
  *
  * Danh sách người chơi KHÔNG ở đây - nó là cột riêng bên trái, cùng một
  * component với lúc đang chơi, nên không còn hai cách trình bày người chơi phải
- * giữ cho khớp nhau.
+ * giữ cho khớp nhau. Tên phòng, mã phòng và bộ đếm người cũng không ở đây: chúng
+ * nằm trong `LobbyHeader` ngay trên, nên thẻ này chỉ còn nói về BỘ BÀI.
  *
  * Bày theo lớp: thẻ đầu trả lời đúng câu hỏi của phút đầu tiên - "bấm bắt đầu
  * được chưa, và nếu chưa thì vướng gì" - còn mười ba thẻ vai, năm ô thời gian
@@ -36,6 +37,11 @@ interface Props {
  * trên điện thoại nó dài hơn ba màn hình, trong đó phần host thực sự cần đọc
  * chiếm chưa tới một phần tư. Host lâu năm vẫn chỉnh được đúng mọi thứ như cũ,
  * chỉ thêm một cú bấm mở mục.
+ *
+ * Nút "Rời phòng" KHÔNG còn ở đây. Bản cũ có hai cái - một ở thanh đầu trang,
+ * một chiếm trọn chiều ngang ngay dưới "Bắt đầu trận đấu" - và cái thứ hai có
+ * đúng hình dáng của CTA nên nó cạnh tranh với chính nút mà nó nằm dưới. Giờ
+ * chỉ còn một, ở thanh đầu trang, cỡ chữ thường.
  */
 export function Lobby({
   snapshot,
@@ -43,7 +49,6 @@ export function Lobby({
   onReady,
   onStart,
   onAddBot,
-  onLeave,
   onUpdateConfig,
 }: Props) {
   const config = snapshot.config;
@@ -67,27 +72,26 @@ export function Lobby({
   // Ưu tiên kết quả server; generateWarnings chỉ để xem trước tức thì lúc host
   // vừa gạt một công tắc và snapshot mới chưa về.
   const balance = snapshot.balanceWarning ?? generateWarnings(config, count);
+  const copy = balanceCopy(balance, count);
   const counts = deckCounts(config, count);
   const onPreset = isPresetDeck(config, count);
   const presetForCount = PRESET_DECKS[count];
   const mode = config.mode ?? "ranked";
 
   return (
-    <div className="space-y-3">
-      <section className="card space-y-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-display text-2xl font-bold text-white">Ván sắp tới</h2>
-          <span className="text-sm text-mist/70">
-            <b className="text-white">{count}</b>/{MAX_PLAYERS_PER_ROOM} người
-          </span>
+    <div className="space-y-3 lg:space-y-4">
+      <section className="card space-y-4 p-4 lg:p-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h2 className="font-display text-xl font-bold text-white lg:text-2xl">Thiết lập trận</h2>
+          <span className="text-sm text-mist/80">Bộ bài cho {count} người</span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
           <span
-            className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+            className={`rounded-full border px-3 py-1.5 text-xs font-bold ${
               onPreset
-                ? "border-emerald-500/40 bg-emerald-900/25 text-emerald-300"
-                : "border-amber-500/40 bg-amber-900/20 text-amber-300"
+                ? "border-emerald-500/45 bg-emerald-900/30 text-emerald-200"
+                : "border-amber-500/45 bg-amber-900/25 text-amber-200"
             }`}
           >
             {onPreset ? `Preset chuẩn ${count} người` : "Bộ bài tuỳ chỉnh"}
@@ -105,73 +109,90 @@ export function Lobby({
 
         <BalanceMeter score={balance.score} />
 
-        {balance.warnings.length > 0 && (
+        {copy.advice.length > 0 && (
           <div
             data-testid="balance-warning"
-            className={`rounded-xl border px-3 py-2.5 ${
-              balance.blocking
-                ? "border-blood-500/40 bg-blood-600/15"
-                : "border-amber-500/30 bg-amber-500/10"
+            className={`rounded-xl border px-3.5 py-3 ${
+              copy.blocking
+                ? "border-blood-500/45 bg-blood-600/15"
+                : "border-amber-500/35 bg-amber-500/10"
             }`}
           >
             <p
-              className={`text-xs font-bold ${balance.blocking ? "text-blood-400" : "text-amber-300"}`}
+              className={`text-sm font-bold ${copy.blocking ? "text-blood-400" : "text-amber-200"}`}
             >
-              {balance.blocking
-                ? "Cấu hình mất cân bằng — không thể bắt đầu ở Ranked"
-                : "Cảnh báo cân bằng"}
+              {copy.headline}
             </p>
-            <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[11px] leading-snug text-mist/80">
-              {balance.warnings.map((warning, index) => (
-                <li key={index}>{warning}</li>
+            {/*
+              * Lời khuyên là câu người chơi ĐỌC, bản kỹ thuật là câu họ tra khi
+              * cần. Bản cũ in thẳng "BalanceScore 58 ngoài ngưỡng 45-55" ở đúng
+              * chỗ này: nó nói đúng chuyện gì đang xảy ra mà không nói được phải
+              * làm gì, và nó là dòng chữ đầu tiên của thẻ cảnh báo.
+              */}
+            <ul className="mt-1.5 list-disc space-y-1 pl-5 text-[13px] leading-relaxed text-mist/90">
+              {copy.advice.map((line, index) => (
+                <li key={index}>{line}</li>
               ))}
             </ul>
+            {copy.blocking && mode === "ranked" && (
+              <p className="mt-2 text-[13px] text-blood-300">
+                Chuyển sang Chaos hoặc sửa bộ bài để bắt đầu.
+              </p>
+            )}
             {isHost && presetForCount && (
               <button
                 type="button"
                 onClick={() => onUpdateConfig(presetForCount)}
-                className="mt-2 w-full rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/15"
+                className="btn-secondary mt-3 w-full text-sm"
                 data-testid="apply-preset"
               >
                 Áp dụng preset chuẩn cho {count} người
               </button>
             )}
-            {balance.blocking && mode === "ranked" && (
-              <p className="mt-1.5 text-[11px] text-blood-300/90">
-                Chuyển sang Chaos hoặc sửa cấu hình để bắt đầu.
-              </p>
-            )}
+            <TechnicalDetail lines={copy.technical} score={balance.score} />
           </div>
         )}
 
-        {isHost ? (
-          <div className="space-y-2">
-            <button
-              className="btn-primary w-full py-3 text-base"
-              onClick={onStart}
-              disabled={block !== null}
-            >
-              Bắt đầu trận đấu
+        <div className="border-t border-white/[0.08] pt-4">
+          {isHost ? (
+            /*
+             * CTA và "Thêm bot" nằm CÙNG một hàng từ sm trở lên, và CTA chiếm
+             * phần lớn chiều ngang. Bản cũ xếp chúng thành hai nút toàn chiều
+             * rộng chồng lên nhau, cùng bề ngang và cùng chiều cao: mắt đọc ra
+             * hai hành động ngang hàng, trong khi "Thêm bot" chỉ là thứ dùng để
+             * tự test một mình.
+             */
+            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-stretch">
+              <button
+                className="btn-cta w-full sm:flex-[3]"
+                onClick={onStart}
+                disabled={block !== null}
+              >
+                Bắt đầu trận đấu
+              </button>
+              <button
+                className="btn-secondary w-full sm:flex-1"
+                onClick={onAddBot}
+                disabled={count >= MAX_PLAYERS_PER_ROOM}
+              >
+                + Thêm bot
+              </button>
+            </div>
+          ) : (
+            <button className="btn-cta w-full" onClick={() => onReady(!myReady)}>
+              {myReady ? "Huỷ sẵn sàng" : "Tôi đã sẵn sàng!"}
             </button>
-            <button
-              className="btn-secondary w-full"
-              onClick={onAddBot}
-              disabled={count >= MAX_PLAYERS_PER_ROOM}
-            >
-              + Thêm bot (để test một mình)
-            </button>
-          </div>
-        ) : (
-          <button className="btn-primary w-full py-3 text-base" onClick={() => onReady(!myReady)}>
-            {myReady ? "Huỷ sẵn sàng" : "Tôi đã sẵn sàng!"}
-          </button>
-        )}
+          )}
 
-        <BlockReason block={block} code={snapshot.code} isHost={isHost} />
+          <BlockReason block={block} isHost={isHost} />
 
-        <button className="btn-secondary w-full" onClick={onLeave}>
-          Rời phòng
-        </button>
+          {isHost && count < MAX_PLAYERS_PER_ROOM && (
+            <p className="mt-2 text-center text-xs text-mist/70">
+              Bot dùng để chơi thử một mình — người thật vẫn vào được cho tới khi đủ{" "}
+              {MAX_PLAYERS_PER_ROOM} người.
+            </p>
+          )}
+        </div>
       </section>
 
       <Disclosure
@@ -201,12 +222,39 @@ function Chip({
   children: React.ReactNode;
 }) {
   const cls = {
-    wolves: "border-blood-500/40 bg-blood-600/15 text-blood-400",
-    village: "border-emerald-500/30 bg-emerald-900/20 text-emerald-300",
-    plain: "border-night-600 bg-night-800/60 text-mist/80",
+    wolves: "border-blood-500/45 bg-blood-600/20 text-blood-400",
+    village: "border-emerald-500/35 bg-emerald-900/25 text-emerald-200",
+    plain: "border-night-600 bg-night-800/70 text-mist",
   }[tone];
   return (
-    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${cls}`}>{children}</span>
+    <span className={`rounded-full border px-3 py-1.5 text-xs font-bold ${cls}`}>{children}</span>
+  );
+}
+
+/**
+ * Bản gốc của engine, gấp lại.
+ *
+ * Không xoá hẳn: khi host báo "nó không cho tôi bắt đầu" thì con số và ngưỡng
+ * chính xác là thứ duy nhất tra ra được chuyện gì đã xảy ra, và nó phải khớp
+ * từng chữ với thứ server đang chặn.
+ */
+function TechnicalDetail({ lines, score }: { lines: string[]; score: number }) {
+  if (lines.length === 0) return null;
+  return (
+    <details className="group mt-2">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs text-mist/75 transition hover:text-white">
+        <span aria-hidden="true" className="transition group-open:rotate-90">
+          ▸
+        </span>
+        Chi tiết kỹ thuật
+      </summary>
+      <ul className="mt-1.5 space-y-0.5 pl-4 text-[11px] leading-snug text-mist/70">
+        <li>Điểm cân bằng: {score}/100 (cân là 45-55)</li>
+        {lines.map((line, index) => (
+          <li key={index}>{line}</li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
@@ -227,15 +275,15 @@ function Disclosure({
   children: React.ReactNode;
 }) {
   return (
-    <details className="card group">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+    <details className="card group p-4 lg:p-5">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg transition hover:text-white">
         <span>
-          <span className="font-semibold text-white">{summary}</span>
-          <span className="block text-xs text-mist/65">{hint}</span>
+          <span className="font-display text-lg font-semibold text-white">{summary}</span>
+          <span className="block text-sm text-mist/80">{hint}</span>
         </span>
         <span
           aria-hidden="true"
-          className="shrink-0 text-mist/65 transition group-open:rotate-180"
+          className="shrink-0 text-lg text-mist/80 transition group-open:rotate-180"
         >
           ▾
         </span>
@@ -245,33 +293,34 @@ function Disclosure({
   );
 }
 
-/** Chỉ hiện ĐÚNG lý do đang chặn, theo thứ tự người chơi gặp phải. */
-function BlockReason({
-  block,
-  code,
-  isHost,
-}: {
-  block: StartBlock;
-  code: string;
-  isHost: boolean;
-}) {
+/**
+ * Chỉ hiện ĐÚNG lý do đang chặn, theo thứ tự người chơi gặp phải.
+ *
+ * Đứng ngay dưới nút để mắt không phải đi tìm: nút xám là câu hỏi, dòng này là
+ * câu trả lời, và hai thứ đó cách nhau 10px. Lời rủ gửi mã phòng cho bạn bè đã
+ * nằm ở `LobbyHeader` cùng thanh tiến độ, nên ở đây không nhắc lại.
+ */
+function BlockReason({ block, isHost }: { block: StartBlock; isHost: boolean }) {
   if (!block) return null;
   if (block.kind === "need-players") {
     return (
-      <p className="text-center text-xs text-mist/65">
-        Chờ thêm {block.missing} người nữa để bắt đầu. Gửi mã{" "}
-        <b className="font-mono text-white">{code}</b> cho bạn bè.
+      <p className="mt-2.5 text-center text-sm text-mist/85" data-testid="start-block">
+        Cần thêm <b className="text-white">{block.missing}</b> người để bắt đầu.
       </p>
     );
   }
   if (block.kind === "config") {
-    return <p className="text-center text-xs text-blood-400">{block.message}</p>;
+    return (
+      <p className="mt-2.5 text-center text-sm text-blood-400" data-testid="start-block">
+        {block.message}
+      </p>
+    );
   }
   // Khách không cần đọc danh sách người chưa sẵn sàng: họ không bấm bắt đầu.
   if (!isHost) return null;
   return (
-    <p className="text-center text-xs text-amber-300">
-      Chờ {block.names.join(", ")} sẵn sàng.
+    <p className="mt-2.5 text-center text-sm text-amber-200" data-testid="start-block">
+      Chờ {block.names.join(", ")} bấm sẵn sàng.
     </p>
   );
 }
@@ -289,18 +338,27 @@ function ModeToggle({
     {
       id: "ranked" as const,
       label: "🛡️ Ranked",
+      hint: "Sự kiện hiếm",
       title: "Sự kiện chỉ kích hoạt khi một phe bị lấn lướt mạnh",
-      on: "border-amber-500/40 bg-amber-500/20 text-amber-300",
+      // Viền đặc + nền đậm + chữ sáng: ở bản cũ ô được chọn chỉ khác ô kia ở
+      // sắc chữ, và trên nền xanh đen thì amber/65 với amber/100 nhìn gần như
+      // nhau - không đọc kỹ thì không biết đang ở chế độ nào.
+      on: "border-amber-400/70 bg-amber-500/25 text-amber-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]",
     },
     {
       id: "chaos" as const,
       label: "🌀 Chaos",
+      hint: "Sự kiện mỗi vòng",
       title: "Sự kiện bất ngờ ngẫu nhiên kích hoạt mỗi vòng",
-      on: "border-purple-500/40 bg-purple-500/20 text-purple-300",
+      on: "border-purple-400/70 bg-purple-500/25 text-purple-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]",
     },
   ];
   return (
-    <div className="flex items-center gap-1 rounded-xl border border-night-600/60 bg-night-800/60 p-1">
+    <div
+      className="flex items-stretch gap-1.5 rounded-xl border border-night-600/70 bg-night-900/60 p-1.5"
+      role="group"
+      aria-label="Chế độ sự kiện"
+    >
       {options.map((option) => (
         <button
           key={option.id}
@@ -309,13 +367,14 @@ function ModeToggle({
           onClick={() => onChange(option.id)}
           title={option.title}
           aria-pressed={mode === option.id}
-          className={`flex-1 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition ${
+          className={`flex-1 rounded-lg border px-3 py-2 text-sm font-bold transition ${
             mode === option.id
               ? option.on
-              : "border-transparent text-mist/65 hover:text-white"
+              : "border-transparent text-mist/80 hover:bg-white/[0.06] hover:text-white"
           } ${isHost ? "cursor-pointer" : "cursor-default"}`}
         >
-          {option.label}
+          <span className="block">{option.label}</span>
+          <span className="mt-0.5 block text-[11px] font-medium opacity-80">{option.hint}</span>
         </button>
       ))}
     </div>
@@ -336,7 +395,7 @@ function VoiceConfig({
 }) {
   const on = config.voice === true;
   return (
-    <div className="flex flex-col gap-2 border-b border-white/[0.06] pb-4">
+    <div className="flex flex-col gap-2 border-b border-white/[0.08] pb-4">
       <label className="flex cursor-pointer items-center justify-between gap-3">
         <span className="font-semibold text-white">🎙️ Trò chuyện bằng giọng nói</span>
         <input
@@ -346,11 +405,11 @@ function VoiceConfig({
           onChange={(e) => onSave({ ...config, voice: e.target.checked })}
         />
       </label>
-      <p className="text-xs text-mist/65">
+      <p className="text-sm text-mist/80">
         Chỉ dùng được ban ngày. Ban đêm và phe Sói vẫn nhắn bằng chữ.
       </p>
       {on && (
-        <p className="text-xs text-amber-300/80">
+        <p className="text-sm text-amber-200/90">
           Lưu ý: giọng nói làm lộ bạn là ai, kể cả khi vai của bạn còn bí mật.
         </p>
       )}
@@ -377,7 +436,7 @@ function TimingConfig({
   return (
     <div>
       <p className="font-semibold text-white">Thời gian từng pha</p>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {(
           [
             // Khoảng hợp lệ phải khớp roomConfigSchema; đặc biệt finalVoteSeconds
@@ -390,9 +449,9 @@ function TimingConfig({
           ] as const
         ).map(([key, label, min, max]) => (
           <label key={key} className="block text-sm">
-            <span className="text-mist/80">
+            <span className="text-mist/90">
               {label}{" "}
-              <span className="text-mist/60">
+              <span className="text-mist/70">
                 ({min}-{max}s)
               </span>
             </span>
@@ -408,7 +467,7 @@ function TimingConfig({
         ))}
       </div>
       <button
-        className="btn-primary mt-3 w-full"
+        className="btn-primary mt-3 w-full sm:w-auto"
         disabled={!dirty}
         onClick={() => {
           onSave(draft);

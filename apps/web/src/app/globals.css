@@ -244,7 +244,60 @@ summary:focus-visible,
   }
 
   .btn-secondary {
-    @apply btn bg-night-700/80 text-mist hover:bg-night-600 active:bg-night-800;
+    @apply btn border border-night-600/70 bg-night-700/80 text-mist hover:border-mist/30
+      hover:bg-night-600 hover:text-white active:bg-night-800;
+  }
+
+  /*
+   * Hành động hạng ba: rời phòng, mở ô đổi ảnh, xem chi tiết kỹ thuật.
+   *
+   * Nền gần như trong suốt và không có viền đặc, nên nó KHÔNG cạnh tranh với
+   * CTA trong cùng một khung nhìn - đúng thứ mà nút "Rời phòng" toàn chiều rộng
+   * ở bản cũ đã làm: nó nằm ngay dưới "Bắt đầu trận đấu", cùng bề ngang, cùng
+   * chiều cao, và mắt phải đọc chữ mới phân biệt được hai cái.
+   */
+  .btn-tertiary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm
+      font-semibold text-mist/85 transition hover:bg-white/[0.07] hover:text-white
+      active:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  /* Cùng hình dáng, nhưng chữ ngả về phía nguy hiểm khi rê chuột. */
+  .btn-tertiary-danger {
+    @apply btn-tertiary hover:bg-blood-600/15 hover:text-blood-400;
+  }
+
+  /*
+   * CTA của phòng chờ.
+   *
+   * Không dùng .btn-primary vì `disabled:opacity-40` của nó làm mờ cả nền đỏ
+   * lẫn chữ: nút "Bắt đầu trận đấu" ở trạng thái tắt vẫn còn ĐỎ, chỉ nhạt đi -
+   * đọc ra là một nút nguy hiểm đang hỏng chứ không phải một nút chưa tới lượt.
+   * Ở đây trạng thái tắt đổi hẳn sang xám trung tính và chữ vẫn đọc được, cùng
+   * cách mà `.gate-cta` của trang chủ xử lý.
+   */
+  .btn-cta {
+    @apply relative inline-flex items-center justify-center gap-2.5 rounded-xl px-6 py-3.5
+      text-base font-bold tracking-wide text-white transition;
+    background: linear-gradient(180deg, #e13350 0%, #b91c33 100%);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
+      0 14px 34px -16px rgba(220, 38, 64, 0.85);
+  }
+
+  .btn-cta:hover:not(:disabled) {
+    background: linear-gradient(180deg, #f04760 0%, #cb2038 100%);
+  }
+
+  .btn-cta:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  .btn-cta:disabled {
+    cursor: not-allowed;
+    background: linear-gradient(180deg, rgba(58, 74, 106, 0.9) 0%, rgba(34, 46, 72, 0.92) 100%);
+    color: rgba(207, 224, 255, 0.8);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
   }
 
   /* placeholder ở mist/40 gần như chìm hẳn vào nền night-800; /55 vẫn nhạt hơn
@@ -651,4 +704,59 @@ summary:focus-visible,
   .gate-spinner {
     display: none;
   }
+}
+
+/* ============================================================================
+ * PHÒNG CHỜ
+ * ========================================================================= */
+
+/*
+ * Ô người chơi còn trống.
+ *
+ * Nhịp thở rất nhẹ để cả cột không đứng chết cứng trong lúc chờ người vào -
+ * cùng biên độ với `.avatar-breathe`, và cũng tắt hẳn khi hệ điều hành xin giảm
+ * chuyển động. Mỗi ô lệch pha một chút theo `--slot-index`, nếu không thì năm
+ * ô trống nhấp nháy đồng loạt như một thanh tiến trình đang tải.
+ */
+.lobby-slot-waiting {
+  animation: lobby-slot-waiting 3.4s ease-in-out infinite;
+  animation-delay: calc(var(--slot-index, 0) * 260ms);
+}
+
+@keyframes lobby-slot-waiting {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lobby-slot-waiting {
+    animation: none;
+    opacity: 0.75;
+  }
+}
+
+/*
+ * Vùng cuộn của danh sách người chơi.
+ *
+ * Phòng chứa tối đa 15 người còn cột trái thì dính (`sticky`) theo màn hình,
+ * nên danh sách phải tự cuộn thay vì đẩy dài cả trang. Thanh cuộn vẽ mảnh và
+ * tối để nó không thành một vạch sáng chạy dọc thẻ.
+ */
+.lobby-roster-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(157, 178, 213, 0.28) transparent;
+}
+
+.lobby-roster-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lobby-roster-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(157, 178, 213, 0.28);
 }

@@ -114,10 +114,23 @@ export function ChatBox({
         */}
       <div
         ref={boxRef}
-        className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2.5"
+        className={`lobby-roster-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain p-2.5 ${
+          // Khung rỗng thì dồn nội dung vào GIỮA thay vì dán một dòng chữ xám ở
+          // mép trên và bỏ trống 400px bên dưới - ở cột phải trên desktop đó là
+          // khoảng trống lớn nhất của cả trang phòng chờ.
+          messages.length === 0 ? "grid place-content-center" : "space-y-1.5"
+        }`}
       >
         {messages.length === 0 && (
-          <p className="text-sm text-mist/60">Chưa có tin nhắn nào.</p>
+          <div className="px-4 py-6 text-center">
+            <MessageCircleIcon
+              className="mx-auto h-8 w-8 text-mist/35"
+            />
+            <p className="mt-2.5 text-sm font-semibold text-mist/85">Chưa có tin nhắn nào</p>
+            <p className="mt-1 text-xs leading-relaxed text-mist/70">
+              Chào cả phòng một câu trong lúc chờ đủ người.
+            </p>
+          </div>
         )}
         {messages.map((message) => {
           const mine = message.playerId === meId;
@@ -154,7 +167,7 @@ export function ChatBox({
                   </span>
                 </div>
                 {/* break-words: một chuỗi 300 ký tự không dấu cách sẽ đẩy toang cột phụ. */}
-                <p className="break-words text-sm text-mist">{message.text}</p>
+                <p className="break-words text-sm leading-relaxed text-mist/95">{message.text}</p>
               </div>
             </div>
           );

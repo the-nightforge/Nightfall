@@ -27,6 +27,7 @@ import { EventBanner } from "@/components/EventBanner";
 import { MobileChatDock } from "@/components/MobileChatDock";
 import { CinematicOverlay } from "@/components/CinematicOverlay";
 import { RoomInvite } from "@/components/RoomInvite";
+import { LobbyHeader } from "@/components/LobbyHeader";
 
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
@@ -52,6 +53,7 @@ export default function RoomPage() {
 
   const isHost = !!snapshot && snapshot.hostId === getIdentity()?.playerId;
   const droppedConnection = !!snapshot && !room.connected;
+  const isLobby = snapshot?.phase === "LOBBY";
 
   const content = useMemo(() => {
     if (!snapshot) {
@@ -71,7 +73,6 @@ export default function RoomPage() {
             onStart={() => room.emit("room:start")}
             onAddBot={() => room.emit("room:add-bot")}
             onUpdateConfig={(config) => room.emit("room:update-config", { config })}
-            onLeave={leaveRoom}
           />
         );
       case "ROLE_REVEAL":
@@ -156,19 +157,39 @@ export default function RoomPage() {
       <CinematicOverlay snapshot={snapshot} />
 
       {/* pb-28 chừa chỗ cho nút chat nổi ở đáy - thiếu nó thì nút cuối trang
-        * (Bỏ phiếu, Rời phòng) nằm ngay dưới nút chat và bấm nhầm. */}
-      <main className="mx-auto w-full max-w-lg px-3 pb-28 pt-4 lg:max-w-[1600px] lg:pb-4">
-        <header className="flex items-center justify-between">
+        * (Bỏ phiếu, Rời phòng) nằm ngay dưới nút chat và bấm nhầm.
+        *
+        * Phòng chờ hẹp hơn lúc chơi: 1600px là bề ngang cho một bàn 15 ô cộng
+        * hai cột biên, còn ở phòng chờ cột giữa chỉ có một thẻ thiết lập, và kéo
+        * nó ra 1600 thì mỗi dòng chữ dài quá tầm đọc trong khi thẻ vẫn trống
+        * hoác. 1440 là chỗ ba vùng còn thở mà không dãn ra. */}
+      <main
+        className={`mx-auto w-full max-w-lg px-3 pb-28 pt-4 lg:pb-6 ${
+          isLobby ? "md:max-w-2xl lg:max-w-[1440px] lg:px-6" : "lg:max-w-[1600px]"
+        }`}
+      >
+        <header className="flex items-center justify-between gap-2">
+          {/*
+            * MỘT chỗ rời phòng cho cả trang.
+            *
+            * Phòng chờ bản cũ có thêm một nút "Rời phòng" toàn chiều ngang ngay
+            * dưới "Bắt đầu trận đấu" - cùng bề ngang, cùng chiều cao với CTA -
+            * nên hai nút cạnh tranh nhau, và người chơi gặp cùng một hành động ở
+            * cả đầu lẫn cuối trang. Cái ở đây giữ lại vì nó có mặt ở MỌI pha.
+            */}
           <button
-            className="shrink-0 whitespace-nowrap text-sm text-mist/60 hover:text-white"
+            className="btn-tertiary-danger shrink-0 whitespace-nowrap"
             onClick={leaveRoom}
           >
-            ← Rời phòng
+            <span aria-hidden="true">←</span> Rời phòng
           </button>
           {/* items-start: cụm mời cao hơn một dòng khi có thông báo hoặc ô chép
             * tay, và nút âm thanh không được trôi xuống giữa theo nó. */}
           <div className="flex items-start gap-2">
-            <RoomInvite code={code} />
+            {/* Trong phòng chờ cụm mời đã lên `LobbyHeader` cùng mã phòng và bộ
+              * đếm người; để lại bản thứ hai ở đây là hai mã phòng trên cùng một
+              * màn hình. */}
+            {!isLobby && <RoomInvite code={code} />}
             <SoundControl />
             {/*
               * Điều kiện là `snapshot &&`, không phải chỉ `!connected`.
@@ -193,11 +214,35 @@ export default function RoomPage() {
         </header>
 
         {/*
+          * Đầu phòng chờ nằm NGOÀI lưới, vắt ngang cả ba vùng.
+          *
+          * Đặt nó trong cột giữa thì dưới lg nó rơi xuống SAU danh sách người
+          * chơi (cột trái cố ý lên trước ở phòng chờ), và người vừa mở link mời
+          * phải cuộn qua cả danh sách mới thấy mã phòng cùng nút mời bạn - đúng
+          * hai thứ họ cần trong mười giây đầu. Ở đây nó cũng thay luôn
+          * `PhaseBanner`: hai khối đó cùng nói "Phòng chờ", mà ở pha này thanh
+          * pha không có thêm gì để nói (chưa có hạn giờ, chưa có số vòng).
+          */}
+        {snapshot && snapshot.phase === "LOBBY" && (
+          <div className="mt-3 lg:mt-5">
+            <LobbyHeader snapshot={snapshot} code={code} />
+          </div>
+        )}
+
+        {/*
           * Dưới lg vẫn đúng một cột như cũ. Từ lg trở lên là ba vùng: người chơi,
           * nội dung pha, chat. Hai cột biên có bề rộng CỐ ĐỊNH và hẹp - chúng
           * không đẹp thêm khi rộng ra, chỉ nội dung pha mới dùng được chỗ thừa.
+          * Phòng chờ nới hai cột biên rộng thêm một chút: tên người chơi ở 15rem
+          * bị cắt cụt ngay khi có thêm nút Kick bên cạnh.
           */}
-        <div className="mt-3 grid gap-3 lg:grid-cols-[15rem_minmax(0,1fr)_21rem] lg:items-start">
+        <div
+          className={`mt-3 grid gap-3 lg:items-start ${
+            isLobby
+              ? "lg:grid-cols-[18rem_minmax(0,1fr)_21rem] lg:gap-5 xl:grid-cols-[19rem_minmax(0,1fr)_22rem]"
+              : "lg:grid-cols-[15rem_minmax(0,1fr)_21rem]"
+          }`}
+        >
           {/*
             * Trên điện thoại, trong ván thì cột người chơi xuống dưới nội dung -
             * ở đó nó chỉ để tra cứu, còn nội dung pha mới là thứ phải thao tác
@@ -230,7 +275,9 @@ export default function RoomPage() {
             } flex min-w-0 flex-col gap-3 lg:order-none`}
           >
             {snapshot && <EventBanner event={snapshot.activeEvent} />}
-            {snapshot && <PhaseBanner snapshot={snapshot} />}
+            {/* Phòng chờ dùng `LobbyHeader` phía trên lưới thay cho thanh pha -
+              * xem chú thích ở chỗ dựng nó. */}
+            {snapshot && snapshot.phase !== "LOBBY" && <PhaseBanner snapshot={snapshot} />}
 
             {/* Voice là thao tác trực tiếp, không phải thông tin phụ: trên điện
               * thoại nó phải ở ngay đầu cột nội dung chứ không theo cột phải đi
@@ -270,7 +317,13 @@ export default function RoomPage() {
           <div className="hidden lg:order-none lg:sticky lg:top-4 lg:flex lg:h-[calc(100dvh-2rem)] lg:min-h-0 lg:flex-col lg:gap-3">
             <RightMetaPanel snapshot={snapshot} />
             <VoiceControl snapshot={snapshot} />
-            <div className="min-h-0 flex-1 lg:max-h-[520px] lg:min-h-[320px]">
+            {/* Trong phòng chờ khung chat thấp hơn: chưa có ai nói gì thì một
+              * khung 520px rỗng là khoảng trống lớn nhất trên màn hình. */}
+            <div
+              className={`min-h-0 flex-1 ${
+                isLobby ? "lg:max-h-[420px] lg:min-h-[240px]" : "lg:max-h-[520px] lg:min-h-[320px]"
+              }`}
+            >
               <ChatBox
                 messages={room.messages}
                 onSend={(text) => room.emit("chat:send", { text })}
