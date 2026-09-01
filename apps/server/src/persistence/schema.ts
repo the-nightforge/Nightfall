@@ -312,6 +312,10 @@ const persistedRoomSchema = z.object({
   governorCalls: z.number().int().min(0),
   discussionSkipVotes: z.array(z.string()),
   discussionRun: discussionRunSchema.nullable(),
+  // OPTIONAL vì đây là trường thêm sau. Bắt buộc nó là mọi snapshot đã ghi
+  // trước bản này hoá hỏng ngay lúc deploy - tức giết sạch các ván đang chạy,
+  // đúng cái bẫy mà `restoreRoomFromEnvelope` đã ghi chú.
+  kickedPlayerIds: z.array(z.string()).optional(),
 });
 
 export const roomEnvelopeSchema = z.object({

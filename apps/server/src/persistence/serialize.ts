@@ -45,6 +45,7 @@ export function serializeRoom(room: Room, opSeq: number): RoomEnvelopeV1 {
       governorCalls: botBudgetUsed(room.code),
       discussionSkipVotes: [...(discussionSkipVotes.get(room.code) ?? [])],
       discussionRun: serializeDiscussionRun(room.code),
+      kickedPlayerIds: room.kickedPlayerIds,
     },
   };
 }

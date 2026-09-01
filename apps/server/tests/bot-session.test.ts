@@ -8,12 +8,16 @@ import {
   startBotSession,
 } from "../src/bots/session-registry";
 import { cleanupRoomBotState } from "../src/game/bot-room-state";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 vi.mock("../src/redis", () => ({ redis: { set: async () => undefined, get: async () => null, del: async () => undefined } }));
 vi.mock("../src/db", () => ({ prisma: {} }));
 
 function room(code = "ROOM1", createdAt = 1_000): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase: "VOTING",
     round: 1,
     phaseEndsAt: 30_000,
@@ -26,6 +30,7 @@ function room(code = "ROOM1", createdAt = 1_000): Room {
     config: { ...DEFAULT_ROOM_CONFIG },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       wolfVotes: {},
       killTarget: null,
       wolvesLocked: false,
@@ -52,6 +57,7 @@ function room(code = "ROOM1", createdAt = 1_000): Room {
   };
 
   return {
+    ...ROOM_SCAFFOLD,
     code,
     hostId: "human",
     status: "IN_GAME",

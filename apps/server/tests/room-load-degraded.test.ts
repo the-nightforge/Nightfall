@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 const store = vi.hoisted(() => ({
   data: new Map<string, string>(),
@@ -72,6 +73,7 @@ const { clearBotSession } = await import("../src/bots/session-registry");
 
 function lobby(code: string): Room {
   return {
+    ...ROOM_SCAFFOLD,
     code,
     hostId: "p1",
     status: "LOBBY",

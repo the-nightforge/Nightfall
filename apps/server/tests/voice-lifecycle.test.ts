@@ -109,6 +109,7 @@ function makeRoom(inGame: boolean): Room {
     engine: inGame ? new GameEngine(gameState()) : null,
     chatLog: [],
     createdAt: 0,
+    kickedPlayerIds: [],
   } as unknown as Room;
 }
 

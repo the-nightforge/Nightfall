@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 function nightState(guardPrevious: string | null): GameState {
   return {
+    ...GAME_STATE_SCAFFOLD,
     phase: "NIGHT",
     round: 2,
     phaseEndsAt: null,
@@ -15,9 +18,8 @@ function nightState(guardPrevious: string | null): GameState {
     config: { ...DEFAULT_ROOM_CONFIG },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       killTarget: null,
-      actedWolves: [],
-      skippedWolves: [],
       guardTarget: null,
       healTonight: false,
       poisonTarget: null,

@@ -3,9 +3,13 @@ import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import { buildSnapshot, resolveChat } from "../src/rooms/snapshot";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 function cursedRoom(phase: GameState["phase"], turned: boolean): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase,
     round: 2,
     phaseEndsAt: null,
@@ -25,6 +29,7 @@ function cursedRoom(phase: GameState["phase"], turned: boolean): Room {
     config: { ...DEFAULT_ROOM_CONFIG, cursed: true },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       wolfVotes: {},
       killTarget: null,
       wolvesLocked: false,
@@ -57,6 +62,7 @@ function cursedRoom(phase: GameState["phase"], turned: boolean): Room {
   };
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "CURSE",
     hostId: "villager",
     status: "IN_GAME",

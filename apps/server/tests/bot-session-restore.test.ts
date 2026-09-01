@@ -7,9 +7,11 @@ import {
   serializeBotSession,
 } from "../src/bots/session-registry";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 function room(code = "ABCDE"): Room {
   return {
+    ...ROOM_SCAFFOLD,
     code,
     hostId: "p1",
     status: "IN_GAME",

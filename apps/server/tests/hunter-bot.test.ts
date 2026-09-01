@@ -43,9 +43,13 @@ vi.mock("../src/bots", async () => {
 });
 
 import { continueAfterDeathResult } from "../src/game/machine";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 function hunterRoom(): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase: "NIGHT_RESULT",
     round: 2,
     phaseEndsAt: 8_000,
@@ -59,6 +63,7 @@ function hunterRoom(): Room {
     config: { ...DEFAULT_ROOM_CONFIG, hunter: true },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       wolfVotes: {},
       killTarget: null,
       wolvesLocked: true,
@@ -85,6 +90,7 @@ function hunterRoom(): Room {
   };
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "HUNT1",
     hostId: "villager",
     status: "IN_GAME",

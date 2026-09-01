@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import { reconnectPlayer, type ReconnectDependencies } from "../src/rooms/reconnect";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 function room(connected = false): Room {
   return {
+    ...ROOM_SCAFFOLD,
     code: "ABCDE",
     hostId: "player",
     status: "LOBBY",

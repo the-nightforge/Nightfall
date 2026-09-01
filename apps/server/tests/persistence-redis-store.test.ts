@@ -59,7 +59,7 @@ const { PERSISTENCE_VERSION } = await import("../src/persistence/schema");
 
 function envelope(opSeq = 1, code = "ABCDE") {
   return {
-    persistenceVersion: PERSISTENCE_VERSION,
+    persistenceVersion: PERSISTENCE_VERSION as typeof PERSISTENCE_VERSION,
     savedAt: 1_000,
     opSeq,
     room: {

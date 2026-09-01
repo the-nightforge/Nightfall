@@ -3,6 +3,9 @@ import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
 import { scheduleVoteBots } from "../src/game/machine";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 const brainControl = vi.hoisted(() => ({ renderDaySpeech: vi.fn() }));
 
@@ -76,6 +79,7 @@ const noElimination = {
 
 function votingRoom(): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase: "VOTING",
     round: 1,
     phaseEndsAt: 30_000,
@@ -88,6 +92,7 @@ function votingRoom(): Room {
     config: { ...DEFAULT_ROOM_CONFIG },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       wolfVotes: {},
       killTarget: null,
       wolvesLocked: false,
@@ -114,6 +119,7 @@ function votingRoom(): Room {
   };
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "VOTE1",
     hostId: "b",
     status: "IN_GAME",

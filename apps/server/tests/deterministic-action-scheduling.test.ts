@@ -4,6 +4,9 @@ import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
 import { clearBotSession } from "../src/bots/session-registry";
 import { scheduleNightBots } from "../src/game/machine";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 /**
  * Sau Phase 2, KHÔNG quyết định game action nào được đi qua provider.
@@ -41,6 +44,7 @@ vi.mock("../src/bots", async () => {
 
 function nightRoom(): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase: "NIGHT",
     round: 1,
     phaseEndsAt: 30_000,
@@ -54,6 +58,7 @@ function nightRoom(): Room {
     config: { ...DEFAULT_ROOM_CONFIG, werewolves: 1, seer: true, guard: true, witch: false },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       wolfVotes: {},
       killTarget: null,
       wolvesLocked: false,
@@ -80,6 +85,7 @@ function nightRoom(): Room {
   };
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "NIGHT1",
     hostId: "wolf",
     status: "IN_GAME",

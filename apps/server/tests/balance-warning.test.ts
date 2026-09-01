@@ -4,6 +4,7 @@ import { GameEngine, generateWarnings, PRESET_DECKS } from "@masoi/game-engine";
 import type { Room } from "../src/rooms/store";
 import { createRoom, allRooms } from "../src/rooms/store";
 import { buildSnapshot } from "../src/rooms/snapshot";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 vi.mock("../src/rooms/broadcast", () => ({
   broadcastRoom: () => undefined,
@@ -37,6 +38,7 @@ function makeRoomWithConfig(playerCount: number, configOverrides: Partial<typeof
   const host = baseMembers[0];
   // createRoom uses generateRoomCode, bypass and construct manually to avoid redis
   const room: Room = {
+    ...ROOM_SCAFFOLD,
     code: `TEST${playerCount}`,
     hostId: host.playerId,
     status: "LOBBY",
@@ -56,6 +58,7 @@ function makeRoomWithConfig(playerCount: number, configOverrides: Partial<typeof
 describe("balance warning snapshot", () => {
   it("exposes balanceWarning in snapshot", () => {
     const room: Room = {
+      ...ROOM_SCAFFOLD,
       code: "SNAP1",
       hostId: "p1",
       status: "LOBBY",
@@ -75,6 +78,7 @@ describe("balance warning snapshot", () => {
 
   it("snapshot balanced preset not blocking", () => {
     const room: Room = {
+      ...ROOM_SCAFFOLD,
       code: "SNAP2",
       hostId: "p1",
       status: "LOBBY",
@@ -105,6 +109,7 @@ describe("balance validation service", () => {
     const members = makeMembers(6).map((m, idx) => idx === 0 ? { ...m, playerId: hostId, name: "Host" } : m);
     // Manually create room entry
     const room: Room = {
+      ...ROOM_SCAFFOLD,
       code: "RANK01",
       hostId,
       status: "LOBBY",
@@ -135,6 +140,7 @@ describe("balance validation service", () => {
     const hostId = "host-chaos";
     const members = makeMembers(6).map((m, idx) => idx === 0 ? { ...m, playerId: hostId, name: "HostChaos" } : m);
     const room: Room = {
+      ...ROOM_SCAFFOLD,
       code: "CHAOS1",
       hostId,
       status: "LOBBY",

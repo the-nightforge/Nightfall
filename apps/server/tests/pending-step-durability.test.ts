@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
 import type { RoomEnvelopeV1 } from "../src/persistence/schema";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 const store = vi.hoisted(() => ({ data: new Map<string, string>() }));
 
@@ -44,6 +45,7 @@ const { clearBotSession } = await import("../src/bots/session-registry");
 
 function lobby(code: string): Room {
   return {
+    ...ROOM_SCAFFOLD,
     code,
     hostId: "p1",
     status: "LOBBY",
@@ -133,7 +135,7 @@ describe("snapshot chụp đúng khe không còn bước chờ", () => {
       prepare?.(room);
       // Khe hở: process chết đúng giữa lúc bước cũ vừa bị tiêu và bước mới chưa
       // kịp hẹn. Phòng KHÔNG được treo vĩnh viễn vì chuyện đó.
-      room.pendingStep = null;
+      room.pendingStep = null as Room["pendingStep"];
 
       resumeRoom(room);
 
@@ -155,7 +157,7 @@ describe("snapshot chụp đúng khe không còn bước chờ", () => {
       resolved: false,
     };
     room.engine!.beginHunterShot(15_000);
-    room.pendingStep = null;
+    room.pendingStep = null as Room["pendingStep"];
 
     resumeRoom(room);
 
@@ -168,7 +170,7 @@ describe("snapshot chụp đúng khe không còn bước chờ", () => {
     const room = lobby(code);
     startGame(room);
     room.engine!.finishGame("village");
-    room.pendingStep = null;
+    room.pendingStep = null as Room["pendingStep"];
 
     resumeRoom(room);
 

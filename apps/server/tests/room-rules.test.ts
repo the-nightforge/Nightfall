@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import { allRequiredPlayersReady, roomEntryError } from "../src/rooms/rules";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 function lobbyRoom(): Room {
   return {
+    ...ROOM_SCAFFOLD,
     code: "ABCDE",
     hostId: "host",
     status: "LOBBY",

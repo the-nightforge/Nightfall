@@ -3,6 +3,9 @@ import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG, gameActionPayload } from "@masoi/shared";
 import { buildSnapshot } from "../src/rooms/snapshot";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 const PLAYERS: GameState["players"] = [
   { id: "w1", name: "Sói 1", role: "WEREWOLF", alive: true, isBot: false },
@@ -15,6 +18,7 @@ const PLAYERS: GameState["players"] = [
 
 function nightRoom(night: Partial<GameState["night"]> = {}): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase: "NIGHT",
     round: 1,
     phaseEndsAt: null,
@@ -22,6 +26,7 @@ function nightRoom(night: Partial<GameState["night"]> = {}): Room {
     config: { ...DEFAULT_ROOM_CONFIG },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       wolfVotes: {},
       killTarget: null,
       wolvesLocked: false,
@@ -43,6 +48,7 @@ function nightRoom(night: Partial<GameState["night"]> = {}): Room {
   };
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "WOLFSK",
     hostId: "w1",
     status: "IN_GAME",
@@ -122,7 +128,7 @@ describe("snapshot tiến độ bỏ phiếu của Sói", () => {
     const legacy = room.engine!.state as GameState & {
       night: { wolfVotes?: Record<string, string | null> };
     };
-    delete legacy.night.wolfVotes;
+    delete (legacy.night as { wolfVotes?: Record<string, string | null> }).wolfVotes;
     room.engine = new GameEngine(legacy as GameState);
 
     expect(room.engine.state.night.wolfVotes).toEqual({});

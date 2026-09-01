@@ -10,6 +10,9 @@ import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { ChatMessage } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
 import { botSessionFor, clearBotSession } from "../src/bots/session-registry";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 const LIMITS = DEFAULT_BOT_WEIGHTS.conversation;
 
@@ -84,6 +87,7 @@ function discussionRoom(botCount = 4, aliveOverrides: Record<string, boolean> = 
   ];
 
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase: "DAY_DISCUSSION",
     round: 1,
     phaseEndsAt: Date.now() + DEFAULT_ROOM_CONFIG.discussionSeconds * 1_000,
@@ -97,9 +101,8 @@ function discussionRoom(botCount = 4, aliveOverrides: Record<string, boolean> = 
     config: { ...DEFAULT_ROOM_CONFIG },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       killTarget: null,
-      actedWolves: [],
-      skippedWolves: [],
       guardTarget: null,
       healTonight: false,
       poisonTarget: null,
@@ -117,6 +120,7 @@ function discussionRoom(botCount = 4, aliveOverrides: Record<string, boolean> = 
   };
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "ROOMA",
     hostId: "human",
     status: "IN_GAME",

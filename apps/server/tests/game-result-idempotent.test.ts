@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import { GameEngine } from "@masoi/game-engine";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 const db = vi.hoisted(() => ({
   created: [] as Array<Record<string, unknown>>,
@@ -43,6 +44,7 @@ function finishedRoom(gameId: string | null = "game-1"): Room {
   engine.finishGame("village");
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "RSULT",
     hostId: "p1",
     status: "IN_GAME",

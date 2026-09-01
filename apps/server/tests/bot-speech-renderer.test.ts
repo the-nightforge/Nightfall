@@ -15,6 +15,7 @@ function requestForTarget(
     speaker: { id: "bot", name: "Bot" },
     ...speechDefaults(),
     intention: {
+      tone: "NEUTRAL",
       kind: "ACCUSE",
       targetId: "c",
       confidence: 0.8,

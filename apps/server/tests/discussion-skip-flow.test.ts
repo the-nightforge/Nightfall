@@ -12,6 +12,9 @@ import {
   discussionSkipVotes,
 } from "../src/game/discussion-skip";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 const storeMocks = vi.hoisted(() => ({
   clearRoomTimers: vi.fn(),
@@ -35,6 +38,7 @@ vi.mock("../src/db", () => ({
 
 function discussionRoom(): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase: "DAY_DISCUSSION",
     round: 1,
     phaseEndsAt: Date.now() + 60_000,
@@ -46,9 +50,8 @@ function discussionRoom(): Room {
     config: { ...DEFAULT_ROOM_CONFIG },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       killTarget: null,
-      actedWolves: [],
-      skippedWolves: [],
       guardTarget: null,
       healTonight: false,
       poisonTarget: null,
@@ -66,6 +69,7 @@ function discussionRoom(): Room {
   };
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "ABCDE",
     hostId: "human1",
     status: "IN_GAME",

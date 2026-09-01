@@ -3,6 +3,7 @@ import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
 import { clearBotSession } from "../src/bots/session-registry";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 vi.mock("../src/rooms/store", () => ({
   clearRoomTimers: () => undefined,
@@ -96,6 +97,7 @@ function discussionRoom(code = "ROOMR"): Room {
   } as unknown as GameState;
 
   return {
+    ...ROOM_SCAFFOLD,
     code,
     hostId: "human",
     status: "IN_GAME",

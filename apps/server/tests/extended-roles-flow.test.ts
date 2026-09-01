@@ -9,6 +9,7 @@ import {
   continueAfterDeathResult,
 } from "../src/game/machine";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 const storeMocks = vi.hoisted(() => ({
   clearRoomTimers: vi.fn(),
@@ -95,6 +96,7 @@ function setupRoomWithRoles(
   }
 
   return {
+    ...ROOM_SCAFFOLD,
     code,
     hostId: members[0].playerId,
     status: "IN_GAME",

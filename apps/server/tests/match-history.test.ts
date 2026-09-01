@@ -14,6 +14,7 @@ function row(playerRoles: unknown) {
     round: 4,
     durationSec: 620,
     playerRoles,
+    caseFile: null,
     createdAt: new Date("2026-08-31T10:00:00Z"),
   };
 }

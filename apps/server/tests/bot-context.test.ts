@@ -3,6 +3,9 @@ import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
 import { buildBotDecisionContext } from "../src/bots/context";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 vi.mock("../src/redis", () => ({ redis: { set: async () => undefined, get: async () => null, del: async () => undefined } }));
 vi.mock("../src/db", () => ({ prisma: {} }));
@@ -13,6 +16,7 @@ vi.mock("../src/db", () => ({ prisma: {} }));
  */
 function secretRoleRoom(): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase: "VOTING",
     round: 2,
     phaseEndsAt: 130_000,
@@ -27,6 +31,7 @@ function secretRoleRoom(): Room {
     config: { ...DEFAULT_ROOM_CONFIG, werewolves: 2 },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       wolfVotes: { "wolf-a": "witch" },
       killTarget: "witch",
       wolvesLocked: true,
@@ -53,6 +58,7 @@ function secretRoleRoom(): Room {
   };
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "ROOM1",
     hostId: "witch",
     status: "IN_GAME",
