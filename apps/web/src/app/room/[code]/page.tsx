@@ -26,6 +26,7 @@ import { SoundControl } from "@/components/SoundControl";
 import { EventBanner } from "@/components/EventBanner";
 import { MobileChatDock } from "@/components/MobileChatDock";
 import { CinematicOverlay } from "@/components/CinematicOverlay";
+import { RoomInvite } from "@/components/RoomInvite";
 
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
@@ -157,18 +158,16 @@ export default function RoomPage() {
         * (Bỏ phiếu, Rời phòng) nằm ngay dưới nút chat và bấm nhầm. */}
       <main className="mx-auto w-full max-w-lg px-3 pb-28 pt-4 lg:max-w-[1600px] lg:pb-4">
         <header className="flex items-center justify-between">
-          <button className="text-sm text-mist/60 hover:text-white" onClick={leaveRoom}>
+          <button
+            className="shrink-0 whitespace-nowrap text-sm text-mist/60 hover:text-white"
+            onClick={leaveRoom}
+          >
             ← Rời phòng
           </button>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-mist/65">Mã phòng:</span>
-            <button
-              className="rounded-lg border border-night-600 bg-night-800 px-3 py-1 font-mono text-sm font-bold tracking-widest text-white"
-              onClick={() => navigator.clipboard?.writeText(code)}
-              title="Bấm để sao chép"
-            >
-              {code}
-            </button>
+          {/* items-start: cụm mời cao hơn một dòng khi có thông báo hoặc ô chép
+            * tay, và nút âm thanh không được trôi xuống giữa theo nó. */}
+          <div className="flex items-start gap-2">
+            <RoomInvite code={code} />
             <SoundControl />
             {!room.connected && (
               <span className="rounded bg-blood-600/30 px-2 py-0.5 text-xs text-blood-400">Mất kết nối...</span>
