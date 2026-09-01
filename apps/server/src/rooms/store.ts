@@ -111,18 +111,33 @@ export function clearAbandonCheckTimer(code: string): void {
 
 // ---- Redis persistence (write-through) ----
 
-interface SerializedRoom extends Omit<Room, "engine"> {
-  engineState: ReturnType<GameEngine["getState"]> | null;
-}
+/**
+ * KHÔNG còn trường `engineState`.
+ *
+ * Bản cũ ghi trọn trạng thái engine xuống Redis ở MỌI lần đồng bộ, rồi
+ * `loadRoomFromRedis` vứt bỏ đúng thứ đó lúc nạp lại. Không phải quên: phòng
+ * đang giữa trận được cố ý trả về LOBBY sau khi server restart, thay vì khôi
+ * phục timer và lượt đi dang dở.
+ *
+ * Bất biến khiến nó thành ghi thừa hoàn toàn: `room.engine` khác null KHI VÀ
+ * CHỈ KHI `room.status === "IN_GAME"` (xem `startGame` và `resetToLobby`, hai
+ * chỗ duy nhất gán cặp này). Nên `engineState` khác null thì phòng chắc chắn
+ * IN_GAME, mà đúng trường hợp đó lại là trường hợp bị vứt.
+ *
+ * Đo trên ván 15 người: bản ghi phồng từ 5,5 KB lên 48,9 KB, trong đó
+ * engineState chiếm ~85% - riêng `dayVoteHistory` đã 27,8 KB. Toàn bộ phần đó
+ * đi qua đường truyền tới Redis vài trăm lần mỗi ván để không ai đọc.
+ *
+ * Bản ghi cũ còn sót trường này thì `JSON.parse` vẫn đọc bình thường; nó chỉ
+ * không được nhìn tới nữa.
+ */
+type SerializedRoom = Omit<Room, "engine">;
 
 export async function persistRoom(room: Room): Promise<void> {
   try {
     const { engine: _engine, ...rest } = room;
     void _engine;
-    const data: SerializedRoom = {
-      ...rest,
-      engineState: room.engine ? room.engine.getState() : null,
-    };
+    const data: SerializedRoom = rest;
     await redis.set(`room:${room.code}`, JSON.stringify(data), "EX", 60 * 60 * 6);
   } catch {
     // Redis lỗi không chặn gameplay (in-memory là nguồn chính)
@@ -159,9 +174,6 @@ export async function loadRoomFromRedis(code: string): Promise<Room | null> {
       defenseSeconds: storedConfig.defenseSeconds ?? DEFAULT_ROOM_CONFIG.defenseSeconds,
       finalVoteSeconds: storedConfig.finalVoteSeconds ?? DEFAULT_ROOM_CONFIG.finalVoteSeconds,
     };
-    const normalizedEngineState = data.engineState
-      ? { ...data.engineState, config: normalizedConfig }
-      : null;
     const room: Room = {
       code: data.code,
       hostId: data.hostId,
@@ -170,7 +182,10 @@ export async function loadRoomFromRedis(code: string): Promise<Room | null> {
       // khoảng ân hạn mới thay vì coi như họ đã rớt từ lâu.
       members: data.members.map((m) => ({ ...m, connected: false, disconnectedAt: Date.now() })),
       config: normalizedConfig,
-      engine: normalizedEngineState ? new GameEngine(normalizedEngineState) : null,
+      // Luôn null: ván đang chạy KHÔNG được khôi phục (xem dưới), nên dựng lại
+      // engine ở đây chỉ để vứt đi ngay dòng sau - kèm cả phần chuẩn hoá không
+      // rẻ trong constructor của nó.
+      engine: null,
       chatLog: data.chatLog ?? [],
       createdAt: data.createdAt,
     };
@@ -178,7 +193,6 @@ export async function loadRoomFromRedis(code: string): Promise<Room | null> {
     // nếu server restart giữa chừng trận, trả phòng về LOBBY an toàn.
     if (room.status === "IN_GAME") {
       room.status = "LOBBY";
-      room.engine = null;
       for (const m of room.members) m.ready = false;
     }
     rooms.set(code, room);

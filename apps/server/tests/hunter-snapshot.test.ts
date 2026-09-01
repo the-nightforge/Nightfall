@@ -157,10 +157,9 @@ describe("Hunter snapshot privacy", () => {
 });
 
 describe("Hunter config compatibility", () => {
-  it("normalizes a legacy persisted lobby config in both room and engine state", async () => {
+  it("normalizes a legacy persisted lobby config", async () => {
     const state = hunterState("ROLE_REVEAL");
     const { hunter: _roomHunter, ...oldRoomConfig } = state.config;
-    const { hunter: _engineHunter, ...oldEngineConfig } = state.config;
     redisMocks.get.mockResolvedValueOnce(
       JSON.stringify({
         code: "OLD01",
@@ -168,7 +167,6 @@ describe("Hunter config compatibility", () => {
         status: "LOBBY",
         members: snapshotRoom("ROLE_REVEAL").members,
         config: oldRoomConfig,
-        engineState: { ...state, config: oldEngineConfig },
         chatLog: [],
         createdAt: 0,
       }),
@@ -177,7 +175,22 @@ describe("Hunter config compatibility", () => {
     const room = await loadRoomFromRedis("OLD01");
 
     expect(room?.config.hunter).toBe(false);
-    expect(room?.engine?.state.config.hunter).toBe(false);
+    /*
+     * Bản trước còn khẳng định `room.engine.state.config.hunter` là false.
+     * Khẳng định đó không còn nghĩa: engine KHÔNG được khôi phục từ Redis nữa,
+     * nên `room.engine` luôn null ở đây.
+     *
+     * Bảo đảm thật sự thì vẫn còn nguyên, chỉ đi đường khác - `startGame` dựng
+     * engine bằng `GameEngine.create(players, room.config)`, tức là bằng đúng
+     * config vừa được chuẩn hoá ở trên. Nói cách khác, chuẩn hoá ở tầng phòng
+     * là chỗ DUY NHẤT cần đúng, và nó vẫn được kiểm ngay dòng trên.
+     *
+     * Payload cũ cũng đã bỏ `engineState`: một phòng LOBBY kèm engineState là
+     * tổ hợp hệ thống không bao giờ tạo ra (engine khác null khi và chỉ khi
+     * status là IN_GAME), nên dựng nó lên chỉ để kiểm là kiểm một thứ không tồn
+     * tại.
+     */
+    expect(room?.engine).toBeNull();
   });
 
   it("keeps the existing restart policy while normalizing a legacy in-game room", async () => {
