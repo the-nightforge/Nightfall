@@ -232,30 +232,6 @@ export const roomService = {
     void persistRoom(room).then(() => broadcastRoom(room.code));
   },
 
-  async updateAvatar(playerId: string, avatarUrl: string | null): Promise<void> {
-    const roomCode = getRoomSyncByPlayer(playerId);
-    // Cho phép đổi cả trong và ngoài phòng — nếu chưa vào phòng chỉ lưu DB
-    if (avatarUrl !== null) {
-      if (!avatarUrl.startsWith("data:image/")) throw new RoomError("Ảnh đại diện không hợp lệ");
-      if (Buffer.byteLength(avatarUrl, "utf8") > 5 * 1024 * 1024) throw new RoomError("Ảnh quá lớn (>5MB)");
-    }
-    // Lưu DB trước để lần sau vào phòng có sẵn
-    try {
-      await prisma.player.update({ where: { id: playerId }, data: { avatarUrl } as any });
-    } catch {
-      // DB lỗi không chặn — vẫn cho đổi trong phòng hiện tại
-    }
-    if (!roomCode) return;
-    const room = getRoom(roomCode);
-    if (!room) return;
-    const member = room.members.find((m) => m.playerId === playerId);
-    if (member) {
-      (member as any).avatarUrl = avatarUrl;
-      await persistRoom(room);
-      broadcastRoom(room.code);
-    }
-  },
-
   async kick(hostId: string, targetId: string): Promise<void> {
     await withPlayerRoomLock(targetId, async () => {
       const roomCode = getRoomSyncByPlayer(hostId);

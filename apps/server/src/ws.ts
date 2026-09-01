@@ -43,6 +43,7 @@ import { getPlayerRoom, updateSessionRoom } from "./redis";
 import { reconnectPlayer } from "./rooms/reconnect";
 import { allowAction } from "./rate-limit";
 import { issueVoiceToken, syncVoiceForPlayer } from "./voice/service";
+import { clearAvatar } from "./avatar/service";
 
 interface AuthedSocket extends Socket {
   data: { playerId: string };
@@ -162,10 +163,16 @@ export function setupSocket(io: SocketServer): void {
       roomService.updateConfig(playerId, cfg);
     });
 
+    /*
+     * Chỉ còn đường XOÁ. Ảnh đi lên qua PUT /api/players/me/avatar, nơi có
+     * kiểm magic bytes và xử lý ảnh - gửi vài MB base64 qua socket thì snapshot
+     * của cả phòng phình theo, đó chính là lỗi mà endpoint kia sinh ra để sửa.
+     * Giữ sự kiện lại vì client cũ đã cache trên Vercel vẫn phải bấm Xóa được.
+     */
     handler(CLIENT_EVENTS.ROOM_UPDATE_AVATAR, async (payload) => {
-      const { avatarUrl } = updateAvatarPayload.parse(payload);
+      updateAvatarPayload.parse(payload);
       if (!allowAction(`avatar:${playerId}`, 5, 10_000)) throw new RoomError("Thao tác quá nhanh");
-      await roomService.updateAvatar(playerId, avatarUrl);
+      await clearAvatar(playerId);
     });
 
     handler(CLIENT_EVENTS.ROOM_ADD_BOT, async (payload) => {
