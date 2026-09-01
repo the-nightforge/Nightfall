@@ -11,6 +11,8 @@ interface Props {
   messages: ChatMessage[];
   onSend: (text: string) => void;
   placeholder?: string;
+  /** Câu gợi ý lúc chưa có tin nhắn; xem `ChatBox`. */
+  emptyHint?: string;
   /** Bản nháp nằm ở trang phòng nên đóng tấm trượt không xoá mất chữ đang gõ. */
   draft: string;
   onDraftChange: (draft: string) => void;
@@ -33,6 +35,7 @@ export function MobileChatDock({
   messages,
   onSend,
   placeholder,
+  emptyHint,
   draft,
   onDraftChange,
   selfId,
@@ -143,6 +146,7 @@ export function MobileChatDock({
                   messages={messages}
                   onSend={onSend}
                   placeholder={placeholder}
+                  emptyHint={emptyHint}
                   draft={draft}
                   onDraftChange={onDraftChange}
                   // Không còn `autoFocus`: focus lúc mở giờ do useModalFocus đặt,

@@ -150,19 +150,41 @@ export function RoomInvite({ code, size = "sm" }: { code: string; size?: "sm" | 
   }
 
   return (
-    <div className="flex flex-col items-end gap-1.5">
+    /*
+     * Ở cỡ lg trên màn hẹp, cụm này chiếm trọn bề ngang và xếp thành hai hàng
+     * CÓ CHỦ Ý: mã phòng một hàng, hai nút chia đôi hàng dưới.
+     *
+     * Để nó tự wrap thì ba control lọt vừa 264px của thẻ ở màn 320 - đúng hai
+     * cái đầu - và "Mã QR" rơi xuống một mình, dạt về mép phải, trông như một
+     * nút bị bỏ quên chứ không như một hàng. Mã phòng cũng là thứ người ta đọc
+     * to lên cho bạn chép, nên nó xứng đáng cả một hàng.
+     *
+     * Từ sm trở lên mọi thứ về đúng bản cũ: một hàng, dạt phải, cạnh tiêu đề.
+     */
+    <div
+      className={`flex flex-col gap-1.5 ${large ? "items-stretch sm:items-end" : "items-end"}`}
+    >
       {/* flex-wrap: trên màn 390 thanh đầu trang còn có nút âm thanh và huy
         * hiệu mất kết nối. Không cho xuống dòng thì bốn thứ đó bóp mã phòng
         * lại tới mức không đọc được. */}
-      <div className="flex flex-wrap items-center justify-end gap-1.5">
+      <div
+        className={`flex flex-wrap items-center gap-1.5 ${
+          large ? "justify-start sm:justify-end" : "justify-end"
+        }`}
+      >
         {/* Nhãn biến mất dưới sm: trên màn 390 thanh này còn phải chứa nút rời
           * phòng, ba nút mời và nút âm thanh. Ô mã phòng đã tự nói nó là gì
           * bằng phông monospace và giãn chữ, còn trình đọc màn hình thì đọc
           * `aria-label` của nút chứ không đọc nhãn này. */}
         <span className="hidden text-xs text-mist/80 sm:inline">Mã phòng:</span>
         <button
+          /* Dưới sm ở cỡ lg: chiếm trọn một hàng, chữ nhỏ hơn một nấc. Đây là
+           * thứ người ta đọc to lên cho bạn chép, nên nó không phải chen chỗ với
+           * hai cái nút. min-h-11 giữ nguyên ở mọi cỡ - vùng chạm 44px. */
           className={`rounded-lg border border-night-600 bg-night-800 font-mono font-bold tracking-widest text-white transition hover:border-mist/40 hover:bg-night-700 active:bg-night-800 ${
-            large ? "min-h-11 px-4 py-1.5 text-xl" : "min-h-9 px-3 py-1 text-sm"
+            large
+              ? "min-h-11 w-full px-3 py-1.5 text-lg sm:w-auto sm:px-4 sm:text-xl"
+              : "min-h-9 px-3 py-1 text-sm"
           }`}
           onClick={() => void copy(code, "copied-code")}
           title="Bấm để sao chép mã phòng"
@@ -172,7 +194,9 @@ export function RoomInvite({ code, size = "sm" }: { code: string; size?: "sm" | 
         </button>
 
         <button
-          className={`btn-secondary px-3 py-1 ${large ? "min-h-11 text-sm" : "min-h-9 text-sm"}`}
+          className={`btn-secondary px-3 py-1 text-sm ${
+            large ? "min-h-11 flex-1 sm:flex-none" : "min-h-9"
+          }`}
           onClick={() => void handleInvite()}
           disabled={!payload}
         >
@@ -181,7 +205,9 @@ export function RoomInvite({ code, size = "sm" }: { code: string; size?: "sm" | 
 
         <button
           ref={qrButtonRef}
-          className={`btn-secondary px-3 py-1 ${large ? "min-h-11 text-sm" : "min-h-9 text-sm"}`}
+          className={`btn-secondary px-3 py-1 text-sm ${
+            large ? "min-h-11 flex-1 sm:flex-none" : "min-h-9"
+          }`}
           onClick={() => setQrOpen(true)}
           disabled={!payload}
           aria-haspopup="dialog"

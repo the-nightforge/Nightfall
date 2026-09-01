@@ -141,6 +141,7 @@ export default function RoomPage() {
   }
 
   const chatPlaceholder = chatChannelHint(snapshot);
+  const chatEmpty = chatEmptyHint(snapshot);
 
   return (
     <VoiceProvider snapshot={snapshot}>
@@ -390,6 +391,7 @@ export default function RoomPage() {
                 messages={room.messages}
                 onSend={(text) => room.emit("chat:send", { text })}
                 placeholder={chatPlaceholder}
+                emptyHint={chatEmpty}
                 draft={chatDraft}
                 onDraftChange={setChatDraft}
               />
@@ -402,6 +404,7 @@ export default function RoomPage() {
         messages={room.messages}
         onSend={(text) => room.emit("chat:send", { text })}
         placeholder={chatPlaceholder}
+        emptyHint={chatEmpty}
         draft={chatDraft}
         onDraftChange={setChatDraft}
         selfId={snapshot?.you?.id ?? null}
@@ -409,6 +412,21 @@ export default function RoomPage() {
       />
     </VoiceProvider>
   );
+}
+
+/**
+ * Câu gợi ý khi khung chat còn rỗng.
+ *
+ * Đứng cạnh `chatChannelHint` vì cùng một lý do và cùng một đầu vào: chỗ này
+ * biết đang ở pha nào, còn `ChatBox` thì không. Ba câu, một hàm - không đáng
+ * dựng thêm một lớp trừu tượng nào cho ba dòng chữ.
+ */
+function chatEmptyHint(snapshot: RoomSnapshot | null): string {
+  if (!snapshot || snapshot.phase === "LOBBY") {
+    return "Chào cả phòng một câu trong lúc chờ đủ người.";
+  }
+  if (snapshot.phase === "GAME_OVER") return "Chưa có tin nhắn nào sau trận.";
+  return "Chưa có tin nhắn trong kênh này.";
 }
 
 function chatChannelHint(snapshot: RoomSnapshot | null): string {
