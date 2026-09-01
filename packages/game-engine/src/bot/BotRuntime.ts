@@ -69,6 +69,19 @@ export interface BotRuntimeOptions {
    * Production để trống; test và self-play truyền vào.
    */
   trace?: BotTraceSink;
+  /**
+   * Brain đã lưu từ trước khi process chết.
+   *
+   * Có nó thì constructor KHÔNG gọi `createBotPersonality` nữa: lời gọi đó tiêu
+   * một số của RNG, nên gọi lại sẽ đẩy con trỏ lệch đi một nhịp và mọi quyết
+   * định sau đó trôi khỏi dòng số gốc - đúng thứ mà việc khôi phục phải tránh.
+   */
+  state?: BotBrainState;
+  /**
+   * Đi kèm `state`. Thiếu nó thì memory bị bào mòn thêm một lần ở vòng đang
+   * chơi, vì runtime tưởng vòng này chưa decay lần nào.
+   */
+  lastDecayRound?: number;
 }
 
 interface MemoryDraft {
@@ -188,10 +201,28 @@ export class BotRuntime {
       throw new Error(`Cấu hình trọng số BOT không hợp lệ: ${problems.join("; ")}`);
     }
 
-    const personality =
-      options.personality ?? createBotPersonality(options.rng, this.weights);
-    this.state = createBotBrainState(options.playerId, personality, options.playerIds);
-    this.style = deriveSpeechStyle(personality);
+    if (options.state) {
+      this.state = options.state;
+      this.lastDecayRound = options.lastDecayRound ?? -1;
+    } else {
+      const personality =
+        options.personality ?? createBotPersonality(options.rng, this.weights);
+      this.state = createBotBrainState(options.playerId, personality, options.playerIds);
+    }
+    // Dẫn xuất từ personality ĐANG nằm trong state, không phải từ biến cục bộ:
+    // ở nhánh khôi phục không có biến đó, và hai nguồn sẽ trôi lệch nhau.
+    this.style = deriveSpeechStyle(this.state.personality);
+  }
+
+  /**
+   * Ảnh chụp đủ để dựng lại đúng con BOT này sau khi server khởi động lại.
+   *
+   * `style` và `weights` KHÔNG có mặt: cả hai là hàm thuần của những thứ đã nằm
+   * trong ảnh (personality, bảng cấu hình), nên lưu thêm chỉ tạo ra một nguồn
+   * sự thật thứ hai để trôi lệch.
+   */
+  serialize(): { state: BotBrainState; lastDecayRound: number } {
+    return { state: this.state, lastDecayRound: this.lastDecayRound };
   }
 
   /** Nạp mọi quan sát công khai chưa thấy vào memory, belief và social graph. */
