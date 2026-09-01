@@ -183,9 +183,13 @@ by EXIF, crops to a centred square, resizes to 256×256 and encodes WebP under
 #### Cloudflare R2
 
 1. Cloudflare dashboard → **R2** → **Create bucket**, name it `masoi-avatars`.
-2. In the bucket's **Settings**, enable **Public Development URL** (or attach a
-   custom domain). Copy the `https://pub-<hash>.r2.dev` URL — that is
-   `OBJECT_STORAGE_PUBLIC_BASE_URL`.
+2. In the bucket's **Settings**, attach a **custom domain** and use that as
+   `OBJECT_STORAGE_PUBLIC_BASE_URL`. Prefer this over the **Public Development
+   URL** (`https://pub-<hash>.r2.dev`): Cloudflare rate-limits `r2.dev`
+   specifically to discourage production traffic, and it would bite a
+   twelve-player room the moment avatars start loading slowly or getting
+   throttled. Use `r2.dev` for quick local testing only, never for a deployed
+   game.
 3. **R2** → **Manage API Tokens** → **Create API Token**, permission
    *Object Read & Write*, scoped to that bucket. Copy the access key ID and
    secret.
