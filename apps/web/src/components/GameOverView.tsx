@@ -76,7 +76,7 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-        className={`card overflow-hidden border-2 py-8 text-center ${
+        className={`card overflow-hidden border-2 py-8 text-center lg:py-5 ${
           wolvesWin ? "border-blood-500/70" : "border-emerald-500/60"
         }`}
       >

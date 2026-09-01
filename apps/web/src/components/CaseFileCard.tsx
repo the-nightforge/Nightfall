@@ -24,7 +24,10 @@ export function CaseFileCard({ file }: { file: CaseFile }) {
   const accent = wolvesWin ? "text-blood-400" : "text-emerald-300";
 
   return (
-    <section className="card space-y-4" aria-labelledby="case-file-heading">
+    <section
+      className="lobby-roster-scroll card space-y-4 lg:max-h-[46vh] lg:overflow-y-auto lg:overscroll-contain lg:pr-1"
+      aria-labelledby="case-file-heading"
+    >
       <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <div className="min-w-0">
           <p className="text-[11px] uppercase tracking-[0.3em] text-mist/65">Hồ sơ vụ án</p>
