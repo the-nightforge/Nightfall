@@ -1,5 +1,7 @@
+import { m } from "motion/react";
 import type { NightRecap } from "@masoi/shared";
 import { cursedTurnedText } from "@/lib/cursed";
+import { listItemMotion } from "@/lib/motion";
 
 const causeLabel = (cause: "wolf" | "poison" | "priest" | "priest_backfire") => {
   switch (cause) {
@@ -60,10 +62,14 @@ export function NightRecapTimeline({ nights }: { nights: NightRecap[] }) {
         // Thanh dọc bên trái nối các đêm thành một mạch thời gian thay vì mấy
         // khối rời nhau.
         <ol className="relative space-y-3 border-l border-night-600/70 pl-4">
-          {nights.map((night) => {
+          {nights.map((night, index) => {
             const died = night.deaths.length > 0;
             return (
-              <li key={night.round} className="relative">
+              <m.li
+                key={night.round}
+                {...listItemMotion(index, nights.length)}
+                className="relative"
+              >
                 <span
                   className={`absolute -left-[21px] top-3 h-2.5 w-2.5 rounded-full ring-4 ring-night-900 ${
                     died ? "bg-blood-500" : "bg-emerald-500/70"
@@ -172,7 +178,7 @@ export function NightRecapTimeline({ nights }: { nights: NightRecap[] }) {
                       : "Không ai chết trong đêm này"}
                   </p>
                 </section>
-              </li>
+              </m.li>
             );
           })}
         </ol>
