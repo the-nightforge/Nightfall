@@ -1,4 +1,4 @@
-import { setRoomTimer, type Room } from "../rooms/store";
+import { persistRoom, setRoomTimer, type Room } from "../rooms/store";
 import type { PendingStep, PendingStepName } from "./pending-step";
 
 export type StepHandler = (room: Room, step: PendingStep) => void;
@@ -37,6 +37,13 @@ export function phaseToken(room: Room): string {
  * sót qua restart, còn `setTimeout` chỉ là cách chạy nó trong process này.
  * Mỗi lần hẹn đều tăng `phaseSeq`, nên mọi bước đã hẹn trước đó lập tức hết
  * hiệu lực - kể cả khi nó vẫn nằm trong hàng đợi của Node.
+ *
+ * Tự lưu snapshot NGAY tại đây, không nhờ `sync()` của chỗ gọi: vài handler
+ * (`endNight`, `endVoting`, `endFinalVote`, `submitHunterShot`) gọi `sync()`
+ * rồi mới hẹn bước, nên bản lưu cuối cùng của chúng mang `pendingStep: null` -
+ * và một process mới sẽ không biết ván đang chờ điều gì. Đặt lời lưu ở đây
+ * biến "bước chờ luôn nằm trong snapshot" thành một tính chất của chính hàm
+ * hẹn, thay vì một quy ước mà mọi chỗ gọi phải nhớ.
  */
 export function armStep(
   room: Room,
@@ -53,6 +60,7 @@ export function armStep(
   room.pendingStep = pending;
 
   setRoomTimer(room.code, () => runPendingStep(room, pending), delayMs);
+  void persistRoom(room);
 }
 
 /**

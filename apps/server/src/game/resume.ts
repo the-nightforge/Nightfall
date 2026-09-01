@@ -1,4 +1,4 @@
-import type { GamePhase } from "@masoi/shared";
+import { RESULT_MS, ROLE_REVEAL_MS, type GamePhase } from "@masoi/shared";
 import type { Room } from "../rooms/store";
 import { serializeDiscussionRun, runDiscussionScheduler } from "./discussion-scheduler";
 import type { PersistedDiscussionRun } from "./discussion-scheduler";
@@ -11,6 +11,7 @@ import {
   scheduleNightBots,
   scheduleVoteBots,
 } from "./machine";
+import type { PendingStepName } from "./pending-step";
 import { armStep, runPendingStep } from "./steps";
 
 /**
@@ -69,6 +70,57 @@ function rescheduleBots(room: Room, resumeRun: PersistedDiscussionRun | null): v
   }
 }
 
+/**
+ * Bước kế tiếp SUY RA TỪ PHA, dùng khi snapshot rơi đúng khe không còn bước chờ
+ * (bước cũ vừa bị tiêu, bước mới chưa kịp hẹn).
+ *
+ * Đây KHÔNG phải đoán state: state đã có sẵn và đầy đủ, chỗ này chỉ trả lời
+ * "một ván đang ở pha đó thì đang chờ điều gì" - câu trả lời cố định theo luật
+ * chơi. Đêm là chỗ duy nhất cần thêm một mẩu state để phân biệt hai chặng, và
+ * `wolvesLocked` nói đúng điều đó.
+ *
+ * Không có nhánh này, một snapshot rơi vào khe đó sẽ để phòng treo vĩnh viễn ở
+ * giữa pha - hỏng nặng hơn nhiều so với việc hẹn lại một bước đã biết chắc.
+ */
+function derivePendingStep(
+  room: Room,
+): { name: PendingStepName; source?: "night" | "vote"; delayMs: number } | null {
+  const state = room.engine?.state;
+  if (!state) return null;
+
+  const untilDeadline = Math.max(0, (state.phaseEndsAt ?? Date.now()) - Date.now());
+
+  switch (state.phase) {
+    case "ROLE_REVEAL":
+      return { name: "beginNight", delayMs: ROLE_REVEAL_MS };
+    case "NIGHT":
+      return state.night.wolvesLocked
+        ? { name: "endNight", delayMs: untilDeadline }
+        : { name: "lockWolves", delayMs: untilDeadline };
+    case "NIGHT_RESULT":
+      return { name: "afterDeathResult", source: "night", delayMs: RESULT_MS };
+    case "DAY_DISCUSSION":
+      // Ngày Hoà Hoãn đi thẳng sang đêm, không qua bỏ phiếu.
+      return state.activeEvent?.id === "AMNESTY_DAY"
+        ? { name: "beginNight", delayMs: untilDeadline }
+        : { name: "beginVoting", delayMs: untilDeadline };
+    case "VOTING":
+      return { name: "endVoting", delayMs: untilDeadline };
+    case "DEFENSE":
+      return { name: "beginFinalVote", delayMs: untilDeadline };
+    case "FINAL_VOTE":
+      return { name: "endFinalVote", delayMs: untilDeadline };
+    case "ELIMINATION":
+      return { name: "afterDeathResult", source: "vote", delayMs: RESULT_MS };
+    case "HUNTER_SHOT":
+      return { name: "timeoutHunterShot", delayMs: untilDeadline };
+    default:
+      // CHECK_WIN là pha đi qua trong cùng một lời gọi đồng bộ, không bao giờ là
+      // nơi một snapshot dừng lại; GAME_OVER đã được xử lý trước khi tới đây.
+      return null;
+  }
+}
+
 export interface ResumeOutcome {
   /** Đã chạy bù một bước quá hạn ngay lập tức hay chưa. */
   caughtUp: boolean;
@@ -107,14 +159,18 @@ export function resumeRoom(room: Room): ResumeOutcome {
     return noop;
   }
 
-  const pending = room.pendingStep;
-  if (!pending) {
-    // Không có bước chờ mà ván chưa xong: snapshot được chụp đúng khe giữa hai
-    // lần hẹn. Không đoán bước kế tiếp - chỉ mở lại lịch bot, và hạn chót của
-    // pha vẫn hiển thị đúng cho người chơi.
-    rescheduleBots(room, serializeDiscussionRun(room.code));
-    return noop;
+  if (!room.pendingStep) {
+    // Snapshot rơi đúng khe giữa hai lần hẹn. Hồi bước theo luật của pha rồi
+    // chạy tiếp như thường - để trống ở đây là để phòng treo mãi mãi.
+    const derived = derivePendingStep(room);
+    if (!derived) {
+      rescheduleBots(room, serializeDiscussionRun(room.code));
+      return noop;
+    }
+    armStep(room, { name: derived.name, source: derived.source }, derived.delayMs);
   }
+
+  const pending = room.pendingStep!;
 
   const now = Date.now();
   const remaining = pending.runAt - now;
