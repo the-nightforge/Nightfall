@@ -68,12 +68,15 @@ export function LobbyHeader({ snapshot, code }: Props) {
         {/*
           * `shrink-0` KHÔNG được đứng một mình ở đây.
           *
-          * Cụm mời tự xuống dòng bên trong (mã phòng, "Mời bạn bè", "Mã QR"),
-          * nhưng một flex item không co được thì kích thước cơ sở của nó là bề
-          * rộng max-content - tức là cả ba nút nằm trên MỘT hàng, khoảng 288px.
-          * Trong thẻ ở màn 320 chỉ còn 264px, nên nó đẩy tràn ngang 24px thay vì
-          * xuống hàng. Chiếm trọn một dòng ở màn hẹp thì phần wrap bên trong mới
-          * có chỗ làm việc; từ sm trở lên nó về lại nằm cạnh tiêu đề.
+          * Đo ở 320/360/390 thì bản cũ KHÔNG tràn ngang - ba control vừa đủ lọt
+          * sau khi wrap. Nhưng nó vừa đủ một cách tình cờ: `shrink-0` cấm hẳn
+          * việc co lại, nên kích thước cơ sở của item là bề rộng max-content của
+          * cả cụm chưa wrap. Thêm một ký tự vào mã phòng hay một chữ vào nhãn
+          * nút là nó tràn thật, không có gì đỡ.
+          *
+          * Chiếm trọn một dòng ở màn hẹp thì phần wrap bên trong mới có chỗ làm
+          * việc (xem `RoomInvite`, nơi quyết định hai hàng xếp thế nào); từ sm
+          * trở lên nó về lại nằm cạnh tiêu đề như cũ.
           */}
         <div className="w-full min-w-0 sm:w-auto sm:shrink-0">
           <RoomInvite code={code} size="lg" />

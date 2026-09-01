@@ -154,10 +154,10 @@ export function RoomInvite({ code, size = "sm" }: { code: string; size?: "sm" | 
      * Ở cỡ lg trên màn hẹp, cụm này chiếm trọn bề ngang và xếp thành hai hàng
      * CÓ CHỦ Ý: mã phòng một hàng, hai nút chia đôi hàng dưới.
      *
-     * Để nó tự wrap thì ba control lọt vừa 264px của thẻ ở màn 320 - đúng hai
-     * cái đầu - và "Mã QR" rơi xuống một mình, dạt về mép phải, trông như một
-     * nút bị bỏ quên chứ không như một hàng. Mã phòng cũng là thứ người ta đọc
-     * to lên cho bạn chép, nên nó xứng đáng cả một hàng.
+     * Để nó tự wrap thì ở màn 320 mã phòng và "Mời bạn bè" vừa lọt hàng trên,
+     * còn "Mã QR" rơi xuống một mình và dạt về mép phải - đọc ra như một nút bị
+     * bỏ quên chứ không như một hàng. Mã phòng cũng là thứ người ta đọc to lên
+     * cho bạn chép, nên nó xứng đáng cả một hàng.
      *
      * Từ sm trở lên mọi thứ về đúng bản cũ: một hàng, dạt phải, cạnh tiêu đề.
      */
