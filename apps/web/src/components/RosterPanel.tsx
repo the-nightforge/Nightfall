@@ -18,7 +18,6 @@ interface Props {
   snapshot: RoomSnapshot;
   /** Chỉ ở phòng chờ: trạng thái sẵn sàng, ô còn trống, và quyền loại người. */
   lobby?: { isHost: boolean; onKick: (playerId: string) => void };
-  onUpdateAvatar?: (avatarUrl: string | null) => void;
 }
 
 /**
@@ -33,7 +32,7 @@ interface Props {
  * trống cho cái tên, dòng dưới là các nhãn được phép xuống hàng. Nhồi nhãn vào
  * cùng dòng với tên thì tên bị bóp lại còn đúng một chữ cái.
  */
-export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
+export function RosterPanel({ snapshot, lobby }: Props) {
   const speakers = useSpeakers();
   const meId = snapshot.you?.id ?? null;
   const roster = snapshot.players.map((p) => p.id).join(",");
@@ -200,7 +199,7 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
         ))}
       </ul>
 
-      {onUpdateAvatar && snapshot.you && (
+      {snapshot.you && (
         <div className="mt-3 border-t border-white/[0.06] pt-3">
           <button
             type="button"
@@ -212,11 +211,8 @@ export function RosterPanel({ snapshot, lobby, onUpdateAvatar }: Props) {
           {showPicker && (
             <div className="mt-2">
               <AvatarPicker
-                currentUrl={(snapshot.you as any)?.avatarUrl ?? null}
-                onSave={(url) => {
-                  onUpdateAvatar(url);
-                  setShowPicker(false);
-                }}
+                currentUrl={snapshot.you?.avatarUrl ?? null}
+                onDone={() => setShowPicker(false)}
               />
             </div>
           )}
