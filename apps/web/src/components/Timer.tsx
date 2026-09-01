@@ -29,17 +29,42 @@ export function Timer({ endsAt }: { endsAt: number | null }) {
 
   const msLeft = endsAt === null ? 0 : endsAt - now;
   const fraction = useCountdownFraction(endsAt, msLeft);
+  /*
+   * Hai nấc cảnh báo, không phải một.
+   *
+   * Bản cũ chỉ đổi màu ở mốc 10 giây - tức là lúc đã quá muộn để đổi phiếu hay
+   * gõ nốt một câu. Nấc "sắp hết" ở 30 giây ngả sang hổ phách để mắt bắt được
+   * mà không giật mình; nấc 10 giây mới sang đỏ. Cả hai đều KHÔNG nhấp nháy:
+   * đây là một con số phải đọc được, và một cái đồng hồ chớp tắt trên nền tối
+   * vừa chói vừa khó đọc hơn hẳn.
+   */
   const danger = endsAt !== null && msLeft <= 10_000;
+  const warning = endsAt !== null && !danger && msLeft <= 30_000;
+  const ring = danger ? "stroke-blood-500" : warning ? "stroke-amber-400" : "stroke-mist/70";
+  const label = endsAt === null ? "--:--" : fmt(msLeft);
 
   return (
-    <div className="relative h-[52px] w-[52px] shrink-0">
-      <svg viewBox="0 0 52 52" className="h-full w-full -rotate-90">
+    <div
+      /*
+       * role="timer" chứ không phải aria-live: một vùng live ở đây sẽ đọc lại
+       * con số hai lần mỗi giây và nuốt mất mọi thông báo khác. Trình đọc màn
+       * hình lấy được giá trị khi người dùng chủ động hỏi tới, còn thời điểm
+       * đổi pha thì đã có thông báo riêng trong PhaseBanner.
+       */
+      role="timer"
+      aria-label={
+        endsAt === null ? "Pha này không có hạn giờ" : `Còn ${label} trước khi hết giờ`
+      }
+      title={endsAt === null ? "Pha này không có hạn giờ" : "Thời gian còn lại của pha"}
+      className="relative h-14 w-14 shrink-0 lg:h-[68px] lg:w-[68px]"
+    >
+      <svg viewBox="0 0 52 52" className="h-full w-full -rotate-90" aria-hidden="true">
         <circle
           cx="26"
           cy="26"
           r={RADIUS}
           fill="none"
-          strokeWidth="3"
+          strokeWidth="3.5"
           className="stroke-white/10"
         />
         {endsAt !== null && (
@@ -48,9 +73,9 @@ export function Timer({ endsAt }: { endsAt: number | null }) {
             cy="26"
             r={RADIUS}
             fill="none"
-            strokeWidth="3"
+            strokeWidth="3.5"
             strokeLinecap="round"
-            className={danger ? "stroke-blood-500" : "stroke-mist/70"}
+            className={ring}
             style={{
               strokeDasharray: CIRCUMFERENCE,
               strokeDashoffset: CIRCUMFERENCE * (1 - fraction),
@@ -62,11 +87,18 @@ export function Timer({ endsAt }: { endsAt: number | null }) {
         )}
       </svg>
       <span
-        className={`absolute inset-0 grid place-items-center font-mono text-[11px] font-bold tabular-nums ${
-          endsAt === null ? "text-mist/60" : danger ? "text-blood-400" : "text-white"
+        aria-hidden="true"
+        className={`absolute inset-0 grid place-items-center font-mono text-[13px] font-bold tabular-nums lg:text-[15px] ${
+          endsAt === null
+            ? "text-mist/70"
+            : danger
+              ? "text-blood-400"
+              : warning
+                ? "text-amber-200"
+                : "text-white"
         }`}
       >
-        {endsAt === null ? "--:--" : fmt(msLeft)}
+        {label}
       </span>
     </div>
   );

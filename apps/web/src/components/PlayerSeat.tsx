@@ -15,6 +15,8 @@ interface Props {
   isHost: boolean;
   selected: boolean;
   disabled: boolean;
+  /** Vì sao ô này không bấm được; null khi cả lưới vốn chỉ để xem. */
+  disabledReason?: string | null;
   onSelect?: () => void;
   /** Lớp phiếu bay cần đo vị trí ô này để biết bay tới đâu. */
   seatRef?: (el: HTMLButtonElement | null) => void;
@@ -35,6 +37,7 @@ export function PlayerSeat({
   isHost,
   selected,
   disabled,
+  disabledReason,
   onSelect,
   seatRef,
 }: Props) {
@@ -42,11 +45,14 @@ export function PlayerSeat({
   const votes = player.voteCount ?? 0;
 
   const frame = selected
-    ? "border-blood-500 bg-blood-600/15 ring-1 ring-blood-500"
+    ? "border-blood-500 bg-blood-600/20 ring-2 ring-blood-500"
     : dead
-      ? "border-night-700/70 bg-night-950/60"
+      ? "border-night-600/60 bg-night-950/70"
       : isMe
-        ? "border-indigo-500/50 bg-night-800/60"
+        ? // Ô của chính mình phải nhận ra được từ đầu kia bàn: viền đặc cộng
+          // một vòng trong, chứ không phải một sắc chàm nhạt hơn viền thường
+          // đúng một nấc.
+          "border-indigo-400 bg-indigo-500/10 ring-1 ring-indigo-400/50"
         : "border-night-600/70 bg-night-800/40";
 
   return (
@@ -55,13 +61,36 @@ export function PlayerSeat({
       type="button"
       disabled={disabled}
       onClick={onSelect}
+      aria-pressed={onSelect ? selected : undefined}
       initial={false}
       animate={{ rotate: dead ? -6 : 0, y: dead ? 5 : 0, scale: dead ? 0.97 : 1 }}
       whileTap={disabled ? undefined : { scale: 0.96 }}
       transition={{ type: "spring", stiffness: 260, damping: 17 }}
-      className={`relative flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border p-2 transition-colors
+      /*
+       * Ô tắt vẫn phải ĐỌC được: không hạ opacity, không làm nhạt chữ. Dấu hiệu
+       * nằm ở con trỏ chuột và ở lời giải thích khi rê vào - còn nội dung thì
+       * người chơi vẫn cần đọc y như mọi ô khác.
+       */
+      title={disabledReason ?? undefined}
+      /*
+       * min-height thay cho aspect-square.
+       *
+       * Ô vuông cứng thì chiều cao bị bề ngang cột quyết định, trong khi nội
+       * dung bên trong lại co giãn theo số nhãn: thêm "Đã chọn" cạnh "Bạn" là
+       * dòng nhãn xuống hai hàng và tràn ra ngoài khung, đè lên hàng ghế bên
+       * dưới. Đặt sàn chiều cao thì ô vẫn gần vuông ở mọi cỡ cột thường gặp,
+       * còn khi cần thì nó cao thêm - và cả hàng cao đều theo (lưới tự kéo các
+       * ô cùng hàng bằng nhau).
+       */
+      className={`relative flex min-h-[7.25rem] flex-col items-center justify-center gap-1 rounded-xl border p-2 transition-colors sm:min-h-[9rem]
         ${frame}
-        ${!disabled ? "cursor-pointer hover:border-blood-500/80" : "cursor-default"}`}
+        ${
+          !disabled
+            ? "cursor-pointer hover:border-blood-500/80 hover:bg-blood-600/10"
+            : disabledReason
+              ? "cursor-not-allowed"
+              : "cursor-default"
+        }`}
     >
       <AnimatePresence>
         {votes > 0 && (
@@ -71,11 +100,25 @@ export function PlayerSeat({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.4, opacity: 0, transition: { duration: 0.12 } }}
             transition={{ type: "spring", stiffness: 600, damping: 22 }}
-            className="absolute right-0 top-0 grid h-5 min-w-[20px] translate-x-1/3 -translate-y-1/3 place-items-center rounded-full bg-blood-600 px-1 text-[11px] font-bold text-white shadow shadow-black/50 motion-reduce:transition-none"
+            /*
+             * Nằm TRONG ô, không còn thò ra ngoài góc.
+             *
+             * Cột giữa tự cuộn dọc, mà một phần tử tràn ra mép phải thì trình
+             * duyệt sinh luôn thanh cuộn NGANG cho cả cột - chỉ vì một huy hiệu
+             * lấn ra bảy pixel ở ô ngoài cùng.
+             *
+             * Và nó nói ra chữ "phiếu": một chấm đỏ chứa số 3 ở góc ô có thể là
+             * số phiếu, số tin nhắn, hay số lần bị soi. Từ sm trở lên ô đủ rộng
+             * cho cả chữ; dưới đó chỉ còn con số, và aria-label giữ nguyên nghĩa
+             * cho trình đọc màn hình.
+             */
+            className="absolute right-1 top-1 inline-flex items-center gap-1 rounded-full bg-blood-600 px-1.5 py-0.5 text-[11px] font-bold leading-none text-white shadow shadow-black/50 motion-reduce:transition-none"
             aria-label={`${votes} phiếu`}
+            title={`${votes} phiếu đang nhắm vào ${player.name}`}
             role="status"
           >
             {votes}
+            <span className="hidden font-semibold sm:inline">phiếu</span>
           </m.span>
         )}
       </AnimatePresence>
@@ -110,17 +153,25 @@ export function PlayerSeat({
       </span>
 
       <span
-        className={`w-full truncate text-center text-[11px] font-semibold leading-tight ${
-          dead ? "text-mist/60 line-through" : "text-white"
+        title={player.name}
+        className={`w-full truncate text-center text-[13px] font-semibold leading-tight sm:text-sm ${
+          // Tên người chết vẫn đọc được: gạch ngang và vạch chéo trên chân dung
+          // đã nói đủ là họ ra khỏi ván, không cần bóp thêm tương phản.
+          dead ? "text-mist-strong line-through" : "text-white"
         }`}
       >
         {player.name}
       </span>
 
       <span className="flex flex-wrap items-center justify-center gap-1">
-        {isMe && <Tag cls="bg-indigo-800/80 text-indigo-100">Bạn</Tag>}
-        {isHost && <Tag cls="bg-amber-800/70 text-amber-100">Chủ</Tag>}
-        {player.isBot && <Tag cls="bg-slate-700/80 text-slate-200">Bot</Tag>}
+        {/* Trạng thái nói bằng CHỮ, không chỉ bằng màu viền: người không phân
+          * biệt được đỏ với chàm vẫn phải biết ô nào đang được chọn và ai đã
+          * ra khỏi ván. */}
+        {selected && <Tag cls="bg-blood-600 text-white">✓ Đã chọn</Tag>}
+        {dead && <Tag cls="bg-night-700 text-mist-bright">Đã chết</Tag>}
+        {isMe && <Tag cls="bg-indigo-700 text-indigo-50">Bạn</Tag>}
+        {isHost && <Tag cls="bg-amber-800/80 text-amber-100">Chủ</Tag>}
+        {player.isBot && <Tag cls="bg-slate-700 text-slate-100">Bot</Tag>}
         {player.role && (
           <Tag
             cls={
@@ -139,7 +190,7 @@ export function PlayerSeat({
 
 function Tag({ children, cls }: { children: React.ReactNode; cls: string }) {
   return (
-    <span className={`rounded px-1 py-[1px] text-[10px] font-semibold leading-tight ${cls}`}>
+    <span className={`rounded px-1.5 py-[1px] text-[11px] font-semibold leading-tight ${cls}`}>
       {children}
     </span>
   );

@@ -94,7 +94,19 @@ export function PlayerGrid({
   return (
     <div
       ref={gridRef}
-      className="relative grid grid-cols-[repeat(auto-fit,minmax(96px,1fr))] gap-3 sm:gap-3"
+      /*
+       * Ô to hơn hẳn từ sm trở lên.
+       *
+       * 96px là cỡ của một danh sách, không phải của một cái bàn: ở đó tên
+       * người chơi phải xuống 11px và huy hiệu số phiếu chỉ còn bằng đầu ngón
+       * tay út.
+       *
+       * Sàn 120px ở xl là con số đo được chứ không phải chọn cho tròn: ở 1280px
+       * - viewport hẹp nhất còn dùng bố cục ba cột - lưới ghế thật sự rộng
+       * 544px sau khi trừ hai cột biên, đệm thẻ và thanh cuộn. 128px cho ra 3
+       * cột (thiếu đúng vài pixel để thành 4), còn 120px cho 4 cột ô ~128px.
+       */
+      className="relative grid grid-cols-[repeat(auto-fit,minmax(94px,1fr))] gap-3 sm:grid-cols-[repeat(auto-fit,minmax(112px,1fr))] sm:gap-3.5 xl:grid-cols-[repeat(auto-fit,minmax(120px,1fr))]"
     >
       {snapshot.players.map((player) => {
           const isMe = player.id === meId;
@@ -103,6 +115,24 @@ export function PlayerGrid({
             !player.alive ||
             (isMe && !allowSelf) ||
             disabledIds.includes(player.id);
+          /*
+           * Vì sao ô này bấm không được.
+           *
+           * Một ô tắt mà không nói lý do thì không phân biệt được với một ô
+           * hỏng - nhất là ô của CHÍNH mình, thứ mà người chơi thử bấm đầu
+           * tiên. Chỉ có lý do khi lưới đang ở chế độ chọn: ngoài pha bỏ phiếu
+           * thì cả lưới vốn chỉ để xem, và lúc đó "không chọn được" không phải
+           * một trạng thái cần giải thích.
+           */
+          const disabledReason = !selectable
+            ? null
+            : !player.alive
+              ? "Người này đã chết"
+              : isMe && !allowSelf
+                ? "Không thể chọn chính mình"
+                : disabledIds.includes(player.id)
+                  ? "Không thể chọn người này lúc này"
+                  : null;
           const isSelected =
             selectedIds?.includes(player.id) ?? (selectedId === player.id);
           return (
@@ -115,6 +145,7 @@ export function PlayerGrid({
               isHost={snapshot.hostId === player.id}
               selected={isSelected}
               disabled={disabled}
+              disabledReason={disabledReason}
             onSelect={onSelect ? () => onSelect(player.id) : undefined}
             seatRef={(el) => {
               if (el) seatEls.current.set(player.id, el);

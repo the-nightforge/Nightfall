@@ -226,8 +226,17 @@ summary:focus-visible,
  * bị chính .card ghi đè mất viền, dù cùng độ đặc hiệu.
  */
 @layer components {
+  /*
+   * Viền thẻ ở /10 chứ không phải /06.
+   *
+   * Bàn chơi xếp ba thẻ cạnh nhau trên một nền tối, và ở /06 mép thẻ trộn ra
+   * chưa tới 1.2:1 so với nền: cả màn hình đọc ra như một mảng tối liền có
+   * chữ rải lên, phải nhìn kỹ mới thấy ranh giới giữa cột người chơi, khu bỏ
+   * phiếu và chat. /10 vẫn là một đường mảnh không ai để ý tới, nhưng đủ để
+   * mắt tách được ba vùng ngay từ cái liếc đầu.
+   */
   .card {
-    @apply relative rounded-xl border border-white/[0.06] p-4 backdrop-blur-md;
+    @apply relative rounded-xl border border-white/10 p-4 backdrop-blur-md;
     background: linear-gradient(180deg, rgba(38, 54, 90, 0.34) 0%, rgba(11, 17, 32, 0.74) 100%);
     box-shadow:
       inset 0 1px 0 0 rgba(157, 178, 213, 0.1),
@@ -300,11 +309,23 @@ summary:focus-visible,
     box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
   }
 
-  /* placeholder ở mist/40 gần như chìm hẳn vào nền night-800; /55 vẫn nhạt hơn
-   * chữ thật nên không bị nhầm là đã nhập, mà đọc được trên màn hình ngoài trời. */
+  /*
+   * placeholder ở mist/75.
+   *
+   * /40 chìm hẳn vào nền night-800, còn /55 đo được khoảng 3.4:1 - dưới ngưỡng
+   * AA, và ô chat trong ván thì gợi ý kênh đang gõ ("Chat phe Sói...") lại là
+   * thông tin phải đọc được chứ không phải chữ trang trí. /75 lên khoảng 4.8:1
+   * mà vẫn nhạt hơn hẳn chữ thật (trắng nguyên, 15:1) nên không bao giờ bị
+   * nhầm là đã nhập.
+   *
+   * KHÔNG được thêm `focus:outline-none` ở đây - xem chú thích vòng focus ở
+   * đầu file. Viền đỏ khi focus là thứ CỘNG THÊM vào vòng focus, không thay nó.
+   */
   .input {
     @apply w-full rounded-lg border border-night-600 bg-night-800/80 px-3 py-2.5 text-white
-      placeholder:text-mist/55 focus:border-blood-500;
+      transition-colors placeholder:text-mist/75 hover:border-night-600/60 focus:border-blood-500
+      disabled:cursor-not-allowed disabled:border-night-700 disabled:bg-night-900/70
+      disabled:text-mist-strong;
   }
 
   .badge-phase {
