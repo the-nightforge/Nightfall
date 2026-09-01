@@ -5,6 +5,7 @@ import {
   type RoomConfig,
 } from "@masoi/shared";
 import { generateWarnings } from "@masoi/game-engine";
+import { resolveMemberAvatar } from "../avatar/legacy";
 import { prisma } from "../db";
 import { getPlayerRoom, updateSessionRoom } from "../redis";
 import { destroyVoiceRoom, dropVoiceParticipant } from "../voice/service";
@@ -101,7 +102,7 @@ export const roomService = {
         connected: true,
         disconnectedAt: null,
         isBot: false,
-        avatarUrl: (playerRecord as any)?.avatarUrl ?? null,
+        avatarUrl: await resolveMemberAvatar(playerRecord),
       };
       const room = createRoom(code, member);
       await persistRoom(room);
@@ -122,11 +123,12 @@ export const roomService = {
       const entryError = roomEntryError(await this.findRoomOf(playerId), code, room.status, !!existing);
       if (entryError) throw new RoomError(entryError);
       const player = await prisma.player.findUnique({ where: { id: playerId } });
+      const avatarUrl = await resolveMemberAvatar(player);
       if (existing) {
         existing.connected = true;
         existing.disconnectedAt = null;
         existing.name = name;
-        (existing as any).avatarUrl = (player as any)?.avatarUrl ?? (existing as any).avatarUrl ?? null;
+        existing.avatarUrl = avatarUrl ?? existing.avatarUrl ?? null;
       } else {
         if (room.members.length >= MAX_PLAYERS_PER_ROOM) throw new RoomError("Phòng đã đầy");
         const dupName = room.members.some(
@@ -140,7 +142,7 @@ export const roomService = {
           connected: true,
           disconnectedAt: null,
           isBot: false,
-          avatarUrl: (player as any)?.avatarUrl ?? null,
+          avatarUrl,
         });
       }
 
