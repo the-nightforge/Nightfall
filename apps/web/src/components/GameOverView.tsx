@@ -115,6 +115,10 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
         * Bản cũ xếp dọc, nên ở 1080p màn kết thúc luôn tràn quá một màn - trong
         * khi chính file này đã ghi ý định "phải đọc được trong một màn hình".
         * Dưới `lg` vẫn đúng một cột như cũ.
+        *
+        * `items-start`: không để grid kéo hai cột giãn bằng chiều cao nhau -
+        * mặc định grid item cao bằng hàng, nên phe ít quân hơn sẽ bị kéo dài ra
+        * một khoảng trống rỗng lớn để bằng cột kia.
         */}
       <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="grid items-start gap-3 lg:grid-cols-1 xl:grid-cols-2">
@@ -235,7 +239,7 @@ function TeamPanel({
         * (`lg:max-h-[calc(100dvh-16rem)]`). Chỉ khoá riêng danh sách đội hình
         * chứ không khoá cả màn: đây là khối duy nhất co giãn theo số người.
         */}
-      <ul className="lobby-roster-scroll space-y-1.5 lg:max-h-[32vh] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
+      <ul className="lobby-roster-scroll space-y-1.5 lg:max-h-[calc(100dvh-47rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
         {players.map((player) => (
           <li
             key={player.id}

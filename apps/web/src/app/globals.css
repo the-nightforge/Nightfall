@@ -15,7 +15,6 @@
    */
   --dur-quick: 120ms;
   --dur-base: 200ms;
-  --dur-slow: 320ms;
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -230,8 +229,9 @@ summary:focus-visible,
  * Nhịp thở của cả phông nền.
  *
  * Biên độ theo đúng chuẩn mà `avatar-breathe` phía trên đã đặt: nhỏ tới mức
- * không nhìn thẳng thì không thấy. Ở đây là 0.04 opacity và tâm sáng dịch 2%
- * chiều rộng, chu kỳ 14 giây.
+ * không nhìn thẳng thì không thấy. Ở đây là phóng to 1.5% (`scale(1.015)`,
+ * tâm giữ nguyên vì scale quanh tâm) cộng một cú giảm opacity còn 0.96, chu kỳ
+ * 14 giây.
  *
  * Chu kỳ dài và biên độ nhỏ không phải dè dặt mà là điều kiện để một chuyển
  * động chạy suốt hai mươi phút không trở thành thứ gây khó chịu. Ambient khác
@@ -258,7 +258,8 @@ summary:focus-visible,
 }
 
 /* Cùng độ đặc hiệu thì luật đứng SAU thắng, nên guard phải nằm dưới chính khai báo
- * animation ở dòng 246, chứ không lẫn với các guard khác ở đầu tệp. */
+ * animation của `.backdrop-vignette` ngay phía trên, chứ không lẫn với các guard
+ * khác ở đầu tệp. */
 @media (prefers-reduced-motion: reduce) {
   .backdrop-vignette {
     animation: none;
@@ -321,8 +322,13 @@ summary:focus-visible,
    */
   .btn-tertiary {
     @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm
-      font-semibold text-mist/85 transition hover:bg-white/[0.07] hover:text-white
+      font-semibold text-mist/85 hover:bg-white/[0.07] hover:text-white
       active:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-50;
+    transition:
+      background-color var(--dur-base) var(--ease-out-soft),
+      border-color var(--dur-base) var(--ease-out-soft),
+      color var(--dur-base) var(--ease-out-soft),
+      transform var(--dur-quick) var(--ease-out-soft);
   }
 
   /* Cùng hình dáng, nhưng chữ ngả về phía nguy hiểm khi rê chuột. */
@@ -384,8 +390,7 @@ summary:focus-visible,
 
   .btn:active:not(:disabled),
   .btn-tertiary:active:not(:disabled),
-  .btn-cta:active:not(:disabled),
-  .gate-cta:active:not(:disabled) {
+  .btn-cta:active:not(:disabled) {
     transform: none;
   }
 }
@@ -713,6 +718,14 @@ summary:focus-visible,
   background: linear-gradient(180deg, rgba(58, 74, 106, 0.9) 0%, rgba(34, 46, 72, 0.92) 100%);
   color: rgba(207, 224, 255, 0.75);
   box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
+}
+
+/* Guard phải nằm SAU chính rule nó huỷ: cùng độ đặc hiệu thì luật đứng sau
+ * thắng, và `@media` không cộng thêm độ đặc hiệu nào. */
+@media (prefers-reduced-motion: reduce) {
+  .gate-cta:active:not(:disabled) {
+    transform: none;
+  }
 }
 
 .gate-secondary {
