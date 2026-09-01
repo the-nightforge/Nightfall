@@ -5,6 +5,7 @@ import { redis } from "../redis";
 import { destroyVoiceRoom } from "../voice/service";
 import { cleanupRoomBotState } from "../game/bot-room-state";
 import { clearDiscussionSkipVotes } from "../game/discussion-skip";
+import type { PendingStep } from "../game/pending-step";
 
 export interface RoomMember {
   playerId: string;
@@ -32,6 +33,24 @@ export interface Room {
   engine: GameEngine | null;
   chatLog: ChatMessage[];
   createdAt: number;
+  /**
+   * Khoá idempotency của MỘT ván, sinh ở `startGame`.
+   *
+   * Ghi `GameResult` là side effect duy nhất nằm ngoài engine, nên nó là chỗ
+   * duy nhất mà khôi phục có thể nhân đôi. Khoá này đi kèm unique index trong
+   * DB, nên một ván không thể có hai dòng kết quả dù process chết đúng vào khe
+   * giữa lúc ghi và lúc lưu snapshot.
+   */
+  gameId: string | null;
+  /** Đã ghi `GameResult` cho `gameId` hiện tại chưa. */
+  resultWritten: boolean;
+  /** Bước chuyển pha đang chờ; `null` khi phòng ở sảnh chờ hoặc ván đã xong. */
+  pendingStep: PendingStep | null;
+  /**
+   * Tăng mỗi lần hẹn một bước mới. Là thành phần thứ ba của phase token, và là
+   * thứ duy nhất phân biệt được hai chặng của cùng một pha đêm.
+   */
+  phaseSeq: number;
 }
 
 const rooms = new Map<string, Room>();
@@ -55,6 +74,10 @@ export function createRoom(code: string, host: RoomMember): Room {
     engine: null,
     chatLog: [],
     createdAt: Date.now(),
+    gameId: null,
+    resultWritten: false,
+    pendingStep: null,
+    phaseSeq: 0,
   };
   rooms.set(code, room);
   return room;
@@ -173,6 +196,10 @@ export async function loadRoomFromRedis(code: string): Promise<Room | null> {
       engine: normalizedEngineState ? new GameEngine(normalizedEngineState) : null,
       chatLog: data.chatLog ?? [],
       createdAt: data.createdAt,
+      gameId: null,
+      resultWritten: false,
+      pendingStep: null,
+      phaseSeq: 0,
     };
     // Không khôi phục phòng đang trong trận về trạng thái timer cũ:
     // nếu server restart giữa chừng trận, trả phòng về LOBBY an toàn.

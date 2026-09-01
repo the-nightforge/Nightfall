@@ -1,5 +1,24 @@
-import { BotRuntime, createSeededRng, type BotRng } from "@masoi/game-engine";
+import { BotRuntime, createSeededRng, type SeededRng } from "@masoi/game-engine";
+import type { BotBrainState } from "@masoi/game-engine";
 import type { Room } from "../rooms/store";
+
+/**
+ * Ảnh chụp nhận thức của cả bàn BOT trong một ván.
+ *
+ * Có mặt vì server không còn trả phòng đang chơi về sảnh chờ sau khi khởi động
+ * lại: brain phải sống sót cùng ván, nếu không thì sau restart cả bàn quên sạch
+ * mọi nghi ngờ và đổi hẳn cách chơi giữa chừng.
+ *
+ * `cursors` lưu VỊ TRÍ của từng dòng RNG chứ không lưu số đã sinh: dòng số là
+ * hàm thuần của (hạt, số lần gọi), nên một số nguyên là đủ để mở lại đúng chỗ.
+ */
+export interface PersistedBotSession {
+  seed: string;
+  playerIds: string[];
+  brains: Record<string, { state: BotBrainState; lastDecayRound: number }>;
+  /** Khoá là `botId:channel`; kênh `brain` của runtime cũng nằm ở đây. */
+  cursors: Record<string, number>;
+}
 
 /**
  * Vòng đời nhận thức của BOT trong một ván.
@@ -9,12 +28,19 @@ import type { Room } from "../rooms/store";
  * bug trong lõi AI không thể ghi ngược vào luật chơi, và belief riêng không thể
  * vô tình lọt vào snapshot.
  *
- * Session sống đúng một ván. Server hiện trả phòng đang chơi về lobby sau khi
- * restart, nên Phase 1 không persist brain vào Redis.
+ * Session sống đúng một ván, và sống sót qua việc process chết: `serialize` và
+ * `restore` là cặp cửa duy nhất cho việc đó.
  */
 export class BotSession {
   private readonly runtimes = new Map<string, BotRuntime>();
-  private readonly channels = new Map<string, BotRng>();
+  private readonly channels = new Map<string, SeededRng>();
+  /**
+   * RNG của kênh `brain`, giữ riêng vì `runtimeFor` tạo nó rồi trao hẳn cho
+   * runtime. Không giữ lại thì `serialize` không đọc được con trỏ của kênh đó,
+   * và sau khôi phục brain sẽ tua lại từ đầu dòng số trong khi mọi kênh khác
+   * thì không.
+   */
+  private readonly brainRngs = new Map<string, SeededRng>();
 
   constructor(
     readonly seed: string,
@@ -26,11 +52,13 @@ export class BotSession {
     const existing = this.runtimes.get(botId);
     if (existing) return existing;
 
+    const rng = createSeededRng(`${this.seed}:${botId}:brain`);
     const runtime = new BotRuntime({
       playerId: botId,
-      rng: createSeededRng(`${this.seed}:${botId}:brain`),
+      rng,
       playerIds: this.playerIds,
     });
+    this.brainRngs.set(botId, rng);
     this.runtimes.set(botId, runtime);
     return runtime;
   }
@@ -39,7 +67,7 @@ export class BotSession {
    * Dòng RNG riêng cho từng mục đích. Tách kênh để lịch bỏ phiếu không "ăn" mất
    * các số mà lõi belief sẽ dùng: hai thứ đó phải tái lập độc lập với nhau.
    */
-  rngFor(botId: string, channel: string): BotRng {
+  rngFor(botId: string, channel: string): SeededRng {
     const key = `${botId}:${channel}`;
     const existing = this.channels.get(key);
     if (existing) return existing;
@@ -47,6 +75,55 @@ export class BotSession {
     const rng = createSeededRng(`${this.seed}:${key}`);
     this.channels.set(key, rng);
     return rng;
+  }
+
+  /** Ảnh chụp mọi brain và vị trí mọi dòng RNG đã mở. */
+  serialize(): PersistedBotSession {
+    const brains: PersistedBotSession["brains"] = {};
+    for (const [botId, runtime] of this.runtimes) brains[botId] = runtime.serialize();
+
+    const cursors: Record<string, number> = {};
+    for (const [key, rng] of this.channels) cursors[key] = rng.cursor;
+    for (const [botId, rng] of this.brainRngs) cursors[`${botId}:brain`] = rng.cursor;
+
+    return { seed: this.seed, playerIds: [...this.playerIds], brains, cursors };
+  }
+
+  /**
+   * Dựng lại session từ ảnh chụp.
+   *
+   * Runtime và kênh RNG được nạp SẴN chứ không lazy: lazy sẽ dựng lại chúng
+   * bằng con trỏ 0 nếu có ai hỏi trước khi ảnh kịp áp, và một con BOT mất trí
+   * nhớ giữa ván là loại lỗi khó lần ra nhất trong cả hệ thống này.
+   */
+  static restore(data: PersistedBotSession): BotSession {
+    const session = new BotSession(data.seed, data.playerIds);
+
+    for (const [botId, dumped] of Object.entries(data.brains)) {
+      const rng = createSeededRng(
+        `${data.seed}:${botId}:brain`,
+        data.cursors[`${botId}:brain`] ?? 0,
+      );
+      session.brainRngs.set(botId, rng);
+      session.runtimes.set(
+        botId,
+        new BotRuntime({
+          playerId: botId,
+          rng,
+          playerIds: data.playerIds,
+          state: dumped.state,
+          lastDecayRound: dumped.lastDecayRound,
+        }),
+      );
+    }
+
+    for (const [key, cursor] of Object.entries(data.cursors)) {
+      // Kênh `brain` đã được nạp ở trên cùng runtime của nó.
+      if (key.endsWith(":brain")) continue;
+      session.channels.set(key, createSeededRng(`${data.seed}:${key}`, cursor));
+    }
+
+    return session;
   }
 }
 
@@ -77,6 +154,18 @@ export function botSessionFor(room: Room): BotSession {
   const existing = sessions.get(room.code);
   if (existing) return existing;
   return startBotSession(room);
+}
+
+/** Ảnh chụp session của phòng; `null` khi phòng chưa mở session nào. */
+export function serializeBotSession(roomCode: string): PersistedBotSession | null {
+  return sessions.get(roomCode)?.serialize() ?? null;
+}
+
+/** Nạp lại session của phòng từ ảnh chụp, thay hẳn session đang có. */
+export function restoreBotSession(roomCode: string, data: PersistedBotSession): BotSession {
+  const session = BotSession.restore(data);
+  sessions.set(roomCode, session);
+  return session;
 }
 
 /** Dọn session khi reset về lobby, kết thúc ván hoặc xoá phòng. */
