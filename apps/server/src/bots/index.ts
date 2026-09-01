@@ -139,3 +139,13 @@ export { randomBrain };
 export function resetBotBudget(roomCode: string): void {
   sharedGovernor.reset(roomCode);
 }
+
+/** Ngân sách AI đã tiêu của phòng, để đưa vào snapshot. */
+export function botBudgetUsed(roomCode: string): number {
+  return sharedGovernor.callsUsed(roomCode);
+}
+
+/** Nạp lại ngân sách AI của phòng từ snapshot sau khi khởi động lại. */
+export function restoreBotBudget(roomCode: string, calls: number): void {
+  sharedGovernor.restore(roomCode, calls);
+}
