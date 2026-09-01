@@ -32,6 +32,8 @@ vi.mock("../src/redis", () => ({
       return 1;
     },
   },
+  getPlayerRoom: async () => null,
+  updateSessionRoom: async () => undefined,
 }));
 
 vi.mock("../src/voice/service", () => ({
@@ -47,7 +49,17 @@ vi.mock("../src/rooms/broadcast", () => ({
 }));
 
 vi.mock("../src/db", () => ({
-  prisma: { gameResult: { create: async () => undefined } },
+  prisma: {
+    gameResult: { create: async () => undefined },
+    player: {
+      findUnique: async ({ where }: { where: { id: string } }) => ({
+        id: where.id,
+        nickname: "Người 1",
+        avatarUrl: null,
+        avatarKey: null,
+      }),
+    },
+  },
 }));
 
 const { loadRoomSnapshot, persistRoom, removeRoom, roomCodeTaken } = await import(
@@ -181,5 +193,33 @@ describe("kiểm tra mã phòng đã dùng", () => {
 
     expect(await roomCodeTaken("LOAD7")).toBe(true);
     expect(await roomCodeTaken("TRONG")).toBe(false);
+  });
+});
+
+describe("phòng vừa đánh thức mà không ai quay lại", () => {
+  it("được hẹn kiểm bỏ hoang, không chạy tiếp vô thời hạn với toàn bot", async () => {
+    vi.useFakeTimers();
+    try {
+      await persistedNightRoom("LOAD8");
+      const { roomService } = await import("../src/rooms/service");
+      const { getRoom } = await import("../src/rooms/store");
+
+      // Đánh thức phòng qua đúng đường mà một người chơi lạc đường sẽ đi.
+      await roomService.join("p1", "Người 1", "LOAD8");
+      const room = getRoom("LOAD8")!;
+      expect(room.status).toBe("IN_GAME");
+
+      // Người vừa vào lại biến mất, và không ai khác nối lại.
+      for (const member of room.members) {
+        member.connected = false;
+        member.disconnectedAt = Date.now();
+      }
+      await vi.advanceTimersByTimeAsync(25_000);
+
+      expect(room.status).toBe("LOBBY");
+      removeRoom("LOAD8");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

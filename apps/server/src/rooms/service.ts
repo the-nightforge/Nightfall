@@ -43,7 +43,13 @@ export class RoomError extends Error {}
  * dựng một phòng trống ở chỗ một ván đang chơi mới là điều tệ nhất.
  */
 function assertLoadedRoom(outcome: RoomLoadOutcome): Room {
-  if (outcome.status === "ok") return outcome.room;
+  if (outcome.status === "ok") {
+    // Một phòng vừa được đánh thức chưa có ai kết nối, và trong đó bot vẫn chơi
+    // tiếp. Hẹn kiểm bỏ hoang NGAY để nó không đánh trọn một ván trong căn
+    // phòng trống - người quay lại kịp thì lịch này tự bỏ qua.
+    scheduleAbandonedRoomCheck(outcome.room);
+    return outcome.room;
+  }
   if (outcome.status === "unavailable") {
     throw new RoomError("Máy chủ chưa đọc được dữ liệu phòng, thử lại sau ít giây");
   }
@@ -254,6 +260,7 @@ export const roomService = {
     }
 
     const loaded = await loadAndResumeRoom(persistedCode);
+    if (loaded.status === "ok") scheduleAbandonedRoomCheck(loaded.room);
     if (loaded.status === "unavailable") {
       // Redis chớp mắt KHÔNG được xoá đường về phòng của người chơi. Trả lại mã
       // đã lưu: nếu phòng thật sự còn, lần thao tác kế tiếp sẽ nạp được nó; nếu
