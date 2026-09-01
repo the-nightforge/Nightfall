@@ -20,10 +20,26 @@ describe("staggerDelay", () => {
     assert.ok(gap > 0 && gap <= 70, `khoang cach ${gap}ms nam ngoai khoang de chiu`);
   });
 
-  it("thứ tự luôn tăng dần", () => {
+  it("danh sách thực tế luôn tăng dần", () => {
+    // Chỉ giữ thứ tự tăng nghiêm ngặt ở kích cỡ thực tế. Với count >= 262,
+    // làm tròn mili-giây khiến hai phần tử liền nhau có thể vào cùng một khung hình.
     for (const count of [2, 5, 15]) {
       for (let i = 1; i < count; i += 1) {
         assert.ok(staggerDelay(i, count) > staggerDelay(i - 1, count));
+      }
+    }
+  });
+
+  it("danh sách lớn giữ trần và không lùi lại", () => {
+    // Trần được giữ luôn; thứ tự chỉ non-decreasing vì làm tròn mili-giây.
+    const count = 1000;
+    for (let i = 0; i < count; i += 1) {
+      assert.ok(staggerDelay(i, count) <= STAGGER_TOTAL_MS, `Delay at index ${i} exceeds cap`);
+      if (i > 0) {
+        assert.ok(
+          staggerDelay(i, count) >= staggerDelay(i - 1, count),
+          `Non-monotonic at index ${i}`
+        );
       }
     }
   });

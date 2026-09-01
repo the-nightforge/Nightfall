@@ -10,6 +10,14 @@ export const STAGGER_TOTAL_MS = 260;
 /** Trễ tối đa giữa hai phần tử liền nhau, cho danh sách ngắn. */
 const MAX_GAP_MS = 60;
 
+/**
+ * Tính trễ (ms) cho phần tử thứ `index` trong danh sách `count` phần tử.
+ *
+ * Trần 260ms là tải trọng: không thể chứa 262 giá trị mili-giây khác nhau.
+ * Với count >= 262, làm tròn về mili-giây khiến hai phần tử liền nhau có thể
+ * vào cùng một khung hình. Trần được giữ luôn; thứ tự tăng nghiêm ngặt chỉ
+ * giữ được ở kích cỡ thực tế (count <= 15).
+ */
 export function staggerDelay(index: number, count: number): number {
   if (index <= 0 || count <= 1) return 0;
   const position = Math.min(index, count - 1);
