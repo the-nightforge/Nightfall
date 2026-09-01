@@ -160,7 +160,8 @@ summary:focus-visible,
   /* Nhịp thở không mang tin gì cả, tắt là xong. Màn quét thì Backdrop tự chặn
    * từ đầu chứ không dựng rồi giấu - dựng rồi giấu thì animationend không bao
    * giờ chạy và phần tử nằm lại vĩnh viễn. */
-  .avatar-breathe {
+  .avatar-breathe,
+  .backdrop-vignette {
     animation: none;
   }
 }
@@ -226,11 +227,35 @@ summary:focus-visible,
  * Nền sự kiện không cần z-index: nó đứng sau các .backdrop-layer trong DOM nên
  * đã nằm trên rồi. Chỉ cần nâng hai lớp phải ở trên nó.
  */
+/*
+ * Nhịp thở của cả phông nền.
+ *
+ * Biên độ theo đúng chuẩn mà `avatar-breathe` phía trên đã đặt: nhỏ tới mức
+ * không nhìn thẳng thì không thấy. Ở đây là 0.04 opacity và tâm sáng dịch 2%
+ * chiều rộng, chu kỳ 14 giây.
+ *
+ * Chu kỳ dài và biên độ nhỏ không phải dè dặt mà là điều kiện để một chuyển
+ * động chạy suốt hai mươi phút không trở thành thứ gây khó chịu. Ambient khác
+ * mọi animation khác trong app ở chỗ nó KHÔNG BAO GIỜ kết thúc.
+ */
 .backdrop-vignette {
   position: absolute;
   inset: 0;
   z-index: 1;
   background: radial-gradient(120% 78% at 50% 42%, transparent 42%, rgba(0, 0, 0, 0.62) 100%);
+  animation: backdrop-breathe 14s ease-in-out infinite;
+}
+
+@keyframes backdrop-breathe {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.96;
+    transform: scale(1.015);
+  }
 }
 
 /*
@@ -352,7 +377,8 @@ summary:focus-visible,
 
   .btn:active:not(:disabled),
   .btn-tertiary:active:not(:disabled),
-  .btn-cta:active:not(:disabled) {
+  .btn-cta:active:not(:disabled),
+  .gate-cta:active:not(:disabled) {
     transform: none;
   }
 }
