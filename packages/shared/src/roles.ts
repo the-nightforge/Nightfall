@@ -16,6 +16,19 @@ export const ROLES = [
 ] as const;
 export type Role = (typeof ROLES)[number];
 
+/**
+ * Chuỗi này có phải một vai mà bản build HIỆN TẠI hiểu không.
+ *
+ * Cần cho dữ liệu đọc lên từ những chỗ mà TypeScript không với tới được: cột
+ * Json trong DB giữ nguyên hình dạng của bản build đã ghi nó, nên một vai bị
+ * đổi tên hay gỡ đi vẫn nằm nguyên trong lịch sử của những ván cũ. Tra thẳng
+ * chuỗi đó vào `ROLE_META` sẽ ra undefined, và `.team` trên undefined thì ném
+ * lỗi - làm chết cả trang đang render nó.
+ */
+export function isRole(value: unknown): value is Role {
+  return typeof value === "string" && Object.hasOwn(ROLE_META, value);
+}
+
 export type Team = "wolves" | "village";
 
 export interface RoleMeta {

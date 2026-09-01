@@ -5,7 +5,7 @@
 **A real-time multiplayer Werewolf (Mafia) game — 13 roles, 15 dynamic events, voice chat, and AI bots that actually reason.**
 
 [![CI](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-2718%20passing-brightgreen)](#testing)
+[![Tests](https://img.shields.io/badge/tests-2720%20passing-brightgreen)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
@@ -450,9 +450,9 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 |---|---|---|
 | `@masoi/shared` | Vitest | **75** |
 | `@masoi/game-engine` | Vitest | **1514** |
-| `@masoi/server` | Vitest | **767** |
+| `@masoi/server` | Vitest | **769** |
 | `@masoi/web` | `node:test` | **362** |
-| | | **2718 total** |
+| | | **2720 total** |
 
 The engine suite includes seeded self-play runs that assert invariants across hundreds of full matches — no illegal move is ever accepted, no bot ever learns a role it should not know, and the same seed reproduces a match bit-for-bit.
 
@@ -502,6 +502,7 @@ CI runs build → test → lint on every push and pull request, and deploys prev
 - Private chat (wolves, the dead) is emitted only to the exact set of entitled recipients — it is not broadcast and filtered client-side. It opens to everyone at `GAME_OVER`, and only there, because that is the same phase in which the engine reveals every role.
 - Every socket payload is validated with strict Zod schemas; unknown keys are rejected.
 - Session tokens are stored as SHA-256 hashes; the plaintext token exists only on the client.
+- Stored match history is filtered element by element on read. A `Json` column keeps the shape the build that wrote it chose, so a role later renamed or removed would otherwise reach `ROLE_META[role].team` as `undefined` and take down the home page for whoever played it — permanently, since the data lives in the database.
 - Voice speaking rights are granted after joining, never encoded in a token, so an old token cannot restore a dead player's mic.
 - Guest signup is rate-limited per IP. This one matters more than it looks: every socket rate limit is keyed by `playerId`, so unlimited free `playerId`s would have made all of them decorative.
 

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "./db";
 import { newToken, sha256 } from "./util";
-import { nicknameSchema, type MatchHistoryEntry, type MatchHistoryPlayer } from "@masoi/shared";
+import { isRole, nicknameSchema, type MatchHistoryEntry, type MatchHistoryPlayer } from "@masoi/shared";
 import { redis } from "./redis";
 import { config } from "./config";
 import { allowAction } from "./rate-limit";
@@ -26,10 +26,22 @@ interface GameResultRow {
 }
 
 export function toHistoryEntry(row: GameResultRow, viewerId: string): MatchHistoryEntry {
-  // Cột Json nên hình dạng do bản ghi lúc đó quyết định, không do type hiện tại:
-  // ván lưu trước khi có `id` vẫn phải đọc được thay vì làm hỏng cả trang.
+  /*
+   * Cột Json nên hình dạng do bản ghi lúc đó quyết định, không do type hiện tại:
+   * ván lưu trước khi có `id` vẫn phải đọc được thay vì làm hỏng cả trang.
+   *
+   * Vì thế phải lọc tới TỪNG PHẦN TỬ, không chỉ kiểm tra nó có phải mảng không.
+   * Người xem tra thẳng `ROLE_META[player.role]` để lấy tên và phe; một vai đã
+   * đổi tên hoặc bị gỡ trong bản sau sẽ ra undefined và `.team` ném lỗi ngay
+   * giữa lúc render. Mà lỗi đó nằm ở TRANG CHỦ và dữ liệu thì ở trong DB, nên
+   * nạn nhân gặp lại đúng màn hình hỏng đó mọi lần vào, không tự thoát ra được.
+   *
+   * Bỏ hẳn phần tử lạ thay vì cố cứu: một ván đã xong là kỷ vật chỉ để đọc, và
+   * một vai không đọc nổi thì cũng không hiển thị ra gì có nghĩa. Cái giá là
+   * dòng đó thiếu một người trong đội hình - đổi lại trang vẫn sống.
+   */
   const players: MatchHistoryPlayer[] = Array.isArray(row.playerRoles)
-    ? (row.playerRoles as MatchHistoryPlayer[])
+    ? (row.playerRoles as MatchHistoryPlayer[]).filter((player) => isRole(player?.role))
     : [];
   const me = players.find((p) => p.id === viewerId) ?? null;
 
