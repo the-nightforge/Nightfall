@@ -265,7 +265,8 @@ summary:focus-visible,
    * `transform` ở nhịp nhanh hơn màu vì tay nhanh hơn mắt: cú lún phải kịp
    * ngón tay, còn màu đuổi theo sau cũng được.
    */
-  .btn:active:not(:disabled) {
+  .btn:active:not(:disabled),
+  .btn-tertiary:active:not(:disabled) {
     transform: translateY(1px);
   }
 
@@ -350,7 +351,8 @@ summary:focus-visible,
   }
 
   .btn:active:not(:disabled),
-  .btn-tertiary:active:not(:disabled) {
+  .btn-tertiary:active:not(:disabled),
+  .btn-cta:active:not(:disabled) {
     transform: none;
   }
 }
