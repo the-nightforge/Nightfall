@@ -449,9 +449,9 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 |---|---|---|
 | `@masoi/shared` | Vitest | **75** |
 | `@masoi/game-engine` | Vitest | **1514** |
-| `@masoi/server` | Vitest | **759** |
+| `@masoi/server` | Vitest | **767** |
 | `@masoi/web` | `node:test` | **362** |
-| | | **2710 total** |
+| | | **2718 total** |
 
 The engine suite includes seeded self-play runs that assert invariants across hundreds of full matches — no illegal move is ever accepted, no bot ever learns a role it should not know, and the same seed reproduces a match bit-for-bit.
 
