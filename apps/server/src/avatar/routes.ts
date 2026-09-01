@@ -30,14 +30,31 @@ function uploadSingleFile(req: Request, res: Response, next: NextFunction): void
       return;
     }
     if (err) {
-      next(err);
+      // KHÔNG next(err) ở đây: request multipart do client tự tay ghép có thể
+      // khiến Busboy ném lỗi đồng bộ ngay từ hàm dựng (thiếu boundary trong
+      // Content-Type - một header là đủ, không cần body) hoặc giữa chừng đọc
+      // luồng (form cắt cụt, request bị huỷ). Không có error middleware nào
+      // bọc /api trước những request này (đây chính là tầng phân tích
+      // multipart), nên next(err) rơi thẳng vào finalhandler mặc định của
+      // Express: trả nguyên err.stack khi NODE_ENV !== production, hoặc HTML
+      // "Internal Server Error" khi production - cả hai đều không phải
+      // { error: "..." } tiếng Việt, và endpoint này không yêu cầu người gọi
+      // phải hợp phòng để kích hoạt (chỉ cần Bearer token hợp lệ).
+      console.error("[api] Đọc multipart thất bại:", err);
+      res.status(400).json({ error: "Không đọc được file tải lên" });
       return;
     }
     next();
   });
 }
 
-/** Đổi avatar là thao tác nặng (giải mã + resize), nên khoá chặt hơn chat. */
+/**
+ * Đổi avatar là thao tác nặng (giải mã + resize), nên khoá chặt hơn chat.
+ *
+ * PUT và DELETE dùng chung một rổ `avatar:${playerId}` - cố ý: cả hai đều đi
+ * qua compare-and-swap và đụng object storage, nên 5 lượt xoá cũng tiêu hết
+ * hạn mức của 5 lượt tải lên kế tiếp, không phải hai quota tách biệt.
+ */
 function rateLimitAvatar(req: Request, res: Response, next: NextFunction): void {
   const playerId = (req as PlayerRequest).player!.id;
   if (!allowAction(`avatar:${playerId}`, 5, 60_000)) {

@@ -6,6 +6,9 @@ import sharp from "sharp";
 const db = vi.hoisted(() => ({
   players: new Map<string, { id: string; avatarUrl: string | null; avatarKey: string | null }>(),
   tokenHashes: new Map<string, string>(),
+  // Bật để giả lập DB sập giữa lúc đổi ảnh - lỗi thô (không phải AvatarError)
+  // dùng để chứng minh route không để lộ nó ra client.
+  forceUpdateError: false,
 }));
 
 vi.mock("../src/db", () => ({
@@ -25,6 +28,9 @@ vi.mock("../src/db", () => ({
         where: { id: string; avatarKey?: string | null };
         data: { avatarUrl: string | null; avatarKey: string | null };
       }) => {
+        if (db.forceUpdateError) {
+          throw new Error("Lỗi CSDL giả lập - KHÔNG được lộ câu này ra client");
+        }
         const row = db.players.get(where.id);
         if (!row) return { count: 0 };
         if (where.avatarKey !== undefined && row.avatarKey !== where.avatarKey) return { count: 0 };
@@ -47,6 +53,7 @@ import { resetObjectStorage, setObjectStorage } from "../src/storage";
 const TOKEN = "token-hop-le-dai-hon-16-ky-tu";
 
 let storage: MemoryObjectStorage;
+let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
 function app() {
   const instance = express();
@@ -63,16 +70,22 @@ async function jpeg(width = 400, height = 300): Promise<Buffer> {
 beforeEach(() => {
   db.players.clear();
   db.tokenHashes.clear();
+  db.forceUpdateError = false;
   db.players.set("p1", { id: "p1", avatarUrl: null, avatarKey: null });
   db.tokenHashes.set(sha256(TOKEN), "p1");
   storage = createMemoryStorage("https://cdn.test/masoi");
   setObjectStorage(storage);
   resetRateLimit();
+  // Hai test dưới đây (lỗi CSDL thô, thiếu boundary multipart) cố tình đi qua
+  // nhánh log lỗi - câm ở đây theo đúng nếp avatar-service.test.ts, không đụng
+  // vào code sản phẩm.
+  consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {
   resetObjectStorage();
   resetRateLimit();
+  consoleErrorSpy.mockRestore();
 });
 
 describe("PUT /api/players/me/avatar", () => {
@@ -144,10 +157,15 @@ describe("PUT /api/players/me/avatar", () => {
   it("gọi quá nhanh thì 429", async () => {
     const file = await jpeg();
     for (let i = 0; i < 5; i++) {
-      await request(app())
+      const res = await request(app())
         .put("/api/players/me/avatar")
         .set("authorization", `Bearer ${TOKEN}`)
         .attach("file", file, "a.jpg");
+      // Rate limit chạy TRƯỚC khi parse, nên 5 lượt upload lỗi cũng tiêu hết
+      // đúng ngần ấy hạn mức - phải chốt cả 5 lượt đầu thành công thì lượt 429
+      // dưới đây mới thật sự chứng minh "giới hạn tốc độ", chứ không phải
+      // đang đo một quota-lỗi trùng hợp có cùng con số.
+      expect(res.status).toBe(200);
     }
 
     const res = await request(app())
@@ -166,6 +184,30 @@ describe("PUT /api/players/me/avatar", () => {
       .attach("file", await jpeg(), "a.jpg");
 
     expect(res.status).toBe(503);
+  });
+
+  it("service ném lỗi thô (không phải AvatarError) thì trả 500 chung, không lộ chi tiết", async () => {
+    db.forceUpdateError = true;
+    const res = await request(app())
+      .put("/api/players/me/avatar")
+      .set("authorization", `Bearer ${TOKEN}`)
+      .attach("file", await jpeg(), "a.jpg");
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe("Không đổi được ảnh đại diện lúc này");
+    // Câu lỗi giả lập ở tầng DB không được lọt ra ngoài dưới bất kỳ hình thức nào.
+    expect(JSON.stringify(res.body)).not.toContain("Lỗi CSDL giả lập");
+  });
+
+  it("thiếu boundary trong Content-Type multipart thì vẫn trả JSON tiếng Việt, không phải stack trace", async () => {
+    const res = await request(app())
+      .put("/api/players/me/avatar")
+      .set("authorization", `Bearer ${TOKEN}`)
+      .set("Content-Type", "multipart/form-data")
+      .send("khong-co-boundary-nen-busboy-nem-loi");
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: "Không đọc được file tải lên" });
   });
 });
 
