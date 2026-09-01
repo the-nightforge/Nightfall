@@ -48,6 +48,10 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
   // hình, còn ai muốn soi từng đêm thì mở ra.
   const [showFullTimeline, setShowFullTimeline] = useState(false);
 
+  // Thẻ chia sẻ là HÀNH ĐỘNG, không phải thứ để nhìn: một khung 9:16 cao hơn
+  // cả phần còn lại cộng lại, và người ta mở nó đúng một lần lúc muốn khoe.
+  const [showShare, setShowShare] = useState(false);
+
   // Chỉ có ở trình duyệt. Trên server render thì để rỗng và lời mời rơi về
   // đúng đường dẫn tương đối thay vì một origin bịa ra.
   const shareOrigin = typeof window === "undefined" ? "" : window.location.origin;
@@ -106,27 +110,31 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
       </m.div>
 
       {/*
-        * items-start: hai phe hiếm khi bằng số người, để grid kéo cao bằng nhau
-        * thì phe ít người có một khoảng trống to bằng nửa panel.
+        * Từ `lg` là hai cột ngang hàng: đội hình bên trái, hồ sơ vụ án bên phải.
+        *
+        * Bản cũ xếp dọc, nên ở 1080p màn kết thúc luôn tràn quá một màn - trong
+        * khi chính file này đã ghi ý định "phải đọc được trong một màn hình".
+        * Dưới `lg` vẫn đúng một cột như cũ.
         */}
-      <div className="grid items-start gap-3 lg:grid-cols-2">
-        <TeamPanel
-          title="Phe Ma Sói"
-          players={wolves}
-          avatars={avatars}
-          won={wolvesWin}
-          accent="wolves"
-        />
-        <TeamPanel
-          title="Phe Dân Làng"
-          players={village}
-          avatars={avatars}
-          won={!wolvesWin}
-          accent="village"
-        />
+      <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+          <TeamPanel
+            title="Phe Ma Sói"
+            players={wolves}
+            avatars={avatars}
+            won={wolvesWin}
+            accent="wolves"
+          />
+          <TeamPanel
+            title="Phe Dân Làng"
+            players={village}
+            avatars={avatars}
+            won={!wolvesWin}
+            accent="village"
+          />
+        </div>
+        {caseFile && <CaseFileCard file={caseFile} />}
       </div>
-
-      {caseFile && <CaseFileCard file={caseFile} />}
 
       <button
         className="btn-secondary min-h-11 w-full"
@@ -145,7 +153,23 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
         </div>
       )}
 
-      {caseFile && <CaseShareCard file={caseFile} shareOrigin={shareOrigin} />}
+      {caseFile && (
+        <>
+          <button
+            className="btn-secondary min-h-11 w-full"
+            onClick={() => setShowShare((open) => !open)}
+            aria-expanded={showShare}
+            aria-controls="share-card"
+          >
+            {showShare ? "Ẩn thẻ chia sẻ" : "Tạo thẻ chia sẻ"}
+          </button>
+          {showShare && (
+            <div id="share-card">
+              <CaseShareCard file={caseFile} shareOrigin={shareOrigin} />
+            </div>
+          )}
+        </>
+      )}
 
       <div className="flex gap-2">
         {canReset && (
@@ -206,7 +230,12 @@ function TeamPanel({
         </span>
       </div>
 
-      <ul className="space-y-1.5">
+      {/*
+        * Cuộn TRONG thẻ từ `lg`, theo đúng khuôn mà `RosterPanel` đang dùng
+        * (`lg:max-h-[calc(100dvh-16rem)]`). Chỉ khoá riêng danh sách đội hình
+        * chứ không khoá cả màn: đây là khối duy nhất co giãn theo số người.
+        */}
+      <ul className="space-y-1.5 lg:max-h-[38vh] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
         {players.map((player) => (
           <li
             key={player.id}
