@@ -864,7 +864,7 @@ function scheduleDefenseBot(room: Room, accusedId: string): void {
  * Vẫn có độ trễ, nhưng lý do đã đổi: trước đây nó chờ nhà cung cấp trả lời, giờ
  * nó chỉ để người thật kịp đọc lời biện hộ trước khi bảng phiếu nhảy số.
  */
-function scheduleFinalVoteBots(room: Room): void {
+export function scheduleFinalVoteBots(room: Room): void {
   const scheduledEngine = room.engine;
   if (!scheduledEngine) return;
   const accusedId = scheduledEngine.state.trial?.accusedId;
