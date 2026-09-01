@@ -60,6 +60,7 @@ The interesting parts are not the CRUD. They are:
 | 📱 | **Mobile-first UI** with cinematic phase transitions |
 | 🔁 | **Reconnect support** — refresh or drop out and rejoin the same match |
 | 📜 | **Full night recap** at game over: every role action, every death, and why |
+| 💬 | **Full chat reveal** at game over — the wolves' den and the dead's channel open up once roles are public |
 | 🗂️ | **Case file** at game over: 3-5 turning points picked from authoritative match data, with a shareable 9:16 card |
 | 🕘 | **Match history** on the home page: your recent games, your role in each, the final roster, and the turning points that decided them |
 
@@ -498,7 +499,7 @@ CI runs build → test → lint on every push and pull request, and deploys prev
 **The server is the single source of truth.** Nothing about the game state is trusted from a client.
 
 - Secret roles are filtered inside `snapshotFor(viewerId)` **before** serialization, so the wire never carries a role the viewer is not entitled to see.
-- Private chat (wolves, the dead) is emitted only to the exact set of entitled recipients — it is not broadcast and filtered client-side.
+- Private chat (wolves, the dead) is emitted only to the exact set of entitled recipients — it is not broadcast and filtered client-side. It opens to everyone at `GAME_OVER`, and only there, because that is the same phase in which the engine reveals every role.
 - Every socket payload is validated with strict Zod schemas; unknown keys are rejected.
 - Session tokens are stored as SHA-256 hashes; the plaintext token exists only on the client.
 - Voice speaking rights are granted after joining, never encoded in a token, so an old token cannot restore a dead player's mic.
@@ -512,7 +513,7 @@ Stated plainly, because knowing where the edges are is more useful than pretendi
 - **Recovery is best-effort on the Redis side.** If Redis is down *at the moment* the process dies, the match is lost. That is a deliberate trade: a slow Redis must never stall a live table.
 - **Rooms wake up lazily**, when someone reconnects. A match left with only bots stays frozen until a human returns or the 6-hour TTL expires.
 - **LLM speech is not replayed.** After a restore, bots say new sentences; only their *decisions* are deterministic.
-- **No chat persistence.** Match history records the result, the final roster and the case file, not the conversation.
+- **No chat persistence.** Match history records the result, the final roster and the case file, not the conversation. The end-of-match reveal reads the room's in-memory log, which is capped at the last 100 messages across all channels, so a long and talkative game reveals its final stretch rather than the whole thing.
 - **Case files only exist from the match that introduced them onward.** Games finished before the column was added show their roster but no turning points; the ingredients live only in the room's memory, so they cannot be reconstructed after the fact.
 - **Voice is daytime-only** and audio-only — no video.
 - **Rate limiting is in-memory**, so it is per-process and resets on deploy.

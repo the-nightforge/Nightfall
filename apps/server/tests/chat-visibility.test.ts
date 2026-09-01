@@ -153,8 +153,15 @@ describe("visibleChatLog", () => {
     expect(channels(visibleChatLog(room("DAY_DISCUSSION"), "villager"))).toEqual(["day"]);
   });
 
-  it("only returns lobby chat after the game", () => {
-    expect(channels(visibleChatLog(room("GAME_OVER"), "villager"))).toEqual(["lobby"]);
+  it("opens the whole match log to everyone once the game is over", () => {
+    // Kể cả một Dân Làng còn sống cũng đọc được hang Sói: hết ván thì không
+    // còn bí mật nào để giữ, và đó là phần đáng đọc nhất của trận.
+    expect(channels(visibleChatLog(room("GAME_OVER"), "villager"))).toEqual([
+      "lobby",
+      "day",
+      "wolves",
+      "dead",
+    ]);
   });
 });
 
