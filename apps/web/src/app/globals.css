@@ -4,6 +4,19 @@
 
 :root {
   color-scheme: dark;
+
+  /*
+   * Nhịp dùng chung.
+   *
+   * Trước đây mỗi chỗ tự chọn số, nên hai thao tác cạnh nhau trong cùng một
+   * khung nhìn chạy hai tốc độ khác nhau mà không vì lý do gì. `--ease-out-soft`
+   * chính là đường cong mà chuyển pha trong `room/[code]/page.tsx` đang dùng,
+   * nâng lên thành token thay vì để nó bị chép lại lần thứ hai.
+   */
+  --dur-quick: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 body {
@@ -235,8 +248,25 @@ summary:focus-visible,
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 font-semibold transition
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 font-semibold
       disabled:opacity-40 disabled:cursor-not-allowed;
+    transition:
+      background-color var(--dur-base) var(--ease-out-soft),
+      border-color var(--dur-base) var(--ease-out-soft),
+      color var(--dur-base) var(--ease-out-soft),
+      transform var(--dur-quick) var(--ease-out-soft);
+  }
+
+  /*
+   * Lún xuống khi bấm.
+   *
+   * `transition` trần của Tailwind là 150ms tuyến tính cho MỌI thuộc tính -
+   * đọc ra là "có làm gì đó" chứ không phải một nút được thiết kế. Tách riêng
+   * `transform` ở nhịp nhanh hơn màu vì tay nhanh hơn mắt: cú lún phải kịp
+   * ngón tay, còn màu đuổi theo sau cũng được.
+   */
+  .btn:active:not(:disabled) {
+    transform: translateY(1px);
   }
 
   .btn-primary {
@@ -309,6 +339,19 @@ summary:focus-visible,
 
   .badge-phase {
     @apply inline-block rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider;
+  }
+}
+
+/* Phản hồi khi bấm là trang trí thuần: tắt hết vẫn bấm được đủ. */
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .btn-tertiary {
+    transition: none;
+  }
+
+  .btn:active:not(:disabled),
+  .btn-tertiary:active:not(:disabled) {
+    transform: none;
   }
 }
 
