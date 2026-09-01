@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import fs from "fs";
+import path from "path";
+import dotenv from "dotenv";
 import { resolveObjectStorageConfig } from "../src/storage/config";
 
 const FULL: NodeJS.ProcessEnv = {
@@ -82,5 +85,25 @@ describe("resolveObjectStorageConfig", () => {
     expect(() =>
       resolveObjectStorageConfig({ ...FULL, OBJECT_STORAGE_ENDPOINT: "không-phải-url" }),
     ).toThrow(/OBJECT_STORAGE_ENDPOINT/);
+  });
+
+  // Cả hai template thật trong repo phải copy-được mà không nổ ngay lúc khởi
+  // động (config.ts gọi resolveObjectStorageConfig ở tầng module, nên một
+  // template hỏng == crash-loop khi ai đó copy nó thành .env). Đọc file thật
+  // thay vì đối tượng tay chép: bug hồi này chính là chuỗi "auto" bị bỏ quên
+  // trong apps/server/.env.example, thứ hai test phía trên (blank literal)
+  // không thể phát hiện vì nó không đọc file.
+  it("apps/server/.env.example (sáu khoá rỗng, dùng lúc deploy) copy được mà không ném lỗi", () => {
+    const raw = fs.readFileSync(path.join(__dirname, "../.env.example"), "utf8");
+    const env = dotenv.parse(raw);
+    expect(() => resolveObjectStorageConfig(env)).not.toThrow();
+    expect(resolveObjectStorageConfig(env)).toEqual({ enabled: false });
+  });
+
+  it(".env.example ở gốc repo (sáu khoá điền sẵn MinIO, dùng lúc dev local) copy được mà không ném lỗi", () => {
+    const raw = fs.readFileSync(path.join(__dirname, "../../../.env.example"), "utf8");
+    const env = dotenv.parse(raw);
+    expect(() => resolveObjectStorageConfig({ ...env, NODE_ENV: "development" })).not.toThrow();
+    expect(resolveObjectStorageConfig({ ...env, NODE_ENV: "development" }).enabled).toBe(true);
   });
 });

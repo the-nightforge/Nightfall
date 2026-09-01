@@ -37,8 +37,12 @@ function assertUrl(key: string, raw: string): URL {
  * qua là cách hỏng tệ nhất vì nó không log gì - avatar sẽ hỏng ở production mà
  * không ai biết vì sao.
  *
- * Chuỗi rỗng tính như chưa đặt: .env.example khai sẵn sáu khoá rỗng, nên copy
- * template về mà nổ là hỏng đường vào của người mới.
+ * Chuỗi rỗng tính như chưa đặt. Cả hai template trong repo đều copy-được mà
+ * không nổ: apps/server/.env.example (dùng khi deploy, Render tự cấp storage
+ * qua biến môi trường) khai sẵn sáu khoá rỗng để tắt hẳn tính năng, còn
+ * .env.example ở gốc repo (dùng cho dev local) điền sẵn cả sáu khoá bằng giá
+ * trị MinIO của docker-compose để bật tính năng ngay - không có template nào
+ * được phép rơi vào giữa (điền một phần) vì đó chính là trạng thái ném lỗi.
  */
 export function resolveObjectStorageConfig(env: NodeJS.ProcessEnv): ObjectStorageConfigResult {
   const values = KEYS.map((key) => env[key]?.trim() ?? "");
