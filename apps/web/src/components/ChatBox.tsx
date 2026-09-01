@@ -123,8 +123,18 @@ export function ChatBox({
       >
         {messages.length === 0 && (
           <div className="px-4 py-6 text-center">
+            {/*
+              * /55 chứ không phải /35.
+              *
+              * Nét icon ở /35 trộn ra khoảng #3f4b61 trên nền #0b1120, tức là
+              * tương phản 2.1:1 - dưới mức 3:1 cho hình đồ hoạ, và trên màn
+              * hình chỉnh tối một chút thì nó biến mất hẳn: khung rỗng trông
+              * như chỉ có hai dòng chữ. /55 đưa lên khoảng 3.5:1, bằng đúng
+              * icon trong ô nhập ngay bên dưới, mà vẫn nhạt hơn hai dòng chữ
+              * nên thứ tự đọc không đổi.
+              */}
             <MessageCircleIcon
-              className="mx-auto h-8 w-8 text-mist/35"
+              className="mx-auto h-8 w-8 text-mist/55"
             />
             <p className="mt-2.5 text-sm font-semibold text-mist/85">Chưa có tin nhắn nào</p>
             <p className="mt-1 text-xs leading-relaxed text-mist/70">
