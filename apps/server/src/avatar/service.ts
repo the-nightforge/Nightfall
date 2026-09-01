@@ -169,5 +169,10 @@ export async function setAvatar(playerId: string, file: Buffer): Promise<{ avata
  */
 export async function clearAvatar(playerId: string): Promise<void> {
   await swapAvatar(playerId, null);
-  await applyAvatarToRoom(playerId, null);
+  // Cùng lý do với setAvatar: DB và bucket đã xoá xong ở đây, nên phát lại
+  // snapshot ném lỗi không được phép biến một thao tác DELETE đã thành công
+  // thành 500 phía client.
+  await applyAvatarToRoom(playerId, null).catch((err) =>
+    console.error("[avatar] Phát lại snapshot phòng thất bại:", err),
+  );
 }

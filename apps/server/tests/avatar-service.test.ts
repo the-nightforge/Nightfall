@@ -404,6 +404,24 @@ describe("clearAvatar", () => {
 
     expect(row("p1").avatarUrl).toBeNull();
   });
+
+  it("phát lại snapshot ném lỗi vẫn không làm clearAvatar thất bại - DB và bucket đã dọn xong rồi", async () => {
+    // Cùng hình dạng với setAvatar (đã bọc .catch từ trước): re-broadcast chỉ
+    // để phòng khác NHÌN THẤY avatar bị xoá, không phải điều kiện để coi thao
+    // tác xoá là thành công. Trước khi sửa, clearAvatar await thẳng
+    // applyAvatarToRoom không catch - lỗi ở đây (ví dụ getRoomSyncByPlayer
+    // ném, hay Redis phát snapshot lỗi) sẽ khiến route DELETE trả 500 cho một
+    // thao tác DB/bucket đã xoá sạch từ trước đó.
+    await setAvatar("p1", await jpeg());
+    applied.fn.mockImplementationOnce(async () => {
+      throw new Error("Phát lại snapshot hỏng - KHÔNG được lộ ra clearAvatar");
+    });
+
+    await expect(clearAvatar("p1")).resolves.toBeUndefined();
+    expect(row("p1").avatarUrl).toBeNull();
+    expect(row("p1").avatarKey).toBeNull();
+    expect(storage.objects.size).toBe(0);
+  });
 });
 
 describe("AvatarError", () => {
