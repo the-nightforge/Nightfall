@@ -17,13 +17,15 @@ import {
   createRoom,
   deletePersistedRoom,
   getRoom,
-  loadRoomFromRedis,
   persistRoom,
   removeRoom,
+  roomCodeTaken,
   setAbandonCheckTimer,
   type Room,
+  type RoomLoadOutcome,
   type RoomMember,
 } from "./store";
+import { loadAndResumeRoom } from "./load";
 import { getRoomSyncByPlayer } from "./index-helpers";
 import { reconcileDiscussionSkip, startGame, resetToLobby } from "../game/machine";
 import { DISCONNECT_GRACE_MS } from "../game/discussion-skip";
@@ -31,6 +33,33 @@ import { allRequiredPlayersReady, roomEntryError } from "./rules";
 import { withPlayerRoomLock } from "./player-room-lock";
 
 export class RoomError extends Error {}
+
+/**
+ * Kết quả nạp phòng, quy về một `Room` hoặc một lỗi NÓI RÕ chuyện gì đã xảy ra.
+ *
+ * Ba lối hỏng phải là ba câu khác nhau với người chơi: "không có phòng này" là
+ * chuyện thường ngày, "chưa đọc được dữ liệu" là hãy thử lại, còn "ván trước
+ * không khôi phục được" là một sự thật khó chịu nhưng phải nói thẳng - im lặng
+ * dựng một phòng trống ở chỗ một ván đang chơi mới là điều tệ nhất.
+ */
+function assertLoadedRoom(outcome: RoomLoadOutcome): Room {
+  if (outcome.status === "ok") {
+    // Một phòng vừa được đánh thức chưa có ai kết nối, và trong đó bot vẫn chơi
+    // tiếp. Hẹn kiểm bỏ hoang NGAY để nó không đánh trọn một ván trong căn
+    // phòng trống - người quay lại kịp thì lịch này tự bỏ qua.
+    scheduleAbandonedRoomCheck(outcome.room);
+    return outcome.room;
+  }
+  if (outcome.status === "unavailable") {
+    throw new RoomError("Máy chủ chưa đọc được dữ liệu phòng, thử lại sau ít giây");
+  }
+  if (outcome.status === "corrupt") {
+    throw new RoomError(
+      "Dữ liệu phòng đã hỏng nên ván cũ không khôi phục được. Hãy tạo phòng mới.",
+    );
+  }
+  throw new RoomError("Không tìm thấy phòng");
+}
 
 function assertMember(room: Room, playerId: string): RoomMember {
   const m = room.members.find((x) => x.playerId === playerId);
@@ -91,7 +120,7 @@ export const roomService = {
         throw new RoomError("Bạn phải rời phòng hiện tại trước khi tạo phòng khác");
       }
       let code = generateRoomCode();
-      while (getRoom(code) || (await loadRoomFromRedis(code))) {
+      while (await roomCodeTaken(code)) {
         code = generateRoomCode();
       }
       const playerRecord = await prisma.player.findUnique({ where: { id: playerId } });
@@ -115,8 +144,7 @@ export const roomService = {
   async join(playerId: string, name: string, rawCode: string): Promise<Room> {
     return withPlayerRoomLock(playerId, async () => {
       const code = rawCode.trim().toUpperCase();
-      const room = getRoom(code) ?? (await loadRoomFromRedis(code));
-      if (!room) throw new RoomError("Không tìm thấy phòng");
+      const room = getRoom(code) ?? assertLoadedRoom(await loadAndResumeRoom(code));
 
       // Reconnect: đã là thành viên
       const existing = room.members.find((m) => m.playerId === playerId);
@@ -224,10 +252,25 @@ export const roomService = {
     }
     const persistedCode = await getPlayerRoom(playerId);
     if (!persistedCode) return null;
-    const persistedRoom = getRoom(persistedCode) ?? (await loadRoomFromRedis(persistedCode));
-    if (persistedRoom?.members.some((member) => member.playerId === playerId)) {
-      return persistedRoom.code;
+    const cached = getRoom(persistedCode);
+    if (cached) {
+      if (cached.members.some((member) => member.playerId === playerId)) return cached.code;
+      await updateSessionRoom(playerId, null);
+      return null;
     }
+
+    const loaded = await loadAndResumeRoom(persistedCode);
+    if (loaded.status === "ok") scheduleAbandonedRoomCheck(loaded.room);
+    if (loaded.status === "unavailable") {
+      // Redis chớp mắt KHÔNG được xoá đường về phòng của người chơi. Trả lại mã
+      // đã lưu: nếu phòng thật sự còn, lần thao tác kế tiếp sẽ nạp được nó; nếu
+      // không, chính lần đó mới là lúc dọn.
+      return persistedCode;
+    }
+    if (loaded.status === "ok" && loaded.room.members.some((m) => m.playerId === playerId)) {
+      return loaded.room.code;
+    }
+
     await updateSessionRoom(playerId, null);
     return null;
   },

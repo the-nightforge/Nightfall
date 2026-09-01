@@ -7,6 +7,8 @@ const redisMocks = vi.hoisted(() => ({
   get: vi.fn<() => Promise<string | null>>(),
   set: vi.fn(async () => "OK"),
   del: vi.fn(async () => 1),
+  eval: vi.fn(async () => 1),
+  exists: vi.fn(async () => 0),
 }));
 
 vi.mock("../src/redis", () => ({
@@ -23,7 +25,8 @@ vi.mock("../src/rooms/broadcast", () => ({
 }));
 
 import { buildSnapshot } from "../src/rooms/snapshot";
-import { createRoom, loadRoomFromRedis, removeRoom } from "../src/rooms/store";
+import { createRoom, loadRoomSnapshot, removeRoom } from "../src/rooms/store";
+import { PERSISTENCE_VERSION } from "../src/persistence/schema";
 import { roomService } from "../src/rooms/service";
 
 function hunterState(phase: GameState["phase"]): GameState {
@@ -157,51 +160,67 @@ describe("Hunter snapshot privacy", () => {
 });
 
 describe("Hunter config compatibility", () => {
-  it("normalizes a legacy persisted lobby config in both room and engine state", async () => {
+  it("cách ly payload không có persistenceVersion thay vì đoán nghĩa nó", async () => {
     const state = hunterState("ROLE_REVEAL");
-    const { hunter: _roomHunter, ...oldRoomConfig } = state.config;
-    const { hunter: _engineHunter, ...oldEngineConfig } = state.config;
     redisMocks.get.mockResolvedValueOnce(
       JSON.stringify({
         code: "OLD01",
         hostId: "villager",
         status: "LOBBY",
         members: snapshotRoom("ROLE_REVEAL").members,
-        config: oldRoomConfig,
-        engineState: { ...state, config: oldEngineConfig },
+        config: state.config,
+        engineState: state,
         chatLog: [],
         createdAt: 0,
       }),
     );
 
-    const room = await loadRoomFromRedis("OLD01");
+    const result = await loadRoomSnapshot("OLD01");
 
-    expect(room?.config.hunter).toBe(false);
-    expect(room?.engine?.state.config.hunter).toBe(false);
+    expect(result.status).toBe("corrupt");
   });
 
-  it("keeps the existing restart policy while normalizing a legacy in-game room", async () => {
+  it("phòng đang chơi được nạp lại NGUYÊN VẸN, không còn bị trả về sảnh chờ", async () => {
     const state = hunterState("HUNTER_SHOT");
-    const { hunter: _hunter, ...oldConfig } = state.config;
     redisMocks.get.mockResolvedValueOnce(
       JSON.stringify({
-        code: "OLD02",
-        hostId: "villager",
-        status: "IN_GAME",
-        members: snapshotRoom("HUNTER_SHOT").members,
-        config: oldConfig,
-        engineState: { ...state, config: oldConfig },
-        chatLog: [],
-        createdAt: 0,
+        persistenceVersion: PERSISTENCE_VERSION,
+        savedAt: 0,
+        opSeq: 1,
+        room: {
+          code: "OLD02",
+          hostId: "villager",
+          status: "IN_GAME",
+          members: snapshotRoom("HUNTER_SHOT").members,
+          config: state.config,
+          engineState: new GameEngine(state).getState(),
+          chatLog: [],
+          createdAt: 0,
+          gameId: "game-old02",
+          resultWritten: false,
+          pendingStep: null,
+          phaseSeq: 3,
+          botSession: null,
+          governorCalls: 0,
+          discussionSkipVotes: [],
+          discussionRun: null,
+        },
       }),
     );
 
-    const room = await loadRoomFromRedis("OLD02");
+    const result = await loadRoomSnapshot("OLD02");
 
-    expect(room?.config.hunter).toBe(false);
-    expect(room?.status).toBe("LOBBY");
-    expect(room?.engine).toBeNull();
-    expect(room?.members.every((member) => !member.ready)).toBe(true);
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.room.status).toBe("IN_GAME");
+    expect(result.room.engine?.state.phase).toBe("HUNTER_SHOT");
+    expect(result.room.engine?.state.hunterReaction).toEqual({
+      hunterId: "hunter",
+      source: "night",
+      resolved: false,
+    });
+    expect(result.room.config.hunter).toBe(true);
+    removeRoom("OLD02");
   });
 
   it("counts Hunter in the server-side special-role guard", () => {

@@ -29,7 +29,8 @@ import { config } from "./config";
 import { GameError } from "@masoi/game-engine";
 import { roomService, RoomError, scheduleAbandonedRoomCheck } from "./rooms/service";
 import { getRoomSyncByPlayer } from "./rooms/index-helpers";
-import { getRoom, loadRoomFromRedis, persistRoom } from "./rooms/store";
+import { getRoom, persistRoom } from "./rooms/store";
+import { loadAndResumeRoom } from "./rooms/load";
 import { trackSocket, untrackSocket, broadcastRoom, hasConnection } from "./rooms/broadcast";
 import {
   maybeEndFinalVoteEarly,
@@ -123,19 +124,33 @@ export function setupSocket(io: SocketServer): void {
 
     // Tự động rejo vào phòng cũ nếu còn session
     (async () => {
-      const room = await reconnectPlayer(playerId, {
+      const outcome = await reconnectPlayer(playerId, {
         findCachedRoom: (id) => {
           const roomCode = getRoomSyncByPlayer(id);
           return roomCode ? getRoom(roomCode) : undefined;
         },
         getPersistedRoomCode: getPlayerRoom,
-        loadRoom: loadRoomFromRedis,
+        loadRoom: loadAndResumeRoom,
         clearPersistedRoom: (id) => updateSessionRoom(id, null),
         saveRoom: persistRoom,
       });
-      if (room) {
-        await socket.join(room.code);
-        broadcastRoom(room.code);
+
+      if (outcome.status === "joined") {
+        await socket.join(outcome.room.code);
+        broadcastRoom(outcome.room.code);
+        return;
+      }
+
+      // Hai trường hợp dưới đây phải NÓI ra. Im lặng thả người chơi về màn hình
+      // trống là để họ tự đoán mình có còn ván hay không.
+      if (outcome.status === "unavailable") {
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: "Máy chủ chưa đọc được dữ liệu phòng, thử tải lại sau ít giây",
+        });
+      } else if (outcome.status === "corrupt") {
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: "Ván trước không khôi phục được sau khi máy chủ khởi động lại",
+        });
       }
     })().catch(() => undefined);
 

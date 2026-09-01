@@ -22,6 +22,14 @@ model Player {
 
 model GameResult {
   id          String   @id @default(cuid())
+  /// Khoá idempotency của MỘT ván, sinh lúc `startGame`.
+  ///
+  /// Nullable có chủ đích: ván ghi trước migration này không có khoá nào để
+  /// gán, và Postgres cho phép nhiều NULL trong một unique index nên chúng
+  /// không đụng nhau. Mọi ván mới đều có khoá, nên một ván không thể có hai
+  /// dòng kết quả kể cả khi server chết đúng vào khe giữa lúc ghi DB và lúc
+  /// lưu snapshot rồi ghi lại sau khi khôi phục.
+  gameId      String?  @unique
   roomCode    String
   round       Int
   winner      String

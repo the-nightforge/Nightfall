@@ -15,6 +15,10 @@ function room(connected = false): Room {
     engine: null,
     chatLog: [],
     createdAt: 0,
+    gameId: null,
+    resultWritten: false,
+    pendingStep: null,
+    phaseSeq: 0,
   };
 }
 
@@ -22,7 +26,7 @@ function dependencies(overrides: Partial<ReconnectDependencies> = {}): Reconnect
   return {
     findCachedRoom: () => undefined,
     getPersistedRoomCode: async () => null,
-    loadRoom: async () => null,
+    loadRoom: async () => ({ status: "missing" }),
     clearPersistedRoom: async () => undefined,
     saveRoom: async () => undefined,
     ...overrides,
@@ -48,7 +52,7 @@ describe("reconnectPlayer", () => {
       }),
     );
 
-    expect(result).toBe(cached);
+    expect(result).toEqual({ status: "joined", room: cached });
     expect(cached.members[0].connected).toBe(true);
     expect(redisLookups).toBe(0);
     expect(saves).toBe(1);
@@ -63,13 +67,13 @@ describe("reconnectPlayer", () => {
         getPersistedRoomCode: async () => "ABCDE",
         loadRoom: async (code) => {
           loadedCode = code;
-          return persisted;
+          return { status: "ok", room: persisted };
         },
       }),
     );
 
     expect(loadedCode).toBe("ABCDE");
-    expect(result).toBe(persisted);
+    expect(result).toEqual({ status: "joined", room: persisted });
     expect(persisted.members[0].connected).toBe(true);
   });
 
@@ -85,7 +89,7 @@ describe("reconnectPlayer", () => {
       }),
     );
 
-    expect(result).toBeNull();
+    expect(result).toEqual({ status: "none" });
     expect(clearedPlayer).toBe("player");
   });
 
@@ -97,14 +101,50 @@ describe("reconnectPlayer", () => {
       "player",
       dependencies({
         getPersistedRoomCode: async () => "ABCDE",
-        loadRoom: async () => persisted,
+        loadRoom: async () => ({ status: "ok", room: persisted }),
         clearPersistedRoom: async () => {
           cleared = true;
         },
       }),
     );
 
-    expect(result).toBeNull();
+    expect(result).toEqual({ status: "none" });
+    expect(cleared).toBe(true);
+  });
+
+  it("giữ nguyên đường về phòng khi Redis tạm thời không đọc được", async () => {
+    let cleared = false;
+    const result = await reconnectPlayer(
+      "player",
+      dependencies({
+        getPersistedRoomCode: async () => "ABCDE",
+        loadRoom: async () => ({ status: "unavailable" }),
+        clearPersistedRoom: async () => {
+          cleared = true;
+        },
+      }),
+    );
+
+    // Một lần Redis chớp mắt không được phép cắt đứt đường về phòng: người chơi
+    // thử lại sau vài giây phải về đúng ván cũ.
+    expect(result).toEqual({ status: "unavailable" });
+    expect(cleared).toBe(false);
+  });
+
+  it("báo riêng trường hợp snapshot hỏng và dọn mapping", async () => {
+    let cleared = false;
+    const result = await reconnectPlayer(
+      "player",
+      dependencies({
+        getPersistedRoomCode: async () => "ABCDE",
+        loadRoom: async () => ({ status: "corrupt", reason: "schema-mismatch" }),
+        clearPersistedRoom: async () => {
+          cleared = true;
+        },
+      }),
+    );
+
+    expect(result).toEqual({ status: "corrupt" });
     expect(cleared).toBe(true);
   });
 });
