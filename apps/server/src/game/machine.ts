@@ -12,6 +12,7 @@ import {
 import type { CaseFile, PublicVoteChoice } from "@masoi/shared";
 import type { Room } from "../rooms/store";
 import { clearRoomTimers, persistRoom, setRoomTimer } from "../rooms/store";
+import { armStep, clearPendingStep, registerStepHandlers } from "./steps";
 import { broadcastRoom, emitToPlayers } from "../rooms/broadcast";
 import { destroyVoiceRoom, syncVoicePermissions } from "../voice/service";
 import { prisma } from "../db";
@@ -99,6 +100,13 @@ function checkWinOrContinue(room: Room, next: () => void): void {
 export function startGame(room: Room): void {
   room.chatLog = [];
   clearDiscussionSkipVotes(room.code);
+  // Khoá idempotency của ván này. Sinh Ở ĐÂY chứ không sinh lúc ghi kết quả:
+  // lúc ghi thì process có thể đã là một process khác, và một khoá sinh sau
+  // restart sẽ không nhận ra bản ghi mà process trước đã kịp tạo.
+  room.gameId = newId();
+  room.resultWritten = false;
+  room.pendingStep = null;
+  room.phaseSeq = 0;
   const players = room.members.map((m) => ({ id: m.playerId, name: m.name, isBot: m.isBot }));
   room.engine = GameEngine.create(players, room.config);
   room.status = "IN_GAME";
@@ -108,7 +116,7 @@ export function startGame(room: Room): void {
   startBotSession(room);
 
   // ROLE_REVEAL rồi tự vào đêm
-  setRoomTimer(room.code, () => beginNight(room), ROLE_REVEAL_MS);
+  armStep(room, { name: "beginNight" }, ROLE_REVEAL_MS);
   sync(room);
 }
 
@@ -120,7 +128,7 @@ function beginNight(room: Room): void {
   const e = engine(room);
   e.startNight(room.config.nightSeconds * 1000);
   scheduleNightBots(room);
-  setRoomTimer(room.code, () => lockWolves(room), room.config.nightSeconds * 1000 + 500);
+  armStep(room, { name: "lockWolves" }, room.config.nightSeconds * 1000 + 500);
   sync(room);
 }
 
@@ -142,7 +150,7 @@ function lockWolves(room: Room): void {
   }
   e.extendPhase(WITCH_WINDOW_MS);
   scheduleNightBots(room);
-  setRoomTimer(room.code, () => endNight(room), WITCH_WINDOW_MS + 500);
+  armStep(room, { name: "endNight" }, WITCH_WINDOW_MS + 500);
   sync(room);
 }
 
@@ -154,7 +162,7 @@ export function maybeEndWitchWindow(room: Room): void {
   if (!room.engine || room.engine.state.phase !== "NIGHT") return;
   if (!room.engine.state.night.wolvesLocked) return;
   if (room.engine.witchPending()) return;
-  setRoomTimer(room.code, () => endNight(room), 800);
+  armStep(room, { name: "endNight" }, 800);
 }
 
 function endNight(room: Room): void {
@@ -164,9 +172,7 @@ function endNight(room: Room): void {
   void deaths;
   sync(room);
 
-  setRoomTimer(room.code, () => {
-    continueAfterDeathResult(room, "night");
-  }, RESULT_MS);
+  armStep(room, { name: "afterDeathResult", source: "night" }, RESULT_MS);
 }
 
 function beginDiscussion(room: Room): void {
@@ -178,9 +184,9 @@ function beginDiscussion(room: Room): void {
 
   if (event?.id === "AMNESTY_DAY") {
     // Ngày Hòa Hoãn: sau thảo luận chuyển thẳng sang Đêm
-    setRoomTimer(room.code, () => beginNight(room), durationMs + 500);
+    armStep(room, { name: "beginNight" }, durationMs + 500);
   } else {
-    setRoomTimer(room.code, () => beginVoting(room), durationMs + 500);
+    armStep(room, { name: "beginVoting" }, durationMs + 500);
   }
   scheduleDayBots(room);
   scheduleDayOfTruthBots(room);
@@ -198,7 +204,7 @@ function beginVoting(room: Room): void {
   const e = engine(room);
   e.setPhase("VOTING", room.config.voteSeconds * 1000);
   scheduleVoteBots(room);
-  setRoomTimer(room.code, () => endVoting(room), room.config.voteSeconds * 1000 + 500);
+  armStep(room, { name: "endVoting" }, room.config.voteSeconds * 1000 + 500);
   sync(room);
 }
 
@@ -255,15 +261,13 @@ export function endVoting(room: Room): void {
   sync(room);
 
   if (outcome.kind === "NONE") {
-    setRoomTimer(room.code, () => {
-      continueAfterDeathResult(room, "vote");
-    }, RESULT_MS);
+    armStep(room, { name: "afterDeathResult", source: "vote" }, RESULT_MS);
     return;
   }
 
   // resolveNomination đã đặt pha và hạn chót; ở đây chỉ còn xếp lịch.
   scheduleDefenseBot(room, outcome.accusedId);
-  setRoomTimer(room.code, () => beginFinalVote(room), defenseMs + 500);
+  armStep(room, { name: "beginFinalVote" }, defenseMs + 500);
 }
 
 function beginFinalVote(room: Room): void {
@@ -272,7 +276,7 @@ function beginFinalVote(room: Room): void {
   pendingEndFinalVote.set(room.code, false);
   engine(room).beginFinalVote(room.config.finalVoteSeconds * 1000);
   scheduleFinalVoteBots(room);
-  setRoomTimer(room.code, () => endFinalVote(room), room.config.finalVoteSeconds * 1000 + 500);
+  armStep(room, { name: "endFinalVote" }, room.config.finalVoteSeconds * 1000 + 500);
   sync(room);
 }
 
@@ -282,7 +286,7 @@ export function maybeEndFinalVoteEarly(room: Room): void {
   if (!room.engine.allFinalVotersVoted()) return;
   if (pendingEndFinalVote.get(room.code)) return;
   pendingEndFinalVote.set(room.code, true);
-  setRoomTimer(room.code, () => endFinalVote(room), 800);
+  armStep(room, { name: "endFinalVote" }, 800);
 }
 
 function endFinalVote(room: Room): void {
@@ -291,9 +295,7 @@ function endFinalVote(room: Room): void {
   engine(room).resolveFinalVote();
   sync(room);
 
-  setRoomTimer(room.code, () => {
-    continueAfterDeathResult(room, "vote");
-  }, RESULT_MS);
+  armStep(room, { name: "afterDeathResult", source: "vote" }, RESULT_MS);
 }
 
 export function continueAfterDeathResult(room: Room, source: "night" | "vote"): void {
@@ -306,14 +308,14 @@ export function continueAfterDeathResult(room: Room, source: "night" | "vote"): 
   clearRoomTimers(room.code);
   e.beginHunterShot(HUNTER_SHOT_MS);
   scheduleHunterBot(room);
-  setRoomTimer(room.code, () => timeoutHunterShot(room), HUNTER_SHOT_MS + 500);
+  armStep(room, { name: "timeoutHunterShot" }, HUNTER_SHOT_MS + 500);
   sync(room);
 }
 
 export function submitHunterShot(room: Room, playerId: string, targetId: string | null): void {
   engine(room).submitHunterShot(playerId, targetId);
   sync(room);
-  setRoomTimer(room.code, () => finishHunterShot(room), 800);
+  armStep(room, { name: "finishHunterShot" }, 800);
 }
 
 function timeoutHunterShot(room: Room): void {
@@ -338,6 +340,7 @@ function finishHunterShot(room: Room): void {
 
 export function resetToLobby(room: Room): void {
   clearRoomTimers(room.code);
+  clearPendingStep(room);
   cancelDiscussionScheduler(room.code);
   clearDiscussionSkipVotes(room.code);
   room.engine = null;
@@ -381,6 +384,9 @@ function caseFileForHistory(room: Room): CaseFile | null {
 
 function onGameOver(room: Room): void {
   cancelDiscussionScheduler(room.code);
+  // Ván đã xong thì không còn bước nào được chờ. Không xoá thì một bước cũ còn
+  // nằm trong hàng đợi có thể hồi sinh máy trạng thái sau màn kết thúc.
+  clearPendingStep(room);
   const e = engine(room);
   const st = e.getState();
   void prisma.gameResult
@@ -1038,3 +1044,23 @@ export function scheduleVoteBots(room: Room): void {
     }
   }
 }
+
+/**
+ * Bảng xử lý cho `steps.ts`.
+ *
+ * Đăng ký ở cấp module (chạy đúng một lần lúc nạp) thay vì để `steps.ts` import
+ * ngược lại file này - chiều import đó sẽ tạo vòng, vì file này đã import
+ * `steps.ts` để hẹn bước.
+ */
+registerStepHandlers({
+  beginNight: (room) => beginNight(room),
+  lockWolves: (room) => lockWolves(room),
+  endNight: (room) => endNight(room),
+  beginVoting: (room) => beginVoting(room),
+  endVoting: (room) => endVoting(room),
+  beginFinalVote: (room) => beginFinalVote(room),
+  endFinalVote: (room) => endFinalVote(room),
+  afterDeathResult: (room, step) => continueAfterDeathResult(room, step.source ?? "night"),
+  timeoutHunterShot: (room) => timeoutHunterShot(room),
+  finishHunterShot: (room) => finishHunterShot(room),
+});
