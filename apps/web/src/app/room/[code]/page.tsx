@@ -50,6 +50,7 @@ export default function RoomPage() {
   }, [room.identityMissing, code, router]);
 
   const isHost = !!snapshot && snapshot.hostId === getIdentity()?.playerId;
+  const droppedConnection = !!snapshot && !room.connected;
 
   const content = useMemo(() => {
     if (!snapshot) {
@@ -170,7 +171,23 @@ export default function RoomPage() {
               {code}
             </button>
             <SoundControl />
-            {!room.connected && (
+            {/*
+              * Điều kiện là `snapshot &&`, không phải chỉ `!connected`.
+              *
+              * Lúc mới mở trang, connected còn false trong khi socket đang bắt
+              * tay - phù hiệu đỏ "Mất kết nối" nhấp nháy ngay cạnh dòng "Đang
+              * kết nối vào phòng..." ở giữa màn, hai câu nói ngược nhau. Có
+              * snapshot nghĩa là đã từng vào được phòng, nên mất kết nối lúc đó
+              * mới thật sự là RỚT.
+              *
+              * Vùng sr-only nằm NGOÀI điều kiện: một node chỉ mọc ra lúc có
+              * chuyện thì aria-live trên chính nó không đọc gì cả - trình đọc
+              * màn hình phải thấy vùng đó từ trước mới theo dõi được thay đổi.
+              */}
+            <span className="sr-only" role="status">
+              {droppedConnection ? "Mất kết nối với máy chủ, đang thử kết nối lại" : ""}
+            </span>
+            {droppedConnection && (
               <span className="rounded bg-blood-600/30 px-2 py-0.5 text-xs text-blood-400">Mất kết nối...</span>
             )}
           </div>
