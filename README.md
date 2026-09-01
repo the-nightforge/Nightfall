@@ -159,6 +159,53 @@ Leave all three empty to disable voice entirely. Setting only some of them makes
 | `LIVEKIT_API_SECRET` | LiveKit API secret |
 | `LIVEKIT_ENV` | Namespace prefix, so `dev` and `prod` rooms never collide |
 
+### Object storage for avatars (optional)
+
+Player avatars are uploaded to any S3-compatible bucket — Cloudflare R2, AWS S3
+or MinIO. Leave **all six** variables empty to disable uploads; the game runs
+normally on the built-in default avatars. Filling in only *some* of them throws
+at startup rather than silently disabling the feature.
+
+| Variable | Purpose |
+| --- | --- |
+| `OBJECT_STORAGE_ENDPOINT` | S3 API endpoint used for signing |
+| `OBJECT_STORAGE_REGION` | `auto` for R2, a real region for S3, anything for MinIO |
+| `OBJECT_STORAGE_BUCKET` | Bucket that holds the avatars |
+| `OBJECT_STORAGE_ACCESS_KEY_ID` | Access key |
+| `OBJECT_STORAGE_SECRET_ACCESS_KEY` | Secret key |
+| `OBJECT_STORAGE_PUBLIC_BASE_URL` | Public read URL — **not** the signing endpoint. Must be HTTPS in production. |
+
+Uploads go to `PUT /api/players/me/avatar`. The server sniffs magic bytes
+(JPEG/PNG/WebP only — the client-declared MIME type is ignored), auto-rotates
+by EXIF, crops to a centred square, resizes to 256×256 and encodes WebP under
+200 KB. Object keys are random, so a user's filename never reaches the bucket.
+
+#### Cloudflare R2
+
+1. Cloudflare dashboard → **R2** → **Create bucket**, name it `masoi-avatars`.
+2. In the bucket's **Settings**, enable **Public Development URL** (or attach a
+   custom domain). Copy the `https://pub-<hash>.r2.dev` URL — that is
+   `OBJECT_STORAGE_PUBLIC_BASE_URL`.
+3. **R2** → **Manage API Tokens** → **Create API Token**, permission
+   *Object Read & Write*, scoped to that bucket. Copy the access key ID and
+   secret.
+4. The token page also shows the S3 endpoint
+   `https://<account-id>.r2.cloudflarestorage.com` — that is
+   `OBJECT_STORAGE_ENDPOINT`. Set `OBJECT_STORAGE_REGION=auto`.
+5. Paste all six values into Render's environment variables and redeploy.
+
+The public URL and the endpoint are different hosts. Using the endpoint as the
+public base URL produces avatars that 401 in the browser.
+
+#### MinIO for local development
+
+`npm run dev:infra` already starts MinIO and creates the bucket with public
+read access. Copy the object storage block from `.env.example` as-is — it
+matches the compose file. The MinIO console is at <http://localhost:9001>
+(`masoi` / `masoi_dev_password`).
+
+`http://` public URLs are accepted only when `NODE_ENV` is not `production`.
+
 ### Bot AI (optional)
 
 Providers are tried top to bottom. A stage is skipped when any of its parts is missing; if no stage is configured, bots still play — they just use canned phrasing instead of generated speech.
@@ -287,6 +334,8 @@ Run a self-play batch with `npm run selfplay`, or probe a live provider with `np
 | Method | Path | Body | Response | Notes |
 |---|---|---|---|---|
 | `POST` | `/api/players` | `{ nickname }` | `{ playerId, token, nickname }` | Guest registration. The client keeps the token; the server stores only its SHA-256. Rate-limited per IP. |
+| `PUT` | `/api/players/me/avatar` | `multipart/form-data`, field `file` | `{ avatarUrl }` | Bearer auth. ≤ 5 MB. Format is decided by magic bytes (JPEG/PNG/WebP), never by the client-declared MIME type. The server auto-rotates by EXIF, crops to a centred square, resizes to 256×256 and encodes WebP under 200 KB. `503` when object storage is not configured. |
+| `DELETE` | `/api/players/me/avatar` | — | `204` | Bearer auth. Clears the avatar and deletes the stored object. Succeeds even when object storage is not configured — the database is the source of truth for "has an avatar". |
 | `GET` | `/api/health` | — | `{ ok, db, redis, version, startedAt }` | `503` when PostgreSQL is down. Redis trouble reports `redis: false` but still returns `200`, since in-memory rooms remain playable. |
 
 `version` is the first 7 characters of the running commit (from `RENDER_GIT_COMMIT`), or `dev` outside a deploy environment — compare it against `git rev-parse --short HEAD` to confirm what is actually live.
@@ -307,7 +356,7 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `room:kick` | `{ targetId }` | Host, before start |
 | `room:update-config` | `{ config }` | Host, outside a match |
 | `room:add-bot` | `{}` | Host, outside a match |
-| `room:update-avatar` | `{ avatarUrl }` | Member; `data:image/*`, ≤ 5 MB |
+| `room:update-avatar` | `{ avatarUrl: null }` | Member; removal only. Uploads go through `PUT /api/players/me/avatar` — sending image data over Socket.IO is what bloated every room snapshot. Kept so older cached clients can still remove an avatar. |
 | `room:start` | `{}` | Host; ≥ 6 players, valid config, all humans ready |
 | `room:reset` | `{}` | Host after `GAME_OVER` → back to lobby |
 | `game:action` | `{ type, targetId?, targetId1?, targetId2? }` | Correct role, alive, during `NIGHT` |
