@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { speechDefaults } from "./helpers/speech-request";
-import { buildDaySpeechPrompt, personaFor } from "../src/bots/prompt";
+import { buildDaySpeechPrompt } from "../src/bots/prompt";
 import type { SpeechRequest } from "../src/bots/types";
 
 /**
@@ -17,6 +17,7 @@ function cursedSpeechRequest(over: Partial<SpeechRequest> = {}): SpeechRequest {
     speaker: { id: "cursed", name: "Nguyền" },
     ...speechDefaults(),
     intention: {
+      tone: "NEUTRAL",
       kind: "ACCUSE",
       targetId: "villager",
       confidence: 0.7,

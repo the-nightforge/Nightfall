@@ -40,6 +40,9 @@ vi.mock("../src/db", () => ({
 
 import { endVoting, maybeEndFinalVoteEarly } from "../src/game/machine";
 import { pendingEndFinalVote } from "../src/game/bot-room-state";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 const CONFIG = {
   ...DEFAULT_ROOM_CONFIG,
@@ -59,6 +62,7 @@ const CONFIG = {
  */
 function votingRoom(votes: Record<string, string | null>, hunterId?: string): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase: "VOTING",
     round: 1,
     phaseEndsAt: Date.now() + CONFIG.voteSeconds * 1000,
@@ -73,6 +77,7 @@ function votingRoom(votes: Record<string, string | null>, hunterId?: string): Ro
     config: { ...CONFIG, hunter: hunterId !== undefined },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       wolfVotes: {},
       killTarget: null,
       wolvesLocked: false,
@@ -98,6 +103,7 @@ function votingRoom(votes: Record<string, string | null>, hunterId?: string): Ro
   if (hunterId) state.players.find((p) => p.id === hunterId)!.role = "HUNTER";
 
   const room: Room = {
+    ...ROOM_SCAFFOLD,
     code: "TRIAL",
     hostId: "p1",
     status: "IN_GAME",

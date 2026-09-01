@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
 
 const roomHolder = vi.hoisted(() => ({ room: null as Room | null }));
 const storeSpies = vi.hoisted(() => ({ removeRoom: vi.fn() }));
@@ -44,6 +47,7 @@ function roomWith(
   status: "LOBBY" | "IN_GAME" = "IN_GAME",
 ): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase: "NIGHT",
     round: 1,
     phaseEndsAt: Date.now() + 30_000,
@@ -57,6 +61,7 @@ function roomWith(
     config: { ...DEFAULT_ROOM_CONFIG },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       wolfVotes: {},
       killTarget: null,
       wolvesLocked: false,
@@ -79,6 +84,7 @@ function roomWith(
   } as GameState;
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "LEAVE1",
     hostId: members[0].id,
     status,

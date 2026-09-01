@@ -11,6 +11,7 @@ function speechRequest(over: Partial<SpeechRequest> = {}): SpeechRequest {
     speaker: { id: "v", name: "Vân" },
     ...speechDefaults(),
     intention: {
+      tone: "NEUTRAL",
       kind: "ACCUSE",
       targetId: "w",
       confidence: 0.8,
@@ -172,7 +173,7 @@ describe("chống lặp lời", () => {
   it("ý định WITHHOLD không nêu tên ai", () => {
     const user = buildDaySpeechPrompt(
       speechRequest({
-        intention: { kind: "WITHHOLD", confidence: 0.2, evidence: [] },
+        intention: { kind: "WITHHOLD", tone: "NEUTRAL", confidence: 0.2, evidence: [] },
         evidence: [],
         targetName: null,
       }),

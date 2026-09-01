@@ -4,6 +4,7 @@ import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
 import { clearBotSession } from "../src/bots/session-registry";
 import { scheduleDayOfTruthBots } from "../src/game/machine";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 /**
  * Ngày Sự Thật trong một bàn có BOT.
@@ -44,6 +45,7 @@ function truthRoom(options: { withEvent?: boolean; humanIds?: string[] } = {}): 
   }
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "TRUTH1",
     hostId: "p1",
     status: "IN_GAME",

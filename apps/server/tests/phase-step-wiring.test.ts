@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 vi.mock("../src/rooms/store", () => ({
   clearRoomTimers: () => undefined,
@@ -21,6 +22,7 @@ const { runPendingStep } = await import("../src/game/steps");
 
 function lobby(): Room {
   return {
+    ...ROOM_SCAFFOLD,
     code: "WIRED",
     hostId: "p1",
     status: "LOBBY",

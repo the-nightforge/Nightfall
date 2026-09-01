@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 vi.mock("../src/rooms/store", () => ({
   clearRoomTimers: () => undefined,
@@ -22,6 +25,7 @@ const { continueAfterDeathResult } = await import("../src/game/machine");
 
 function winningRoom(): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase: "ELIMINATION",
     round: 1,
     phaseEndsAt: Date.now() + 8_000,
@@ -32,6 +36,7 @@ function winningRoom(): Room {
     config: { ...DEFAULT_ROOM_CONFIG },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       wolfVotes: {},
       killTarget: null,
       wolvesLocked: false,
@@ -54,6 +59,7 @@ function winningRoom(): Room {
   };
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "OVER1",
     hostId: "villager",
     status: "IN_GAME",

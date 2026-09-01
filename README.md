@@ -454,6 +454,8 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `@masoi/web` | `node:test` | **362** |
 | | | **2723 total** |
 
+Every package typechecks its tests as well as its sources — `npm run lint` runs `tsc` over both. This matters more than it sounds: the server's tests were unchecked until recently, and in that gap more than forty fixtures drifted away from the types they claimed to build, several of them still setting engine fields that had been renamed away.
+
 The engine suite includes seeded self-play runs that assert invariants across hundreds of full matches — no illegal move is ever accepted, no bot ever learns a role it should not know, and the same seed reproduces a match bit-for-bit.
 
 ```bash

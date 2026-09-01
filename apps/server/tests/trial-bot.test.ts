@@ -151,7 +151,7 @@ describe("chuỗi dự phòng: chuỗi rỗng ở lượt bào chữa phải th�
       // là cờ `defense`, không phải hình dạng ý định.
       defenseRequest({
         defense: null,
-        intention: { kind: "WITHHOLD", confidence: 0.2, evidence: [] },
+        intention: { kind: "WITHHOLD", tone: "NEUTRAL", confidence: 0.2, evidence: [] },
         targetName: null,
       }),
     );

@@ -3,6 +3,9 @@ import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG, type ChatMessage } from "@masoi/shared";
 import { resolveChat, visibleChatLog } from "../src/rooms/snapshot";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 const messages: ChatMessage[] = [
   { id: "day", channel: "day", playerId: "villager", playerName: "Dân", text: "day", at: 1 },
@@ -12,6 +15,7 @@ const messages: ChatMessage[] = [
 /** Phòng đang xử phiên toà với "accused" là bị cáo. */
 function trialRoom(phase: "DEFENSE" | "FINAL_VOTE"): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase,
     round: 1,
     phaseEndsAt: null,
@@ -24,6 +28,7 @@ function trialRoom(phase: "DEFENSE" | "FINAL_VOTE"): Room {
     config: { ...DEFAULT_ROOM_CONFIG },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       wolfVotes: {},
       killTarget: null,
       wolvesLocked: false,
@@ -48,6 +53,7 @@ function trialRoom(phase: "DEFENSE" | "FINAL_VOTE"): Room {
   };
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "TRIAL",
     hostId: "wolf",
     status: "IN_GAME",

@@ -4,6 +4,9 @@ import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
 import { clearBotSession } from "../src/bots/session-registry";
 import { scheduleNightBots } from "../src/game/machine";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 /**
  * Cửa sổ riêng của Phù Thuỷ dài 15s, KHÔNG dài bằng `nightSeconds`.
@@ -34,6 +37,7 @@ const LONG_NIGHT_SECONDS = 120;
 
 function witchWindowRoom(): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase: "NIGHT",
     round: 1,
     phaseStartedAt: Date.now(),
@@ -56,6 +60,7 @@ function witchWindowRoom(): Room {
     },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       wolfVotes: { wolf: "villager" },
       killTarget: "villager",
       // Đã khoá phiếu Sói: đây chính là lúc cửa sổ Phù Thuỷ mở.
@@ -83,6 +88,7 @@ function witchWindowRoom(): Room {
   };
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "WITCH1",
     hostId: "wolf",
     status: "IN_GAME",

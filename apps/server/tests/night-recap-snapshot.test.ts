@@ -3,9 +3,13 @@ import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import { buildSnapshot } from "../src/rooms/snapshot";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 function recapRoom(phase: GameState["phase"]): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase,
     round: 1,
     phaseEndsAt: null,
@@ -16,9 +20,8 @@ function recapRoom(phase: GameState["phase"]): Room {
     config: { ...DEFAULT_ROOM_CONFIG },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       killTarget: "b",
-      actedWolves: [],
-      skippedWolves: [],
       guardTarget: null,
       healTonight: false,
       poisonTarget: null,
@@ -45,6 +48,7 @@ function recapRoom(phase: GameState["phase"]): Room {
   };
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "RECAP",
     hostId: "a",
     status: "IN_GAME",

@@ -4,6 +4,7 @@ import { DEFAULT_ROOM_CONFIG, GHOST_AUTHOR_ID, GHOST_AUTHOR_NAME } from "@masoi/
 import type { Room } from "../src/rooms/store";
 import { clearBotSession } from "../src/bots/session-registry";
 import { scheduleDeadCanSpeakBot, submitGhostMessage } from "../src/game/machine";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 /**
  * Tiếng Vọng Người Chết ở tầng phòng.
@@ -61,6 +62,7 @@ function echoRoom(options: { deadIds?: string[]; humanIds?: string[]; withEvent?
   engine.startDay(60_000, Date.now(), () => 0, options.withEvent === false ? null : { ...GAME_EVENTS.DEAD_CAN_SPEAK, round: 1 });
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "ECHO1",
     hostId: "p1",
     status: "IN_GAME",

@@ -38,9 +38,13 @@ vi.mock("../src/redis", () => ({
 
 import { continueAfterDeathResult, submitHunterShot } from "../src/game/machine";
 import { setupSocket } from "../src/ws";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 function reactionRoom(source: "night" | "vote", code = "HUNT1"): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase: source === "night" ? "NIGHT_RESULT" : "ELIMINATION",
     round: 1,
     phaseEndsAt: Date.now() + 8_000,
@@ -53,6 +57,7 @@ function reactionRoom(source: "night" | "vote", code = "HUNT1"): Room {
     config: { ...DEFAULT_ROOM_CONFIG, hunter: true },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       wolfVotes: {},
       killTarget: null,
       wolvesLocked: false,
@@ -75,6 +80,7 @@ function reactionRoom(source: "night" | "vote", code = "HUNT1"): Room {
   };
 
   return {
+    ...ROOM_SCAFFOLD,
     code,
     hostId: "villager-1",
     status: "IN_GAME",

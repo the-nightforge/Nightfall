@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 /**
  * Bug thật: rejoin (existing member) dùng
@@ -63,6 +64,7 @@ const { roomService } = await import("../src/rooms/service");
 
 function roomWith(members: Array<{ id: string; avatarUrl: string | null }>): Room {
   return {
+    ...ROOM_SCAFFOLD,
     code: "JOIN1",
     hostId: members[0].id,
     status: "LOBBY",

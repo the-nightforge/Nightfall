@@ -83,6 +83,7 @@ function speechRequest(overrides: Partial<SpeechRequest> = {}): SpeechRequest {
     speaker: { id: "v", name: "Vân" },
     ...speechDefaults(),
     intention: {
+      tone: "NEUTRAL",
       kind: "ACCUSE",
       targetId: "s",
       confidence: 0.7,

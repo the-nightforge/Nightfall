@@ -3,6 +3,7 @@ import { GameEngine } from "@masoi/game-engine";
 import { buildCaseFile, DEFAULT_ROOM_CONFIG, roleTeam } from "@masoi/shared";
 import { buildSnapshot } from "../src/rooms/snapshot";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 const NAMES = ["An", "Bình", "Cường", "Dung", "Én", "Phúc"];
 
@@ -10,6 +11,7 @@ const NAMES = ["An", "Bình", "Cường", "Dung", "Én", "Phúc"];
 function realRoom(): Room {
   const players = NAMES.map((name, index) => ({ id: `p${index}`, name, isBot: false }));
   return {
+    ...ROOM_SCAFFOLD,
     code: "CASE1",
     hostId: "p0",
     status: "IN_GAME",

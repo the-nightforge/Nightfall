@@ -3,6 +3,9 @@ import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG, type ChatMessage } from "@masoi/shared";
 import { buildSnapshot, resolveChat, visibleChatLog } from "../src/rooms/snapshot";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 const messages: ChatMessage[] = [
   { id: "lobby", channel: "lobby", playerId: "wolf", playerName: "Sói", text: "lobby", at: 1 },
@@ -13,6 +16,7 @@ const messages: ChatMessage[] = [
 
 function gameState(phase: GameState["phase"]): GameState {
   return {
+    ...GAME_STATE_SCAFFOLD,
     phase,
     round: 1,
     phaseEndsAt: null,
@@ -24,9 +28,8 @@ function gameState(phase: GameState["phase"]): GameState {
     config: { ...DEFAULT_ROOM_CONFIG },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       killTarget: null,
-      actedWolves: [],
-      skippedWolves: [],
       guardTarget: null,
       healTonight: false,
       poisonTarget: null,
@@ -47,6 +50,7 @@ function gameState(phase: GameState["phase"]): GameState {
 function room(phase: GameState["phase"] | "LOBBY"): Room {
   const inLobby = phase === "LOBBY";
   return {
+    ...ROOM_SCAFFOLD,
     code: "ABCDE",
     hostId: "wolf",
     status: inLobby ? "LOBBY" : "IN_GAME",
@@ -68,6 +72,7 @@ function channels(value: ChatMessage[]): string[] {
 
 function pendingHunterRoom(source: "night" | "vote"): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase: source === "night" ? "NIGHT" : "VOTING",
     round: 1,
     phaseEndsAt: null,
@@ -80,6 +85,7 @@ function pendingHunterRoom(source: "night" | "vote"): Room {
     config: { ...DEFAULT_ROOM_CONFIG, werewolves: 1, hunter: true },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       wolfVotes: {},
       killTarget: null,
       wolvesLocked: false,
@@ -115,6 +121,7 @@ function pendingHunterRoom(source: "night" | "vote"): Room {
   }
 
   return {
+    ...ROOM_SCAFFOLD,
     code: source === "night" ? "HNITE" : "HVOTE",
     hostId: "villager",
     status: "IN_GAME",

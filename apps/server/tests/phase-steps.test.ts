@@ -3,6 +3,7 @@ import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
 import type { PendingStepName } from "../src/game/pending-step";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 const timers = vi.hoisted(() => ({ scheduled: [] as Array<{ fn: () => void; ms: number }> }));
 
@@ -32,7 +33,7 @@ function handlers(): Record<PendingStepName, (room: Room) => void> {
     "timeoutHunterShot",
     "finishHunterShot",
   ];
-  return Object.fromEntries(names.map((name) => [name, () => ran.push(name)])) as Record<
+  return Object.fromEntries(names.map((name) => [name, (_room: Room) => void ran.push(name)])) as Record<
     PendingStepName,
     (room: Room) => void
   >;
@@ -53,6 +54,7 @@ function inGameRoom(): Room {
   } as unknown as GameState;
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "STEPS",
     hostId: "p1",
     status: "IN_GAME",

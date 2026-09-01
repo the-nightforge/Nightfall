@@ -8,6 +8,11 @@ import { BotGovernor, Cooldown } from "../src/bots/governor";
 
 function dayView(): RoomSnapshot {
   return {
+    hunterShot: null,
+    trial: null,
+    lastTrial: null,
+    dayVoteHistory: [],
+    hunterShots: [],
     code: "ABCDE",
     hostId: "v",
     phase: "DAY_DISCUSSION",
@@ -200,6 +205,7 @@ function speechRequest(overrides: Partial<SpeechRequest> = {}): SpeechRequest {
     speaker: { id: "v", name: "Vân" },
     ...speechDefaults(),
     intention: {
+      tone: "NEUTRAL",
       kind: "ACCUSE",
       targetId: "s",
       confidence: 0.7,

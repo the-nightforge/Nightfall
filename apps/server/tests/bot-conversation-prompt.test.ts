@@ -52,6 +52,11 @@ function request(over: Partial<SpeechRequest> = {}): SpeechRequest {
     recentSpeechSourceIds: ["recap:1"],
     seq: 3,
     round: 2,
+    players: [
+      { id: "bot", name: "An", alive: true },
+      { id: "chi", name: "Chi", alive: true },
+    ],
+    defense: null,
     ...over,
   };
 }

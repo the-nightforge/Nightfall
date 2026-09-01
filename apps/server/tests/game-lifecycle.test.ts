@@ -4,6 +4,7 @@ import { DEFAULT_ROOM_CONFIG, type ChatMessage } from "@masoi/shared";
 import { startGame } from "../src/game/machine";
 import { discussionSkipVotes } from "../src/game/discussion-skip";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 vi.mock("../src/rooms/store", () => ({
   clearRoomTimers: () => undefined,
@@ -29,6 +30,7 @@ const oldMessages: ChatMessage[] = [
 
 function lobbyWithOldChat(): Room {
   return {
+    ...ROOM_SCAFFOLD,
     code: "ABCDE",
     hostId: "p1",
     status: "LOBBY",

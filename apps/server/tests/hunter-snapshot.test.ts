@@ -28,9 +28,13 @@ import { buildSnapshot } from "../src/rooms/snapshot";
 import { createRoom, loadRoomSnapshot, removeRoom } from "../src/rooms/store";
 import { PERSISTENCE_VERSION } from "../src/persistence/schema";
 import { roomService } from "../src/rooms/service";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 function hunterState(phase: GameState["phase"]): GameState {
   return {
+    ...GAME_STATE_SCAFFOLD,
     phase,
     round: 2,
     phaseEndsAt: 20_000,
@@ -43,6 +47,7 @@ function hunterState(phase: GameState["phase"]): GameState {
     config: { ...DEFAULT_ROOM_CONFIG, hunter: true },
     winner: phase === "GAME_OVER" ? "village" : null,
     night: {
+      ...NIGHT_SCAFFOLD,
       wolfVotes: {},
       killTarget: null,
       wolvesLocked: false,
@@ -76,6 +81,7 @@ function hunterState(phase: GameState["phase"]): GameState {
 function snapshotRoom(phase: GameState["phase"]): Room {
   const state = hunterState(phase);
   return {
+    ...ROOM_SCAFFOLD,
     code: "SNAP1",
     hostId: "villager",
     status: "IN_GAME",
@@ -164,6 +170,7 @@ describe("Hunter config compatibility", () => {
     const state = hunterState("ROLE_REVEAL");
     redisMocks.get.mockResolvedValueOnce(
       JSON.stringify({
+        ...ROOM_SCAFFOLD,
         code: "OLD01",
         hostId: "villager",
         status: "LOBBY",
@@ -188,6 +195,7 @@ describe("Hunter config compatibility", () => {
         savedAt: 0,
         opSeq: 1,
         room: {
+          ...ROOM_SCAFFOLD,
           code: "OLD02",
           hostId: "villager",
           status: "IN_GAME",

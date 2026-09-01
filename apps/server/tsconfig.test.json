@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "sourceMap": false,
+    "types": ["node"],
+    /*
+     * Base dùng `commonjs` vì đó là thứ server BUILD ra. Test thì Vitest chạy
+     * dưới dạng ESM, và chúng dùng `await import()` ở cấp cao nhất để nạp module
+     * SAU khi `vi.mock` đã gắn - dưới commonjs, tsc coi mỗi dòng đó là lỗi.
+     * Khai ESM ở đây là mô tả đúng cách test thật sự chạy, không phải nới lỏng.
+     */
+    "module": "esnext",
+    "moduleResolution": "bundler"
+  },
+  "include": ["src", "tests"]
+}

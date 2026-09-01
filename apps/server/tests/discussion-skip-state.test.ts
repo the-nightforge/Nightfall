@@ -9,9 +9,13 @@ import {
 } from "../src/game/discussion-skip";
 import { buildSnapshot } from "../src/rooms/snapshot";
 import type { Room } from "../src/rooms/store";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 function dayRoom(): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase: "DAY_DISCUSSION",
     round: 2,
     phaseEndsAt: Date.now() + 60_000,
@@ -25,9 +29,8 @@ function dayRoom(): Room {
     config: { ...DEFAULT_ROOM_CONFIG },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       killTarget: null,
-      actedWolves: [],
-      skippedWolves: [],
       guardTarget: null,
       healTonight: false,
       poisonTarget: null,
@@ -45,6 +48,7 @@ function dayRoom(): Room {
   };
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "ABCDE",
     hostId: "alice",
     status: "IN_GAME",

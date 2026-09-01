@@ -5,6 +5,9 @@ import type { Attempt, DaySpeechDecision } from "../src/bots/types";
 import type { Room } from "../src/rooms/store";
 import { scheduleDayBots, submitDiscussionSkip } from "../src/game/machine";
 import { clearDiscussionSkipVotes } from "../src/game/discussion-skip";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
 
 const brainControl = vi.hoisted(() => ({
   renderDaySpeech: vi.fn(),
@@ -87,6 +90,7 @@ vi.mock("../src/bots", async () => {
 
 function discussionRoom(): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase: "DAY_DISCUSSION",
     round: 1,
     phaseEndsAt: Date.now() + DEFAULT_ROOM_CONFIG.discussionSeconds * 1_000,
@@ -98,9 +102,8 @@ function discussionRoom(): Room {
     config: { ...DEFAULT_ROOM_CONFIG },
     winner: null,
     night: {
+      ...NIGHT_SCAFFOLD,
       killTarget: null,
-      actedWolves: [],
-      skippedWolves: [],
       guardTarget: null,
       healTonight: false,
       poisonTarget: null,
@@ -118,6 +121,7 @@ function discussionRoom(): Room {
   };
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "ABCDE",
     hostId: "human1",
     status: "IN_GAME",

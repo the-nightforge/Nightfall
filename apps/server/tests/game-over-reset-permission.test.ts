@@ -4,6 +4,9 @@ import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import { DISCONNECT_GRACE_MS } from "../src/game/discussion-skip";
 import type { Room, RoomMember } from "../src/rooms/store";
 import { RoomError, roomService } from "../src/rooms/service";
+import { ROOM_SCAFFOLD } from "./helpers/room";
+import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
+import { NIGHT_SCAFFOLD } from "./helpers/night";
 
 const roomHolder = vi.hoisted(() => ({ room: null as Room | null }));
 
@@ -31,6 +34,7 @@ vi.mock("../src/voice/service", () => ({
 
 function roomAt(phase: GameState["phase"], host: Partial<RoomMember>): Room {
   const state: GameState = {
+    ...GAME_STATE_SCAFFOLD,
     phase,
     round: 3,
     phaseEndsAt: null,
@@ -41,6 +45,7 @@ function roomAt(phase: GameState["phase"], host: Partial<RoomMember>): Room {
     config: { ...DEFAULT_ROOM_CONFIG },
     winner: phase === "GAME_OVER" ? "village" : null,
     night: {
+      ...NIGHT_SCAFFOLD,
       wolfVotes: {},
       killTarget: null,
       wolvesLocked: false,
@@ -63,6 +68,7 @@ function roomAt(phase: GameState["phase"], host: Partial<RoomMember>): Room {
   } as GameState;
 
   return {
+    ...ROOM_SCAFFOLD,
     code: "OVER1",
     hostId: "host",
     status: "IN_GAME",

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import { GameEngine } from "@masoi/game-engine";
 import { PERSISTENCE_VERSION, roomEnvelopeSchema } from "../src/persistence/schema";
+import { ROOM_SCAFFOLD } from "./helpers/room";
 
 function engineState() {
   const engine = GameEngine.create(
@@ -18,6 +19,7 @@ function validEnvelope() {
     savedAt: Date.now(),
     opSeq: 7,
     room: {
+      ...ROOM_SCAFFOLD,
       code: "ABCDE",
       hostId: "p1",
       status: "IN_GAME",
@@ -101,7 +103,7 @@ describe("schema snapshot phòng", () => {
 
     const parsed = roomEnvelopeSchema.parse(input);
 
-    expect(parsed.room.engineState.votes).toEqual({ p1: null, p2: "p3" });
+    expect(parsed.room.engineState!.votes).toEqual({ p1: null, p2: "p3" });
   });
 
   it("không bóc mất lịch sử đêm", () => {
@@ -112,7 +114,7 @@ describe("schema snapshot phòng", () => {
 
     const parsed = roomEnvelopeSchema.parse(input);
 
-    expect(parsed.room.engineState.nightHistory).toEqual(input.room.engineState.nightHistory);
+    expect(parsed.room.engineState!.nightHistory).toEqual(input.room.engineState.nightHistory);
   });
 
   it("nhận brain state đầy đủ của bot", () => {
