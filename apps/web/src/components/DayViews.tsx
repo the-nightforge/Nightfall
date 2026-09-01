@@ -7,6 +7,7 @@ import { PlayerGrid } from "./PlayerGrid";
 import { VoteHistoryPanel } from "./VoteHistoryPanel";
 import { DayOfTruthModal } from "./DayOfTruthModal";
 import { DeadWhisperPanel } from "./DeadWhisperPanel";
+import { leaderLabel, voteProgressOf } from "@/lib/vote-progress";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -32,6 +33,7 @@ export function DayView({
   // ai" cũng có myVote === null, và khoá UI theo myVote sẽ để ngỏ lá phiếu đó.
   const hasVoted = snapshot.hasVoted;
   const discussionSkip = snapshot.discussionSkip;
+  const leader = isVoting ? leaderLabel(voteProgressOf(snapshot)) : null;
 
   return (
     <div className="space-y-4">
@@ -41,7 +43,7 @@ export function DayView({
             snapshot.lastNightDeaths.length > 0 ? "border-blood-500/40" : "border-emerald-500/30"
           }`}
         >
-          <p className="text-xs uppercase tracking-[0.3em] text-mist/65">Trời đã sáng</p>
+          <p className="text-[13px] uppercase tracking-[0.3em] text-mist-strong">Trời đã sáng</p>
           {snapshot.lastNightDeaths.length > 0 ? (
             <>
               <h3 className="mt-2 font-display text-3xl font-bold text-blood-400">
@@ -60,20 +62,59 @@ export function DayView({
       )}
 
       {isVoting && (
-        <div className={`card ${dead ? "opacity-70" : ""}`}>
-          <h3 className="mb-1 font-display text-2xl font-bold text-white">
-            {dead ? "Bạn đã chết" : "Ai là Ma Sói?"}
-          </h3>
+        /*
+         * KHÔNG còn `opacity-70` cho người đã chết.
+         *
+         * Làm mờ cả thẻ là làm mờ luôn tên người chơi, số phiếu và lịch sử -
+         * đúng những thứ mà người đã chết chỉ còn mỗi việc là ngồi đọc. Trạng
+         * thái "bạn đã chết" nói bằng một dải riêng bên dưới, và mọi ô người
+         * chơi thì đã tự tắt (disabled) sẵn.
+         */
+        <div className="card">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+            <div className="min-w-0">
+              {/*
+                * Tên pha giữ nguyên kể cả khi người xem đã chết.
+                *
+                * Bản cũ đổi hẳn tiêu đề thành "Bạn đã chết": tình trạng riêng
+                * của một người chiếm mất dòng chữ to nhất màn hình, và người
+                * chơi mất luôn dấu hiệu rằng cả làng ĐANG bỏ phiếu.
+                */}
+              <h3 className="font-display text-2xl font-bold text-white lg:text-[1.75rem]">
+                Ai là Ma Sói?
+              </h3>
+              <p className="mt-1 text-sm text-mist-strong">
+                Vòng này chỉ chọn ra bị cáo, chưa ai bị treo.
+              </p>
+            </div>
+            {/* Ai đang bị dồn phiếu - câu hỏi thứ hai của cả vòng, sau "còn bao
+              * lâu". Trước đây phải tự nhẩm bằng cách quét hết các huy hiệu số
+              * trên lưới. */}
+            {leader && (
+              <p className="shrink-0 rounded-lg border border-blood-500/30 bg-blood-600/15 px-2.5 py-1.5 text-[13px] font-semibold text-blood-400">
+                <span className="mr-1" aria-hidden="true">🔥</span>
+                {leader}
+              </p>
+            )}
+          </div>
+
+          {dead && (
+            /* Trạng thái phụ: một dải trung tính, không phải tiêu đề. Biểu tượng
+             * + chữ chứ không chỉ màu, và nói rõ CẢ hai vế - vẫn xem được, không
+             * bỏ phiếu được. */
+            <p className="mb-3 flex items-start gap-2 rounded-lg border border-white/10 bg-night-800/70 px-3 py-2 text-sm text-mist-bright">
+              <span aria-hidden="true">👁</span>
+              <span>
+                <b className="font-semibold text-white">Bạn đã chết.</b> Bạn theo dõi được cả
+                vòng bỏ phiếu nhưng không thể bỏ phiếu.
+              </span>
+            </p>
+          )}
           {snapshot.you?.role === "MAYOR" && (
-            <p className="mb-2 inline-block rounded-full border border-amber-500/40 bg-amber-950/40 px-3 py-1 text-xs font-bold text-amber-300">
+            <p className="mb-2 inline-block rounded-full border border-amber-500/40 bg-amber-950/40 px-3 py-1 text-[13px] font-bold text-amber-200">
               👑 Bạn là Thị Trưởng (Phiếu của bạn có trọng số x2)
             </p>
           )}
-          <p className="mb-3 text-sm text-mist/60">
-            {dead
-              ? "Bạn theo dõi được nhưng không bỏ phiếu."
-              : "Vòng này chỉ chọn ra bị cáo, chưa ai bị treo."}
-          </p>
           {hasVoted && !dead && (
             <p className="mb-2 text-sm text-emerald-300">
               {myVote
@@ -103,8 +144,8 @@ export function DayView({
             </>
           ) : (
             // Người chết và người đã vote chỉ theo dõi tiến độ, không có thao tác.
-            <p className="mt-3 text-center text-xs text-mist/60">
-              Không treo ai: {snapshot.noEliminationVoteCount} phiếu
+            <p className="mt-3 text-center text-sm text-mist-strong">
+              Không treo ai: <b className="text-white">{snapshot.noEliminationVoteCount}</b> phiếu
             </p>
           )}
           <OpenVotePanel snapshot={snapshot} />
@@ -113,9 +154,9 @@ export function DayView({
 
       {snapshot.phase === "DAY_DISCUSSION" && (
         <div className="card py-7 text-center">
-          <p className="text-xs uppercase tracking-[0.3em] text-mist/65">Ban ngày</p>
+          <p className="text-[13px] uppercase tracking-[0.3em] text-mist-strong">Ban ngày</p>
           <h3 className="mt-2 font-display text-3xl font-bold text-amber-100">Thảo luận</h3>
-          <p className="mx-auto mt-2 max-w-sm text-sm text-mist/70">
+          <p className="mx-auto mt-2 max-w-md text-sm text-mist-strong">
             Ai đáng ngờ? Buộc tội, bào chữa, và để ý ai đang im lặng.
           </p>
 
@@ -125,11 +166,11 @@ export function DayView({
             * chứ không chỉ ở pha công bố.
             */}
           <div className="mx-auto mt-5 max-w-sm rounded-xl border border-white/[0.06] bg-night-800/50 px-4 py-3">
-            <p className="text-[11px] uppercase tracking-[0.25em] text-mist/60">Đêm vừa rồi</p>
+            <p className="text-xs uppercase tracking-[0.25em] text-mist-strong">Đêm vừa rồi</p>
             {snapshot.lastNightDeaths.length > 0 ? (
               <p className="mt-1 font-semibold text-blood-400">
                 {snapshot.lastNightDeaths.map((d) => d.name).join(" · ")}{" "}
-                <span className="font-normal text-mist/60">đã chết</span>
+                <span className="font-normal text-mist-strong">đã chết</span>
               </p>
             ) : (
               <p className="mt-1 font-semibold text-emerald-300">Không ai chết</p>
@@ -145,12 +186,12 @@ export function DayView({
                   {discussionSkip.hasVoted ? "Huỷ skip" : "Skip thảo luận"}
                   {` (${discussionSkip.votes}/${discussionSkip.required})`}
                 </button>
-                <p className="mt-1 text-xs text-mist/65">
+                <p className="mt-1 text-[13px] text-mist-strong">
                   Cần toàn bộ người thật còn sống và đang online đồng ý.
                 </p>
               </div>
             ) : (
-              <p className="mt-3 text-xs text-mist/60">
+              <p className="mt-3 text-[13px] text-mist-strong">
                 Người chơi còn sống muốn skip: {discussionSkip.votes}/{discussionSkip.required}
               </p>
             )
@@ -170,14 +211,14 @@ export function EliminationView({ snapshot }: { snapshot: RoomSnapshot }) {
   return (
     <div className="space-y-4">
       <div className="card py-7 text-center">
-        <p className="text-xs uppercase tracking-[0.3em] text-mist/65">Phán quyết của làng</p>
+        <p className="text-[13px] uppercase tracking-[0.3em] text-mist-strong">Phán quyết của làng</p>
           {snapshot.lastEliminated ? (
           <>
             <h3 className="mt-2 font-display text-3xl font-bold text-blood-400">
               {snapshot.lastEliminated.name}
             </h3>
-            <p className="mt-1 text-sm text-mist/70">đã bị treo cổ</p>
-            <p className="mt-3 text-xs text-mist/60">Vai trò sẽ được tiết lộ khi ván đấu kết thúc.</p>
+            <p className="mt-1 text-sm text-mist-strong">đã bị treo cổ</p>
+            <p className="mt-3 text-[13px] text-mist-strong">Vai trò sẽ được tiết lộ khi ván đấu kết thúc.</p>
           </>
         ) : snapshot.lastTrial ? (
         // Được tha là một kết cục riêng: lastEliminated === null không phân biệt
@@ -186,7 +227,7 @@ export function EliminationView({ snapshot }: { snapshot: RoomSnapshot }) {
           <h3 className="mt-2 font-display text-3xl font-bold text-emerald-300">
             {snapshot.lastTrial.accused.name} được tha
           </h3>
-          <p className="mt-1 text-sm text-mist/70">
+          <p className="mt-1 text-sm text-mist-strong">
             {snapshot.lastTrial.guilty} phiếu treo - {snapshot.lastTrial.innocent} phiếu tha
             {snapshot.lastTrial.abstain > 0 && `, ${snapshot.lastTrial.abstain} không bỏ phiếu`}.
           </p>

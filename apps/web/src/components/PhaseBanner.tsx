@@ -3,6 +3,7 @@
 import { AnimatePresence, m } from "motion/react";
 import type { Phase, RoomSnapshot } from "@masoi/shared";
 import { moodFor } from "@/lib/mood";
+import { voteProgressOf } from "@/lib/vote-progress";
 import { Timer } from "./Timer";
 
 interface PhaseMeta {
@@ -33,8 +34,18 @@ export function PhaseBanner({ snapshot }: { snapshot: RoomSnapshot }) {
   // ban đêm hay ban ngày nên không cần thêm bảng tra thứ hai.
   const unit = moodFor(snapshot.phase) === "night" ? "Đêm" : "Ngày";
 
+  /*
+   * Tiến độ phiếu nằm ở ĐÂY, cạnh đồng hồ.
+   *
+   * "Còn bao lâu" và "đã bao nhiêu người bỏ" là hai nửa của cùng một câu hỏi -
+   * vòng này sắp chốt chưa - nên đặt cạnh nhau thì đọc một lần là xong. Rải ra
+   * hai chỗ cách nhau nửa màn hình thì người chơi phải tự ghép.
+   */
+  const progress = snapshot.phase === "VOTING" ? voteProgressOf(snapshot) : null;
+  const showProgress = !!progress && progress.cast !== null && progress.eligible > 0;
+
   return (
-    <div className="card flex items-center justify-between gap-3 py-3">
+    <div className="card flex items-center justify-between gap-3 py-3 lg:gap-5 lg:px-5 lg:py-4">
       {/*
         * Thông báo đổi pha cho trình đọc màn hình.
         *
@@ -63,17 +74,27 @@ export function PhaseBanner({ snapshot }: { snapshot: RoomSnapshot }) {
           transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
           className="min-w-0"
         >
-          <div className="flex items-center gap-2">
-            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${meta.dot} animate-pulseSlow`} />
-            <h2 className={`truncate font-display text-2xl font-bold leading-tight ${meta.accent}`}>
-              {meta.label}
-            </h2>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className={`h-2 w-2 shrink-0 rounded-full ${meta.dot} animate-pulseSlow`} />
+              <h2
+                className={`truncate font-display text-2xl font-bold leading-tight ${meta.accent} lg:text-[1.75rem]`}
+              >
+                {meta.label}
+              </h2>
+            </div>
+            {/*
+              * "Ngày thứ 2" là một CHIP đứng cạnh tên pha, không còn là dòng
+              * chữ 12px in hoa giãn chữ nằm nép bên dưới. Nó là một trong ba
+              * thứ phải nhận ra trong hai giây đầu (pha nào / ngày mấy / còn
+              * bao lâu), mà ở cỡ cũ nó đọc ra như một cái nhãn trang trí.
+              */}
+            {snapshot.round > 0 && (
+              <span className="shrink-0 rounded-md bg-white/[0.07] px-2 py-0.5 text-[13px] font-semibold text-mist-bright ring-1 ring-white/10">
+                {unit} thứ {snapshot.round}
+              </span>
+            )}
           </div>
-          {snapshot.round > 0 && (
-            <p className="mt-0.5 pl-3.5 text-xs uppercase tracking-[0.2em] text-mist/65">
-              {unit} thứ {snapshot.round}
-            </p>
-          )}
         </m.div>
       </AnimatePresence>
       {/*
@@ -81,7 +102,37 @@ export function PhaseBanner({ snapshot }: { snapshot: RoomSnapshot }) {
         * "--:--" vào giữa - trong phòng chờ nó trông y hệt một đồng hồ đã hỏng,
         * và người chơi đi hỏi bao giờ nó chạy.
         */}
-      {snapshot.phaseEndsAt !== null && <Timer endsAt={snapshot.phaseEndsAt} />}
+      <div className="flex shrink-0 items-center gap-3 lg:gap-4">
+        {showProgress && progress && (
+          /*
+           * Ẩn ở đúng nấc lg.
+           *
+           * Ở 1024-1279px khu chơi là cột hẹp nhất trong cả bố cục, và cụm này
+           * ăn thêm khoảng 100px làm tên pha bị cắt cụt - mà tên pha thì quan
+           * trọng hơn. Từ xl trở lên chỗ đã đủ cho cả hai; dưới lg thanh pha
+           * chiếm trọn bề ngang nên cũng không thiếu chỗ.
+           */
+          <div className="hidden text-right sm:block lg:hidden xl:block">
+            <p className="whitespace-nowrap text-[13px] font-semibold text-mist-bright">
+              <b className="text-base font-bold tabular-nums text-white">
+                {progress.cast}/{progress.eligible}
+              </b>{" "}
+              đã bỏ phiếu
+            </p>
+            {/* Thanh chỉ nhắc lại con số ngay trên nó, nên giấu khỏi trình đọc
+              * màn hình thay vì bắt nghe hai lần cùng một thông tin. */}
+            <div className="mt-1 h-1.5 w-24 overflow-hidden rounded-full bg-white/10" aria-hidden="true">
+              <div
+                className="h-full rounded-full bg-blood-500 transition-[width] duration-300"
+                style={{
+                  width: `${Math.min(100, Math.round(((progress.cast ?? 0) / progress.eligible) * 100))}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
+        {snapshot.phaseEndsAt !== null && <Timer endsAt={snapshot.phaseEndsAt} />}
+      </div>
     </div>
   );
 }

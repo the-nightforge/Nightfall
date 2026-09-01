@@ -202,8 +202,8 @@ export function ChatBox({
             <MessageCircleIcon
               className="mx-auto h-8 w-8 text-mist/55"
             />
-            <p className="mt-2.5 text-sm font-semibold text-mist/85">Chưa có tin nhắn nào</p>
-            <p className="mt-1 text-xs leading-relaxed text-mist/70">
+            <p className="mt-2.5 text-sm font-semibold text-mist-bright">Chưa có tin nhắn nào</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-mist-strong">
               Chào cả phòng một câu trong lúc chờ đủ người.
             </p>
           </div>
@@ -216,7 +216,7 @@ export function ChatBox({
           return (
             <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
               <div
-                className={`max-w-[85%] rounded-xl border px-2.5 py-1.5 ${
+                className={`max-w-[88%] rounded-xl border px-3 py-2 ${
                   ghost
                     ? "border-violet-500/30 bg-violet-900/25 italic"
                     : mine
@@ -225,16 +225,26 @@ export function ChatBox({
                 }`}
               >
                 <div className="flex items-baseline gap-1.5">
+                  {/*
+                    * Tên người gửi và nội dung phải TÁCH được ra khỏi nhau.
+                    *
+                    * Bản cũ để tên ở trắng và nội dung ở mist/95 - gần như cùng
+                    * một sắc, nên trong một khung dài mắt không tìm ra được mép
+                    * trên của từng tin mà phải đọc tuần tự. Giờ tên là trắng
+                    * đậm, nội dung là mist-strong (vẫn 10:1 trên nền bong bóng,
+                    * trên ngưỡng AA), và khoảng cách giữa hai bậc đủ để lướt.
+                    */}
                   <span
-                    className={`text-xs font-bold ${
+                    className={`text-[13px] font-bold ${
                       ghost ? "text-violet-200" : mine ? "text-indigo-200" : "text-white"
                     }`}
                   >
                     {message.playerName}
                   </span>
                   <span
-                    className={`text-[11px] leading-none ${
-                      message.channel === "wolves" ? "text-blood-400/80" : "text-mist/60"
+                    role="img"
+                    className={`text-xs leading-none ${
+                      message.channel === "wolves" ? "text-blood-400" : "text-mist-strong"
                     }`}
                     title={CHANNEL_LABEL[message.channel] ?? message.channel}
                     aria-label={CHANNEL_LABEL[message.channel] ?? message.channel}
@@ -243,7 +253,7 @@ export function ChatBox({
                   </span>
                 </div>
                 {/* break-words: một chuỗi 300 ký tự không dấu cách sẽ đẩy toang cột phụ. */}
-                <p className="break-words text-sm leading-relaxed text-mist/95">{message.text}</p>
+                <p className="break-words text-sm leading-relaxed text-mist-strong">{message.text}</p>
               </div>
             </div>
           );
@@ -278,7 +288,20 @@ export function ChatBox({
             inputRef={ownInputRef}
           />
         </div>
-        <button className="btn-primary shrink-0" onClick={submit} disabled={!text.trim()}>
+        {/*
+          * Nút Gửi lúc chưa gõ gì phải còn ĐỌC được.
+          *
+          * `.btn` mặc định hạ opacity xuống 40%: nền đỏ nhạt đi thành hồng
+          * xám và chữ "Gửi" gần như biến mất - trông như một nút đang hỏng chứ
+          * không phải một nút chưa tới lượt. Ba lớp disabled: dưới đây đổi hẳn
+          * sang xám trung tính mà chữ vẫn rõ, cùng cách `.btn-cta` và
+          * `.gate-cta` đã xử lý.
+          */}
+        <button
+          className="btn-primary shrink-0 disabled:bg-night-700 disabled:text-mist-strong disabled:opacity-100 disabled:shadow-none"
+          onClick={submit}
+          disabled={!text.trim()}
+        >
           Gửi
         </button>
       </div>
