@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { GHOST_AUTHOR_ID, type ChatMessage } from "@masoi/shared";
 import { getIdentity } from "@/lib/identity";
+import { insertEmoji } from "@/lib/chat-emoji";
+import { EmojiPicker } from "./EmojiPicker";
 
 const CHANNEL_LABEL: Record<string, string> = {
   lobby: "Phòng",
@@ -72,7 +74,18 @@ interface Props {
   onDraftChange?: (draft: string) => void;
   inputRef?: RefObject<HTMLInputElement | null>;
   autoFocus?: boolean;
+  /**
+   * Bảng biểu tượng vừa mở hay vừa đóng.
+   *
+   * Chỉ tấm trượt chat trên điện thoại cần biết: nó bắt Escape ở pha capture
+   * để tự đóng, nên nếu không biết bảng đang mở thì một phím Escape sẽ đóng
+   * luôn cả khung chat thay vì chỉ đóng bảng.
+   */
+  onEmojiOpenChange?: (open: boolean) => void;
 }
+
+/** Đúng bằng maxLength của ô nhập bên dưới - server cũng cắt ở mốc này. */
+const MAX_MESSAGE_LENGTH = 300;
 
 export function ChatBox({
   messages,
@@ -82,12 +95,38 @@ export function ChatBox({
   onDraftChange,
   inputRef,
   autoFocus,
+  onEmojiOpenChange,
 }: Props) {
   const [ownText, setOwnText] = useState("");
   const text = draft ?? ownText;
   const setText = onDraftChange ?? setOwnText;
   const boxRef = useRef<HTMLDivElement>(null);
   const meId = getIdentity()?.playerId;
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  /*
+   * Ref nội bộ, LUÔN có, bên cạnh cái tuỳ chọn do bên ngoài truyền vào.
+   *
+   * Chèn biểu tượng cần đọc vị trí con trỏ trên chính thẻ input, mà `inputRef`
+   * chỉ có mặt khi khung này nằm trong tấm trượt điện thoại - ở cột phải trên
+   * desktop nó là undefined. Không có ref riêng thì biểu tượng chỉ chèn được
+   * vào cuối chuỗi, và chỉ trên một nửa số chỗ khung này xuất hiện.
+   */
+  const ownInputRef = useRef<HTMLInputElement>(null);
+  const attachInput = useCallback(
+    (el: HTMLInputElement | null) => {
+      ownInputRef.current = el;
+      if (inputRef) inputRef.current = el;
+    },
+    [inputRef],
+  );
+
+  const changeEmojiOpen = useCallback(
+    (open: boolean) => {
+      setEmojiOpen(open);
+      onEmojiOpenChange?.(open);
+    },
+    [onEmojiOpenChange],
+  );
 
   useEffect(() => {
     boxRef.current?.scrollTo({ top: boxRef.current.scrollHeight });
@@ -98,6 +137,33 @@ export function ChatBox({
     if (!t) return;
     onSend(t);
     setText("");
+    // Gửi xong là hết câu: để bảng mở thì nó che mất chính dòng vừa gửi.
+    changeEmojiOpen(false);
+  };
+
+  const pickEmoji = (emoji: string) => {
+    const el = ownInputRef.current;
+    const next = insertEmoji(
+      text,
+      emoji,
+      el?.selectionStart ?? text.length,
+      el?.selectionEnd ?? text.length,
+      MAX_MESSAGE_LENGTH,
+    );
+    // null = đã chạm trần 300 ký tự. Im lặng bỏ qua, đúng như khi gõ thêm một
+    // ký tự vào ô đã đầy.
+    if (!next) return;
+    setText(next.text);
+    /*
+     * Đặt lại con trỏ ở khung hình SAU khi React đã ghi value mới xuống DOM.
+     * Gọi ngay ở đây thì setSelectionRange chạy trên chuỗi cũ, rồi React ghi
+     * đè value và trình duyệt ném con trỏ về cuối - biểu tượng chèn giữa câu
+     * đúng chỗ nhưng lần chèn tiếp theo lại nhảy xuống cuối.
+     */
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.setSelectionRange(next.caret, next.caret);
+    });
   };
 
   return (
@@ -191,16 +257,25 @@ export function ChatBox({
           */}
         <div className="relative min-w-0 flex-1">
           <MessageCircleIcon className="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-mist/55" />
+          {/* pr-11 chừa chỗ cho nút biểu tượng nằm đè bên phải, y như pl-10
+            * chừa chỗ cho bong bóng bên trái - thiếu nó thì chữ chui xuống dưới
+            * nút đúng lúc câu vừa đủ dài. */}
           <input
-            className="input pl-10"
-            ref={inputRef}
+            className="input pl-10 pr-11"
+            ref={attachInput}
             autoFocus={autoFocus}
             aria-label="Nội dung tin nhắn"
             value={text}
-            maxLength={300}
+            maxLength={MAX_MESSAGE_LENGTH}
             placeholder={placeholder ?? "Nhập tin nhắn..."}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submit()}
+          />
+          <EmojiPicker
+            open={emojiOpen}
+            onOpenChange={changeEmojiOpen}
+            onPick={pickEmoji}
+            inputRef={ownInputRef}
           />
         </div>
         <button className="btn-primary shrink-0" onClick={submit} disabled={!text.trim()}>

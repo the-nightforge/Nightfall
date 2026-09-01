@@ -40,6 +40,16 @@ export function MobileChatDock({
 }: Props) {
   const [open, setOpen] = useState(false);
   const unread = useChatUnread(messages, selfId, open);
+  /*
+   * Bảng biểu tượng của ChatBox đang mở hay không.
+   *
+   * Trong ref chứ không trong state: nó chỉ được đọc bên trong handler Escape,
+   * không có gì trên màn hình đổi theo nó, và `useModalFocus` ghim callback
+   * `onEscape` vào một ref của riêng nó ở mỗi lần render - một biến state ở
+   * đây sẽ dựng lại bẫy focus mỗi lần mở/đóng bảng và ném focus về đầu tấm
+   * trượt giữa lúc người chơi đang chọn biểu tượng.
+   */
+  const emojiOpenRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
@@ -66,7 +76,18 @@ export function MobileChatDock({
     roots: [sheetRef, scrimRef],
     initialFocus: inputRef,
     restoreTo: triggerRef,
-    onEscape: () => setOpen(false),
+    /*
+     * Escape đóng LỚP TRONG CÙNG.
+     *
+     * Bảng biểu tượng nằm trong tấm trượt này. Không có nhánh dưới đây thì một
+     * phím Escape lúc bảng đang mở sẽ cuốn cả tấm trượt đi theo, và người chơi
+     * mất luôn khung chat trong khi họ chỉ định gập cái bảng lại. Bảng tự đóng
+     * mình ở pha bubble của cùng sự kiện đó - xem chú thích trong EmojiPicker.
+     */
+    onEscape: () => {
+      if (emojiOpenRef.current) return;
+      setOpen(false);
+    },
   });
 
   // Ban ngày chat là hoạt động chính, nên nút đổi hẳn dáng thay vì chỉ đổi màu:
@@ -129,6 +150,9 @@ export function MobileChatDock({
                   // thì không, nên nó cuộn trang ngay giữa lúc tấm trượt đang
                   // trượt lên và làm nhịp mở giật một cái.
                   inputRef={inputRef}
+                  onEmojiOpenChange={(emojiOpen) => {
+                    emojiOpenRef.current = emojiOpen;
+                  }}
                 />
               </div>
             </m.div>
