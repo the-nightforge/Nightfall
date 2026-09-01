@@ -117,7 +117,7 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
         * Dưới `lg` vẫn đúng một cột như cũ.
         */}
       <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div className="grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+        <div className="grid items-start gap-3 lg:grid-cols-1 xl:grid-cols-2">
           <TeamPanel
             title="Phe Ma Sói"
             players={wolves}
@@ -235,7 +235,7 @@ function TeamPanel({
         * (`lg:max-h-[calc(100dvh-16rem)]`). Chỉ khoá riêng danh sách đội hình
         * chứ không khoá cả màn: đây là khối duy nhất co giãn theo số người.
         */}
-      <ul className="space-y-1.5 lg:max-h-[38vh] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
+      <ul className="lobby-roster-scroll space-y-1.5 lg:max-h-[38vh] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
         {players.map((player) => (
           <li
             key={player.id}
