@@ -1,27 +1,9 @@
 import { GameEngine } from "@masoi/game-engine";
-import { DEFAULT_ROOM_CONFIG, type RoomConfig } from "@masoi/shared";
 import { restoreBotBudget } from "../bots";
 import { clearBotSession, restoreBotSession } from "../bots/session-registry";
 import { clearDiscussionSkipVotes, discussionSkipVotes } from "../game/discussion-skip";
 import type { Room } from "../rooms/store";
 import type { RoomEnvelopeV1 } from "./schema";
-
-/**
- * Cấu hình của phòng lưu trước khi một tuỳ chọn ra đời sẽ thiếu hẳn khoá của
- * tuỳ chọn đó. Mặc định an toàn là "role tắt, mốc thời gian lấy giá trị chuẩn":
- * một ván cũ không bao giờ tự dưng mọc thêm vai khi được nạp lại, và
- * `roomConfigSchema` là `.strict()` nên thiếu trường sẽ làm lần cập nhật cấu
- * hình kế tiếp hỏng.
- */
-function normalizeConfig(stored: RoomConfig): RoomConfig {
-  return {
-    ...stored,
-    hunter: stored.hunter ?? false,
-    cursed: stored.cursed ?? false,
-    defenseSeconds: stored.defenseSeconds ?? DEFAULT_ROOM_CONFIG.defenseSeconds,
-    finalVoteSeconds: stored.finalVoteSeconds ?? DEFAULT_ROOM_CONFIG.finalVoteSeconds,
-  };
-}
 
 /**
  * Dựng lại phòng trong RAM từ một envelope ĐÃ QUA VALIDATION.
@@ -33,7 +15,12 @@ function normalizeConfig(stored: RoomConfig): RoomConfig {
  */
 export function restoreRoomFromEnvelope(envelope: RoomEnvelopeV1): Room {
   const data = envelope.room;
-  const config = normalizeConfig(data.config);
+  // Config KHÔNG cần chuẩn hoá ở đây: schema đã kiểm nó bằng chính
+  // `roomConfigSchema` của shared. Hệ quả phải nhớ khi thêm tuỳ chọn phòng mới:
+  // trường mới hoặc là OPTIONAL trong `roomConfigSchema` (rồi được lấp mặc định
+  // ở engine), hoặc `PERSISTENCE_VERSION` phải tăng - thêm một trường bắt buộc
+  // mà không làm gì cả sẽ biến mọi ván đang chạy thành snapshot hỏng.
+  const config = data.config;
 
   const room: Room = {
     code: data.code,

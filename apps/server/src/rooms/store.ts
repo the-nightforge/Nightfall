@@ -1,7 +1,16 @@
-import { GameEngine } from "@masoi/game-engine";
+import type { GameEngine } from "@masoi/game-engine";
 import type { ChatMessage, RoomConfig } from "@masoi/shared";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import { redis } from "../redis";
+import {
+  FINISHED_ROOM_TTL_SECONDS,
+  ROOM_TTL_SECONDS,
+  deleteEnvelope,
+  loadEnvelope,
+  saveEnvelope,
+} from "../persistence/redis-store";
+import { restoreRoomFromEnvelope } from "../persistence/restore";
+import { serializeRoom } from "../persistence/serialize";
 import { destroyVoiceRoom } from "../voice/service";
 import { cleanupRoomBotState } from "../game/bot-room-state";
 import { clearDiscussionSkipVotes } from "../game/discussion-skip";
@@ -134,83 +143,83 @@ export function clearAbandonCheckTimer(code: string): void {
 
 // ---- Redis persistence (write-through) ----
 
-interface SerializedRoom extends Omit<Room, "engine"> {
-  engineState: ReturnType<GameEngine["getState"]> | null;
+/**
+ * Số thứ tự lần ghi, theo từng phòng.
+ *
+ * Sống trong RAM vì nó chỉ cần đúng TRONG một process: mục đích là để một lời
+ * ghi bất đồng bộ về muộn không đè lên một lời ghi mới hơn. Sau restart nó được
+ * gieo lại từ chính snapshot vừa đọc, nên dãy số không bao giờ lùi.
+ */
+const opSeqs = new Map<string, number>();
+
+function nextOpSeq(code: string): number {
+  const next = (opSeqs.get(code) ?? 0) + 1;
+  opSeqs.set(code, next);
+  return next;
 }
 
+/**
+ * Ghi snapshot của phòng.
+ *
+ * BEST-EFFORT có chủ đích: RAM là nguồn đang chạy, Redis là bản sao để sống sót
+ * qua restart. Một lần ghi hỏng không được phép chặn ván - đó là quyết định vận
+ * hành, và cái giá của nó (chết đúng lúc Redis cũng đang chết thì mất ván) được
+ * ghi rõ trong tài liệu vận hành.
+ */
 export async function persistRoom(room: Room): Promise<void> {
-  try {
-    const { engine: _engine, ...rest } = room;
-    void _engine;
-    const data: SerializedRoom = {
-      ...rest,
-      engineState: room.engine ? room.engine.getState() : null,
-    };
-    await redis.set(`room:${room.code}`, JSON.stringify(data), "EX", 60 * 60 * 6);
-  } catch {
-    // Redis lỗi không chặn gameplay (in-memory là nguồn chính)
-  }
+  // Ván đã xong chỉ cần sống qua màn lật bài và vài phút bàn tán, không cần
+  // chiếm chỗ sáu tiếng như một ván đang chạy.
+  const ttl =
+    room.engine?.state.phase === "GAME_OVER" ? FINISHED_ROOM_TTL_SECONDS : ROOM_TTL_SECONDS;
+
+  await saveEnvelope(serializeRoom(room, nextOpSeq(room.code)), ttl);
 }
 
 export async function deletePersistedRoom(code: string): Promise<void> {
-  try {
-    await redis.del(`room:${code}`);
-  } catch {
-    /* ignore */
-  }
+  opSeqs.delete(code);
+  await deleteEnvelope(code);
 }
 
-export async function loadRoomFromRedis(code: string): Promise<Room | null> {
+export type RoomLoadOutcome =
+  | { status: "ok"; room: Room }
+  | { status: "missing" }
+  | { status: "unavailable" }
+  | { status: "corrupt"; reason: string };
+
+/**
+ * Nạp phòng từ Redis vào bộ nhớ, KHÔNG hẹn giờ và không chạy bước nào.
+ *
+ * Bốn kết quả được giữ tách bạch tới tận chỗ gọi. Gộp "Redis đang chết" vào
+ * "không có phòng" chính là cách một lần chớp mắt của Redis xoá sổ một ván
+ * đang chơi và đẩy người chơi vào một phòng trống.
+ */
+export async function loadRoomSnapshot(code: string): Promise<RoomLoadOutcome> {
+  const result = await loadEnvelope(code);
+  if (result.status !== "ok") return result;
+
+  const room = restoreRoomFromEnvelope(result.envelope);
+  // Nối tiếp dãy số ghi của process trước: lời ghi đầu tiên của process này
+  // phải LỚN HƠN bản đang nằm trong Redis, nếu không compare-and-set sẽ bỏ nó.
+  opSeqs.set(code, result.envelope.opSeq);
+  rooms.set(code, room);
+
+  return { status: "ok", room };
+}
+
+/**
+ * Mã phòng đã có người dùng chưa.
+ *
+ * Chỉ hỏi sự tồn tại của khoá, KHÔNG dựng lại phòng: việc sinh mã cho một
+ * phòng mới không có lý do gì để đánh thức một ván của người khác dậy.
+ * Redis chết thì trả `false` - một va chạm mã là chuyện gần như không xảy ra,
+ * còn chặn hẳn việc tạo phòng khi Redis chết thì trái với thoả thuận
+ * "best-effort lúc chạy".
+ */
+export async function roomCodeTaken(code: string): Promise<boolean> {
+  if (rooms.has(code)) return true;
   try {
-    const raw = await redis.get(`room:${code}`);
-    if (!raw) return null;
-    const data = JSON.parse(raw) as SerializedRoom;
-    // Phòng lưu trước khi có một role mới thiếu hẳn khoá của role đó. Mặc định
-    // false: một ván cũ không bao giờ tự dưng bật thêm vai khi được nạp lại.
-    const storedConfig = data.config as RoomConfig & {
-      hunter?: boolean;
-      cursed?: boolean;
-      defenseSeconds?: number;
-      finalVoteSeconds?: number;
-    };
-    const normalizedConfig: RoomConfig = {
-      ...storedConfig,
-      hunter: storedConfig.hunter ?? false,
-      cursed: storedConfig.cursed ?? false,
-      // Phòng lưu trước khi có phiên toà thiếu hẳn hai mốc này. roomConfigSchema
-      // là .strict() nên thiếu trường là lần cập nhật cấu hình kế tiếp sẽ hỏng.
-      defenseSeconds: storedConfig.defenseSeconds ?? DEFAULT_ROOM_CONFIG.defenseSeconds,
-      finalVoteSeconds: storedConfig.finalVoteSeconds ?? DEFAULT_ROOM_CONFIG.finalVoteSeconds,
-    };
-    const normalizedEngineState = data.engineState
-      ? { ...data.engineState, config: normalizedConfig }
-      : null;
-    const room: Room = {
-      code: data.code,
-      hostId: data.hostId,
-      status: data.status,
-      // Sau khi process khởi động lại thì chưa ai kịp nối lại: cho tất cả một
-      // khoảng ân hạn mới thay vì coi như họ đã rớt từ lâu.
-      members: data.members.map((m) => ({ ...m, connected: false, disconnectedAt: Date.now() })),
-      config: normalizedConfig,
-      engine: normalizedEngineState ? new GameEngine(normalizedEngineState) : null,
-      chatLog: data.chatLog ?? [],
-      createdAt: data.createdAt,
-      gameId: null,
-      resultWritten: false,
-      pendingStep: null,
-      phaseSeq: 0,
-    };
-    // Không khôi phục phòng đang trong trận về trạng thái timer cũ:
-    // nếu server restart giữa chừng trận, trả phòng về LOBBY an toàn.
-    if (room.status === "IN_GAME") {
-      room.status = "LOBBY";
-      room.engine = null;
-      for (const m of room.members) m.ready = false;
-    }
-    rooms.set(code, room);
-    return room;
+    return (await redis.exists(`room:${code}`)) === 1;
   } catch {
-    return null;
+    return false;
   }
 }
