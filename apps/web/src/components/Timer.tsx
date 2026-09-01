@@ -63,7 +63,7 @@ export function Timer({ endsAt }: { endsAt: number | null }) {
       </svg>
       <span
         className={`absolute inset-0 grid place-items-center font-mono text-[11px] font-bold tabular-nums ${
-          endsAt === null ? "text-mist/60" : danger ? "text-blood-400" : "text-white"
+          endsAt === null ? "text-mist/60" : danger ? "text-blood-400 timer-danger-pulse" : "text-white"
         }`}
       >
         {endsAt === null ? "--:--" : fmt(msLeft)}

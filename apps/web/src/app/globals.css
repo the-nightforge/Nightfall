@@ -838,3 +838,24 @@ summary:focus-visible,
   border-radius: 999px;
   background: rgba(157, 178, 213, 0.28);
 }
+
+/* Đồng hồ dưới 10 giây: nhịp đập đi kèm màu đỏ vốn đã có. */
+.timer-danger-pulse {
+  animation: timer-danger-pulse 1s ease-in-out infinite;
+}
+
+@keyframes timer-danger-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timer-danger-pulse {
+    animation: none;
+  }
+}
