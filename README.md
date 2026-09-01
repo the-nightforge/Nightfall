@@ -195,7 +195,7 @@ by EXIF, crops to a centred square, resizes to 256×256 and encodes WebP under
 5. Paste all six values into Render's environment variables and redeploy.
 
 The public URL and the endpoint are different hosts. Using the endpoint as the
-public base URL produces avatars that 401 in the browser.
+public base URL produces avatars that 403 in the browser.
 
 #### MinIO for local development
 
