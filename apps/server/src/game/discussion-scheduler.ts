@@ -78,6 +78,43 @@ interface DiscussionRun {
 const runs = new Map<string, DiscussionRun>();
 
 /**
+ * Bộ đếm của một phiên thảo luận, ở dạng lưu được.
+ *
+ * Phải sống sót qua restart vì id tin nhắn của BOT là TẤT ĐỊNH
+ * (`bot-chat:{vòng}:{total}`). Mở lại phiên với `total = 0` sẽ sinh đúng những
+ * id đã nằm trong `chatLog`, và `judgeChainPosition` cùng quan hệ `replyTo`
+ * bám thẳng vào id đó. `spoken`/`lastSpokenAt` đi kèm vì thiếu chúng thì một
+ * lần restart tự cấp lại hạn mức nói cho cả bàn trong cùng một vòng.
+ */
+export interface PersistedDiscussionRun {
+  round: number;
+  phaseEndsAt: number | null;
+  total: number;
+  lastAt: number;
+  spoken: Record<string, number>;
+  lastSpokenAt: Record<string, number>;
+  messageDepths: Record<string, number>;
+  replyCounts: Record<string, number>;
+}
+
+/** Ảnh chụp phiên đang mở của phòng; `null` khi không có phiên nào. */
+export function serializeDiscussionRun(roomCode: string): PersistedDiscussionRun | null {
+  const run = runs.get(roomCode);
+  if (!run) return null;
+
+  return {
+    round: run.round,
+    phaseEndsAt: run.phaseEndsAt,
+    total: run.total,
+    lastAt: run.lastAt,
+    spoken: Object.fromEntries(run.spoken),
+    lastSpokenAt: Object.fromEntries(run.lastSpokenAt),
+    messageDepths: Object.fromEntries(run.messageDepths),
+    replyCounts: Object.fromEntries(run.replyCounts),
+  };
+}
+
+/**
  * Dừng mọi phản hồi đang chờ của một phòng.
  *
  * Gọi khi pha đổi, khi cả làng bấm bỏ qua thảo luận, hoặc khi ván kết thúc.
@@ -107,7 +144,15 @@ function stillValid(room: Room, run: DiscussionRun, botId: string): boolean {
   return state.players.find((player) => player.id === botId)?.alive === true;
 }
 
-export function runDiscussionScheduler(room: Room): void {
+/**
+ * `resumeFrom` là ảnh chụp của phiên vừa bị process chết cắt ngang. Nó chỉ được
+ * dùng khi CÙNG VÒNG: một ảnh của vòng khác nói về một cuộc trò chuyện đã kết
+ * thúc, và áp nó vào sẽ khoá miệng cả bàn bằng hạn mức của ngày hôm trước.
+ */
+export function runDiscussionScheduler(
+  room: Room,
+  resumeFrom?: PersistedDiscussionRun | null,
+): void {
   cancelDiscussionScheduler(room.code);
   if (!room.engine || room.engine.state.phase !== "DAY_DISCUSSION") return;
 
@@ -117,17 +162,19 @@ export function runDiscussionScheduler(room: Room): void {
   const botMembers = room.members.filter((member) => member.isBot);
   if (botMembers.length === 0) return;
 
+  const resumed = resumeFrom && resumeFrom.round === room.engine.state.round ? resumeFrom : null;
+
   const run: DiscussionRun = {
     cancelled: false,
     engine: room.engine,
     round: room.engine.state.round,
     phaseEndsAt: room.engine.state.phaseEndsAt,
-    spoken: new Map(),
-    total: 0,
-    lastAt: 0,
-    lastSpokenAt: new Map(),
-    messageDepths: new Map(),
-    replyCounts: new Map(),
+    spoken: new Map(Object.entries(resumed?.spoken ?? {})),
+    total: resumed?.total ?? 0,
+    lastAt: resumed?.lastAt ?? 0,
+    lastSpokenAt: new Map(Object.entries(resumed?.lastSpokenAt ?? {})),
+    messageDepths: new Map(Object.entries(resumed?.messageDepths ?? {})),
+    replyCounts: new Map(Object.entries(resumed?.replyCounts ?? {})),
   };
   runs.set(room.code, run);
 

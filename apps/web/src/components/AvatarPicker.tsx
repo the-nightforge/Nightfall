@@ -1,58 +1,96 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { getIdentity } from "@/lib/identity";
+import {
+  AVATAR_ACCEPT,
+  deleteAvatar,
+  uploadAvatar,
+  validateAvatarFile,
+} from "@/lib/avatar-upload";
 
 interface Props {
   currentUrl?: string | null;
-  onSave: (avatarUrl: string | null) => void;
+  /** Gọi khi thao tác xong, để chỗ đặt picker tự đóng lại. */
+  onDone?: () => void;
 }
 
-export function AvatarPicker({ currentUrl, onSave }: Props) {
+/**
+ * Chọn ảnh, xem trước, tải lên.
+ *
+ * Không crop và không encode gì ở đây nữa: server tự xoay theo EXIF, crop vuông,
+ * thu về 256 và encode WebP. Trình duyệt chỉ còn hiển thị - preview dùng
+ * createObjectURL chứ không phải data URL, nên không có chuỗi base64 nào được
+ * dựng trong bộ nhớ tab.
+ *
+ * Ảnh hiện tại KHÔNG bị đụng cho tới khi server trả về thành công, nên một lần
+ * tải hỏng giữa chừng không làm mất avatar đang có.
+ */
+export function AvatarPicker({ currentUrl, onDone }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const handleFile = async (file: File) => {
+  // Thu hồi object URL khi đổi ảnh hoặc rời component: mỗi createObjectURL giữ
+  // nguyên tấm ảnh trong bộ nhớ tab cho tới khi được revoke.
+  useEffect(() => {
+    if (!previewUrl) return;
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
+
+  const pick = (picked: File) => {
+    const message = validateAvatarFile(picked);
+    if (message) {
+      setError(message);
+      return;
+    }
     setError(null);
-    if (file.size > 5 * 1024 * 1024) {
-      setError("Ảnh phải < 5MB");
-      return;
-    }
-    if (!file.type.startsWith("image/")) {
-      setError("Chỉ chấp nhận file ảnh");
-      return;
-    }
-    const dataUrl = await fileToCroppedDataUrl(file, 256);
-    if (!dataUrl) {
-      setError("Không đọc được ảnh");
-      return;
-    }
-    if (BufferByteLength(dataUrl) > 5 * 1024 * 1024) {
-      setError("Ảnh sau crop vẫn quá lớn");
-      return;
-    }
-    setPreview(dataUrl);
+    setFile(picked);
+    setPreviewUrl(URL.createObjectURL(picked));
   };
 
-  const handleSave = async () => {
-    if (!preview) return;
-    setSaving(true);
+  const reset = () => {
+    setFile(null);
+    setPreviewUrl(null);
+    setProgress(null);
+  };
+
+  const handleUpload = async () => {
+    const identity = getIdentity();
+    if (!file || !identity) return;
+
+    setBusy(true);
+    setError(null);
+    setProgress(0);
     try {
-      await onSave(preview);
-      setPreview(null);
+      await uploadAvatar(file, identity, setProgress);
+      reset();
+      onDone?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Tải ảnh thất bại");
+      setProgress(null);
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   };
 
   const handleRemove = async () => {
-    setSaving(true);
+    const identity = getIdentity();
+    if (!identity) return;
+
+    setBusy(true);
+    setError(null);
     try {
-      await onSave(null);
-      setPreview(null);
+      await deleteAvatar(identity);
+      reset();
+      onDone?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Xoá ảnh thất bại");
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   };
 
@@ -61,77 +99,80 @@ export function AvatarPicker({ currentUrl, onSave }: Props) {
       <input
         ref={inputRef}
         type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif"
+        accept={AVATAR_ACCEPT}
         className="hidden"
         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) handleFile(f);
+          const picked = e.target.files?.[0];
+          if (picked) pick(picked);
           e.target.value = "";
         }}
       />
       <div className="flex gap-1.5">
         <button
           type="button"
-          className="rounded-lg bg-white/10 px-2.5 py-1 text-xs font-semibold text-white hover:bg-white/15"
+          className="rounded-lg bg-white/10 px-2.5 py-1 text-xs font-semibold text-white hover:bg-white/15 disabled:opacity-50"
           onClick={() => inputRef.current?.click()}
+          disabled={busy}
         >
           📷 Chọn ảnh
         </button>
-        {currentUrl && (
+        {currentUrl && !file && (
           <button
             type="button"
-            className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-mist/70 hover:bg-white/5"
+            className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-mist/70 hover:bg-white/5 disabled:opacity-50"
             onClick={handleRemove}
-            disabled={saving}
+            disabled={busy}
           >
-            Xóa
+            {busy ? "Đang xoá..." : "Xóa"}
           </button>
         )}
       </div>
-      {preview && (
+
+      {previewUrl && (
         <div className="rounded-xl border border-white/10 bg-night-800 p-3">
-          <p className="mb-1 text-xs text-mist/60">Xem trước (256×256, tự crop vuông):</p>
+          <p className="mb-1 text-xs text-mist/60">Xem trước — máy chủ sẽ cắt vuông 256×256:</p>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview} alt="preview" className="mx-auto h-24 w-24 rounded-full object-cover ring-1 ring-white/10" />
+          <img
+            src={previewUrl}
+            alt="Ảnh vừa chọn"
+            className="mx-auto h-24 w-24 rounded-full object-cover ring-1 ring-white/10"
+          />
+
+          {progress !== null && (
+            <div className="mt-2">
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full bg-white/70 transition-[width] duration-150"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <p className="mt-1 text-center text-[11px] text-mist/60">Đang tải lên {progress}%</p>
+            </div>
+          )}
+
           <div className="mt-2 flex gap-2">
-            <button type="button" className="btn-primary flex-1 text-xs" onClick={handleSave} disabled={saving}>
-              {saving ? "Đang lưu..." : "Lưu"}
+            <button
+              type="button"
+              className="btn-primary flex-1 text-xs"
+              onClick={handleUpload}
+              disabled={busy}
+            >
+              {busy ? "Đang tải..." : error ? "Thử lại" : "Tải lên"}
             </button>
-            <button type="button" className="btn-secondary flex-1 text-xs" onClick={() => setPreview(null)}>
+            <button
+              type="button"
+              className="btn-secondary flex-1 text-xs"
+              onClick={reset}
+              disabled={busy}
+            >
               Hủy
             </button>
           </div>
         </div>
       )}
+
       {error && <p className="text-xs text-blood-400">{error}</p>}
-      <p className="text-[11px] text-mist/60">JPG/PNG/WebP &lt;5MB, tự crop vuông 256px.</p>
+      <p className="text-[11px] text-mist/60">JPG/PNG/WebP &lt;5MB, máy chủ tự cắt vuông 256px.</p>
     </div>
   );
-}
-
-async function fileToCroppedDataUrl(file: File, size: number): Promise<string | null> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        resolve(null);
-        return;
-      }
-      const min = Math.min(img.width, img.height);
-      const sx = (img.width - min) / 2;
-      const sy = (img.height - min) / 2;
-      ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
-      resolve(canvas.toDataURL("image/webp", 0.85));
-    };
-    img.onerror = () => resolve(null);
-    img.src = URL.createObjectURL(file);
-  });
-}
-
-function BufferByteLength(str: string): number {
-  return new Blob([str]).size;
 }

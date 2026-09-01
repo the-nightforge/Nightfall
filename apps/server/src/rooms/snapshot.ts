@@ -3,6 +3,25 @@ import { generateWarnings } from "@masoi/game-engine";
 import { getDiscussionSkipView } from "../game/discussion-skip";
 import type { Room } from "./store";
 import { voiceViewFor } from "../voice/service";
+import { objectStorage } from "../storage";
+
+/**
+ * Lưới an toàn cuối cùng cho việc "snapshot chỉ chứa URL ngắn".
+ *
+ * Data URL cũ vẫn còn trong DB của những người đã đặt avatar trước khi có object
+ * storage. Khi storage đã bật, việc di trú đã chạy ở lúc vào phòng - nên bất kỳ
+ * data URL nào còn sót lại tới đây đều là dấu hiệu di trú hỏng, và đẩy vài MB
+ * base64 cho 12 người là cái giá quá đắt để hiển thị một cái ảnh. Hiện avatar
+ * mặc định thay vì làm nghẽn cả phòng.
+ *
+ * Khi storage CHƯA bật (dev), để nguyên: ở đó chưa có đường nào tạo URL object,
+ * nên lọc đi chỉ tổ làm mất avatar mà không đổi lại được gì.
+ */
+function safeAvatarUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value === "") return null;
+  if (value.startsWith("data:")) return objectStorage().configured ? null : value;
+  return value;
+}
 
 function isHunterReactionParticipant(room: Room, playerId: string): boolean {
   return room.engine?.state.hunterReaction?.hunterId === playerId;
@@ -179,7 +198,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
           name: member.name,
           ready: member.ready,
           connected: member.connected,
-          avatarUrl: (member as any)?.avatarUrl ?? null,
+          avatarUrl: safeAvatarUrl((member as any)?.avatarUrl),
           role: gameView?.you?.role,
           alive: gameView?.you?.alive ?? true,
           cursedTurned: gameView?.you?.cursedTurned,
@@ -194,7 +213,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
             name: p.name,
             alive: p.alive,
             isBot: p.isBot,
-            avatarUrl: (member as any)?.avatarUrl ?? null,
+            avatarUrl: safeAvatarUrl((member as any)?.avatarUrl),
             role: p.role,
             cursedTurned: p.cursedTurned,
             voteCount: p.voteCount,
@@ -208,7 +227,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
         name: m.name,
         alive: true,
         isBot: m.isBot,
-        avatarUrl: (m as any)?.avatarUrl ?? null,
+        avatarUrl: safeAvatarUrl((m as any)?.avatarUrl),
         voteCount: 0,
         ready: m.ready,
         connected: m.connected,

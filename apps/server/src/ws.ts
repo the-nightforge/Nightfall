@@ -29,7 +29,8 @@ import { config } from "./config";
 import { GameError } from "@masoi/game-engine";
 import { roomService, RoomError, scheduleAbandonedRoomCheck } from "./rooms/service";
 import { getRoomSyncByPlayer } from "./rooms/index-helpers";
-import { getRoom, loadRoomFromRedis, persistRoom } from "./rooms/store";
+import { getRoom, persistRoom } from "./rooms/store";
+import { loadAndResumeRoom } from "./rooms/load";
 import { trackSocket, untrackSocket, broadcastRoom, hasConnection } from "./rooms/broadcast";
 import {
   maybeEndFinalVoteEarly,
@@ -43,9 +44,38 @@ import { getPlayerRoom, updateSessionRoom } from "./redis";
 import { reconnectPlayer } from "./rooms/reconnect";
 import { allowAction } from "./rate-limit";
 import { issueVoiceToken, syncVoiceForPlayer } from "./voice/service";
+import { clearAvatar } from "./avatar/service";
 
 interface AuthedSocket extends Socket {
   data: { playerId: string };
+}
+
+/**
+ * Tách khỏi setupSocket để test được: handleError vốn là closure cục bộ trong
+ * io.on("connection", ...), không có cách nào import thẳng vào test.
+ *
+ * ZodError nghĩa là payload không khớp schema hiện tại - client cũ đã cache
+ * trên Vercel còn gửi hình dạng payload cũ (ví dụ room:update-avatar kèm một
+ * chuỗi base64, từ trước khi schema bị siết lại chỉ còn nhận payload rỗng) là
+ * đường THẬT dẫn tới đây, không phải lỗi lập trình. "Có lỗi xảy ra, vui lòng
+ * thử lại" đúng nhưng vô dụng ở đây: bấm lại gửi lại đúng payload cũ đó, lỗi
+ * lặp lại y hệt. Chỉ có tải lại trang (lấy bundle mới, đi cùng schema mới) mới
+ * sửa được, nên nói thẳng điều đó thay vì câu chung chung.
+ *
+ * Nhận diện bằng err.name === "ZodError" thay vì instanceof ZodError: schema
+ * (updateAvatarPayload,...) đến từ @masoi/shared, biên dịch/đóng gói riêng
+ * với server - "zod" có bản build ESM (index.js) và CJS (index.cjs) tách
+ * biệt, và tuỳ đường mỗi phía nạp module (import so với require) mà instanceof
+ * xuyên hai bản build đó có thể sai dù cùng một package.json version. `name`
+ * là chuỗi ổn định do chính lớp ZodError tự gán, không phụ thuộc identity của
+ * class.
+ */
+export function socketErrorMessage(err: unknown): string {
+  if (err instanceof RoomError || err instanceof GameError) return err.message;
+  if (err instanceof Error && err.name === "ZodError") {
+    return "Phiên bản trang đã cũ, hãy tải lại trang rồi thử lại";
+  }
+  return "Có lỗi xảy ra, vui lòng thử lại";
 }
 
 export function setupSocket(io: SocketServer): void {
@@ -89,28 +119,38 @@ export function setupSocket(io: SocketServer): void {
     trackSocket(playerId, socket);
 
     const handleError = (err: unknown): void => {
-      const message =
-        err instanceof RoomError || err instanceof GameError
-          ? err.message
-          : "Có lỗi xảy ra, vui lòng thử lại";
-      socket.emit(SERVER_EVENTS.ERROR, { message });
+      socket.emit(SERVER_EVENTS.ERROR, { message: socketErrorMessage(err) });
     };
 
     // Tự động rejo vào phòng cũ nếu còn session
     (async () => {
-      const room = await reconnectPlayer(playerId, {
+      const outcome = await reconnectPlayer(playerId, {
         findCachedRoom: (id) => {
           const roomCode = getRoomSyncByPlayer(id);
           return roomCode ? getRoom(roomCode) : undefined;
         },
         getPersistedRoomCode: getPlayerRoom,
-        loadRoom: loadRoomFromRedis,
+        loadRoom: loadAndResumeRoom,
         clearPersistedRoom: (id) => updateSessionRoom(id, null),
         saveRoom: persistRoom,
       });
-      if (room) {
-        await socket.join(room.code);
-        broadcastRoom(room.code);
+
+      if (outcome.status === "joined") {
+        await socket.join(outcome.room.code);
+        broadcastRoom(outcome.room.code);
+        return;
+      }
+
+      // Hai trường hợp dưới đây phải NÓI ra. Im lặng thả người chơi về màn hình
+      // trống là để họ tự đoán mình có còn ván hay không.
+      if (outcome.status === "unavailable") {
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: "Máy chủ chưa đọc được dữ liệu phòng, thử tải lại sau ít giây",
+        });
+      } else if (outcome.status === "corrupt") {
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: "Ván trước không khôi phục được sau khi máy chủ khởi động lại",
+        });
       }
     })().catch(() => undefined);
 
@@ -162,10 +202,21 @@ export function setupSocket(io: SocketServer): void {
       roomService.updateConfig(playerId, cfg);
     });
 
+    /*
+     * Chỉ còn đường XOÁ. Ảnh đi lên qua PUT /api/players/me/avatar, nơi có
+     * kiểm magic bytes và xử lý ảnh - gửi vài MB base64 qua socket thì snapshot
+     * của cả phòng phình theo, đó chính là lỗi mà endpoint kia sinh ra để sửa.
+     * Giữ sự kiện lại vì client cũ đã cache trên Vercel vẫn phải bấm Xóa được.
+     */
     handler(CLIENT_EVENTS.ROOM_UPDATE_AVATAR, async (payload) => {
-      const { avatarUrl } = updateAvatarPayload.parse(payload);
-      if (!allowAction(`avatar:${playerId}`, 5, 10_000)) throw new RoomError("Thao tác quá nhanh");
-      await roomService.updateAvatar(playerId, avatarUrl);
+      updateAvatarPayload.parse(payload);
+      // Cùng rổ `avatar:${playerId}` với PUT/DELETE /api/players/me/avatar
+      // (xem routes.ts) - cửa sổ PHẢI khớp 60_000ms, không phải 10_000ms:
+      // allowAction lọc theo cửa sổ truyền vào lúc GỌI, nên một cửa sổ ngắn
+      // hơn ở đây cho phép khoảng 30 lượt clearAvatar/phút qua socket trong
+      // khi đường HTTP chỉ cho 5 lượt/phút cho đúng việc đó.
+      if (!allowAction(`avatar:${playerId}`, 5, 60_000)) throw new RoomError("Thao tác quá nhanh");
+      await clearAvatar(playerId);
     });
 
     handler(CLIENT_EVENTS.ROOM_ADD_BOT, async (payload) => {

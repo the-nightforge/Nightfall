@@ -29,6 +29,7 @@
 - [Game rules](#game-rules)
 - [Voice chat](#voice-chat)
 - [Bot AI](#bot-ai)
+- [Crash recovery](#crash-recovery)
 - [API reference](#api-reference)
 - [Scripts](#scripts)
 - [Testing](#testing)
@@ -160,6 +161,57 @@ Leave all three empty to disable voice entirely. Setting only some of them makes
 | `LIVEKIT_API_SECRET` | LiveKit API secret |
 | `LIVEKIT_ENV` | Namespace prefix, so `dev` and `prod` rooms never collide |
 
+### Object storage for avatars (optional)
+
+Player avatars are uploaded to any S3-compatible bucket — Cloudflare R2, AWS S3
+or MinIO. Leave **all six** variables empty to disable uploads; the game runs
+normally on the built-in default avatars. Filling in only *some* of them throws
+at startup rather than silently disabling the feature.
+
+| Variable | Purpose |
+| --- | --- |
+| `OBJECT_STORAGE_ENDPOINT` | S3 API endpoint used for signing |
+| `OBJECT_STORAGE_REGION` | `auto` for R2, a real region for S3, anything for MinIO |
+| `OBJECT_STORAGE_BUCKET` | Bucket that holds the avatars |
+| `OBJECT_STORAGE_ACCESS_KEY_ID` | Access key |
+| `OBJECT_STORAGE_SECRET_ACCESS_KEY` | Secret key |
+| `OBJECT_STORAGE_PUBLIC_BASE_URL` | Public read URL — **not** the signing endpoint. Must be HTTPS in production. |
+
+Uploads go to `PUT /api/players/me/avatar`. The server sniffs magic bytes
+(JPEG/PNG/WebP only — the client-declared MIME type is ignored), auto-rotates
+by EXIF, crops to a centred square, resizes to 256×256 and encodes WebP under
+200 KB. Object keys are random, so a user's filename never reaches the bucket.
+
+#### Cloudflare R2
+
+1. Cloudflare dashboard → **R2** → **Create bucket**, name it `masoi-avatars`.
+2. In the bucket's **Settings**, attach a **custom domain** and use that as
+   `OBJECT_STORAGE_PUBLIC_BASE_URL`. Prefer this over the **Public Development
+   URL** (`https://pub-<hash>.r2.dev`): Cloudflare rate-limits `r2.dev`
+   specifically to discourage production traffic, and it would bite a
+   twelve-player room the moment avatars start loading slowly or getting
+   throttled. Use `r2.dev` for quick local testing only, never for a deployed
+   game.
+3. **R2** → **Manage API Tokens** → **Create API Token**, permission
+   *Object Read & Write*, scoped to that bucket. Copy the access key ID and
+   secret.
+4. The token page also shows the S3 endpoint
+   `https://<account-id>.r2.cloudflarestorage.com` — that is
+   `OBJECT_STORAGE_ENDPOINT`. Set `OBJECT_STORAGE_REGION=auto`.
+5. Paste all six values into Render's environment variables and redeploy.
+
+The public URL and the endpoint are different hosts. Using the endpoint as the
+public base URL produces avatars that 403 in the browser.
+
+#### MinIO for local development
+
+`npm run dev:infra` already starts MinIO and creates the bucket with public
+read access. Copy the object storage block from `.env.example` as-is — it
+matches the compose file. The MinIO console is at <http://localhost:9001>
+(`masoi` / `masoi_dev_password`).
+
+`http://` public URLs are accepted only when `NODE_ENV` is not `production`.
+
 ### Bot AI (optional)
 
 Providers are tried top to bottom. A stage is skipped when any of its parts is missing; if no stage is configured, bots still play — they just use canned phrasing instead of generated speech.
@@ -281,6 +333,37 @@ Bots can claim roles in chat (a Seer announcing a wolf hit, a wolf claiming fals
 
 Run a self-play batch with `npm run selfplay`, or probe a live provider with `npm run bot:probe`.
 
+## Crash recovery
+
+A backend restart no longer ends the match. Every authoritative state transition
+writes a versioned snapshot to Redis (`room:{CODE}`); when a player reconnects,
+the room is validated with Zod, rebuilt, and resumed — same round, same phase,
+same votes, same bot memories, same clock.
+
+Three details carry most of the weight:
+
+- **No timer handle is ever persisted.** What gets stored is the *pending step*
+  — a name plus an absolute `runAt` — so a fresh process knows what the match is
+  waiting for without having to infer it from the phase. Inferring would break
+  on night, where one `NIGHT` phase has two stages.
+- **A phase token guards every transition** (`round:phase:phaseSeq`). A step
+  carrying a stale token is a step from a situation that no longer exists, so it
+  is dropped. This is what makes "no phase and no side effect runs twice" a
+  structural property rather than a hope — it holds for the leftover timer, the
+  re-armed timer, and the deadline catch-up alike.
+- **Bot RNG stores a cursor, not a state.** The generator is counter-based, so
+  one integer reopens the exact stream. Bots therefore do not change their minds
+  just because the process died.
+
+A snapshot that fails validation is **quarantined**, never guessed at: the key
+is moved aside for 24 hours, a structured `snapshot.invalid` line is logged, and
+the player is told plainly. Redis being unreachable is kept distinct from the
+room not existing — one asks the player to retry and changes nothing, the other
+cleans up.
+
+Operational details — keys, TTLs, log lines, deploy checklist, when to bump
+`persistenceVersion` — are in [`docs/operations-recovery.md`](docs/operations-recovery.md).
+
 ## API reference
 
 ### REST
@@ -289,6 +372,8 @@ Run a self-play batch with `npm run selfplay`, or probe a live provider with `np
 |---|---|---|---|---|
 | `POST` | `/api/players` | `{ nickname }` | `{ playerId, token, nickname }` | Guest registration. The client keeps the token; the server stores only its SHA-256. Rate-limited per IP. |
 | `GET` | `/api/players/me/matches` | — | `{ matches: MatchHistoryEntry[] }` | The caller's 20 most recent finished matches, each with its stored case file when one exists. Requires `Authorization: Bearer <token>`; answers `401` without a valid one. Matched by player id inside the stored roster, so games recorded before ids were stored do not appear. |
+| `PUT` | `/api/players/me/avatar` | `multipart/form-data`, field `file` | `{ avatarUrl }` | Bearer auth. ≤ 5 MB. Format is decided by magic bytes (JPEG/PNG/WebP), never by the client-declared MIME type. The server auto-rotates by EXIF, crops to a centred square, resizes to 256×256 and encodes WebP under 200 KB. `503` when object storage is not configured. |
+| `DELETE` | `/api/players/me/avatar` | — | `204` | Bearer auth. Clears the avatar and deletes the stored object. Succeeds even when object storage is not configured — the database is the source of truth for "has an avatar". |
 | `GET` | `/api/health` | — | `{ ok, db, redis, version, startedAt }` | `503` when PostgreSQL is down. Redis trouble reports `redis: false` but still returns `200`, since in-memory rooms remain playable. |
 
 `version` is the first 7 characters of the running commit (from `RENDER_GIT_COMMIT`), or `dev` outside a deploy environment — compare it against `git rev-parse --short HEAD` to confirm what is actually live.
@@ -309,7 +394,7 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `room:kick` | `{ targetId }` | Host, before start |
 | `room:update-config` | `{ config }` | Host, outside a match |
 | `room:add-bot` | `{}` | Host, outside a match |
-| `room:update-avatar` | `{ avatarUrl }` | Member; `data:image/*`, ≤ 5 MB |
+| `room:update-avatar` | `{ avatarUrl: null }` | Member; removal only. Uploads go through `PUT /api/players/me/avatar` — sending image data over Socket.IO is what bloated every room snapshot. Kept so older cached clients can still remove an avatar. |
 | `room:start` | `{}` | Host; ≥ 6 players, valid config, all humans ready |
 | `room:reset` | `{}` | Host after `GAME_OVER` → back to lobby |
 | `game:action` | `{ type, targetId?, targetId1?, targetId2? }` | Correct role, alive, during `NIGHT` |
@@ -356,16 +441,17 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `npm run bot:probe` | One real LLM call against a fake match, to validate keys and prompts |
 | `npm run voice:probe` | One real LiveKit round trip, to validate credentials and token grants |
 | `npm run test:e2e` | Socket.IO smoke test; needs a running local server. Not yet a release gate |
+| `npm run test:e2e:recovery` | Starts a server, SIGKILLs it mid-match, restarts it, and asserts the match resumes. Needs `dev:infra` |
 
 ## Testing
 
 | Package | Runner | Tests |
 |---|---|---|
-| `@masoi/shared` | Vitest | **72** |
-| `@masoi/game-engine` | Vitest | **1506** |
-| `@masoi/server` | Vitest | **553** |
-| `@masoi/web` | `node:test` | **354** |
-| | | **2485 total** |
+| `@masoi/shared` | Vitest | **75** |
+| `@masoi/game-engine` | Vitest | **1514** |
+| `@masoi/server` | Vitest | **767** |
+| `@masoi/web` | `node:test` | **362** |
+| | | **2718 total** |
 
 The engine suite includes seeded self-play runs that assert invariants across hundreds of full matches — no illegal move is ever accepted, no bot ever learns a role it should not know, and the same seed reproduces a match bit-for-bit.
 
@@ -422,8 +508,10 @@ CI runs build → test → lint on every push and pull request, and deploys prev
 
 Stated plainly, because knowing where the edges are is more useful than pretending they do not exist.
 
-- **Single instance only.** Room state lives in RAM; Redis is a recovery copy. A restart mid-match returns the room to the lobby rather than resuming it.
-- **`BotBrainState` is not persisted.** A restart mid-match wipes what the bots had learned that game.
+- **Single instance only.** Room state lives in RAM; Redis is a recovery copy. There is no distributed lock, so two processes serving the same room code would fight over it — the `opSeq` compare-and-set limits the damage but does not solve it.
+- **Recovery is best-effort on the Redis side.** If Redis is down *at the moment* the process dies, the match is lost. That is a deliberate trade: a slow Redis must never stall a live table.
+- **Rooms wake up lazily**, when someone reconnects. A match left with only bots stays frozen until a human returns or the 6-hour TTL expires.
+- **LLM speech is not replayed.** After a restore, bots say new sentences; only their *decisions* are deterministic.
 - **No chat persistence.** Match history records the result, the final roster and the case file, not the conversation.
 - **Case files only exist from the match that introduced them onward.** Games finished before the column was added show their roster but no turning points; the ingredients live only in the room's memory, so they cannot be reconstructed after the fact.
 - **Voice is daytime-only** and audio-only — no video.
@@ -432,7 +520,7 @@ Stated plainly, because knowing where the edges are is more useful than pretendi
 
 ## Documentation
 
-Design specifications and verification reports live in [`docs/`](docs/) — including the bot AI phase reports, the roles and events balance design, and the voice chat spec.
+Design specifications and verification reports live in [`docs/`](docs/) — including the bot AI phase reports, the roles and events balance design, the voice chat spec, and the [crash recovery runbook](docs/operations-recovery.md).
 
 ---
 

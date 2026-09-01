@@ -6,8 +6,11 @@ import { redis } from "./redis";
 import { config } from "./config";
 import { allowAction } from "./rate-limit";
 import { buildVersion, healthHttpStatus, redisConnectionHealthy } from "./health";
+import { avatarRouter } from "./avatar/routes";
+import { requirePlayer, type PlayerRequest } from "./auth";
 
 export const apiRouter = Router();
+apiRouter.use(avatarRouter);
 
 /** Mốc khởi động, để phân biệt "đã deploy lại" với "chỉ restart". */
 const STARTED_AT = Date.now();
@@ -96,21 +99,10 @@ apiRouter.post("/players", async (req, res) => {
  * của TOÀN SERVER có thể không chứa ván nào của người đang hỏi, và giao diện
  * sẽ lặng lẽ báo "chưa có ván nào".
  */
-apiRouter.get("/players/me/matches", async (req, res) => {
-  const auth = req.header("authorization") ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-  if (!token) {
-    res.status(401).json({ error: "Thiếu thông tin xác thực" });
-    return;
-  }
+apiRouter.get("/players/me/matches", requirePlayer, async (req, res) => {
+  const player = (req as PlayerRequest).player!;
 
   try {
-    const player = await prisma.player.findUnique({ where: { tokenHash: sha256(token) } });
-    if (!player) {
-      res.status(401).json({ error: "Phiên đăng nhập không hợp lệ" });
-      return;
-    }
-
     const rows = await prisma.$queryRaw<GameResultRow[]>`
       SELECT "roomCode", "winner", "round", "durationSec", "playerRoles", "caseFile", "createdAt"
       FROM "GameResult"

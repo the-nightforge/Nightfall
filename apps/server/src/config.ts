@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { resolveObjectStorageConfig } from "./storage/config";
 
 dotenv.config();
 
@@ -95,6 +96,7 @@ export function resolveVoiceConfig(env: NodeJS.ProcessEnv): VoiceConfigResult {
 export const config = {
   port: resolvePort(process.env),
   voice: resolveVoiceConfig(process.env),
+  objectStorage: resolveObjectStorageConfig(process.env),
   redisUrl: process.env.REDIS_URL ?? "redis://127.0.0.1:6380",
   nodeEnv: process.env.NODE_ENV ?? "development",
   corsOrigin: process.env.CORS_ORIGIN ?? "*",

@@ -11,6 +11,8 @@ import { prisma } from "./db";
 import { botBrain } from "./bots";
 import { createLiveKitAdmin } from "./voice/livekit";
 import { setVoiceAdmin } from "./voice/service";
+import { initObjectStorage } from "./storage";
+import { apiErrorFallback } from "./error-middleware";
 
 async function main(): Promise<void> {
   const corsOrigin = config.corsOrigin === "*" ? true : config.corsOrigin.split(",");
@@ -32,6 +34,10 @@ async function main(): Promise<void> {
 
   app.use("/api", apiRouter);
 
+  // Xem apiErrorFallback trong error-middleware.ts để biết vì sao lưới này
+  // cần thiết và vì sao nó được tách ra module riêng.
+  app.use(apiErrorFallback);
+
   const server = http.createServer(app);
   const io = new Server(server, {
     cors: { origin: corsOrigin },
@@ -45,6 +51,13 @@ async function main(): Promise<void> {
   // có nguồn sự thật thứ hai.
   if (config.voice.enabled) setVoiceAdmin(createLiveKitAdmin(config.voice), config.voice);
   console.log(`[server] Voice chat: ${config.voice.enabled ? `bật (${config.voice.env})` : "tắt"}`);
+
+  initObjectStorage(config.objectStorage);
+  console.log(
+    `[server] Object storage: ${
+      config.objectStorage.enabled ? `bật (${config.objectStorage.bucket})` : "tắt - avatar tải lên bị vô hiệu"
+    }`,
+  );
 
   const redisOk = await pingRedis();
   console.log(`[server] Redis: ${redisOk ? "OK" : "KHÔNG kết nối được - kiểm tra docker compose"}`);

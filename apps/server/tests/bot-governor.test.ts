@@ -106,3 +106,32 @@ describe("withTimeout", () => {
     expect(elapsed).toBeLessThan(1000);
   });
 });
+
+describe("ngân sách sống sót qua restart", () => {
+  it("đọc được số lượt đã tiêu của phòng", () => {
+    const gov = new BotGovernor(5);
+    gov.recordCall("ABCDE");
+    gov.recordCall("ABCDE");
+
+    expect(gov.callsUsed("ABCDE")).toBe(2);
+    expect(gov.callsUsed("KHACC")).toBe(0);
+  });
+
+  it("nạp lại ngân sách đã tiêu vào một governor mới", () => {
+    const fresh = new BotGovernor(5);
+    fresh.restore("ABCDE", 4);
+
+    expect(fresh.callsUsed("ABCDE")).toBe(4);
+    expect(fresh.canCall("ABCDE")).toBe(true);
+
+    fresh.recordCall("ABCDE");
+    expect(fresh.canCall("ABCDE")).toBe(false);
+  });
+
+  it("nạp lại ngân sách đã cạn thì không cho gọi thêm", () => {
+    const fresh = new BotGovernor(3);
+    fresh.restore("ABCDE", 3);
+
+    expect(fresh.canCall("ABCDE")).toBe(false);
+  });
+});

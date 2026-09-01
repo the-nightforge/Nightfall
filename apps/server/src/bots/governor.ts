@@ -72,6 +72,22 @@ export class BotGovernor {
   reset(roomCode: string): void {
     this.budgets.delete(roomCode);
   }
+
+  /** Số lượt đã tiêu, để snapshot của phòng ghi lại được. */
+  callsUsed(roomCode: string): number {
+    return this.budgets.get(roomCode)?.calls ?? 0;
+  }
+
+  /**
+   * Nạp lại ngân sách sau khi server khởi động lại.
+   *
+   * Không có bước này thì mỗi lần restart lại cấp thêm một hạn mức đầy cho
+   * cùng một ván: trần "bao nhiêu tiền cho MỘT ván" biến thành "bao nhiêu tiền
+   * cho một ván MỖI LẦN restart".
+   */
+  restore(roomCode: string, calls: number): void {
+    this.budgets.set(roomCode, { calls });
+  }
 }
 
 /** Chạy công việc với hạn chót cứng. Quá hạn hoặc lỗi đều trả null. */

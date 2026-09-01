@@ -5,6 +5,7 @@ import {
   type RoomConfig,
 } from "@masoi/shared";
 import { generateWarnings } from "@masoi/game-engine";
+import { resolveMemberAvatar } from "../avatar/legacy";
 import { prisma } from "../db";
 import { getPlayerRoom, updateSessionRoom } from "../redis";
 import { destroyVoiceRoom, dropVoiceParticipant } from "../voice/service";
@@ -16,13 +17,15 @@ import {
   createRoom,
   deletePersistedRoom,
   getRoom,
-  loadRoomFromRedis,
   persistRoom,
   removeRoom,
+  roomCodeTaken,
   setAbandonCheckTimer,
   type Room,
+  type RoomLoadOutcome,
   type RoomMember,
 } from "./store";
+import { loadAndResumeRoom } from "./load";
 import { getRoomSyncByPlayer } from "./index-helpers";
 import { reconcileDiscussionSkip, startGame, resetToLobby } from "../game/machine";
 import { DISCONNECT_GRACE_MS } from "../game/discussion-skip";
@@ -30,6 +33,33 @@ import { allRequiredPlayersReady, roomEntryError } from "./rules";
 import { withPlayerRoomLock } from "./player-room-lock";
 
 export class RoomError extends Error {}
+
+/**
+ * Kết quả nạp phòng, quy về một `Room` hoặc một lỗi NÓI RÕ chuyện gì đã xảy ra.
+ *
+ * Ba lối hỏng phải là ba câu khác nhau với người chơi: "không có phòng này" là
+ * chuyện thường ngày, "chưa đọc được dữ liệu" là hãy thử lại, còn "ván trước
+ * không khôi phục được" là một sự thật khó chịu nhưng phải nói thẳng - im lặng
+ * dựng một phòng trống ở chỗ một ván đang chơi mới là điều tệ nhất.
+ */
+function assertLoadedRoom(outcome: RoomLoadOutcome): Room {
+  if (outcome.status === "ok") {
+    // Một phòng vừa được đánh thức chưa có ai kết nối, và trong đó bot vẫn chơi
+    // tiếp. Hẹn kiểm bỏ hoang NGAY để nó không đánh trọn một ván trong căn
+    // phòng trống - người quay lại kịp thì lịch này tự bỏ qua.
+    scheduleAbandonedRoomCheck(outcome.room);
+    return outcome.room;
+  }
+  if (outcome.status === "unavailable") {
+    throw new RoomError("Máy chủ chưa đọc được dữ liệu phòng, thử lại sau ít giây");
+  }
+  if (outcome.status === "corrupt") {
+    throw new RoomError(
+      "Dữ liệu phòng đã hỏng nên ván cũ không khôi phục được. Hãy tạo phòng mới.",
+    );
+  }
+  throw new RoomError("Không tìm thấy phòng");
+}
 
 function assertMember(room: Room, playerId: string): RoomMember {
   const m = room.members.find((x) => x.playerId === playerId);
@@ -90,7 +120,7 @@ export const roomService = {
         throw new RoomError("Bạn phải rời phòng hiện tại trước khi tạo phòng khác");
       }
       let code = generateRoomCode();
-      while (getRoom(code) || (await loadRoomFromRedis(code))) {
+      while (await roomCodeTaken(code)) {
         code = generateRoomCode();
       }
       const playerRecord = await prisma.player.findUnique({ where: { id: playerId } });
@@ -101,7 +131,7 @@ export const roomService = {
         connected: true,
         disconnectedAt: null,
         isBot: false,
-        avatarUrl: (playerRecord as any)?.avatarUrl ?? null,
+        avatarUrl: await resolveMemberAvatar(playerRecord),
       };
       const room = createRoom(code, member);
       await persistRoom(room);
@@ -114,19 +144,28 @@ export const roomService = {
   async join(playerId: string, name: string, rawCode: string): Promise<Room> {
     return withPlayerRoomLock(playerId, async () => {
       const code = rawCode.trim().toUpperCase();
-      const room = getRoom(code) ?? (await loadRoomFromRedis(code));
-      if (!room) throw new RoomError("Không tìm thấy phòng");
+      const room = getRoom(code) ?? assertLoadedRoom(await loadAndResumeRoom(code));
 
       // Reconnect: đã là thành viên
       const existing = room.members.find((m) => m.playerId === playerId);
       const entryError = roomEntryError(await this.findRoomOf(playerId), code, room.status, !!existing);
       if (entryError) throw new RoomError(entryError);
       const player = await prisma.player.findUnique({ where: { id: playerId } });
+      const avatarUrl = await resolveMemberAvatar(player);
       if (existing) {
         existing.connected = true;
         existing.disconnectedAt = null;
         existing.name = name;
-        (existing as any).avatarUrl = (player as any)?.avatarUrl ?? (existing as any).avatarUrl ?? null;
+        // avatarUrl ở đây đến từ DB - nguồn sự thật DUY NHẤT kể từ khi nhánh
+        // này chuyển avatar sang object storage. null là một sự thật ("người
+        // này không có avatar"), không phải "chưa biết" - gán thẳng, KHÔNG
+        // dùng ?? existing.avatarUrl để "giữ tạm" giá trị cũ trong phòng: bản
+        // ghi phòng có thể còn avatarUrl cũ từ trước khi bị xoá (ví dụ phòng
+        // chỉ sống trong Redis lúc server restart, applyAvatarToRoom no-op vì
+        // getRoomSyncByPlayer miss), và DB + bucket đã dọn sạch object đó rồi.
+        // Rớt về giá trị cũ ở đây phục sinh một avatar đã xoá, và trình duyệt
+        // sẽ hiện ảnh vỡ vì object thật sự không còn.
+        existing.avatarUrl = avatarUrl;
       } else {
         if (room.members.length >= MAX_PLAYERS_PER_ROOM) throw new RoomError("Phòng đã đầy");
         const dupName = room.members.some(
@@ -140,7 +179,7 @@ export const roomService = {
           connected: true,
           disconnectedAt: null,
           isBot: false,
-          avatarUrl: (player as any)?.avatarUrl ?? null,
+          avatarUrl,
         });
       }
 
@@ -213,10 +252,25 @@ export const roomService = {
     }
     const persistedCode = await getPlayerRoom(playerId);
     if (!persistedCode) return null;
-    const persistedRoom = getRoom(persistedCode) ?? (await loadRoomFromRedis(persistedCode));
-    if (persistedRoom?.members.some((member) => member.playerId === playerId)) {
-      return persistedRoom.code;
+    const cached = getRoom(persistedCode);
+    if (cached) {
+      if (cached.members.some((member) => member.playerId === playerId)) return cached.code;
+      await updateSessionRoom(playerId, null);
+      return null;
     }
+
+    const loaded = await loadAndResumeRoom(persistedCode);
+    if (loaded.status === "ok") scheduleAbandonedRoomCheck(loaded.room);
+    if (loaded.status === "unavailable") {
+      // Redis chớp mắt KHÔNG được xoá đường về phòng của người chơi. Trả lại mã
+      // đã lưu: nếu phòng thật sự còn, lần thao tác kế tiếp sẽ nạp được nó; nếu
+      // không, chính lần đó mới là lúc dọn.
+      return persistedCode;
+    }
+    if (loaded.status === "ok" && loaded.room.members.some((m) => m.playerId === playerId)) {
+      return loaded.room.code;
+    }
+
     await updateSessionRoom(playerId, null);
     return null;
   },
@@ -230,30 +284,6 @@ export const roomService = {
     if (m.isBot) throw new RoomError("Bot luôn sẵn sàng");
     m.ready = ready;
     void persistRoom(room).then(() => broadcastRoom(room.code));
-  },
-
-  async updateAvatar(playerId: string, avatarUrl: string | null): Promise<void> {
-    const roomCode = getRoomSyncByPlayer(playerId);
-    // Cho phép đổi cả trong và ngoài phòng — nếu chưa vào phòng chỉ lưu DB
-    if (avatarUrl !== null) {
-      if (!avatarUrl.startsWith("data:image/")) throw new RoomError("Ảnh đại diện không hợp lệ");
-      if (Buffer.byteLength(avatarUrl, "utf8") > 5 * 1024 * 1024) throw new RoomError("Ảnh quá lớn (>5MB)");
-    }
-    // Lưu DB trước để lần sau vào phòng có sẵn
-    try {
-      await prisma.player.update({ where: { id: playerId }, data: { avatarUrl } as any });
-    } catch {
-      // DB lỗi không chặn — vẫn cho đổi trong phòng hiện tại
-    }
-    if (!roomCode) return;
-    const room = getRoom(roomCode);
-    if (!room) return;
-    const member = room.members.find((m) => m.playerId === playerId);
-    if (member) {
-      (member as any).avatarUrl = avatarUrl;
-      await persistRoom(room);
-      broadcastRoom(room.code);
-    }
   },
 
   async kick(hostId: string, targetId: string): Promise<void> {

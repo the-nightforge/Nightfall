@@ -12,12 +12,24 @@ model Player {
   nickname     String
   tokenHash    String   @unique
   avatarUrl    String?  @db.Text
+  /// Khoá của object avatar trong bucket. Nguồn sự thật DUY NHẤT cho việc xoá:
+  /// server không bao giờ nhận khoá từ client, nên không ai xoá được object của
+  /// người khác bằng một URL giả. avatarUrl chỉ để hiển thị.
+  avatarKey    String?
   createdAt    DateTime @default(now())
   lastSeenAt   DateTime @default(now())
 }
 
 model GameResult {
   id          String   @id @default(cuid())
+  /// Khoá idempotency của MỘT ván, sinh lúc `startGame`.
+  ///
+  /// Nullable có chủ đích: ván ghi trước migration này không có khoá nào để
+  /// gán, và Postgres cho phép nhiều NULL trong một unique index nên chúng
+  /// không đụng nhau. Mọi ván mới đều có khoá, nên một ván không thể có hai
+  /// dòng kết quả kể cả khi server chết đúng vào khe giữa lúc ghi DB và lúc
+  /// lưu snapshot rồi ghi lại sau khi khôi phục.
+  gameId      String?  @unique
   roomCode    String
   round       Int
   winner      String
