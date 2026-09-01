@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AnimatePresence, m } from "motion/react";
-import type { RoomSnapshot } from "@masoi/shared";
+import { ROLE_META, type RoomSnapshot } from "@masoi/shared";
 import { getIdentity } from "@/lib/identity";
 import { useRoomSocket } from "@/lib/useRoomSocket";
 import { VoiceControl } from "@/components/VoiceControl";
@@ -273,12 +273,19 @@ export default function RoomPage() {
           * items-start chỉ dành cho phòng chờ. Trong ván ba cột phải cao bằng
           * nhau và bằng khung - đó là thứ làm nó ra hình một cái bàn thay vì ba
           * mẩu thẻ trôi lệch nhau ở nửa trên màn hình.
+          *
+          * Trần 68rem + `my-auto`: trên màn rất cao (2559x1346 chẳng hạn) một
+          * cái bàn kéo dài 1240px chỉ tạo ra khoảng trống BÊN TRONG cột chơi -
+          * thứ không có gì để đổ vào mà cũng không được phép bịa nội dung ra
+          * lấp. Chặn chiều cao rồi thả cho nó tự căn giữa thì phần thừa chuyển
+          * ra ngoài thành lề trên/dưới cân nhau, và ba cột vẫn cao bằng nhau.
+          * Dưới mốc đó (1080p trở xuống) trần không bao giờ chạm tới.
           */}
         <div
           className={`mt-3 grid gap-3 ${
             isLobby
               ? "lg:grid-cols-[18rem_minmax(0,1fr)_21rem] lg:items-start lg:gap-5 xl:grid-cols-[19rem_minmax(0,1fr)_22rem]"
-              : "lg:min-h-0 lg:flex-1 lg:grid-cols-[14rem_minmax(0,1fr)_17.5rem] xl:grid-cols-[15rem_minmax(0,1fr)_23rem] xl:gap-4"
+              : "lg:my-auto lg:max-h-[68rem] lg:min-h-0 lg:flex-1 lg:grid-cols-[14rem_minmax(0,1fr)_17.5rem] xl:grid-cols-[15rem_minmax(0,1fr)_23rem] xl:gap-4"
           }`}
         >
           {/*
@@ -355,6 +362,17 @@ export default function RoomPage() {
             {room.error && (
               <p className="rounded-lg bg-blood-600/20 px-3 py-2 text-center text-sm text-blood-400">{room.error}</p>
             )}
+
+            {/*
+              * Dải thông tin trận chuyển từ đầu cột chat xuống CHÂN cột chơi.
+              *
+              * Hai lý do, cùng một nước đi: ở trên cột chat nó làm cả cột đó
+              * đọc ra như một bảng số liệu chứ không phải khu trò chuyện; còn ở
+              * đây nó neo cái đáy của khu chơi lại, nên khoảng trống giữa thẻ
+              * bỏ phiếu và nó thành khoảng thở của một cái bàn thay vì một
+              * mảng bỏ lửng. Nó tự đẩy mình xuống đáy bằng `mt-auto`.
+              */}
+            {snapshot && <RightMetaPanel snapshot={snapshot} />}
           </div>
 
           {/*
@@ -372,7 +390,6 @@ export default function RoomPage() {
               isLobby ? "lg:sticky lg:top-4 lg:h-[calc(100dvh-2rem)]" : ""
             }`}
           >
-            <RightMetaPanel snapshot={snapshot} />
             <VoiceControl snapshot={snapshot} />
             {/*
               * Trong ván khung chat lấy TRỌN phần còn lại của cột chứ không bị
@@ -388,6 +405,8 @@ export default function RoomPage() {
               }`}
             >
               <ChatBox
+                title="Thảo luận"
+                subtitle={chatChannelLabel(snapshot)}
                 messages={room.messages}
                 onSend={(text) => room.emit("chat:send", { text })}
                 placeholder={chatPlaceholder}
@@ -429,10 +448,62 @@ function chatEmptyHint(snapshot: RoomSnapshot | null): string {
   return "Chưa có tin nhắn trong kênh này.";
 }
 
+/*
+ * Kênh chat mà người xem đang gõ vào.
+ *
+ * Một nguồn duy nhất cho cả câu gợi ý trong ô nhập lẫn dòng phụ trên tiêu đề
+ * khung chat: hai chỗ nói về cùng một chuyện thì không được phép lệch nhau.
+ *
+ * Điều kiện "là Sói" đọc theo PHE trong ROLE_META chứ không so thẳng với
+ * "WEREWOLF". Máy chủ cho cả Sói Con vào kênh phe Sói ban đêm
+ * (apps/server/src/rooms/snapshot.ts), nên bản cũ báo với Sói Con rằng "ban
+ * đêm bạn không thể chat" trong khi nó gõ được - một câu sai về đúng thứ mà
+ * người chơi cần tin.
+ */
+type ChatChannel = "lobby" | "dead" | "wolves" | "muted" | "day";
+
+function chatChannelOf(snapshot: RoomSnapshot | null): ChatChannel | null {
+  if (!snapshot) return null;
+  if (snapshot.phase === "LOBBY" || snapshot.phase === "GAME_OVER") return "lobby";
+  if (!snapshot.you?.alive) return "dead";
+  if (snapshot.phase === "NIGHT") {
+    const role = snapshot.you.role;
+    return role && ROLE_META[role].team === "wolves" ? "wolves" : "muted";
+  }
+  return "day";
+}
+
 function chatChannelHint(snapshot: RoomSnapshot | null): string {
-  if (!snapshot) return "Nhập tin nhắn...";
-  if (snapshot.phase === "LOBBY" || snapshot.phase === "GAME_OVER") return "Chat phòng...";
-  if (!snapshot.you?.alive) return "Chat cùng những người đã chết...";
-  if (snapshot.phase === "NIGHT") return snapshot.you.role === "WEREWOLF" ? "Chat phe Sói..." : "Ban đêm bạn không thể chat...";
-  return "Chat làng...";
+  switch (chatChannelOf(snapshot)) {
+    case null:
+      return "Nhập tin nhắn...";
+    case "lobby":
+      return "Chat phòng...";
+    case "dead":
+      return "Chat cùng những người đã chết...";
+    case "wolves":
+      return "Chat phe Sói...";
+    case "muted":
+      return "Ban đêm bạn không thể chat...";
+    default:
+      return "Chat làng...";
+  }
+}
+
+/** Dòng phụ trên tiêu đề khung chat. undefined thì tiêu đề đứng một mình. */
+function chatChannelLabel(snapshot: RoomSnapshot | null): string | undefined {
+  switch (chatChannelOf(snapshot)) {
+    case "lobby":
+      return "Kênh phòng chờ";
+    case "dead":
+      return "Kênh người chết";
+    case "wolves":
+      return "Kênh phe Sói";
+    case "muted":
+      return "Ban đêm không nói được";
+    case "day":
+      return "Kênh làng";
+    default:
+      return undefined;
+  }
 }

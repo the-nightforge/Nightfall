@@ -14,6 +14,14 @@ interface Props {
   isMe: boolean;
   isHost: boolean;
   selected: boolean;
+  /**
+   * Lá phiếu ĐÃ GỬI của người xem đang nằm ở ô này.
+   *
+   * Khác `selected`: chọn là ý định còn chưa bấm nút, còn cái này là phiếu đã
+   * nằm trên bàn. Hai trạng thái phải phân biệt được, nếu không thì người chơi
+   * bấm vào một ô rồi tưởng mình đã bỏ phiếu xong.
+   */
+  confirmed?: boolean;
   disabled: boolean;
   /** Vì sao ô này không bấm được; null khi cả lưới vốn chỉ để xem. */
   disabledReason?: string | null;
@@ -36,6 +44,7 @@ export function PlayerSeat({
   isMe,
   isHost,
   selected,
+  confirmed = false,
   disabled,
   disabledReason,
   onSelect,
@@ -44,15 +53,27 @@ export function PlayerSeat({
   const dead = !player.alive;
   const votes = player.voteCount ?? 0;
 
+  /*
+   * "Ô của tôi" và "ô tôi đang chọn" phải trông KHÁC HẲN nhau.
+   *
+   * Bản trước dùng chung một ngôn ngữ cho cả hai - viền đặc cộng một vòng
+   * `ring` - chỉ khác màu chàm với đỏ. Trên nền tối, ở đuôi mắt, hai cái đó
+   * đọc ra như nhau, và ô "Bạn" bị hiểu thành ứng viên đang bị nhắm.
+   *
+   * Nên tách hẳn hai NGÔN NGỮ hình:
+   *   - đang chọn / đã bỏ phiếu -> viền đặc + vòng cứng + dấu tích ở góc
+   *   - chính mình              -> quầng sáng mềm, không viền cứng, không vòng
+   *
+   * Ô không chọn được (chính mình khi luật cấm tự bầu, người đã chết) thì viền
+   * ĐỨT NÉT: một dấu hiệu không phải màu, đọc ngay ra là "ô này không phải mục
+   * tiêu bấm được".
+   */
   const frame = selected
-    ? "border-blood-500 bg-blood-600/20 ring-2 ring-blood-500"
+    ? "border-blood-500 bg-blood-600/25 ring-2 ring-blood-500"
     : dead
       ? "border-night-600/60 bg-night-950/70"
       : isMe
-        ? // Ô của chính mình phải nhận ra được từ đầu kia bàn: viền đặc cộng
-          // một vòng trong, chứ không phải một sắc chàm nhạt hơn viền thường
-          // đúng một nấc.
-          "border-indigo-400 bg-indigo-500/10 ring-1 ring-indigo-400/50"
+        ? "border-indigo-400/60 bg-indigo-500/[0.07] shadow-[0_0_22px_-8px_rgba(129,140,248,0.9)]"
         : "border-night-600/70 bg-night-800/40";
 
   return (
@@ -81,17 +102,39 @@ export function PlayerSeat({
        * dưới. Đặt sàn chiều cao thì ô vẫn gần vuông ở mọi cỡ cột thường gặp,
        * còn khi cần thì nó cao thêm - và cả hàng cao đều theo (lưới tự kéo các
        * ô cùng hàng bằng nhau).
+       *
+       * Trên màn CAO (từ 1000px trở lên) ô nới thêm một nấc và chân dung to
+       * hơn. Ở 1080p trở lên, bàn chơi chỉ chiếm chừng hai phần ba chiều cao
+       * cột và phần thừa thì không có gì để đổ vào - nới ô ra là cách dùng nó
+       * mà không phải bịa thêm nội dung, và mặt người thì to lên thật. Điều
+       * kiện theo CHIỀU CAO chứ không phải chiều rộng: ở 1440x900 cột đã tràn
+       * và cuộn rồi, nới thêm chỉ tổ phải cuộn nhiều hơn.
        */
-      className={`relative flex min-h-[7.25rem] flex-col items-center justify-center gap-1 rounded-xl border p-2 transition-colors sm:min-h-[9rem]
+      className={`relative flex min-h-[7.25rem] flex-col items-center justify-center gap-1 rounded-xl border p-2 transition-colors sm:min-h-[9rem] [@media(min-height:1000px)]:sm:min-h-[10.5rem]
         ${frame}
         ${
           !disabled
             ? "cursor-pointer hover:border-blood-500/80 hover:bg-blood-600/10"
             : disabledReason
-              ? "cursor-not-allowed"
+              ? "cursor-not-allowed border-dashed"
               : "cursor-default"
         }`}
     >
+      {/*
+        * Dấu tích ở góc TRÁI: góc phải là huy hiệu số phiếu, và hai thứ chồng
+        * lên nhau thì cái nào cũng đọc không ra. Nó cố ý lặp lại điều mà viền
+        * đỏ đã nói - trạng thái quan trọng nhất của lưới này không được phép
+        * chỉ nằm ở một sắc màu.
+        */}
+      {selected && (
+        <span
+          aria-hidden="true"
+          className="absolute left-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-blood-500 text-xs font-bold leading-none text-white ring-1 ring-white/30"
+        >
+          ✓
+        </span>
+      )}
+
       <AnimatePresence>
         {votes > 0 && (
           <m.span
@@ -112,7 +155,7 @@ export function PlayerSeat({
              * cho cả chữ; dưới đó chỉ còn con số, và aria-label giữ nguyên nghĩa
              * cho trình đọc màn hình.
              */
-            className="absolute right-1 top-1 inline-flex items-center gap-1 rounded-full bg-blood-600 px-1.5 py-0.5 text-[11px] font-bold leading-none text-white shadow shadow-black/50 motion-reduce:transition-none"
+            className="absolute right-1 top-1 inline-flex items-center gap-1 rounded-full bg-blood-600 px-1.5 py-0.5 text-xs font-bold leading-none text-white shadow shadow-black/50 motion-reduce:transition-none"
             aria-label={`${votes} phiếu`}
             title={`${votes} phiếu đang nhắm vào ${player.name}`}
             role="status"
@@ -129,7 +172,7 @@ export function PlayerSeat({
           tint={tint}
           alive={player.alive}
           breathOffset={breathOffsetFor(player.id)}
-          className="h-16 w-16 sm:h-20 sm:w-20"
+          className="h-16 w-16 sm:h-20 sm:w-20 [@media(min-height:1000px)]:sm:h-24 [@media(min-height:1000px)]:sm:w-24"
           isCustom={!!player.avatarUrl}
         />
         {dead && (
@@ -167,7 +210,9 @@ export function PlayerSeat({
         {/* Trạng thái nói bằng CHỮ, không chỉ bằng màu viền: người không phân
           * biệt được đỏ với chàm vẫn phải biết ô nào đang được chọn và ai đã
           * ra khỏi ván. */}
-        {selected && <Tag cls="bg-blood-600 text-white">✓ Đã chọn</Tag>}
+        {selected && (
+          <Tag cls="bg-blood-600 text-white">{confirmed ? "Phiếu của bạn" : "Đang chọn"}</Tag>
+        )}
         {dead && <Tag cls="bg-night-700 text-mist-bright">Đã chết</Tag>}
         {isMe && <Tag cls="bg-indigo-700 text-indigo-50">Bạn</Tag>}
         {isHost && <Tag cls="bg-amber-800/80 text-amber-100">Chủ</Tag>}
@@ -190,7 +235,7 @@ export function PlayerSeat({
 
 function Tag({ children, cls }: { children: React.ReactNode; cls: string }) {
   return (
-    <span className={`rounded px-1.5 py-[1px] text-[11px] font-semibold leading-tight ${cls}`}>
+    <span className={`rounded px-1.5 py-px text-xs font-semibold leading-tight ${cls}`}>
       {children}
     </span>
   );

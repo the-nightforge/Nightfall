@@ -30,7 +30,18 @@ export interface PlayerView {
   isBot: boolean;
   /** Ảnh đại diện custom base64, ưu tiên hơn avatar hash */
   avatarUrl?: string | null;
-  /** Chỉ hiện khi game kết thúc hoặc viewer đã chết */
+  /*
+   * Vai trò của người này, chỉ khi người NHẬN snapshot được phép biết.
+   *
+   * Đúng hai trường hợp, gác ở `snapshotFor` trong game-engine:
+   *   - ván đã kết thúc (GAME_OVER): lộ hết cho mọi người;
+   *   - người nhận là Sói CÒN SỐNG, và người này cũng thuộc phe Sói.
+   *
+   * Chú thích cũ ghi "hoặc viewer đã chết" - sai. Người chết KHÔNG nhận được
+   * vai trò của ai cả (kể cả Sói đã chết cũng mất quyền nhìn đồng bọn), và
+   * engine có test khoá đúng điều đó. Một chú thích rộng hơn code là lời mời
+   * người sửa sau nới code ra cho "khớp tài liệu".
+   */
   role?: Role;
   /**
    * Người này vốn là Kẻ Nguyền Rủa và đã bị Sói cắn hoá Sói. Chỉ đi kèm khi

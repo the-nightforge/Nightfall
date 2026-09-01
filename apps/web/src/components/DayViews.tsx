@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
 import { OpenVotePanel } from "./OpenVotePanel";
 import { PlayerGrid } from "./PlayerGrid";
@@ -34,6 +34,54 @@ export function DayView({
   const hasVoted = snapshot.hasVoted;
   const discussionSkip = snapshot.discussionSkip;
   const leader = isVoting ? leaderLabel(voteProgressOf(snapshot)) : null;
+
+  /*
+   * Lá phiếu vừa gửi mà snapshot chưa xác nhận.
+   *
+   * Gửi phiếu là một event socket không có phản hồi trực tiếp: bằng chứng duy
+   * nhất rằng máy chủ đã nhận là snapshot kế tiếp. Giữa hai mốc đó nút phải nói
+   * là "đang gửi" và không được bấm lại - trước đây bấm nhanh ba cái là bắn ba
+   * event y hệt nhau.
+   *
+   * KHÔNG đổi payload, không đổi tên event, không tự đoán kết quả: đây thuần
+   * là trạng thái hiển thị của nút trong lúc chờ.
+   */
+  const [pending, setPending] = useState<{ target: string | null } | null>(null);
+
+  useEffect(() => {
+    if (!pending) return;
+    // Snapshot đã mang đúng lá phiếu vừa gửi -> hết chờ.
+    if (snapshot.hasVoted && snapshot.myVote === pending.target) {
+      setPending(null);
+      return;
+    }
+    /*
+     * Chốt chặn: máy chủ có thể từ chối lá phiếu (hết giờ, vừa chết) và khi đó
+     * snapshot không bao giờ khớp. Không có hạn này thì nút kẹt ở "đang gửi"
+     * vĩnh viễn và người chơi mất luôn quyền bỏ phiếu ở vòng sau.
+     */
+    const timer = setTimeout(() => setPending(null), 4_000);
+    return () => clearTimeout(timer);
+  }, [pending, snapshot.hasVoted, snapshot.myVote]);
+
+  // Sang pha hoặc sang vòng khác thì mọi thứ đang chờ đều hết nghĩa.
+  useEffect(() => setPending(null), [snapshot.phase, snapshot.round]);
+
+  const sending = pending !== null;
+  // Ô đang sáng trên lưới: ý định chưa gửi, hoặc lá phiếu đã gửi nếu chưa đổi ý.
+  const effectiveTarget = selected ?? myVote;
+  const targetName = effectiveTarget
+    ? (snapshot.players.find((p) => p.id === effectiveTarget)?.name ?? null)
+    : null;
+  // Đang trỏ đúng vào lá phiếu đã nằm trên bàn -> không có gì để gửi nữa.
+  const alreadyCast = hasVoted && effectiveTarget === myVote;
+  const noElimCast = hasVoted && myVote === null;
+
+  const castVote = (target: string | null) => {
+    if (sending) return;
+    setPending({ target });
+    onVote(target);
+  };
 
   return (
     <div className="space-y-4">
@@ -98,18 +146,6 @@ export function DayView({
             )}
           </div>
 
-          {dead && (
-            /* Trạng thái phụ: một dải trung tính, không phải tiêu đề. Biểu tượng
-             * + chữ chứ không chỉ màu, và nói rõ CẢ hai vế - vẫn xem được, không
-             * bỏ phiếu được. */
-            <p className="mb-3 flex items-start gap-2 rounded-lg border border-white/10 bg-night-800/70 px-3 py-2 text-sm text-mist-bright">
-              <span aria-hidden="true">👁</span>
-              <span>
-                <b className="font-semibold text-white">Bạn đã chết.</b> Bạn theo dõi được cả
-                vòng bỏ phiếu nhưng không thể bỏ phiếu.
-              </span>
-            </p>
-          )}
           {snapshot.you?.role === "MAYOR" && (
             <p className="mb-2 inline-block rounded-full border border-amber-500/40 bg-amber-950/40 px-3 py-1 text-[13px] font-bold text-amber-200">
               👑 Bạn là Thị Trưởng (Phiếu của bạn có trọng số x2)
@@ -117,36 +153,105 @@ export function DayView({
           )}
           {hasVoted && !dead && (
             <p className="mb-2 text-sm text-emerald-300">
-              {myVote
-                ? `Bạn đã bỏ phiếu cho ${snapshot.players.find((p) => p.id === myVote)?.name}.`
-                : "Bạn đã chọn không treo ai."}
-              {" Bạn vẫn có thể đổi phiếu tới khi hết giờ."}
+              Bạn vẫn có thể đổi phiếu tới khi hết giờ.
             </p>
           )}
           <PlayerGrid
             snapshot={snapshot}
             selectable={!dead}
-            selectedId={selected ?? myVote}
+            selectedId={effectiveTarget}
+            confirmedId={hasVoted ? myVote : null}
             onSelect={setSelected}
           />
           {!dead ? (
             <>
+              {/*
+                * Nút chính nói ĐÚNG chuyện đang xảy ra, không phải một chữ
+                * "Bỏ phiếu" đứng yên qua mọi trạng thái:
+                *
+                *   chưa chọn ai  -> xám, "Chọn một người để bỏ phiếu"
+                *   đã chọn       -> đỏ,  "Bỏ phiếu cho <tên>"
+                *   đang gửi      -> vòng quay, khoá lại để không bắn trùng
+                *   đã gửi xong   -> xanh, "Đã bỏ phiếu cho <tên>"
+                *
+                * Trạng thái tắt KHÔNG dùng `disabled:opacity-40` mặc định của
+                * `.btn`: nền đỏ mờ đi đọc ra như một nút hỏng. Nó đổi hẳn sang
+                * xám trung tính mà chữ vẫn rõ - cùng cách `.btn-cta` xử lý.
+                */}
               <button
-                className="btn-primary mt-3 w-full"
-                disabled={!selected}
-                onClick={() => selected && onVote(selected)}
+                className={`mt-3 w-full ${
+                  alreadyCast && !sending
+                    ? "btn border border-emerald-500/45 bg-emerald-600/15 text-emerald-200 disabled:cursor-default disabled:opacity-100"
+                    : // Trạng thái tắt phải trông như một CHỖ TRỐNG chờ được
+                      // điền, không phải một cái nút khác: nền gần như trong
+                      // suốt + viền mảnh, tách hẳn khỏi nút "Không treo ai"
+                      // ngay bên dưới - cái đó đặc, có nền, và bấm được.
+                      "btn-primary disabled:bg-white/[0.04] disabled:text-mist-strong disabled:opacity-100 disabled:shadow-none disabled:ring-1 disabled:ring-inset disabled:ring-white/10"
+                }`}
+                disabled={sending || !effectiveTarget || alreadyCast}
+                aria-busy={sending}
+                onClick={() => effectiveTarget && castVote(effectiveTarget)}
               >
-                {hasVoted ? "Đổi phiếu" : "Bỏ phiếu"}
+                {sending && pending?.target !== null ? (
+                  <>
+                    <span className="gate-spinner" aria-hidden="true" />
+                    Đang gửi phiếu...
+                  </>
+                ) : alreadyCast && targetName ? (
+                  <>
+                    <span aria-hidden="true">✓</span>
+                    {/* Tên tối đa 20 ký tự nhưng nút thì hẹp dần theo cột: cắt
+                      * ở đây thay vì để nó đẩy toang thẻ. */}
+                    <span className="min-w-0 truncate">Đã bỏ phiếu cho {targetName}</span>
+                  </>
+                ) : !effectiveTarget ? (
+                  "Chọn một người để bỏ phiếu"
+                ) : (
+                  <span className="min-w-0 truncate">
+                    {hasVoted ? "Đổi phiếu sang" : "Bỏ phiếu cho"} {targetName}
+                  </span>
+                )}
               </button>
-              <button className="btn-secondary mt-2 w-full" onClick={() => onVote(null)}>
-                Không treo ai ({snapshot.noEliminationVoteCount} phiếu)
+              <button
+                className={`mt-2 w-full ${
+                  noElimCast && !sending
+                    ? "btn border border-emerald-500/45 bg-emerald-600/15 text-emerald-200 disabled:cursor-default disabled:opacity-100"
+                    : "btn-secondary"
+                }`}
+                disabled={sending || noElimCast}
+                aria-busy={sending}
+                onClick={() => castVote(null)}
+              >
+                {sending && pending?.target === null ? (
+                  <>
+                    <span className="gate-spinner" aria-hidden="true" />
+                    Đang gửi phiếu...
+                  </>
+                ) : (
+                  <>
+                    {noElimCast && <span aria-hidden="true">✓</span>}
+                    {noElimCast ? "Đã chọn không treo ai" : "Không treo ai"} (
+                    {snapshot.noEliminationVoteCount} phiếu)
+                  </>
+                )}
               </button>
             </>
           ) : (
-            // Người chết và người đã vote chỉ theo dõi tiến độ, không có thao tác.
-            <p className="mt-3 text-center text-sm text-mist-strong">
-              Không treo ai: <b className="text-white">{snapshot.noEliminationVoteCount}</b> phiếu
-            </p>
+            /*
+              * Người chết: chỗ của nút bấm là chỗ phải giải thích vì sao không
+              * có nút bấm. Một nút tắt trơ ra ở đây không nói được điều đó, mà
+              * một dòng chữ nhỏ ở đầu thẻ thì đọc xong đã quên khi cuộn tới
+              * lưới người chơi.
+              */
+            <div className="mt-3">
+              <p className="flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-night-800/70 px-3 py-2.5 text-center text-sm text-mist-bright">
+                <span aria-hidden="true">👁</span>
+                Bạn đã chết và chỉ có thể theo dõi - không bỏ phiếu được.
+              </p>
+              <p className="mt-2 text-center text-sm text-mist-strong">
+                Không treo ai: <b className="text-white">{snapshot.noEliminationVoteCount}</b> phiếu
+              </p>
+            </div>
           )}
           <OpenVotePanel snapshot={snapshot} />
         </div>
