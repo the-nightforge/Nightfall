@@ -402,4 +402,12 @@ export interface MatchHistoryEntry {
   myRole: Role | null;
   mySurvived: boolean | null;
   players: MatchHistoryPlayer[];
+  /**
+   * Hồ sơ vụ án chốt lúc ván kết thúc; null với ván ghi trước khi có cột này.
+   *
+   * Kiểu để lỏng ở `unknown` chứ không phải `CaseFile`: đây là JSON đọc từ DB,
+   * do một phiên bản server nào đó ghi ra, nên tin nó đúng hình dạng hiện tại
+   * là tự chuốc lấy lỗi lúc chạy. Phía dùng phải tự kiểm rồi mới ép kiểu.
+   */
+  caseFile: unknown;
 }

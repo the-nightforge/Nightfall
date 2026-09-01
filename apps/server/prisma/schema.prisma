@@ -22,6 +22,15 @@ model GameResult {
   round       Int
   winner      String
   playerRoles Json
+  /// Hồ sơ vụ án chốt tại lúc ván kết thúc.
+  ///
+  /// Nullable có chủ đích: ván ghi trước khi có cột này, và ván mà buildCaseFile
+  /// trả null, đều để trống chứ không chặn việc lưu kết quả. Lịch sử vẫn đọc
+  /// được khi thiếu nó - chỉ là không có phần điểm ngoặt.
+  ///
+  /// Lưu bản ĐÃ DỰNG chứ không dựng lại lúc đọc: nguyên liệu (nightHistory,
+  /// dayVoteHistory, hunterShots) chỉ sống trong RAM của ván, không có trong DB.
+  caseFile    Json?
   durationSec Int
   createdAt   DateTime @default(now())
 }

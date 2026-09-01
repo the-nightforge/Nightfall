@@ -7,13 +7,15 @@ import {
   RESULT_MS,
   ROLE_REVEAL_MS,
   SERVER_EVENTS,
+  buildCaseFile,
 } from "@masoi/shared";
-import type { PublicVoteChoice } from "@masoi/shared";
+import type { CaseFile, PublicVoteChoice } from "@masoi/shared";
 import type { Room } from "../rooms/store";
 import { clearRoomTimers, persistRoom, setRoomTimer } from "../rooms/store";
 import { broadcastRoom, emitToPlayers } from "../rooms/broadcast";
 import { destroyVoiceRoom, syncVoicePermissions } from "../voice/service";
 import { prisma } from "../db";
+import type { Prisma } from "@prisma/client";
 import { buildSnapshot, dayRecipients, pushChat, resolveChat } from "../rooms/snapshot";
 import { botBrain, resetBotBudget } from "../bots";
 import { buildBotDecisionContext } from "../bots/context";
@@ -351,6 +353,32 @@ export function resetToLobby(room: Room): void {
   sync(room);
 }
 
+/**
+ * Hồ sơ vụ án để lưu kèm kết quả ván.
+ *
+ * Dựng ở đây chứ không dựng lại lúc ĐỌC lịch sử: nguyên liệu (nightHistory,
+ * dayVoteHistory, hunterShots) chỉ sống trong RAM của ván và không có trong DB,
+ * nên qua lúc này là mất vĩnh viễn.
+ *
+ * Lấy snapshot của một thành viên bất kỳ là ĐỦ, không phải cẩu thả: ở GAME_OVER
+ * mọi vai đã lộ với mọi người, và `case-file-contract.test.ts` khẳng định tường
+ * minh rằng mọi thành viên dựng ra cùng một hồ sơ.
+ *
+ * KHÔNG đụng tới snapshot phát đi: hồ sơ vẫn do client tự dựng lúc chơi, đúng
+ * như hợp đồng "không thêm byte nào lên dây". Đây là một đường riêng, chỉ để
+ * xem lại về sau.
+ */
+function caseFileForHistory(room: Room): CaseFile | null {
+  const viewer = room.members[0]?.playerId;
+  if (!viewer) return null;
+  try {
+    return buildCaseFile(buildSnapshot(room, viewer));
+  } catch {
+    // Hồ sơ là phần thêm nếm. Hỏng nó không được làm mất luôn kết quả ván.
+    return null;
+  }
+}
+
 function onGameOver(room: Room): void {
   cancelDiscussionScheduler(room.code);
   const e = engine(room);
@@ -361,6 +389,10 @@ function onGameOver(room: Room): void {
         roomCode: room.code,
         round: st.round,
         winner: st.winner ?? "unknown",
+        // Prisma đòi `InputJsonValue`, kiểu này cần index signature mà một
+        // interface đóng như `CaseFile` không có - dù giá trị là JSON hoàn toàn
+        // hợp lệ. Ép đúng một lần, ngay tại biên vào DB.
+        caseFile: (caseFileForHistory(room) ?? undefined) as Prisma.InputJsonValue | undefined,
         // `id` để nối được kết quả về đúng người chơi. Thiếu nó thì bảng này
         // chỉ ghi được chứ không tra ngược được - đó là lý do nó nằm im từ đầu.
         // `playerRoles` là cột Json nên thêm trường không cần migration; ván cũ

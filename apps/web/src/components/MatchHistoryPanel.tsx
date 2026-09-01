@@ -1,8 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ROLE_META, type MatchHistoryEntry } from "@masoi/shared";
-import { fetchMatchHistory, formatDuration, formatWhen, type HistoryOutcome } from "@/lib/match-history";
+import { ROLE_META, momentLabel, type MatchHistoryEntry } from "@masoi/shared";
+import {
+  fetchMatchHistory,
+  formatDuration,
+  formatWhen,
+  readStoredCaseFile,
+  type HistoryOutcome,
+} from "@/lib/match-history";
 
 /**
  * Lịch sử các ván đã chơi.
@@ -58,6 +64,9 @@ export function MatchHistoryPanel() {
 
 function MatchRow({ match }: { match: MatchHistoryEntry }) {
   const [open, setOpen] = useState(false);
+  // Ván ghi trước khi hồ sơ được lưu thì không có gì để mở ra - hàng vẫn xem
+  // được roster như cũ, chỉ thiếu phần bước ngoặt.
+  const caseFile = readStoredCaseFile(match.caseFile);
 
   // Thắng/thua tính theo PHE của vai mình cầm, không theo việc còn sống: sống
   // tới cuối trong một ván thua vẫn là thua.
@@ -106,6 +115,25 @@ function MatchRow({ match }: { match: MatchHistoryEntry }) {
           {open ? "▾" : "▸"}
         </span>
       </button>
+
+      {open && caseFile && (
+        <div className="border-t border-white/[0.06] px-3 py-2.5">
+          <p className="mb-1.5 text-[10px] uppercase tracking-[0.28em] text-mist/55">
+            {caseFile.fallback ? "Hồ sơ vụ án" : "Bước ngoặt"}
+          </p>
+          <ol className="space-y-1.5">
+            {caseFile.highlights.map((highlight, index) => (
+              <li key={`${highlight.type}-${highlight.round}-${index}`} className="text-xs">
+                <span className="text-mist/50">
+                  {momentLabel(highlight.round, highlight.phase)}
+                </span>{" "}
+                <span className="font-semibold text-white/90">{highlight.title}</span>
+                <span className="block text-mist/70">{highlight.description}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       {open && (
         <ul className="space-y-1 border-t border-white/[0.06] px-3 py-2">

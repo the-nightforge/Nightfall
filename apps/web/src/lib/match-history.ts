@@ -1,4 +1,4 @@
-import type { MatchHistoryEntry } from "@masoi/shared";
+import type { CaseFile, MatchHistoryEntry } from "@masoi/shared";
 import { getIdentity } from "./identity";
 
 const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL ?? "http://localhost:4000";
@@ -34,6 +34,25 @@ export async function fetchMatchHistory(signal?: AbortSignal): Promise<HistoryOu
   } catch {
     return { kind: "error" };
   }
+}
+
+/**
+ * Đọc hồ sơ vụ án lấy từ lịch sử.
+ *
+ * Giá trị này là JSON nằm trong DB, do một phiên bản server nào đó ghi ra, nên
+ * tin nó khớp kiểu hiện tại là tự chuốc lấy lỗi lúc chạy. `CaseFile.version` có
+ * sẵn đúng cho việc này: schema đổi thì hồ sơ cũ bị bỏ qua chứ không làm vỡ cả
+ * trang lịch sử.
+ *
+ * Trả `null` cũng là trạng thái BÌNH THƯỜNG, không phải lỗi: ván ghi trước khi
+ * có cột này đơn giản là không có hồ sơ.
+ */
+export function readStoredCaseFile(value: unknown): CaseFile | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const file = value as Partial<CaseFile>;
+  if (file.version !== 1) return null;
+  if (!Array.isArray(file.highlights) || file.highlights.length === 0) return null;
+  return file as CaseFile;
 }
 
 /** "12 phút 30 giây" đọc nhanh hơn "750s" ở một danh sách nhìn lướt. */

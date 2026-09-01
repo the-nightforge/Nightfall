@@ -1,6 +1,40 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { formatDuration, formatWhen } from "./match-history";
+import { formatDuration, formatWhen, readStoredCaseFile } from "./match-history";
+
+describe("readStoredCaseFile", () => {
+  const valid = {
+    version: 1,
+    caseId: "VA-1",
+    winner: "village",
+    rounds: 3,
+    cast: [],
+    highlights: [{ type: "WOLF_LYNCHED", round: 2, phase: "day", title: "T", description: "D" }],
+    timeline: [],
+    fallback: false,
+  };
+
+  it("nhận hồ sơ hợp lệ", () => {
+    assert.equal(readStoredCaseFile(valid)?.caseId, "VA-1");
+  });
+
+  it("ván cũ chưa có hồ sơ: null, không ném", () => {
+    // Đây là trạng thái BÌNH THƯỜNG với mọi ván ghi trước khi có cột caseFile.
+    assert.equal(readStoredCaseFile(null), null);
+    assert.equal(readStoredCaseFile(undefined), null);
+  });
+
+  it("bỏ qua hồ sơ thuộc schema khác thay vì làm vỡ trang", () => {
+    assert.equal(readStoredCaseFile({ ...valid, version: 2 }), null);
+    assert.equal(readStoredCaseFile({ ...valid, version: undefined }), null);
+  });
+
+  it("bỏ qua hồ sơ hỏng hình dạng", () => {
+    for (const bad of [42, "chuoi", [], {}, { version: 1 }, { ...valid, highlights: [] }]) {
+      assert.equal(readStoredCaseFile(bad), null);
+    }
+  });
+});
 
 describe("formatDuration", () => {
   it("dưới một phút chỉ nói giây", () => {
