@@ -25,7 +25,7 @@ export function CaseFileCard({ file }: { file: CaseFile }) {
 
   return (
     <section
-      className="lobby-roster-scroll card space-y-4 lg:max-h-[46vh] lg:overflow-y-auto lg:overscroll-contain lg:pr-1"
+      className="lobby-roster-scroll card space-y-4 lg:max-h-[38vh] lg:overflow-y-auto lg:overscroll-contain lg:pr-1"
       aria-labelledby="case-file-heading"
     >
       <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">

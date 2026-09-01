@@ -57,7 +57,7 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
   const shareOrigin = typeof window === "undefined" ? "" : window.location.origin;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 lg:space-y-2">
       {/*
         * Quầng sáng phủ cả màn theo phe thắng. Không nhét vào Backdrop vì moodFor
         * chỉ nhận pha: ai thắng là dữ liệu của ván, không phải của pha.
@@ -235,7 +235,7 @@ function TeamPanel({
         * (`lg:max-h-[calc(100dvh-16rem)]`). Chỉ khoá riêng danh sách đội hình
         * chứ không khoá cả màn: đây là khối duy nhất co giãn theo số người.
         */}
-      <ul className="lobby-roster-scroll space-y-1.5 lg:max-h-[38vh] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
+      <ul className="lobby-roster-scroll space-y-1.5 lg:max-h-[32vh] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
         {players.map((player) => (
           <li
             key={player.id}
