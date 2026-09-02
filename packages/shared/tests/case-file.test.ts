@@ -371,6 +371,95 @@ describe("highlight · vai đêm", () => {
     expect(typesOf(file)).not.toContain("GUARD_SAVE");
   });
 
+  it("Thiên Thần Hộ Mệnh chắn đúng mục tiêu của Sói là ANGEL_SAVE", () => {
+    const file = buildCaseFile(
+      snap({
+        nightHistory: [
+          night({
+            round: 1,
+            wolfTarget: { id: "p-dan", name: "Dân Làng" },
+            guardianAngelTarget: { id: "p-dan", name: "Dân Làng" },
+            deaths: [],
+          }),
+        ],
+      }),
+    );
+    expect(typesOf(file)).toContain("ANGEL_SAVE");
+  });
+
+  it("chắn đúng người nhưng người đó vẫn chết thì không phải chắn được", () => {
+    const file = buildCaseFile(
+      snap({
+        nightHistory: [
+          night({
+            round: 1,
+            wolfTarget: { id: "p-dan", name: "Dân Làng" },
+            guardianAngelTarget: { id: "p-dan", name: "Dân Làng" },
+            deaths: [{ player: { id: "p-dan", name: "Dân Làng" }, cause: "wolf" }],
+          }),
+        ],
+      }),
+    );
+    expect(typesOf(file)).not.toContain("ANGEL_SAVE");
+  });
+
+  it("chắn nhầm người không bị Sói nhắm thì không phải điểm ngoặt", () => {
+    const file = buildCaseFile(
+      snap({
+        nightHistory: [
+          night({
+            round: 1,
+            wolfTarget: { id: "p-dan", name: "Dân Làng" },
+            guardianAngelTarget: { id: "p-phuthuy", name: "Phù Thuỷ" },
+            deaths: [{ player: { id: "p-dan", name: "Dân Làng" }, cause: "wolf" }],
+          }),
+        ],
+      }),
+    );
+    expect(typesOf(file)).not.toContain("ANGEL_SAVE");
+  });
+
+  it("hai tấm khiên cùng chắn một người chỉ tính MỘT lần cứu", () => {
+    const file = buildCaseFile(
+      snap({
+        nightHistory: [
+          night({
+            round: 1,
+            wolfTarget: { id: "p-dan", name: "Dân Làng" },
+            guardTarget: { id: "p-dan", name: "Dân Làng" },
+            guardianAngelTarget: { id: "p-dan", name: "Dân Làng" },
+            deaths: [],
+          }),
+        ],
+      }),
+    );
+    const saves = typesOf(file).filter((type) => type === "ANGEL_SAVE" || type === "GUARD_SAVE");
+    expect(saves).toEqual(["ANGEL_SAVE"]);
+  });
+
+  it("hai tấm khiên chắn hai người khác nhau thì vẫn là hai lần cứu", () => {
+    const file = buildCaseFile(
+      snap({
+        nightHistory: [
+          night({
+            round: 1,
+            wolfTarget: { id: "p-dan", name: "Dân Làng" },
+            guardTarget: { id: "p-dan", name: "Dân Làng" },
+            deaths: [],
+          }),
+          night({
+            round: 2,
+            wolfTarget: { id: "p-phuthuy", name: "Phù Thuỷ" },
+            guardianAngelTarget: { id: "p-phuthuy", name: "Phù Thuỷ" },
+            deaths: [],
+          }),
+        ],
+      }),
+    );
+    expect(typesOf(file)).toContain("GUARD_SAVE");
+    expect(typesOf(file)).toContain("ANGEL_SAVE");
+  });
+
   it("một đêm nhiều người chết là BLOODBATH", () => {
     const file = buildCaseFile(
       snap({
