@@ -31,20 +31,6 @@ function useServerTick(): number {
 }
 
 /**
- * Thời gian còn lại dạng chữ, để nhét vào giữa một câu.
- *
- * Không thay `Timer`: vòng đồng hồ vẫn đứng NGUYÊN chỗ cũ trên thanh pha ở mọi
- * pha, đó là điểm neo mà người chơi đã quen liếc tới. Cái này chỉ dành cho chỗ
- * mà con số phải nằm ngay trong câu đang đọc - "Đến lượt bạn biện hộ · còn
- * 00:18" - vì bị cáo lúc đó đang nhìn ô nhập chứ không nhìn lên đầu màn hình.
- */
-export function CountdownText({ endsAt, className }: { endsAt: number | null; className?: string }) {
-  const now = useServerTick();
-  if (endsAt === null) return null;
-  return <span className={`tabular-nums ${className ?? ""}`}>còn {fmt(endsAt - now)}</span>;
-}
-
-/**
  * Đồng hồ đếm ngược từ timestamp server, không tự tính logic game.
  *
  * Mốc so sánh là serverNow() chứ không phải Date.now(): endsAt là giờ server,

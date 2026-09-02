@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import type { DayVoteRecap, RoomSnapshot } from "@masoi/shared";
 import { assignAvatars, tintFor } from "@/lib/avatar";
 import { summarizeDefenseVotes } from "@/lib/defense-votes";
@@ -25,9 +25,19 @@ interface Props {
  * Giờ nó là một câu trả lời sẵn ở trên, còn lịch sử đầy đủ lùi vào một khối
  * bung ra: vẫn còn đủ cho ai muốn truy dấu ai đổi phiếu lúc nào, nhưng không
  * còn cạnh tranh với chính lời biện hộ.
+ *
+ * Dùng ở CẢ pha biện hộ lẫn pha bỏ phiếu xác nhận. Hai pha đó hỏi hai câu khác
+ * nhau ("nghe gì" và "treo hay tha") nhưng cùng cần đúng một nền: ai bị đề cử,
+ * bao nhiêu phiếu, và những phiếu đó của ai. Vòng xác nhận từng có bảng lịch sử
+ * đầy đủ của riêng nó, và đó chính là đám chip đồng hạng ở trên, chỉ đổi chỗ
+ * xuống ngay trên hai cái nút quyết định.
  */
 export function DefenseVotePanel({ recap, players, accusedId, accusedName }: Props) {
   const [open, setOpen] = useState(false);
+  // aria-controls cần một id THẬT và duy nhất: khối này xuất hiện ở cả pha biện
+  // hộ lẫn pha bỏ phiếu xác nhận, và một chuỗi id viết cứng sẽ trùng nhau ngay
+  // khi hai bản cùng nằm trên trang.
+  const historyId = useId();
   const summary = useMemo(
     () => summarizeDefenseVotes(recap, accusedId, players),
     [recap, accusedId, players],
@@ -36,7 +46,7 @@ export function DefenseVotePanel({ recap, players, accusedId, accusedName }: Pro
   const avatars = useMemo(() => assignAvatars(players.map((p) => p.id)), [players]);
 
   return (
-    <section className="card space-y-3" aria-label="Phiếu nhắm vào người đang biện hộ">
+    <section className="card space-y-3" aria-label="Phiếu đã đề cử người này">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <p className="text-xs font-semibold uppercase tracking-[0.25em] text-amber-300">
           Vì sao bị đề cử
@@ -97,21 +107,32 @@ export function DefenseVotePanel({ recap, players, accusedId, accusedName }: Pro
             type="button"
             onClick={() => setOpen((value) => !value)}
             aria-expanded={open}
+            aria-controls={historyId}
             className="btn-tertiary -mx-1 w-full justify-between"
           >
             <span>Xem toàn bộ lịch sử bỏ phiếu</span>
+            {/* Mũi tên đổi theo trạng thái mở/đóng, và nó là thứ DUY NHẤT ở đây
+              * mang nghĩa bằng hình - nên nhãn chữ giữ nguyên ở cả hai trạng
+              * thái và `aria-expanded` mới là phần trình đọc màn hình nghe. */}
             <span aria-hidden="true">{open ? "▴" : "▾"}</span>
           </button>
-          {open && (
-            <div className="mt-2.5">
-              <VoteHistoryPanel
-                recap={recap}
-                players={players}
-                highlightTargetId={accusedId}
-                bare
-              />
-            </div>
-          )}
+          {/*
+            * Luôn dựng, chỉ ẩn bằng `hidden`.
+            *
+            * `aria-controls` trỏ tới một node không tồn tại là một liên kết
+            * gãy: lúc đóng thì id kia không có chủ, và trình đọc màn hình chỉ
+            * đọc được một cái nút hứa hẹn điều khiển một thứ không có thật.
+            * `hidden` giữ node lại trong tài liệu mà vẫn đưa nó ra khỏi cây
+            * trợ năng lẫn thứ tự Tab.
+            */}
+          <div id={historyId} hidden={!open} className="mt-2.5">
+            <VoteHistoryPanel
+              recap={recap}
+              players={players}
+              highlightTargetId={accusedId}
+              bare
+            />
+          </div>
         </div>
       )}
     </section>

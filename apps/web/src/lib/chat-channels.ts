@@ -14,6 +14,17 @@ export interface ChatChannelMeta {
   label: string;
   /** Câu đầy đủ cho tiêu đề khung và cho aria-label. */
   longLabel: string;
+  /**
+   * AI NHÌN THẤY kênh này - dòng phụ dưới tiêu đề khung.
+   *
+   * Không phải "chỉ hiển thị sói": câu đó nói về thứ đang được VẼ RA, trong khi
+   * điều người chơi cần biết trước khi gõ là ai sẽ đọc được câu của mình. Kênh
+   * chat là chỗ lộ vai nhanh nhất trong cả ván, nên dòng này phải trả lời đúng
+   * câu hỏi đó bằng đối tượng, không bằng bộ lọc.
+   */
+  audience: string;
+  /** Gợi ý trong ô nhập khi kênh này là ĐÍCH GỬI. */
+  placeholder: string;
   icon: string;
 }
 
@@ -27,14 +38,57 @@ export interface ChatChannelMeta {
  * hai tên tuỳ chỗ nhìn.
  */
 export const CHAT_CHANNEL_META: Record<ChatChannelId, ChatChannelMeta> = {
-  lobby: { label: "Phòng", longLabel: "Kênh phòng chờ", icon: "🏠" },
-  day: { label: "Làng", longLabel: "Kênh làng", icon: "☀️" },
-  wolves: { label: "Sói", longLabel: "Kênh phe Sói", icon: "🐺" },
-  dead: { label: "Người chết", longLabel: "Kênh người chết", icon: "💀" },
+  lobby: {
+    label: "Phòng",
+    longLabel: "Kênh phòng chờ",
+    audience: "Cả phòng nhìn thấy",
+    placeholder: "Chat với cả phòng…",
+    icon: "🏠",
+  },
+  day: {
+    label: "Làng",
+    longLabel: "Kênh làng",
+    audience: "Chỉ người còn sống nhìn thấy",
+    placeholder: "Chat với người còn sống…",
+    icon: "☀️",
+  },
+  wolves: {
+    label: "Sói",
+    longLabel: "Kênh phe Sói",
+    audience: "Chỉ phe Sói nhìn thấy",
+    placeholder: "Chat với đồng đội Sói…",
+    icon: "🐺",
+  },
+  dead: {
+    label: "Người chết",
+    longLabel: "Kênh người chết",
+    audience: "Chỉ người đã chết nhìn thấy",
+    placeholder: "Chat với những người đã chết…",
+    icon: "💀",
+  },
 };
 
+/**
+ * Nhãn của ô nhập: "Gửi vào Kênh phe Sói".
+ *
+ * Một hàm chứ không phải một trường thứ năm trong bảng, để tên kênh chỉ tồn tại
+ * ở ĐÚNG một chỗ (`longLabel`). Dòng chữ trên thanh soạn và tên có thể đọc được
+ * của chính thẻ <input> đều đi qua đây, nên hai thứ đó không thể lệch nhau.
+ */
+export function composerLabel(channel: ChatChannelId): string {
+  return `Gửi vào ${CHAT_CHANNEL_META[channel].longLabel}`;
+}
+
 export function channelMeta(channel: string): ChatChannelMeta {
-  return CHAT_CHANNEL_META[channel as ChatChannelId] ?? { label: channel, longLabel: channel, icon: "💬" };
+  return (
+    CHAT_CHANNEL_META[channel as ChatChannelId] ?? {
+      label: channel,
+      longLabel: channel,
+      audience: "",
+      placeholder: "Nhập tin nhắn…",
+      icon: "💬",
+    }
+  );
 }
 
 /** Thứ tự cố định cho tab lọc, để tab không nhảy chỗ giữa hai lần render. */
@@ -97,7 +151,10 @@ export function chatHeading(snapshot: RoomSnapshot | null): ChatHeading {
   }
   if (channels.length === 1) {
     const meta = CHAT_CHANNEL_META[channels[0]];
-    return { title: meta.longLabel, subtitle: `Chỉ hiển thị ${meta.label.toLowerCase()}` };
+    // Dòng phụ nói AI ĐỌC ĐƯỢC, không nói cái khung đang lọc theo gì. "Chỉ hiển
+    // thị sói" đọc ra như một tuỳ chọn xem, còn "Chỉ phe Sói nhìn thấy" là điều
+    // người chơi phải biết trước khi gõ.
+    return { title: meta.longLabel, subtitle: meta.audience };
   }
   /*
    * Nhiều kênh thì tiêu đề KHÔNG được mang tên một kênh nào.
@@ -121,7 +178,14 @@ export interface ChatComposerState {
   canSend: boolean;
   /** Kênh mà một tin nhắn gửi bây giờ sẽ rơi vào; null khi không gửi được. */
   channel: ChatChannelId | null;
-  /** Gợi ý trong ô nhập. Ngắn để không bị cắt ở cột chat 368px. */
+  /**
+   * Gợi ý trong ô nhập.
+   *
+   * Khi gửi được thì nó LUÔN là `CHAT_CHANNEL_META[channel].placeholder` - câu
+   * chữ của một kênh không được phép có hai bản, một trong bảng tra và một viết
+   * tay ở nhánh dưới đây. Các nhánh KHOÁ mới tự viết câu của mình: lúc đó không
+   * có kênh đích nào để tra.
+   */
   placeholder: string;
   /** Vì sao đang khoá; chuỗi rỗng khi gửi được. */
   reason: string;
@@ -153,12 +217,12 @@ function isSilentNight(snapshot: RoomSnapshot): boolean {
  */
 export function chatComposerState(snapshot: RoomSnapshot | null): ChatComposerState {
   if (!snapshot) {
-    return { ...LOCKED, placeholder: "Đang kết nối...", reason: "Chưa vào được phòng" };
+    return { ...LOCKED, placeholder: "Đang kết nối…", reason: "Chưa vào được phòng." };
   }
 
   const phase = snapshot.phase;
   if (phase === "LOBBY" || phase === "GAME_OVER") {
-    return { canSend: true, channel: "lobby", placeholder: "Chat phòng...", reason: "" };
+    return { canSend: true, channel: "lobby", placeholder: CHAT_CHANNEL_META.lobby.placeholder, reason: "" };
   }
 
   const you = snapshot.you;
@@ -177,14 +241,14 @@ export function chatComposerState(snapshot: RoomSnapshot | null): ChatComposerSt
     if (phase === "HUNTER_SHOT" && snapshot.hunterShot?.hunterId === you.id) {
       return {
         ...LOCKED,
-        placeholder: "Bạn còn một phát súng...",
+        placeholder: "Bạn còn một phát súng…",
         reason: "Bắn xong bạn mới vào được kênh người chết.",
       };
     }
     return {
       canSend: true,
       channel: "dead",
-      placeholder: "Nhắn kênh người chết...",
+      placeholder: CHAT_CHANNEL_META.dead.placeholder,
       reason: "",
     };
   }
@@ -204,13 +268,17 @@ export function chatComposerState(snapshot: RoomSnapshot | null): ChatComposerSt
         reason: "Đêm Tĩnh Lặng: kênh phe Sói bị vô hiệu hoá.",
       };
     }
-    return { canSend: true, channel: "wolves", placeholder: "Chat phe Sói...", reason: "" };
+    return { canSend: true, channel: "wolves", placeholder: CHAT_CHANNEL_META.wolves.placeholder, reason: "" };
   }
 
   if (phase === "DEFENSE") {
     const accusedId = snapshot.trial?.accusedId;
     if (accusedId && you.id === accusedId) {
-      return { canSend: true, channel: "day", placeholder: "Nhập lời biện hộ...", reason: "" };
+      // Bị cáo gửi vào ĐÚNG kênh làng như mọi câu ban ngày khác, nhưng gợi ý
+      // thì nói việc đang làm: cả pha này chỉ có một người được gõ, và câu
+      // "Chat với người còn sống…" ở đó đọc ra như một cuộc trò chuyện bình
+      // thường thay vì lượt nói cuối của họ.
+      return { canSend: true, channel: "day", placeholder: "Nhập lời biện hộ…", reason: "" };
     }
     const accusedName = snapshot.trial?.accusedName;
     return {
@@ -218,7 +286,7 @@ export function chatComposerState(snapshot: RoomSnapshot | null): ChatComposerSt
       // Tên người biện hộ nằm trong placeholder chứ không chỉ ở dòng lý do:
       // trên điện thoại tấm trượt chat che gần hết màn, và ô nhập là thứ duy
       // nhất người chơi còn nhìn thấy lúc định gõ.
-      placeholder: accusedName ? `Đang lắng nghe ${accusedName}...` : "Đang lắng nghe lời biện hộ...",
+      placeholder: accusedName ? `Đang lắng nghe ${accusedName}…` : "Đang lắng nghe lời biện hộ…",
       reason: accusedName
         ? `Chỉ ${accusedName} được nói trong lúc biện hộ.`
         : "Chỉ người đang biện hộ được nói.",
@@ -233,7 +301,7 @@ export function chatComposerState(snapshot: RoomSnapshot | null): ChatComposerSt
     phase === "FINAL_VOTE" ||
     phase === "ELIMINATION"
   ) {
-    return { canSend: true, channel: "day", placeholder: "Chat làng...", reason: "" };
+    return { canSend: true, channel: "day", placeholder: CHAT_CHANNEL_META.day.placeholder, reason: "" };
   }
 
   /*

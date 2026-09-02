@@ -19,6 +19,16 @@ interface Props {
   confirmedId?: string | null;
   onSelect?: (playerId: string) => void;
   disabledIds?: string[];
+  /**
+   * Vì sao những ô trong `disabledIds` không bấm được.
+   *
+   * Bỏ trống thì rơi về một câu chung. Câu chung đó đúng nhưng rỗng nghĩa ở
+   * đúng chỗ cần nghĩa nhất: lưới đêm của phe Sói tắt ô của đồng đội, và một
+   * con Sói mới chơi rê chuột vào đó chỉ đọc được "không thể chọn người này
+   * lúc này" - không nói ra là ô đó KHÔNG BAO GIỜ chọn được, cũng không nói ra
+   * người đó là đồng đội.
+   */
+  disabledIdsReason?: string;
   /** Bảo Vệ được tự bảo vệ mình, nên vài lưới đêm phải mở ô của chính người chơi. */
   allowSelf?: boolean;
 }
@@ -31,6 +41,7 @@ export function PlayerGrid({
   confirmedId = null,
   onSelect,
   disabledIds = [],
+  disabledIdsReason,
   allowSelf = false,
 }: Props) {
   // snapshot.you thay cho getIdentity(): id của chính người xem đã nằm sẵn
@@ -134,7 +145,7 @@ export function PlayerGrid({
               : isMe && !allowSelf
                 ? "Không thể chọn chính mình"
                 : disabledIds.includes(player.id)
-                  ? "Không thể chọn người này lúc này"
+                  ? disabledIdsReason ?? "Không thể chọn người này lúc này"
                   : null;
           const isSelected =
             selectedIds?.includes(player.id) ?? (selectedId === player.id);

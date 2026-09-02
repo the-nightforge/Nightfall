@@ -8,6 +8,7 @@ import { insertEmoji } from "@/lib/chat-emoji";
 import {
   CHAT_CHANNEL_META,
   channelMeta,
+  composerLabel,
   type ChatChannelId,
   type ChatComposerState,
   type ChatHeading,
@@ -303,10 +304,19 @@ export function ChatBox({
         */}
       {heading && (
         <div className="shrink-0 border-b border-night-600/60 px-3 py-2">
-          <div className="flex items-baseline justify-between gap-2">
-            <h3 className="font-display text-base font-bold text-white">{heading.title}</h3>
-            <p className="truncate text-[13px] text-mist-strong">{heading.subtitle}</p>
-          </div>
+          {/*
+            * Xếp CHỒNG, không xếp cạnh.
+            *
+            * Dòng phụ giờ là một câu hoàn chỉnh ("Chỉ người còn sống nhìn
+            * thấy") chứ không phải hai chữ như bản cũ. Để nó ngồi cạnh tiêu đề
+            * thì ở cột chat 17.5rem của nấc lg cả hai cùng thua: tiêu đề gãy
+            * làm hai dòng còn câu kia bị cắt giữa chừng - đúng cái câu nói ai
+            * đọc được tin nhắn của mình. Chồng lên nhau thì mỗi dòng có trọn
+            * bề ngang, và thứ tự đọc (đang ở kênh nào -> ai thấy được) vẫn y
+            * như trước.
+            */}
+          <h3 className="truncate font-display text-base font-bold text-white">{heading.title}</h3>
+          <p className="truncate text-[13px] text-mist-strong">{heading.subtitle}</p>
         </div>
       )}
 
@@ -502,8 +512,16 @@ export function ChatBox({
           * đâu cả. Đây là nửa còn lại của việc tách kênh: tiêu đề nói mình
           * đang ĐỌC gì, dòng này nói mình đang GỬI vào đâu.
           */}
-        {composer.canSend && destination ? (
-          <p className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[12px] text-mist-strong">
+        {composer.canSend && composer.channel && destination ? (
+          /*
+            * 13px chứ không phải 12px.
+            *
+            * Đây là nhãn của ô nhập ngay bên dưới - dòng nói tin nhắn sắp đi
+            * đâu - chứ không phải một chú thích. Ở 12px trên nền khung chat nó
+            * đọc ra như dấu vết của một tooltip, và người chơi bỏ qua đúng câu
+            * duy nhất phân biệt kênh làng với hang Sói.
+            */
+          <p className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[13px] text-mist-strong">
             <span aria-hidden="true">{destination.icon}</span>
             Gửi vào <b className="font-semibold text-mist-bright">{destination.longLabel}</b>
           </p>
@@ -524,9 +542,17 @@ export function ChatBox({
             * pointer-events-none để chạm vào icon vẫn là chạm vào ô nhập.
             */}
           <div className="relative min-w-0 flex-1">
-            {composer.canSend ? (
-              <MessageCircleIcon className="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-mist/55" />
-            ) : (
+            {/*
+              * Chỉ trạng thái KHOÁ mới đeo hình ở mép trái.
+              *
+              * Bong bóng hội thoại ở trạng thái gửi được không nói thêm gì -
+              * dòng "Gửi vào Kênh phe Sói" ngay trên đã mang cả biểu tượng lẫn
+              * tên kênh - nhưng nó ăn 28px đầu ô, và ở cột chat 17.5rem của nấc
+              * lg thì 28px đó chính là phần đuôi bị cắt của câu gợi ý. Ổ khoá
+              * thì ở lại: nó là dấu hiệu KHÔNG PHẢI MÀU cho một ô không gõ
+              * được, và ô lúc đó cũng chẳng có nút biểu tượng để tranh chỗ.
+              */}
+            {!composer.canSend && (
               <LockIcon className="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-mist/55" />
             )}
             {/* pr-11 chừa chỗ cho nút biểu tượng nằm đè bên phải, y như pl-10
@@ -544,10 +570,45 @@ export function ChatBox({
               * placeholder với nội dung đã nhập.
               */}
             <input
-              className={`input placeholder:text-mist/75 ${composer.canSend ? "pl-10 pr-11" : "pl-10 pr-3"}`}
+              /*
+                * Gợi ý ở 14px trong khi chữ đã nhập vẫn 16px.
+                *
+                * 16px của `.input` là để iOS không tự phóng to trang lúc chạm
+                * vào ô, nên chữ NHẬP phải giữ nguyên cỡ đó. Còn gợi ý thì đo
+                * được: "Chat với những người đã chết…" cần 240px ở 16px, trong
+                * khi ô chat rộng nhất (cột 23rem) chỉ chừa 225px - tức là câu
+                * mời gõ luôn bị cắt mất phần đuôi ở MỌI bề ngang desktop. Ở
+                * 14px nó còn 210px và hiện trọn vẹn. Vẫn trên sàn 12px, và độ
+                * tương phản thì đi ngược lại một nấc (xem `/85` bên dưới).
+                */
+              className={`input placeholder:text-sm ${
+                composer.canSend
+                  ? "pl-3 pr-11 placeholder:text-mist/75"
+                  : /*
+                     * Ô bị khoá thì gợi ý phải SÁNG HƠN, không mờ đi.
+                     *
+                     * Nền ô lúc đó là `night-900/70` - tối hơn lúc gõ được - và
+                     * câu trong đó ("Đang lắng nghe Phú Lê…") là thứ duy nhất
+                     * nói vì sao không gõ được, ngay tầm mắt của người vừa định
+                     * gõ. Ở /75 nó chìm đúng vào lúc cần đọc nhất; /85 đưa lên
+                     * khoảng 6:1 mà vẫn nhạt hơn hẳn chữ đã nhập.
+                     */
+                    "pl-10 pr-3 placeholder:text-mist/85"
+              }`}
               ref={attachInput}
               autoFocus={autoFocus}
-              aria-label="Nội dung tin nhắn"
+              /*
+               * Tên đọc được của ô nhập LÀ nhãn kênh, không phải "Nội dung tin
+               * nhắn". Người dùng trình đọc màn hình không thấy dòng "Gửi vào
+               * Kênh phe Sói" nằm phía trên như một nhãn - nó chỉ là một đoạn
+               * văn - nên nếu ô này tự giới thiệu bằng một cái tên chung chung
+               * thì họ mất hẳn thông tin ai sẽ đọc được câu mình gõ.
+               */
+              aria-label={
+                composer.canSend && composer.channel
+                  ? composerLabel(composer.channel)
+                  : "Nội dung tin nhắn"
+              }
               /*
                * `disabled` chứ không phải readOnly hay một lớp CSS mờ đi: ô bị
                * khoá phải rơi hẳn khỏi thứ tự Tab, nếu không người dùng bàn
