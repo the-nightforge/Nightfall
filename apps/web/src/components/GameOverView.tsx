@@ -5,6 +5,7 @@ import { m } from "motion/react";
 import {
   buildCaseFile,
   momentLabel,
+  roundsLabel,
   ROLE_META,
   type CaseHighlight,
   type PlayerView,
@@ -70,6 +71,12 @@ const ACCENT = {
  * hình dáng nút đỏ, nên không có hành động nào là hành động chính. Giờ chỉ
  * `btn-cta` về phòng chờ là hạng nhất; chia sẻ tụt xuống hạng hai trong thẻ
  * chia sẻ, tải ảnh và sao chép xuống hạng ba, rời phòng là chữ nhạt sắc đỏ.
+ *
+ * MÀU cũng phải nói đúng nghĩa, không chỉ kích cỡ. CTA về phòng chờ mang sắc
+ * xanh chiến thắng (`btn-cta-win`) chứ không phải đỏ thương hiệu: đỏ ở màn này
+ * được để dành cho đường thoát ra. Nếu cả hai cùng đỏ thì thứ bậc chỉ còn nằm ở
+ * cỡ nút, và người vừa đọc xong "Phe Ma Sói chiến thắng" bằng chữ đỏ sẽ thấy
+ * đúng sắc đỏ đó trên nút đi tiếp lẫn nút rời đi.
  */
 export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
   const wolvesWin = snapshot.winner === "wolves";
@@ -107,7 +114,15 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
   // đúng đường dẫn tương đối thay vì một origin bịa ra.
   const shareOrigin = typeof window === "undefined" ? "" : window.location.origin;
 
-  const scale = `${caseFile ? caseFile.rounds : snapshot.round} vòng · ${snapshot.players.length} người chơi`;
+  /*
+   * Quy mô ván, đếm bằng NGÀY.
+   *
+   * Cùng con số với "Ngày 3" của thanh pha và của mọi mốc trong hồ sơ, nên nó
+   * phải mang cùng một đơn vị: bản cũ gọi nó là "3 vòng" ngay phía trên một hồ
+   * sơ toàn nhãn "Ngày 3 / Đêm 2", và không có gì nói cho người đọc biết hai
+   * cách gọi đó là một.
+   */
+  const scale = `${roundsLabel(caseFile ? caseFile.rounds : snapshot.round)} · ${snapshot.players.length} người chơi`;
 
   return (
     <div className="space-y-3">
@@ -323,9 +338,17 @@ function DecisiveMoment({
  * sách người chơi và nguyên cấu hình, chứ KHÔNG bắt đầu ván mới - "Chơi lại"
  * của bản cũ hứa một ván mới mà server không hề khởi động.
  *
- * "Rời phòng" vẫn ở đây dù thanh đầu trang đã có một cái: trên điện thoại màn
- * kết thúc dài hơn một khung nhìn nên thanh đó đã cuộn đi mất. Nó là chữ nhạt
- * hạng ba chứ không phải nút đặc, nên nó không cạnh tranh với CTA ngay trên.
+ * "Rời phòng" vẫn ở đây dù thanh đầu trang đã có một cái: thanh đó là đường
+ * thoát của MỌI pha nên không bỏ được, còn trên điện thoại màn kết thúc dài hơn
+ * một khung nhìn nên tới lúc đọc xong nó đã cuộn đi mất.
+ *
+ * Vì hai chỗ cùng gọi đúng một hàm, nhãn phải nói rõ hơn cái ở trên chứ không
+ * lặp lại y hệt: hai nút "Rời phòng" trên cùng một trang đọc ra như hai hành
+ * động khác nhau mà người chơi phải đoán xem cái nào là cái nào. "Rời phòng và
+ * về trang chủ" nói hết điều nút làm - `room:leave` rồi đẩy về `/`.
+ *
+ * Vẫn là chữ nhạt hạng ba chứ không phải nút đặc, nên nó không cạnh tranh với
+ * CTA ngay trên.
  */
 function PostMatchActions({
   canReset,
@@ -348,7 +371,7 @@ function PostMatchActions({
 
       {canReset ? (
         <>
-          <button className="btn-cta w-full" onClick={onReset}>
+          <button className="btn-cta btn-cta-win w-full" onClick={onReset}>
             Về phòng chờ
           </button>
           <p className="text-center text-sm text-mist-strong">
@@ -371,7 +394,7 @@ function PostMatchActions({
 
       <div className="flex justify-center border-t border-white/[0.08] pt-3">
         <button className="btn-tertiary-danger min-h-11 px-4" onClick={onLeave}>
-          Rời phòng
+          Rời phòng và về trang chủ
         </button>
       </div>
     </section>

@@ -379,6 +379,65 @@ summary:focus-visible,
   }
 
   /*
+   * CTA sắc thắng lợi - dùng ở màn kết thúc ván.
+   *
+   * Đỏ là màu THƯƠNG HIỆU của trò chơi, nhưng ở màn kết thúc nó va vào chính
+   * nghĩa của nó: trên cùng một khung nhìn có "Về phòng chờ" (đi tiếp) và "Rời
+   * phòng" (thoát hẳn), và nếu cái đi tiếp là nút đỏ đặc thì đỏ không còn nói
+   * được điều gì về mức nguy hiểm nữa - hai hành động ngược chiều nhau mặc cùng
+   * một màu. Ở đây đỏ được trả về đúng vai: chỉ hành động rời phòng mới ngả đỏ,
+   * còn đường đi tiếp mang sắc xanh chiến thắng, cùng hệ với quầng sáng phe
+   * thắng và thẻ "Bạn thắng".
+   *
+   * Xanh CỐ ĐỊNH, không đổi theo phe thắng: để nó ngả đỏ khi Sói thắng là dựng
+   * lại đúng cái va chạm vừa gỡ ra.
+   *
+   * Mọi trạng thái của .btn-cta đều phải được viết lại ở đây: `.btn-cta:hover`
+   * đặc hiệu hơn `.btn-cta-win`, nên một khai báo `background` trần không đủ để
+   * giành lại lúc rê chuột.
+   */
+  .btn-cta-win {
+    background: linear-gradient(180deg, #1a8f6a 0%, #10664c 100%);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
+      0 14px 34px -16px rgba(26, 143, 106, 0.85);
+  }
+
+  .btn-cta-win:hover:not(:disabled) {
+    background: linear-gradient(180deg, #21a67c 0%, #157457 100%);
+  }
+
+  .btn-cta-win:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  .btn-cta-win:disabled {
+    background: linear-gradient(180deg, rgba(58, 74, 106, 0.9) 0%, rgba(34, 46, 72, 0.92) 100%);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
+  }
+
+  /*
+   * Hành động phụ CÓ hình nút.
+   *
+   * Nằm giữa .btn-secondary (nền đặc) và .btn-tertiary (chỉ là chữ). "Tải ảnh"
+   * và "Sao chép tóm tắt" ở thẻ chia sẻ từng dùng .btn-tertiary, và trên nền
+   * thẻ hai cái đó đọc ra như hai dòng chữ nhạt chứ không như hai thứ bấm được
+   * - không viền, không nền, không gì phân biệt với câu mô tả ngay trên. Viền
+   * mảnh + nền gần trong suốt ở đây đủ để mắt thấy một vùng bấm mà vẫn nhẹ hơn
+   * hẳn nút "Chia sẻ kết quả" đứng ngay trên chúng.
+   *
+   * min-height 2.5rem = 40px: đúng sàn vùng chạm mà cả màn này phải giữ.
+   */
+  .btn-ghost {
+    @apply inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border
+      border-white/[0.12] bg-white/[0.03] px-3 py-2 text-sm font-semibold text-mist-strong
+      transition hover:border-white/25 hover:bg-white/[0.08] hover:text-white
+      active:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50
+      disabled:hover:border-white/[0.12] disabled:hover:bg-white/[0.03]
+      disabled:hover:text-mist-strong;
+  }
+
+  /*
    * placeholder ở mist/75.
    *
    * /40 chìm hẳn vào nền night-800, còn /55 đo được khoảng 3.4:1 - dưới ngưỡng

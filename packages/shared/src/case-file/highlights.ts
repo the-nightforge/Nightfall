@@ -64,6 +64,30 @@ function villageRoleClause(player: CaseFilePlayer): string {
   return label === "Dân Làng" ? label : `${label}, phe Dân Làng`;
 }
 
+/**
+ * Vế kiểm phiếu của một phiên toà ĐÃ kết án.
+ *
+ * "8 phiếu Treo trên 0 phiếu Tha" là ngôn ngữ của bảng kiểm phiếu, không phải
+ * của một câu kể: nó bắt người đọc tự dịch "0 phiếu Tha" thành "không ai bênh",
+ * và viết hoa Treo/Tha giữa câu làm hai chữ đó đọc ra như tên riêng. Câu ở đây
+ * đã có động từ "treo cổ" nên vế phiếu KHÔNG nói lại chữ "treo" lần nữa.
+ */
+function verdictTally(guilty: number, innocent: number): string {
+  return `${guilty} phiếu, ${innocent === 0 ? "không có phiếu tha" : `${innocent} phiếu tha`}`;
+}
+
+/**
+ * Vế kiểm phiếu của một phiên toà THA BỔNG.
+ *
+ * Ở đây câu không có động từ treo cổ nào để tựa vào, nên vế phiếu phải tự gọi
+ * tên cả hai phía - khác `verdictTally` đúng ở một chữ, và đó là chữ quyết định
+ * câu có đọc được hay không.
+ */
+function acquittalTally(guilty: number, innocent: number): string {
+  const spared = innocent === 0 ? "không có phiếu tha" : `${innocent} phiếu tha`;
+  return `${guilty} phiếu treo, ${spared}`;
+}
+
 function candidate(
   type: CaseHighlightType,
   round: number,
@@ -115,7 +139,7 @@ function trialHighlights(data: CaseData): CaseCandidate[] {
               "day",
               key,
               "Án oan giữa ban ngày",
-              `Làng treo cổ ${name} với ${judgment.guilty} phiếu Treo trên ${judgment.innocent} phiếu Tha. ${name} là ${villageRoleClause(accused)}.`,
+              `Làng treo cổ ${name} với ${verdictTally(judgment.guilty, judgment.innocent)}. ${name} là ${villageRoleClause(accused)}.`,
               [accusedId],
               { kind: "lynch", accusedId, ...tally },
             )
@@ -125,7 +149,7 @@ function trialHighlights(data: CaseData): CaseCandidate[] {
               "day",
               key,
               "Làng tóm đúng Sói",
-              `${name} bị treo cổ với ${judgment.guilty} phiếu Treo trên ${judgment.innocent} phiếu Tha. Đúng là ${roleLabelOf(accused)}.`,
+              `${name} bị treo cổ với ${verdictTally(judgment.guilty, judgment.innocent)}. Đúng là ${roleLabelOf(accused)}.`,
               [accusedId],
               { kind: "lynch", accusedId, ...tally },
             ),
@@ -142,7 +166,7 @@ function trialHighlights(data: CaseData): CaseCandidate[] {
           "day",
           key,
           "Con sói được tha",
-          `Làng đưa ${name} ra xét xử rồi tha, ${judgment.guilty} phiếu Treo trên ${judgment.innocent} phiếu Tha. ${name} là ${roleLabelOf(accused)}.`,
+          `Làng đưa ${name} ra xét xử rồi tha: ${acquittalTally(judgment.guilty, judgment.innocent)}. ${name} là ${roleLabelOf(accused)}.`,
           [accusedId],
           { kind: "acquittal", accusedId, ...tally },
         ),
@@ -191,7 +215,7 @@ function voteSwingHighlights(data: CaseData): CaseCandidate[] {
         "day",
         `swing:${day.round}`,
         "Lá phiếu phút chót",
-        `${voter} đổi phiếu sang ${accused} ở những giây cuối của vòng đề cử, và ${accused} là người bị đưa ra xét xử.`,
+        `${voter} đổi phiếu sang ${accused} ở những giây cuối của lượt đề cử, và ${accused} là người bị đưa ra xét xử.`,
         [last.voterId, accusedId],
         {
           kind: "vote-swing",
@@ -424,7 +448,7 @@ function loneSurvivorHighlights(data: CaseData): CaseCandidate[] {
 /**
  * Đường lui khi ván không để lại điểm ngoặt nào.
  *
- * Câu chữ chỉ được dùng phe thắng và số vòng. Không nói "chưa có phiên toà nào"
+ * Câu chữ chỉ được dùng phe thắng và số ngày. Không nói "chưa có phiên toà nào"
  * - một ván CÓ phiên toà nhưng tha đúng người vẫn rơi vào đây, và câu đó sẽ sai.
  */
 export function quietMatchHighlight(data: CaseData): CaseHighlight {
@@ -433,7 +457,7 @@ export function quietMatchHighlight(data: CaseData): CaseHighlight {
     round: data.rounds,
     phase: "day",
     title: "Một vụ án khép nhanh",
-    description: `Phe ${teamLabel(data.winner)} thắng sau ${data.rounds} vòng. Ván này không để lại điểm ngoặt nào đủ rõ để dựng thành hồ sơ.`,
+    description: `Phe ${teamLabel(data.winner)} thắng sau ${data.rounds} ngày. Ván này không để lại điểm ngoặt nào đủ rõ để dựng thành hồ sơ.`,
     participants: [],
     importance: IMPORTANCE.QUIET_MATCH,
     evidence: { kind: "quiet-match", rounds: data.rounds },

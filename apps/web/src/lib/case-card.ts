@@ -1,4 +1,4 @@
-import { momentLabel, type CaseFile } from "@masoi/shared";
+import { momentLabel, roundsLabel, type CaseFile } from "@masoi/shared";
 
 /** Trần độ dài mô tả trên thẻ. Dài hơn thì thẻ 9:16 hết chỗ cho điểm ngoặt sau. */
 export const CARD_TEXT_MAX = 110;
@@ -53,7 +53,7 @@ const CTA = "Chơi Ma Sói online";
 export function buildCaseCardModel(file: CaseFile, options: CaseCardOptions): CaseCardModel {
   const teamName = file.winner === "wolves" ? "Ma Sói" : "Dân Làng";
   const headline = `Phe ${teamName} thắng`;
-  const subline = `${file.rounds} vòng · ${file.cast.length} người chơi`;
+  const subline = `${roundsLabel(file.rounds)} · ${file.cast.length} người chơi`;
 
   const lines: CaseCardLine[] = file.highlights.map((highlight) => ({
     moment: momentLabel(highlight.round, highlight.phase),
@@ -61,7 +61,7 @@ export function buildCaseCardModel(file: CaseFile, options: CaseCardOptions): Ca
     text: truncate(highlight.description, CARD_TEXT_MAX),
   }));
 
-  // Ở trạng thái fallback, mô tả mở đầu bằng đúng câu "Phe X thắng sau N vòng"
+  // Ở trạng thái fallback, mô tả mở đầu bằng đúng câu "Phe X thắng sau N ngày"
   // đã nằm ngay dòng trên. Dùng tiêu đề để khỏi nói hai lần cùng một điều.
   const shareLines = file.fallback
     ? file.highlights.map((highlight) => `• ${highlight.title}`)
@@ -72,7 +72,7 @@ export function buildCaseCardModel(file: CaseFile, options: CaseCardOptions): Ca
 
   const shareText = [
     `🕯️ Hồ sơ vụ án ${file.caseId}`,
-    `Phe ${teamName} thắng sau ${file.rounds} vòng.`,
+    `Phe ${teamName} thắng sau ${roundsLabel(file.rounds)}.`,
     "",
     ...shareLines,
     "",
