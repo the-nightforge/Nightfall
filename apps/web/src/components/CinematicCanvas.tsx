@@ -94,6 +94,13 @@ export function CinematicCanvas({ kind, durationMs, onFail }: Props) {
         // Báo lên để bên gọi thôi hẳn, chứ không thử lại vô ích.
         const onLost = (event: Event) => {
           event.preventDefault();
+          // Dừng vòng vẽ TRƯỚC khi huỷ renderer: `onFail` của bên gọi là một
+          // setState, mà React gộp lô state - nên vẫn còn ít nhất một khung
+          // hình được lên lịch, và khung đó sẽ gọi render() trên một renderer
+          // đã dispose rồi ném lỗi. Mất context vốn đã là lúc máy đang thiếu
+          // bộ nhớ; không nên chồng thêm một lỗi nữa lên đó.
+          disposed = true;
+          cancelAnimationFrame(frame);
           destroyRenderer();
           onFail();
         };
