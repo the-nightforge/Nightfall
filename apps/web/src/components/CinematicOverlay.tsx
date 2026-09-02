@@ -64,12 +64,12 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
   const [network, setNetwork] = useState<NetworkHints>({ saveData: false, effectiveType: null });
   const [webgl, setWebgl] = useState(false);
   /*
-   * useCallback voi deps rong, KHONG phai arrow inline.
+   * useCallback với deps rỗng, KHÔNG phải arrow inline.
    *
-   * CinematicCanvas dat `onFail` trong deps cua effect dung scene. Mot arrow
-   * inline doi danh tinh moi lan render, ma overlay nay render lai theo TUNG
-   * snapshot - nen scene se bi thao va dung lai lien tuc suot ca canh.
-   * `webglBroken` o cap module va `setWebgl` on dinh, nen deps rong la dung.
+   * CinematicCanvas đặt `onFail` trong deps của effect dựng scene. Một arrow
+   * inline đổi danh tính mỗi lần render, mà overlay này render lại theo TỪNG
+   * snapshot - nên scene sẽ bị tháo và dựng lại liên tục suốt cả cảnh.
+   * `webglBroken` ở cấp module và `setWebgl` ổn định, nên deps rỗng là đúng.
    */
   const handleWebglFail = useCallback(() => {
     webglBroken = true;
@@ -245,7 +245,16 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
       onClick={finish}
     >
       <div className={`cine-scene cine-${playing.kind.toLowerCase().replace(/_/g, "-")}`} aria-hidden="true">
-        <SceneArt kind={playing.kind} />
+        {/*
+         * Chỉ vẽ phần hình CSS khi KHÔNG có canvas.
+         *
+         * Canvas dựng với `alpha: true` và scene không đặt `background`, nên nó
+         * TRONG SUỐT - khác hẳn <video> vốn `object-cover` và đục, che kín lớp
+         * dưới. Để nguyên thì trăng CSS và trăng 3D chồng lên nhau, siluet làng
+         * cũng vậy. Giữ lại thẻ bọc vì class của nó mang nền gradient, thứ cảnh
+         * 3D dùng làm nền.
+         */}
+        {!useWebgl && <SceneArt kind={playing.kind} />}
       </div>
 
       {useWebgl && (
@@ -424,17 +433,28 @@ function SceneArt({ kind }: { kind: CinematicKind }) {
 }
 
 /**
- * Máy này có WebGL2 không.
+ * Máy này có WebGL2 không. Hỏi ĐÚNG MỘT LẦN cho cả phiên.
  *
- * Thử tạo context trên một canvas rời rồi bỏ đi ngay: đây là cách duy nhất
- * biết chắc, vì `window.WebGL2RenderingContext` tồn tại kể cả trên máy mà
- * driver từ chối cấp context thật.
+ * Phép thử này tạo một context THẬT, và context là tài nguyên có hạn - trình
+ * duyệt chỉ cho chừng 16 cái rồi bắt đầu đá cái CŨ NHẤT, mà cái cũ nhất chính
+ * là renderer đang dùng. Gọi lại mỗi lần đổi thiết lập nghĩa là người chơi gạt
+ * công tắc vài chục lần là tự tay giết 3D của chính mình. Câu trả lời không đổi
+ * trong một phiên, nên nhớ lại là đủ.
  */
+let webgl2Support: boolean | null = null;
+
 function hasWebgl2(): boolean {
+  if (webgl2Support !== null) return webgl2Support;
   if (typeof document === "undefined") return false;
   try {
-    return document.createElement("canvas").getContext("webgl2") !== null;
+    const probe = document.createElement("canvas");
+    const context = probe.getContext("webgl2");
+    // Trả context lại ngay thay vì để trình duyệt tự thu: một context sống lay
+    // lắt vẫn tính vào hạn mức.
+    context?.getExtension("WEBGL_lose_context")?.loseContext();
+    webgl2Support = context !== null;
   } catch {
-    return false;
+    webgl2Support = false;
   }
+  return webgl2Support;
 }

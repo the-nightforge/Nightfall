@@ -407,10 +407,10 @@ describe("nextClips", () => {
 });
 
 describe("prefetchPlan khi máy dựng được cảnh 3D", () => {
-  // ELIMINATION chu KHONG phai NIGHT: nextClips("NIGHT") tra ["dawn"], khong he
-  // chua "nightfall", nen mot test dat o do se pass du ban sua co chay hay
-  // khong. nextClips("ELIMINATION") tra ["nightfall","wolves-win","village-win"]
-  // - dung ca hai ve can chung minh: nightfall bi bo, hai clip kia con nguyen.
+  // ELIMINATION chứ KHÔNG phải NIGHT: nextClips("NIGHT") trả ["dawn"], không hề
+  // chứa "nightfall", nên một test đặt ở đó sẽ pass dù bản sửa có chạy hay
+  // không. nextClips("ELIMINATION") trả ["nightfall","wolves-win","village-win"]
+  // - đúng cả hai vế cần chứng minh: nightfall bị bỏ, hai clip kia còn nguyên.
   const base = {
     phase: "ELIMINATION" as const,
     mode: "video" as const,
