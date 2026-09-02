@@ -1,6 +1,7 @@
 import type { ChatMessage, RoomSnapshot } from "@masoi/shared";
 import { generateWarnings } from "@masoi/game-engine";
 import { getDiscussionSkipView } from "../game/discussion-skip";
+import { lastLetterViewFor } from "../game/last-letter";
 import type { Room } from "./store";
 import { voiceViewFor } from "../voice/service";
 import { objectStorage } from "../storage";
@@ -261,5 +262,9 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
     // Chỉ `canAct`, đã tính riêng cho chính người nhận snapshot này. Danh tính
     // linh hồn nằm lại trong engine và không có đường nào ra đây.
     deadCanSpeak: gameView?.deadCanSpeak ?? null,
+    // Bản nháp CHỈ được lấp cho đúng `viewerId`, ngay tại đây. Đây là chỗ duy
+    // nhất nội dung thư có thể lên dây, nên nó cũng là chỗ duy nhất phải đúng -
+    // không có tầng lọc nào ở phía web, và cũng không được có.
+    lastLetter: lastLetterViewFor(room, viewerId),
   };
 }

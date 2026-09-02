@@ -40,6 +40,12 @@ import {
   hasUnanimousDiscussionSkip,
   updateDiscussionSkipVote,
 } from "./discussion-skip";
+import {
+  clearLastLetters,
+  lastLetterEnabled,
+  openLastLettersForDeaths,
+  submitLastLetter,
+} from "./last-letter";
 
 const HUNTER_SHOT_MS = 15_000;
 /** Chừa một giây để engine nhận fallback trước khi phase hết hạn. */
@@ -66,12 +72,40 @@ const DAY_OF_TRUTH_SPREAD_MS = 6_000;
  */
 const GHOST_WHISPER_SPREAD_MS = 10_000;
 
+/**
+ * Cửa sổ rải lượt viết Phong thư của BOT.
+ *
+ * Muộn hơn claim, sớm hơn lời nhắn của linh hồn - và lý do là ở chỗ nó KHÔNG
+ * hiện ra: lá thư chỉ được lưu vào sổ, không ai thấy gì cả. Rải ra chỉ để mười
+ * lăm con bot không cùng ghi vào một lượt event loop, và để một bot bị chết
+ * ngay sau đó vẫn kịp có thư. Vẫn bị kẹp theo cửa sổ thật vì Lệnh Giới Nghiêm
+ * cắt đôi pha thảo luận.
+ */
+const LAST_LETTER_SPREAD_MS = 8_000;
+
 function engine(room: Room): GameEngine {
   if (!room.engine) throw new Error("Chưa có trận đấu");
   return room.engine;
 }
 
 function sync(room: Room): void {
+  /*
+   * ĐIỂM NGHẼN DUY NHẤT của việc mở phong thư.
+   *
+   * Mọi cái chết trong game đều đi qua một lần `sync` ngay sau đó - Sói cắn và
+   * Phù Thuỷ dùng độc ở `endNight`, treo cổ ở `endFinalVote`, phát bắn của Thợ
+   * Săn ở `submitHunterShot`, Tử Thủ ở lượt `resolveNight` của vòng sau, và màn
+   * kết thúc ở `onGameOver`. Đặt lời gọi ở đây thay vì chép vào từng nhánh
+   * nghĩa là một cơ chế gây chết THÊM SAU NÀY cũng được phủ sẵn, mà không ai
+   * phải nhớ thêm một dòng.
+   *
+   * Đứng TRƯỚC `persistRoom` và `broadcastRoom`: lá thư phải nằm sẵn trong
+   * chính snapshot báo cái chết, không phải trong snapshot kế tiếp.
+   *
+   * Hàm được gọi thuần theo trạng thái hiện tại nên gọi thừa là vô hại - đó là
+   * điều kiện để nó an toàn ở một chỗ bị gọi nhiều lần như thế này.
+   */
+  openLastLettersForDeaths(room);
   void persistRoom(room);
   // Không await: một lần LiveKit chậm không được làm cả bàn đứng hình chờ đổi
   // pha. Client tự tắt mic ngay khi nhận snapshot là lớp nhanh; lời gọi này là
@@ -98,6 +132,9 @@ function checkWinOrContinue(room: Room, next: () => void): void {
 export function startGame(room: Room): void {
   room.chatLog = [];
   clearDiscussionSkipVotes(room.code);
+  // Ván mới, sổ thư trắng: một lá thư của ván trước mở ra giữa ván này sẽ nói
+  // về những người đã đổi vai.
+  clearLastLetters(room);
   // Khoá idempotency của ván này. Sinh Ở ĐÂY chứ không sinh lúc ghi kết quả:
   // lúc ghi thì process có thể đã là một process khác, và một khoá sinh sau
   // restart sẽ không nhận ra bản ghi mà process trước đã kịp tạo.
@@ -192,6 +229,7 @@ function beginDiscussion(room: Room): void {
   scheduleDayBots(room);
   scheduleDayOfTruthBots(room);
   scheduleDeadCanSpeakBot(room);
+  scheduleLastLetterBots(room);
   sync(room);
 }
 
@@ -344,6 +382,23 @@ export function resetToLobby(room: Room): void {
   clearPendingStep(room);
   cancelDiscussionScheduler(room.code);
   clearDiscussionSkipVotes(room.code);
+  // Thư CHƯA mở bị xoá cùng lúc: chủ nhân nó đã sống tới cuối ván, và một bản
+  // nháp không có ai chết để mở ra thì không có lý do gì để sống tiếp.
+  clearLastLetters(room);
+  /*
+   * Add-on cũng TẮT theo, và đây là một quyết định về mặc định chứ không phải
+   * dọn dẹp.
+   *
+   * "Phong thư sau cùng" là lựa chọn của MỘT ván, không phải thiết lập dính vào
+   * phòng. Để nó bật sẵn thì ván sau chạy với một luật thêm mà không ai vừa
+   * đồng ý - và cũng không ai nhìn lại khu Add-on để phát hiện, vì chính họ đã
+   * bật nó ở ván trước. Host bật lại là đúng một cú bấm; còn bật hộ thì không
+   * có cú bấm nào để rút lại.
+   *
+   * Chỉ đụng đúng trường này. Bộ bài, thời gian từng pha, voice và chế độ đều
+   * là thiết lập của PHÒNG và phải sống qua mọi lần chơi lại.
+   */
+  room.config.lastLetter = false;
   room.engine = null;
   room.status = "LOBBY";
   for (const m of room.members) m.ready = false;
@@ -474,6 +529,70 @@ export function scheduleDayOfTruthBots(room: Room): void {
         sync(room);
       } catch {
         /* state đổi sát lúc nộp thì bỏ lượt claim, không kéo sập tiến trình */
+      }
+    }, delay);
+  }
+}
+
+/**
+ * Phong thư sau cùng của BOT.
+ *
+ * Đi qua ĐÚNG hàm `submitLastLetter` mà người thật dùng, nên mọi hàng rào -
+ * add-on đã bật, còn sống, đúng pha, trần độ dài - chỉ có một bản. Hai đường
+ * riêng cho người và BOT sẽ trôi lệch, và ở đây trôi lệch nghĩa là một con BOT
+ * viết được thư trong lúc người thật thì không.
+ *
+ * Nội dung do lõi tất định quyết (`decideLastLetter`), và cố ý KHÔNG đi qua
+ * `renderBotSpeech`: một câu do nhà cung cấp viết ra thì không ai kiểm được nó
+ * có nhắc tới thứ ngoài quyền của vai hay không, mà lá thư thì mở ra là cả làng
+ * đọc và không rút lại được.
+ *
+ * KHÔNG `sync` sau khi lưu: bản nháp chỉ nằm trong snapshot của chính chủ, mà
+ * chủ ở đây là một con BOT không có socket nào. Phát cho cả phòng chỉ để dựng
+ * mười lăm snapshot y hệt bản cũ.
+ */
+export function scheduleLastLetterBots(room: Room): void {
+  const scheduledEngine = room.engine;
+  if (!scheduledEngine) return;
+  if (!lastLetterEnabled(room)) return;
+  if (scheduledEngine.state.phase !== "DAY_DISCUSSION") return;
+
+  const session = botSessionFor(room);
+  const scheduledRound = scheduledEngine.state.round;
+
+  const stillOpen = (): boolean =>
+    room.engine === scheduledEngine &&
+    scheduledEngine.state.phase === "DAY_DISCUSSION" &&
+    scheduledEngine.state.round === scheduledRound;
+
+  const remaining = Math.max(0, (scheduledEngine.state.phaseEndsAt ?? Date.now()) - Date.now());
+  const spread = Math.min(LAST_LETTER_SPREAD_MS, Math.floor(remaining * 0.4));
+
+  for (const member of room.members) {
+    if (!member.isBot) continue;
+    // Người chết không viết được - `submitLastLetter` cũng từ chối - nhưng chặn
+    // ở đây thì không phải tiêu một lượt dựng context cho một lượt chắc chắn hỏng.
+    const player = scheduledEngine.state.players.find((p) => p.id === member.playerId);
+    if (!player?.alive) continue;
+
+    const delay = Math.floor(session.rngFor(member.playerId, "last-letter")() * spread);
+
+    setRoomTimer(room.code, () => {
+      try {
+        if (!stillOpen()) return;
+
+        const runtime = session.runtimeFor(member.playerId);
+        const context = buildBotDecisionContext(room, member.playerId);
+        runtime.observe(context);
+
+        // Im lặng là một quyết định thật: không nghi ai thì không để lại gì.
+        const letter = runtime.decideLastLetter(context);
+        if (letter.text === null) return;
+
+        submitLastLetter(room, member.playerId, letter.text);
+        void persistRoom(room);
+      } catch {
+        /* state đổi sát lúc lưu thì bỏ lượt viết, không kéo sập tiến trình */
       }
     }, delay);
   }

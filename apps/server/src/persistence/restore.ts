@@ -2,6 +2,7 @@ import { GameEngine } from "@masoi/game-engine";
 import { restoreBotBudget } from "../bots";
 import { clearBotSession, restoreBotSession } from "../bots/session-registry";
 import { clearDiscussionSkipVotes, discussionSkipVotes } from "../game/discussion-skip";
+import { createLastLetterState } from "../game/last-letter";
 import type { Room } from "../rooms/store";
 import type { RoomEnvelopeV1 } from "./schema";
 
@@ -50,6 +51,9 @@ export function restoreRoomFromEnvelope(envelope: RoomEnvelopeV1): Room {
     phaseSeq: data.phaseSeq,
     // Snapshot cũ chưa có trường này - đọc lên thành phòng chưa đuổi ai.
     kickedPlayerIds: data.kickedPlayerIds ?? [],
+    // Cùng lý do: snapshot ghi trước add-on đọc lên thành một phòng chưa ai
+    // viết thư, chứ không phải một phòng hỏng.
+    lastLetters: data.lastLetters ?? createLastLetterState(),
   };
 
   if (data.botSession) {

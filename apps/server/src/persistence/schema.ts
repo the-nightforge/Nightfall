@@ -21,6 +21,7 @@ import type {
   BotSpeechRecord,
   SocialEdge,
 } from "@masoi/game-engine";
+import type { LastLetterRoomState } from "../game/last-letter";
 import type { PendingStep } from "../game/pending-step";
 import type { PersistedBotSession } from "../bots/session-registry";
 import type { PersistedDiscussionRun } from "../game/discussion-scheduler";
@@ -295,6 +296,33 @@ const discussionRunSchema = z.object({
   replyCounts: z.record(z.string(), z.number()),
 });
 
+/**
+ * Add-on "Phong thư sau cùng".
+ *
+ * Ở tầng CẤU TRÚC chứ không strict từng chữ, đúng thang đo đã khai ở đầu file:
+ * một lá thư méo cùng lắm hiển thị xấu, nó không đẩy máy trạng thái đi sai luật.
+ * Nhưng `openedAuthorIds` thì phải đúng - nó là chốt chống mở trùng, và một dãy
+ * hỏng ở đây sẽ mở lại thư của người đã chết sau mỗi lần khởi động lại.
+ */
+const lastLetterStateSchema = z.object({
+  drafts: z.record(
+    z.string(),
+    z.object({ text: z.string(), updatedRound: z.number() }),
+  ),
+  opened: z.array(
+    z.object({
+      id: z.string(),
+      authorId: z.string(),
+      authorName: z.string(),
+      text: z.string(),
+      sealedRound: z.number(),
+      openedRound: z.number(),
+      openedAt: z.number(),
+    }),
+  ),
+  openedAuthorIds: z.array(z.string()),
+});
+
 const persistedRoomSchema = z.object({
   code: z.string(),
   hostId: z.string().nullable(),
@@ -321,6 +349,10 @@ const persistedRoomSchema = z.object({
   // rơi vào `quarantine` và giết sạch các ván đang chạy ngay lúc deploy. Chỗ
   // đọc rơi về `createdAt`.
   startedAt: z.number().optional(),
+  // OPTIONAL vì cùng lý do với hai trường ngay trên. Ván đang chạy lúc deploy
+  // bản này đọc lên thành một phòng chưa ai viết thư - đúng trạng thái mà nó
+  // thật sự đang ở.
+  lastLetters: lastLetterStateSchema.optional(),
 });
 
 export const roomEnvelopeSchema = z.object({
@@ -354,6 +386,8 @@ const _runForward: Assignable<PersistedDiscussionRun, z.infer<typeof discussionR
 const _runBackward: Assignable<z.infer<typeof discussionRunSchema>, PersistedDiscussionRun> = true;
 const _memberForward: Assignable<RoomMember, z.infer<typeof memberSchema>> = true;
 const _memberBackward: Assignable<z.infer<typeof memberSchema>, RoomMember> = true;
+const _lettersForward: Assignable<LastLetterRoomState, z.infer<typeof lastLetterStateSchema>> = true;
+const _lettersBackward: Assignable<z.infer<typeof lastLetterStateSchema>, LastLetterRoomState> = true;
 
 void _stateForward;
 void _stateBackward;
@@ -367,3 +401,5 @@ void _runForward;
 void _runBackward;
 void _memberForward;
 void _memberBackward;
+void _lettersForward;
+void _lettersBackward;

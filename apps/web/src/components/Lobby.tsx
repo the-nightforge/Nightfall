@@ -11,6 +11,7 @@ import type { Identity } from "@/lib/identity";
 import { generateWarnings, PRESET_DECKS } from "@/lib/balance";
 import { balanceCopy } from "@/lib/balance-copy";
 import { deckCounts, deckStage, isPresetDeck, startBlock, type StartBlock } from "@/lib/lobby-summary";
+import { lastLetterToggle } from "@/lib/last-letter";
 import { BalanceMeter } from "./BalanceMeter";
 import { RoleDeckPanel } from "./RoleDeckPanel";
 
@@ -227,6 +228,21 @@ export function Lobby({
         </div>
       </section>
 
+      {/*
+        * Khu Add-on đứng NGOÀI mục "Cài đặt nâng cao".
+        *
+        * Mục kia chỉ hiện với chủ phòng, còn add-on thì đổi LUẬT của ván mà cả
+        * bàn sắp chơi. Giấu nó với khách nghĩa là để họ phát hiện ra giữa ván,
+        * lúc một lá thư mở ra và không ai biết nó từ đâu tới. Khách thấy đủ
+        * trạng thái, chỉ không gạt được.
+        */}
+      <Disclosure
+        summary="Add-on"
+        hint={isHost ? "Luật thêm cho ván này" : "Luật thêm chủ phòng đã bật"}
+      >
+        <AddonConfig snapshot={snapshot} identity={identity} onSave={onUpdateConfig} />
+      </Disclosure>
+
       <Disclosure
         summary="Tuỳ chỉnh vai trò"
         hint={isHost ? "Bật/tắt từng vai, đổi số Ma Sói" : "Xem bộ bài chủ phòng đã chọn"}
@@ -427,6 +443,55 @@ function ModeToggle({
           <span className="mt-0.5 block text-xs font-medium opacity-90">{option.hint}</span>
         </button>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Khu Add-on: những luật thêm, bật/tắt cho từng ván.
+ *
+ * Công tắc bị `disabled` với người không phải chủ phòng chứ không bị ẩn đi -
+ * `lastLetterToggle` trả về hai cờ tách bạch đúng cho việc này, và server vẫn
+ * là nơi chặn thật (`updateConfig` đòi chủ phòng và đòi phòng chưa vào trận).
+ */
+function AddonConfig({
+  snapshot,
+  identity,
+  onSave,
+}: {
+  snapshot: RoomSnapshot;
+  identity: Identity;
+  onSave: (c: RoomConfig) => void;
+}) {
+  const config = snapshot.config;
+  const letter = lastLetterToggle(snapshot, identity.playerId);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <label
+        className={`flex items-center justify-between gap-3 ${
+          letter.canToggle ? "cursor-pointer" : "cursor-default"
+        }`}
+      >
+        <span className="font-semibold text-white">✉️ Phong thư sau cùng</span>
+        <input
+          type="checkbox"
+          className="h-5 w-5 accent-blood-500 disabled:opacity-50"
+          checked={letter.on}
+          disabled={!letter.canToggle}
+          onChange={(e) => onSave({ ...config, lastLetter: e.target.checked })}
+        />
+      </label>
+      <p className="text-sm text-mist/80">
+        Người chơi có thể để lại một thông điệp bí mật, chỉ được mở sau khi họ chết.
+      </p>
+      {!letter.canToggle && (
+        <p className="text-xs text-mist/60">
+          {snapshot.phase === "LOBBY"
+            ? "Chỉ chủ phòng đổi được add-on."
+            : "Không đổi được add-on khi trận đã bắt đầu."}
+        </p>
+      )}
     </div>
   );
 }

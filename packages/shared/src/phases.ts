@@ -42,6 +42,15 @@ export interface RoomConfig {
    * thay đổi so với trước khi có tính năng này.
    */
   voice?: boolean;
+  /**
+   * Add-on "Phong thư sau cùng": mỗi người sống được để lại một thông điệp bí
+   * mật, chỉ mở ra khi họ chết.
+   *
+   * Mặc định TẮT, và tắt nghĩa là ván chạy đúng như trước khi có tính năng này -
+   * không có state nào được dựng, không có snapshot nào mọc thêm trường.
+   * Optional vì snapshot Redis ghi trước bản này không có nó.
+   */
+  lastLetter?: boolean;
   /** giây */
   nightSeconds: number;
   discussionSeconds: number;
@@ -92,6 +101,16 @@ export const RESULT_MS = 8_000;
  * nhất mới là luật thật.
  */
 export const DEAD_MESSAGE_MAX_LENGTH = 120;
+
+/**
+ * Trần độ dài một Phong thư sau cùng, đo SAU khi trim.
+ *
+ * Cùng lý do với `DEAD_MESSAGE_MAX_LENGTH` ngay trên: web chặn ở ô nhập, schema
+ * chặn ở biên socket, server chặn lần cuối. Ba con số rời nhau thì tầng lỏng
+ * nhất mới là luật thật - và ở đây tầng lỏng hơn sẽ đẩy server tới chỗ từ chối
+ * một lá thư mà người chơi tưởng đã lưu xong.
+ */
+export const LAST_LETTER_MAX_LENGTH = 100;
 
 /**
  * Tác giả giả của lời nhắn ẩn danh.

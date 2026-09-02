@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   DEAD_MESSAGE_MAX_LENGTH,
+  LAST_LETTER_MAX_LENGTH,
   MAX_PLAYERS_PER_ROOM,
   MIN_PLAYERS_TO_START,
   type RoomConfig,
@@ -35,6 +36,7 @@ export const roomConfigSchema = z
     mayor: bool.optional(),
     mode: roomModeSchema.optional(),
     voice: bool.optional(),
+    lastLetter: bool.optional(),
     nightSeconds: z.number().int().min(15).max(120),
     discussionSeconds: z.number().int().min(30).max(300),
     voteSeconds: z.number().int().min(15).max(120),
@@ -142,6 +144,23 @@ export const deadMessagePayload = z
  * bấm "Xóa" vẫn phải chạy được, còn client cũ bấm "Lưu" thì phải nhận lỗi rõ
  * ràng thay vì im lặng hỏng.
  */
+/**
+ * Lưu / xoá Phong thư sau cùng.
+ *
+ * `null` là một lệnh THẬT ("xoá lá thư đang có"), không phải một payload thiếu -
+ * đúng cùng cách `votePayload` phân biệt "không treo ai" với "phiếu trống". Vì
+ * vậy union phải tường minh chứ không dùng `.optional()`: một trường vắng mặt
+ * và một lệnh xoá không được đi chung một nhánh.
+ *
+ * Trim đứng TRƯỚC min/max nên trần được đo trên nội dung thật; một lá thư gồm
+ * toàn khoảng trắng bị từ chối ở đây chứ không tới được server.
+ */
+export const lastLetterSetPayload = z
+  .object({
+    text: z.string().trim().min(1).max(LAST_LETTER_MAX_LENGTH).nullable(),
+  })
+  .strict();
+
 export const updateAvatarPayload = z.object({ avatarUrl: z.null() }).strict();
 export const chatSendPayload = z.object({ text: z.string().trim().min(1).max(300) }).strict();
 

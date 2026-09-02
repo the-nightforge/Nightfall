@@ -14,6 +14,7 @@ import { serializeRoom } from "../persistence/serialize";
 import { destroyVoiceRoom } from "../voice/service";
 import { cleanupRoomBotState } from "../game/bot-room-state";
 import { clearDiscussionSkipVotes } from "../game/discussion-skip";
+import { createLastLetterState, type LastLetterRoomState } from "../game/last-letter";
 import type { PendingStep } from "../game/pending-step";
 
 export interface RoomMember {
@@ -81,6 +82,16 @@ export interface Room {
    * nhánh "thành viên mới" và nhận họ lại. Bấm F5 là vào lại được.
    */
   kickedPlayerIds: string[];
+  /**
+   * Trạng thái add-on "Phong thư sau cùng": nháp theo playerId, thư đã mở, và
+   * chốt chống mở trùng. Xem `game/last-letter.ts`.
+   *
+   * OPTIONAL vì đây là trường thêm sau: phòng dựng từ một snapshot ghi trước bản
+   * này không có nó, và `lastLetterStateOf` tạo lười khi cần. Bắt buộc nó ở đây
+   * là bắt mọi chỗ khởi tạo `Room` - kể cả hàng chục fixture test - phải sửa
+   * cùng lúc, để đổi lấy đúng con số không.
+   */
+  lastLetters?: LastLetterRoomState;
 }
 
 const rooms = new Map<string, Room>();
@@ -109,6 +120,7 @@ export function createRoom(code: string, host: RoomMember): Room {
     pendingStep: null,
     phaseSeq: 0,
     kickedPlayerIds: [],
+    lastLetters: createLastLetterState(),
   };
   rooms.set(code, room);
   return room;

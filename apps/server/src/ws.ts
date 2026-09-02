@@ -23,6 +23,7 @@ import {
   hunterShotPayload,
   dayOfTruthClaimPayload,
   deadMessagePayload,
+  lastLetterSetPayload,
   updateAvatarPayload,
 } from "@masoi/shared";
 import { config } from "./config";
@@ -31,7 +32,13 @@ import { roomService, RoomError, scheduleAbandonedRoomCheck } from "./rooms/serv
 import { getRoomSyncByPlayer } from "./rooms/index-helpers";
 import { getRoom, persistRoom } from "./rooms/store";
 import { loadAndResumeRoom } from "./rooms/load";
-import { trackSocket, untrackSocket, broadcastRoom, hasConnection } from "./rooms/broadcast";
+import {
+  trackSocket,
+  untrackSocket,
+  broadcastRoom,
+  broadcastToPlayer,
+  hasConnection,
+} from "./rooms/broadcast";
 import {
   maybeEndFinalVoteEarly,
   maybeEndWitchWindow,
@@ -40,6 +47,7 @@ import {
   submitGhostMessage,
   submitHunterShot,
 } from "./game/machine";
+import { submitLastLetter } from "./game/last-letter";
 import { getPlayerRoom, updateSessionRoom } from "./redis";
 import { reconnectPlayer } from "./rooms/reconnect";
 import { allowAction } from "./rate-limit";
@@ -402,6 +410,37 @@ export function setupSocket(io: SocketServer): void {
       // Cùng hàm mà BOT dùng: hai đường riêng sẽ trôi lệch, và ở đây trôi lệch
       // nghĩa là một cú lộ danh tính.
       submitGhostMessage(room, playerId, text);
+    });
+
+    /**
+     * Lưu hoặc xoá Phong thư sau cùng.
+     *
+     * Payload mang ĐÚNG một trường `text`, và `null` là lệnh xoá. Không có
+     * `round`, không có `playerId`, không có cờ "tôi còn sống": mọi thứ đó server
+     * tự đọc từ `room`/`engine`, vì đó chính là những thứ mà một client sửa đổi
+     * sẽ dùng để viết thư sau khi đã chết hoặc ngoài pha thảo luận.
+     *
+     * Chỉ đẩy snapshot cho CHÍNH người gửi. Không ai khác có gì thay đổi để
+     * xem, và nội dung thư thì không được rời khỏi snapshot của chủ nhân.
+     */
+    handler(CLIENT_EVENTS.GAME_LAST_LETTER_SET, async (payload) => {
+      const { text } = lastLetterSetPayload.parse(payload);
+      // Rộng hơn `dead-message` (lượt duy nhất cả ván) và hẹp hơn chat: một
+      // người sửa đi sửa lại thư trong một ngày là chuyện thường, nhưng mỗi lần
+      // lưu vẫn là một lượt ghi Redis.
+      if (!allowAction(`last-letter:${playerId}`, 6, 5_000)) {
+        throw new RoomError("Thao tác quá nhanh");
+      }
+      const roomCode = getRoomSyncByPlayer(playerId);
+      if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
+      const room = getRoom(roomCode);
+      if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
+
+      const error = submitLastLetter(room, playerId, text);
+      if (error) throw new RoomError(error);
+
+      broadcastToPlayer(roomCode, playerId);
+      void persistRoom(room);
     });
 
     handler(CLIENT_EVENTS.CHAT_SEND, async (payload) => {

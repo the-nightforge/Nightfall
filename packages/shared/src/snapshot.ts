@@ -350,12 +350,68 @@ export interface RoomSnapshot {
    */
   deadCanSpeak?: { canAct: boolean } | null;
   /**
+   * Phong thư sau cùng, đã tính riêng cho người nhận snapshot này.
+   *
+   * `null` khi add-on tắt. Optional vì web và server deploy rời nhau.
+   */
+  lastLetter?: LastLetterView | null;
+  /**
    * Trạng thái voice cho riêng người nhận snapshot này.
    *
    * Optional vì web và server deploy rời nhau: client mới chạy với server cũ
    * phải không vỡ.
    */
   voice?: VoiceView;
+}
+
+/**
+ * Bản nháp thư của CHÍNH người nhận snapshot.
+ *
+ * `text` chỉ khác `null` trong snapshot của chủ nhân lá thư. Đây không phải một
+ * quy ước hiển thị mà là hợp đồng ở dây: nếu draft đi xuống mọi trình duyệt rồi
+ * mới lọc bằng React thì bất kỳ ai mở tab devtools cũng đọc được thư của cả
+ * phòng, và tính năng này mất sạch ý nghĩa.
+ */
+export interface LastLetterDraftView {
+  /** Nội dung nháp; `null` là chưa viết hoặc đã xoá. */
+  text: string | null;
+  /** Vòng lá thư được cập nhật lần cuối; `null` khi chưa có nháp. */
+  updatedRound: number | null;
+  /** Người xem có được sửa NGAY BÂY GIỜ không. Server tính, web không tự suy. */
+  canEdit: boolean;
+}
+
+/**
+ * Một lá thư ĐÃ MỞ. Từ lúc mở ra nó là dữ liệu công khai, ai cũng thấy như nhau.
+ *
+ * Cố ý KHÔNG có `role`: một lá thư mở ra giữa ván mà kèm vai người viết thì nó
+ * không còn là lời nhắn, nó là một lần lật bài. Kiểu dữ liệu là chỗ chặn điều
+ * đó, không phải một quy ước mà mỗi component phải nhớ.
+ */
+export interface OpenedLastLetter {
+  /** Ổn định theo tác giả: mỗi người đúng một lá thư cả ván. */
+  id: string;
+  authorId: string;
+  authorName: string;
+  text: string;
+  /** Vòng bản cuối được niêm phong. */
+  sealedRound: number;
+  /** Vòng lá thư được mở, tức vòng tác giả chết. */
+  openedRound: number;
+  /** epoch ms lúc mở; dùng để xếp hàng đợi hiển thị theo đúng thứ tự. */
+  openedAt: number;
+}
+
+export interface LastLetterView {
+  /** Add-on đang bật cho phòng này. */
+  enabled: boolean;
+  /**
+   * Thư của chính người xem. Snapshot của người khác luôn mang `text: null` -
+   * không có trường nào ở đây tiết lộ AI đang có thư.
+   */
+  mine: LastLetterDraftView;
+  /** Các lá thư đã mở, xếp theo thứ tự mở. Công khai cho mọi người xem. */
+  opened: OpenedLastLetter[];
 }
 
 export interface VoiceView {
