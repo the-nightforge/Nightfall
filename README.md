@@ -5,7 +5,7 @@
 **A real-time multiplayer Werewolf (Mafia) game — 13 roles, 15 dynamic events, voice chat, and AI bots that actually reason.**
 
 [![CI](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-2835%20passing-brightgreen)](#testing)
+[![Tests](https://img.shields.io/badge/tests-2846%20passing-brightgreen)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
@@ -451,8 +451,8 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `@masoi/shared` | Vitest | **75** |
 | `@masoi/game-engine` | Vitest | **1514** |
 | `@masoi/server` | Vitest | **772** |
-| `@masoi/web` | `node:test` | **474** |
-| | | **2835 total** |
+| `@masoi/web` | `node:test` | **485** |
+| | | **2846 total** |
 
 Every package typechecks its tests as well as its sources — `npm run lint` runs `tsc` over both. This matters more than it sounds: the server's tests were unchecked until recently, and in that gap more than forty fixtures drifted away from the types they claimed to build, several of them still setting engine fields that had been renamed away.
 

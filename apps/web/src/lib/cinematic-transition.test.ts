@@ -405,3 +405,34 @@ describe("nextClips", () => {
     assert.deepEqual(nextClips("GAME_OVER"), []);
   });
 });
+
+describe("prefetchPlan khi máy dựng được cảnh 3D", () => {
+  // ELIMINATION chứ KHÔNG phải NIGHT: nextClips("NIGHT") trả ["dawn"], không hề
+  // chứa "nightfall", nên một test đặt ở đó sẽ pass dù bản sửa có chạy hay
+  // không. nextClips("ELIMINATION") trả ["nightfall","wolves-win","village-win"]
+  // - đúng cả hai vế cần chứng minh: nightfall bị bỏ, hai clip kia còn nguyên.
+  const base = {
+    phase: "ELIMINATION" as const,
+    mode: "video" as const,
+    saveData: false,
+    effectiveType: "4g",
+  };
+
+  it("bỏ clip của cảnh có bản 3D, GIỮ mọi clip còn lại", () => {
+    const withWebgl = prefetchPlan({ ...base, webgl: true });
+    const without = prefetchPlan({ ...base, webgl: false });
+
+    assert.ok(!withWebgl.now.includes("nightfall"));
+    // Đây là hồi quy đáng sợ nhất: nếu cờ webgl vô tình tắt cả prefetch thì
+    // chín cảnh kia im lặng tụt về CSS, và không có gì báo.
+    assert.ok(withWebgl.now.length > 0 || without.now.length === 0);
+    for (const clip of without.now) {
+      if (clip !== "nightfall") assert.ok(withWebgl.now.includes(clip));
+    }
+    assert.deepEqual(withWebgl.idle, without.idle);
+  });
+
+  it("không truyền cờ thì hành vi y như cũ", () => {
+    assert.deepEqual(prefetchPlan(base), prefetchPlan({ ...base, webgl: false }));
+  });
+});
