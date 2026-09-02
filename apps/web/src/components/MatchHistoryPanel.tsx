@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ROLE_META, momentLabel, type MatchHistoryEntry } from "@masoi/shared";
+import { ROLE_META, momentLabel, roundsLabel, type MatchHistoryEntry } from "@masoi/shared";
 import {
   fetchMatchHistory,
   formatDuration,
@@ -114,7 +114,7 @@ function MatchRow({ match }: { match: MatchHistoryEntry }) {
             * sử. Thà hai dòng còn hơn mất câu trả lời cho "ván này từ bao giờ".
             */}
           <span className="mt-0.5 block text-[11px] leading-snug text-mist/55">
-            {wolvesWon ? "Ma Sói thắng" : "Dân Làng thắng"} · {match.rounds} vòng ·{" "}
+            {wolvesWon ? "Ma Sói thắng" : "Dân Làng thắng"} · {roundsLabel(match.rounds)} ·{" "}
             {formatDuration(match.durationSec)} · {formatWhen(match.endedAt)}
           </span>
         </span>

@@ -1,4 +1,4 @@
-import { momentLabel, type CaseDeathCause, type CaseFile } from "@masoi/shared";
+import { momentLabel, roundsLabel, type CaseDeathCause, type CaseFile } from "@masoi/shared";
 
 /** Nhãn nguyên nhân cho dòng thời gian ngắn. Gộp cả ba nguồn chết về một cách đọc. */
 const CAUSE_LABEL: Record<CaseDeathCause, string> = {
@@ -31,7 +31,7 @@ export function CaseFileCard({ file }: { file: CaseFile }) {
           </h3>
         </div>
         <p className="text-[13px] text-mist-strong">
-          {file.rounds} vòng · {file.cast.length} người chơi
+          {roundsLabel(file.rounds)} · {file.cast.length} người chơi
         </p>
       </header>
 
