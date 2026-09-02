@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import type { ChatMessage, Phase } from "@masoi/shared";
+import type { ChatChannelId, ChatComposerState } from "@/lib/chat-channels";
+import type { PhaseMarker } from "@/lib/chat-timeline";
 import { useChatUnread, unreadLabel } from "@/lib/chat-unread";
 import { useModalFocus } from "@/lib/useModalFocus";
 import { ChatBox } from "./ChatBox";
@@ -10,9 +12,22 @@ import { ChatBox } from "./ChatBox";
 interface Props {
   messages: ChatMessage[];
   onSend: (text: string) => void;
-  placeholder?: string;
+  /** Quyền gửi ở pha hiện tại; xem `ChatBox`. */
+  composer: ChatComposerState;
+  /** Kênh có mặt trong danh sách; xem `ChatBox`. */
+  channels?: ChatChannelId[];
+  /** Mốc đổi pha để chèn vạch ngăn; xem `ChatBox`. */
+  markers?: PhaseMarker[];
   /** Câu gợi ý lúc chưa có tin nhắn; xem `ChatBox`. */
   emptyHint?: string;
+  /**
+   * Tên khu vực đang xem, in lên thanh tiêu đề tấm trượt.
+   *
+   * Trên điện thoại tấm trượt che gần hết màn và `ChatBox` bên trong cố ý không
+   * mọc thêm tiêu đề thứ hai - nên nếu chỗ này không nói kênh nào đang mở thì
+   * người chơi mất hẳn thông tin đó, đúng thứ mà cả vòng sửa này dựng lên.
+   */
+  title?: string;
   /** Bản nháp nằm ở trang phòng nên đóng tấm trượt không xoá mất chữ đang gõ. */
   draft: string;
   onDraftChange: (draft: string) => void;
@@ -34,8 +49,11 @@ interface Props {
 export function MobileChatDock({
   messages,
   onSend,
-  placeholder,
+  composer,
+  channels,
+  markers,
   emptyHint,
+  title,
   draft,
   onDraftChange,
   selfId,
@@ -77,7 +95,15 @@ export function MobileChatDock({
   useModalFocus({
     active: open,
     roots: [sheetRef, scrimRef],
-    initialFocus: inputRef,
+    /*
+     * Ô nhập bị KHOÁ thì không được nhận focus mở màn.
+     *
+     * `focus()` trên một input `disabled` là lệnh không làm gì cả, nên focus ở
+     * lại `body` và người dùng bàn phím mở tấm trượt ra rồi đứng ngoài nó. Bỏ
+     * trống thì hook rơi về phần tử focus được đầu tiên trong tấm trượt - nút
+     * Đóng hoặc hàng tab kênh, đúng thứ họ dùng được lúc không nói được.
+     */
+    initialFocus: composer.canSend ? inputRef : undefined,
     restoreTo: triggerRef,
     /*
      * Escape đóng LỚP TRONG CÙNG.
@@ -133,7 +159,9 @@ export function MobileChatDock({
             >
               <div className="flex items-center justify-between gap-2 px-3 py-2">
                 <span aria-hidden="true" className="absolute inset-x-0 top-1.5 mx-auto h-1 w-10 rounded-full bg-white/20" />
-                <h2 className="mt-1 font-display text-base font-bold text-white">Trò chuyện</h2>
+                <h2 className="mt-1 min-w-0 truncate font-display text-base font-bold text-white">
+                  {title ?? "Trò chuyện"}
+                </h2>
                 <button
                   className="mt-1 rounded-lg border border-night-600 bg-night-800 px-3 py-1.5 text-sm font-semibold text-mist"
                   onClick={() => setOpen(false)}
@@ -145,7 +173,9 @@ export function MobileChatDock({
                 <ChatBox
                   messages={messages}
                   onSend={onSend}
-                  placeholder={placeholder}
+                  composer={composer}
+                  channels={channels}
+                  markers={markers}
                   emptyHint={emptyHint}
                   draft={draft}
                   onDraftChange={onDraftChange}

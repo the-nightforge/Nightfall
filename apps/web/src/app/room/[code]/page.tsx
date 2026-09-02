@@ -3,8 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AnimatePresence, m } from "motion/react";
-import { ROLE_META, type RoomSnapshot } from "@masoi/shared";
+import type { RoomSnapshot } from "@masoi/shared";
 import { getIdentity } from "@/lib/identity";
+import {
+  chatComposerState,
+  chatEmptyHint,
+  chatHeading,
+  presentChannels,
+} from "@/lib/chat-channels";
+import { usePhaseMarkers } from "@/lib/use-phase-markers";
 import { useRoomSocket } from "@/lib/useRoomSocket";
 import { VoiceControl } from "@/components/VoiceControl";
 import { VoiceProvider } from "@/components/VoiceProvider";
@@ -140,7 +147,18 @@ export default function RoomPage() {
     router.push("/");
   }
 
-  const chatPlaceholder = chatChannelHint(snapshot);
+  /*
+   * Ba thứ dưới đây tách BẠCH hai câu hỏi mà bản cũ trộn làm một.
+   *
+   * `chatHeading` nói người xem đang ĐỌC những kênh nào; `composer` nói họ đang
+   * GỬI vào đâu, hoặc vì sao không gửi được. Bản cũ chỉ tính được vế thứ hai
+   * rồi in nó lên đầu danh sách đọc - đó là lý do một người đã chết nhìn thấy
+   * "Kênh người chết" bên trên một loạt câu của người còn sống.
+   */
+  const heading = chatHeading(snapshot);
+  const composer = chatComposerState(snapshot);
+  const channels = presentChannels(snapshot, room.messages);
+  const markers = usePhaseMarkers(snapshot);
   const chatEmpty = chatEmptyHint(snapshot);
 
   return (
@@ -405,11 +423,12 @@ export default function RoomPage() {
               }`}
             >
               <ChatBox
-                title="Thảo luận"
-                subtitle={chatChannelLabel(snapshot)}
+                heading={heading}
                 messages={room.messages}
                 onSend={(text) => room.emit("chat:send", { text })}
-                placeholder={chatPlaceholder}
+                composer={composer}
+                channels={channels}
+                markers={markers}
                 emptyHint={chatEmpty}
                 draft={chatDraft}
                 onDraftChange={setChatDraft}
@@ -422,88 +441,16 @@ export default function RoomPage() {
       <MobileChatDock
         messages={room.messages}
         onSend={(text) => room.emit("chat:send", { text })}
-        placeholder={chatPlaceholder}
+        composer={composer}
+        channels={channels}
+        markers={markers}
         emptyHint={chatEmpty}
         draft={chatDraft}
         onDraftChange={setChatDraft}
         selfId={snapshot?.you?.id ?? null}
         phase={snapshot?.phase ?? null}
+        title={heading.title}
       />
     </VoiceProvider>
   );
-}
-
-/**
- * Câu gợi ý khi khung chat còn rỗng.
- *
- * Đứng cạnh `chatChannelHint` vì cùng một lý do và cùng một đầu vào: chỗ này
- * biết đang ở pha nào, còn `ChatBox` thì không. Ba câu, một hàm - không đáng
- * dựng thêm một lớp trừu tượng nào cho ba dòng chữ.
- */
-function chatEmptyHint(snapshot: RoomSnapshot | null): string {
-  if (!snapshot || snapshot.phase === "LOBBY") {
-    return "Chào cả phòng một câu trong lúc chờ đủ người.";
-  }
-  if (snapshot.phase === "GAME_OVER") return "Chưa có tin nhắn nào sau trận.";
-  return "Chưa có tin nhắn trong kênh này.";
-}
-
-/*
- * Kênh chat mà người xem đang gõ vào.
- *
- * Một nguồn duy nhất cho cả câu gợi ý trong ô nhập lẫn dòng phụ trên tiêu đề
- * khung chat: hai chỗ nói về cùng một chuyện thì không được phép lệch nhau.
- *
- * Điều kiện "là Sói" đọc theo PHE trong ROLE_META chứ không so thẳng với
- * "WEREWOLF". Máy chủ cho cả Sói Con vào kênh phe Sói ban đêm
- * (apps/server/src/rooms/snapshot.ts), nên bản cũ báo với Sói Con rằng "ban
- * đêm bạn không thể chat" trong khi nó gõ được - một câu sai về đúng thứ mà
- * người chơi cần tin.
- */
-type ChatChannel = "lobby" | "dead" | "wolves" | "muted" | "day";
-
-function chatChannelOf(snapshot: RoomSnapshot | null): ChatChannel | null {
-  if (!snapshot) return null;
-  if (snapshot.phase === "LOBBY" || snapshot.phase === "GAME_OVER") return "lobby";
-  if (!snapshot.you?.alive) return "dead";
-  if (snapshot.phase === "NIGHT") {
-    const role = snapshot.you.role;
-    return role && ROLE_META[role].team === "wolves" ? "wolves" : "muted";
-  }
-  return "day";
-}
-
-function chatChannelHint(snapshot: RoomSnapshot | null): string {
-  switch (chatChannelOf(snapshot)) {
-    case null:
-      return "Nhập tin nhắn...";
-    case "lobby":
-      return "Chat phòng...";
-    case "dead":
-      return "Chat cùng những người đã chết...";
-    case "wolves":
-      return "Chat phe Sói...";
-    case "muted":
-      return "Ban đêm bạn không thể chat...";
-    default:
-      return "Chat làng...";
-  }
-}
-
-/** Dòng phụ trên tiêu đề khung chat. undefined thì tiêu đề đứng một mình. */
-function chatChannelLabel(snapshot: RoomSnapshot | null): string | undefined {
-  switch (chatChannelOf(snapshot)) {
-    case "lobby":
-      return "Kênh phòng chờ";
-    case "dead":
-      return "Kênh người chết";
-    case "wolves":
-      return "Kênh phe Sói";
-    case "muted":
-      return "Ban đêm không nói được";
-    case "day":
-      return "Kênh làng";
-    default:
-      return undefined;
-  }
 }
