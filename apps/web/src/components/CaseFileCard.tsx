@@ -1,4 +1,6 @@
+import { m } from "motion/react";
 import { momentLabel, roundsLabel, type CaseDeathCause, type CaseFile } from "@masoi/shared";
+import { listItemMotion } from "@/lib/motion";
 
 /** Nhãn nguyên nhân cho dòng thời gian ngắn. Gộp cả ba nguồn chết về một cách đọc. */
 const CAUSE_LABEL: Record<CaseDeathCause, string> = {
@@ -42,8 +44,9 @@ export function CaseFileCard({ file }: { file: CaseFile }) {
       ) : (
         <ol className="space-y-2">
           {file.highlights.map((highlight, index) => (
-            <li
+            <m.li
               key={`${highlight.type}-${highlight.round}-${highlight.phase}-${index}`}
+              {...listItemMotion(index, file.highlights.length)}
               className="rounded-lg border border-white/[0.05] bg-night-800/50 px-3 py-2.5"
             >
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -62,7 +65,7 @@ export function CaseFileCard({ file }: { file: CaseFile }) {
               </div>
               {/* break-words: biệt danh dài viết liền không được đẩy ngang cả thẻ. */}
               <p className="mt-1 break-words text-sm leading-relaxed text-mist-strong">{highlight.description}</p>
-            </li>
+            </m.li>
           ))}
         </ol>
       )}

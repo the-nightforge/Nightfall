@@ -104,7 +104,7 @@ export function Timer({ endsAt }: { endsAt: number | null }) {
           endsAt === null
             ? "text-mist/70"
             : danger
-              ? "text-blood-400"
+              ? "text-blood-400 timer-danger-pulse"
               : warning
                 ? "text-amber-200"
                 : "text-white"

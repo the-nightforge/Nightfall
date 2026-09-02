@@ -11,6 +11,7 @@ import {
 import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { useSpeakers } from "@/components/VoiceProvider";
 import { roleLabel } from "@/lib/cursed";
+import { listItemMotion } from "@/lib/motion";
 import { Avatar } from "./Avatar";
 import { AvatarPicker } from "./AvatarPicker";
 
@@ -86,7 +87,7 @@ export function RosterPanel({ snapshot, lobby }: Props) {
           lobby ? "lg:max-h-[calc(100dvh-16rem)]" : "lg:min-h-0 lg:flex-1"
         }`}
       >
-        {snapshot.players.map((player) => {
+        {snapshot.players.map((player, index) => {
           const votes = player.voteCount ?? 0;
           const isMe = player.id === meId;
           const isRoomHost = snapshot.hostId === player.id;
@@ -110,8 +111,9 @@ export function RosterPanel({ snapshot, lobby }: Props) {
           // Identity của LiveKit chính là playerId nên đối chiếu thẳng.
           const speaking = speakers.has(player.id);
           return (
-            <li
+            <m.li
               key={player.id}
+              {...listItemMotion(index, snapshot.players.length)}
               className={`group rounded-lg px-2 py-1.5 transition ${
                 speaking
                   ? "bg-emerald-400/10 ring-1 ring-emerald-400/60"
@@ -298,7 +300,7 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                   )}
                 </div>
               )}
-            </li>
+            </m.li>
           );
         })}
 
