@@ -501,7 +501,7 @@ describe("câu chữ không tự lặp", () => {
   });
 
   it("đêm đẫm máu không khẳng định nguyên nhân mà nó chưa kiểm tra", () => {
-    // Hai người cùng chết vì Sói: nhắc tới bình độc ở đây là bịa.
+    // Hai người cùng chết vì Sói: nhắc tới Bình Độc ở đây là bịa.
     const file = buildCaseFile(
       snap({
         nightHistory: [
@@ -516,7 +516,7 @@ describe("câu chữ không tự lặp", () => {
       }),
     );
     const highlight = file!.highlights.find((h) => h.type === "BLOODBATH")!;
-    expect(highlight.description).not.toContain("bình độc");
+    expect(highlight.description).not.toContain("Bình Độc");
     expect(highlight.description).not.toContain("Nước thánh");
     expect(highlight.description).toContain("Dân Làng");
     expect(highlight.description).toContain("Tiên Tri");

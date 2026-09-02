@@ -1,16 +1,7 @@
 import { m } from "motion/react";
-import { momentLabel, roundsLabel, type CaseDeathCause, type CaseFile } from "@masoi/shared";
+import { momentLabel, roundsLabel, type CaseFile } from "@masoi/shared";
+import { deathCauseClause } from "@/lib/death-cause";
 import { listItemMotion } from "@/lib/motion";
-
-/** Nhãn nguyên nhân cho dòng thời gian ngắn. Gộp cả ba nguồn chết về một cách đọc. */
-const CAUSE_LABEL: Record<CaseDeathCause, string> = {
-  wolf: "bị Sói cắn",
-  poison: "trúng độc",
-  priest: "bị Nước thánh thanh tẩy",
-  priest_backfire: "chết vì Nước thánh phản phệ",
-  lynch: "bị làng treo cổ",
-  hunter: "trúng đạn Thợ Săn",
-};
 
 /**
  * Hồ sơ vụ án của một ván đã kết thúc.
@@ -88,7 +79,7 @@ export function CaseFileCard({ file }: { file: CaseFile }) {
                 <span className="text-mist-strong">
                   {entry.kind === "cursed-turned"
                     ? "hoá Ma Sói"
-                    : CAUSE_LABEL[entry.cause ?? "wolf"]}
+                    : deathCauseClause(entry.cause ?? "wolf")}
                 </span>
               </li>
             ))}

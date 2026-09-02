@@ -501,7 +501,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
               </span>
             </div>
             <p className="mb-2 text-[13px] text-mist-strong">
-              Ném Nước thánh vào 1 người: Nếu là <b>Sói</b> thì Sói chết. Nếu là <b>Dân</b> thì Linh mục bị phản phệ tử vong!
+              Ném Nước thánh vào 1 người: Nếu là <b>Sói</b> thì Sói chết. Nếu là <b>Dân</b> thì Linh mục bị phản vệ tử vong!
             </p>
             {night?.priestResult && (
               <div className="mb-2 rounded-lg bg-night-800 p-2.5 text-sm">

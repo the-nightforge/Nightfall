@@ -92,6 +92,21 @@ function acquittalTally(guilty: number, innocent: number): string {
   return `${guilty} phiếu treo, ${spared}`;
 }
 
+/**
+ * Khuôn câu chung của mọi mô tả điểm ngoặt: AI + LÀM GÌ + VỚI AI + KẾT QUẢ.
+ *
+ * Vế kết quả tách bằng gạch ngang dài khi nó là một PHÁN QUYẾT ngắn ("— đúng là
+ * Ma Sói", "— khác phe"); còn khi kết quả là cả một mệnh đề thì nó đứng thành
+ * câu riêng sau dấu chấm. Gạch ngang ngắn `-` KHÔNG dùng cho việc này: ở cỡ chữ
+ * nhỏ nó không tách được khỏi dấu nối trong chính biệt danh người chơi.
+ *
+ * Tên vật phẩm viết hoa như tên riêng - "Bình Cứu", "Bình Độc", "Nước thánh" -
+ * và tên phe luôn là "Ma Sói" / "Dân Làng" (xem `teamLabel`), không bao giờ là
+ * "sói" hay "dân" viết thường giữa câu.
+ *
+ * Mọi câu sinh từ dữ liệu trận. Không có tên người chơi, tên vai hay kết quả
+ * nào viết cứng trong tệp này.
+ */
 function candidate(
   type: CaseHighlightType,
   round: number,
@@ -262,7 +277,7 @@ function hunterHighlights(data: CaseData): CaseCandidate[] {
             phase,
             key,
             "Phát đạn lạc",
-            `Thợ Săn ${shot.hunter.name} ngã xuống và bắn theo ${shot.target.name} - ${villageRoleClause(target)}.`,
+            `Thợ Săn ${shot.hunter.name} ngã xuống và bắn theo ${shot.target.name} — ${villageRoleClause(target)}.`,
             participants,
             evidence,
           )
@@ -272,7 +287,7 @@ function hunterHighlights(data: CaseData): CaseCandidate[] {
             phase,
             key,
             "Phát đạn cuối cùng",
-            `Thợ Săn ${shot.hunter.name} ngã xuống và kéo theo ${shot.target.name} - ${roleLabelOf(target)}.`,
+            `Thợ Săn ${shot.hunter.name} ngã xuống và kéo theo ${shot.target.name} — ${roleLabelOf(target)}.`,
             participants,
             evidence,
           ),
@@ -308,7 +323,7 @@ function nightHighlights(data: CaseData): CaseCandidate[] {
       );
     }
 
-    // Phù Thuỷ cứu đúng nạn nhân: đã đốt bình VÀ người đó không nằm trong danh
+    // Phù Thủy cứu đúng nạn nhân: đã đốt bình VÀ người đó không nằm trong danh
     // sách chết đêm đó.
     const healed = night.witch.usedHeal ? night.witch.healedTarget : null;
     if (healed && !diedThisNight.has(healed.id)) {
@@ -318,15 +333,15 @@ function nightHighlights(data: CaseData): CaseCandidate[] {
           round,
           "night",
           `witch-save:${round}`,
-          "Bình cứu đúng lúc",
-          `Phù Thuỷ đổ bình cứu lên ${healed.name}, kéo ${healed.name} ra khỏi nanh Sói.`,
+          "Bình Cứu đúng lúc",
+          `Phù Thủy dùng Bình Cứu cho ${healed.name}, cứu ${healed.name} khỏi Sói.`,
           [healed.id],
           { kind: "witch-save", savedId: healed.id },
         ),
       );
     }
 
-    // Bình độc: chỉ tính khi CÓ một cái chết vì độc đúng vào người bị nhắm.
+    // Bình Độc: chỉ tính khi CÓ một cái chết vì độc đúng vào người bị nhắm.
     const poisoned = night.witch.poisonTarget;
     if (poisoned && deaths.some((d) => d.cause === "poison" && d.player.id === poisoned.id)) {
       out.push(
@@ -335,8 +350,8 @@ function nightHighlights(data: CaseData): CaseCandidate[] {
           round,
           "night",
           `witch-poison:${round}`,
-          "Bình độc lên tiếng",
-          `Phù Thuỷ rót bình độc vào ${poisoned.name}.`,
+          "Bình Độc lên tiếng",
+          `Phù Thủy dùng Bình Độc lên ${poisoned.name}.`,
           [poisoned.id],
           { kind: "witch-poison", poisonedId: poisoned.id },
         ),
@@ -354,14 +369,14 @@ function nightHighlights(data: CaseData): CaseCandidate[] {
         type: "GUARD_SAVE",
         target: night.guardTarget,
         title: "Tấm khiên giữ được người",
-        clause: (name: string) => `Bảo Vệ đỡ đúng ${name}`,
+        clause: (name: string) => `Bảo Vệ bảo vệ ${name}`,
         evidence: "guard-save",
       },
       {
         type: "ANGEL_SAVE",
         target: night.guardianAngelTarget ?? null,
         title: "Khiên hộ mệnh chắn đúng lúc",
-        clause: (name: string) => `Thiên Thần Hộ Mệnh phủ khiên lên ${name}`,
+        clause: (name: string) => `Thiên Thần Hộ Mệnh dùng khiên hộ mệnh cho ${name}`,
         evidence: "angel-save",
       },
     ] as const;
@@ -377,7 +392,7 @@ function nightHighlights(data: CaseData): CaseCandidate[] {
           "night",
           `shield-save:${round}:${saved.id}`,
           shield.title,
-          `${shield.clause(saved.name)} - người mà bầy Sói nhắm tới đêm đó.`,
+          `${shield.clause(saved.name)} — đúng người mà bầy Sói nhắm tới đêm đó.`,
           [saved.id],
           { kind: shield.evidence, savedId: saved.id },
         ),
@@ -395,7 +410,7 @@ function nightHighlights(data: CaseData): CaseCandidate[] {
             "night",
             `priest:${round}`,
             "Nước thánh trúng đích",
-            `Linh Mục ${priest.priest.name} ném Nước thánh vào ${priest.target.name} - đúng là Ma Sói.`,
+            `Linh Mục ${priest.priest.name} dùng Nước thánh lên ${priest.target.name} — đúng là Ma Sói.`,
             [priest.priest.id, priest.target.id],
             { kind: "priest", priestId: priest.priest.id, targetId: priest.target.id, isWolf: true },
           ),
@@ -407,8 +422,8 @@ function nightHighlights(data: CaseData): CaseCandidate[] {
             round,
             "night",
             `priest:${round}`,
-            "Nước thánh phản phệ",
-            `Linh Mục ${priest.priest.name} ném Nước thánh vào ${priest.target.name} - không phải Ma Sói, và chính Linh Mục ngã xuống.`,
+            "Nước thánh phản vệ",
+            `Linh Mục ${priest.priest.name} dùng Nước thánh lên ${priest.target.name} — không phải Ma Sói, và chính Linh Mục ngã xuống.`,
             [priest.priest.id, priest.target.id],
             { kind: "priest", priestId: priest.priest.id, targetId: priest.target.id, isWolf: false },
           ),
@@ -442,7 +457,7 @@ function nightHighlights(data: CaseData): CaseCandidate[] {
           "night",
           `seer:${round}:${index}`,
           "Tiên Tri soi trúng",
-          `${check.seer.name} soi ${check.target.name} và thấy một con Sói.`,
+          `${check.seer.name} soi ${check.target.name} — đúng là Ma Sói.`,
           [check.seer.id, check.target.id],
           { kind: "seer-check", seerId: check.seer.id, targetId: check.target.id },
         ),

@@ -29,7 +29,7 @@ Mục tiêu của thiết kế này là:
 | `DETECTIVE` | Thám Tử | `village` | 1.5 | Mỗi đêm | Chọn 2 người chơi còn sống để kiểm tra xem họ **Cùng phe** hay **Khác phe**. |
 | `GUARD` | Bảo Vệ | `village` | 0 | Mỗi đêm | Bảo vệ 1 người/đêm chống Sói cắn (không được chọn cùng 1 người 2 đêm liên tiếp). |
 | `GUARDIAN_ANGEL` | Thiên Thần Hộ Mệnh | `village` | 0.5 | Tối đa 2 lần | Ban đêm chọn 1 người để bảo vệ khỏi đòn cắn của Sói. Tối đa 2 lần cả ván, không bảo vệ cùng 1 người 2 đêm liên tiếp. |
-| `PRIEST` | Linh Mục | `village` | 2.5 | 1 bình Nước thánh | Ban đêm ném Nước thánh vào 1 người: Nếu mục tiêu là **Sói** $\rightarrow$ Sói chết; Nếu mục tiêu là **Dân** $\rightarrow$ Linh mục chết do phản phệ. |
+| `PRIEST` | Linh Mục | `village` | 2.5 | 1 bình Nước thánh | Ban đêm ném Nước thánh vào 1 người: Nếu mục tiêu là **Sói** $\rightarrow$ Sói chết; Nếu mục tiêu là **Dân** $\rightarrow$ Linh mục chết do phản vệ. |
 | `WITCH` | Phù Thủy | `village` | 3 | 1 Cứu + 1 Độc | 1 bình cứu và 1 bình độc cả ván, dùng trong cửa sổ riêng sau khi Sói chốt cắn. |
 | `HUNTER` | Thợ Săn | `village` | Không | Khi chết | Khi bị loại bỏ, được bắn 1 phát súng vào bất kỳ người sống nào hoặc bỏ qua. |
 | `MAYOR` | Thị Trưởng | `village` | Không | Thường trực | Phiếu biểu quyết ban ngày (cả vòng đề cử và vòng treo cổ) có trọng số **x2 phiếu**. |
@@ -187,7 +187,7 @@ Cấu hình mặc định trong `assignRoles.ts`:
    - Test Tiên tri tập sự thức tỉnh khi Tiên tri chết.
    - Test Thám tử soi cùng phe / khác phe.
    - Test Thiên thần hộ mệnh (tối đa 2 lần dùng, không lặp 2 đêm liền).
-   - Test Linh mục dùng Nước thánh (thành công diệt Sói vs thất bại bị phản phệ).
+   - Test Linh mục dùng Nước thánh (thành công diệt Sói vs thất bại bị phản vệ).
    - Test Thị trưởng x2 trọng số vote ngày.
    - Test các modifier của 9 Event (Curfew, Silent Night, Amnesty Day, Clearing Mist, Moonless Night, v.v.).
 2. **Integration Test Server (`apps/server/tests/`)**:

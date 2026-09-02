@@ -93,7 +93,7 @@ export const ROLE_META: Record<Role, RoleMeta> = {
   PRIEST: {
     id: "PRIEST",
     name: "Linh Mục",
-    description: "Có 1 bình Nước thánh cả ván: Ném vào Sói thì Sói chết, ném vào Dân thì Linh mục chết do phản phệ.",
+    description: "Có 1 bình Nước thánh cả ván: Ném vào Sói thì Sói chết, ném vào Dân thì Linh mục chết do phản vệ.",
     team: "village",
     nightOrder: 2.5,
   },

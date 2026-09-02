@@ -73,10 +73,16 @@ const ACCENT = {
  * chia sẻ, tải ảnh và sao chép xuống hạng ba, rời phòng là chữ nhạt sắc đỏ.
  *
  * MÀU cũng phải nói đúng nghĩa, không chỉ kích cỡ. CTA về phòng chờ mang sắc
- * xanh chiến thắng (`btn-cta-win`) chứ không phải đỏ thương hiệu: đỏ ở màn này
- * được để dành cho đường thoát ra. Nếu cả hai cùng đỏ thì thứ bậc chỉ còn nằm ở
- * cỡ nút, và người vừa đọc xong "Phe Ma Sói chiến thắng" bằng chữ đỏ sẽ thấy
- * đúng sắc đỏ đó trên nút đi tiếp lẫn nút rời đi.
+ * vàng TRUNG TÍNH (`btn-cta-neutral`) chứ không phải đỏ thương hiệu: đỏ ở màn
+ * này được để dành cho đường thoát ra. Nếu cả hai cùng đỏ thì thứ bậc chỉ còn
+ * nằm ở cỡ nút, và người vừa đọc xong "Phe Ma Sói chiến thắng" bằng chữ đỏ sẽ
+ * thấy đúng sắc đỏ đó trên nút đi tiếp lẫn nút rời đi.
+ *
+ * Vàng chứ không phải xanh lá - "Về phòng chờ" là đường ĐIỀU HƯỚNG, không phải
+ * một tuyên bố về phe nào. Xanh lá ở màn này đã có nghĩa cố định là phe Dân
+ * Làng (tiêu đề, viền bảng vai trò, thẻ "Bạn thắng"), nên một nút xanh to nhất
+ * màn hình bên dưới dòng "Phe Ma Sói chiến thắng" nói ngược lại chính nó. Xem
+ * `.btn-cta-neutral`.
  */
 export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
   const wolvesWin = snapshot.winner === "wolves";
@@ -338,14 +344,15 @@ function DecisiveMoment({
  * sách người chơi và nguyên cấu hình, chứ KHÔNG bắt đầu ván mới - "Chơi lại"
  * của bản cũ hứa một ván mới mà server không hề khởi động.
  *
- * "Rời phòng" vẫn ở đây dù thanh đầu trang đã có một cái: thanh đó là đường
- * thoát của MỌI pha nên không bỏ được, còn trên điện thoại màn kết thúc dài hơn
- * một khung nhìn nên tới lúc đọc xong nó đã cuộn đi mất.
+ * "Rời phòng và về trang chủ" là ĐƯỜNG THOÁT DUY NHẤT của màn này. Thanh đầu
+ * trang cũng có một nút "Rời phòng", và cả hai gọi đúng một hàm - cùng emit
+ * `room:leave` rồi đẩy về `/` - nên ở pha GAME_OVER cái trên thanh được ẩn đi
+ * (xem `room/[code]/page.tsx`). Hai điều khiển khác tên mà cùng kết quả buộc
+ * người chơi phải đoán xem chúng có khác nhau không, và câu trả lời là không.
  *
- * Vì hai chỗ cùng gọi đúng một hàm, nhãn phải nói rõ hơn cái ở trên chứ không
- * lặp lại y hệt: hai nút "Rời phòng" trên cùng một trang đọc ra như hai hành
- * động khác nhau mà người chơi phải đoán xem cái nào là cái nào. "Rời phòng và
- * về trang chủ" nói hết điều nút làm - `room:leave` rồi đẩy về `/`.
+ * Cái ở lại là cái NÀY chứ không phải cái trên thanh, vì hai lẽ: nhãn của nó
+ * nói hết đích đến, và nó đứng ngay dưới CTA nên đọc ra là lựa chọn đối lập với
+ * "Về phòng chờ" - đúng cặp quyết định mà người chơi đang cân nhắc lúc đó.
  *
  * Vẫn là chữ nhạt hạng ba chứ không phải nút đặc, nên nó không cạnh tranh với
  * CTA ngay trên.
@@ -371,7 +378,7 @@ function PostMatchActions({
 
       {canReset ? (
         <>
-          <button className="btn-cta btn-cta-win w-full" onClick={onReset}>
+          <button className="btn-cta btn-cta-neutral w-full" onClick={onReset}>
             Về phòng chờ
           </button>
           <p className="text-center text-sm text-mist-strong">

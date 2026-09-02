@@ -379,39 +379,58 @@ summary:focus-visible,
   }
 
   /*
-   * CTA sắc thắng lợi - dùng ở màn kết thúc ván.
+   * CTA TRUNG TÍNH - dùng ở màn kết thúc ván.
    *
    * Đỏ là màu THƯƠNG HIỆU của trò chơi, nhưng ở màn kết thúc nó va vào chính
    * nghĩa của nó: trên cùng một khung nhìn có "Về phòng chờ" (đi tiếp) và "Rời
    * phòng" (thoát hẳn), và nếu cái đi tiếp là nút đỏ đặc thì đỏ không còn nói
    * được điều gì về mức nguy hiểm nữa - hai hành động ngược chiều nhau mặc cùng
-   * một màu. Ở đây đỏ được trả về đúng vai: chỉ hành động rời phòng mới ngả đỏ,
-   * còn đường đi tiếp mang sắc xanh chiến thắng, cùng hệ với quầng sáng phe
-   * thắng và thẻ "Bạn thắng".
+   * một màu. Đỏ ở màn này được để dành cho đường thoát ra.
    *
-   * Xanh CỐ ĐỊNH, không đổi theo phe thắng: để nó ngả đỏ khi Sói thắng là dựng
-   * lại đúng cái va chạm vừa gỡ ra.
+   * Vàng chứ KHÔNG phải xanh lá. Bản trước dùng xanh "chiến thắng", nhưng xanh
+   * lá trong trò chơi này là màu của PHE DÂN LÀNG - nó nằm trên tiêu đề phe
+   * thắng, trên viền bảng vai trò, trên thẻ "Bạn thắng". Đặt nó lên một nút
+   * điều hướng trung tính thì màn "Phe Ma Sói chiến thắng" có một nút xanh
+   * Dân Làng to nhất màn hình, và người đọc phải bỏ qua màu mới hiểu được nút.
+   *
+   * Vàng không thuộc phe nào: trong bảng màu hiện có nó là màu của BAN NGÀY và
+   * của sự kiện (EventBanner, chip kênh chat ban ngày, thanh sẵn sàng ở phòng
+   * chờ) - luôn là "chú ý vào đây", chưa bao giờ là "phe này".
+   *
+   * Chữ đổi sang sắc TỐI, không phải trắng: trắng trên vàng đo được khoảng
+   * 2:1 - dưới cả ngưỡng AA cho chữ lớn. #241704 trên hai đầu dải vàng cho
+   * 10.8:1 (đỉnh) và 6.4:1 (đáy), nên câu chữ đọc được ở mọi điểm của gradient.
+   *
+   * Màu CỐ ĐỊNH, không đổi theo phe thắng - để nó ngả theo phe là dựng lại
+   * đúng cái va chạm vừa gỡ ra.
    *
    * Mọi trạng thái của .btn-cta đều phải được viết lại ở đây: `.btn-cta:hover`
-   * đặc hiệu hơn `.btn-cta-win`, nên một khai báo `background` trần không đủ để
-   * giành lại lúc rê chuột.
+   * và `.btn-cta:disabled` đặc hiệu hơn `.btn-cta-neutral`, nên một khai báo
+   * `background` trần không đủ để giành lại lúc rê chuột hay lúc bị tắt.
+   *
+   * Vòng focus bàn phím KHÔNG khai báo ở đây: `button:focus-visible` ở đầu file
+   * đã vẽ vòng #cfe0ff dày 2px cách nút 2px, và trên nền vàng nó vẫn tách bạch.
    */
-  .btn-cta-win {
-    background: linear-gradient(180deg, #1a8f6a 0%, #10664c 100%);
+  .btn-cta-neutral {
+    color: #241704;
+    background: linear-gradient(180deg, #f6c344 0%, #d18f16 100%);
     box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
-      0 14px 34px -16px rgba(26, 143, 106, 0.85);
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.35),
+      0 14px 34px -16px rgba(214, 148, 26, 0.8);
   }
 
-  .btn-cta-win:hover:not(:disabled) {
-    background: linear-gradient(180deg, #21a67c 0%, #157457 100%);
+  .btn-cta-neutral:hover:not(:disabled) {
+    color: #241704;
+    background: linear-gradient(180deg, #ffd15c 0%, #e09c1f 100%);
   }
 
-  .btn-cta-win:active:not(:disabled) {
+  .btn-cta-neutral:active:not(:disabled) {
     transform: translateY(1px);
   }
 
-  .btn-cta-win:disabled {
+  .btn-cta-neutral:disabled {
+    cursor: not-allowed;
+    color: rgba(207, 224, 255, 0.8);
     background: linear-gradient(180deg, rgba(58, 74, 106, 0.9) 0%, rgba(34, 46, 72, 0.92) 100%);
     box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
   }
@@ -470,7 +489,8 @@ summary:focus-visible,
 
   .btn:active:not(:disabled),
   .btn-tertiary:active:not(:disabled),
-  .btn-cta:active:not(:disabled) {
+  .btn-cta:active:not(:disabled),
+  .btn-cta-neutral:active:not(:disabled) {
     transform: none;
   }
 }

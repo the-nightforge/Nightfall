@@ -1,23 +1,9 @@
 import { m } from "motion/react";
 import type { NightRecap, RoomConfig } from "@masoi/shared";
 import { cursedTurnedText } from "@/lib/cursed";
+import { deathCauseClause } from "@/lib/death-cause";
 import { priestSpentRound, rolesInRecap } from "@/lib/night-recap-roles";
 import { listItemMotion } from "@/lib/motion";
-
-const causeLabel = (cause: "wolf" | "poison" | "priest" | "priest_backfire") => {
-  switch (cause) {
-    case "wolf":
-      return "bị Sói cắn";
-    case "poison":
-      return "trúng độc của Phù Thủy";
-    case "priest":
-      return "bị Linh Mục thanh tẩy bằng Nước thánh";
-    case "priest_backfire":
-      return "chết do phản phệ Nước thánh";
-    default:
-      return "tử vong trong đêm";
-  }
-};
 
 /** Màu chip theo vai, dùng đúng bảng màu phe đang dùng ở mọi chỗ khác. */
 const ACTOR_STYLE: Record<string, string> = {
@@ -30,6 +16,68 @@ const ACTOR_STYLE: Record<string, string> = {
   "Thám Tử": "bg-violet-900/50 text-violet-300",
   "Linh Mục": "bg-rose-900/50 text-rose-300",
 };
+
+/**
+ * Vế KẾT QUẢ của một dòng, tách khỏi vế hành động bằng gạch ngang.
+ *
+ * Bản cũ dùng mũi tên "→" giữa câu: đó là ký hiệu của một bảng tra, không phải
+ * của một câu kể, và khi đọc thành tiếng thì không có gì để đọc. Gạch ngang dài
+ * đọc được thành một nhịp ngắt, nên "Tiên Tri soi Nhật Minh — không phải Ma
+ * Sói." là một câu hoàn chỉnh chứ không phải một dòng dữ liệu.
+ *
+ * Màu vẫn theo nghĩa: xanh là tin lành cho phe làng, đỏ là tin dữ, hổ phách
+ * dành cho kết quả không ngả về bên nào (Thám Tử báo "cùng phe" chỉ nói hai
+ * người đó giống nhau, không nói giống nhau ở phe NÀO).
+ */
+function Verdict({ tone, children }: { tone: "good" | "bad" | "warn"; children: React.ReactNode }) {
+  const color =
+    tone === "bad" ? "text-blood-400" : tone === "warn" ? "text-amber-300" : "text-emerald-300";
+  return (
+    <span className={color}>
+      <span aria-hidden="true">— </span>
+      {children}.
+    </span>
+  );
+}
+
+/**
+ * Dòng Phù Thủy.
+ *
+ * Hai bình được kể trong MỘT câu, và chỉ kể bình nào có chuyện. Bản cũ luôn in
+ * đủ hai vế, nên một đêm Phù Thủy ngồi im ra thành "không dùng bình cứu, không
+ * dùng bình độc" - hai lần phủ định nối bằng dấu phẩy, đọc như một biên bản
+ * kiểm kho. Ngồi im giờ là một câu: "không sử dụng Bình Cứu hoặc Bình Độc."
+ *
+ * Tên hai bình viết hoa như tên riêng của vật phẩm, cùng cách "Nước thánh" của
+ * Linh Mục được viết ở dòng ngay dưới.
+ */
+function WitchLine({ witch }: { witch: NightRecap["witch"] }) {
+  const heal = witch.usedHeal ? (
+    witch.healedTarget ? (
+      <>
+        dùng Bình Cứu cho <b className="text-white">{witch.healedTarget.name}</b>
+      </>
+    ) : (
+      <>dùng Bình Cứu nhưng không có nạn nhân để cứu</>
+    )
+  ) : null;
+
+  const poison = witch.poisonTarget ? (
+    <>
+      dùng Bình Độc lên <b className="text-white">{witch.poisonTarget.name}</b>
+    </>
+  ) : null;
+
+  if (!heal && !poison) return <>không sử dụng Bình Cứu hoặc Bình Độc.</>;
+
+  return (
+    <>
+      {heal}
+      {heal && poison ? ", " : null}
+      {poison}.
+    </>
+  );
+}
 
 function Line({ actor, children }: { actor: string; children: React.ReactNode }) {
   return (
@@ -55,6 +103,22 @@ function Line({ actor, children }: { actor: string; children: React.ReactNode })
  *
  * `config` quyết định vai nào có dòng. Không truyền cũng chạy được - server cũ
  * deploy lệch thì `rolesInRecap` rơi về đúng những vai đã để lại dấu vết.
+ *
+ * MỘT khuôn câu cho mọi dòng: VAI (chip) + hành động + mục tiêu + kết quả, kết
+ * bằng dấu chấm.
+ *
+ *   Sói        cắn Nhật Minh.
+ *   Bảo Vệ     bảo vệ Hải Yến.
+ *   Tiên Tri   Hải Yến soi Nhật Minh — không phải Ma Sói.
+ *   Thám Tử    Minh kiểm tra Nhật Minh và Đức Thắng — khác phe.
+ *   Phù Thủy   không sử dụng Bình Cứu hoặc Bình Độc.
+ *
+ * Bản cũ trộn ba lối viết trong cùng một khối: có dòng là câu ("cứu X"), có
+ * dòng là mục từ điển ("→ không phải Ma Sói"), có dòng là ô bảng ("Nhật Minh
+ * (bị Sói cắn)"). Mỗi lối một mình thì đọc được, nhưng xếp chồng lên nhau thì
+ * mắt phải đổi cách đọc ở từng dòng.
+ *
+ * Câu sinh từ DỮ LIỆU trận, không có tên người hay tên vai nào viết cứng ở đây.
  */
 export function NightRecapTimeline({
   nights,
@@ -101,26 +165,30 @@ export function NightRecapTimeline({
                               {" "}và <b className="text-white">{night.wolfSecondaryTarget.name}</b> (cắn kép)
                             </>
                           )}
+                          .
                         </>
                       ) : (
-                        "không chọn được mục tiêu"
+                        "không chọn được mục tiêu."
                       )}
                     </Line>
                     {roles.guard && (
                       <Line actor="Bảo Vệ">
                         {night.guardTarget ? (
-                          <>đỡ cho <b className="text-white">{night.guardTarget.name}</b></>
+                          <>bảo vệ <b className="text-white">{night.guardTarget.name}</b>.</>
                         ) : (
-                          "không hành động"
+                          "không bảo vệ ai."
                         )}
                       </Line>
                     )}
                     {roles.guardianAngel && (
                       <Line actor="Thiên Thần">
                         {night.guardianAngelTarget ? (
-                          <>bảo vệ <b className="text-white">{night.guardianAngelTarget.name}</b></>
+                          <>
+                            dùng khiên hộ mệnh cho{" "}
+                            <b className="text-white">{night.guardianAngelTarget.name}</b>.
+                          </>
                         ) : (
-                          "không dùng khiên"
+                          "không dùng khiên hộ mệnh."
                         )}
                       </Line>
                     )}
@@ -129,21 +197,21 @@ export function NightRecapTimeline({
                         night.seerChecks.map((check) => (
                           <Line key={`${check.seer.id}-${check.target.id}`} actor="Tiên Tri">
                             {check.seer.name} soi <b className="text-white">{check.target.name}</b>{" "}
-                            <span className={check.isWolf ? "text-blood-400" : "text-emerald-300"}>
-                              {check.isWolf ? "→ là Ma Sói" : "→ không phải Ma Sói"}
-                            </span>
+                            <Verdict tone={check.isWolf ? "bad" : "good"}>
+                              {check.isWolf ? "là Ma Sói" : "không phải Ma Sói"}
+                            </Verdict>
                             {check.secondaryTarget && (
                               <>
-                                , soi thêm <b className="text-white">{check.secondaryTarget.name}</b>{" "}
-                                <span className={check.secondaryIsWolf ? "text-blood-400" : "text-emerald-300"}>
-                                  {check.secondaryIsWolf ? "→ là Ma Sói" : "→ không phải Ma Sói"}
-                                </span>
+                                {" "}Soi thêm <b className="text-white">{check.secondaryTarget.name}</b>{" "}
+                                <Verdict tone={check.secondaryIsWolf ? "bad" : "good"}>
+                                  {check.secondaryIsWolf ? "là Ma Sói" : "không phải Ma Sói"}
+                                </Verdict>
                               </>
                             )}
                           </Line>
                         ))
                       ) : (
-                        <Line actor="Tiên Tri">không hành động</Line>
+                        <Line actor="Tiên Tri">không soi ai.</Line>
                       ))}
                     {roles.detective &&
                       ((night.detectiveChecks?.length ?? 0) > 0 ? (
@@ -151,28 +219,17 @@ export function NightRecapTimeline({
                           <Line key={`${check.detective.id}-${check.target1.id}`} actor="Thám Tử">
                             {check.detective.name} kiểm tra <b className="text-white">{check.target1.name}</b> và{" "}
                             <b className="text-white">{check.target2.name}</b>{" "}
-                            <span className={check.sameTeam ? "text-amber-300" : "text-emerald-300"}>
-                              {check.sameTeam ? "→ cùng phe" : "→ khác phe"}
-                            </span>
+                            <Verdict tone={check.sameTeam ? "warn" : "good"}>
+                              {check.sameTeam ? "cùng phe" : "khác phe"}
+                            </Verdict>
                           </Line>
                         ))
                       ) : (
-                        <Line actor="Thám Tử">không hành động</Line>
+                        <Line actor="Thám Tử">không kiểm tra ai.</Line>
                       ))}
                     {roles.witch && (
                       <Line actor="Phù Thủy">
-                        {night.witch.usedHeal
-                          ? night.witch.healedTarget
-                            ? <>cứu <b className="text-white">{night.witch.healedTarget.name}</b></>
-                            : "đốt bình cứu nhưng không có nạn nhân"
-                          : "không dùng bình cứu"}
-                        {night.witch.poisonTarget ? (
-                          <>
-                            , đầu độc <b className="text-white">{night.witch.poisonTarget.name}</b>
-                          </>
-                        ) : (
-                          ", không dùng bình độc"
-                        )}
+                        <WitchLine witch={night.witch} />
                       </Line>
                     )}
                     {roles.priest &&
@@ -180,19 +237,19 @@ export function NightRecapTimeline({
                         <Line actor="Linh Mục">
                           {night.priest.priest.name} dùng Nước thánh lên{" "}
                           <b className="text-white">{night.priest.target.name}</b>{" "}
-                          <span className={night.priest.isWolf ? "text-blood-400" : "text-emerald-300"}>
+                          <Verdict tone={night.priest.isWolf ? "bad" : "good"}>
                             {night.priest.isWolf
-                              ? "→ là Ma Sói, đã bị thanh tẩy"
-                              : "→ không phải Ma Sói, nước thánh phản phệ"}
-                          </span>
+                              ? "là Ma Sói, đã bị thanh tẩy"
+                              : "không phải Ma Sói, Nước thánh phản vệ"}
+                          </Verdict>
                         </Line>
                       ) : (
                         // Chỉ có MỘT bình cả ván, nên "không hành động" trả lời
                         // sai câu hỏi người đọc đang hỏi: còn bình hay hết rồi.
                         <Line actor="Linh Mục">
                           {holyWaterSpentAt === null
-                            ? "chưa dùng Nước thánh"
-                            : `đã dùng Nước thánh ở Đêm ${holyWaterSpentAt}`}
+                            ? "chưa dùng Nước thánh."
+                            : `đã dùng Nước thánh ở Đêm ${holyWaterSpentAt}.`}
                         </Line>
                       ))}
                     {(() => {
@@ -208,9 +265,9 @@ export function NightRecapTimeline({
                   >
                     {died
                       ? night.deaths
-                          .map(({ player, cause }) => `${player.name} (${causeLabel(cause)})`)
-                          .join(", ")
-                      : "Không ai chết trong đêm này"}
+                          .map(({ player, cause }) => `${player.name} ${deathCauseClause(cause)} và đã chết.`)
+                          .join(" ")
+                      : "Không ai chết trong đêm này."}
                   </p>
                 </section>
               </m.li>

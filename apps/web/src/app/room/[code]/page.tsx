@@ -210,22 +210,35 @@ export default function RoomPage() {
       >
         <header className="flex shrink-0 items-center justify-between gap-2">
           {/*
-            * MỘT chỗ rời phòng cho cả trang.
+            * MỘT chỗ rời phòng cho mỗi pha - không bao giờ hai.
             *
             * Phòng chờ bản cũ có thêm một nút "Rời phòng" toàn chiều ngang ngay
             * dưới "Bắt đầu trận đấu" - cùng bề ngang, cùng chiều cao với CTA -
             * nên hai nút cạnh tranh nhau, và người chơi gặp cùng một hành động ở
-            * cả đầu lẫn cuối trang. Cái ở đây giữ lại vì nó có mặt ở MỌI pha.
+            * cả đầu lẫn cuối trang. Cái ở đây phục vụ MỌI pha còn lại.
+            *
+            * Trừ GAME_OVER. Ở đó `PostMatchActions` đã có "Rời phòng và về trang
+            * chủ", và hai điều khiển đó gọi ĐÚNG một hàm `leaveRoom` - cùng emit
+            * `room:leave`, cùng đẩy về `/`. Hai nút khác tên mà cùng kết quả thì
+            * người chơi phải đoán xem cái nào là cái nào, nên chỉ một cái được ở
+            * lại. Cái ở lại là cái trong cụm hành động sau trận: nhãn của nó nói
+            * rõ ĐÍCH ĐẾN, và nó đứng ngay dưới CTA nên đọc ra là một lựa chọn
+            * đối lập với "Về phòng chờ" chứ không phải một cái nút lạc ở góc.
             */}
-          <button
-            className="btn-tertiary-danger shrink-0 whitespace-nowrap"
-            onClick={leaveRoom}
-          >
-            <span aria-hidden="true">←</span> Rời phòng
-          </button>
+          {snapshot?.phase !== "GAME_OVER" && (
+            <button
+              className="btn-tertiary-danger shrink-0 whitespace-nowrap"
+              onClick={leaveRoom}
+            >
+              <span aria-hidden="true">←</span> Rời phòng
+            </button>
+          )}
           {/* items-start: cụm mời cao hơn một dòng khi có thông báo hoặc ô chép
-            * tay, và nút âm thanh không được trôi xuống giữa theo nó. */}
-          <div className="flex items-start gap-2">
+            * tay, và nút âm thanh không được trôi xuống giữa theo nó.
+            *
+            * ml-auto để cụm này vẫn dính mép phải khi nút rời phòng vắng mặt:
+            * `justify-between` với một đứa con duy nhất sẽ dồn nó về bên TRÁI. */}
+          <div className="ml-auto flex items-start gap-2">
             {/* Trong phòng chờ cụm mời đã lên `LobbyHeader` cùng mã phòng và bộ
               * đếm người; để lại bản thứ hai ở đây là hai mã phòng trên cùng một
               * màn hình. */}
