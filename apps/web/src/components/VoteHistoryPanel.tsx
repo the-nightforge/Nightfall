@@ -85,7 +85,7 @@ export function VoteHistoryPanel({ recap, players, highlightTargetId, bare }: Pr
 
       {recap.finalJudgment && (
         <div className="border-t border-white/[0.08] pt-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-mist-strong">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-mist-bright">
             Phán quyết · {recap.finalJudgment.guilty} treo · {recap.finalJudgment.innocent} tha · {recap.finalJudgment.abstain} bỏ qua
           </p>
           {recap.finalJudgment.ballots.length === 0 ? (
@@ -131,7 +131,7 @@ export function VoteHistoryPanel({ recap, players, highlightTargetId, bare }: Pr
     <section className="card space-y-3" aria-label="Lịch sử phiếu">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.25em] text-mist-strong">Lịch sử bỏ phiếu</p>
+          <p className="text-xs uppercase tracking-[0.25em] text-mist-bright">Lịch sử bỏ phiếu</p>
         </div>
         <span className="rounded-full bg-night-800 px-2 py-0.5 text-[13px] font-semibold text-mist-bright ring-1 ring-white/10">
           Vòng {recap.round}

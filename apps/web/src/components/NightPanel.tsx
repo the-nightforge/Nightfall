@@ -1,9 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ROLE_META, type RoomSnapshot } from "@masoi/shared";
 import { PlayerGrid } from "./PlayerGrid";
 import { canActAtNight } from "@/lib/night-role";
+import {
+  WOLF_TALLY_EMPTY,
+  wolfBiteLabel,
+  wolfSkipLabel,
+  wolfTallyProgress,
+} from "@/lib/wolf-action";
 import { CursedNote } from "./RoleViews";
 
 interface Props {
@@ -19,13 +25,45 @@ export function NightPanel({ snapshot, onAction }: Props) {
   const [detectiveTarget1, setDetectiveTarget1] = useState<string | null>(null);
   const [detectiveTarget2, setDetectiveTarget2] = useState<string | null>(null);
   const [poisoning, setPoisoning] = useState(false);
+  /*
+   * Phiếu cắn vừa gửi mà snapshot chưa xác nhận.
+   *
+   * Cùng cách xử lý với lá phiếu ban ngày (`DayView`): `game:action` là một
+   * event socket không có phản hồi trực tiếp, nên bằng chứng duy nhất rằng máy
+   * chủ đã nhận là snapshot kế tiếp. Không có trạng thái này thì bấm nhanh ba
+   * cái là bắn ba event y hệt nhau, và người chơi không có dấu hiệu nào cho
+   * biết cú bấm đầu đã đi.
+   *
+   * KHÔNG đổi payload, không đổi tên event, không đoán trước kết quả.
+   */
+  const [pendingWolfVote, setPendingWolfVote] = useState<{ target: string | null } | null>(null);
+
+  const wolfVoteOnServer = snapshot.night?.acted ? (snapshot.night.myWolfVote ?? null) : undefined;
+  useEffect(() => {
+    if (!pendingWolfVote) return;
+    // Snapshot đã mang đúng lá phiếu vừa gửi -> hết chờ.
+    if (wolfVoteOnServer !== undefined && wolfVoteOnServer === pendingWolfVote.target) {
+      setPendingWolfVote(null);
+      return;
+    }
+    /*
+     * Chốt chặn: máy chủ có thể từ chối phiếu (bầy vừa bị chốt, người chơi vừa
+     * chết) và khi đó snapshot không bao giờ khớp. Thiếu hạn này thì nút kẹt ở
+     * "đang gửi" tới hết đêm.
+     */
+    const timer = setTimeout(() => setPendingWolfVote(null), 4_000);
+    return () => clearTimeout(timer);
+  }, [pendingWolfVote, wolfVoteOnServer]);
+
+  // Sang pha hoặc sang đêm khác thì mọi thứ đang chờ đều hết nghĩa.
+  useEffect(() => setPendingWolfVote(null), [snapshot.phase, snapshot.round]);
 
   if (!snapshot.you?.alive) {
     return (
       <div className="card py-8 text-center">
         <p className="text-xs uppercase tracking-[0.3em] text-mist/65">Bạn đã chết</p>
         <h3 className="mt-2 font-display text-3xl font-bold text-mist/70">Khán đài</h3>
-        <p className="mx-auto mt-2 max-w-xs text-sm text-mist/60">
+        <p className="mx-auto mt-2 max-w-xs text-sm text-mist-strong">
           Bạn xem được mọi kênh chat, kể cả kênh của Sói - nhưng chỉ nói được với
           những người đã chết.
         </p>
@@ -47,7 +85,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
             Tiên Tri vẫn còn sống. Bạn đang trong giai đoạn tập sự và chưa thức tỉnh.
           </p>
         )}
-        <p className="mx-auto mt-2 max-w-xs text-sm text-mist/60">
+        <p className="mx-auto mt-2 max-w-xs text-sm text-mist-strong">
           Không có gì để làm cho tới sáng. Hãy nghe ngóng xem sáng mai ai vắng mặt.
         </p>
         <div className="mt-4 text-left">
@@ -61,19 +99,60 @@ export function NightPanel({ snapshot, onAction }: Props) {
   const locked = night?.wolvesLocked ?? false;
   const nameOf = (id: string | null | undefined) =>
     snapshot.players.find((p) => p.id === id)?.name ?? "?";
-  const aliveOthers = (opts?: { selectable?: boolean; disabledIds?: string[]; allowSelf?: boolean }) => (
+  const aliveOthers = (opts?: {
+    selectable?: boolean;
+    /** Ô sáng lên; bỏ trống thì dùng ý định đang chọn của người xem. */
+    selectedId?: string | null;
+    /** Ô mang lá phiếu ĐÃ gửi - dấu tích đổi từ "Đang chọn" sang "Phiếu của bạn". */
+    confirmedId?: string | null;
+    disabledIds?: string[];
+    disabledIdsReason?: string;
+    allowSelf?: boolean;
+  }) => (
     <PlayerGrid
       snapshot={snapshot}
       selectable={opts?.selectable ?? !acted}
-      selectedId={selected}
+      selectedId={opts?.selectedId !== undefined ? opts.selectedId : selected}
+      confirmedId={opts?.confirmedId ?? null}
       onSelect={setSelected}
       disabledIds={opts?.disabledIds}
+      disabledIdsReason={opts?.disabledIdsReason}
       allowSelf={opts?.allowSelf}
     />
   );
 
   // Sói bỏ phiếu chứ không chốt, nên nhãn "Đã hành động" của các vai khác sẽ nói sai.
   const showActedBadge = acted && role !== "WEREWOLF" && role !== "WOLF_CUB";
+
+  /*
+   * Đồng đội trong phe Sói - những ô mà luật không cho nhắm tới.
+   *
+   * Lọc theo `ROLE_META[...].team` chứ không liệt kê tay "WEREWOLF" và
+   * "WOLF_CUB": bảng vai là nơi duy nhất biết vai nào thuộc phe nào, và một vai
+   * Sói thêm vào sau này sẽ tự được che ở đây thay vì lặng lẽ trở thành một
+   * mục tiêu bấm được. `p.role` chỉ có mặt khi người xem LÀ Sói - snapshotFor
+   * giấu nó với mọi người khác - nên danh sách này rỗng ở mọi vai khác, đúng
+   * như nó phải thế.
+   */
+  const wolfAllyIds = snapshot.players
+    .filter((p) => p.role && ROLE_META[p.role].team === "wolves")
+    .map((p) => p.id);
+
+  const wolfSending = pendingWolfVote !== null;
+  // Ô đang sáng: ý định chưa gửi, hoặc lá phiếu đã nằm trên bàn nếu chưa đổi ý.
+  const wolfTargetId = selected ?? (acted ? night?.myWolfVote ?? null : null);
+  const wolfTargetName = wolfTargetId ? nameOf(wolfTargetId) : null;
+  // Đã bầu đúng người đang trỏ tới -> không còn gì để gửi. Mục tiêu phụ không
+  // nằm trong `myWolfVote`, nên đêm cắn kép luôn cho gửi lại.
+  const wolfBiteCast =
+    acted && !wolfSecondary && wolfTargetId !== null && night?.myWolfVote === wolfTargetId;
+  const wolfSkipCast = acted && (night?.myWolfVote ?? null) === null;
+
+  const castWolfVote = (target: string | null, secondary?: string | null) => {
+    if (wolfSending) return;
+    setPendingWolfVote({ target });
+    onAction(target === null ? "SKIP" : "KILL", target, secondary ?? null);
+  };
 
   const toggleDetectiveTarget = (id: string) => {
     if (acted) return;
@@ -103,7 +182,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
             >
               {meta.name}
             </h3>
-            <p className="mt-1 text-sm text-mist/60">{meta.description}</p>
+            <p className="mt-1 text-sm text-mist-strong">{meta.description}</p>
           </div>
           {showActedBadge && (
             <span className="badge-phase shrink-0 bg-emerald-900/60 text-emerald-300">
@@ -156,7 +235,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
               <p className="mb-2 rounded-lg bg-night-800 p-2 text-sm text-blood-400">
                 {night?.wolfTarget ? (
                   <>
-                    Bầy sói đã chốt: <b>{nameOf(night.wolfTarget)}</b>
+                    Bầy Sói đã chốt: <b>{nameOf(night.wolfTarget)}</b>
                     {night.wolfSecondaryTarget && (
                       <>
                         {" "}và <b>{nameOf(night.wolfSecondaryTarget)}</b>
@@ -165,7 +244,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
                     .
                   </>
                 ) : (
-                  "Bầy sói đã chốt: đêm nay không cắn ai."
+                  "Bầy Sói đã chốt: đêm nay không cắn ai."
                 )}
               </p>
             ) : (
@@ -183,40 +262,97 @@ export function NightPanel({ snapshot, onAction }: Props) {
                         else if (!wolfSecondary && id !== selected) setWolfSecondary(id);
                         else setSelected(id);
                       }}
-                      disabledIds={snapshot.players
-                        .filter((p) => p.role === "WEREWOLF" || p.role === "WOLF_CUB")
-                        .map((p) => p.id)}
+                      disabledIds={wolfAllyIds}
+                      disabledIdsReason="Đồng đội trong phe Sói"
                     />
                     <button
-                      className="btn-primary mt-3 w-full"
-                      disabled={!selected}
-                      onClick={() => selected && onAction("KILL", selected, wolfSecondary)}
+                      type="button"
+                      className="btn-primary mt-3 w-full disabled:bg-white/[0.04] disabled:text-mist-strong disabled:opacity-100 disabled:shadow-none disabled:ring-1 disabled:ring-inset disabled:ring-white/10"
+                      disabled={!selected || wolfSending}
+                      aria-busy={wolfSending}
+                      onClick={() => selected && castWolfVote(selected, wolfSecondary)}
                     >
-                      {acted ? "Đổi phiếu cắn" : wolfSecondary ? "Bầu cắn 2 mục tiêu" : "Bầu cắn mục tiêu"}
+                      {wolfSending && <span className="gate-spinner" aria-hidden="true" />}
+                      <span className="min-w-0 truncate">
+                        {wolfBiteLabel({
+                          targetName: selected ? nameOf(selected) : null,
+                          secondaryName: wolfSecondary ? nameOf(wolfSecondary) : null,
+                          sending: wolfSending,
+                        })}
+                      </span>
                     </button>
                   </>
                 ) : (
                   <>
                     {aliveOthers({
                       selectable: true,
-                      disabledIds: snapshot.players
-                        .filter((p) => p.role === "WEREWOLF" || p.role === "WOLF_CUB")
-                        .map((p) => p.id),
+                      selectedId: wolfTargetId,
+                      confirmedId: wolfBiteCast ? wolfTargetId : null,
+                      disabledIds: wolfAllyIds,
+                      disabledIdsReason: "Đồng đội trong phe Sói",
                     })}
+                    {/*
+                      * Nút chính nói ĐÚNG trạng thái hiện tại, không phải một
+                      * chữ "Bầu cắn mục tiêu" đứng yên qua mọi trạng thái:
+                      *
+                      *   chưa chọn ai -> xám,  "Chọn một người để cắn"
+                      *   đã chọn      -> đỏ,   "Bầu chọn <tên>"
+                      *   đang gửi     -> vòng quay, khoá lại để không bắn trùng
+                      *   đã bầu xong  -> xanh, "Đã bầu chọn <tên>"
+                      *
+                      * Trạng thái tắt đổi hẳn sang nền trung tính thay vì dùng
+                      * `disabled:opacity-40` của `.btn`: nền đỏ mờ đi đọc ra
+                      * như một nút hỏng - cùng lý do đã ghi ở `DayView`.
+                      */}
                     <button
-                      className="btn-primary mt-3 w-full"
-                      disabled={!selected}
-                      onClick={() => selected && onAction("KILL", selected)}
+                      type="button"
+                      className={`mt-3 w-full ${
+                        wolfBiteCast && !wolfSending
+                          ? "btn border border-emerald-500/45 bg-emerald-600/15 text-emerald-200 disabled:cursor-default disabled:opacity-100"
+                          : "btn-primary disabled:bg-white/[0.04] disabled:text-mist-strong disabled:opacity-100 disabled:shadow-none disabled:ring-1 disabled:ring-inset disabled:ring-white/10"
+                      }`}
+                      disabled={!wolfTargetId || wolfSending || wolfBiteCast}
+                      aria-busy={wolfSending}
+                      onClick={() => wolfTargetId && castWolfVote(wolfTargetId)}
                     >
-                      {acted ? "Đổi phiếu cắn" : "Bầu cắn mục tiêu"}
+                      {wolfSending && pendingWolfVote?.target !== null && (
+                        <span className="gate-spinner" aria-hidden="true" />
+                      )}
+                      {wolfBiteCast && !wolfSending && <span aria-hidden="true">✓</span>}
+                      {/* Tên tối đa 20 ký tự nhưng nút hẹp dần theo cột: cắt ở
+                        * đây thay vì để nó đẩy toang thẻ. */}
+                      <span className="min-w-0 truncate">
+                        {wolfBiteLabel({
+                          targetName: wolfTargetName,
+                          sending: wolfSending && pendingWolfVote?.target !== null,
+                          alreadyCast: wolfBiteCast,
+                        })}
+                      </span>
                     </button>
                   </>
                 )}
-                <button className="btn-secondary mt-2 w-full" onClick={() => onAction("SKIP", null)}>
-                  Bầu không cắn đêm nay
+                <button
+                  type="button"
+                  className={`mt-2 w-full ${
+                    wolfSkipCast && !wolfSending
+                      ? "btn border border-emerald-500/45 bg-emerald-600/15 text-emerald-200 disabled:cursor-default disabled:opacity-100"
+                      : "btn-secondary"
+                  }`}
+                  disabled={wolfSending || wolfSkipCast}
+                  aria-busy={wolfSending}
+                  onClick={() => castWolfVote(null)}
+                >
+                  {wolfSending && pendingWolfVote?.target === null && (
+                    <span className="gate-spinner" aria-hidden="true" />
+                  )}
+                  {wolfSkipCast && !wolfSending && <span aria-hidden="true">✓</span>}
+                  {wolfSkipLabel({
+                    sending: wolfSending && pendingWolfVote?.target === null,
+                    alreadyCast: wolfSkipCast,
+                  })}
                 </button>
-                <p className="mt-2 text-center text-xs text-mist/65">
-                  Phiếu chốt khi hết giờ. Hoà phiếu sẽ bốc ngẫu nhiên trong nhóm dẫn đầu.
+                <p className="mt-2 text-center text-[13px] text-mist-strong">
+                  Phiếu chốt khi hết giờ. Hòa phiếu sẽ bốc ngẫu nhiên trong nhóm dẫn đầu.
                 </p>
               </>
             )}
@@ -233,7 +369,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
             )}
             {night?.seerResult && (
               <div className="mb-2 rounded-lg bg-night-800 p-2.5 text-sm">
-                <p className="text-xs text-mist/60">Kết quả soi gần nhất:</p>
+                <p className="text-[13px] text-mist-strong">Kết quả soi gần nhất:</p>
                 {night.seerResult.unknown ? (
                   <p className="mt-1 font-bold text-amber-300">
                     Bóng tối bao phủ: Không thể nhận diện phe của {night.seerResult.targetName} (UNKNOWN).
@@ -270,12 +406,12 @@ export function NightPanel({ snapshot, onAction }: Props) {
         {/* THÁM TỬ */}
         {role === "DETECTIVE" && (
           <>
-            <p className="mb-2 text-sm text-mist/70">
+            <p className="mb-2 text-sm text-mist-strong">
               Chọn 2 người chơi còn sống để kiểm tra xem họ cùng phe hay khác phe.
             </p>
             {night?.detectiveResult && (
               <div className="mb-2 rounded-lg bg-night-800 p-2.5 text-sm">
-                <p className="text-xs text-mist/60">Kết quả điều tra gần nhất:</p>
+                <p className="text-[13px] text-mist-strong">Kết quả điều tra gần nhất:</p>
                 <p className="mt-1">
                   <b>{night.detectiveResult.target1.name}</b> và <b>{night.detectiveResult.target2.name}</b>:{" "}
                   <b
@@ -339,7 +475,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
                 </span>
               )}
             </div>
-            <p className="mb-2 text-xs text-mist/60">
+            <p className="mb-2 text-[13px] text-mist-strong">
               Bảo vệ 1 người khỏi đòn cắn của Sói (tối đa 2 lần cả ván, không chọn cùng 1 người 2 đêm liền).
             </p>
             {aliveOthers({
@@ -364,19 +500,19 @@ export function NightPanel({ snapshot, onAction }: Props) {
                 Nước thánh: {night?.priestHolyWaterUsed ? "Đã sử dụng" : "1 Bình duy nhất"}
               </span>
             </div>
-            <p className="mb-2 text-xs text-mist/70">
+            <p className="mb-2 text-[13px] text-mist-strong">
               Ném Nước thánh vào 1 người: Nếu là <b>Sói</b> thì Sói chết. Nếu là <b>Dân</b> thì Linh mục bị phản phệ tử vong!
             </p>
             {night?.priestResult && (
               <div className="mb-2 rounded-lg bg-night-800 p-2.5 text-sm">
-                <p className="text-xs text-mist/60">Kết quả dùng Nước thánh:</p>
+                <p className="text-[13px] text-mist-strong">Kết quả dùng Nước thánh:</p>
                 <p className="mt-1">
                   Mục tiêu <b>{night.priestResult.target.name}</b> {night.priestResult.isWolf ? "là Ma Sói và đã bị thanh tẩy!" : "là Dân Làng vô tội!"}
                 </p>
               </div>
             )}
             {acted ? (
-              <p className="rounded-lg bg-night-800 p-3 text-center text-sm text-mist/65">Bạn đã hành động đêm nay.</p>
+              <p className="rounded-lg bg-night-800 p-3 text-center text-sm text-mist-strong">Bạn đã hành động đêm nay.</p>
             ) : (
               <>
                 {aliveOthers({
@@ -404,7 +540,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
         {/* BẢO VỆ */}
         {role === "GUARD" && (
           <>
-            <p className="mb-2 text-sm text-mist/70">
+            <p className="mb-2 text-sm text-mist-strong">
               Bạn không thể tự bảo vệ mình và không thể bảo vệ cùng một người hai đêm liên tiếp.
               {night?.guardPrevious && (
                 <>
@@ -444,8 +580,8 @@ export function NightPanel({ snapshot, onAction }: Props) {
             </div>
 
             {!locked ? (
-              <p className="rounded-lg bg-night-800 p-3 text-center text-sm text-mist/70">
-                🌙 Bầy sói đang chọn con mồi. Chờ chúng ra tay xong bạn mới quyết định
+              <p className="rounded-lg bg-night-800 p-3 text-center text-sm text-mist-strong">
+                🌙 Bầy Sói đang chọn con mồi. Chờ chúng ra tay xong bạn mới quyết định
                 có cứu hay không.
               </p>
             ) : (
@@ -453,10 +589,10 @@ export function NightPanel({ snapshot, onAction }: Props) {
                 <p className="rounded-lg bg-night-800 p-2 text-sm">
                   {night?.wolfTarget ? (
                     <>
-                      Đêm nay bầy sói cắn <b className="text-blood-400">{nameOf(night.wolfTarget)}</b>.
+                      Đêm nay bầy Sói cắn <b className="text-blood-400">{nameOf(night.wolfTarget)}</b>.
                     </>
                   ) : (
-                    "Đêm nay bầy sói không cắn ai."
+                    "Đêm nay bầy Sói không cắn ai."
                   )}
                 </p>
 
@@ -516,7 +652,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
   );
 }
 
-/** Bảng phiếu cắn của bầy sói: ai đang dẫn, còn bao nhiêu sói chưa bầu. */
+/** Bảng phiếu cắn của bầy Sói: ai đang dẫn, còn bao nhiêu Sói chưa bầu. */
 function WolfTally({
   snapshot,
   nameOf,
@@ -543,20 +679,20 @@ function WolfTally({
 
   return (
     <div className="mb-3 rounded-lg bg-night-800 p-2 text-sm">
-      <p className="mb-1 text-xs text-mist/60">
-        Phiếu cắn: {cast}/{required} sói đã bầu
+      <p className="mb-1 text-[13px] font-semibold text-mist-strong">
+        {wolfTallyProgress(cast, required)}
       </p>
       {rows.length === 0 ? (
-        <p className="text-mist/65">Chưa sói nào bầu.</p>
+        <p className="text-mist-strong">{WOLF_TALLY_EMPTY}</p>
       ) : (
         <ul className="space-y-0.5">
           {rows.map((row) => (
             <li key={row.label} className="flex justify-between gap-2">
-              <span className={row.mine ? "font-semibold text-blood-400" : "text-mist/80"}>
+              <span className={row.mine ? "font-semibold text-blood-400" : "text-mist-strong"}>
                 {row.label}
                 {row.mine && " (phiếu của bạn)"}
               </span>
-              <span className="text-mist/60">{row.count}</span>
+              <span className="font-semibold text-mist-bright">{row.count}</span>
             </li>
           ))}
         </ul>

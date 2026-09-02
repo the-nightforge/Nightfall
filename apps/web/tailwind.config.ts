@@ -36,11 +36,24 @@ const config: Config = {
        * #dde7f8): trên màn hình chỉnh sáng thấp, chữ phụ ở nấc cũ vẫn phải
        * nheo mắt. Vẫn cách chữ trắng nguyên (15:1) đủ xa để thứ bậc không
        * phẳng ra.
+       *
+       * Vòng nâng gần nhất (#9db2d5/#ccd9ef/#e7eefb -> giá trị hiện tại) cộng
+       * thêm khoảng 9% tương phản cho hai nấc dưới, đo trên nền thẻ #141d31:
+       *
+       *   mist         7.81:1 -> 8.53:1   (+9.2%)
+       *   mist-strong 11.79:1 -> 12.87:1  (+9.1%)
+       *   mist-bright 14.42:1 -> 15.10:1  (+4.7%)
+       *
+       * `mist-bright` cố ý đi CHẬM hơn hai nấc kia: nó đã cách chữ trắng
+       * (16.80:1) có một quãng ngắn, và kéo nó lên cùng nhịp là xoá luôn bậc
+       * cuối cùng của thang. `mist` được ưu tiên vì nó là nấc bị dùng KÈM
+       * opacity ở khắp nơi (`text-mist/60`, `/65`) - nâng gốc là nâng luôn mọi
+       * biến thể đó, và chính chúng mới là những dòng chữ rơi xuống quanh 3-4:1.
        */
       mist: {
-        DEFAULT: "#9db2d5",
-        strong: "#ccd9ef",
-        bright: "#e7eefb",
+        DEFAULT: "#a6bada",
+        strong: "#d7e2f5",
+        bright: "#eef3fd",
       },
       },
       fontFamily: {

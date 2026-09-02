@@ -7,6 +7,7 @@ import { PlayerGrid } from "./PlayerGrid";
 import { VoteHistoryPanel } from "./VoteHistoryPanel";
 import { DayOfTruthModal } from "./DayOfTruthModal";
 import { DeadWhisperPanel } from "./DeadWhisperPanel";
+import { discussionSkipCopy } from "@/lib/discussion-skip-copy";
 import { leaderLabel, voteProgressOf } from "@/lib/vote-progress";
 
 interface Props {
@@ -34,6 +35,7 @@ export function DayView({
   const hasVoted = snapshot.hasVoted;
   const discussionSkip = snapshot.discussionSkip;
   const leader = isVoting ? leaderLabel(voteProgressOf(snapshot)) : null;
+  const skipCopy = discussionSkip ? discussionSkipCopy(discussionSkip) : null;
 
   /*
    * Lá phiếu vừa gửi mà snapshot chưa xác nhận.
@@ -282,24 +284,44 @@ export function DayView({
             )}
           </div>
           {discussionSkip && (
-            discussionSkip.canVote ? (
-              <div className="mt-3">
+            /*
+              * Bỏ qua thảo luận là hành động HẠNG HAI của pha này.
+              *
+              * Bản cũ cho nó `.btn-primary` toàn chiều ngang: một mảng đỏ máu -
+              * cùng sắc với nút "Treo cổ" và với đồng hồ lúc sắp hết giờ - nằm
+              * ngay dưới dòng "Ai đáng ngờ?", nên thứ nổi nhất trong cả pha
+              * thảo luận lại là cái nút bỏ qua chính pha đó. Nó cũng không có
+              * gì nguy hiểm để mà mang màu nguy hiểm: bấm nhầm thì bấm lại là
+              * rút, và một mình một phiếu thì không bỏ qua được gì.
+              *
+              * `.btn-secondary` (viền + nền xanh xám trung tính, đã có sẵn
+              * hover/active) cộng bề ngang chặn ở 20rem: vẫn là một cái nút
+              * bấm được thoải mái, nhưng không còn cạnh tranh với tên pha ở
+              * trên hay đồng hồ trên thanh pha.
+              */
+            <div className="mt-4">
+              {skipCopy?.status && (
+                <p
+                  className={`mx-auto mb-2 flex max-w-xs items-center justify-center gap-1.5 text-[13px] font-semibold ${
+                    discussionSkip.hasVoted ? "text-emerald-300" : "text-mist-strong"
+                  }`}
+                  role="status"
+                >
+                  {discussionSkip.hasVoted && <span aria-hidden="true">✓</span>}
+                  {skipCopy.status}
+                </p>
+              )}
+              {skipCopy?.button && (
                 <button
-                  className={discussionSkip.hasVoted ? "btn-secondary w-full" : "btn-primary w-full"}
+                  type="button"
+                  className="btn-secondary mx-auto w-full max-w-xs"
                   onClick={() => onSkipDiscussion(!discussionSkip.hasVoted)}
                 >
-                  {discussionSkip.hasVoted ? "Huỷ skip" : "Skip thảo luận"}
-                  {` (${discussionSkip.votes}/${discussionSkip.required})`}
+                  {skipCopy.button}
                 </button>
-                <p className="mt-1 text-[13px] text-mist-strong">
-                  Cần toàn bộ người thật còn sống và đang online đồng ý.
-                </p>
-              </div>
-            ) : (
-              <p className="mt-3 text-[13px] text-mist-strong">
-                Người chơi còn sống muốn skip: {discussionSkip.votes}/{discussionSkip.required}
-              </p>
-            )
+              )}
+              <p className="mx-auto mt-2 max-w-xs text-[13px] text-mist-strong">{skipCopy?.hint}</p>
+            </div>
           )}
         </div>
       )}

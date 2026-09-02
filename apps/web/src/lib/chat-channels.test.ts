@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Phase, RoomSnapshot } from "@masoi/shared";
 import {
+  CHAT_CHANNEL_META,
   chatComposerState,
   chatHeading,
+  composerLabel,
   presentChannels,
   readableChannels,
 } from "./chat-channels";
@@ -68,9 +70,54 @@ describe("readableChannels", () => {
   });
 });
 
+describe("CHAT_CHANNEL_META", () => {
+  /*
+   * Bảng tra là NGUỒN DUY NHẤT của tên kênh, và ba chỗ đọc nó - tiêu đề khung,
+   * dòng phụ, nhãn ô nhập - phải nói cùng một cái tên. Trước vòng này mỗi chỗ
+   * tự viết lấy, và "Kênh người chết" ở trang phòng đứng cạnh "Người chết" trên
+   * bong bóng tin nhắn.
+   */
+  it("mỗi kênh nói đúng AI NHÌN THẤY nó, không nói cái khung đang lọc gì", () => {
+    assert.equal(CHAT_CHANNEL_META.wolves.audience, "Chỉ phe Sói nhìn thấy");
+    assert.equal(CHAT_CHANNEL_META.day.audience, "Chỉ người còn sống nhìn thấy");
+    assert.equal(CHAT_CHANNEL_META.dead.audience, "Chỉ người đã chết nhìn thấy");
+  });
+
+  it("gợi ý ô nhập gọi đúng người sẽ đọc được câu vừa gõ", () => {
+    assert.equal(CHAT_CHANNEL_META.wolves.placeholder, "Chat với đồng đội Sói…");
+    assert.equal(CHAT_CHANNEL_META.day.placeholder, "Chat với người còn sống…");
+    assert.equal(CHAT_CHANNEL_META.dead.placeholder, "Chat với những người đã chết…");
+  });
+
+  it("nhãn ô nhập dựng từ đúng cái tên mà tiêu đề khung dùng", () => {
+    for (const channel of ["lobby", "day", "wolves", "dead"] as const) {
+      assert.equal(
+        composerLabel(channel),
+        `Gửi vào ${CHAT_CHANNEL_META[channel].longLabel}`,
+      );
+    }
+    assert.equal(composerLabel("wolves"), "Gửi vào Kênh phe Sói");
+    assert.equal(composerLabel("day"), "Gửi vào Kênh làng");
+    assert.equal(composerLabel("dead"), "Gửi vào Kênh người chết");
+  });
+});
+
 describe("chatHeading", () => {
   it("một kênh thì tiêu đề mang đúng tên kênh đó", () => {
     assert.equal(chatHeading(snapshot()).title, "Kênh làng");
+  });
+
+  it("dòng phụ nói đối tượng được xem, không phải bộ lọc đang bật", () => {
+    assert.equal(chatHeading(snapshot()).subtitle, "Chỉ người còn sống nhìn thấy");
+
+    const wolf = snapshot({
+      phase: "NIGHT",
+      you: { id: "me", alive: true, role: "WEREWOLF" } as never,
+    });
+    assert.deepEqual(chatHeading(wolf), {
+      title: "Kênh phe Sói",
+      subtitle: "Chỉ phe Sói nhìn thấy",
+    });
   });
 
   /*
@@ -118,7 +165,7 @@ describe("chatComposerState trong pha biện hộ", () => {
 
     assert.equal(state.canSend, true);
     assert.equal(state.channel, "day");
-    assert.equal(state.placeholder, "Nhập lời biện hộ...");
+    assert.equal(state.placeholder, "Nhập lời biện hộ…");
     assert.equal(state.reason, "");
   });
 
@@ -127,7 +174,7 @@ describe("chatComposerState trong pha biện hộ", () => {
 
     assert.equal(state.canSend, false);
     assert.equal(state.channel, null);
-    assert.equal(state.placeholder, "Đang lắng nghe Hải Yến...");
+    assert.equal(state.placeholder, "Đang lắng nghe Hải Yến…");
     assert.equal(state.reason, "Chỉ Hải Yến được nói trong lúc biện hộ.");
   });
 
@@ -144,7 +191,7 @@ describe("chatComposerState trong pha biện hộ", () => {
 
     assert.equal(state.canSend, true);
     assert.equal(state.channel, "dead");
-    assert.equal(state.placeholder, "Nhắn kênh người chết...");
+    assert.equal(state.placeholder, "Chat với những người đã chết…");
   });
 });
 
@@ -153,7 +200,7 @@ describe("chatComposerState ở các pha khác", () => {
     assert.deepEqual(chatComposerState(snapshot({ phase: "FINAL_VOTE" })), {
       canSend: true,
       channel: "day",
-      placeholder: "Chat làng...",
+      placeholder: "Chat với người còn sống…",
       reason: "",
     });
   });
@@ -165,6 +212,21 @@ describe("chatComposerState ở các pha khác", () => {
 
     assert.equal(state.canSend, false);
     assert.match(state.reason, /chỉ phe Sói/);
+  });
+
+  it("mỗi kênh gửi được đều mang đúng gợi ý của kênh đó", () => {
+    // Không có bản viết tay nào trong `chatComposerState`: câu gợi ý luôn đi
+    // thẳng từ bảng tra ra, nên đổi tên kênh một chỗ là đổi cả ba chỗ.
+    const wolf = chatComposerState(
+      snapshot({ phase: "NIGHT", you: { id: "me", alive: true, role: "WEREWOLF" } as never }),
+    );
+    assert.equal(wolf.placeholder, CHAT_CHANNEL_META.wolves.placeholder);
+
+    const dead = chatComposerState(snapshot({ you: { id: "me", alive: false } as never }));
+    assert.equal(dead.placeholder, CHAT_CHANNEL_META.dead.placeholder);
+
+    const lobby = chatComposerState(snapshot({ phase: "LOBBY" }));
+    assert.equal(lobby.placeholder, CHAT_CHANNEL_META.lobby.placeholder);
   });
 
   it("Sói Con vào được hang Sói y như Sói thường", () => {

@@ -5,9 +5,7 @@ import type { RoomSnapshot } from "@masoi/shared";
 import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { nominationRecapFor } from "@/lib/defense-votes";
 import { Avatar } from "./Avatar";
-import { CountdownText } from "./Timer";
 import { DefenseVotePanel } from "./DefenseVotePanel";
-import { VoteHistoryPanel } from "./VoteHistoryPanel";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -125,48 +123,33 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
                   Đến lượt bạn biện hộ
                 </>
               ) : dead ? (
-                <>Bạn đã chết — chỉ {trial.accusedName} được nói lúc này.</>
+                <>Bạn đã chết — chỉ {trial.accusedName} được nói lúc này</>
               ) : (
-                <>Hãy lắng nghe — chỉ {trial.accusedName} được nói lúc này.</>
+                <>Hãy lắng nghe — chỉ {trial.accusedName} được nói lúc này</>
               )}
             </span>
-            {snapshot.phaseEndsAt !== null && (
-              <>
-                <span aria-hidden="true" className="text-mist-strong">
-                  ·
-                </span>
-                <CountdownText
-                  endsAt={snapshot.phaseEndsAt}
-                  className={myTurn ? "font-bold text-amber-200" : "font-semibold text-mist-bright"}
-                />
-              </>
-            )}
           </p>
         )}
       </div>
 
       {/*
-        * Trong pha biện hộ, bảng phiếu là bảng TÓM TẮT có lịch sử gấp lại bên
-        * trong. Sang vòng xác nhận thì lịch sử đầy đủ mở lại như cũ: ở đó không
-        * còn ai phải nói nữa, cả màn hình chỉ để cân nhắc Treo hay Tha, và toàn
-        * bộ diễn biến phiếu là dữ liệu để cân.
+        * CẢ HAI pha của phiên toà dùng chung một khối: tóm tắt ở trên, lịch sử
+        * đầy đủ gấp lại trong một khối bung ra.
+        *
+        * Vòng xác nhận trước đây dán thẳng bảng lịch sử đầy đủ vào giữa màn -
+        * hai ba chục con chip "A → B" nằm ngay trên đúng hai cái nút Treo/Tha,
+        * và câu hỏi của cả pha ("có đủ lý do treo người này không") phải tự
+        * quét lấy giữa một đám chip đồng hạng. Đó là cùng một vấn đề mà màn
+        * biện hộ đã giải rồi, nên nó dùng lại lời giải đó chứ không có lời giải
+        * thứ hai. Ai muốn truy dấu ai đổi phiếu lúc nào thì mở khối bung ra -
+        * dữ liệu còn nguyên, chỉ không còn tranh chỗ với quyết định.
         */}
-      {isDefense ? (
-        <DefenseVotePanel
-          recap={recap}
-          players={snapshot.players}
-          accusedId={trial.accusedId}
-          accusedName={trial.accusedName}
-        />
-      ) : (
-        recap && (
-          <VoteHistoryPanel
-            recap={recap}
-            players={snapshot.players}
-            highlightTargetId={trial.accusedId}
-          />
-        )
-      )}
+      <DefenseVotePanel
+        recap={recap}
+        players={snapshot.players}
+        accusedId={trial.accusedId}
+        accusedName={trial.accusedName}
+      />
 
       {!isDefense && (
         <div className={`card ${dead ? "opacity-70" : ""}`}>
@@ -178,11 +161,13 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
                 : `Treo cổ ${trial.accusedName}?`}
           </h3>
           {snapshot.you?.role === "MAYOR" && (
-            <p className="mb-2 inline-block rounded-full border border-amber-500/40 bg-amber-950/40 px-3 py-1 text-xs font-bold text-amber-300">
+            <p className="mb-2 inline-block rounded-full border border-amber-500/40 bg-amber-950/40 px-3 py-1 text-[13px] font-bold text-amber-200">
               👑 Bạn là Thị Trưởng (Phiếu của bạn có trọng số x2)
             </p>
           )}
-          <p className="mb-3 text-xs text-mist-strong">
+          {/* 13px chứ không phải 12px: đây là luật quyết định kết cục của cả
+            * pha, không phải một dòng chú thích dưới chân thẻ. */}
+          <p className="mb-3 text-[13px] text-mist-strong">
             Cần {trial.guiltyRequired} phiếu Treo để kết án. Không bỏ phiếu tính là Tha.
           </p>
 
