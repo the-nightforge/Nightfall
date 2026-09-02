@@ -14,7 +14,9 @@ import {
   readPlaybackInputs,
   type NetworkHints,
 } from "@/lib/cinematic-settings";
+import { canUseWebgl, hasWebglScene } from "@/lib/cinematic-webgl";
 import { useModalFocus } from "@/lib/useModalFocus";
+import { CinematicCanvas } from "./CinematicCanvas";
 import { VillageSilhouette } from "./VillageSilhouette";
 import { WolfMark } from "./WolfMark";
 
@@ -43,6 +45,14 @@ import { WolfMark } from "./WolfMark";
 const brokenClips = new Set<string>();
 const prefetched = new Set<string>();
 
+/*
+ * WebGL đã hỏng trong phiên này chưa.
+ *
+ * Ở cấp module đúng như `brokenClips`: mất context một lần là máy này không nên
+ * bị thử lại ở mọi cảnh sau nữa, kể cả khi overlay tháo rồi dựng lại.
+ */
+let webglBroken = false;
+
 const CLIP_BASE = "/cinematics";
 
 export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }) {
@@ -52,6 +62,19 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
   const played = useRef(new Set<string>());
   const [mode, setMode] = useState<"video" | "css" | "none">("none");
   const [network, setNetwork] = useState<NetworkHints>({ saveData: false, effectiveType: null });
+  const [webgl, setWebgl] = useState(false);
+  /*
+   * useCallback voi deps rong, KHONG phai arrow inline.
+   *
+   * CinematicCanvas dat `onFail` trong deps cua effect dung scene. Mot arrow
+   * inline doi danh tinh moi lan render, ma overlay nay render lai theo TUNG
+   * snapshot - nen scene se bi thao va dung lai lien tuc suot ca canh.
+   * `webglBroken` o cap module va `setWebgl` on dinh, nen deps rong la dung.
+   */
+  const handleWebglFail = useCallback(() => {
+    webglBroken = true;
+    setWebgl(false);
+  }, []);
   // Bản sao trong ref để effect chọn cảnh chỉ phụ thuộc snapshot: cho `mode` vào
   // deps thì đổi thiết lập giữa pha sẽ chạy lại effect và ghi đè `previous`.
   const modeRef = useRef(mode);
@@ -67,7 +90,16 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
    */
   useEffect(() => {
     const apply = () => {
-      setMode(playbackMode(readPlaybackInputs()));
+      const inputs = readPlaybackInputs();
+      setMode(playbackMode(inputs));
+      setWebgl(
+        !webglBroken &&
+          canUseWebgl({
+            mode: playbackMode(inputs),
+            saveData: readNetworkHints().saveData,
+            webgl2: hasWebgl2(),
+          }),
+      );
       setNetwork(readNetworkHints());
     };
     apply();
@@ -142,6 +174,7 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
       mode,
       saveData: network.saveData,
       effectiveType: network.effectiveType,
+      webgl,
     });
 
     const add = (clip: string) => {
@@ -177,11 +210,15 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
     }
     const timer = setTimeout(run, 2000);
     return () => clearTimeout(timer);
-  }, [mode, network, snapshot]);
+  }, [mode, network, snapshot, webgl]);
 
   if (!playing) return null;
 
-  const useVideo = mode === "video" && !brokenClips.has(playing.clip);
+  // Thứ tự quyết định: 3D nếu cảnh này có bản 3D và máy dựng được; nếu không
+  // thì clip; nếu không nữa thì chỉ còn cảnh CSS bên dưới. Một cảnh KHÔNG bao
+  // giờ chạy cả canvas lẫn video - không có lý do gì tải hai bản của một cảnh.
+  const useWebgl = webgl && !webglBroken && hasWebglScene(playing.kind);
+  const useVideo = !useWebgl && mode === "video" && !brokenClips.has(playing.clip);
 
   // Sự kiện mang tên riêng nên nhãn họ tụt xuống làm dòng nhỏ phía trên; cạnh
   // pha thì hai thứ trùng nhau và in hai lần chỉ tổ thừa.
@@ -210,6 +247,17 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
       <div className={`cine-scene cine-${playing.kind.toLowerCase().replace(/_/g, "-")}`} aria-hidden="true">
         <SceneArt kind={playing.kind} />
       </div>
+
+      {useWebgl && (
+        <CinematicCanvas
+          // key theo khoá lần phát: mỗi cảnh dựng lại scene từ đầu, đúng cách
+          // thẻ <video> bên dưới đang làm.
+          key={playing.key}
+          kind={playing.kind}
+          durationMs={playing.durationMs}
+          onFail={handleWebglFail}
+        />
+      )}
 
       {useVideo && (
         <video
@@ -372,5 +420,21 @@ function SceneArt({ kind }: { kind: CinematicKind }) {
           <span className="cine-bloom" />
         </>
       );
+  }
+}
+
+/**
+ * Máy này có WebGL2 không.
+ *
+ * Thử tạo context trên một canvas rời rồi bỏ đi ngay: đây là cách duy nhất
+ * biết chắc, vì `window.WebGL2RenderingContext` tồn tại kể cả trên máy mà
+ * driver từ chối cấp context thật.
+ */
+function hasWebgl2(): boolean {
+  if (typeof document === "undefined") return false;
+  try {
+    return document.createElement("canvas").getContext("webgl2") !== null;
+  } catch {
+    return false;
   }
 }
