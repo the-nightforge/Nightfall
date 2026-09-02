@@ -78,6 +78,61 @@ export function socketErrorMessage(err: unknown): string {
   return "Có lỗi xảy ra, vui lòng thử lại";
 }
 
+/** Dòng log cho một lỗi socket KHÔNG lường trước. */
+export interface SocketErrorLogLine {
+  event: "socket.unexpected-error";
+  socketEvent: string;
+  playerId: string;
+  name: string;
+  message: string;
+  stack: string;
+}
+
+/** Cắt ngắn thông điệp của thư viện bên thứ ba trước khi cho vào log. */
+const MAX_LOGGED_MESSAGE = 300;
+
+/**
+ * Lỗi này có đáng ghi lại không, và ghi lại thì ghi gì.
+ *
+ * Ba lối ra của `socketErrorMessage` ở trên KHÔNG cùng một loại sự việc, mà
+ * cho tới nay cả ba đều im lặng như nhau:
+ *
+ *  - `RoomError`/`GameError` là LUẬT CHƠI. "Phòng đã đầy" xảy ra hàng trăm lần
+ *    mỗi ngày và là hành vi đúng; ghi lại là tự dìm chết log của mình.
+ *  - `ZodError` là CLIENT CŨ còn cache trên Vercel gửi hình dạng payload cũ -
+ *    khó chịu nhưng không phải bug của bản đang chạy.
+ *  - Nhánh cuối là LỖI LẬP TRÌNH. Một `TypeError` trong `submitNightAction` đi
+ *    qua đây, hoá thành "Có lỗi xảy ra, vui lòng thử lại" gửi cho người chơi,
+ *    rồi biến mất. Nói cách khác, đúng loại lỗi cần biết nhất lại là loại duy
+ *    nhất không để lại dấu vết nào.
+ *
+ * Trả về DỮ LIỆU chứ không tự gọi `console.error`: như vậy test khẳng định
+ * được cái gì bị ghi và cái gì không, mà không phải rình một hàm toàn cục.
+ *
+ * Chỉ nhận `socketEvent` và `playerId` - KHÔNG nhận payload. Đó là lý do chat,
+ * token và prompt AI không có đường nào lọt vào log: chúng không được truyền
+ * vào đây ngay từ chữ ký hàm. `message` là trường duy nhất có thể mang chữ từ
+ * một thư viện bên dưới, nên nó bị cắt ngắn.
+ */
+export function socketErrorLog(
+  socketEvent: string,
+  playerId: string,
+  err: unknown,
+): SocketErrorLogLine | null {
+  if (err instanceof RoomError || err instanceof GameError) return null;
+  if (err instanceof Error && err.name === "ZodError") return null;
+
+  const isError = err instanceof Error;
+  return {
+    event: "socket.unexpected-error",
+    socketEvent,
+    playerId,
+    name: isError ? err.name : "UnknownThrown",
+    message: (isError ? err.message : String(err)).slice(0, MAX_LOGGED_MESSAGE),
+    stack: isError ? err.stack ?? "" : "",
+  };
+}
+
 export function setupSocket(io: SocketServer): void {
   // Xác thực ngay khi kết nối: playerId + token từ localStorage client
   io.use(async (socket, next) => {
@@ -118,7 +173,9 @@ export function setupSocket(io: SocketServer): void {
 
     trackSocket(playerId, socket);
 
-    const handleError = (err: unknown): void => {
+    const handleError = (err: unknown, socketEvent: string): void => {
+      const line = socketErrorLog(socketEvent, playerId, err);
+      if (line) console.error(JSON.stringify(line));
       socket.emit(SERVER_EVENTS.ERROR, { message: socketErrorMessage(err) });
     };
 
@@ -159,7 +216,7 @@ export function setupSocket(io: SocketServer): void {
         try {
           await fn(payload);
         } catch (err) {
-          handleError(err);
+          handleError(err, event);
         }
       });
     };
@@ -189,16 +246,26 @@ export function setupSocket(io: SocketServer): void {
 
     handler(CLIENT_EVENTS.ROOM_SET_READY, async (payload) => {
       const { ready } = setReadyPayload.parse(payload);
+      /*
+       * NGƯỠNG DƯỚI ĐÂY LÀ ƯỚC LƯỢNG, chưa phải số đo.
+       *
+       * Đặt đủ rộng để không chạm thao tác của người chơi thật, đủ hẹp để một
+       * vòng lặp emit không nhân tải lên theo số thành viên. Chốt lại bằng log
+       * thật hoặc một vòng test tải rồi sửa ở đây - đừng coi chúng là đã xác nhận.
+       */
+      if (!allowAction(`ready:${playerId}`, 10, 3_000)) throw new RoomError("Thao tác quá nhanh");
       roomService.setReady(playerId, ready);
     });
 
     handler(CLIENT_EVENTS.ROOM_KICK, async (payload) => {
       const { targetId } = kickPayload.parse(payload);
+      if (!allowAction(`kick:${playerId}`, 5, 10_000)) throw new RoomError("Thao tác quá nhanh");
       await roomService.kick(playerId, targetId);
     });
 
     handler(CLIENT_EVENTS.ROOM_UPDATE_CONFIG, async (payload) => {
       const { config: cfg } = updateConfigPayload.parse(payload);
+      if (!allowAction(`config:${playerId}`, 10, 3_000)) throw new RoomError("Thao tác quá nhanh");
       roomService.updateConfig(playerId, cfg);
     });
 
@@ -221,16 +288,19 @@ export function setupSocket(io: SocketServer): void {
 
     handler(CLIENT_EVENTS.ROOM_ADD_BOT, async (payload) => {
       addBotPayload.parse(payload);
+      if (!allowAction(`add-bot:${playerId}`, 10, 5_000)) throw new RoomError("Thao tác quá nhanh");
       roomService.addBot(playerId);
     });
 
     handler(CLIENT_EVENTS.ROOM_START, async (payload) => {
       startGamePayload.parse(payload);
+      if (!allowAction(`start:${playerId}`, 5, 10_000)) throw new RoomError("Thao tác quá nhanh");
       roomService.start(playerId);
     });
 
     handler(CLIENT_EVENTS.ROOM_RESET, async (payload) => {
       resetGamePayload.parse(payload);
+      if (!allowAction(`reset:${playerId}`, 5, 10_000)) throw new RoomError("Thao tác quá nhanh");
       roomService.reset(playerId);
     });
 
