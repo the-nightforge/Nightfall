@@ -79,7 +79,10 @@ export async function writeGameResultOnce(room: Room): Promise<void> {
           role: p.role,
           alive: p.alive,
         })),
-        durationSec: Math.round((Date.now() - room.createdAt) / 1000),
+        // `startedAt`, KHÔNG phải `createdAt`: xem chú thích của trường đó
+        // trong `rooms/store.ts`. Rơi về `createdAt` cho phòng đọc lên từ ảnh
+        // chụp ghi trước khi có trường này - một con số hơi rộng vẫn tốt hơn NaN.
+        durationSec: Math.round((Date.now() - (room.startedAt ?? room.createdAt)) / 1000),
       },
     });
     room.resultWritten = true;

@@ -33,6 +33,7 @@ export function serializeRoom(room: Room, opSeq: number): RoomEnvelopeV1 {
       config: { ...room.config },
       chatLog: room.chatLog,
       createdAt: room.createdAt,
+      startedAt: room.startedAt,
       engineState: room.engine ? room.engine.getState() : null,
       gameId: room.gameId,
       resultWritten: room.resultWritten,
