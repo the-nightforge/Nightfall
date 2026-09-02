@@ -59,7 +59,7 @@ function StaticTint({ eventId }: { eventId: string }) {
     BLOOD_MOON: "bg-blood-600/25",
     MOONLESS_NIGHT: "bg-night-950/55",
     CLEARING_MIST: "bg-white/10 backdrop-blur-sm",
-    CURFEW: "ring-2 ring-amber-500/30 ring-inset",
+    CURFEW: "ring-1 ring-amber-500/20 ring-inset",
     BLOODY_HUNT: "bg-blood-600/15",
     WOLF_SHADOW: "bg-indigo-900/25",
     SILENT_NIGHT: "bg-slate-800/20",
@@ -76,24 +76,45 @@ function StaticTint({ eventId }: { eventId: string }) {
 }
 
 /*
- * Vì sao không còn thứ gì đặt ở `left-1/2 top-1/2`.
+ * Vì sao điểm nhấn bị cắt cụt ở bốn góc màn.
  *
- * Cả lớp này nằm ở z-index -10, tức sau MỌI thành phần giao diện. Chính giữa
- * màn hình là chỗ bàn chơi - lưới người chơi, bảng vai, khung chat - nên một
- * biểu tượng đặt ở đó bị che gần như hoàn toàn và người chơi không bao giờ
- * thấy. Phần duy nhất của nền còn lộ ra là dải trên, dải dưới và hai lề bên
- * khi màn rộng, nên mọi điểm nhấn dời hết về đó.
+ * Bản trước neo chúng theo phần trăm khung nhìn (right 7%, top 9%), và
+ * phần trăm của khung nhìn không dính gì tới chỗ bố cục thật sự để trống:
+ *
+ *   - Màn rộng hơn 1600px: `main` chỉ rộng tối đa 1600 rồi tự căn giữa, nên
+ *     hai bên thừa ra một dải trống. 7% của một màn 2100px rơi đúng vào giữa
+ *     dải đó, và cái đồng hồ 96px của Lệnh Giới Nghiêm hiện ra nguyên hình,
+ *     sắc nét, đứng một mình trong khoảng trắng - không ai đọc nó ra là nền
+ *     cả, nó đọc ra như một ô giao diện bị văng khỏi bố cục.
+ *   - Màn 1440px: cũng toạ độ đó lại rơi vào NGAY SAU cột phải. Thẻ ở đó đều
+ *     `backdrop-blur` và nền trong, nên biểu tượng lờ mờ hiện lên sau chữ.
+ *
+ * Cùng một hằng số, hỏng theo hai kiểu ngược nhau. Cách chữa là bỏ hẳn lối neo
+ * theo phần trăm: dán điểm nhấn vào góc khung nhìn rồi đẩy 2.5rem ra NGOÀI mép.
+ * `.backdrop` có `overflow: hidden` nên phần thừa bị cắt, thứ còn lại là một
+ * mảnh hình ăn từ góc vào - không bao giờ thành một vật thể tròn trịa đứng
+ * giữa khoảng trống, ở bề ngang nào cũng vậy. Bốn góc cũng là chỗ vignette tối
+ * nhất, nên nó chìm thêm một lần nữa.
+ *
+ * Kèm theo đó là hạ độ mờ của mọi điểm nhấn xuống còn quá nửa: ở /25-/30 chúng
+ * đủ tương phản để mắt bắt lấy như một thành phần, mà nền thì không được phép
+ * giành lấy sự chú ý với bàn chơi.
  *
  * Các lớp phủ toàn màn (gradient, tint) thì giữ nguyên: chúng vẫn ăn qua các
  * khe hở và qua những thẻ bài đang `backdrop-blur`.
  */
 
-/** Điểm nhấn ở lề: đủ xa tâm để không bị bàn chơi che. */
+/**
+ * Neo ở góc, thò 2.5rem ra ngoài mép để luôn bị cắt.
+ *
+ * Kéo theo một ràng buộc: mọi điểm nhấn dùng EDGE phải cao ít nhất 5rem, không
+ * thì 2.5rem bị cắt ăn gần trọn hình và chỉ còn lại một vệt không đọc ra là gì.
+ */
 const EDGE = {
-  topLeft: "left-[6%] top-[8%]",
-  topRight: "right-[7%] top-[9%]",
-  bottomLeft: "bottom-[10%] left-[8%]",
-  bottomRight: "bottom-[9%] right-[8%]",
+  topLeft: "left-[-2.5rem] top-[-2.5rem]",
+  topRight: "right-[-2.5rem] top-[-2.5rem]",
+  bottomLeft: "bottom-[-2.5rem] left-[-2.5rem]",
+  bottomRight: "bottom-[-2.5rem] right-[-2.5rem]",
 } as const;
 
 function Glyph({
@@ -152,7 +173,7 @@ function EventLayer({ id }: { id: string }) {
               style={{ background: "repeating-linear-gradient(0deg, transparent 0 2px, rgba(255,255,255,0.02) 2px 3px)" }}
             />
           </m.div>
-          <Glyph name="moon" at="topRight" size="h-16 w-16" className="text-white/[0.07]" />
+          <Glyph name="moon" at="topRight" size="h-20 w-20" className="text-white/[0.07]" />
         </>
       );
     case "CLEARING_MIST":
@@ -184,19 +205,19 @@ function EventLayer({ id }: { id: string }) {
     case "CURFEW":
       return (
         <>
-          <div className="absolute inset-0 ring-[3px] ring-amber-500/30 ring-inset" />
+          <div className="absolute inset-0 ring-2 ring-amber-500/20 ring-inset" />
           <m.div
             className="absolute inset-0 bg-amber-500/5"
             animate={{ opacity: [0.05, 0.12, 0.05] }}
             transition={{ duration: 1.5, repeat: Infinity }}
           />
           <m.div
-            className={`absolute ${EDGE.topRight} h-24 w-24 rounded-full border-2 border-amber-400/20`}
+            className={`absolute ${EDGE.topRight} h-24 w-24 rounded-full border border-amber-400/15`}
             animate={{ scale: [1, 1.08, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
           />
           <m.div
-            className={`absolute ${EDGE.topRight} h-24 w-24 p-4 text-amber-300/30`}
+            className={`absolute ${EDGE.topRight} h-24 w-24 p-4 text-amber-300/18`}
             animate={{ rotate: 360 }}
             transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
           >
@@ -214,7 +235,7 @@ function EventLayer({ id }: { id: string }) {
         <>
           <div className="absolute inset-0 bg-gradient-to-b from-white/[0.06] via-sky-100/[0.03] to-transparent" />
           <m.div
-            className={`absolute ${EDGE.topRight} h-16 w-16 text-white/25`}
+            className={`absolute ${EDGE.topRight} h-20 w-20 text-white/15`}
             animate={{ y: [0, -8, 0], rotate: [-2, 2, -2] }}
             transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
           >
@@ -234,7 +255,7 @@ function EventLayer({ id }: { id: string }) {
           />
           <Motes count={12} size="h-1 w-1" color="bg-emerald-300/35" duration={9} />
           <m.div
-            className={`absolute ${EDGE.topRight} h-14 w-14 text-emerald-200/20`}
+            className={`absolute ${EDGE.topRight} h-20 w-20 text-emerald-200/20`}
             animate={{ scale: [1, 1.12, 1] }}
             transition={{ duration: 4, repeat: Infinity }}
           >
@@ -255,14 +276,14 @@ function EventLayer({ id }: { id: string }) {
             style={{ background: "repeating-linear-gradient(90deg, transparent 0 40px, rgba(220,38,64,0.04) 40px 41px)" }}
           />
           <m.div
-            className={`absolute ${EDGE.topLeft} h-10 w-10 rotate-12 text-blood-400/25`}
+            className={`absolute ${EDGE.topLeft} h-20 w-20 rotate-12 text-blood-400/16`}
             animate={{ y: [0, 5, 0] }}
             transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
           >
             <EventGlyph name="blood" className="h-full w-full" />
           </m.div>
           <m.div
-            className={`absolute ${EDGE.bottomRight} h-8 w-8 -rotate-12 text-blood-400/20`}
+            className={`absolute ${EDGE.bottomRight} h-20 w-20 -rotate-12 text-blood-400/14`}
             animate={{ y: [0, 4, 0] }}
             transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
           >
@@ -286,7 +307,7 @@ function EventLayer({ id }: { id: string }) {
             transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
           />
           <m.div
-            className={`absolute ${EDGE.bottomLeft} h-16 w-16 text-black/25 blur-[1px]`}
+            className={`absolute ${EDGE.bottomLeft} h-20 w-20 text-black/25 blur-[1px]`}
             animate={{ x: [0, 12, 0], opacity: [0.5, 0.9, 0.5] }}
             transition={{ duration: 4, repeat: Infinity }}
           >
@@ -299,12 +320,12 @@ function EventLayer({ id }: { id: string }) {
         <>
           <div className="absolute inset-0 bg-gradient-to-t from-amber-600/18 via-amber-900/8 to-transparent" />
           <m.div
-            className={`absolute ${EDGE.bottomRight} h-24 w-24 rounded-full border-2 border-amber-400/25`}
+            className={`absolute ${EDGE.bottomRight} h-24 w-24 rounded-full border border-amber-400/15`}
             animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0.2, 0.5] }}
             transition={{ duration: 2, repeat: Infinity }}
           />
           <m.div
-            className={`absolute ${EDGE.bottomRight} h-24 w-24 p-6 text-amber-300/30`}
+            className={`absolute ${EDGE.bottomRight} h-24 w-24 p-6 text-amber-300/18`}
             animate={{ scale: [1, 1.08, 1] }}
             transition={{ duration: 1.5, repeat: Infinity }}
           >
@@ -317,7 +338,7 @@ function EventLayer({ id }: { id: string }) {
         <>
           <div className="absolute inset-0 bg-blood-900/10" />
           <m.div
-            className={`absolute ${EDGE.topRight} h-20 w-20 text-blood-400/25`}
+            className={`absolute ${EDGE.topRight} h-20 w-20 text-blood-400/16`}
             animate={{ scale: [1, 1.14, 1] }}
             transition={{ duration: 1.6, repeat: Infinity }}
           >
@@ -326,7 +347,7 @@ function EventLayer({ id }: { id: string }) {
           {[0, 1, 2].map((i) => (
             <m.div
               key={i}
-              className={`absolute ${EDGE.topRight} h-20 w-20 rounded-full border border-blood-400/15`}
+              className={`absolute ${EDGE.topRight} h-20 w-20 rounded-full border border-blood-400/10`}
               animate={{ scale: [0.8, 1.8], opacity: [0.4, 0] }}
               transition={{ duration: 2, repeat: Infinity, delay: i * 0.6 }}
             />
@@ -338,12 +359,12 @@ function EventLayer({ id }: { id: string }) {
         <>
           <div className="absolute inset-0 bg-sky-900/12 backdrop-contrast-110" />
           <m.div
-            className={`absolute ${EDGE.topRight} h-28 w-28 rounded-full border border-sky-400/15`}
+            className={`absolute ${EDGE.topRight} h-28 w-28 rounded-full border border-sky-400/10`}
             animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.5, 0.3] }}
             transition={{ duration: 3, repeat: Infinity }}
           />
           <m.div
-            className={`absolute ${EDGE.topRight} h-28 w-28 p-7 text-sky-200/20`}
+            className={`absolute ${EDGE.topRight} h-28 w-28 p-7 text-sky-200/14`}
             animate={{ scale: [1, 1.08, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
           >
@@ -361,7 +382,7 @@ function EventLayer({ id }: { id: string }) {
         <>
           <div className="absolute inset-0 bg-amber-900/14 ring-1 ring-amber-500/20 ring-inset" />
           <m.div
-            className={`absolute ${EDGE.topRight} h-20 w-20 text-amber-200/25`}
+            className={`absolute ${EDGE.topRight} h-20 w-20 text-amber-200/16`}
             animate={{ rotate: [-3, 3, -3] }}
             transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
           >
@@ -374,7 +395,7 @@ function EventLayer({ id }: { id: string }) {
         <>
           <div className="absolute inset-0 bg-sky-800/8" />
           <m.div
-            className={`absolute ${EDGE.topRight} h-14 w-14 rotate-3 text-sky-200/20`}
+            className={`absolute ${EDGE.topRight} h-20 w-20 rotate-3 text-sky-200/14`}
             animate={{ y: [0, -4, 0] }}
             transition={{ duration: 3, repeat: Infinity }}
           >
@@ -392,7 +413,7 @@ function EventLayer({ id }: { id: string }) {
         <>
           <div className="absolute inset-0 bg-violet-950/18" />
           <m.div
-            className={`absolute ${EDGE.bottomLeft} h-20 w-20 text-violet-200/20 blur-[0.5px]`}
+            className={`absolute ${EDGE.bottomLeft} h-20 w-20 text-violet-200/14 blur-[0.5px]`}
             animate={{ y: [0, -10, 0], opacity: [0.7, 1, 0.7] }}
             transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
           >
