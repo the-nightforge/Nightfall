@@ -10,7 +10,7 @@ import {
 import type { Identity } from "@/lib/identity";
 import { generateWarnings, PRESET_DECKS } from "@/lib/balance";
 import { balanceCopy } from "@/lib/balance-copy";
-import { deckCounts, isPresetDeck, startBlock, type StartBlock } from "@/lib/lobby-summary";
+import { deckCounts, deckStage, isPresetDeck, startBlock, type StartBlock } from "@/lib/lobby-summary";
 import { BalanceMeter } from "./BalanceMeter";
 import { RoleDeckPanel } from "./RoleDeckPanel";
 
@@ -60,45 +60,63 @@ export function Lobby({
     (player) => !player.isBot && player.id !== snapshot.hostId && !player.ready,
   );
 
-  // Cùng ba đầu vào, cùng thứ tự ưu tiên như bản cũ - startBlock chỉ gói lại
-  // chứ không đổi luật nào.
+  // Ưu tiên kết quả server; generateWarnings chỉ để xem trước tức thì lúc host
+  // vừa gạt một công tắc và snapshot mới chưa về.
+  const mode = config.mode ?? "ranked";
+  const balance = snapshot.balanceWarning ?? generateWarnings(config, count);
+  // Chế độ đi vào đây để thẻ cảnh báo biết mình đang CHẶN hay chỉ đang nhắc:
+  // Chaos bỏ qua chặn cân bằng, đúng như server.
+  const copy = balanceCopy(balance, count, mode);
+  const counts = deckCounts(config, count);
+  const onPreset = isPresetDeck(config, count);
+  const presetForCount = PRESET_DECKS[count];
+  const stage = deckStage(count);
+
+  // Cùng bộ đầu vào và cùng thứ tự ưu tiên mà `RoomService.start` dùng -
+  // startBlock chỉ gói lại chứ không đổi luật nào.
   const configError = validateRoomConfig(config, count);
   const block = startBlock({
     playerCount: count,
     configError,
+    balanceBlocking: balance.blocking,
+    mode,
     unreadyNames: unreadyGuests.map((player) => player.name),
   });
-
-  // Ưu tiên kết quả server; generateWarnings chỉ để xem trước tức thì lúc host
-  // vừa gạt một công tắc và snapshot mới chưa về.
-  const balance = snapshot.balanceWarning ?? generateWarnings(config, count);
-  const copy = balanceCopy(balance, count);
-  const counts = deckCounts(config, count);
-  const onPreset = isPresetDeck(config, count);
-  const presetForCount = PRESET_DECKS[count];
-  const mode = config.mode ?? "ranked";
 
   return (
     <div className="space-y-3 lg:space-y-4">
       <section className="card space-y-4 p-4 lg:p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <h2 className="font-display text-xl font-bold text-white lg:text-2xl">Thiết lập trận</h2>
-          <span className="text-sm text-mist/80">Bộ bài cho {count} người</span>
+          <span className="text-sm text-mist-strong/85">{stage.summary}</span>
         </div>
 
+        {/*
+          * Hai chip đầu đếm thẳng từ cấu hình nên lúc nào cũng đúng. Hai chip
+          * còn lại thì KHÔNG: nhãn preset khẳng định bộ bài hợp lệ cho số người
+          * hiện tại, còn "Dân Làng" là phần còn lại sau khi trừ bài khỏi người -
+          * ở phòng 1 người nó ra "0 Dân Làng", một con số đúng về số học và vô
+          * nghĩa về trò chơi.
+          */}
         <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={`rounded-full border px-3 py-1.5 text-xs font-bold ${
-              onPreset
-                ? "border-emerald-500/45 bg-emerald-900/30 text-emerald-200"
-                : "border-amber-500/45 bg-amber-900/25 text-amber-200"
-            }`}
-          >
-            {onPreset ? `Preset chuẩn ${count} người` : "Bộ bài tuỳ chỉnh"}
-          </span>
+          {stage.rated ? (
+            <span
+              className={`rounded-full border px-3 py-1.5 text-xs font-bold ${
+                onPreset
+                  ? "border-emerald-500/45 bg-emerald-900/30 text-emerald-200"
+                  : "border-amber-500/45 bg-amber-900/25 text-amber-200"
+              }`}
+            >
+              {onPreset ? `Preset chuẩn ${count} người` : "Bộ bài tuỳ chỉnh"}
+            </span>
+          ) : (
+            <span className="rounded-full border border-night-600 bg-night-800/70 px-3 py-1.5 text-xs font-bold text-mist">
+              Vai trò đang bật
+            </span>
+          )}
           <Chip tone="wolves">{counts.wolves} Ma Sói</Chip>
           <Chip tone="village">{counts.specials} chức năng</Chip>
-          <Chip tone="plain">{counts.villagers} Dân Làng</Chip>
+          {stage.rated && <Chip tone="plain">{counts.villagers} Dân Làng</Chip>}
         </div>
 
         <ModeToggle
@@ -107,19 +125,38 @@ export function Lobby({
           onChange={(next) => onUpdateConfig({ ...config, mode: next })}
         />
 
-        <BalanceMeter score={balance.score} />
+        {/*
+          * Dưới mốc bắt đầu KHÔNG chấm cân bằng.
+          *
+          * `calculateBalanceScore` vẫn trả về một con số cho bàn 1 người, và
+          * `PRESET_DECKS` phủ đúng 6..15 nên nó luôn kèm "Không có preset". Kết
+          * quả ở bản cũ: phòng 1 người hiện một thanh cân bằng 58 điểm, một
+          * cảnh báo đội hình nghiêng, và một câu bảo "Bạn vẫn chơi được" - ngay
+          * dưới dòng header nói còn thiếu 5 người. Chấm điểm một bàn chưa tồn
+          * tại thì mọi câu chữ sinh ra từ nó đều mâu thuẫn với phần còn lại.
+          */}
+        {stage.rated ? (
+          <BalanceMeter score={balance.score} />
+        ) : (
+          <p
+            data-testid="balance-pending"
+            className="rounded-xl border border-night-600/60 bg-night-900/50 px-3.5 py-3 text-[13px] leading-relaxed text-mist-strong"
+          >
+            {stage.pending}
+          </p>
+        )}
 
-        {copy.advice.length > 0 && (
+        {stage.rated && copy.advice.length > 0 && (
           <div
             data-testid="balance-warning"
             className={`rounded-xl border px-3.5 py-3 ${
-              copy.blocking
+              copy.blocksStart
                 ? "border-blood-500/45 bg-blood-600/15"
                 : "border-amber-500/35 bg-amber-500/10"
             }`}
           >
             <p
-              className={`text-sm font-bold ${copy.blocking ? "text-blood-400" : "text-amber-200"}`}
+              className={`text-sm font-bold ${copy.blocksStart ? "text-blood-400" : "text-amber-200"}`}
             >
               {copy.headline}
             </p>
@@ -134,11 +171,6 @@ export function Lobby({
                 <li key={index}>{line}</li>
               ))}
             </ul>
-            {copy.blocking && mode === "ranked" && (
-              <p className="mt-2 text-[13px] text-blood-300">
-                Chuyển sang Chaos hoặc sửa bộ bài để bắt đầu.
-              </p>
-            )}
             {isHost && presetForCount && (
               <button
                 type="button"
@@ -187,7 +219,7 @@ export function Lobby({
           <BlockReason block={block} isHost={isHost} />
 
           {isHost && count < MAX_PLAYERS_PER_ROOM && (
-            <p className="mt-2 text-center text-xs text-mist/70">
+            <p className="mt-2 text-center text-[13px] leading-relaxed text-mist-strong/85">
               Bot dùng để chơi thử một mình — người thật vẫn vào được cho tới khi đủ{" "}
               {MAX_PLAYERS_PER_ROOM} người.
             </p>
@@ -279,7 +311,7 @@ function Disclosure({
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg transition hover:text-white">
         <span>
           <span className="font-display text-lg font-semibold text-white">{summary}</span>
-          <span className="block text-sm text-mist/80">{hint}</span>
+          <span className="block text-sm text-mist-strong/85">{hint}</span>
         </span>
         <span
           aria-hidden="true"
@@ -306,6 +338,21 @@ function BlockReason({ block, isHost }: { block: StartBlock; isHost: boolean }) 
     return (
       <p className="mt-2.5 text-center text-sm text-mist/85" data-testid="start-block">
         Cần thêm <b className="text-white">{block.missing}</b> người để bắt đầu.
+      </p>
+    );
+  }
+  /*
+   * Lý do này trước đây KHÔNG tồn tại ở client.
+   *
+   * Server từ chối `room:start` bằng BALANCE_UNSTABLE khi đội hình mất cân bằng
+   * và phòng đang ở Ranked, nhưng nút vẫn sáng - host bấm và nhận về một dòng
+   * lỗi đỏ chép nguyên văn cảnh báo của engine. Câu ở đây nói ra cả hai lối
+   * thoát mà server chấp nhận.
+   */
+  if (block.kind === "balance") {
+    return (
+      <p className="mt-2.5 text-center text-sm text-blood-400" data-testid="start-block">
+        Đội hình chưa đủ cân bằng để bắt đầu Ranked. Hãy sửa bộ bài hoặc chuyển sang Chaos.
       </p>
     );
   }
@@ -374,7 +421,10 @@ function ModeToggle({
           } ${isHost ? "cursor-pointer" : "cursor-default"}`}
         >
           <span className="block">{option.label}</span>
-          <span className="mt-0.5 block text-[11px] font-medium opacity-80">{option.hint}</span>
+          {/* 11px là cỡ chữ nhỏ nhất trên trang này và nó nằm ngay dưới nhãn
+            * đậm 14px - ở khoảng cách ngồi chơi thật thì nó chỉ còn là một vệt
+            * xám. Lên 12px và bớt mờ đi một nấc. */}
+          <span className="mt-0.5 block text-xs font-medium opacity-90">{option.hint}</span>
         </button>
       ))}
     </div>

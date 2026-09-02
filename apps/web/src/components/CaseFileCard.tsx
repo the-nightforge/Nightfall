@@ -24,24 +24,21 @@ export function CaseFileCard({ file }: { file: CaseFile }) {
   const accent = wolvesWin ? "text-blood-400" : "text-emerald-300";
 
   return (
-    <section
-      className="lobby-roster-scroll card space-y-4 lg:max-h-[calc(100dvh-40.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1"
-      aria-labelledby="case-file-heading"
-    >
+    <section className="card space-y-4" aria-labelledby="case-file-heading">
       <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <div className="min-w-0">
-          <p className="text-[11px] uppercase tracking-[0.3em] text-mist/65">Hồ sơ vụ án</p>
+          <p className="text-xs uppercase tracking-[0.3em] text-mist">Hồ sơ vụ án</p>
           <h3 id="case-file-heading" className={`font-display text-xl font-bold ${accent}`}>
             {file.caseId}
           </h3>
         </div>
-        <p className="text-xs text-mist/70">
+        <p className="text-[13px] text-mist-strong">
           {file.rounds} vòng · {file.cast.length} người chơi
         </p>
       </header>
 
       {file.fallback ? (
-        <p className="rounded-lg bg-night-800/50 px-3 py-3 text-sm text-mist/75">
+        <p className="rounded-lg bg-night-800/50 px-3 py-3 text-sm leading-relaxed text-mist-strong">
           {file.highlights[0].description}
         </p>
       ) : (
@@ -56,7 +53,7 @@ export function CaseFileCard({ file }: { file: CaseFile }) {
                 <span
                   className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ${
                     highlight.phase === "night"
-                      ? "bg-night-700 text-mist/80"
+                      ? "bg-night-700 text-mist-bright"
                       : "bg-amber-900/40 text-amber-300"
                   }`}
                 >
@@ -67,7 +64,7 @@ export function CaseFileCard({ file }: { file: CaseFile }) {
                 </h4>
               </div>
               {/* break-words: biệt danh dài viết liền không được đẩy ngang cả thẻ. */}
-              <p className="mt-1 break-words text-sm text-mist/80">{highlight.description}</p>
+              <p className="mt-1 break-words text-sm leading-relaxed text-mist-strong">{highlight.description}</p>
             </m.li>
           ))}
         </ol>
@@ -75,20 +72,20 @@ export function CaseFileCard({ file }: { file: CaseFile }) {
 
       {file.timeline.length > 0 && (
         <div className="border-t border-white/[0.06] pt-3">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-mist/60">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-mist">
             Dòng thời gian
           </p>
           <ol className="space-y-1">
             {file.timeline.map((entry, index) => (
               <li
                 key={`${entry.round}-${entry.phase}-${entry.playerId}-${index}`}
-                className="flex flex-wrap items-baseline gap-x-1.5 text-xs"
+                className="flex flex-wrap items-baseline gap-x-1.5 text-[13px]"
               >
-                <span className="shrink-0 text-mist/50">
+                <span className="shrink-0 text-mist">
                   {momentLabel(entry.round, entry.phase)}
                 </span>
                 <span className="min-w-0 break-words font-semibold text-white">{entry.name}</span>
-                <span className="text-mist/70">
+                <span className="text-mist-strong">
                   {entry.kind === "cursed-turned"
                     ? "hoá Ma Sói"
                     : CAUSE_LABEL[entry.cause ?? "wolf"]}

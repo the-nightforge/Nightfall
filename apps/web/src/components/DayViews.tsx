@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
 import { OpenVotePanel } from "./OpenVotePanel";
 import { PlayerGrid } from "./PlayerGrid";
 import { VoteHistoryPanel } from "./VoteHistoryPanel";
 import { DayOfTruthModal } from "./DayOfTruthModal";
 import { DeadWhisperPanel } from "./DeadWhisperPanel";
+import { leaderLabel, voteProgressOf } from "@/lib/vote-progress";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -32,6 +33,55 @@ export function DayView({
   // ai" cũng có myVote === null, và khoá UI theo myVote sẽ để ngỏ lá phiếu đó.
   const hasVoted = snapshot.hasVoted;
   const discussionSkip = snapshot.discussionSkip;
+  const leader = isVoting ? leaderLabel(voteProgressOf(snapshot)) : null;
+
+  /*
+   * Lá phiếu vừa gửi mà snapshot chưa xác nhận.
+   *
+   * Gửi phiếu là một event socket không có phản hồi trực tiếp: bằng chứng duy
+   * nhất rằng máy chủ đã nhận là snapshot kế tiếp. Giữa hai mốc đó nút phải nói
+   * là "đang gửi" và không được bấm lại - trước đây bấm nhanh ba cái là bắn ba
+   * event y hệt nhau.
+   *
+   * KHÔNG đổi payload, không đổi tên event, không tự đoán kết quả: đây thuần
+   * là trạng thái hiển thị của nút trong lúc chờ.
+   */
+  const [pending, setPending] = useState<{ target: string | null } | null>(null);
+
+  useEffect(() => {
+    if (!pending) return;
+    // Snapshot đã mang đúng lá phiếu vừa gửi -> hết chờ.
+    if (snapshot.hasVoted && snapshot.myVote === pending.target) {
+      setPending(null);
+      return;
+    }
+    /*
+     * Chốt chặn: máy chủ có thể từ chối lá phiếu (hết giờ, vừa chết) và khi đó
+     * snapshot không bao giờ khớp. Không có hạn này thì nút kẹt ở "đang gửi"
+     * vĩnh viễn và người chơi mất luôn quyền bỏ phiếu ở vòng sau.
+     */
+    const timer = setTimeout(() => setPending(null), 4_000);
+    return () => clearTimeout(timer);
+  }, [pending, snapshot.hasVoted, snapshot.myVote]);
+
+  // Sang pha hoặc sang vòng khác thì mọi thứ đang chờ đều hết nghĩa.
+  useEffect(() => setPending(null), [snapshot.phase, snapshot.round]);
+
+  const sending = pending !== null;
+  // Ô đang sáng trên lưới: ý định chưa gửi, hoặc lá phiếu đã gửi nếu chưa đổi ý.
+  const effectiveTarget = selected ?? myVote;
+  const targetName = effectiveTarget
+    ? (snapshot.players.find((p) => p.id === effectiveTarget)?.name ?? null)
+    : null;
+  // Đang trỏ đúng vào lá phiếu đã nằm trên bàn -> không có gì để gửi nữa.
+  const alreadyCast = hasVoted && effectiveTarget === myVote;
+  const noElimCast = hasVoted && myVote === null;
+
+  const castVote = (target: string | null) => {
+    if (sending) return;
+    setPending({ target });
+    onVote(target);
+  };
 
   return (
     <div className="space-y-4">
@@ -41,7 +91,7 @@ export function DayView({
             snapshot.lastNightDeaths.length > 0 ? "border-blood-500/40" : "border-emerald-500/30"
           }`}
         >
-          <p className="text-xs uppercase tracking-[0.3em] text-mist/65">Trời đã sáng</p>
+          <p className="text-[13px] uppercase tracking-[0.3em] text-mist-strong">Trời đã sáng</p>
           {snapshot.lastNightDeaths.length > 0 ? (
             <>
               <h3 className="mt-2 font-display text-3xl font-bold text-blood-400">
@@ -60,52 +110,148 @@ export function DayView({
       )}
 
       {isVoting && (
-        <div className={`card ${dead ? "opacity-70" : ""}`}>
-          <h3 className="mb-1 font-display text-2xl font-bold text-white">
-            {dead ? "Bạn đã chết" : "Ai là Ma Sói?"}
-          </h3>
+        /*
+         * KHÔNG còn `opacity-70` cho người đã chết.
+         *
+         * Làm mờ cả thẻ là làm mờ luôn tên người chơi, số phiếu và lịch sử -
+         * đúng những thứ mà người đã chết chỉ còn mỗi việc là ngồi đọc. Trạng
+         * thái "bạn đã chết" nói bằng một dải riêng bên dưới, và mọi ô người
+         * chơi thì đã tự tắt (disabled) sẵn.
+         */
+        <div className="card">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+            <div className="min-w-0">
+              {/*
+                * Tên pha giữ nguyên kể cả khi người xem đã chết.
+                *
+                * Bản cũ đổi hẳn tiêu đề thành "Bạn đã chết": tình trạng riêng
+                * của một người chiếm mất dòng chữ to nhất màn hình, và người
+                * chơi mất luôn dấu hiệu rằng cả làng ĐANG bỏ phiếu.
+                */}
+              <h3 className="font-display text-2xl font-bold text-white lg:text-[1.75rem]">
+                Ai là Ma Sói?
+              </h3>
+              <p className="mt-1 text-sm text-mist-strong">
+                Vòng này chỉ chọn ra bị cáo, chưa ai bị treo.
+              </p>
+            </div>
+            {/* Ai đang bị dồn phiếu - câu hỏi thứ hai của cả vòng, sau "còn bao
+              * lâu". Trước đây phải tự nhẩm bằng cách quét hết các huy hiệu số
+              * trên lưới. */}
+            {leader && (
+              <p className="shrink-0 rounded-lg border border-blood-500/30 bg-blood-600/15 px-2.5 py-1.5 text-[13px] font-semibold text-blood-400">
+                <span className="mr-1" aria-hidden="true">🔥</span>
+                {leader}
+              </p>
+            )}
+          </div>
+
           {snapshot.you?.role === "MAYOR" && (
-            <p className="mb-2 inline-block rounded-full border border-amber-500/40 bg-amber-950/40 px-3 py-1 text-xs font-bold text-amber-300">
+            <p className="mb-2 inline-block rounded-full border border-amber-500/40 bg-amber-950/40 px-3 py-1 text-[13px] font-bold text-amber-200">
               👑 Bạn là Thị Trưởng (Phiếu của bạn có trọng số x2)
             </p>
           )}
-          <p className="mb-3 text-sm text-mist/60">
-            {dead
-              ? "Bạn theo dõi được nhưng không bỏ phiếu."
-              : "Vòng này chỉ chọn ra bị cáo, chưa ai bị treo."}
-          </p>
           {hasVoted && !dead && (
             <p className="mb-2 text-sm text-emerald-300">
-              {myVote
-                ? `Bạn đã bỏ phiếu cho ${snapshot.players.find((p) => p.id === myVote)?.name}.`
-                : "Bạn đã chọn không treo ai."}
-              {" Bạn vẫn có thể đổi phiếu tới khi hết giờ."}
+              Bạn vẫn có thể đổi phiếu tới khi hết giờ.
             </p>
           )}
           <PlayerGrid
             snapshot={snapshot}
             selectable={!dead}
-            selectedId={selected ?? myVote}
+            selectedId={effectiveTarget}
+            confirmedId={hasVoted ? myVote : null}
             onSelect={setSelected}
           />
           {!dead ? (
             <>
+              {/*
+                * Nút chính nói ĐÚNG chuyện đang xảy ra, không phải một chữ
+                * "Bỏ phiếu" đứng yên qua mọi trạng thái:
+                *
+                *   chưa chọn ai  -> xám, "Chọn một người để bỏ phiếu"
+                *   đã chọn       -> đỏ,  "Bỏ phiếu cho <tên>"
+                *   đang gửi      -> vòng quay, khoá lại để không bắn trùng
+                *   đã gửi xong   -> xanh, "Đã bỏ phiếu cho <tên>"
+                *
+                * Trạng thái tắt KHÔNG dùng `disabled:opacity-40` mặc định của
+                * `.btn`: nền đỏ mờ đi đọc ra như một nút hỏng. Nó đổi hẳn sang
+                * xám trung tính mà chữ vẫn rõ - cùng cách `.btn-cta` xử lý.
+                */}
               <button
-                className="btn-primary mt-3 w-full"
-                disabled={!selected}
-                onClick={() => selected && onVote(selected)}
+                className={`mt-3 w-full ${
+                  alreadyCast && !sending
+                    ? "btn border border-emerald-500/45 bg-emerald-600/15 text-emerald-200 disabled:cursor-default disabled:opacity-100"
+                    : // Trạng thái tắt phải trông như một CHỖ TRỐNG chờ được
+                      // điền, không phải một cái nút khác: nền gần như trong
+                      // suốt + viền mảnh, tách hẳn khỏi nút "Không treo ai"
+                      // ngay bên dưới - cái đó đặc, có nền, và bấm được.
+                      "btn-primary disabled:bg-white/[0.04] disabled:text-mist-strong disabled:opacity-100 disabled:shadow-none disabled:ring-1 disabled:ring-inset disabled:ring-white/10"
+                }`}
+                disabled={sending || !effectiveTarget || alreadyCast}
+                aria-busy={sending}
+                onClick={() => effectiveTarget && castVote(effectiveTarget)}
               >
-                {hasVoted ? "Đổi phiếu" : "Bỏ phiếu"}
+                {sending && pending?.target !== null ? (
+                  <>
+                    <span className="gate-spinner" aria-hidden="true" />
+                    Đang gửi phiếu...
+                  </>
+                ) : alreadyCast && targetName ? (
+                  <>
+                    <span aria-hidden="true">✓</span>
+                    {/* Tên tối đa 20 ký tự nhưng nút thì hẹp dần theo cột: cắt
+                      * ở đây thay vì để nó đẩy toang thẻ. */}
+                    <span className="min-w-0 truncate">Đã bỏ phiếu cho {targetName}</span>
+                  </>
+                ) : !effectiveTarget ? (
+                  "Chọn một người để bỏ phiếu"
+                ) : (
+                  <span className="min-w-0 truncate">
+                    {hasVoted ? "Đổi phiếu sang" : "Bỏ phiếu cho"} {targetName}
+                  </span>
+                )}
               </button>
-              <button className="btn-secondary mt-2 w-full" onClick={() => onVote(null)}>
-                Không treo ai ({snapshot.noEliminationVoteCount} phiếu)
+              <button
+                className={`mt-2 w-full ${
+                  noElimCast && !sending
+                    ? "btn border border-emerald-500/45 bg-emerald-600/15 text-emerald-200 disabled:cursor-default disabled:opacity-100"
+                    : "btn-secondary"
+                }`}
+                disabled={sending || noElimCast}
+                aria-busy={sending}
+                onClick={() => castVote(null)}
+              >
+                {sending && pending?.target === null ? (
+                  <>
+                    <span className="gate-spinner" aria-hidden="true" />
+                    Đang gửi phiếu...
+                  </>
+                ) : (
+                  <>
+                    {noElimCast && <span aria-hidden="true">✓</span>}
+                    {noElimCast ? "Đã chọn không treo ai" : "Không treo ai"} (
+                    {snapshot.noEliminationVoteCount} phiếu)
+                  </>
+                )}
               </button>
             </>
           ) : (
-            // Người chết và người đã vote chỉ theo dõi tiến độ, không có thao tác.
-            <p className="mt-3 text-center text-xs text-mist/60">
-              Không treo ai: {snapshot.noEliminationVoteCount} phiếu
-            </p>
+            /*
+              * Người chết: chỗ của nút bấm là chỗ phải giải thích vì sao không
+              * có nút bấm. Một nút tắt trơ ra ở đây không nói được điều đó, mà
+              * một dòng chữ nhỏ ở đầu thẻ thì đọc xong đã quên khi cuộn tới
+              * lưới người chơi.
+              */
+            <div className="mt-3">
+              <p className="flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-night-800/70 px-3 py-2.5 text-center text-sm text-mist-bright">
+                <span aria-hidden="true">👁</span>
+                Bạn đã chết và chỉ có thể theo dõi - không bỏ phiếu được.
+              </p>
+              <p className="mt-2 text-center text-sm text-mist-strong">
+                Không treo ai: <b className="text-white">{snapshot.noEliminationVoteCount}</b> phiếu
+              </p>
+            </div>
           )}
           <OpenVotePanel snapshot={snapshot} />
         </div>
@@ -113,9 +259,9 @@ export function DayView({
 
       {snapshot.phase === "DAY_DISCUSSION" && (
         <div className="card py-7 text-center">
-          <p className="text-xs uppercase tracking-[0.3em] text-mist/65">Ban ngày</p>
+          <p className="text-[13px] uppercase tracking-[0.3em] text-mist-strong">Ban ngày</p>
           <h3 className="mt-2 font-display text-3xl font-bold text-amber-100">Thảo luận</h3>
-          <p className="mx-auto mt-2 max-w-sm text-sm text-mist/70">
+          <p className="mx-auto mt-2 max-w-md text-sm text-mist-strong">
             Ai đáng ngờ? Buộc tội, bào chữa, và để ý ai đang im lặng.
           </p>
 
@@ -125,11 +271,11 @@ export function DayView({
             * chứ không chỉ ở pha công bố.
             */}
           <div className="mx-auto mt-5 max-w-sm rounded-xl border border-white/[0.06] bg-night-800/50 px-4 py-3">
-            <p className="text-[11px] uppercase tracking-[0.25em] text-mist/60">Đêm vừa rồi</p>
+            <p className="text-xs uppercase tracking-[0.25em] text-mist-strong">Đêm vừa rồi</p>
             {snapshot.lastNightDeaths.length > 0 ? (
               <p className="mt-1 font-semibold text-blood-400">
                 {snapshot.lastNightDeaths.map((d) => d.name).join(" · ")}{" "}
-                <span className="font-normal text-mist/60">đã chết</span>
+                <span className="font-normal text-mist-strong">đã chết</span>
               </p>
             ) : (
               <p className="mt-1 font-semibold text-emerald-300">Không ai chết</p>
@@ -145,12 +291,12 @@ export function DayView({
                   {discussionSkip.hasVoted ? "Huỷ skip" : "Skip thảo luận"}
                   {` (${discussionSkip.votes}/${discussionSkip.required})`}
                 </button>
-                <p className="mt-1 text-xs text-mist/65">
+                <p className="mt-1 text-[13px] text-mist-strong">
                   Cần toàn bộ người thật còn sống và đang online đồng ý.
                 </p>
               </div>
             ) : (
-              <p className="mt-3 text-xs text-mist/60">
+              <p className="mt-3 text-[13px] text-mist-strong">
                 Người chơi còn sống muốn skip: {discussionSkip.votes}/{discussionSkip.required}
               </p>
             )
@@ -170,14 +316,14 @@ export function EliminationView({ snapshot }: { snapshot: RoomSnapshot }) {
   return (
     <div className="space-y-4">
       <div className="card py-7 text-center">
-        <p className="text-xs uppercase tracking-[0.3em] text-mist/65">Phán quyết của làng</p>
+        <p className="text-[13px] uppercase tracking-[0.3em] text-mist-strong">Phán quyết của làng</p>
           {snapshot.lastEliminated ? (
           <>
             <h3 className="mt-2 font-display text-3xl font-bold text-blood-400">
               {snapshot.lastEliminated.name}
             </h3>
-            <p className="mt-1 text-sm text-mist/70">đã bị treo cổ</p>
-            <p className="mt-3 text-xs text-mist/60">Vai trò sẽ được tiết lộ khi ván đấu kết thúc.</p>
+            <p className="mt-1 text-sm text-mist-strong">đã bị treo cổ</p>
+            <p className="mt-3 text-[13px] text-mist-strong">Vai trò sẽ được tiết lộ khi ván đấu kết thúc.</p>
           </>
         ) : snapshot.lastTrial ? (
         // Được tha là một kết cục riêng: lastEliminated === null không phân biệt
@@ -186,7 +332,7 @@ export function EliminationView({ snapshot }: { snapshot: RoomSnapshot }) {
           <h3 className="mt-2 font-display text-3xl font-bold text-emerald-300">
             {snapshot.lastTrial.accused.name} được tha
           </h3>
-          <p className="mt-1 text-sm text-mist/70">
+          <p className="mt-1 text-sm text-mist-strong">
             {snapshot.lastTrial.guilty} phiếu treo - {snapshot.lastTrial.innocent} phiếu tha
             {snapshot.lastTrial.abstain > 0 && `, ${snapshot.lastTrial.abstain} không bỏ phiếu`}.
           </p>

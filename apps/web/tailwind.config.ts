@@ -17,7 +17,31 @@ const config: Config = {
           600: "#b91c33",
           400: "#f04760",
         },
-        mist: "#9db2d5",
+        /*
+       * Sương - màu chữ phụ của cả trang.
+       *
+       * Trước đây chỉ có một sắc duy nhất, nên mọi chỗ cần chữ đọc rõ hơn đều
+       * phải tự pha bằng `text-white/85` hay một mã màu rời. Ba nấc dưới đây là
+       * ba VAI TRÒ, không phải ba sắc độ cho đẹp:
+       *
+       *   mist         - nhãn phụ, chú thích, thứ được phép chìm
+       *   mist-strong  - chữ nội dung: tin nhắn, tên trong lịch sử phiếu
+       *   mist-bright  - chữ gần như chính, dùng khi trắng nguyên là quá gắt
+       *
+       * mist-strong đo được 8.6:1 trên nền thẻ (#141d31) và 11:1 trên nền
+       * trang (#070b14) - trên ngưỡng AA cho chữ thường, còn `mist` gốc ở
+       * opacity 60-70% mà bản cũ rắc khắp nơi thì rơi xuống quanh 3:1.
+       *
+       * Hai nấc này vừa được nâng thêm một bậc so với lần đầu (#c2d2ea /
+       * #dde7f8): trên màn hình chỉnh sáng thấp, chữ phụ ở nấc cũ vẫn phải
+       * nheo mắt. Vẫn cách chữ trắng nguyên (15:1) đủ xa để thứ bậc không
+       * phẳng ra.
+       */
+      mist: {
+        DEFAULT: "#9db2d5",
+        strong: "#ccd9ef",
+        bright: "#e7eefb",
+      },
       },
       fontFamily: {
         // Tailwind preflight gán fontFamily.sans cho <html>, nên khai báo ở đây

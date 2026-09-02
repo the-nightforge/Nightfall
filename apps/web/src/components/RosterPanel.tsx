@@ -58,11 +58,18 @@ export function RosterPanel({ snapshot, lobby }: Props) {
     snapshot.activeEvent?.id === "DAY_OF_TRUTH" ? snapshot.dayOfTruthClaims : undefined;
 
   return (
-    <section className="card p-3.5 lg:p-4">
-      <div className="mb-2.5 flex items-baseline justify-between gap-2">
+    /*
+     * Trong ván thẻ này cao đúng bằng cột, và phần cuộn nằm ở danh sách bên
+     * trong. Trước đây nó cao theo nội dung rồi `sticky` bám mép trên: một
+     * phòng 6 người cho ra một thẻ cao chừng 320px lơ lửng ở góc trên trái của
+     * màn 1440x900, cạnh một cột chat cao gấp ba. Phòng chờ vẫn để nội dung
+     * quyết định chiều cao - ở đó cột này còn có bộ bài cuộn phía dưới.
+     */
+    <section className={`card p-3.5 lg:p-4 ${lobby ? "" : "lg:flex lg:h-full lg:min-h-0 lg:flex-col"}`}>
+      <div className="mb-2.5 flex shrink-0 items-baseline justify-between gap-2">
         <h3 className="font-display text-lg font-bold text-white">Người chơi</h3>
         {/* Đếm theo sức chứa phòng: "15/6" đọc như phòng đang quá tải. */}
-        <span className="shrink-0 text-sm font-semibold text-mist/85">
+        <span className="shrink-0 text-sm font-semibold text-mist-strong">
           {lobby ? `${count}/${MAX_PLAYERS_PER_ROOM}` : `${alive}/${count} sống`}
         </span>
       </div>
@@ -75,7 +82,11 @@ export function RosterPanel({ snapshot, lobby }: Props) {
         * người cuối không bao giờ thấy được. Chỉ bó từ lg - dưới đó cột nằm
         * trong dòng chảy của trang và cuộn cùng trang là đúng.
         */}
-      <ul className="lobby-roster-scroll space-y-1 lg:max-h-[calc(100dvh-16rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
+      <ul
+        className={`lobby-roster-scroll space-y-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-1 ${
+          lobby ? "lg:max-h-[calc(100dvh-16rem)]" : "lg:min-h-0 lg:flex-1"
+        }`}
+      >
         {snapshot.players.map((player, index) => {
           const votes = player.voteCount ?? 0;
           const isMe = player.id === meId;
@@ -86,7 +97,17 @@ export function RosterPanel({ snapshot, lobby }: Props) {
           const claim = claims?.[player.id];
           const claimed = claims ? player.id in claims : false;
           const isPending = snapshot.pendingLastStandVictim?.playerId === player.id;
-          const hasTags = isRoomHost || player.isBot || !!player.role || offline || claimed || isPending;
+          /*
+           * Bot KHÔNG còn nằm ở dòng nhãn.
+           *
+           * Một phòng thường có 4-5 bot, và một cột dọc hẹp lặp lại năm lần cái
+           * nhãn "🤖 Bot" đọc ra như thể "bot" là thông tin quan trọng nhất về
+           * mỗi người - trong khi thứ người chơi thật sự quét cột này để tìm là
+           * ai còn sống và ai đang bị dồn phiếu. Nó xuống thành một dấu nhỏ ở
+           * góc ảnh đại diện (có title + nhãn cho trình đọc màn hình), và nhờ
+           * đó phần lớn các hàng bot rút từ hai dòng xuống còn một.
+           */
+          const hasTags = isRoomHost || !!player.role || offline || claimed || isPending;
           // Identity của LiveKit chính là playerId nên đối chiếu thẳng.
           const speaking = speakers.has(player.id);
           return (
@@ -126,15 +147,72 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                       <span className="h-[1.5px] w-7 rotate-45 rounded bg-blood-500/70" />
                     </span>
                   )}
+                  {/*
+                    * Dấu bot nằm ở GÓC ẢNH, không nằm trên dòng chữ.
+                    *
+                    * Cột này rộng 224-240px và đã phải chia cho ảnh, tên, huy
+                    * hiệu phiếu; thêm một con chip chữ nữa là tên bị cắt cụt
+                    * ("Trường Gia...") ở đúng những hàng mà người chơi cần đọc
+                    * tên nhất. Đặt lên góc ảnh thì nó không lấy một pixel bề
+                    * ngang nào của cái tên.
+                    */}
+                  {/*
+                    * Đổi ảnh đại diện nằm NGAY TRÊN ảnh của chính mình.
+                    *
+                    * Trước đây nó là một nút chạy hết bề ngang ở đáy cột, cách
+                    * hàng của người chơi cả một danh sách 15 người: đọc ra như
+                    * một mục cài đặt của cả phòng chứ không phải "ảnh của tôi".
+                    * Dán lên góc ảnh thì không còn phải đoán nó tác động lên
+                    * ai. Chỉ mọc ra trên ảnh của người xem, và chỉ trong ván -
+                    * ở phòng chờ chức năng này thuộc về LobbyHeader.
+                    */}
+                  {!lobby && isMe && (
+                    <button
+                      type="button"
+                      className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-night-800 text-xs leading-none ring-1 ring-white/25 transition hover:bg-night-700 hover:ring-white/60"
+                      aria-label="Đổi ảnh đại diện"
+                      title="Đổi ảnh đại diện"
+                      aria-expanded={showPicker}
+                      onClick={() => setShowPicker((v) => !v)}
+                    >
+                      <span aria-hidden="true">📷</span>
+                    </button>
+                  )}
+                  {player.isBot && (
+                    <span
+                      className="absolute -bottom-0.5 -right-0.5 grid h-5 w-5 place-items-center rounded-full bg-night-900 text-[11px] leading-none ring-1 ring-white/25"
+                      title="Bot - do máy điều khiển"
+                      aria-label="Bot, do máy điều khiển"
+                      role="img"
+                    >
+                      <span aria-hidden="true">🤖</span>
+                    </span>
+                  )}
                 </span>
 
-                <span
-                  className={`min-w-0 flex-1 truncate text-[15px] font-semibold ${
-                    player.alive ? "text-white" : "text-mist/70 line-through"
-                  }`}
-                  title={player.name}
-                >
-                  {player.name}
+                <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                  {/*
+                   * Người chết vẫn phải ĐỌC được: cột này là nơi tra "ai đã ra
+                   * khỏi ván", nên một cái tên mờ tới mức đoán chữ thì đúng cái
+                   * việc duy nhất của nó cũng hỏng. mist-strong đạt 7:1 trên nền
+                   * thẻ, còn dấu hiệu "đã chết" nằm ở GẠCH NGANG cộng vạch chéo
+                   * trên ảnh - hai tín hiệu không phải màu.
+                   */}
+                  <span
+                    className={`min-w-0 truncate text-[15px] font-semibold ${
+                      player.alive ? "text-white" : "text-mist-strong line-through"
+                    }`}
+                    title={player.name}
+                  >
+                    {player.name}
+                  </span>
+                  {/* Trình đọc màn hình không "thấy" được gạch ngang. */}
+                  {!player.alive && <span className="sr-only">(đã chết)</span>}
+                  {isMe && (
+                    <span className="shrink-0 rounded bg-indigo-500/25 px-1 py-px text-xs font-bold leading-tight text-indigo-100 ring-1 ring-indigo-400/40">
+                      Bạn
+                    </span>
+                  )}
                 </span>
 
                 {lobby ? (
@@ -148,7 +226,15 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0.4, opacity: 0, transition: { duration: 0.12 } }}
                         transition={{ type: "spring", stiffness: 600, damping: 22 }}
-                        className="grid h-5 min-w-[20px] shrink-0 place-items-center rounded-full bg-blood-600 px-1 text-[11px] font-bold text-white"
+                        className="grid h-[22px] min-w-[22px] shrink-0 place-items-center rounded-full bg-blood-600 px-1.5 text-xs font-bold text-white"
+                        /*
+                         * Một chấm đỏ chứa số "3" không tự nói nó là số phiếu -
+                         * nó cũng có thể là tin nhắn chưa đọc hay số lần bị soi.
+                         * title cho chuột, aria-label cho trình đọc màn hình.
+                         */
+                        title={`${votes} phiếu đang nhắm vào ${player.name}`}
+                        aria-label={`${votes} phiếu`}
+                        role="status"
                       >
                         {votes}
                       </m.span>
@@ -158,7 +244,7 @@ export function RosterPanel({ snapshot, lobby }: Props) {
 
                 {lobby?.isHost && player.id !== meId && (
                   <button
-                    className="inline-flex shrink-0 items-center gap-0.5 rounded-md bg-blood-600/15 px-1.5 py-1 text-[11px] font-bold text-blood-400 transition hover:bg-blood-600/30 hover:text-blood-300"
+                    className="inline-flex shrink-0 items-center gap-0.5 rounded-md bg-blood-600/15 px-1.5 py-1 text-xs font-bold text-blood-400 transition hover:bg-blood-600/30 hover:text-blood-300"
                     aria-label={`Kick ${player.name}`}
                     onClick={() => lobby.onKick(player.id)}
                   >
@@ -167,21 +253,25 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                 )}
               </div>
 
+              {!lobby && isMe && showPicker && (
+                <div className="mt-2 rounded-lg border border-white/10 bg-night-900/70 p-2">
+                  <AvatarPicker
+                    currentUrl={snapshot.you?.avatarUrl ?? null}
+                    onDone={() => setShowPicker(false)}
+                  />
+                </div>
+              )}
+
               {hasTags && (
                 <div className="ml-[46px] mt-1 flex flex-wrap items-center gap-1 sm:ml-[50px]">
                   {isRoomHost && (
-                    <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[11px] font-bold text-amber-200 ring-1 ring-amber-400/40">
+                    <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-xs font-bold text-amber-200 ring-1 ring-amber-400/40">
                       <span aria-hidden="true">👑</span> Chủ phòng
-                    </span>
-                  )}
-                  {player.isBot && (
-                    <span className="inline-flex items-center gap-1 rounded bg-slate-700/70 px-1.5 py-0.5 text-[11px] font-bold text-slate-100">
-                      <span aria-hidden="true">🤖</span> Bot
                     </span>
                   )}
                   {player.role && (
                     <span
-                      className={`max-w-full truncate rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                      className={`max-w-full truncate rounded px-1.5 py-0.5 text-xs font-semibold ${
                         ROLE_META[player.role].team === "wolves"
                           ? "bg-blood-600/70 text-white"
                           : "bg-emerald-900/80 text-emerald-200"
@@ -191,7 +281,7 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                     </span>
                   )}
                   {claimed && (
-                    <span className="inline-flex max-w-full items-center gap-0.5 truncate rounded bg-sky-600/20 px-1.5 py-0.5 text-[11px] font-bold text-sky-200 ring-1 ring-sky-500/30">
+                    <span className="inline-flex max-w-full items-center gap-0.5 truncate rounded bg-sky-600/20 px-1.5 py-0.5 text-xs font-bold text-sky-200 ring-1 ring-sky-500/30">
                       <span aria-hidden="true">🔍</span>{" "}
                       {claim == null
                         ? "Không tiết lộ"
@@ -199,12 +289,12 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                     </span>
                   )}
                   {offline && (
-                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-bold text-amber-300 ring-1 ring-amber-500/30">
+                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs font-bold text-amber-300 ring-1 ring-amber-500/30">
                       <span aria-hidden="true">📴</span> Mất kết nối
                     </span>
                   )}
                   {isPending && (
-                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/20 px-1.5 py-0.5 text-[11px] font-bold text-amber-300 ring-1 ring-amber-500/30">
+                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/20 px-1.5 py-0.5 text-xs font-bold text-amber-300 ring-1 ring-amber-500/30">
                       <span aria-hidden="true">🛡️</span> Tử Thủ
                     </span>
                   )}
@@ -218,12 +308,16 @@ export function RosterPanel({ snapshot, lobby }: Props) {
           <li
             key={`empty-${i}`}
             style={{ "--slot-index": i } as React.CSSProperties}
-            className="lobby-slot-waiting flex items-center gap-2.5 rounded-lg border border-dashed border-night-600/70 px-2 py-1.5"
+            /* Viền và nền do `.lobby-slot-waiting` cầm (nó là thứ duy nhất
+             * nhấp nháy), nên ở đây chỉ còn kiểu nét và bề dày. */
+            className="lobby-slot-waiting flex items-center gap-2.5 rounded-lg border border-dashed px-2 py-1.5"
           >
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-night-800/70 text-sm font-bold text-mist/50 sm:h-10 sm:w-10">
+            {/* Hai dòng chữ này KHÔNG mờ theo nhịp chờ nữa - xem chú thích ở
+              * `.lobby-slot-waiting` trong globals.css. */}
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-night-800/70 text-sm font-bold text-mist/80 sm:h-10 sm:w-10">
               {count + i + 1}
             </span>
-            <span className="text-sm text-mist/60">Đang chờ người vào...</span>
+            <span className="text-sm text-mist-strong/80">Đang chờ người vào...</span>
           </li>
         ))}
       </ul>
@@ -236,37 +330,26 @@ export function RosterPanel({ snapshot, lobby }: Props) {
         * còn mười một chỗ. Dòng này là chỗ duy nhất nói ra con số đó.
         */}
       {lobby && freeSeats > 0 && (
-        <p className="mt-2.5 border-t border-white/[0.08] pt-2.5 text-xs text-mist/75">
-          Còn <b className="text-white">{freeSeats}</b> chỗ trống · phòng nhận tối đa{" "}
-          {MAX_PLAYERS_PER_ROOM} người
+        /*
+         * Câu này phải vừa MỘT dòng trong cột 18rem.
+         *
+         * Bản đầy đủ - "Còn 14 chỗ trống · phòng nhận tối đa 15 người" - tràn
+         * sang dòng thứ hai và bỏ lại đúng một chữ "người" nằm trơ dưới cùng
+         * thẻ. Cắt "trống" và "phòng nhận" không mất nghĩa nào: "chỗ" trong
+         * ngữ cảnh danh sách người chơi đã là chỗ trống, và "tối đa 15 người"
+         * tự nói ra đó là sức chứa.
+         *
+         * Vẫn cho xuống dòng được (không `whitespace-nowrap`): ở cột hẹp hơn
+         * hoặc khi người dùng phóng chữ, xuống dòng vẫn hơn là tràn ngang.
+         */
+        <p className="mt-2.5 shrink-0 border-t border-white/[0.08] pt-2.5 text-[13px] text-mist-strong">
+          Còn <b className="text-white">{freeSeats}</b> chỗ · tối đa {MAX_PLAYERS_PER_ROOM} người
         </p>
       )}
 
-      {/* Ở phòng chờ nút này nằm trên `LobbyHeader`; đây là bản dùng trong ván. */}
-      {!lobby && snapshot.you && (
-        <div className="mt-3 border-t border-white/[0.08] pt-3">
-          <button
-            type="button"
-            className="btn-tertiary w-full"
-            aria-expanded={showPicker}
-            onClick={() => setShowPicker((v) => !v)}
-          >
-            {showPicker ? "Đóng" : "📷 Đổi ảnh đại diện"}
-          </button>
-          {showPicker && (
-            <div className="mt-2">
-              <AvatarPicker
-                currentUrl={snapshot.you?.avatarUrl ?? null}
-                onDone={() => setShowPicker(false)}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
       {snapshot.noEliminationVoteCount > 0 && (
-        <p className="mt-2 border-t border-white/[0.08] pt-2 text-xs text-mist/75">
-          Không treo ai: <b className="text-white">{snapshot.noEliminationVoteCount}</b>
+        <p className="mt-2 shrink-0 border-t border-white/[0.08] pt-2 text-[13px] text-mist-strong">
+          Không treo ai: <b className="text-white">{snapshot.noEliminationVoteCount}</b> phiếu
         </p>
       )}
     </section>

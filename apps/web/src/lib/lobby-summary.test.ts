@@ -1,8 +1,20 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { DEFAULT_ROOM_CONFIG, MIN_PLAYERS_TO_START, type RoomConfig } from "@masoi/shared";
+import {
+  DEFAULT_ROOM_CONFIG,
+  MIN_PLAYERS_TO_START,
+  generateWarnings,
+  validateRoomConfig,
+  type RoomConfig,
+} from "@masoi/shared";
 import { PRESET_DECKS } from "./balance";
-import { deckCounts, isPresetDeck, startBlock } from "./lobby-summary";
+import {
+  deckCounts,
+  deckStage,
+  isPresetDeck,
+  startBlock,
+  type StartBlockInput,
+} from "./lobby-summary";
 
 /**
  * Bộ bài trắng: DEFAULT_ROOM_CONFIG đã bật sẵn Tiên Tri, Bảo Vệ và Phù Thuỷ,
@@ -71,38 +83,148 @@ describe("isPresetDeck", () => {
   });
 });
 
+/**
+ * Mặc định của một phòng KHÔNG bị chặn bởi thứ gì.
+ *
+ * Mỗi test chỉ khai đúng cái nó đang nói tới; thiếu helper này thì thêm một
+ * đầu vào cho `startBlock` là phải sửa lại tay từng test, và cái sửa tay đó
+ * chính là chỗ một luật chặn bị bỏ quên.
+ */
+function blockInput(patch: Partial<StartBlockInput> = {}): StartBlockInput {
+  return {
+    playerCount: MIN_PLAYERS_TO_START,
+    configError: null,
+    balanceBlocking: false,
+    mode: "ranked",
+    unreadyNames: [],
+    ...patch,
+  };
+}
+
 describe("startBlock", () => {
   it("thiếu người là lý do đầu tiên: cân bằng chưa có nghĩa gì khi bàn chưa đủ", () => {
-    const block = startBlock({
-      playerCount: MIN_PLAYERS_TO_START - 2,
-      configError: "Cấu hình sai",
-      unreadyNames: ["Khải"],
-    });
+    const block = startBlock(
+      blockInput({
+        playerCount: MIN_PLAYERS_TO_START - 2,
+        configError: "Cấu hình sai",
+        balanceBlocking: true,
+        unreadyNames: ["Khải"],
+      }),
+    );
     assert.deepEqual(block, { kind: "need-players", missing: 2 });
   });
 
   it("đủ người rồi thì tới lỗi cấu hình", () => {
-    const block = startBlock({
-      playerCount: MIN_PLAYERS_TO_START,
-      configError: "Quá nhiều Sói",
-      unreadyNames: ["Khải"],
-    });
+    const block = startBlock(blockInput({ configError: "Quá nhiều Sói", unreadyNames: ["Khải"] }));
     assert.deepEqual(block, { kind: "config", message: "Quá nhiều Sói" });
   });
 
   it("cuối cùng mới tới người chưa sẵn sàng", () => {
-    const block = startBlock({
-      playerCount: MIN_PLAYERS_TO_START,
-      configError: null,
-      unreadyNames: ["Khải", "Linh"],
-    });
+    const block = startBlock(blockInput({ unreadyNames: ["Khải", "Linh"] }));
     assert.deepEqual(block, { kind: "unready", names: ["Khải", "Linh"] });
   });
 
   it("không còn gì chặn thì trả null", () => {
+    assert.equal(startBlock(blockInput()), null);
+  });
+
+  /*
+   * Server từ chối `room:start` với BALANCE_UNSTABLE khi đội hình mất cân bằng
+   * VÀ phòng đang ở Ranked (apps/server/src/rooms/service.ts). Trước đây client
+   * không biết luật này, nên nút vẫn sáng và người bấm nhận về một dòng lỗi đỏ.
+   */
+  describe("cân bằng chặn Ranked", () => {
+    it("Ranked + mất cân bằng thì chặn", () => {
+      assert.deepEqual(startBlock(blockInput({ balanceBlocking: true })), { kind: "balance" });
+    });
+
+    it("Chaos + mất cân bằng thì KHÔNG chặn - server cũng cho qua", () => {
+      assert.equal(startBlock(blockInput({ balanceBlocking: true, mode: "chaos" })), null);
+    });
+
+    it("cân bằng đứng TRƯỚC lỗi cấu hình, đúng thứ tự server kiểm", () => {
+      assert.deepEqual(
+        startBlock(blockInput({ balanceBlocking: true, configError: "Quá nhiều Sói" })),
+        { kind: "balance" },
+      );
+    });
+
+    it("cân bằng đứng trước cả người chưa sẵn sàng", () => {
+      assert.deepEqual(
+        startBlock(blockInput({ balanceBlocking: true, unreadyNames: ["Khải"] })),
+        { kind: "balance" },
+      );
+    });
+
+    it("Chaos vẫn dừng lại ở lỗi cấu hình", () => {
+      assert.deepEqual(
+        startBlock(blockInput({ balanceBlocking: true, mode: "chaos", configError: "Quá nhiều Sói" })),
+        { kind: "config", message: "Quá nhiều Sói" },
+      );
+    });
+  });
+
+  /*
+   * Hồi quy cho đúng cái phòng đã bắt gặp: host chốt preset lúc phòng có 7
+   * người, người thứ 8 vào, và preset 7 người ở bàn 8 người cho ra score 33.5 -
+   * ngoài ngưỡng 40-60 nên `blocking`. `validateRoomConfig` không thấy gì sai
+   * (nó chỉ đếm bài so với người), nên bản cũ để nút sáng.
+   */
+  it("preset 7 người dùng ở phòng 8 người: Ranked chặn, Chaos cho qua", () => {
+    const config = PRESET_DECKS[7];
+    const balance = generateWarnings(config, 8);
+    assert.equal(balance.blocking, true, "tiền đề: engine phải coi đây là mất cân bằng");
+    assert.equal(validateRoomConfig(config, 8), null, "tiền đề: cấu hình không có lỗi nào khác");
+
+    const shared = { playerCount: 8, configError: validateRoomConfig(config, 8), unreadyNames: [] };
+    assert.deepEqual(
+      startBlock({ ...shared, balanceBlocking: balance.blocking, mode: "ranked" }),
+      { kind: "balance" },
+    );
     assert.equal(
-      startBlock({ playerCount: MIN_PLAYERS_TO_START, configError: null, unreadyNames: [] }),
+      startBlock({ ...shared, balanceBlocking: balance.blocking, mode: "chaos" }),
       null,
     );
+  });
+});
+
+/*
+ * Phòng 1 người từng hiện cùng lúc: "Cần thêm 5 người nữa để bắt đầu", "Bộ bài
+ * cho 1 người", một thanh cân bằng chấm 58 điểm, và một câu bảo "Bạn vẫn chơi
+ * được". Chấm cân bằng cho một bàn chưa đủ người là chấm một thứ không tồn tại.
+ */
+describe("deckStage", () => {
+  it("dưới mốc bắt đầu thì KHÔNG chấm cân bằng", () => {
+    for (let count = 0; count < MIN_PLAYERS_TO_START; count += 1) {
+      assert.equal(deckStage(count).rated, false, `phòng ${count} người vẫn bị chấm`);
+    }
+  });
+
+  it("đủ mốc bắt đầu là chấm lại ngay", () => {
+    assert.equal(deckStage(MIN_PLAYERS_TO_START).rated, true);
+    assert.equal(deckStage(MIN_PLAYERS_TO_START + 1).rated, true);
+  });
+
+  it("chưa đủ người thì có câu giải thích thay cho thanh cân bằng", () => {
+    const stage = deckStage(1);
+    assert.ok(stage.pending);
+    assert.match(stage.pending!, new RegExp(String(MIN_PLAYERS_TO_START)));
+  });
+
+  it("đủ người rồi thì không còn câu chờ nào", () => {
+    assert.equal(deckStage(MIN_PLAYERS_TO_START).pending, null);
+  });
+
+  it('không gọi cấu hình là "bộ bài cho N người" khi N chưa đủ để chia bài', () => {
+    for (let count = 0; count < MIN_PLAYERS_TO_START; count += 1) {
+      assert.ok(
+        !new RegExp(`Bộ bài cho ${count} người`).test(deckStage(count).summary),
+        `phòng ${count} người vẫn tự nhận là một bộ bài`,
+      );
+    }
+  });
+
+  it("đủ người thì tóm tắt nói rõ bộ bài dành cho bao nhiêu người", () => {
+    assert.match(deckStage(8).summary, /8 người/);
   });
 });

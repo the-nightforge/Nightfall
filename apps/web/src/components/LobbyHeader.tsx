@@ -65,7 +65,20 @@ export function LobbyHeader({ snapshot, code }: Props) {
           )}
         </div>
 
-        <div className="shrink-0">
+        {/*
+          * `shrink-0` KHÔNG được đứng một mình ở đây.
+          *
+          * Đo ở 320/360/390 thì bản cũ KHÔNG tràn ngang - ba control vừa đủ lọt
+          * sau khi wrap. Nhưng nó vừa đủ một cách tình cờ: `shrink-0` cấm hẳn
+          * việc co lại, nên kích thước cơ sở của item là bề rộng max-content của
+          * cả cụm chưa wrap. Thêm một ký tự vào mã phòng hay một chữ vào nhãn
+          * nút là nó tràn thật, không có gì đỡ.
+          *
+          * Chiếm trọn một dòng ở màn hẹp thì phần wrap bên trong mới có chỗ làm
+          * việc (xem `RoomInvite`, nơi quyết định hai hàng xếp thế nào); từ sm
+          * trở lên nó về lại nằm cạnh tiêu đề như cũ.
+          */}
+        <div className="w-full min-w-0 sm:w-auto sm:shrink-0">
           <RoomInvite code={code} size="lg" />
         </div>
       </div>
@@ -91,7 +104,10 @@ export function LobbyHeader({ snapshot, code }: Props) {
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="mt-1.5 text-xs text-mist/80">
+          {/* 13px + mist-strong: câu này là hướng dẫn duy nhất nói phải LÀM gì
+            * khi phòng chưa đủ người, mà ở 12px/mist-80% nó chìm dưới thanh
+            * tiến độ ngay trên nó. */}
+          <p className="mt-1.5 text-[13px] leading-relaxed text-mist-strong">
             Cần thêm <b className="text-white">{missing}</b> người nữa để bắt đầu — gửi mã{" "}
             <b className="font-mono tracking-wider text-white">{code}</b> cho bạn bè.
           </p>

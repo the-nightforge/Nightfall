@@ -119,7 +119,7 @@ export function AvatarPicker({ currentUrl, onDone }: Props) {
         {currentUrl && !file && (
           <button
             type="button"
-            className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-mist/70 hover:bg-white/5 disabled:opacity-50"
+            className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-mist-strong hover:bg-white/5 hover:text-white disabled:opacity-50"
             onClick={handleRemove}
             disabled={busy}
           >
@@ -130,7 +130,7 @@ export function AvatarPicker({ currentUrl, onDone }: Props) {
 
       {previewUrl && (
         <div className="rounded-xl border border-white/10 bg-night-800 p-3">
-          <p className="mb-1 text-xs text-mist/60">Xem trước — máy chủ sẽ cắt vuông 256×256:</p>
+          <p className="mb-1 text-xs text-mist-strong">Xem trước — máy chủ sẽ cắt vuông 256×256:</p>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={previewUrl}
@@ -146,7 +146,7 @@ export function AvatarPicker({ currentUrl, onDone }: Props) {
                   style={{ width: `${progress}%` }}
                 />
               </div>
-              <p className="mt-1 text-center text-[11px] text-mist/60">Đang tải lên {progress}%</p>
+              <p className="mt-1 text-center text-xs text-mist-strong">Đang tải lên {progress}%</p>
             </div>
           )}
 
@@ -171,8 +171,12 @@ export function AvatarPicker({ currentUrl, onDone }: Props) {
         </div>
       )}
 
-      {error && <p className="text-xs text-blood-400">{error}</p>}
-      <p className="text-[11px] text-mist/60">JPG/PNG/WebP &lt;5MB, máy chủ tự cắt vuông 256px.</p>
+      {error && (
+        <p className="text-xs text-blood-400" role="alert">
+          {error}
+        </p>
+      )}
+      <p className="text-xs text-mist-strong">JPG/PNG/WebP &lt;5MB, máy chủ tự cắt vuông 256px.</p>
     </div>
   );
 }

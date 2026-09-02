@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AnimatePresence, m } from "motion/react";
-import type { RoomSnapshot } from "@masoi/shared";
+import { ROLE_META, type RoomSnapshot } from "@masoi/shared";
 import { getIdentity } from "@/lib/identity";
 import { useRoomSocket } from "@/lib/useRoomSocket";
 import { VoiceControl } from "@/components/VoiceControl";
@@ -141,6 +141,7 @@ export default function RoomPage() {
   }
 
   const chatPlaceholder = chatChannelHint(snapshot);
+  const chatEmpty = chatEmptyHint(snapshot);
 
   return (
     <VoiceProvider snapshot={snapshot}>
@@ -162,13 +163,34 @@ export default function RoomPage() {
         * Phòng chờ hẹp hơn lúc chơi: 1600px là bề ngang cho một bàn 15 ô cộng
         * hai cột biên, còn ở phòng chờ cột giữa chỉ có một thẻ thiết lập, và kéo
         * nó ra 1600 thì mỗi dòng chữ dài quá tầm đọc trong khi thẻ vẫn trống
-        * hoác. 1440 là chỗ ba vùng còn thở mà không dãn ra. */}
+        * hoác. 1440 là chỗ ba vùng còn thở mà không dãn ra.
+        *
+        * Trong ván, từ lg trở lên `main` là một KHUNG cao đúng bằng màn hình,
+        * không phải một tấm giấy dài.
+        *
+        * Bản cũ để cả trang tự cuộn: bàn chơi cao chừng 700px nằm dán lên mép
+        * trên của một màn 1440x900 rồi bỏ trống gần hai trăm pixel bên dưới, và
+        * mỗi lần chat dài ra là cả trang trôi - kể cả lưới bỏ phiếu đang thao
+        * tác dở. Cao 100dvh + `overflow-hidden` ở đây, cộng với ba cột tự cuộn
+        * bên trong, đổi lại đúng cảm giác một cái bàn: mọi thứ nằm trong khung
+        * nhìn, phần nào dài thì phần đó cuộn.
+        *
+        * KHÔNG hardcode chiều cao cho lưới (`calc(100dvh - 6rem)` chẳng hạn):
+        * cụm mời + nút âm thanh trên đầu cao thấp khác nhau tuỳ có thông báo
+        * hay không, và mọi hằng số đoán trước đều lệch đúng vào lúc đó. Để lưới
+        * `flex-1` trong một cột flex thì nó tự lấy đúng phần còn lại.
+        *
+        * Phòng chờ giữ nguyên lối cũ: ở đó nội dung ngắn, và ép nó vào một
+        * khung không cuộn thì bộ bài 13 vai không xem hết được.
+        */}
       <main
         className={`mx-auto w-full max-w-lg px-3 pb-28 pt-4 lg:pb-6 ${
-          isLobby ? "md:max-w-2xl lg:max-w-[1440px] lg:px-6" : "lg:max-w-[1600px]"
+          isLobby
+            ? "md:max-w-2xl lg:max-w-[1440px] lg:px-6"
+            : "md:max-w-3xl lg:flex lg:h-[100dvh] lg:max-w-[1600px] lg:flex-col lg:overflow-hidden lg:px-4 xl:px-6"
         }`}
       >
-        <header className="flex items-center justify-between gap-2">
+        <header className="flex shrink-0 items-center justify-between gap-2">
           {/*
             * MỘT chỗ rời phòng cho cả trang.
             *
@@ -235,12 +257,35 @@ export default function RoomPage() {
           * không đẹp thêm khi rộng ra, chỉ nội dung pha mới dùng được chỗ thừa.
           * Phòng chờ nới hai cột biên rộng thêm một chút: tên người chơi ở 15rem
           * bị cắt cụt ngay khi có thêm nút Kick bên cạnh.
+          *
+          * Trong ván, cột chat rộng 23rem (368px) từ xl: ở 21rem cũ một câu chat
+          * trung bình gãy làm ba dòng vì bong bóng chỉ còn ~250px chữ sau khi
+          * trừ đệm và mép 15%. Cột người chơi thì đi ngược lại, 15rem là đủ cho
+          * một danh sách chỉ để TRA CỨU, và mỗi rem lấy bớt ở đây là một rem
+          * trả về cho lưới bỏ phiếu ở giữa.
+          *
+          * Nấc lg (1024-1279px) bóp cả hai cột biên lại: ở 1024 mà giữ nguyên
+          * bề rộng của desktop lớn thì khu chơi chỉ còn 400px - lưới ghế tụt
+          * xuống hai cột và cả tên pha cũng bị cắt ("Bỏ phi..."). Hai cột biên
+          * ở nấc này vẫn dùng được đúng việc của chúng, còn chỗ tiết kiệm được
+          * thì trả hết cho khu chơi, đúng thứ tự ưu tiên ở màn hình hẹp.
+          *
+          * items-start chỉ dành cho phòng chờ. Trong ván ba cột phải cao bằng
+          * nhau và bằng khung - đó là thứ làm nó ra hình một cái bàn thay vì ba
+          * mẩu thẻ trôi lệch nhau ở nửa trên màn hình.
+          *
+          * Trần 68rem + `my-auto`: trên màn rất cao (2559x1346 chẳng hạn) một
+          * cái bàn kéo dài 1240px chỉ tạo ra khoảng trống BÊN TRONG cột chơi -
+          * thứ không có gì để đổ vào mà cũng không được phép bịa nội dung ra
+          * lấp. Chặn chiều cao rồi thả cho nó tự căn giữa thì phần thừa chuyển
+          * ra ngoài thành lề trên/dưới cân nhau, và ba cột vẫn cao bằng nhau.
+          * Dưới mốc đó (1080p trở xuống) trần không bao giờ chạm tới.
           */}
         <div
-          className={`mt-3 grid gap-3 lg:items-start ${
+          className={`mt-3 grid gap-3 ${
             isLobby
-              ? "lg:grid-cols-[18rem_minmax(0,1fr)_21rem] lg:gap-5 xl:grid-cols-[19rem_minmax(0,1fr)_22rem]"
-              : "lg:grid-cols-[15rem_minmax(0,1fr)_21rem]"
+              ? "lg:grid-cols-[18rem_minmax(0,1fr)_21rem] lg:items-start lg:gap-5 xl:grid-cols-[19rem_minmax(0,1fr)_22rem]"
+              : "lg:my-auto lg:max-h-[68rem] lg:min-h-0 lg:flex-1 lg:grid-cols-[14rem_minmax(0,1fr)_17.5rem] xl:grid-cols-[15rem_minmax(0,1fr)_23rem] xl:gap-4"
           }`}
         >
           {/*
@@ -251,8 +296,8 @@ export default function RoomPage() {
             */}
           <aside
             className={`${
-              snapshot?.phase === "LOBBY" ? "order-1" : "order-2"
-            } lg:order-none lg:sticky lg:top-4`}
+              isLobby ? "order-1 lg:sticky lg:top-4" : "order-2 lg:min-h-0"
+            } lg:order-none`}
           >
             {snapshot && (
               <RosterPanel
@@ -269,9 +314,20 @@ export default function RoomPage() {
             )}
           </aside>
 
+          {/*
+            * Cột giữa tự cuộn thay vì đẩy cả trang.
+            *
+            * Trong một pha có lưới bỏ phiếu + lịch sử phiếu + thẻ sự kiện, cột
+            * này dài hơn khung nhìn là chuyện thường. Để nó đẩy trang thì hai
+            * cột biên - vốn đã cao đúng bằng màn - trôi mất theo, và người chơi
+            * cuộn xuống xem lịch sử phiếu là mất luôn khung chat lẫn đồng hồ.
+            * `pr-1` chừa chỗ cho thanh cuộn để nó không đè lên viền thẻ.
+            */}
           <div
             className={`${
-              snapshot?.phase === "LOBBY" ? "order-2" : "order-1"
+              isLobby
+                ? "order-2"
+                : "lobby-roster-scroll order-1 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-1"
             } flex min-w-0 flex-col gap-3 lg:order-none`}
           >
             {snapshot && <EventBanner event={snapshot.activeEvent} />}
@@ -306,6 +362,17 @@ export default function RoomPage() {
             {room.error && (
               <p className="rounded-lg bg-blood-600/20 px-3 py-2 text-center text-sm text-blood-400">{room.error}</p>
             )}
+
+            {/*
+              * Dải thông tin trận chuyển từ đầu cột chat xuống CHÂN cột chơi.
+              *
+              * Hai lý do, cùng một nước đi: ở trên cột chat nó làm cả cột đó
+              * đọc ra như một bảng số liệu chứ không phải khu trò chuyện; còn ở
+              * đây nó neo cái đáy của khu chơi lại, nên khoảng trống giữa thẻ
+              * bỏ phiếu và nó thành khoảng thở của một cái bàn thay vì một
+              * mảng bỏ lửng. Nó tự đẩy mình xuống đáy bằng `mt-auto`.
+              */}
+            {snapshot && <RightMetaPanel snapshot={snapshot} />}
           </div>
 
           {/*
@@ -313,21 +380,37 @@ export default function RoomPage() {
             * sau cả nội dung pha lẫn danh sách người chơi - trong màn bỏ phiếu
             * khung chat rơi xuống quanh mốc 1800px. Trên điện thoại chat đi qua
             * MobileChatDock ở cuối file này thay vì nằm chờ cuối trang.
+            *
+            * `sticky` chỉ còn dùng ở phòng chờ. Trong ván cả lưới đã cao đúng
+            * bằng khung nhìn và không cuộn, nên cột này tự đứng yên - dán thêm
+            * sticky vào một thứ vốn không trôi chỉ tổ thêm một tầng chồng lớp.
             */}
-          <div className="hidden lg:order-none lg:sticky lg:top-4 lg:flex lg:h-[calc(100dvh-2rem)] lg:min-h-0 lg:flex-col lg:gap-3">
-            <RightMetaPanel snapshot={snapshot} />
+          <div
+            className={`hidden lg:order-none lg:flex lg:min-h-0 lg:flex-col lg:gap-3 ${
+              isLobby ? "lg:sticky lg:top-4 lg:h-[calc(100dvh-2rem)]" : ""
+            }`}
+          >
             <VoiceControl snapshot={snapshot} />
-            {/* Trong phòng chờ khung chat thấp hơn: chưa có ai nói gì thì một
-              * khung 520px rỗng là khoảng trống lớn nhất trên màn hình. */}
+            {/*
+              * Trong ván khung chat lấy TRỌN phần còn lại của cột chứ không bị
+              * chặn ở 520px: cột cao bằng màn hình, nên một trần cứng chỉ để
+              * lại một mảng trống dưới đáy cột phải - đúng khoảng trống mà cả
+              * bố cục này sinh ra để dẹp. Phòng chờ vẫn giữ trần thấp: chưa ai
+              * nói gì mà dựng sẵn một khung rỗng cao 700px thì chính nó là
+              * khoảng trống lớn nhất màn hình.
+              */}
             <div
               className={`min-h-0 flex-1 ${
-                isLobby ? "lg:max-h-[420px] lg:min-h-[240px]" : "lg:max-h-[520px] lg:min-h-[320px]"
+                isLobby ? "lg:max-h-[420px] lg:min-h-[240px]" : "lg:min-h-[320px]"
               }`}
             >
               <ChatBox
+                title="Thảo luận"
+                subtitle={chatChannelLabel(snapshot)}
                 messages={room.messages}
                 onSend={(text) => room.emit("chat:send", { text })}
                 placeholder={chatPlaceholder}
+                emptyHint={chatEmpty}
                 draft={chatDraft}
                 onDraftChange={setChatDraft}
               />
@@ -340,6 +423,7 @@ export default function RoomPage() {
         messages={room.messages}
         onSend={(text) => room.emit("chat:send", { text })}
         placeholder={chatPlaceholder}
+        emptyHint={chatEmpty}
         draft={chatDraft}
         onDraftChange={setChatDraft}
         selfId={snapshot?.you?.id ?? null}
@@ -349,10 +433,77 @@ export default function RoomPage() {
   );
 }
 
+/**
+ * Câu gợi ý khi khung chat còn rỗng.
+ *
+ * Đứng cạnh `chatChannelHint` vì cùng một lý do và cùng một đầu vào: chỗ này
+ * biết đang ở pha nào, còn `ChatBox` thì không. Ba câu, một hàm - không đáng
+ * dựng thêm một lớp trừu tượng nào cho ba dòng chữ.
+ */
+function chatEmptyHint(snapshot: RoomSnapshot | null): string {
+  if (!snapshot || snapshot.phase === "LOBBY") {
+    return "Chào cả phòng một câu trong lúc chờ đủ người.";
+  }
+  if (snapshot.phase === "GAME_OVER") return "Chưa có tin nhắn nào sau trận.";
+  return "Chưa có tin nhắn trong kênh này.";
+}
+
+/*
+ * Kênh chat mà người xem đang gõ vào.
+ *
+ * Một nguồn duy nhất cho cả câu gợi ý trong ô nhập lẫn dòng phụ trên tiêu đề
+ * khung chat: hai chỗ nói về cùng một chuyện thì không được phép lệch nhau.
+ *
+ * Điều kiện "là Sói" đọc theo PHE trong ROLE_META chứ không so thẳng với
+ * "WEREWOLF". Máy chủ cho cả Sói Con vào kênh phe Sói ban đêm
+ * (apps/server/src/rooms/snapshot.ts), nên bản cũ báo với Sói Con rằng "ban
+ * đêm bạn không thể chat" trong khi nó gõ được - một câu sai về đúng thứ mà
+ * người chơi cần tin.
+ */
+type ChatChannel = "lobby" | "dead" | "wolves" | "muted" | "day";
+
+function chatChannelOf(snapshot: RoomSnapshot | null): ChatChannel | null {
+  if (!snapshot) return null;
+  if (snapshot.phase === "LOBBY" || snapshot.phase === "GAME_OVER") return "lobby";
+  if (!snapshot.you?.alive) return "dead";
+  if (snapshot.phase === "NIGHT") {
+    const role = snapshot.you.role;
+    return role && ROLE_META[role].team === "wolves" ? "wolves" : "muted";
+  }
+  return "day";
+}
+
 function chatChannelHint(snapshot: RoomSnapshot | null): string {
-  if (!snapshot) return "Nhập tin nhắn...";
-  if (snapshot.phase === "LOBBY" || snapshot.phase === "GAME_OVER") return "Chat phòng...";
-  if (!snapshot.you?.alive) return "Chat cùng những người đã chết...";
-  if (snapshot.phase === "NIGHT") return snapshot.you.role === "WEREWOLF" ? "Chat phe Sói..." : "Ban đêm bạn không thể chat...";
-  return "Chat làng...";
+  switch (chatChannelOf(snapshot)) {
+    case null:
+      return "Nhập tin nhắn...";
+    case "lobby":
+      return "Chat phòng...";
+    case "dead":
+      return "Chat cùng những người đã chết...";
+    case "wolves":
+      return "Chat phe Sói...";
+    case "muted":
+      return "Ban đêm bạn không thể chat...";
+    default:
+      return "Chat làng...";
+  }
+}
+
+/** Dòng phụ trên tiêu đề khung chat. undefined thì tiêu đề đứng một mình. */
+function chatChannelLabel(snapshot: RoomSnapshot | null): string | undefined {
+  switch (chatChannelOf(snapshot)) {
+    case "lobby":
+      return "Kênh phòng chờ";
+    case "dead":
+      return "Kênh người chết";
+    case "wolves":
+      return "Kênh phe Sói";
+    case "muted":
+      return "Ban đêm không nói được";
+    case "day":
+      return "Kênh làng";
+    default:
+      return undefined;
+  }
 }

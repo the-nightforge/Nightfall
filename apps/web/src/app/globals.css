@@ -272,8 +272,17 @@ summary:focus-visible,
  * bị chính .card ghi đè mất viền, dù cùng độ đặc hiệu.
  */
 @layer components {
+  /*
+   * Viền thẻ ở /10 chứ không phải /06.
+   *
+   * Bàn chơi xếp ba thẻ cạnh nhau trên một nền tối, và ở /06 mép thẻ trộn ra
+   * chưa tới 1.2:1 so với nền: cả màn hình đọc ra như một mảng tối liền có
+   * chữ rải lên, phải nhìn kỹ mới thấy ranh giới giữa cột người chơi, khu bỏ
+   * phiếu và chat. /10 vẫn là một đường mảnh không ai để ý tới, nhưng đủ để
+   * mắt tách được ba vùng ngay từ cái liếc đầu.
+   */
   .card {
-    @apply relative rounded-xl border border-white/[0.06] p-4 backdrop-blur-md;
+    @apply relative rounded-xl border border-white/10 p-4 backdrop-blur-md;
     background: linear-gradient(180deg, rgba(38, 54, 90, 0.34) 0%, rgba(11, 17, 32, 0.74) 100%);
     box-shadow:
       inset 0 1px 0 0 rgba(157, 178, 213, 0.1),
@@ -369,11 +378,23 @@ summary:focus-visible,
     box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
   }
 
-  /* placeholder ở mist/40 gần như chìm hẳn vào nền night-800; /55 vẫn nhạt hơn
-   * chữ thật nên không bị nhầm là đã nhập, mà đọc được trên màn hình ngoài trời. */
+  /*
+   * placeholder ở mist/75.
+   *
+   * /40 chìm hẳn vào nền night-800, còn /55 đo được khoảng 3.4:1 - dưới ngưỡng
+   * AA, và ô chat trong ván thì gợi ý kênh đang gõ ("Chat phe Sói...") lại là
+   * thông tin phải đọc được chứ không phải chữ trang trí. /85 lên khoảng 5.6:1
+   * mà vẫn nhạt hơn hẳn chữ thật (trắng nguyên, 15:1) nên không bao giờ bị
+   * nhầm là đã nhập.
+   *
+   * KHÔNG được thêm `focus:outline-none` ở đây - xem chú thích vòng focus ở
+   * đầu file. Viền đỏ khi focus là thứ CỘNG THÊM vào vòng focus, không thay nó.
+   */
   .input {
     @apply w-full rounded-lg border border-night-600 bg-night-800/80 px-3 py-2.5 text-white
-      placeholder:text-mist/55 focus:border-blood-500;
+      transition-colors placeholder:text-mist/85 hover:border-night-600/60 focus:border-blood-500
+      disabled:cursor-not-allowed disabled:border-night-700 disabled:bg-night-900/70
+      disabled:text-mist-strong;
   }
 
   .badge-phase {
@@ -809,25 +830,48 @@ summary:focus-visible,
  * chuyển động. Mỗi ô lệch pha một chút theo `--slot-index`, nếu không thì năm
  * ô trống nhấp nháy đồng loạt như một thanh tiến trình đang tải.
  */
+/*
+ * Nhịp thở nằm ở KHUNG, không ở opacity của cả ô.
+ *
+ * Bản đầu animate `opacity` của chính thẻ `<li>`, xuống tới 0.55. Chữ bên trong
+ * vốn đã là màu phụ, nên nó ăn hai lần giảm tương phản chồng nhau: số ghế ở
+ * mist/50 trên nền thẻ, rồi cả cụm bị nhân thêm 0.55 - hiệu quả còn khoảng
+ * mist/28, tức là dưới 2:1. Trong nửa chu kỳ đó các ô chờ gần như không đọc
+ * được, và đó lại đúng là thông tin "còn thiếu mấy người" mà ô chờ sinh ra để
+ * nói.
+ *
+ * Chữ giờ đứng yên ở một mức đọc được, còn thứ nhấp nháy chỉ là viền và nền -
+ * hai thứ không mang chữ nào. Biên độ cũng hẹp: đây là dấu hiệu "đang chờ", nếu
+ * nó bắt được mắt hơn cả tên người đã vào phòng thì nó sai việc.
+ */
 .lobby-slot-waiting {
+  border-color: rgba(157, 178, 213, 0.24);
+  background-color: rgba(17, 26, 46, 0.35);
   animation: lobby-slot-waiting 3.4s ease-in-out infinite;
+  /* Mỗi ô lệch pha một chút; thiếu nó thì năm ô sáng tối đồng loạt và đọc ra
+   * như một thanh tiến trình đang tải. */
   animation-delay: calc(var(--slot-index, 0) * 260ms);
 }
 
 @keyframes lobby-slot-waiting {
   0%,
   100% {
-    opacity: 0.55;
+    border-color: rgba(157, 178, 213, 0.2);
+    background-color: rgba(17, 26, 46, 0.3);
   }
   50% {
-    opacity: 0.9;
+    border-color: rgba(157, 178, 213, 0.44);
+    background-color: rgba(17, 26, 46, 0.6);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Đứng yên ở giữa dải, KHÔNG ở đáy: bỏ hiệu ứng không được kéo theo việc bỏ
+   * luôn độ tương phản. */
   .lobby-slot-waiting {
     animation: none;
-    opacity: 0.75;
+    border-color: rgba(157, 178, 213, 0.36);
+    background-color: rgba(17, 26, 46, 0.5);
   }
 }
 
