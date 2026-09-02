@@ -114,4 +114,40 @@ describe("Chat trong phiên toà", () => {
       expect(visibleChatLog(room, "villager").map((m) => m.channel)).toEqual(["day"]);
     }
   });
+
+  /*
+   * Ba ca dưới đây khoá lại đúng những gì màn biện hộ trên web đang vẽ ra.
+   *
+   * Web tính lại cùng bộ luật này để tắt ô nhập trước khi người chơi kịp gõ
+   * (apps/web/src/lib/chat-channels.ts). Bản sao đó là tiện nghi, không phải
+   * hàng rào - nên phần thi hành thật phải có test riêng, chứ không dựa vào
+   * việc giao diện có vẽ đúng hay không.
+   */
+  it("bị cáo chết giữa phiên toà thì mất luôn lượt nói", () => {
+    const room = trialRoom("DEFENSE");
+    const accused = room.engine!.state.players.find((p) => p.id === "accused")!;
+    accused.alive = false;
+
+    // Rơi xuống nhánh người chết, không phải nhánh bị cáo.
+    expect(resolveChat(room, "accused")).toMatchObject({ ok: true, channel: "dead" });
+  });
+
+  it("lời của người chết trong lúc biện hộ không tới tay ai còn sống", () => {
+    const room = trialRoom("DEFENSE");
+    const resolved = resolveChat(room, "dead");
+
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    expect(resolved.recipients).toEqual(["dead"]);
+    for (const living of ["accused", "wolf", "villager"]) {
+      expect(resolved.recipients).not.toContain(living);
+    }
+  });
+
+  it("người sống không đọc được kênh người chết trong lúc biện hộ", () => {
+    const room = trialRoom("DEFENSE");
+
+    expect(visibleChatLog(room, "wolf").map((m) => m.channel)).toEqual(["day"]);
+    expect(visibleChatLog(room, "accused").map((m) => m.channel)).toEqual(["day"]);
+  });
 });

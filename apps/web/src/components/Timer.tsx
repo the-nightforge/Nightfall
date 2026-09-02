@@ -14,18 +14,44 @@ function fmt(msLeft: number): string {
 }
 
 /**
- * Đồng hồ đếm ngược từ timestamp server, không tự tính logic game.
+ * Nhịp đếm dùng chung cho cả vòng đồng hồ lẫn dòng chữ đếm ngược.
  *
- * Mốc so sánh là serverNow() chứ không phải Date.now(): endsAt là giờ server,
- * còn đồng hồ máy người chơi có thể lệch hàng chục giây.
+ * Hai chỗ đọc CÙNG một hàm `serverNow()` và cùng một chu kỳ, nên chúng không
+ * bao giờ lệch nhau một giây - thứ mà hai bộ đếm riêng gần như chắc chắn làm.
  */
-export function Timer({ endsAt }: { endsAt: number | null }) {
+function useServerTick(): number {
   const [now, setNow] = useState(() => serverNow());
 
   useEffect(() => {
     const t = setInterval(() => setNow(serverNow()), TICK_MS);
     return () => clearInterval(t);
   }, []);
+
+  return now;
+}
+
+/**
+ * Thời gian còn lại dạng chữ, để nhét vào giữa một câu.
+ *
+ * Không thay `Timer`: vòng đồng hồ vẫn đứng NGUYÊN chỗ cũ trên thanh pha ở mọi
+ * pha, đó là điểm neo mà người chơi đã quen liếc tới. Cái này chỉ dành cho chỗ
+ * mà con số phải nằm ngay trong câu đang đọc - "Đến lượt bạn biện hộ · còn
+ * 00:18" - vì bị cáo lúc đó đang nhìn ô nhập chứ không nhìn lên đầu màn hình.
+ */
+export function CountdownText({ endsAt, className }: { endsAt: number | null; className?: string }) {
+  const now = useServerTick();
+  if (endsAt === null) return null;
+  return <span className={`tabular-nums ${className ?? ""}`}>còn {fmt(endsAt - now)}</span>;
+}
+
+/**
+ * Đồng hồ đếm ngược từ timestamp server, không tự tính logic game.
+ *
+ * Mốc so sánh là serverNow() chứ không phải Date.now(): endsAt là giờ server,
+ * còn đồng hồ máy người chơi có thể lệch hàng chục giây.
+ */
+export function Timer({ endsAt }: { endsAt: number | null }) {
+  const now = useServerTick();
 
   const msLeft = endsAt === null ? 0 : endsAt - now;
   const fraction = useCountdownFraction(endsAt, msLeft);

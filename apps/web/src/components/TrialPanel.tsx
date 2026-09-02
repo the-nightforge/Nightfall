@@ -3,7 +3,10 @@
 import { useMemo } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
 import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
+import { nominationRecapFor } from "@/lib/defense-votes";
 import { Avatar } from "./Avatar";
+import { CountdownText } from "./Timer";
+import { DefenseVotePanel } from "./DefenseVotePanel";
 import { VoteHistoryPanel } from "./VoteHistoryPanel";
 
 interface Props {
@@ -20,21 +23,45 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
   const avatars = useMemo(() => assignAvatars(roster ? roster.split(",") : []), [roster]);
 
   const trial = snapshot.trial;
+  const recap = useMemo(
+    () => (trial ? nominationRecapFor(snapshot.dayVoteHistory, trial.accusedId) : undefined),
+    [snapshot.dayVoteHistory, trial],
+  );
   if (!trial) return null;
-  const latestRecap = snapshot.dayVoteHistory.at(-1);
 
   const dead = !snapshot.you?.alive;
   const isAccused = snapshot.you?.id === trial.accusedId;
   const isDefense = snapshot.phase === "DEFENSE";
+  // `canSpeak` do server tính (engine.trialViewFor): pha đúng, đúng bị cáo, và
+  // còn sống. Không tự ghép lại ba điều kiện đó ở đây - một bị cáo chết giữa
+  // pha vẫn là `isAccused` nhưng không còn được nói.
+  const myTurn = isDefense && trial.canSpeak;
   // Mẫu số là tổng phiếu ĐÃ BỎ hoặc ngưỡng kết án, lấy cái lớn hơn: chia cho
   // tổng phiếu thôi thì hai phiếu Treo trên hai phiếu đã bỏ trông như đã đủ án.
   const total = Math.max(trial.guiltyVotes + trial.innocentVotes, trial.guiltyRequired, 1);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Bị cáo là trung tâm của cả hai pha, nên trao hẳn cho họ một khu riêng. */}
-      <div className="card border-amber-500/40 py-7 text-center">
-        <p className="text-xs uppercase tracking-[0.3em] text-mist/65">
+      <div
+        className={`card py-6 text-center ${
+          myTurn
+            ? // Đến lượt mình thì khối này phải NỔI hơn, nhưng bằng viền và một
+              // quầng mỏng chứ không bằng một mảng màu đặc: cả pha chỉ kéo dài
+              // 25 giây và bị cáo phải đọc chữ trong đó, không phải nheo mắt.
+              "border-amber-400/60 shadow-[0_0_0_1px_rgba(251,191,36,0.18),0_18px_40px_-24px_rgba(251,191,36,0.55)]"
+            : "border-amber-500/40"
+        }`}
+      >
+        {/*
+          * Nhãn pha ở amber-300 chứ không phải mist/65.
+          *
+          * mist ở 65% đo được khoảng 3.1:1 trên nền thẻ - dưới ngưỡng AA cho
+          * chữ thường, và đây lại đúng là dòng trả lời câu hỏi "màn hình này
+          * đang là chuyện gì". amber-300 lên khoảng 9:1 và buộc luôn nhãn vào
+          * cùng sắc với viền thẻ.
+          */}
+        <p className="text-xs font-bold uppercase tracking-[0.3em] text-amber-300">
           {isDefense ? "Đang biện hộ" : "Bỏ phiếu xác nhận"}
         </p>
         <div className="mt-3 flex flex-col items-center gap-2">
@@ -45,30 +72,103 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
             breathOffset={breathOffsetFor(trial.accusedId)}
             className="h-20 w-20 ring-2 ring-amber-500/50"
           />
-          <h3 className="font-display text-3xl font-bold text-white">{trial.accusedName}</h3>
+          {/* break-words: một cái tên dài không dấu cách phải xuống dòng chứ
+            * không được đẩy toang thẻ ở cột giữa 1024px. */}
+          <h3 className="max-w-full break-words font-display text-3xl font-bold leading-tight text-white">
+            {isDefense && (
+              <span aria-hidden="true" className="mr-2">
+                🎙
+              </span>
+            )}
+            {trial.accusedName}
+          </h3>
         </div>
-        <p className="mt-1 text-xs text-mist/60">
-          bị đề cử với{" "}
-          {snapshot.players.find((p) => p.id === trial.accusedId)?.voteCount ?? 0} phiếu sơ bộ
+        {/*
+          * Dòng số phiếu ở mist-strong, và số thì trắng đậm.
+          *
+          * Ở mist/60 cũ nó là dòng chữ nhạt nhất thẻ trong khi nó mang đúng cái
+          * lý do người kia đứng đó. Con số tách ra một bậc nữa để quét được mà
+          * không phải đọc cả câu.
+          */}
+        <p className="mt-1.5 text-sm text-mist-strong">
+          Bị đề cử với{" "}
+          <b className="font-bold text-white">
+            {snapshot.players.find((p) => p.id === trial.accusedId)?.voteCount ?? 0} phiếu
+          </b>{" "}
+          sơ bộ
         </p>
+
+        {/*
+          * Trạng thái quyền nói nằm NGAY trong khối bị cáo.
+          *
+          * Bản cũ để nó ở một thẻ riêng bên dưới bảng lịch sử phiếu, tức là
+          * cách câu hỏi "tôi có được nói không" đúng một màn cuộn. Đây cũng là
+          * chỗ duy nhất trong pha này có con số đếm ngược dạng chữ - vòng đồng
+          * hồ vẫn ở nguyên trên thanh pha như mọi pha khác, nhưng bị cáo lúc
+          * này đang nhìn xuống ô nhập chứ không nhìn lên đầu màn.
+          */}
+        {isDefense && (
+          <p
+            className={`mx-auto mt-3 flex max-w-md flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-lg border px-3 py-2 text-sm leading-snug ${
+              myTurn
+                ? "border-amber-400/45 bg-amber-500/[0.12] font-semibold text-amber-100"
+                : "border-white/10 bg-night-800/60 text-mist-bright"
+            }`}
+            role="status"
+          >
+            <span>
+              {myTurn ? (
+                <>
+                  <span aria-hidden="true" className="mr-1">
+                    🎙
+                  </span>
+                  Đến lượt bạn biện hộ
+                </>
+              ) : dead ? (
+                <>Bạn đã chết — chỉ {trial.accusedName} được nói lúc này.</>
+              ) : (
+                <>Hãy lắng nghe — chỉ {trial.accusedName} được nói lúc này.</>
+              )}
+            </span>
+            {snapshot.phaseEndsAt !== null && (
+              <>
+                <span aria-hidden="true" className="text-mist-strong">
+                  ·
+                </span>
+                <CountdownText
+                  endsAt={snapshot.phaseEndsAt}
+                  className={myTurn ? "font-bold text-amber-200" : "font-semibold text-mist-bright"}
+                />
+              </>
+            )}
+          </p>
+        )}
       </div>
 
-      {latestRecap && <VoteHistoryPanel recap={latestRecap} players={snapshot.players} />}
-
+      {/*
+        * Trong pha biện hộ, bảng phiếu là bảng TÓM TẮT có lịch sử gấp lại bên
+        * trong. Sang vòng xác nhận thì lịch sử đầy đủ mở lại như cũ: ở đó không
+        * còn ai phải nói nữa, cả màn hình chỉ để cân nhắc Treo hay Tha, và toàn
+        * bộ diễn biến phiếu là dữ liệu để cân.
+        */}
       {isDefense ? (
-        <div className="card text-center">
-          {isAccused ? (
-            <p className="font-semibold text-amber-200">
-              Bạn đang bị buộc tội. Hãy tự bào chữa trong khung chat bên dưới.
-            </p>
-          ) : (
-            <p className="text-sm text-mist/70">
-              Chỉ <span className="font-semibold text-white">{trial.accusedName}</span> được nói lúc
-              này. Hãy nghe rồi quyết.
-            </p>
-          )}
-        </div>
+        <DefenseVotePanel
+          recap={recap}
+          players={snapshot.players}
+          accusedId={trial.accusedId}
+          accusedName={trial.accusedName}
+        />
       ) : (
+        recap && (
+          <VoteHistoryPanel
+            recap={recap}
+            players={snapshot.players}
+            highlightTargetId={trial.accusedId}
+          />
+        )
+      )}
+
+      {!isDefense && (
         <div className={`card ${dead ? "opacity-70" : ""}`}>
           <h3 className="mb-1 font-display text-xl font-bold text-white">
             {isAccused
@@ -82,7 +182,7 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
               👑 Bạn là Thị Trưởng (Phiếu của bạn có trọng số x2)
             </p>
           )}
-          <p className="mb-3 text-xs text-mist/60">
+          <p className="mb-3 text-xs text-mist-strong">
             Cần {trial.guiltyRequired} phiếu Treo để kết án. Không bỏ phiếu tính là Tha.
           </p>
 
@@ -104,10 +204,10 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
             </div>
             <div className="mt-1.5 flex justify-between text-sm">
               <span className="font-bold text-blood-400">
-                {trial.guiltyVotes} <span className="text-xs font-normal text-mist/60">Treo</span>
+                {trial.guiltyVotes} <span className="text-xs font-normal text-mist-strong">Treo</span>
               </span>
               <span className="font-bold text-emerald-300">
-                <span className="text-xs font-normal text-mist/60">Tha</span> {trial.innocentVotes}
+                <span className="text-xs font-normal text-mist-strong">Tha</span> {trial.innocentVotes}
               </span>
             </div>
           </div>
