@@ -219,8 +219,12 @@ Thêm vào cuối `apps/web/src/lib/cinematic-transition.test.ts`:
 
 ```ts
 describe("prefetchPlan khi máy dựng được cảnh 3D", () => {
+  // ELIMINATION chu KHONG phai NIGHT: nextClips("NIGHT") tra ["dawn"], khong he
+  // chua "nightfall", nen mot test dat o do se pass du ban sua co chay hay
+  // khong. nextClips("ELIMINATION") tra ["nightfall","wolves-win","village-win"]
+  // - dung ca hai ve can chung minh: nightfall bi bo, hai clip kia con nguyen.
   const base = {
-    phase: "NIGHT" as const,
+    phase: "ELIMINATION" as const,
     mode: "video" as const,
     saveData: false,
     effectiveType: "4g",
@@ -423,6 +427,7 @@ export function CinematicCanvas({ kind, durationMs, onFail }: Props) {
     if (!host) return;
 
     let disposed = false;
+    let painted = false;
     let frame = 0;
     let cleanup: (() => void) | undefined;
 
@@ -477,7 +482,13 @@ export function CinematicCanvas({ kind, durationMs, onFail }: Props) {
           const t = Math.min(1, (performance.now() - started) / durationMs);
           built.update(t, camera);
           renderer.render(scene, camera);
-          if (!ready) setReady(true);
+          // Co cuc bo, KHONG doc state `ready`: cho `ready` vao deps cua effect
+          // thi lan setReady dau tien se chay lai effect, thao scene roi dung
+          // lai, ve tiep, va lap vo tan.
+          if (!painted) {
+            painted = true;
+            setReady(true);
+          }
           if (t < 1) frame = requestAnimationFrame(tick);
         };
         frame = requestAnimationFrame(tick);
@@ -512,9 +523,10 @@ export function CinematicCanvas({ kind, durationMs, onFail }: Props) {
       cancelAnimationFrame(frame);
       cleanup?.();
     };
-    // kind nằm trong deps để đổi cảnh là dựng lại scene; durationMs và onFail
-    // ổn định trong một lần phát.
-  }, [kind, durationMs, onFail, ready]);
+    // `ready` KHONG duoc nam trong deps - xem chu thich o cho setReady. `onFail`
+    // phai on dinh (ben goi boc trong useCallback), neu khong thi moi lan cha
+    // render lai la mot lan thao/dung lai scene.
+  }, [kind, durationMs, onFail]);
 
   return (
     <div
@@ -682,7 +694,21 @@ Trong component, cạnh `const [mode, setMode] = useState(...)`:
 
 ```tsx
   const [webgl, setWebgl] = useState(false);
+  /*
+   * useCallback voi deps rong, KHONG phai arrow inline.
+   *
+   * CinematicCanvas dat `onFail` trong deps cua effect dung scene. Mot arrow
+   * inline doi danh tinh moi lan render, ma overlay nay render lai theo TUNG
+   * snapshot - nen scene se bi thao va dung lai lien tuc suot ca canh.
+   * `webglBroken` o cap module va `setWebgl` on dinh, nen deps rong la dung.
+   */
+  const handleWebglFail = useCallback(() => {
+    webglBroken = true;
+    setWebgl(false);
+  }, []);
 ```
+
+Them `useCallback` vao import `react` san co o dau file.
 
 Trong effect đọc thiết lập (hàm `apply`, ~dòng 70), thêm ngay sau `setMode(...)`:
 
@@ -772,10 +798,7 @@ Ngay TRƯỚC khối `{useVideo && (` (~dòng 215), thêm:
           key={playing.key}
           kind={playing.kind}
           durationMs={playing.durationMs}
-          onFail={() => {
-            webglBroken = true;
-            setWebgl(false);
-          }}
+          onFail={handleWebglFail}
         />
       )}
 ```
