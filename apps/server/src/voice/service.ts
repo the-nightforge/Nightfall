@@ -105,7 +105,6 @@ function desiredPermission(room: Room, playerId: string): boolean {
     phase,
     // Ngoài trận thì chưa có engine, ai cũng coi như còn sống.
     alive: player ? player.alive : true,
-    isAccused: room.engine?.state.trial?.accusedId === playerId,
   });
 }
 

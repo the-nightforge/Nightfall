@@ -272,24 +272,24 @@ export function chatComposerState(snapshot: RoomSnapshot | null): ChatComposerSt
   }
 
   if (phase === "DEFENSE") {
+    /*
+     * Pha biện hộ giờ mở cho MỌI người còn sống, không còn là lượt nói độc
+     * quyền của bị cáo. Ai cũng gửi vào kênh làng như một câu ban ngày.
+     *
+     * Chỉ placeholder là khác nhau, và khác vì một lý do: bị cáo đang làm một
+     * việc cụ thể - tự bào chữa - còn những người kia đang cân nhắc lá phiếu
+     * sắp tới. Cùng một kênh, hai tâm thế.
+     */
     const accusedId = snapshot.trial?.accusedId;
     if (accusedId && you.id === accusedId) {
-      // Bị cáo gửi vào ĐÚNG kênh làng như mọi câu ban ngày khác, nhưng gợi ý
-      // thì nói việc đang làm: cả pha này chỉ có một người được gõ, và câu
-      // "Chat với người còn sống…" ở đó đọc ra như một cuộc trò chuyện bình
-      // thường thay vì lượt nói cuối của họ.
       return { canSend: true, channel: "day", placeholder: "Nhập lời biện hộ…", reason: "" };
     }
     const accusedName = snapshot.trial?.accusedName;
     return {
-      ...LOCKED,
-      // Tên người biện hộ nằm trong placeholder chứ không chỉ ở dòng lý do:
-      // trên điện thoại tấm trượt chat che gần hết màn, và ô nhập là thứ duy
-      // nhất người chơi còn nhìn thấy lúc định gõ.
-      placeholder: accusedName ? `Đang lắng nghe ${accusedName}…` : "Đang lắng nghe lời biện hộ…",
-      reason: accusedName
-        ? `Chỉ ${accusedName} được nói trong lúc biện hộ.`
-        : "Chỉ người đang biện hộ được nói.",
+      canSend: true,
+      channel: "day",
+      placeholder: accusedName ? `Trả lời ${accusedName}…` : "Nói trong lúc biện hộ…",
+      reason: "",
     };
   }
 
