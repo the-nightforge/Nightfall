@@ -109,6 +109,23 @@ export interface CaseTimelineEntry {
  * Cố ý KHÔNG mang `roomCode`: mã phòng chỉ là đầu vào của hash `caseId`, và một
  * mã phòng đã chết nằm trong nội dung chia sẻ là một lời mời gãy.
  */
+/**
+ * Một Phong thư sau cùng đã mở, lưu lại để xem lại sau trận.
+ *
+ * KHÔNG có `role`, đúng như `OpenedLastLetter` trên dây - hồ sơ vụ án đã có
+ * `cast` mang đủ vai của mọi người, nên nhét vai vào đây chỉ tạo ra một đường
+ * thứ hai để cùng một sự thật trôi lệch.
+ *
+ * Chỉ chứa thư ĐÃ MỞ: thư của người sống tới cuối ván không bao giờ đi vào đây.
+ */
+export interface CaseLastLetter {
+  authorId: string;
+  authorName: string;
+  text: string;
+  sealedRound: number;
+  openedRound: number;
+}
+
 export interface CaseFile {
   /** Phiên bản schema, để hồ sơ ghi xuống DB sau này còn đọc lại được. */
   version: 1;
@@ -122,4 +139,12 @@ export interface CaseFile {
   timeline: CaseTimelineEntry[];
   /** Ván không có điểm ngoặt nào đủ rõ; giao diện đừng hứa "3 điểm ngoặt". */
   fallback: boolean;
+  /**
+   * Các Phong thư sau cùng đã mở trong ván, theo thứ tự mở.
+   *
+   * OPTIONAL và có thể vắng mặt hoàn toàn: add-on tắt, hoặc hồ sơ ghi trước khi
+   * có tính năng này. Chỗ đọc phải chịu được `undefined` - `version` vẫn là 1 vì
+   * mọi hồ sơ cũ vẫn đọc đúng, chỉ là không có mục này.
+   */
+  lastLetters?: CaseLastLetter[];
 }

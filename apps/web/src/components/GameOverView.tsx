@@ -21,10 +21,12 @@ import {
   winnerCopy,
   type PersonalOutcome,
 } from "@/lib/game-over-summary";
+import { caseFileLetters } from "@/lib/last-letter";
 import { Avatar } from "./Avatar";
 import { CaseFileCard } from "./CaseFileCard";
 import { CaseShareCard } from "./CaseShareCard";
 import { HunterShotTimeline } from "./HunterShotTimeline";
+import { LastLetterArchive } from "./LastLetterArchive";
 import { NightRecapTimeline } from "./NightRecapTimeline";
 
 interface Props {
@@ -252,6 +254,11 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
         </summary>
         <div className="mt-3 space-y-3">
           {caseFile && <CaseFileCard file={caseFile} />}
+          {/* Mục RIÊNG, không trộn vào danh sách bước ngoặt: phần lớn phong thư
+            * là một linh cảm đã sai, và ép chúng thành "bước ngoặt" sẽ làm loãng
+            * đúng thứ mà danh sách kia dựng ra để nói. Chỉ có thư ĐÃ MỞ ở đây -
+            * `buildCaseFile` đọc từ `opened`, nơi bản nháp không bao giờ tới. */}
+          <LastLetterArchive letters={caseFileLetters(caseFile)} />
           {/* Server cũ deploy lệch có thể thiếu hẳn hai mảng này. */}
           <NightRecapTimeline nights={snapshot.nightHistory ?? []} config={snapshot.config} />
           <HunterShotTimeline shots={snapshot.hunterShots ?? []} />

@@ -33,6 +33,7 @@ import { SoundControl } from "@/components/SoundControl";
 import { EventBanner } from "@/components/EventBanner";
 import { MobileChatDock } from "@/components/MobileChatDock";
 import { CinematicOverlay } from "@/components/CinematicOverlay";
+import { LastLetterReveal } from "@/components/LastLetterReveal";
 import { RoomInvite } from "@/components/RoomInvite";
 import { LobbyHeader } from "@/components/LobbyHeader";
 
@@ -107,6 +108,7 @@ export default function RoomPage() {
             onSkipDiscussion={(skip) => room.emit("game:skip-discussion", { skip })}
             onDayOfTruthClaim={(role) => room.emit("game:day-of-truth-claim", { role })}
             onDeadMessage={(text) => room.emit("game:dead-message", { text })}
+            onLastLetter={(text) => room.emit("game:last-letter-set", { text })}
           />
         );
       case "DEFENSE":
@@ -389,6 +391,16 @@ export default function RoomPage() {
                 {content}
               </m.div>
             </AnimatePresence>
+
+            {/*
+              * Thẻ mở thư đứng SAU nội dung pha, không phải đè lên nó.
+              *
+              * Ở NIGHT_RESULT và ELIMINATION, nội dung pha chính là thông báo
+              * ai đã chết và vì sao - lá thư chỉ có nghĩa khi người đọc đã thấy
+              * dòng đó, nên nó không được che. Đặt ở cấp trang chứ không trong
+              * từng view vì thư có thể mở ở bất kỳ pha nào một cái chết xảy ra.
+              */}
+            {snapshot && <LastLetterReveal snapshot={snapshot} />}
 
             {room.error && (
               <p className="rounded-lg bg-blood-600/20 px-3 py-2 text-center text-sm text-blood-400">{room.error}</p>

@@ -12,6 +12,10 @@ import {
   type BotClaimIntention,
 } from "./decision/claim-decision";
 import { decideGhostWhisper, type BotGhostWhisperIntention } from "./decision/ghost-decision";
+import {
+  decideLastLetter,
+  type BotLastLetterIntention,
+} from "./decision/last-letter-decision";
 import { selectVote } from "./decision/vote-decision";
 import {
   decideFinalVote,
@@ -485,6 +489,17 @@ export class BotRuntime {
    */
   decideGhostWhisper(context: BotDecisionContext): BotGhostWhisperIntention {
     return decideGhostWhisper(context, this.state);
+  }
+
+  /**
+   * Nội dung Phong thư sau cùng.
+   *
+   * Cũng không đi qua trace và không rút RNG, cùng lý do với hai hàm trên - và
+   * ở đây nó còn là một RÀNG BUỘC: lá thư phải tái lập được từ đúng state, nên
+   * nó không được phép tiêu một số nào của dòng RNG.
+   */
+  decideLastLetter(context: BotDecisionContext): BotLastLetterIntention {
+    return decideLastLetter(context, this.state);
   }
 
   /** Phát bắn cuối của Thợ Săn; `targetId: null` là không bắn. */

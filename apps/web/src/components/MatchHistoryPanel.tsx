@@ -9,6 +9,8 @@ import {
   readStoredCaseFile,
   type HistoryOutcome,
 } from "@/lib/match-history";
+import { caseFileLetters } from "@/lib/last-letter";
+import { LastLetterArchive } from "./LastLetterArchive";
 
 /**
  * Số ván hiện lúc chưa mở rộng.
@@ -124,6 +126,7 @@ function MatchRow({ match }: { match: MatchHistoryEntry }) {
   // Ván ghi trước khi hồ sơ được lưu thì không có gì để mở ra - hàng vẫn xem
   // được roster như cũ, chỉ thiếu phần bước ngoặt.
   const caseFile = readStoredCaseFile(match.caseFile);
+  const letters = caseFileLetters(caseFile);
 
   // Thắng/thua tính theo PHE của vai mình cầm, không theo việc còn sống: sống
   // tới cuối trong một ván thua vẫn là thua.
@@ -232,6 +235,15 @@ function MatchRow({ match }: { match: MatchHistoryEntry }) {
               </li>
             ))}
           </ol>
+        </div>
+      )}
+
+      {/* Xem lại phong thư trong lịch sử trận. Dữ liệu nằm trong chính JSON hồ
+        * sơ đã lưu, nên không cần thêm cột nào; ván ghi trước tính năng này chỉ
+        * đơn giản là không có mục này. */}
+      {open && letters.length > 0 && (
+        <div className="border-t border-white/[0.06] px-3 py-2.5">
+          <LastLetterArchive letters={letters} compact />
         </div>
       )}
 

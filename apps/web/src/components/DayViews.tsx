@@ -7,6 +7,7 @@ import { PlayerGrid } from "./PlayerGrid";
 import { VoteHistoryPanel } from "./VoteHistoryPanel";
 import { DayOfTruthModal } from "./DayOfTruthModal";
 import { DeadWhisperPanel } from "./DeadWhisperPanel";
+import { LastLetterComposer } from "./LastLetterComposer";
 import { discussionSkipCopy } from "@/lib/discussion-skip-copy";
 import { leaderLabel, voteProgressOf } from "@/lib/vote-progress";
 
@@ -17,6 +18,8 @@ interface Props {
   onSkipDiscussion: (skip: boolean) => void;
   onDayOfTruthClaim?: (role: string | null) => void;
   onDeadMessage?: (text: string) => void;
+  /** `null` là lệnh xoá thư. Vắng mặt nghĩa là trang chưa nối sự kiện này. */
+  onLastLetter?: (text: string | null) => void;
 }
 
 export function DayView({
@@ -25,6 +28,7 @@ export function DayView({
   onSkipDiscussion,
   onDayOfTruthClaim,
   onDeadMessage,
+  onLastLetter,
 }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const isVoting = snapshot.phase === "VOTING";
@@ -329,6 +333,11 @@ export function DayView({
         <DayOfTruthModal snapshot={snapshot} onClaim={onDayOfTruthClaim} />
       )}
       {onDeadMessage && <DeadWhisperPanel snapshot={snapshot} onSend={onDeadMessage} />}
+      {/* Hai cơ chế RỜI NHAU, dù đứng cạnh nhau ở đây: Tiếng Vọng là một lượt
+        * ẩn danh của người CHẾT do sự kiện bốc, còn phong thư là của người còn
+        * SỐNG và ghi danh. Không dùng chung lượt, không dùng chung trạng thái;
+        * mỗi cái tự gác điều kiện hiện ra của mình. */}
+      {onLastLetter && <LastLetterComposer snapshot={snapshot} onSave={onLastLetter} />}
     </div>
   );
 }

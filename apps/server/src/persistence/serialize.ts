@@ -2,6 +2,7 @@ import { botBudgetUsed } from "../bots";
 import { serializeBotSession } from "../bots/session-registry";
 import { serializeDiscussionRun } from "../game/discussion-scheduler";
 import { discussionSkipVotes } from "../game/discussion-skip";
+import { lastLetterStateOf } from "../game/last-letter";
 import type { Room } from "../rooms/store";
 import { PERSISTENCE_VERSION, type RoomEnvelopeV1 } from "./schema";
 
@@ -47,6 +48,10 @@ export function serializeRoom(room: Room, opSeq: number): RoomEnvelopeV1 {
       discussionSkipVotes: [...(discussionSkipVotes.get(room.code) ?? [])],
       discussionRun: serializeDiscussionRun(room.code),
       kickedPlayerIds: room.kickedPlayerIds,
+      // Cả bản nháp lẫn dãy id đã mở. Bỏ bản nháp đi thì một lần khởi động lại
+      // xoá lượt duy nhất của cả ván; bỏ dãy id đi thì mọi lá thư đã mở sẽ mở
+      // lại lần nữa ngay khi process mới chạy hàm mở đầu tiên.
+      lastLetters: lastLetterStateOf(room),
     },
   };
 }

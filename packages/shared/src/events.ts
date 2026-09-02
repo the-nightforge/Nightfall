@@ -19,6 +19,7 @@ export const CLIENT_EVENTS = {
   GAME_SKIP_DISCUSSION: "game:skip-discussion",
   GAME_DAY_OF_TRUTH_CLAIM: "game:day-of-truth-claim",
   GAME_DEAD_MESSAGE: "game:dead-message",
+  GAME_LAST_LETTER_SET: "game:last-letter-set",
   ROOM_UPDATE_AVATAR: "room:update-avatar",
   CHAT_SEND: "chat:send",
   VOICE_TOKEN: "voice:token",

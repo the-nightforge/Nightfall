@@ -1,7 +1,7 @@
 import { roleTeam } from "../roles";
 import type { RoomSnapshot } from "../snapshot";
 import { collectCandidates, quietMatchHighlight, selectHighlights, type CaseData } from "./highlights";
-import type { CaseFile, CaseFilePlayer, CaseTimelineEntry } from "./types";
+import type { CaseFile, CaseFilePlayer, CaseLastLetter, CaseTimelineEntry } from "./types";
 
 /** Crockford base32: bỏ I, L, O, U để mã đọc qua điện thoại không bị nhầm chữ. */
 const BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
@@ -65,6 +65,29 @@ function buildCast(snapshot: RoomSnapshot): CaseFilePlayer[] {
     });
   }
   return out;
+}
+
+/**
+ * Thư đã mở, chép sang dạng lưu trữ.
+ *
+ * Nguồn là `snapshot.lastLetter.opened`, tức thứ server đã quyết định là công
+ * khai. Hàm này KHÔNG có nhánh nào chạm tới bản nháp của người còn sống - danh
+ * sách đó không tồn tại trong snapshot mà nó đọc.
+ *
+ * Trả `undefined` (không phải mảng rỗng) khi không có thư nào: một trường vắng
+ * mặt đọc ra đúng nghĩa "ván này không có mục đó", và nó giữ hồ sơ của phòng
+ * tắt add-on y hệt hồ sơ ghi trước khi có tính năng.
+ */
+function buildLastLetters(snapshot: RoomSnapshot): CaseLastLetter[] | undefined {
+  const opened = snapshot.lastLetter?.opened ?? [];
+  if (opened.length === 0) return undefined;
+  return opened.map((letter) => ({
+    authorId: letter.authorId,
+    authorName: letter.authorName,
+    text: letter.text,
+    sealedRound: letter.sealedRound,
+    openedRound: letter.openedRound,
+  }));
 }
 
 /** Thứ tự trong một vòng: đêm trước, rồi tới ngày. */
@@ -178,5 +201,6 @@ export function buildCaseFile(snapshot: RoomSnapshot): CaseFile | null {
     highlights: fallback ? [quietMatchHighlight(data)] : highlights,
     timeline: buildTimeline(data),
     fallback,
+    lastLetters: buildLastLetters(snapshot),
   };
 }

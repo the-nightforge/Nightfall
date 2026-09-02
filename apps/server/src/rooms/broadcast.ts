@@ -48,6 +48,27 @@ export function broadcastRoom(code: string): void {
   }
 }
 
+/**
+ * Đẩy snapshot cho ĐÚNG MỘT người.
+ *
+ * Dành cho những thay đổi mà chỉ chính người đó nhìn thấy - lưu Phong thư sau
+ * cùng là ca mẫu: nội dung thư chỉ nằm trong snapshot của chủ nhân, nên phát
+ * cho cả phòng vừa tốn công dựng mười lăm snapshot y hệt bản cũ, vừa mở rộng
+ * bề mặt của một thứ vốn phải hẹp nhất có thể.
+ */
+export function broadcastToPlayer(code: string, playerId: string): void {
+  const room = getRoom(code);
+  const io = ioRef;
+  if (!room || !io) return;
+  const sockets = socketsByPlayer.get(playerId);
+  if (!sockets || sockets.size === 0) return;
+
+  const snapshot = buildSnapshot(room, playerId);
+  for (const s of sockets) {
+    s.emit(SERVER_EVENTS.SNAPSHOT, snapshot);
+  }
+}
+
 /** Gửi tin nhắn chat tới đúng danh sách người nhận được phép. */
 export function emitToPlayers(playerIds: string[], event: string, payload: unknown): void {
   const io = ioRef;
