@@ -165,21 +165,22 @@ describe("kênh làng", () => {
     }
   });
 
-  it("trong lúc biện hộ chỉ bị cáo gửi được, mọi người sống khác bị từ chối", () => {
+  it("trong lúc biện hộ MỌI người còn sống đều gửi được vào kênh làng", () => {
+    /*
+     * Đổi luật: pha này từng là lượt nói độc quyền của bị cáo. Giờ nó mở như
+     * ban ngày - cả làng phản ứng ngay được, đổi lại bị cáo mất lớp bảo vệ
+     * "không bị cắt ngang" mà pha này vốn dựng ra cho họ.
+     */
     const defense = room("DEFENSE", {
       trial: { accusedId: "villager", finalVotes: {} } as GameState["trial"],
     });
 
-    expect(resolveChat(defense, "villager")).toMatchObject({ ok: true, channel: "day" });
-    for (const silenced of ["wolf", "cub", "seer"]) {
-      expect(resolveChat(defense, silenced)).toEqual({
-        ok: false,
-        error: "Chỉ người đang biện hộ được nói",
-      });
+    for (const id of ["villager", "wolf", "cub", "seer"]) {
+      expect(resolveChat(defense, id)).toMatchObject({ ok: true, channel: "day" });
     }
   });
 
-  it("cổng biện hộ không phụ thuộc vào bất cứ thứ gì client gửi lên", () => {
+  it("cổng ban đêm không phụ thuộc vào bất cứ thứ gì client gửi lên", () => {
     /*
      * Nhánh này là câu trả lời cho "gọi thẳng event thì sao".
      *
@@ -187,15 +188,19 @@ describe("kênh làng", () => {
      * đã xác thực, không phải từ payload - nên một người bấm Enter, chèn biểu
      * tượng, hay tự bắn `chat:send` từ console đều đi qua đúng một hàm này và
      * nhận đúng một câu trả lời.
+     *
+     * Trước đây nhánh này mượn cổng biện hộ làm phương tiện. Cổng đó đã mở,
+     * nên luận điểm chuyển sang cổng ban đêm - thứ vẫn còn từ chối người sống
+     * không phải phe Sói. Điều được chứng minh vẫn y nguyên: gọi bao nhiêu lần
+     * cũng nhận đúng một câu trả lời, và nó chỉ phụ thuộc vào phòng với id đã
+     * xác thực.
      */
-    const defense = room("DEFENSE", {
-      trial: { accusedId: "villager", finalVotes: {} } as GameState["trial"],
-    });
+    const night = room("NIGHT");
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      expect(resolveChat(defense, "seer")).toEqual({
+      expect(resolveChat(night, "seer")).toEqual({
         ok: false,
-        error: "Chỉ người đang biện hộ được nói",
+        error: "Ban đêm bạn không thể trò chuyện",
       });
     }
   });

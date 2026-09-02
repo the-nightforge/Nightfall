@@ -72,22 +72,22 @@ function trialRoom(phase: "DEFENSE" | "FINAL_VOTE"): Room {
 }
 
 describe("Chat trong phiên toà", () => {
-  it("chỉ bị cáo được nói trong pha biện hộ", () => {
+  it("mọi người CÒN SỐNG đều nói được trong pha biện hộ", () => {
+    /*
+     * Đổi luật có chủ ý: trước đây pha này là lượt nói độc quyền của bị cáo.
+     * Giờ cả làng phản ứng ngay được, đổi lại bị cáo mất lớp bảo vệ "không bị
+     * cắt ngang" mà pha này vốn dựng ra để cho họ.
+     */
     const room = trialRoom("DEFENSE");
-    expect(resolveChat(room, "accused")).toMatchObject({ ok: true, channel: "day" });
-    expect(resolveChat(room, "wolf")).toEqual({
-      ok: false,
-      error: "Chỉ người đang biện hộ được nói",
-    });
-    expect(resolveChat(room, "villager")).toEqual({
-      ok: false,
-      error: "Chỉ người đang biện hộ được nói",
-    });
+    for (const id of ["accused", "wolf", "villager"]) {
+      expect(resolveChat(room, id)).toMatchObject({ ok: true, channel: "day" });
+    }
   });
 
-  it("người chết vẫn chat kênh dead trong lúc biện hộ", () => {
+  it("người chết KHÔNG lọt vào chat làng lúc biện hộ", () => {
+    // Đây là vế "trừ người chết". Nhánh người chết nằm TRƯỚC nhánh kênh ngày,
+    // nên mở pha biện hộ ra không hề nới lỏng bất biến sống/chết.
     const room = trialRoom("DEFENSE");
-    // Nhánh người chết nằm trước cổng biện hộ, nên khoá kia không chạm tới họ.
     expect(resolveChat(room, "dead")).toMatchObject({ ok: true, channel: "dead" });
   });
 

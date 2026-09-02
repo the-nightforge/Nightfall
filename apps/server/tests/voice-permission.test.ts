@@ -11,20 +11,23 @@ import type { Room } from "../src/rooms/store";
  * chỉ khẳng định hàm bằng chính nó. Mỗi ô dưới đây phải là một quyết định thiết
  * kế đọc được từ mục 4 của spec.
  */
-const EXPECTED: Record<Phase, { aliveOther: boolean; aliveAccused: boolean; dead: boolean }> = {
-  LOBBY: { aliveOther: true, aliveAccused: true, dead: true },
-  ROLE_REVEAL: { aliveOther: false, aliveAccused: false, dead: false },
-  NIGHT: { aliveOther: false, aliveAccused: false, dead: false },
-  NIGHT_RESULT: { aliveOther: true, aliveAccused: true, dead: false },
-  DAY_DISCUSSION: { aliveOther: true, aliveAccused: true, dead: false },
-  VOTING: { aliveOther: true, aliveAccused: true, dead: false },
-  // Biện hộ là lượt nói độc quyền của bị cáo - người sống khác cũng câm.
-  DEFENSE: { aliveOther: false, aliveAccused: true, dead: false },
-  FINAL_VOTE: { aliveOther: true, aliveAccused: true, dead: false },
-  ELIMINATION: { aliveOther: true, aliveAccused: true, dead: false },
-  HUNTER_SHOT: { aliveOther: false, aliveAccused: false, dead: false },
-  CHECK_WIN: { aliveOther: false, aliveAccused: false, dead: false },
-  GAME_OVER: { aliveOther: true, aliveAccused: true, dead: true },
+const EXPECTED: Record<Phase, { alive: boolean; dead: boolean }> = {
+  LOBBY: { alive: true, dead: true },
+  ROLE_REVEAL: { alive: false, dead: false },
+  NIGHT: { alive: false, dead: false },
+  NIGHT_RESULT: { alive: true, dead: false },
+  DAY_DISCUSSION: { alive: true, dead: false },
+  VOTING: { alive: true, dead: false },
+  // Biện hộ mở cho MỌI người còn sống, giống ban ngày. Trước đây chỉ bị cáo
+  // được nói; đó là lý do bảng này từng phải tách "người sống thường" khỏi
+  // "bị cáo còn sống". Giờ không pha nào phân biệt hai hạng đó nữa, nên cột
+  // ấy bị gộp lại thay vì để nó khẳng định một phân biệt đã hết tồn tại.
+  DEFENSE: { alive: true, dead: false },
+  FINAL_VOTE: { alive: true, dead: false },
+  ELIMINATION: { alive: true, dead: false },
+  HUNTER_SHOT: { alive: false, dead: false },
+  CHECK_WIN: { alive: false, dead: false },
+  GAME_OVER: { alive: true, dead: true },
 };
 
 describe("voiceCanPublish - bảng vét cạn", () => {
@@ -35,18 +38,12 @@ describe("voiceCanPublish - bảng vét cạn", () => {
   for (const phase of PHASES) {
     const row = EXPECTED[phase];
 
-    it(`${phase}: người sống thường ${row.aliveOther ? "được" : "không được"} nói`, () => {
-      expect(voiceCanPublish({ phase, alive: true, isAccused: false })).toBe(row.aliveOther);
-    });
-
-    it(`${phase}: bị cáo còn sống ${row.aliveAccused ? "được" : "không được"} nói`, () => {
-      expect(voiceCanPublish({ phase, alive: true, isAccused: true })).toBe(row.aliveAccused);
+    it(`${phase}: người còn sống ${row.alive ? "được" : "không được"} nói`, () => {
+      expect(voiceCanPublish({ phase, alive: true })).toBe(row.alive);
     });
 
     it(`${phase}: người chết ${row.dead ? "được" : "không được"} nói`, () => {
-      expect(voiceCanPublish({ phase, alive: false, isAccused: false })).toBe(row.dead);
-      // Bị cáo mà đã chết thì vẫn là người chết - không có cửa sau nào ở đây.
-      expect(voiceCanPublish({ phase, alive: false, isAccused: true })).toBe(row.dead);
+      expect(voiceCanPublish({ phase, alive: false })).toBe(row.dead);
     });
   }
 });
@@ -134,11 +131,7 @@ describe("bất biến: voice không bao giờ tới được khán giả rộng
       ["ghost", false],
     ] as const) {
       it(`${phase} / ${playerId}`, () => {
-        const canPublish = voiceCanPublish({
-          phase,
-          alive,
-          isAccused: playerId === "accused",
-        });
+        const canPublish = voiceCanPublish({ phase, alive });
         if (!canPublish) return;
 
         const chat = resolveChat(room(phase), playerId);

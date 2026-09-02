@@ -23,6 +23,10 @@ const OPEN_TO_LIVING: ReadonlySet<Phase> = new Set<Phase>([
   "NIGHT_RESULT",
   "DAY_DISCUSSION",
   "VOTING",
+  // Biện hộ từng là lượt nói độc quyền của bị cáo. Giờ nó mở như ban ngày:
+  // cả làng phản ứng được ngay, đổi lại bị cáo không còn được nói mà không bị
+  // cắt ngang - đó là đánh đổi có chủ ý, không phải sót.
+  "DEFENSE",
   "FINAL_VOTE",
   "ELIMINATION",
 ]);
@@ -39,19 +43,14 @@ const OPEN_TO_ALL: ReadonlySet<Phase> = new Set<Phase>(["LOBBY", "GAME_OVER"]);
 export interface VoicePermissionInput {
   phase: Phase;
   alive: boolean;
-  /** Người đang bị đưa ra biện hộ ở phiên toà. */
-  isAccused: boolean;
 }
 
-export function voiceCanPublish({ phase, alive, isAccused }: VoicePermissionInput): boolean {
+export function voiceCanPublish({ phase, alive }: VoicePermissionInput): boolean {
   if (OPEN_TO_ALL.has(phase)) return true;
 
   // Mọi nhánh còn lại đều yêu cầu còn sống. Đây là bất biến quan trọng nhất của
   // cả tính năng: người chết không bao giờ nói được với người sống.
   if (!alive) return false;
-
-  // Biện hộ là lượt nói độc quyền của bị cáo - người sống khác cũng phải câm.
-  if (phase === "DEFENSE") return isAccused;
 
   return OPEN_TO_LIVING.has(phase);
 }
