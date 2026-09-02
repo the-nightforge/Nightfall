@@ -200,22 +200,104 @@ function easeOutCubic(t: number): number {
 }
 
 /**
- * Đường bao một nếp nhà: thân cộng mái dốc.
+ * Một nếp nhà: thân, mái LỆCH, và có thể có ống khói.
  *
  * Dựng bằng `Shape` PHẲNG chứ không phải `BoxGeometry`. Camera nhìn hơi chếch
  * nên một khối hộp lộ cả mặt nóc lẫn mặt hông - mà siluet thì theo định nghĩa
  * chỉ có một mặt, và cái nóc lộ ra chính là thứ tố cáo "đây là mấy cái hộp".
  *
- * Gốc toạ độ đặt ở ĐÁY nhà, nên `scale.y` giãn lên trên và chân nhà tự đứng yên
- * trên đường chân trời - bản cũ phải bù vị trí bằng tay vì gốc nằm giữa khối.
+ * Nóc lệch và ống khói không phải trang trí. Tám hình ngũ giác đối xứng hoàn
+ * hảo xếp cạnh nhau đọc ra một hàng rào răng cưa, không phải một xóm - đó là
+ * cái "giả" mà mắt bắt được trước cả khi kịp nghĩ tại sao.
+ *
+ * Gốc toạ độ đặt ở ĐÁY nhà, nên đặt nó lên đường chân trời là xong.
  */
-function houseShape(THREE: ThreeModule, width: number, body: number, roof: number) {
+function cottageShape(
+  THREE: ThreeModule,
+  width: number,
+  body: number,
+  roof: number,
+  apexBias: number,
+  chimney: boolean,
+) {
+  const half = width / 2;
+  const apexX = apexBias * half;
+  const ridge = body + roof;
   const shape = new THREE.Shape();
-  shape.moveTo(-width / 2, 0);
-  shape.lineTo(-width / 2, body);
-  shape.lineTo(0, body + roof);
-  shape.lineTo(width / 2, body);
-  shape.lineTo(width / 2, 0);
+
+  shape.moveTo(-half, 0);
+  shape.lineTo(-half, body);
+  shape.lineTo(apexX, ridge);
+
+  if (chimney) {
+    // Ống khói phải mọc TỪ mặt mái dốc, nên chân nó lấy theo đúng đường thẳng
+    // từ nóc xuống diềm - cắm một hình chữ nhật lơ lửng là lộ ngay.
+    const onRoof = (x: number) => ridge + ((body - ridge) * (x - apexX)) / (half - apexX);
+    const startX = apexX + (half - apexX) * 0.42;
+    const stackW = width * 0.13;
+    const top = ridge + roof * 0.5;
+    shape.lineTo(startX, onRoof(startX));
+    shape.lineTo(startX, top);
+    shape.lineTo(startX + stackW, top);
+    shape.lineTo(startX + stackW, onRoof(startX + stackW));
+  }
+
+  shape.lineTo(half, body);
+  shape.lineTo(half, 0);
+  shape.closePath();
+  return new THREE.ShapeGeometry(shape);
+}
+
+/**
+ * Nhà thờ: thân rộng, tháp nhọn vươn hẳn lên.
+ *
+ * Một cái mốc cao trong đường chân trời. Xóm nào cũng có một thứ cao hơn hẳn
+ * phần còn lại, và thiếu nó thì tám nóc nhà xấp xỉ nhau trông như đồ hoạ tự
+ * sinh chứ không phải một nơi có người ở.
+ */
+function chapelShape(THREE: ThreeModule, width: number, body: number, spire: number) {
+  const half = width / 2;
+  const shape = new THREE.Shape();
+  shape.moveTo(-half, 0);
+  shape.lineTo(-half, body);
+  shape.lineTo(-half * 0.62, body + spire * 0.22);
+  shape.lineTo(-half * 0.30, body + spire * 0.24);
+  shape.lineTo(-half * 0.16, body + spire * 0.52);
+  shape.lineTo(0, body + spire);
+  shape.lineTo(half * 0.16, body + spire * 0.52);
+  shape.lineTo(half * 0.30, body + spire * 0.24);
+  shape.lineTo(half * 0.62, body + spire * 0.22);
+  shape.lineTo(half, body);
+  shape.lineTo(half, 0);
+  shape.closePath();
+  return new THREE.ShapeGeometry(shape);
+}
+
+/**
+ * Cây thông: ba tầng tán so le trên một thân mảnh.
+ *
+ * Cây làm việc mà nhà không làm được: nó phá nhịp mái-tường-mái-tường. Một
+ * đường chân trời chỉ toàn nhà thì đều đặn một cách máy móc.
+ */
+function coniferShape(THREE: ThreeModule, width: number, height: number) {
+  const half = width / 2;
+  const trunk = width * 0.1;
+  const shape = new THREE.Shape();
+  shape.moveTo(-trunk, 0);
+  shape.lineTo(-trunk, height * 0.16);
+  shape.lineTo(-half, height * 0.2);
+  shape.lineTo(-half * 0.52, height * 0.44);
+  shape.lineTo(-half * 0.8, height * 0.46);
+  shape.lineTo(-half * 0.34, height * 0.74);
+  shape.lineTo(-half * 0.52, height * 0.75);
+  shape.lineTo(0, height);
+  shape.lineTo(half * 0.52, height * 0.75);
+  shape.lineTo(half * 0.34, height * 0.74);
+  shape.lineTo(half * 0.8, height * 0.46);
+  shape.lineTo(half * 0.52, height * 0.44);
+  shape.lineTo(half, height * 0.2);
+  shape.lineTo(trunk, height * 0.16);
+  shape.lineTo(trunk, 0);
   shape.closePath();
   return new THREE.ShapeGeometry(shape);
 }
@@ -379,31 +461,91 @@ function buildNightfall(THREE: ThreeModule, scene: Scene3D): BuiltScene {
    * và nó hoạt động kể cả khi camera đứng yên.
    */
   const nearMat = new THREE.MeshBasicMaterial({ color: 0x010206 });
-  const farMat = new THREE.MeshBasicMaterial({ color: 0x0a1020 });
+  /*
+   * Hàng xa chỉ nhạt hơn MỘT CHÚT.
+   *
+   * Bản trước dùng 0x0a1020, và trên nền trời gần như đen ở chân trời thì nó
+   * đọc ra mấy tấm bìa xanh nhạt dán phía sau chứ không phải nhà ở xa. Phối
+   * cảnh khí quyển ban đêm rất nhẹ - có sương thì vật ở xa mờ đi, không sáng
+   * lên thành một màu khác.
+   */
+  const farMat = new THREE.MeshBasicMaterial({ color: 0x040711 });
   disposables.push(nearMat, farMat);
 
-  // Bề ngang, chiều cao và độ dốc mái đều khác nhau. Bản cũ dùng bảy khối gần
-  // như cùng kích thước xếp đều nhau, nên nó đọc ra một hàng rào chứ không phải
-  // một xóm.
-  const layout = [
-    { x: -4.6, w: 1.25, body: 0.75, roof: 0.5, far: true },
-    { x: -3.3, w: 0.95, body: 1.05, roof: 0.38, far: false },
-    { x: -2.1, w: 1.4, body: 0.62, roof: 0.55, far: true },
-    { x: -0.8, w: 1.05, body: 0.92, roof: 0.42, far: false },
-    { x: 0.5, w: 1.55, body: 1.2, roof: 0.6, far: false },
-    { x: 1.9, w: 0.9, body: 0.7, roof: 0.34, far: true },
-    { x: 3.1, w: 1.3, body: 1.0, roof: 0.48, far: false },
-    { x: 4.4, w: 1.1, body: 0.82, roof: 0.44, far: true },
+  /*
+   * Bố cục một cái xóm nhìn TỪ XA.
+   *
+   * Bản trước sai ở TỈ LỆ, và đó mới là thứ làm nó giả chứ không phải hình
+   * dáng. Camera fov 50 ở z=6 cho 1 đơn vị thế giới khoảng 119px, nên một nếp
+   * nhà rộng 1.3 hiện ra 155px và cao 107px - kích thước của một toà nhà cách
+   * hai chục mét, không phải một xóm ở chân trời. Mắt đọc ngay ra là mấy khối
+   * hộp to đùng dán vào nền trời.
+   *
+   * Giờ mỗi nhà rộng 0.4-0.7 đơn vị, tức 50-85px: đủ để thấy mái và ống khói,
+   * đủ nhỏ để cả cụm đọc ra một cái xóm. Nhiều khối hơn nhưng nhỏ hơn - đó là
+   * cách một đường chân trời có người ở trông ra như vậy.
+   *
+   * Mái cũng DỐC hơn hẳn: trước kia mái chỉ bằng ~35% thân nên gần như phẳng,
+   * và `apex` lệch tới 0.4 làm một bên thoải đến mức thành nóc bằng. Giờ mái
+   * bằng 60-90% thân và độ lệch tối đa 0.18.
+   */
+  const layout: {
+    kind: "cottage" | "chapel" | "conifer";
+    x: number;
+    w: number;
+    body: number;
+    roof: number;
+    apex: number;
+    chimney: boolean;
+    lift: number;
+    far: boolean;
+  }[] = [
+    { kind: "conifer", x: -5.15, w: 0.42, body: 0.95, roof: 0, apex: 0, chimney: false, lift: -0.03, far: true },
+    { kind: "cottage", x: -4.72, w: 0.52, body: 0.30, roof: 0.24, apex: -0.12, chimney: true, lift: 0.02, far: true },
+    { kind: "cottage", x: -4.24, w: 0.44, body: 0.38, roof: 0.28, apex: 0.10, chimney: false, lift: -0.01, far: false },
+    { kind: "cottage", x: -3.62, w: 0.66, body: 0.34, roof: 0.30, apex: 0.15, chimney: true, lift: 0.03, far: true },
+    { kind: "conifer", x: -3.05, w: 0.34, body: 0.72, roof: 0, apex: 0, chimney: false, lift: 0.01, far: false },
+    { kind: "cottage", x: -2.55, w: 0.58, body: 0.42, roof: 0.32, apex: -0.16, chimney: false, lift: -0.02, far: false },
+    { kind: "cottage", x: -2.02, w: 0.46, body: 0.28, roof: 0.26, apex: 0.08, chimney: true, lift: 0.02, far: true },
+    { kind: "chapel", x: -1.28, w: 0.54, body: 0.46, roof: 0, apex: 0, chimney: false, lift: 0.0, far: false },
+    { kind: "cottage", x: -0.66, w: 0.62, body: 0.36, roof: 0.30, apex: 0.14, chimney: true, lift: -0.03, far: false },
+    { kind: "cottage", x: -0.12, w: 0.44, body: 0.44, roof: 0.26, apex: -0.10, chimney: false, lift: 0.01, far: true },
+    { kind: "cottage", x: 0.48, w: 0.70, body: 0.32, roof: 0.34, apex: 0.12, chimney: true, lift: 0.03, far: false },
+    { kind: "conifer", x: 1.05, w: 0.38, body: 0.84, roof: 0, apex: 0, chimney: false, lift: -0.01, far: true },
+    { kind: "cottage", x: 1.52, w: 0.50, body: 0.40, roof: 0.28, apex: -0.14, chimney: false, lift: 0.02, far: false },
+    { kind: "cottage", x: 2.14, w: 0.60, body: 0.30, roof: 0.30, apex: 0.16, chimney: true, lift: -0.02, far: true },
+    { kind: "cottage", x: 2.72, w: 0.42, body: 0.46, roof: 0.24, apex: 0.05, chimney: false, lift: 0.01, far: false },
+    { kind: "cottage", x: 3.35, w: 0.64, body: 0.34, roof: 0.32, apex: -0.18, chimney: true, lift: 0.03, far: false },
+    { kind: "conifer", x: 3.92, w: 0.30, body: 0.64, roof: 0, apex: 0, chimney: false, lift: 0.0, far: true },
+    { kind: "cottage", x: 4.32, w: 0.54, body: 0.38, roof: 0.28, apex: 0.10, chimney: false, lift: -0.02, far: true },
+    { kind: "conifer", x: 4.95, w: 0.46, body: 1.05, roof: 0, apex: 0, chimney: false, lift: 0.02, far: true },
   ];
 
+  const BASE_Y = -2.35;
+
   const houses = layout.map((item) => {
-    const geo = houseShape(THREE, item.w, item.body, item.roof);
+    const geo =
+      item.kind === "chapel"
+        ? chapelShape(THREE, item.w, item.body, 0.92)
+        : item.kind === "conifer"
+          ? coniferShape(THREE, item.w, item.body)
+          : cottageShape(THREE, item.w, item.body, item.roof, item.apex, item.chimney);
     const mesh = new THREE.Mesh(geo, item.far ? farMat : nearMat);
-    mesh.position.set(item.x, -2.35, item.far ? -2.2 : -0.5);
+    /*
+     * KHÔNG có animation cho làng.
+     *
+     * Bản trước cho nhà trượt lên vào vị trí, và trước nữa là giãn `scale.y`.
+     * Cả hai đều sai cùng một kiểu: một cái xóm không di chuyển. Nó đứng đó từ
+     * trước khi đêm xuống, và thứ thay đổi trong 1,2 giây này là ÁNH SÁNG với
+     * SƯƠNG, không phải nhà cửa. Đặt đúng chỗ một lần rồi để yên.
+     */
+    mesh.position.set(item.x, BASE_Y + item.lift, item.far ? -2.2 : -0.5);
     scene.add(mesh);
     disposables.push(geo);
-    return { mesh, far: item.far };
+    return mesh;
   });
+  // `houses` chỉ giữ để dispose; không có gì phải cập nhật mỗi khung hình.
+  void houses;
 
   return {
     update(t, camera) {
@@ -418,13 +560,6 @@ function buildNightfall(THREE: ThreeModule, scene: Scene3D): BuiltScene {
       skyMat.uniforms.uAspect.value = camera.aspect;
       // Trăng mọc theo easing, không phải vận tốc hằng.
       skyMat.uniforms.uMoon.value.set(0.76, 0.62 + eased * 0.11);
-
-      houses.forEach(({ mesh, far }) => {
-        // Hàng xa nhô lên sớm hơn một nhịp. Cả làng hiện cùng lúc trông như một
-        // tấm bìa được kéo lên, không phải một xóm hiện dần ra khỏi bóng tối.
-        const local = Math.min(1, t / (far ? 0.72 : 0.9));
-        mesh.scale.y = 0.62 + easeOutCubic(local) * 0.38;
-      });
 
       /*
        * Camera chỉ TỊNH TIẾN, không `lookAt`.
