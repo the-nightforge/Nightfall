@@ -45,4 +45,9 @@ model GameResult {
   caseFile    Json?
   durationSec Int
   createdAt   DateTime @default(now())
+
+  /// Khai ở đây để Prisma biết index này thuộc về schema.
+  /// Thiếu nó thì `prisma migrate dev` coi index do migration tạo ra là drift
+  /// và sinh ngay một migration xoá nó đi.
+  @@index([playerRoles(ops: JsonbPathOps)], type: Gin)
 }
