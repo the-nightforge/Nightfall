@@ -1,5 +1,6 @@
 import type { GameEventId, GameEventView, Phase, RoomSnapshot } from "@masoi/shared";
 import { eventIcon } from "./event-art";
+import { WEBGL_KINDS } from "./cinematic-webgl";
 
 /**
  * Chuyển cảnh giữa hai snapshot.
@@ -272,6 +273,16 @@ export const EVENT_CLIPS: string[] = ["WOLF_THREAT", "VILLAGE_BOON", "RULE_CHANG
   (kind) => KIND_META[kind as CinematicKind].clip,
 );
 
+/**
+ * Clip của những cảnh đã có bản 3D.
+ *
+ * Suy ra từ `WEBGL_KINDS` chứ không chép tay tên file: thêm một cảnh 3D thì
+ * danh sách này tự đúng theo.
+ */
+const WEBGL_CLIPS = new Set<string>(
+  [...WEBGL_KINDS].map((kind) => KIND_META[kind].clip),
+);
+
 export interface PrefetchInputs {
   phase: Phase;
   /** Kết quả của `playbackMode`. Chỉ chế độ "video" mới tải file. */
@@ -279,6 +290,13 @@ export interface PrefetchInputs {
   saveData: boolean;
   /** `navigator.connection.effectiveType`, hoặc null nếu trình duyệt không có. */
   effectiveType: string | null;
+  /**
+   * Máy này sẽ dựng cảnh 3D cho những kind có bản WebGL.
+   *
+   * Không tải clip của một cảnh sẽ không dùng tới clip. Là OPTIONAL để mọi chỗ
+   * gọi cũ giữ nguyên hành vi.
+   */
+  webgl?: boolean;
 }
 
 export interface PrefetchPlan {
@@ -314,7 +332,9 @@ export function prefetchPlan(inputs: PrefetchInputs): PrefetchPlan {
   // gọi nó từ chỗ khác.
   if (inputs.mode !== "video" || inputs.saveData) return empty;
 
-  const now = nextClips(inputs.phase);
+  const now = nextClips(inputs.phase).filter(
+    (clip) => !(inputs.webgl === true && WEBGL_CLIPS.has(clip)),
+  );
   // Trang chủ không dựng CinematicOverlay nên không có gì tải từ đó; LOBBY là
   // trong phòng nhưng chưa vào ván, còn GAME_OVER thì không còn sự kiện nào nổ
   // được nữa. Hai chỗ đó chỉ nạp theo pha.
