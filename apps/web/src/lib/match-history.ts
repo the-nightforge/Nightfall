@@ -55,14 +55,22 @@ export function readStoredCaseFile(value: unknown): CaseFile | null {
   return file as CaseFile;
 }
 
-/** "12 phút 30 giây" đọc nhanh hơn "750s" ở một danh sách nhìn lướt. */
-export function formatDuration(totalSeconds: number): string {
+/**
+ * Thời lượng ván dạng đồng hồ: "12:22", hoặc "1:05:00" khi vượt một giờ.
+ *
+ * Dòng meta của một hàng lịch sử phải quét được trong một nhịp mắt, mà
+ * "12 phút 30 giây" chiếm gần gấp ba bề ngang của cùng thông tin ở dạng đồng
+ * hồ - đủ để đẩy mốc "4 giờ trước", thứ người ta thực sự tìm, xuống dòng thứ
+ * ba trên khung điện thoại. Phần giờ chỉ hiện khi thực sự có: "65:00" đọc ra
+ * như một con số lỗi.
+ */
+export function formatDurationClock(totalSeconds: number): string {
   const safe = Math.max(0, Math.round(totalSeconds));
-  const minutes = Math.floor(safe / 60);
+  const hours = Math.floor(safe / 3_600);
+  const minutes = Math.floor((safe % 3_600) / 60);
   const seconds = safe % 60;
-  if (minutes === 0) return `${seconds} giây`;
-  if (seconds === 0) return `${minutes} phút`;
-  return `${minutes} phút ${seconds} giây`;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`;
 }
 
 /**

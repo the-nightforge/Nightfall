@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { formatDuration, formatWhen, readStoredCaseFile } from "./match-history";
+import { formatDurationClock, formatWhen, readStoredCaseFile } from "./match-history";
 
 describe("readStoredCaseFile", () => {
   const valid = {
@@ -36,23 +36,27 @@ describe("readStoredCaseFile", () => {
   });
 });
 
-describe("formatDuration", () => {
-  it("dưới một phút chỉ nói giây", () => {
-    assert.equal(formatDuration(45), "45 giây");
+describe("formatDurationClock", () => {
+  it("dưới một phút vẫn giữ đủ hai chỗ giây", () => {
+    assert.equal(formatDurationClock(45), "0:45");
+    assert.equal(formatDurationClock(5), "0:05");
   });
 
-  it("tròn phút thì bỏ phần giây", () => {
-    assert.equal(formatDuration(600), "10 phút");
+  it("phút và giây", () => {
+    assert.equal(formatDurationClock(750), "12:30");
+    assert.equal(formatDurationClock(600), "10:00");
   });
 
-  it("lẻ thì nói cả hai", () => {
-    assert.equal(formatDuration(750), "12 phút 30 giây");
+  it("quá một giờ mới tách thêm cột giờ", () => {
+    // "65:00" đọc ra như một con số lỗi chứ không phải một tiếng năm phút.
+    assert.equal(formatDurationClock(3_900), "1:05:00");
+    assert.equal(formatDurationClock(3_599), "59:59");
   });
 
   it("số âm hoặc rác không sinh ra chuỗi kỳ dị", () => {
     // durationSec tính từ createdAt của phòng; đồng hồ server nhảy lùi là đủ để
-    // ra số âm, và "-3 phút" trong danh sách trông như lỗi hiển thị.
-    assert.equal(formatDuration(-5), "0 giây");
+    // ra số âm, và "-3:00" trong danh sách trông như lỗi hiển thị.
+    assert.equal(formatDurationClock(-5), "0:00");
   });
 });
 

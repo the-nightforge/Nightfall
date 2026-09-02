@@ -273,8 +273,18 @@ export default function Home() {
         * cho trăng; pt-9 của bản trước đẩy chữ "ONLINE" đè thẳng lên đĩa trăng.
         * 96px đủ để hai thứ rời nhau mà nút "Tạo phòng mới" vẫn nằm trong màn
         * hình đầu tiên, không phải cuộn.
+        *
+        * Trên lg, `safe center` chứ không phải `center` trần, và pt-10 thay cho
+        * pt-0. Cột phải giờ mang hai thẻ, và trên màn 1366x768 tổng chiều cao
+        * của nó chạm sát mép: `justify-content: center` với nội dung cao hơn
+        * khung thì tràn ra CẢ HAI đầu, mà đầu trên của một trang thì không cuộn
+        * ngược lên được - thương hiệu biến mất không lấy lại được. `safe center`
+        * vẫn căn giữa khi còn chỗ và tự bám mép trên khi hết chỗ; trình duyệt
+        * không hiểu từ khoá này thì bỏ nguyên khai báo và rơi về flex-start,
+        * đúng bằng hành vi ta muốn ở trường hợp chật. pt-10 là để lúc đó chữ
+        * không dán thẳng vào mép trên.
         */}
-      <main className="relative mx-auto flex min-h-[100svh] w-full flex-col items-center px-5 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-24 sm:px-6 sm:pt-12 lg:justify-center lg:px-8 lg:pt-0">
+      <main className="relative mx-auto flex min-h-[100svh] w-full flex-col items-center px-5 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-24 sm:px-6 sm:pt-12 lg:justify-center lg:px-8 lg:pt-10 lg:[justify-content:safe_center]">
         {/*
           * lg:row-span-2 trên panel form là thứ khâu hai cột lại với nhau.
           *
@@ -312,172 +322,189 @@ export default function Home() {
             </p>
           </section>
 
-          {/* motion-safe: chỉ một lần fade + trượt lên khi vào trang. Tắt
-            * chuyển động thì panel hiện thẳng, không mất gì cả. */}
-          <section className="lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:self-start motion-safe:animate-riseIn">
-            <p className="mb-3.5 flex items-center gap-3 text-[0.68rem] font-bold uppercase tracking-[0.32em] text-mist/80">
-              <span
-                aria-hidden="true"
-                className="h-px w-8 bg-gradient-to-r from-transparent to-mist/45"
-              />
-              Bước vào ngôi làng
-            </p>
+          {/*
+            * Cột phải là MỘT ô lưới chứa hai thẻ, không phải hai ô chồng nhau.
+            *
+            * Bản trước đặt panel form ở `row-start-1 row-span-2` rồi lại đặt
+            * lịch sử ở `row-start-2` cùng cột: hai thứ được xếp đè lên đúng
+            * một ô. Gộp vào một ô rồi để flex xếp dọc thì thứ tự đọc, khoảng
+            * cách và bề rộng chỉ còn một nguồn sự thật - và cả hai thẻ tự khớp
+            * đúng bề ngang của cột.
+            *
+            * gap-3.5 (14px) là cố ý ngắn: đủ để hai thẻ tách hẳn ra, chưa đủ
+            * để lịch sử trôi thành một khối rời rạc dưới chân trang.
+            */}
+          <div className="flex flex-col gap-3.5 lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:self-start">
+            {/* motion-safe: chỉ một lần fade + trượt lên khi vào trang. Tắt
+              * chuyển động thì panel hiện thẳng, không mất gì cả. */}
+            <section className="motion-safe:animate-riseIn">
+              <p className="mb-3.5 flex items-center gap-3 text-[0.68rem] font-bold uppercase tracking-[0.32em] text-mist/80">
+                <span
+                  aria-hidden="true"
+                  className="h-px w-8 bg-gradient-to-r from-transparent to-mist/45"
+                />
+                Bước vào ngôi làng
+              </p>
 
-            <div className="gate-panel p-6 sm:p-7 lg:p-[clamp(1.75rem,2vw,2.5rem)]">
-              {/* relative để nội dung nằm TRÊN hai lớp ánh sáng ::before và
-                * ::after của panel - chúng là phần tử định vị nên mặc định vẽ
-                * đè lên chữ trong luồng. */}
-              <div className="relative space-y-5">
-                <div>
-                  <label
-                    htmlFor="nickname"
-                    className="gate-label"
-                  >
-                    Biệt danh của bạn
-                  </label>
-                  <input
-                    id="nickname"
-                    className="gate-input"
-                    value={nickname}
-                    maxLength={20}
-                    autoComplete="nickname"
-                    placeholder="VD: Thợ săn đêm"
-                    onChange={(e) => setNickname(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <button
-                    className="gate-cta"
-                    disabled={busy || !nameReady}
-                    aria-describedby={createHint ? "create-hint" : undefined}
-                    onClick={handleCreate}
-                  >
-                    {pending === "create" ? (
-                      <>
-                        <span className="gate-spinner" aria-hidden="true" />
-                        Đang mở phòng...
-                      </>
-                    ) : (
-                      "Tạo phòng mới"
-                    )}
-                  </button>
-                  {createHint && (
-                    <p id="create-hint" className="mt-2 text-xs text-mist/80">
-                      {createHint}
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-3" aria-hidden="true">
-                  <span className="h-px flex-1 bg-white/10" />
-                  <span className="text-[0.68rem] uppercase tracking-[0.18em] text-mist/85">
-                    hoặc đã có mã phòng
-                  </span>
-                  <span className="h-px flex-1 bg-white/10" />
-                </div>
-
-                <div>
-                  {/*
-                    * Người rót `?code=` vào ô ngay bên dưới. Không vẽ gì cả.
-                    *
-                    * Đặt ngay cạnh ô nhập chứ không ở đầu trang: nó chỉ tồn tại
-                    * vì cái input này, và đọc tới đây là thấy ngay ai chạm vào
-                    * `joinCode`.
-                    *
-                    * `fallback={null}` không phải là bỏ trống cho xong - nó là
-                    * bản sao chính xác của một component render null, nên
-                    * boundary này không có gì để nhấp nháy lúc hydrate và không
-                    * có bản giao diện thứ hai nào phải giữ cho khớp.
-                    */}
-                  <Suspense fallback={null}>
-                    <JoinCodeFromQuery onCode={setJoinCode} />
-                  </Suspense>
-                  <label
-                    htmlFor="join-code"
-                    className="gate-label"
-                  >
-                    Mã phòng
-                  </label>
-                  <div className="flex gap-2.5">
-                    <input
-                      id="join-code"
-                      className="gate-input uppercase tracking-[0.35em]"
-                      value={joinCode}
-                      maxLength={5}
-                      autoComplete="off"
-                      autoCapitalize="characters"
-                      placeholder="ABCDE"
-                      aria-describedby={joinHint ? "join-hint" : undefined}
-                      onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                      onKeyDown={(e) => e.key === "Enter" && handleJoin()}
-                    />
-                    <button
-                      className="gate-secondary"
-                      disabled={busy || !nameReady || !codeReady}
-                      aria-describedby={joinHint ? "join-hint" : undefined}
-                      onClick={handleJoin}
+              <div className="gate-panel p-6 sm:p-7 lg:p-[clamp(1.75rem,2vw,2.5rem)]">
+                {/* relative để nội dung nằm TRÊN hai lớp ánh sáng ::before và
+                  * ::after của panel - chúng là phần tử định vị nên mặc định vẽ
+                  * đè lên chữ trong luồng. */}
+                <div className="relative space-y-5">
+                  <div>
+                    <label
+                      htmlFor="nickname"
+                      className="gate-label"
                     >
-                      {pending === "join" ? (
+                      Biệt danh của bạn
+                    </label>
+                    <input
+                      id="nickname"
+                      className="gate-input"
+                      value={nickname}
+                      maxLength={20}
+                      autoComplete="nickname"
+                      placeholder="VD: Thợ săn đêm"
+                      onChange={(e) => setNickname(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <button
+                      className="gate-cta"
+                      disabled={busy || !nameReady}
+                      aria-describedby={createHint ? "create-hint" : undefined}
+                      onClick={handleCreate}
+                    >
+                      {pending === "create" ? (
                         <>
                           <span className="gate-spinner" aria-hidden="true" />
-                          Đang vào...
+                          Đang mở phòng...
                         </>
                       ) : (
-                        "Vào phòng"
+                        "Tạo phòng mới"
                       )}
                     </button>
+                    {createHint && (
+                      <p id="create-hint" className="mt-2 text-xs text-mist/80">
+                        {createHint}
+                      </p>
+                    )}
                   </div>
-                  {joinHint && (
-                    <p id="join-hint" className="mt-2 text-xs text-mist/80">
-                      {joinHint}
+
+                  <div className="flex items-center gap-3" aria-hidden="true">
+                    <span className="h-px flex-1 bg-white/10" />
+                    <span className="text-[0.68rem] uppercase tracking-[0.18em] text-mist/85">
+                      hoặc đã có mã phòng
+                    </span>
+                    <span className="h-px flex-1 bg-white/10" />
+                  </div>
+
+                  <div>
+                    {/*
+                      * Người rót `?code=` vào ô ngay bên dưới. Không vẽ gì cả.
+                      *
+                      * Đặt ngay cạnh ô nhập chứ không ở đầu trang: nó chỉ tồn tại
+                      * vì cái input này, và đọc tới đây là thấy ngay ai chạm vào
+                      * `joinCode`.
+                      *
+                      * `fallback={null}` không phải là bỏ trống cho xong - nó là
+                      * bản sao chính xác của một component render null, nên
+                      * boundary này không có gì để nhấp nháy lúc hydrate và không
+                      * có bản giao diện thứ hai nào phải giữ cho khớp.
+                      */}
+                    <Suspense fallback={null}>
+                      <JoinCodeFromQuery onCode={setJoinCode} />
+                    </Suspense>
+                    <label
+                      htmlFor="join-code"
+                      className="gate-label"
+                    >
+                      Mã phòng
+                    </label>
+                    <div className="flex gap-2.5">
+                      <input
+                        id="join-code"
+                        className="gate-input uppercase tracking-[0.35em]"
+                        value={joinCode}
+                        maxLength={5}
+                        autoComplete="off"
+                        autoCapitalize="characters"
+                        placeholder="ABCDE"
+                        aria-describedby={joinHint ? "join-hint" : undefined}
+                        onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => e.key === "Enter" && handleJoin()}
+                      />
+                      <button
+                        className="gate-secondary"
+                        disabled={busy || !nameReady || !codeReady}
+                        aria-describedby={joinHint ? "join-hint" : undefined}
+                        onClick={handleJoin}
+                      >
+                        {pending === "join" ? (
+                          <>
+                            <span className="gate-spinner" aria-hidden="true" />
+                            Đang vào...
+                          </>
+                        ) : (
+                          "Vào phòng"
+                        )}
+                      </button>
+                    </div>
+                    {joinHint && (
+                      <p id="join-hint" className="mt-2 text-xs text-mist/80">
+                        {joinHint}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Dấu chấm than là bắt buộc, không phải trang trí: một khối
+                    * đỏ nhạt là màu, và màu một mình thì người mù màu đọc ra
+                    * đúng bằng một dòng chữ bình thường. */}
+                  {error && (
+                    <p
+                      role="alert"
+                      className="flex items-start gap-2.5 rounded-xl border border-blood-500/40 bg-blood-600/15 px-3.5 py-2.5 text-sm text-blood-400"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="mt-px grid h-4 w-4 shrink-0 place-items-center rounded-full bg-blood-500 text-[0.6rem] font-black leading-none text-white"
+                      >
+                        !
+                      </span>
+                      <span>{error}</span>
                     </p>
                   )}
-                </div>
 
-                {/* Dấu chấm than là bắt buộc, không phải trang trí: một khối
-                  * đỏ nhạt là màu, và màu một mình thì người mù màu đọc ra
-                  * đúng bằng một dòng chữ bình thường. */}
-                {error && (
-                  <p
-                    role="alert"
-                    className="flex items-start gap-2.5 rounded-xl border border-blood-500/40 bg-blood-600/15 px-3.5 py-2.5 text-sm text-blood-400"
-                  >
-                    <span
-                      aria-hidden="true"
-                      className="mt-px grid h-4 w-4 shrink-0 place-items-center rounded-full bg-blood-500 text-[0.6rem] font-black leading-none text-white"
-                    >
-                      !
-                    </span>
-                    <span>{error}</span>
+                  <p className="border-t border-white/[0.07] pt-4 text-xs leading-relaxed text-mist/75">
+                    Tối thiểu 6 người mỗi ván - thiếu thì thêm bot ngay trong phòng chờ.
                   </p>
-                )}
 
-                <p className="border-t border-white/[0.07] pt-4 text-xs leading-relaxed text-mist/75">
-                  Tối thiểu 6 người mỗi ván - thiếu thì thêm bot ngay trong phòng chờ.
-                </p>
-
-                {/* Nhạt hơn hẳn CTA và không có nền: đây là việc người ta làm
-                  * một lần trong đời chứ không phải hành động chính. */}
-                {hasIdentity && (
-                  <button
-                    className="w-full rounded-lg py-1 text-center text-xs text-mist/75 underline-offset-4 transition hover:text-white hover:underline"
-                    onClick={handleLogout}
-                  >
-                    Xoá phiên đăng nhập trên thiết bị này
-                  </button>
-                )}
+                  {/* Nhạt hơn hẳn CTA và không có nền: đây là việc người ta làm
+                    * một lần trong đời chứ không phải hành động chính. */}
+                  {hasIdentity && (
+                    <button
+                      className="w-full rounded-lg py-1 text-center text-xs text-mist/75 underline-offset-4 transition hover:text-white hover:underline"
+                      onClick={handleLogout}
+                    >
+                      Xoá phiên đăng nhập trên thiết bị này
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
 
-          {/*
-            * Lịch sử ván, ngay dưới panel vào phòng.
-            *
-            * Tự ẩn hoàn toàn khi chưa đăng nhập hoặc chưa có ván nào, nên
-            * người mới vào không thấy một khung rỗng nói rằng họ chưa làm gì.
-            */}
-          <div className="lg:col-start-2 lg:row-start-2 lg:self-start">
+            {/*
+              * Lịch sử ván: thẻ riêng, ngay dưới thẻ vào phòng.
+              *
+              * Tách hẳn ra `.card` chứ không nối thêm vào `.gate-panel`: nền,
+              * bo góc và luồng sáng của hai lớp này khác nhau rõ, nên không ai
+              * đọc nhầm danh sách ván là phần tiếp theo của ô nhập mã phòng.
+              *
+              * Tự ẩn hoàn toàn khi chưa đăng nhập hoặc chưa có ván nào, nên
+              * người mới vào không thấy một khung rỗng nói rằng họ chưa làm gì -
+              * và `gap` của flex cũng không chừa chỗ cho một thẻ không tồn tại.
+              */}
             <MatchHistoryPanel />
           </div>
 
