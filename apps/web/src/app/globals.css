@@ -4,6 +4,18 @@
 
 :root {
   color-scheme: dark;
+
+  /*
+   * Nhịp dùng chung.
+   *
+   * Trước đây mỗi chỗ tự chọn số, nên hai thao tác cạnh nhau trong cùng một
+   * khung nhìn chạy hai tốc độ khác nhau mà không vì lý do gì. `--ease-out-soft`
+   * chính là đường cong mà chuyển pha trong `room/[code]/page.tsx` đang dùng,
+   * nâng lên thành token thay vì để nó bị chép lại lần thứ hai.
+   */
+  --dur-quick: 120ms;
+  --dur-base: 200ms;
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 body {
@@ -144,9 +156,9 @@ summary:focus-visible,
     transition: none;
   }
 
-  /* Nhịp thở không mang tin gì cả, tắt là xong. Màn quét thì Backdrop tự chặn
-   * từ đầu chứ không dựng rồi giấu - dựng rồi giấu thì animationend không bao
-   * giờ chạy và phần tử nằm lại vĩnh viễn. */
+  /* Nhịp thở của ảnh đại diện không mang tin gì cả, tắt là xong. Màn quét thì
+   * Backdrop tự chặn từ đầu chứ không dựng rồi giấu - dựng rồi giấu thì
+   * animationend không bao giờ chạy và phần tử nằm lại vĩnh viễn. */
   .avatar-breathe {
     animation: none;
   }
@@ -213,11 +225,45 @@ summary:focus-visible,
  * Nền sự kiện không cần z-index: nó đứng sau các .backdrop-layer trong DOM nên
  * đã nằm trên rồi. Chỉ cần nâng hai lớp phải ở trên nó.
  */
+/*
+ * Nhịp thở của cả phông nền.
+ *
+ * Biên độ theo đúng chuẩn mà `avatar-breathe` phía trên đã đặt: nhỏ tới mức
+ * không nhìn thẳng thì không thấy. Ở đây là phóng to 1.5% (`scale(1.015)`,
+ * tâm giữ nguyên vì scale quanh tâm) cộng một cú giảm opacity còn 0.96, chu kỳ
+ * 14 giây.
+ *
+ * Chu kỳ dài và biên độ nhỏ không phải dè dặt mà là điều kiện để một chuyển
+ * động chạy suốt hai mươi phút không trở thành thứ gây khó chịu. Ambient khác
+ * mọi animation khác trong app ở chỗ nó KHÔNG BAO GIỜ kết thúc.
+ */
 .backdrop-vignette {
   position: absolute;
   inset: 0;
   z-index: 1;
   background: radial-gradient(120% 78% at 50% 42%, transparent 42%, rgba(0, 0, 0, 0.62) 100%);
+  animation: backdrop-breathe 14s ease-in-out infinite;
+}
+
+@keyframes backdrop-breathe {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.96;
+    transform: scale(1.015);
+  }
+}
+
+/* Cùng độ đặc hiệu thì luật đứng SAU thắng, nên guard phải nằm dưới chính khai báo
+ * animation của `.backdrop-vignette` ngay phía trên, chứ không lẫn với các guard
+ * khác ở đầu tệp. */
+@media (prefers-reduced-motion: reduce) {
+  .backdrop-vignette {
+    animation: none;
+  }
 }
 
 /*
@@ -244,8 +290,26 @@ summary:focus-visible,
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 font-semibold transition
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 font-semibold
       disabled:opacity-40 disabled:cursor-not-allowed;
+    transition:
+      background-color var(--dur-base) var(--ease-out-soft),
+      border-color var(--dur-base) var(--ease-out-soft),
+      color var(--dur-base) var(--ease-out-soft),
+      transform var(--dur-quick) var(--ease-out-soft);
+  }
+
+  /*
+   * Lún xuống khi bấm.
+   *
+   * `transition` trần của Tailwind là 150ms tuyến tính cho MỌI thuộc tính -
+   * đọc ra là "có làm gì đó" chứ không phải một nút được thiết kế. Tách riêng
+   * `transform` ở nhịp nhanh hơn màu vì tay nhanh hơn mắt: cú lún phải kịp
+   * ngón tay, còn màu đuổi theo sau cũng được.
+   */
+  .btn:active:not(:disabled),
+  .btn-tertiary:active:not(:disabled) {
+    transform: translateY(1px);
   }
 
   .btn-primary {
@@ -267,8 +331,13 @@ summary:focus-visible,
    */
   .btn-tertiary {
     @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm
-      font-semibold text-mist/85 transition hover:bg-white/[0.07] hover:text-white
+      font-semibold text-mist/85 hover:bg-white/[0.07] hover:text-white
       active:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-50;
+    transition:
+      background-color var(--dur-base) var(--ease-out-soft),
+      border-color var(--dur-base) var(--ease-out-soft),
+      color var(--dur-base) var(--ease-out-soft),
+      transform var(--dur-quick) var(--ease-out-soft);
   }
 
   /* Cùng hình dáng, nhưng chữ ngả về phía nguy hiểm khi rê chuột. */
@@ -389,6 +458,20 @@ summary:focus-visible,
 
   .badge-phase {
     @apply inline-block rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider;
+  }
+}
+
+/* Phản hồi khi bấm là trang trí thuần: tắt hết vẫn bấm được đủ. */
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .btn-tertiary {
+    transition: none;
+  }
+
+  .btn:active:not(:disabled),
+  .btn-tertiary:active:not(:disabled),
+  .btn-cta:active:not(:disabled) {
+    transform: none;
   }
 }
 
@@ -717,6 +800,14 @@ summary:focus-visible,
   box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
 }
 
+/* Guard phải nằm SAU chính rule nó huỷ: cùng độ đặc hiệu thì luật đứng sau
+ * thắng, và `@media` không cộng thêm độ đặc hiệu nào. */
+@media (prefers-reduced-motion: reduce) {
+  .gate-cta:active:not(:disabled) {
+    transform: none;
+  }
+}
+
 .gate-secondary {
   @apply inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-night-600
     bg-night-800/70 px-4 font-semibold text-mist transition;
@@ -862,4 +953,25 @@ summary:focus-visible,
 .lobby-roster-scroll::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: rgba(157, 178, 213, 0.28);
+}
+
+/* Đồng hồ dưới 10 giây: nhịp đập đi kèm màu đỏ vốn đã có. */
+.timer-danger-pulse {
+  animation: timer-danger-pulse 1s ease-in-out infinite;
+}
+
+@keyframes timer-danger-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timer-danger-pulse {
+    animation: none;
+  }
 }
