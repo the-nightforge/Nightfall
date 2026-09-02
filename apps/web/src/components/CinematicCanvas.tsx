@@ -189,12 +189,156 @@ interface BuiltScene {
 }
 
 /**
+ * Nhịp chung cho mọi chuyển động trong cảnh.
+ *
+ * Không có gì trong tự nhiên khởi hành từ đứng yên rồi chạy đều. Bản đầu để
+ * trăng và sương đi tuyến tính trong khi làng lại có easing, nên hai nửa cảnh
+ * chạy hai nhịp khác nhau - đó là một phần của cảm giác "giả".
+ */
+function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+/**
+ * Đường bao một nếp nhà: thân cộng mái dốc.
+ *
+ * Dựng bằng `Shape` PHẲNG chứ không phải `BoxGeometry`. Camera nhìn hơi chếch
+ * nên một khối hộp lộ cả mặt nóc lẫn mặt hông - mà siluet thì theo định nghĩa
+ * chỉ có một mặt, và cái nóc lộ ra chính là thứ tố cáo "đây là mấy cái hộp".
+ *
+ * Gốc toạ độ đặt ở ĐÁY nhà, nên `scale.y` giãn lên trên và chân nhà tự đứng yên
+ * trên đường chân trời - bản cũ phải bù vị trí bằng tay vì gốc nằm giữa khối.
+ */
+function houseShape(THREE: ThreeModule, width: number, body: number, roof: number) {
+  const shape = new THREE.Shape();
+  shape.moveTo(-width / 2, 0);
+  shape.lineTo(-width / 2, body);
+  shape.lineTo(0, body + roof);
+  shape.lineTo(width / 2, body);
+  shape.lineTo(width / 2, 0);
+  shape.closePath();
+  return new THREE.ShapeGeometry(shape);
+}
+
+const SKY_VERT = `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+/*
+ * Trời, trăng và sương vẽ TRONG shader, không phải bằng vật thể.
+ *
+ * Bản đầu dựng sương bằng ba tấm `PlaneGeometry` màu đặc: chúng có cạnh chữ
+ * nhật cứng và trôi ngang nguyên khối, nên mắt bắt được ngay đó là ba tấm kính
+ * màu chứ không phải sương. Nhiễu trong shader thì không có cạnh nào để thấy.
+ *
+ * Trăng cũng vậy: bản đầu là `SphereGeometry` chiếu bằng `PointLight` đặt gần
+ * như bên trong nó, cho ra một quả cầu có đốm sáng và rìa tối. Trăng thật ở xa
+ * vô cùng nên là một ĐĨA sáng đều. Vẽ bằng distance field vừa đúng hơn vừa rẻ.
+ *
+ * Và đây là chỗ lời hứa "trăng đổ sáng lên sương" mới thành thật: quầng sáng
+ * của trăng nhân thẳng vào độ sáng của sương. Bản đầu CÓ `PointLight`, nhưng
+ * sương và nhà đều dùng `MeshBasicMaterial` - vật liệu KHÔNG nhận ánh sáng -
+ * nên hai cái đèn trong scene chưa từng chiếu lên bất cứ thứ gì.
+ */
+const SKY_FRAG = `
+precision mediump float;
+varying vec2 vUv;
+uniform float uT;
+uniform float uAspect;
+uniform vec2 uMoon;
+uniform float uMoonR;
+
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+}
+
+float valueNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+    mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
+    u.y
+  );
+}
+
+float fbm(vec2 p) {
+  float sum = 0.0;
+  float amp = 0.5;
+  for (int i = 0; i < 4; i++) {
+    sum += amp * valueNoise(p);
+    p *= 2.02;
+    amp *= 0.5;
+  }
+  return sum;
+}
+
+void main() {
+  // Bang mau noi tiep .cine-nightfall cua ban CSS, khong ve lai tu dau.
+  // (GLSL nam trong template literal nen tuyet doi khong duoc co dau backtick)
+  vec3 high = vec3(0.039, 0.071, 0.149);
+  vec3 mid = vec3(0.020, 0.035, 0.078);
+  vec3 low = vec3(0.008, 0.012, 0.039);
+  vec3 sky = mix(low, mid, smoothstep(0.0, 0.55, vUv.y));
+  sky = mix(sky, high, smoothstep(0.45, 1.0, vUv.y));
+
+  // Màn đêm buông: cả bầu trời trầm xuống trong suốt cảnh.
+  sky *= mix(1.10, 0.58, uT);
+
+  vec2 d = vec2((vUv.x - uMoon.x) * uAspect, vUv.y - uMoon.y);
+  float dist = length(d);
+
+  // Đĩa trăng: biên mềm vừa đủ để không răng cưa, KHÔNG đổ khối cầu.
+  float disc = 1.0 - smoothstep(uMoonR * 0.93, uMoonR, dist);
+  // Quầng sáng toả - đây là thứ làm trăng nằm TRONG bầu trời thay vì dán lên.
+  float halo = exp(-dist * 9.0) * 0.42 + exp(-dist * 3.2) * 0.07;
+
+  vec3 moonColor = vec3(0.87, 0.91, 1.0);
+  vec3 color = sky + moonColor * halo * (0.35 + 0.65 * uT);
+  color = mix(color, moonColor, disc);
+
+  // Sương bám chân trời rồi tan dần lên cao - không còn cạnh nào để nhìn thấy.
+  float band = smoothstep(0.46, 0.02, vUv.y);
+  vec2 fp = vec2(vUv.x * uAspect, vUv.y);
+  // Trôi theo easing chứ không đều: uT đã là 0..1 nên bình phương cho nó nhích
+  // chậm lúc đầu rồi trôi nhanh dần, giống một luồng khí bắt đầu chuyển động.
+  float drift = uT * uT;
+  float near = fbm(fp * vec2(4.2, 9.0) + vec2(-drift * 1.9, 0.0));
+  float far = fbm(fp * vec2(2.1, 5.5) + vec2(-drift * 0.85, 4.3));
+  // Nang len luy thua: keo phan mong xuong gan 0 va chi giu lai dinh, nen no
+  // thanh tung luon thay vi mot mang xam deu phu ca day khung.
+  float fog = pow((near * 0.62 + far * 0.38) * band, 1.9);
+  // Suong day dan khi dem xuong, va sang len o phia co trang.
+  fog *= 0.35 + 0.65 * uT;
+  color += vec3(0.40, 0.55, 0.80) * fog * (0.42 + halo * 2.2);
+
+  // Anh sang con sot lai o chan troi.
+  //
+  // Khong phai trang tri: siluet mau den chi doc duoc khi co cai gi SANG HON
+  // ngay sau lung no. Khong co dai nay thi lang den tan vao bau troi den va
+  // bien mat hoan toan - dung loi da mac o ban truoc.
+  float horizon = smoothstep(0.44, 0.15, vUv.y) * smoothstep(0.01, 0.13, vUv.y);
+  color += vec3(0.085, 0.115, 0.200) * horizon * mix(1.0, 0.45, uT);
+
+  // Sat day khung thi toi han, de mat lang co chan de dung.
+  color = mix(color, vec3(0.006, 0.009, 0.026), smoothstep(0.10, 0.0, vUv.y) * 0.85);
+
+  // Toi bon goc de mat don vao giua khung.
+  float vign = smoothstep(1.15, 0.35, length(vUv - vec2(0.5)));
+  gl_FragColor = vec4(color * mix(0.72, 1.0, vign), 1.0);
+}
+`;
+
+/**
  * Màn đêm buông xuống.
  *
- * Nối tiếp bảng màu của `.cine-nightfall` chứ không vẽ lại: nền xanh đen, ánh
- * lạnh ở góc trên phải, siluet làng ở đáy. Phần 3D thêm vào đúng thứ CSS không
- * làm được - trăng có khối và đổ sáng thật, sương có chiều sâu, và làng tách
- * thành mấy lớp theo trục z nên camera nhích một chút là có thị sai.
+ * Trời, trăng và sương nằm trong một shader phủ khung nhìn; chỉ siluet làng còn
+ * là vật thể thật, vì đó là chỗ DUY NHẤT cần chiều sâu hình học.
  *
  * Camera chỉ nhích rất nhẹ: đây là đoạn chuyển cảnh 1,2 giây xem mười lần một
  * ván, không phải một đoạn phim mở đầu.
@@ -202,84 +346,94 @@ interface BuiltScene {
 function buildNightfall(THREE: ThreeModule, scene: Scene3D): BuiltScene {
   const disposables: { dispose(): void }[] = [];
 
-  const moonLight = new THREE.PointLight(0x7896dc, 40, 40);
-  moonLight.position.set(3.2, 3.0, 1.5);
-  scene.add(moonLight);
-  scene.add(new THREE.AmbientLight(0x0a1226, 2));
-
-  const moonGeo = new THREE.SphereGeometry(0.75, 32, 24);
-  const moonMat = new THREE.MeshStandardMaterial({
-    color: 0xdfe8ff,
-    emissive: 0x9db2d5,
-    emissiveIntensity: 0.8,
-    roughness: 1,
+  /*
+   * Mặt phẳng phủ kín khung nhìn, vẽ TRƯỚC mọi thứ.
+   *
+   * `depthTest: false` cộng `renderOrder = -1` nên nó luôn nằm sau, không cần
+   * đẩy ra thật xa rồi lo bị far plane cắt. Kích thước tính lại từ frustum
+   * trong `update`, nên đổi cỡ cửa sổ giữa cảnh vẫn phủ đủ.
+   */
+  const skyGeo = new THREE.PlaneGeometry(1, 1);
+  const skyMat = new THREE.ShaderMaterial({
+    vertexShader: SKY_VERT,
+    fragmentShader: SKY_FRAG,
+    depthTest: false,
+    depthWrite: false,
+    uniforms: {
+      uT: { value: 0 },
+      uAspect: { value: 1 },
+      uMoon: { value: new THREE.Vector2(0.76, 0.62) },
+      uMoonR: { value: 0.085 },
+    },
   });
-  const moon = new THREE.Mesh(moonGeo, moonMat);
-  moon.position.set(3.2, 2.2, 0);
-  scene.add(moon);
-  disposables.push(moonGeo, moonMat);
+  const sky = new THREE.Mesh(skyGeo, skyMat);
+  sky.renderOrder = -1;
+  scene.add(sky);
+  disposables.push(skyGeo, skyMat);
 
-  // Ba lớp sương ở ba độ sâu khác nhau. Trôi ngang ở tốc độ khác nhau, nên
-  // phối cảnh tự sinh ra cảm giác dày chứ không phải một tấm phẳng mờ.
-  const fogLayers = [-1, -3, -6].map((z, index) => {
-    const geo = new THREE.PlaneGeometry(26, 7);
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0x78a0dc,
-      transparent: true,
-      opacity: 0.05 + index * 0.03,
-      depthWrite: false,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(0, -1.2 - index * 0.35, z);
-    scene.add(mesh);
-    disposables.push(geo, mat);
-    return mesh;
-  });
+  /*
+   * Siluet làng - phần DUY NHẤT còn là vật thể thật.
+   *
+   * Hai hàng ở hai độ sâu, nên camera nhích là chúng trượt khác tốc độ. Hàng xa
+   * tô nhạt hơn: phối cảnh khí quyển là tín hiệu chiều sâu mạnh hơn cả thị sai,
+   * và nó hoạt động kể cả khi camera đứng yên.
+   */
+  const nearMat = new THREE.MeshBasicMaterial({ color: 0x010206 });
+  const farMat = new THREE.MeshBasicMaterial({ color: 0x0a1020 });
+  disposables.push(nearMat, farMat);
 
-  // Siluet làng: mấy khối hộp ở hai độ sâu. Đen tuyền - nó là bóng, không phải
-  // vật thể được chiếu sáng.
-  const houseMat = new THREE.MeshBasicMaterial({ color: 0x02030a });
-  disposables.push(houseMat);
-  // Chiều cao gốc của từng nhà, giữ lại vì `update` cần nó để bù vị trí khi
-  // scale: scale.y giãn quanh GỐC của khối, nên không bù thì nhà co giãn quanh
-  // tâm và đáy nhà rời khỏi đường chân trời.
-  const houseHeights = [-4.5, -3, -1.6, 0.2, 1.8, 3.4, 4.8].map(
-    (_x, index) => 1.1 + ((index * 37) % 9) / 10,
-  );
-  const houses = [-4.5, -3, -1.6, 0.2, 1.8, 3.4, 4.8].map((x, index) => {
-    const geo = new THREE.BoxGeometry(1.1, houseHeights[index], 1);
-    const mesh = new THREE.Mesh(geo, houseMat);
-    mesh.position.set(x, -2.6 + houseHeights[index] / 2, index % 2 === 0 ? -0.5 : -2.2);
+  // Bề ngang, chiều cao và độ dốc mái đều khác nhau. Bản cũ dùng bảy khối gần
+  // như cùng kích thước xếp đều nhau, nên nó đọc ra một hàng rào chứ không phải
+  // một xóm.
+  const layout = [
+    { x: -4.6, w: 1.25, body: 0.75, roof: 0.5, far: true },
+    { x: -3.3, w: 0.95, body: 1.05, roof: 0.38, far: false },
+    { x: -2.1, w: 1.4, body: 0.62, roof: 0.55, far: true },
+    { x: -0.8, w: 1.05, body: 0.92, roof: 0.42, far: false },
+    { x: 0.5, w: 1.55, body: 1.2, roof: 0.6, far: false },
+    { x: 1.9, w: 0.9, body: 0.7, roof: 0.34, far: true },
+    { x: 3.1, w: 1.3, body: 1.0, roof: 0.48, far: false },
+    { x: 4.4, w: 1.1, body: 0.82, roof: 0.44, far: true },
+  ];
+
+  const houses = layout.map((item) => {
+    const geo = houseShape(THREE, item.w, item.body, item.roof);
+    const mesh = new THREE.Mesh(geo, item.far ? farMat : nearMat);
+    mesh.position.set(item.x, -2.35, item.far ? -2.2 : -0.5);
     scene.add(mesh);
     disposables.push(geo);
-    return mesh;
+    return { mesh, far: item.far };
   });
 
   return {
     update(t, camera) {
-      // Trăng mọc: đi lên và sáng dần trong nửa đầu cảnh.
-      moon.position.y = 1.5 + t * 1.2;
-      moonLight.intensity = 40 * Math.min(1, t * 2);
+      const eased = easeOutCubic(t);
 
-      // Sương trôi ngang, lớp gần nhanh hơn lớp xa.
-      fogLayers.forEach((layer, index) => {
-        layer.position.x = -t * (1.6 - index * 0.4);
+      // Mặt phẳng trời phải phủ đúng frustum ở khoảng cách của nó.
+      const distance = camera.position.z - sky.position.z;
+      const height = 2 * Math.tan(((camera.fov * Math.PI) / 180) / 2) * distance;
+      sky.scale.set(height * camera.aspect * 1.02, height * 1.02, 1);
+
+      skyMat.uniforms.uT.value = t;
+      skyMat.uniforms.uAspect.value = camera.aspect;
+      // Trăng mọc theo easing, không phải vận tốc hằng.
+      skyMat.uniforms.uMoon.value.set(0.76, 0.62 + eased * 0.11);
+
+      houses.forEach(({ mesh, far }) => {
+        // Hàng xa nhô lên sớm hơn một nhịp. Cả làng hiện cùng lúc trông như một
+        // tấm bìa được kéo lên, không phải một xóm hiện dần ra khỏi bóng tối.
+        const local = Math.min(1, t / (far ? 0.72 : 0.9));
+        mesh.scale.y = 0.62 + easeOutCubic(local) * 0.38;
       });
 
-      // Làng trồi lên từ đáy, giống `cine-village-rise` của bản CSS.
-      const rise = 1 - Math.pow(1 - t, 3);
-      // scale.y quanh gốc của khối, nên phải bù lại vị trí để đáy nhà đứng
-      // yên trên đường chân trời thay vì nhà co giãn quanh tâm nó.
-      houses.forEach((house, index) => {
-        const full = houseHeights[index];
-        house.scale.y = 0.55 + rise * 0.45;
-        house.position.y = -2.6 + (full * house.scale.y) / 2;
-      });
-
-      // Camera nhích RẤT nhẹ để sinh thị sai giữa các lớp. 0.25 đơn vị trên cả
-      // cảnh - đủ để thấy chiều sâu, không đủ để thành một cú lia máy.
-      camera.position.x = -0.25 * rise;
-      camera.lookAt(0, 0, 0);
+      /*
+       * Camera chỉ TỊNH TIẾN, không `lookAt`.
+       *
+       * Bản đầu gọi `lookAt(0,0,0)` trong khi dời `position.x`, nên cả cảnh xoay
+       * nhẹ - mắt đọc ra là rung máy chứ không phải chiều sâu. Thị sai thật đến
+       * từ tịnh tiến thuần: hai hàng nhà ở hai độ sâu trượt khác tốc độ.
+       */
+      camera.position.x = -0.22 * eased;
     },
     dispose() {
       for (const item of disposables) item.dispose();
