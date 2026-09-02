@@ -162,3 +162,28 @@ describe("schema snapshot phòng", () => {
     expect(roomEnvelopeSchema.safeParse(input).success).toBe(false);
   });
 });
+
+/*
+ * Trường thêm sau PHẢI optional.
+ *
+ * `persistenceVersion` là `z.literal`, và mọi trường bắt buộc mới đều làm ảnh
+ * chụp ghi bởi bản trước trượt `safeParse`. Trượt ở đây không phải là "bỏ qua
+ * một trường": `loadEnvelope` đưa bản trượt vào `quarantine`, trả `corrupt`, và
+ * người chơi được báo là ván cũ không khôi phục được. Nói cách khác, đánh dấu
+ * một trường mới là bắt buộc sẽ GIẾT MỌI VÁN ĐANG CHẠY ngay lúc deploy.
+ */
+describe("tương thích ngược với ảnh chụp của bản cũ", () => {
+  it("thiếu startedAt vẫn đọc được", () => {
+    const envelope = validEnvelope();
+    delete (envelope.room as Record<string, unknown>).startedAt;
+
+    expect(roomEnvelopeSchema.safeParse(envelope).success).toBe(true);
+  });
+
+  it("thiếu kickedPlayerIds vẫn đọc được", () => {
+    const envelope = validEnvelope();
+    delete (envelope.room as Record<string, unknown>).kickedPlayerIds;
+
+    expect(roomEnvelopeSchema.safeParse(envelope).success).toBe(true);
+  });
+});

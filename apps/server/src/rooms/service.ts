@@ -35,6 +35,35 @@ import { withPlayerRoomLock } from "./player-room-lock";
 export class RoomError extends Error {}
 
 /**
+ * Hai cấu hình này có thật sự khác nhau không.
+ *
+ * So từng trường chứ không `JSON.stringify`: thứ tự khoá của hai object cùng
+ * nội dung có thể khác nhau, và khi đó stringify báo "khác" cho hai thứ giống
+ * hệt. `RoomConfig` toàn giá trị nguyên thuỷ nên so nông là đủ và đúng.
+ */
+function sameRoomConfig(a: RoomConfig, b: RoomConfig): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof RoomConfig>;
+  for (const key of keys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
+}
+
+/*
+ * VÌ SAO CẦN CHẶN THAO TÁC KHÔNG ĐỔI TRẠNG THÁI, bên cạnh rate limit.
+ *
+ * `set-ready` và `update-config` đều kết thúc bằng một lượt ghi Redis cộng một
+ * vòng dựng snapshot CHO MỌI THÀNH VIÊN. Mà `set-ready` chỉ đòi tư cách thành
+ * viên, không đòi quyền chủ phòng - nên trong một phòng 15 người, một người bất
+ * kỳ lặp lại đúng giá trị đang có cũng nhân tải lên mười lăm lần, trên một
+ * server cố ý chạy MỘT instance nên không có chỗ nào hấp thụ.
+ *
+ * Rate limit đặt trần cho số lượt. Chốt này thì rẻ hơn và đúng nghĩa hơn: một
+ * lời gọi không đổi gì thì không đáng tốn gì. Hai lớp bổ sung cho nhau, không
+ * thay thế nhau.
+ */
+
+/**
  * Kết quả nạp phòng, quy về một `Room` hoặc một lỗi NÓI RÕ chuyện gì đã xảy ra.
  *
  * Ba lối hỏng phải là ba câu khác nhau với người chơi: "không có phòng này" là
@@ -289,6 +318,10 @@ export const roomService = {
     const m = assertMember(room, playerId);
     if (room.status !== "LOBBY") throw new RoomError("Trận đấu đang diễn ra");
     if (m.isBot) throw new RoomError("Bot luôn sẵn sàng");
+    // Gửi lại đúng giá trị đang có thì không có gì để ghi và không có gì để
+    // phát. Chốt này đứng SAU các lối lỗi ở trên, nên thông báo lỗi không đổi.
+    // Xem `noOpMutation` ở đầu file về vì sao nó cần thiết bên cạnh rate limit.
+    if (m.ready === ready) return;
     m.ready = ready;
     void persistRoom(room).then(() => broadcastRoom(room.code));
   },
@@ -326,6 +359,10 @@ export const roomService = {
     const room = getRoom(roomCode)!;
     assertHost(room, hostId);
     if (room.status !== "LOBBY") throw new RoomError("Không thể đổi cấu hình khi đang chơi");
+    // Cấu hình y hệt cái đang có: không ghi, không phát, không cả chấm cân
+    // bằng. Đứng SAU hai lối lỗi trên nên thông báo lỗi giữ nguyên. Cảnh báo
+    // cân bằng vẫn tới được sảnh chờ vì snapshot mang sẵn `balanceWarning`.
+    if (sameRoomConfig(room.config, config)) return;
     // Balance check before basic validation so BALANCE_UNSTABLE is surfaced for ranked mode (only when lobby has enough players)
     if (room.members.length >= 6) {
       const balance = generateWarnings(config, room.members.length);

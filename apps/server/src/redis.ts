@@ -56,7 +56,12 @@ export async function updateSessionRoom(playerId: string, roomCode: string | nul
 
 export async function getPlayerRoom(playerId: string): Promise<string | null> {
   try {
-    return redis.get(`player-room:${playerId}`);
+    // `await` là bắt buộc, không phải thừa. `return redis.get(...)` trần trả
+    // promise ra NGOÀI khối try - nó chỉ được resolve sau khi try/catch đã
+    // thoát, nên catch ở dưới không bao giờ chạy và hàm này ném thẳng khi
+    // Redis chớp mắt. Ba hàm anh em ở trên đều await, và `findRoomOf` dựa vào
+    // giao kèo "Redis lỗi thì trả null" của cả bốn.
+    return await redis.get(`player-room:${playerId}`);
   } catch {
     return null;
   }

@@ -41,6 +41,9 @@ export function restoreRoomFromEnvelope(envelope: RoomEnvelopeV1): Room {
       : null,
     chatLog: data.chatLog,
     createdAt: data.createdAt,
+    // Ảnh chụp ghi trước khi có trường này rơi về `createdAt`: một ván đang
+    // chạy được khôi phục vẫn ghi ra một thời lượng hợp lệ, chỉ hơi rộng.
+    startedAt: data.startedAt ?? data.createdAt,
     gameId: data.gameId,
     resultWritten: data.resultWritten,
     pendingStep: data.pendingStep,

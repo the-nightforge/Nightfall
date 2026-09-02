@@ -133,7 +133,25 @@ function createSession(room: Room): BotSession {
   const playerIds = room.engine
     ? room.engine.state.players.map((player) => player.id)
     : room.members.map((member) => member.playerId);
-  return new BotSession(`${room.code}:${room.createdAt}`, playerIds);
+  /*
+   * Hạt đi theo VÁN, không theo PHÒNG.
+   *
+   * `room.createdAt` bất biến suốt đời phòng, nên gieo bằng nó thì ván thứ hai
+   * trong cùng phòng mở lại ĐÚNG dòng số của ván trước - cùng tie-break, cùng
+   * biến thiên câu chữ của bảng mẫu, cùng nhịp phát biểu. Mà "Chơi lại" là
+   * luồng phổ biến nhất, nên đó là dạng lặp người chơi gặp thường xuyên nhất
+   * và cũng là dạng họ CẢM thấy trước khi giải thích được.
+   *
+   * `gameId` sinh mới ở mỗi `startGame`, đã nằm trong envelope persist, nên nó
+   * cho mỗi ván một dòng riêng mà không mất tính tái lập: cùng gameId vẫn dựng
+   * lại được y hệt. Không cần tăng `PERSISTENCE_VERSION` - `BotSession.restore`
+   * đọc `seed` từ chính ảnh chụp, nên phòng đang chạy giữ nguyên hạt cũ và chỉ
+   * ván MỚI dùng cách gieo này.
+   *
+   * Rơi về `createdAt` khi chưa có gameId: phòng ở sảnh chờ và ảnh chụp ghi
+   * trước khi có khoá này đều không mang nó.
+   */
+  return new BotSession(`${room.code}:${room.gameId ?? room.createdAt}`, playerIds);
 }
 
 /** Bắt đầu một ván mới: session cũ của phòng bị bỏ hẳn. */

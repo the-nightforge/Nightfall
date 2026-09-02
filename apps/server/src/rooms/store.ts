@@ -43,6 +43,19 @@ export interface Room {
   chatLog: ChatMessage[];
   createdAt: number;
   /**
+   * Mốc bắt đầu VÁN đang chạy, đặt ở `startGame`.
+   *
+   * Tách khỏi `createdAt` vì hai câu hỏi khác nhau: `createdAt` là "phòng này
+   * mở từ bao giờ" và nó đứng yên qua mọi lần chơi lại, còn cái này là "ván
+   * này chạy từ bao giờ". `durationSec` trong `GameResult` cần vế thứ hai -
+   * dùng vế thứ nhất thì ván thứ hai trong cùng phòng ghi vào lịch sử cả thời
+   * gian chờ ở sảnh lẫn trọn ván trước, và sai số đó nằm lại trong DB vĩnh viễn.
+   *
+   * Optional vì phòng đọc lên từ ảnh chụp ghi trước bản này không có nó; chỗ
+   * đọc rơi về `createdAt`.
+   */
+  startedAt?: number;
+  /**
    * Khoá idempotency của MỘT ván, sinh ở `startGame`.
    *
    * Ghi `GameResult` là side effect duy nhất nằm ngoài engine, nên nó là chỗ

@@ -316,6 +316,11 @@ const persistedRoomSchema = z.object({
   // trước bản này hoá hỏng ngay lúc deploy - tức giết sạch các ván đang chạy,
   // đúng cái bẫy mà `restoreRoomFromEnvelope` đã ghi chú.
   kickedPlayerIds: z.array(z.string()).optional(),
+  // OPTIONAL vì cùng lý do với `kickedPlayerIds` ngay trên: bắt buộc một
+  // trường thêm sau là làm mọi snapshot đã ghi trước bản này trượt schema,
+  // rơi vào `quarantine` và giết sạch các ván đang chạy ngay lúc deploy. Chỗ
+  // đọc rơi về `createdAt`.
+  startedAt: z.number().optional(),
 });
 
 export const roomEnvelopeSchema = z.object({

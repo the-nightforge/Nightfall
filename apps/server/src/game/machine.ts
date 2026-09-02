@@ -102,6 +102,9 @@ export function startGame(room: Room): void {
   // lúc ghi thì process có thể đã là một process khác, và một khoá sinh sau
   // restart sẽ không nhận ra bản ghi mà process trước đã kịp tạo.
   room.gameId = newId();
+  // Mốc đo thời lượng của ván NÀY. `room.createdAt` không dùng được: nó đứng
+  // yên qua mọi lần chơi lại trong cùng một phòng.
+  room.startedAt = Date.now();
   room.resultWritten = false;
   room.pendingStep = null;
   room.phaseSeq = 0;
