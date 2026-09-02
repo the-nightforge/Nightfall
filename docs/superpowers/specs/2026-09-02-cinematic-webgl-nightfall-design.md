@@ -35,8 +35,20 @@ giấu mất đúng câu hỏi đó cho tới khi đã làm xong hết.
 
 ## Phương án đã chọn
 
-**Thêm một bậc `"webgl"` vào thang phát lại đã có** (phương án A), thay vì thay
-thẳng cảnh CSS (B) hay chỉ thêm một lớp trang trí nằm sau (C).
+**Một đường WebGL đi song song, rơi về đúng thang phát lại đã có** (phương án
+A), thay vì thay thẳng cảnh CSS (B) hay chỉ thêm một lớp trang trí nằm sau (C).
+
+**Sửa lại sau khi đọc `prefetchPlan`:** bản duyệt đầu nói "thêm một bậc `webgl`
+vào enum `playbackMode`". Làm vậy sẽ hỏng. `prefetchPlan` mở đầu bằng
+`if (inputs.mode !== "video" || inputs.saveData) return empty;` — nên một máy ở
+bậc `"webgl"` sẽ ngừng prefetch CẢ CHÍN clip còn lại, và 900ms không đủ để tải
+một clip, nghĩa là chín cảnh kia im lặng tụt về CSS. Một enum bậc mô tả "màn này
+giàu tới đâu", nhưng WebGL ở đây là khả năng áp cho MỘT CẢNH, không phải cho cả
+màn. Hai thứ đó không cùng hình dạng.
+
+Nên `playbackMode` giữ nguyên ba giá trị, và khả năng 3D là một vị từ RIÊNG:
+`canUseWebgl(inputs)`. Cảnh có scene 3D thì hỏi vị từ đó; mọi cảnh khác đi
+nguyên đường video/CSS cũ, không biết gì về WebGL.
 
 B bị bác vì nó phá ba đường lui mà `playbackMode` đang giữ: máy không có WebGL2
 mất hẳn chuyển cảnh, Save-Data mất nghĩa, và `prefers-reduced-motion` phải tự
