@@ -57,6 +57,66 @@ export function resolveTrustProxy(env: NodeJS.ProcessEnv): number {
   return value;
 }
 
+/**
+ * Số nguyên dương từ env, hoặc ném ngay lúc khởi động.
+ *
+ * Cùng một kỷ luật mà `resolvePort` và `resolveBotAiMaxCallsPerGame` đã áp -
+ * xem chú thích của hàm sau về vì sao im lặng nuốt cấu hình hỏng là cái bẫy.
+ * Năm biến CHAT và SIGNUP trước đây đi qua `Number(...)` trần và bỏ lọt đúng
+ * những giá trị nguy hiểm nhất:
+ *
+ *  - Chuỗi RỖNG ra 0. `??` không bắt được nó vì "" không phải null/undefined,
+ *    và `CHAT_RATE_LIMIT_COUNT=0` làm `recent.length < 0` luôn sai - cả phòng
+ *    mất quyền chat, không log, không lỗi.
+ *  - Chuỗi rác ra NaN. `text.length > NaN` luôn sai, nên trần độ dài tin nhắn
+ *    biến mất; `SIGNUP_RATE_LIMIT_COUNT` thành NaN thì mở toang endpoint duy
+ *    nhất không cần đăng nhập.
+ *
+ * Không nhận 0 là "tắt có chủ đích": chưa biến nào ở đây có ý nghĩa đó, và một
+ * trần bằng không luôn là lỗi gõ nhầm chứ không phải một ý định.
+ */
+export function resolvePositiveInt(
+  env: NodeJS.ProcessEnv,
+  key: string,
+  fallback: number,
+): number {
+  const raw = env[key];
+  if (raw === undefined) return fallback;
+
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${key} phải là số nguyên dương`);
+  }
+  return value;
+}
+
+/**
+ * Origin được phép gọi API, và một cái chốt cho production.
+ *
+ * `*` ngoài production là tiện lợi đúng chỗ: dev chạy ở localhost:3000 còn
+ * server ở 4100, và bắt người mới khai origin trước khi chạy được là dựng rào
+ * ở lối vào.
+ *
+ * Ở production thì `*` gần như luôn là một biến bị quên. Tác động hẹp hơn vẻ
+ * ngoài - token nằm ở localStorage chứ không phải cookie, nên origin lạ không
+ * đọc được nó - nhưng nó để bất kỳ trang nào cũng gọi được `POST /api/players`
+ * và mở socket vào backend này. Ném ngay lúc khởi động theo đúng lối mà
+ * `resolveVoiceConfig` đã chọn cho LiveKit thiếu một nửa: hỏng ồn ào còn hơn
+ * hỏng lặng lẽ.
+ */
+export function resolveCorsOrigin(env: NodeJS.ProcessEnv): string {
+  const raw = env.CORS_ORIGIN?.trim();
+  const value = raw ? raw : "*";
+
+  if (env.NODE_ENV === "production" && value === "*") {
+    throw new Error(
+      "CORS_ORIGIN phải là danh sách origin cụ thể ở production, không được để `*`. " +
+        "Đặt nó bằng đúng origin của frontend, ví dụ https://ten-du-an.vercel.app",
+    );
+  }
+  return value;
+}
+
 export type VoiceConfigResult =
   | { enabled: false }
   | { enabled: true; url: string; apiKey: string; apiSecret: string; env: string };
@@ -99,14 +159,14 @@ export const config = {
   objectStorage: resolveObjectStorageConfig(process.env),
   redisUrl: process.env.REDIS_URL ?? "redis://127.0.0.1:6380",
   nodeEnv: process.env.NODE_ENV ?? "development",
-  corsOrigin: process.env.CORS_ORIGIN ?? "*",
-  chatMaxLength: Number(process.env.CHAT_MAX_LENGTH ?? 300),
-  chatRateLimitCount: Number(process.env.CHAT_RATE_LIMIT_COUNT ?? 5),
-  chatRateLimitWindowMs: Number(process.env.CHAT_RATE_LIMIT_WINDOW_MS ?? 5000),
+  corsOrigin: resolveCorsOrigin(process.env),
+  chatMaxLength: resolvePositiveInt(process.env, "CHAT_MAX_LENGTH", 300),
+  chatRateLimitCount: resolvePositiveInt(process.env, "CHAT_RATE_LIMIT_COUNT", 5),
+  chatRateLimitWindowMs: resolvePositiveInt(process.env, "CHAT_RATE_LIMIT_WINDOW_MS", 5000),
   // Tạo người chơi là endpoint DUY NHẤT không cần đăng nhập, nên nó cũng là cửa
   // duy nhất ai cũng gõ được. Khoá theo IP: xem `trustProxy` bên dưới.
-  signupRateLimitCount: Number(process.env.SIGNUP_RATE_LIMIT_COUNT ?? 10),
-  signupRateLimitWindowMs: Number(process.env.SIGNUP_RATE_LIMIT_WINDOW_MS ?? 60_000),
+  signupRateLimitCount: resolvePositiveInt(process.env, "SIGNUP_RATE_LIMIT_COUNT", 10),
+  signupRateLimitWindowMs: resolvePositiveInt(process.env, "SIGNUP_RATE_LIMIT_WINDOW_MS", 60_000),
   /**
    * Số hop proxy tin được, truyền thẳng cho `app.set("trust proxy", ...)`.
    *
