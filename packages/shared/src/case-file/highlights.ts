@@ -41,6 +41,10 @@ export const IMPORTANCE: Record<CaseHighlightType, number> = {
   BLOODBATH: 72,
   WITCH_POISON: 70,
   PRIEST_STRIKE: 68,
+  // Thiên Thần Hộ Mệnh xếp trên Bảo Vệ đúng một bậc: cùng một cú đỡ, nhưng
+  // Bảo Vệ đỡ được mỗi đêm còn Thiên Thần chỉ có hai lượt cả ván, nên tiêu
+  // đúng một lượt vào đúng người là quyết định đắt hơn.
+  ANGEL_SAVE: 67,
   GUARD_SAVE: 66,
   LATE_VOTE_SWING: 64,
   SEER_FOUND_WOLF: 58,
@@ -339,19 +343,43 @@ function nightHighlights(data: CaseData): CaseCandidate[] {
       );
     }
 
-    // Bảo Vệ đỡ đúng mục tiêu bầy Sói nhắm tới, và người đó sống qua đêm.
-    const guarded = night.guardTarget;
-    if (guarded && night.wolfTarget && guarded.id === night.wolfTarget.id && !diedThisNight.has(guarded.id)) {
+    // Tấm khiên đỡ đúng mục tiêu bầy Sói nhắm tới, và người đó sống qua đêm.
+    //
+    // Bảo Vệ và Thiên Thần Hộ Mệnh đổ vào CÙNG một cơ chế khiên trong engine,
+    // nên hai vai dùng chung một `eventKey` theo người được cứu: một đêm cả hai
+    // cùng chắn một người là MỘT lần cứu, không phải hai điểm ngoặt chiếm hai
+    // suất trong hồ sơ.
+    const shields = [
+      {
+        type: "GUARD_SAVE",
+        target: night.guardTarget,
+        title: "Tấm khiên giữ được người",
+        clause: (name: string) => `Bảo Vệ đỡ đúng ${name}`,
+        evidence: "guard-save",
+      },
+      {
+        type: "ANGEL_SAVE",
+        target: night.guardianAngelTarget ?? null,
+        title: "Khiên hộ mệnh chắn đúng lúc",
+        clause: (name: string) => `Thiên Thần Hộ Mệnh phủ khiên lên ${name}`,
+        evidence: "angel-save",
+      },
+    ] as const;
+
+    for (const shield of shields) {
+      const saved = shield.target;
+      if (!saved || !night.wolfTarget) continue;
+      if (saved.id !== night.wolfTarget.id || diedThisNight.has(saved.id)) continue;
       out.push(
         candidate(
-          "GUARD_SAVE",
+          shield.type,
           round,
           "night",
-          `guard-save:${round}`,
-          "Tấm khiên giữ được người",
-          `Bảo Vệ đỡ đúng ${guarded.name} - người mà bầy Sói nhắm tới đêm đó.`,
-          [guarded.id],
-          { kind: "guard-save", savedId: guarded.id },
+          `shield-save:${round}:${saved.id}`,
+          shield.title,
+          `${shield.clause(saved.name)} - người mà bầy Sói nhắm tới đêm đó.`,
+          [saved.id],
+          { kind: shield.evidence, savedId: saved.id },
         ),
       );
     }

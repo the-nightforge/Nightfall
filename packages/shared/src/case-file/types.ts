@@ -17,6 +17,7 @@ export type CaseHighlightType =
   | "BLOODBATH"
   | "WITCH_POISON"
   | "PRIEST_STRIKE"
+  | "ANGEL_SAVE"
   | "GUARD_SAVE"
   | "LATE_VOTE_SWING"
   | "SEER_FOUND_WOLF"
@@ -48,6 +49,7 @@ export type CaseEvidence =
   | { kind: "witch-save"; savedId: string }
   | { kind: "witch-poison"; poisonedId: string }
   | { kind: "guard-save"; savedId: string }
+  | { kind: "angel-save"; savedId: string }
   | { kind: "priest"; priestId: string; targetId: string; isWolf: boolean }
   | { kind: "bloodbath"; victimIds: string[] }
   | { kind: "seer-check"; seerId: string; targetId: string }

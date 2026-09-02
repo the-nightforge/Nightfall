@@ -247,7 +247,7 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
         <div className="mt-3 space-y-3">
           {caseFile && <CaseFileCard file={caseFile} />}
           {/* Server cũ deploy lệch có thể thiếu hẳn hai mảng này. */}
-          <NightRecapTimeline nights={snapshot.nightHistory ?? []} />
+          <NightRecapTimeline nights={snapshot.nightHistory ?? []} config={snapshot.config} />
           <HunterShotTimeline shots={snapshot.hunterShots ?? []} />
         </div>
       </details>

@@ -1,6 +1,7 @@
 import { m } from "motion/react";
-import type { NightRecap } from "@masoi/shared";
+import type { NightRecap, RoomConfig } from "@masoi/shared";
 import { cursedTurnedText } from "@/lib/cursed";
+import { priestSpentRound, rolesInRecap } from "@/lib/night-recap-roles";
 import { listItemMotion } from "@/lib/motion";
 
 const causeLabel = (cause: "wolf" | "poison" | "priest" | "priest_backfire") => {
@@ -51,8 +52,18 @@ function Line({ actor, children }: { actor: string; children: React.ReactNode })
  * Chip vai thay cho emoji đầu dòng: emoji không có màu theo phe, không thẳng
  * hàng, và ở cỡ chữ nhỏ thì 🧪 với ☠️ gần như không phân biệt được trên điện
  * thoại. Chip thì quét mắt xuống cột trái là ra ngay ai làm gì.
+ *
+ * `config` quyết định vai nào có dòng. Không truyền cũng chạy được - server cũ
+ * deploy lệch thì `rolesInRecap` rơi về đúng những vai đã để lại dấu vết.
  */
-export function NightRecapTimeline({ nights }: { nights: NightRecap[] }) {
+export function NightRecapTimeline({
+  nights,
+  config,
+}: {
+  nights: NightRecap[];
+  config?: RoomConfig;
+}) {
+  const roles = rolesInRecap(nights, config);
   return (
     <div className="card">
       <h3 className="mb-3 font-display text-lg font-bold text-white">Diễn biến các đêm</h3>
@@ -64,6 +75,7 @@ export function NightRecapTimeline({ nights }: { nights: NightRecap[] }) {
         <ol className="relative space-y-3 border-l border-night-600/70 pl-4">
           {nights.map((night, index) => {
             const died = night.deaths.length > 0;
+            const holyWaterSpentAt = priestSpentRound(nights, index);
             return (
               <m.li
                 key={night.round}
@@ -94,72 +106,95 @@ export function NightRecapTimeline({ nights }: { nights: NightRecap[] }) {
                         "không chọn được mục tiêu"
                       )}
                     </Line>
-                    <Line actor="Bảo Vệ">
-                      {night.guardTarget ? (
-                        <>đỡ cho <b className="text-white">{night.guardTarget.name}</b></>
-                      ) : (
-                        "không hành động"
-                      )}
-                    </Line>
-                    {night.guardianAngelTarget && (
+                    {roles.guard && (
+                      <Line actor="Bảo Vệ">
+                        {night.guardTarget ? (
+                          <>đỡ cho <b className="text-white">{night.guardTarget.name}</b></>
+                        ) : (
+                          "không hành động"
+                        )}
+                      </Line>
+                    )}
+                    {roles.guardianAngel && (
                       <Line actor="Thiên Thần">
-                        bảo vệ <b className="text-white">{night.guardianAngelTarget.name}</b>
+                        {night.guardianAngelTarget ? (
+                          <>bảo vệ <b className="text-white">{night.guardianAngelTarget.name}</b></>
+                        ) : (
+                          "không dùng khiên"
+                        )}
                       </Line>
                     )}
-                    {night.seerChecks.length > 0 ? (
-                      night.seerChecks.map((check) => (
-                        <Line key={`${check.seer.id}-${check.target.id}`} actor="Tiên Tri">
-                          {check.seer.name} soi <b className="text-white">{check.target.name}</b>{" "}
-                          <span className={check.isWolf ? "text-blood-400" : "text-emerald-300"}>
-                            {check.isWolf ? "→ là Ma Sói" : "→ không phải Ma Sói"}
-                          </span>
-                          {check.secondaryTarget && (
-                            <>
-                              , soi thêm <b className="text-white">{check.secondaryTarget.name}</b>{" "}
-                              <span className={check.secondaryIsWolf ? "text-blood-400" : "text-emerald-300"}>
-                                {check.secondaryIsWolf ? "→ là Ma Sói" : "→ không phải Ma Sói"}
-                              </span>
-                            </>
-                          )}
-                        </Line>
-                      ))
-                    ) : (
-                      <Line actor="Tiên Tri">không hành động</Line>
-                    )}
-                    {night.detectiveChecks?.map((check) => (
-                      <Line key={`${check.detective.id}-${check.target1.id}`} actor="Thám Tử">
-                        {check.detective.name} kiểm tra <b className="text-white">{check.target1.name}</b> và{" "}
-                        <b className="text-white">{check.target2.name}</b>{" "}
-                        <span className={check.sameTeam ? "text-amber-300" : "text-emerald-300"}>
-                          {check.sameTeam ? "→ cùng phe" : "→ khác phe"}
-                        </span>
-                      </Line>
-                    ))}
-                    <Line actor="Phù Thủy">
-                      {night.witch.usedHeal
-                        ? night.witch.healedTarget
-                          ? <>cứu <b className="text-white">{night.witch.healedTarget.name}</b></>
-                          : "đốt bình cứu nhưng không có nạn nhân"
-                        : "không dùng bình cứu"}
-                      {night.witch.poisonTarget ? (
-                        <>
-                          , đầu độc <b className="text-white">{night.witch.poisonTarget.name}</b>
-                        </>
+                    {roles.seer &&
+                      (night.seerChecks.length > 0 ? (
+                        night.seerChecks.map((check) => (
+                          <Line key={`${check.seer.id}-${check.target.id}`} actor="Tiên Tri">
+                            {check.seer.name} soi <b className="text-white">{check.target.name}</b>{" "}
+                            <span className={check.isWolf ? "text-blood-400" : "text-emerald-300"}>
+                              {check.isWolf ? "→ là Ma Sói" : "→ không phải Ma Sói"}
+                            </span>
+                            {check.secondaryTarget && (
+                              <>
+                                , soi thêm <b className="text-white">{check.secondaryTarget.name}</b>{" "}
+                                <span className={check.secondaryIsWolf ? "text-blood-400" : "text-emerald-300"}>
+                                  {check.secondaryIsWolf ? "→ là Ma Sói" : "→ không phải Ma Sói"}
+                                </span>
+                              </>
+                            )}
+                          </Line>
+                        ))
                       ) : (
-                        ", không dùng bình độc"
-                      )}
-                    </Line>
-                    {night.priest && (
-                      <Line actor="Linh Mục">
-                        {night.priest.priest.name} dùng Nước thánh lên{" "}
-                        <b className="text-white">{night.priest.target.name}</b>{" "}
-                        <span className={night.priest.isWolf ? "text-blood-400" : "text-emerald-300"}>
-                          {night.priest.isWolf
-                            ? "→ là Ma Sói, đã bị thanh tẩy"
-                            : "→ không phải Ma Sói, nước thánh phản phệ"}
-                        </span>
+                        <Line actor="Tiên Tri">không hành động</Line>
+                      ))}
+                    {roles.detective &&
+                      ((night.detectiveChecks?.length ?? 0) > 0 ? (
+                        night.detectiveChecks?.map((check) => (
+                          <Line key={`${check.detective.id}-${check.target1.id}`} actor="Thám Tử">
+                            {check.detective.name} kiểm tra <b className="text-white">{check.target1.name}</b> và{" "}
+                            <b className="text-white">{check.target2.name}</b>{" "}
+                            <span className={check.sameTeam ? "text-amber-300" : "text-emerald-300"}>
+                              {check.sameTeam ? "→ cùng phe" : "→ khác phe"}
+                            </span>
+                          </Line>
+                        ))
+                      ) : (
+                        <Line actor="Thám Tử">không hành động</Line>
+                      ))}
+                    {roles.witch && (
+                      <Line actor="Phù Thủy">
+                        {night.witch.usedHeal
+                          ? night.witch.healedTarget
+                            ? <>cứu <b className="text-white">{night.witch.healedTarget.name}</b></>
+                            : "đốt bình cứu nhưng không có nạn nhân"
+                          : "không dùng bình cứu"}
+                        {night.witch.poisonTarget ? (
+                          <>
+                            , đầu độc <b className="text-white">{night.witch.poisonTarget.name}</b>
+                          </>
+                        ) : (
+                          ", không dùng bình độc"
+                        )}
                       </Line>
                     )}
+                    {roles.priest &&
+                      (night.priest ? (
+                        <Line actor="Linh Mục">
+                          {night.priest.priest.name} dùng Nước thánh lên{" "}
+                          <b className="text-white">{night.priest.target.name}</b>{" "}
+                          <span className={night.priest.isWolf ? "text-blood-400" : "text-emerald-300"}>
+                            {night.priest.isWolf
+                              ? "→ là Ma Sói, đã bị thanh tẩy"
+                              : "→ không phải Ma Sói, nước thánh phản phệ"}
+                          </span>
+                        </Line>
+                      ) : (
+                        // Chỉ có MỘT bình cả ván, nên "không hành động" trả lời
+                        // sai câu hỏi người đọc đang hỏi: còn bình hay hết rồi.
+                        <Line actor="Linh Mục">
+                          {holyWaterSpentAt === null
+                            ? "chưa dùng Nước thánh"
+                            : `đã dùng Nước thánh ở Đêm ${holyWaterSpentAt}`}
+                        </Line>
+                      ))}
                     {(() => {
                       const turned = cursedTurnedText(night);
                       return turned ? <Line actor="Nguyền">{turned}</Line> : null;
