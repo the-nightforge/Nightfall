@@ -169,13 +169,16 @@ describe("chatComposerState trong pha biện hộ", () => {
     assert.equal(state.reason, "");
   });
 
-  it("người sống khác bị khoá và đọc được lý do kèm tên người đang nói", () => {
+  it("người sống khác cũng nói được, và biết mình đang trả lời ai", () => {
+    // Đổi luật: pha biện hộ không còn là lượt nói độc quyền của bị cáo. Tên bị
+    // cáo vẫn nằm trong placeholder - không phải để khoá nữa, mà để người gõ
+    // biết câu của mình đang chen vào lời của ai.
     const state = chatComposerState(defenseOf("hai-yen"));
 
-    assert.equal(state.canSend, false);
-    assert.equal(state.channel, null);
-    assert.equal(state.placeholder, "Đang lắng nghe Hải Yến…");
-    assert.equal(state.reason, "Chỉ Hải Yến được nói trong lúc biện hộ.");
+    assert.equal(state.canSend, true);
+    assert.equal(state.channel, "day");
+    assert.equal(state.placeholder, "Trả lời Hải Yến…");
+    assert.equal(state.reason, "");
   });
 
   it("người chết vẫn nhắn được kênh người chết trong lúc biện hộ", () => {

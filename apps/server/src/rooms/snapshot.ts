@@ -95,12 +95,6 @@ export function resolveChat(room: Room, senderId: string):
     return { ok: false, error: "Ban đêm bạn không thể trò chuyện" };
   }
 
-  // Biện hộ là lượt nói độc quyền của bị cáo. Nhánh này nằm SAU nhánh người
-  // chết, nên người chết vẫn dùng kênh dead bình thường trong lúc đó.
-  if (view.phase === "DEFENSE" && senderId !== room.engine.state.trial?.accusedId) {
-    return { ok: false, error: "Chỉ người đang biện hộ được nói" };
-  }
-
   if (
     view.phase === "DAY_DISCUSSION" ||
     view.phase === "VOTING" ||
