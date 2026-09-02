@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CaseFile } from "@masoi/shared";
 import { buildCaseCardModel, type CaseCardModel } from "@/lib/case-card";
 import { CARD_HEIGHT, CARD_WIDTH, paintCaseCard, type CardFonts } from "@/lib/case-canvas";
@@ -33,6 +33,58 @@ function resolveFonts(): CardFonts {
   } catch {
     return fallback;
   }
+}
+
+/*
+ * Icon vẽ tay theo lưới Lucide 24 / stroke 2 - cùng cách `MessageCircleIcon`
+ * của ChatBox làm. Cả web chỉ cần đúng ba hình này, và kéo về một bộ icon cho
+ * ba thẻ <svg> thì phần tải về đắt hơn phần dùng.
+ *
+ * `aria-hidden` ở mọi hình: nhãn nút đã nói đủ, để trình đọc màn hình đọc thêm
+ * một cái tên hình là đọc hai lần cùng một điều.
+ */
+function Glyph({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className ?? "h-4 w-4 shrink-0"}
+    >
+      {children}
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <Glyph>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="M7 10l5 5 5-5" />
+      <path d="M12 15V3" />
+    </Glyph>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <Glyph>
+      <rect x="9" y="9" width="12" height="12" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </Glyph>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <Glyph>
+      <path d="M20 6 9 17l-5-5" />
+    </Glyph>
+  );
 }
 
 /** Vẽ thẻ ra PNG. Trả `null` khi trình duyệt không dựng được ảnh - không ném. */
@@ -68,6 +120,34 @@ export function CaseShareCard({ file, shareOrigin }: { file: CaseFile; shareOrig
   const [status, setStatus] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(false);
 
+  /*
+   * Xác nhận ngắn ngay TRÊN nút vừa bấm.
+   *
+   * Dòng trạng thái bên dưới là chỗ trình đọc màn hình nghe được, nhưng bằng
+   * mắt nó ở cách nút một quãng và dễ trôi khỏi tầm nhìn trên điện thoại: bấm
+   * "Sao chép tóm tắt" xong, thứ duy nhất người dùng nhìn là chính cái nút đó,
+   * và nếu nó không đổi gì thì không có gì nói rằng máy đã nhận lệnh. Vì vậy
+   * nhãn nút đổi thành "Đã sao chép" một nhịp ngắn rồi trả về như cũ.
+   *
+   * Hẹn giờ giữ trong ref và dọn khi tháo component: người chơi bấm "Về phòng
+   * chờ" ngay sau khi chép thì cả màn này biến mất trước lúc timer nổ.
+   */
+  const [done, setDone] = useState<"copy" | "download" | null>(null);
+  const doneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (doneTimer.current !== null) clearTimeout(doneTimer.current);
+    },
+    [],
+  );
+
+  function flashDone(which: "copy" | "download") {
+    if (doneTimer.current !== null) clearTimeout(doneTimer.current);
+    setDone(which);
+    doneTimer.current = setTimeout(() => setDone(null), 2200);
+  }
+
   function apply(outcome: ShareOutcome) {
     setStatus(describeShareOutcome(outcome));
     setShowManual(outcome.kind === "manual");
@@ -76,6 +156,7 @@ export function CaseShareCard({ file, shareOrigin }: { file: CaseFile; shareOrig
   async function handleShare() {
     setBusy(true);
     setStatus(null);
+    setDone(null);
     const image = await renderPng(model);
     const capabilities = shareCapabilities(typeof navigator === "undefined" ? undefined : navigator, image);
     const strategy = pickShareStrategy(capabilities);
@@ -105,6 +186,7 @@ export function CaseShareCard({ file, shareOrigin }: { file: CaseFile; shareOrig
   async function handleDownload() {
     setBusy(true);
     setStatus(null);
+    setDone(null);
     const image = await renderPng(model);
     setBusy(false);
     if (!image) {
@@ -118,10 +200,12 @@ export function CaseShareCard({ file, shareOrigin }: { file: CaseFile; shareOrig
     anchor.click();
     URL.revokeObjectURL(url);
     setStatus("Đã tải ảnh hồ sơ về máy.");
+    flashDone("download");
   }
 
   async function handleCopy() {
     setStatus(null);
+    setDone(null);
     try {
       if (typeof navigator === "undefined" || typeof navigator.clipboard?.writeText !== "function") {
         apply({ kind: "manual" });
@@ -129,6 +213,7 @@ export function CaseShareCard({ file, shareOrigin }: { file: CaseFile; shareOrig
       }
       await navigator.clipboard.writeText(model.shareText);
       apply({ kind: "copied" });
+      flashDone("copy");
     } catch {
       apply({ kind: "manual" });
     }
@@ -166,11 +251,24 @@ export function CaseShareCard({ file, shareOrigin }: { file: CaseFile; shareOrig
           {/*
             * Ba nút, ba hạng. Chia sẻ là hành động hạng hai của cả màn - hạng
             * nhất là nút về phòng chờ ở trên - còn tải ảnh và sao chép chỉ là
-            * đường lui khi máy không chia sẻ được, nên chúng là chữ chứ không
-            * phải nút đặc. Bản cũ cho cả ba cùng một cỡ và "Chia sẻ hồ sơ" còn
-            * mang đúng màu đỏ của nút chơi lại.
+            * đường lui khi máy không chia sẻ được. Bản cũ cho cả ba cùng một cỡ
+            * và "Chia sẻ hồ sơ" còn mang đúng màu đỏ của nút chơi lại.
+            *
+            * Hai đường lui KHÔNG còn là `.btn-tertiary` nữa. Hạng ba đúng nghĩa
+            * ở chỗ khác - "Rời phòng", "Xem chi tiết kỹ thuật" - nhưng ở đây
+            * chúng nằm ngay dưới một đoạn chữ `text-mist-strong` cùng cỡ, nên
+            * một dòng chữ nhạt không viền không nền đọc ra như phần đuôi của
+            * đoạn văn chứ không như thứ bấm được. `.btn-ghost` cho chúng một
+            * viền mảnh và một vùng bấm 40px thấy được, mà vẫn nhẹ hơn hẳn nút
+            * "Chia sẻ kết quả" nền đặc ngay trên.
+            *
+            * Hai nút chia hàng theo ĐỘ DÀI NHÃN, không chia đôi: "Sao chép tóm
+            * tắt" dài gấp đôi "Tải ảnh", nên chia đều thì ở khung 390px nhãn dài
+            * gãy làm hai dòng trong khi nút bên cạnh còn thừa chỗ. Cơ sở rộng
+            * hơn cho nút dài, và cả hai vẫn tự xuống dòng thành hai hàng khi cột
+            * hẹp hơn tổng cơ sở - vùng chạm không bao giờ bị bóp lại.
             */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="space-y-2">
             <button
               className="btn-secondary min-h-11 w-full"
               onClick={handleShare}
@@ -178,12 +276,20 @@ export function CaseShareCard({ file, shareOrigin }: { file: CaseFile; shareOrig
             >
               {busy ? "Đang dựng ảnh…" : "Chia sẻ kết quả"}
             </button>
-            <button className="btn-tertiary min-h-11" onClick={handleDownload} disabled={busy}>
-              Tải ảnh
-            </button>
-            <button className="btn-tertiary min-h-11" onClick={handleCopy} disabled={busy}>
-              Sao chép tóm tắt
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="btn-ghost flex-1 basis-28"
+                onClick={handleDownload}
+                disabled={busy}
+              >
+                {done === "download" ? <CheckIcon /> : <DownloadIcon />}
+                {done === "download" ? "Đã tải ảnh" : "Tải ảnh"}
+              </button>
+              <button className="btn-ghost flex-[2] basis-44" onClick={handleCopy} disabled={busy}>
+                {done === "copy" ? <CheckIcon /> : <CopyIcon />}
+                {done === "copy" ? "Đã sao chép" : "Sao chép tóm tắt"}
+              </button>
+            </div>
           </div>
 
           {status && (

@@ -30,9 +30,22 @@ export function teamLabel(team: "wolves" | "village"): string {
   return team === "wolves" ? "Ma Sói" : "Dân Làng";
 }
 
-/** "Đêm 2" / "Ngày 3" - nhãn ngắn dùng chung cho hồ sơ, thẻ chia sẻ và timeline. */
+/**
+ * "Đêm 2" / "Ngày 3" - nhãn ngắn dùng chung cho hồ sơ, thẻ chia sẻ và timeline.
+ *
+ * ĐÂY là từ vựng chính thức cho trục thời gian của một ván, và `round` của
+ * snapshot chính là con số trong nhãn này. Vì vậy mọi câu tóm tắt phải đếm bằng
+ * NGÀY chứ không phải "vòng": bản cũ gọi cùng một con số là "3 vòng" ở dòng quy
+ * mô rồi "Ngày 3" ngay dòng dưới, và người đọc phải tự đoán hai cụm đó có phải
+ * một hay không. Xem `roundsLabel`.
+ */
 export function momentLabel(round: number, phase: "night" | "day"): string {
   return `${phase === "night" ? "Đêm" : "Ngày"} ${round}`;
+}
+
+/** "3 ngày" - độ dài một ván, đếm bằng đúng đơn vị mà `momentLabel` đánh số. */
+export function roundsLabel(rounds: number): string {
+  return `${rounds} ngày`;
 }
 
 export function joinNames(names: string[]): string {
