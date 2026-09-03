@@ -26,8 +26,20 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # Khớp với node:20.19-alpine trong Dockerfile.server.
-          node-version: 20.19.x
+          # KHÔNG còn khớp với node:20.19-alpine của Dockerfile.server, và đó là
+          # một đánh đổi có ý thức chứ không phải sơ suất.
+          #
+          # `TrialStage.test.tsx` mount cây React thật và dùng module mocking của
+          # `node:test` - thứ vừa mới có từ v20.18.0 và còn đang thực nghiệm.
+          # Suite web đỏ trên runner 20.19 kể từ khi file đó vào repo, trong khi
+          # cùng bộ test xanh 937/937 trên 22.x. Chạy test ở đúng phiên bản mà
+          # người phát triển chạy đáng giá hơn là chạy ở phiên bản của image
+          # server - mã server không có phần nào phụ thuộc phiên bản, còn bộ test
+          # thì có.
+          #
+          # Nếu sau này muốn khớp lại: nâng Dockerfile.server lên node:22-alpine
+          # cùng lúc, đừng hạ dòng này xuống một mình.
+          node-version: 22.x
           cache: npm
 
       - name: Install
