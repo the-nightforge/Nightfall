@@ -62,21 +62,57 @@ function resetScene(): void {
   webglSupported = true;
 }
 
+/**
+ * Số vòng macrotask xả sau mỗi lần render.
+ *
+ * `import("three")` và `import("@/lib/live-trial-scene")` trong canvas KHÔNG
+ * giải quyết trong microtask - chúng đi qua loader của Node, nên cần vòng
+ * macrotask, và cần bao nhiêu vòng thì tuỳ phiên bản. Bản trước xả đúng hai
+ * microtask: vừa đủ trên máy người viết, và không bao giờ đủ trên Node 22, nơi
+ * canvas mount SAU khi khẳng định đã chạy - nên test đỏ ở dòng nói về
+ * `playOpening` chứ không ở dòng nói về việc chờ.
+ *
+ * Con số này rộng rãi có chủ ý. Nó không phải một mốc thời gian cần chỉnh cho
+ * khớp: mỗi vòng thoát ngay khi hàng đợi rỗng nên phần dư gần như không tốn gì,
+ * và chính biên rộng mới là thứ giữ cho bộ test không còn phụ thuộc phiên bản.
+ */
+const RENDER_DRAIN_TURNS = 20;
+
+async function drainTurns(): Promise<void> {
+  for (let turn = 0; turn < RENDER_DRAIN_TURNS; turn += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
+
 const opened = () => sceneCalls.filter((c) => c.name === "playOpening").length;
 
 /*
- * `mock.module` với `options.exports`.
+ * `mock.module` đổi tên tuỳ chọn giữa các bản Node, nên ở đây gửi CẢ HAI.
  *
- * Repo ghim `@types/node@^20`, còn runtime là Node 24: kiểu ở đó chỉ biết
- * `namedExports` (đã bị chính Node đánh dấu deprecated và in cảnh báo mỗi lần
- * gọi). Dùng đúng API hiện tại rồi khai kiểu tại chỗ, thay vì dùng API cũ chỉ
- * để chiều một gói kiểu đã lạc hậu.
+ * Node 20 và 22 đọc `namedExports`; Node 24 đổi sang `exports` và đánh dấu
+ * `namedExports` là deprecated. Bản trước chỉ gửi `exports` - đúng trên máy
+ * người viết (Node 24), nhưng trên Node 20/22 tuỳ chọn đó bị bỏ qua LẶNG LẼ và
+ * mock cài vào một module rỗng. Triệu chứng hiện ra cách chỗ sai vài lớp:
+ * `hasWebgl2 is not a function` ở giữa một effect của React. CI ghim 20.19.x
+ * nên đây không phải chuyện lý thuyết.
+ *
+ * Gửi cả hai an toàn hơn rẽ nhánh theo `process.version`: bản nào cũng đọc khoá
+ * nó biết và bỏ qua khoá kia, kể cả một bản Node sau này lại đổi lần nữa. Giá
+ * phải trả nhiều nhất là một dòng cảnh báo deprecated, không phải test đỏ.
+ *
+ * Điều làm cách này an toàn: hai khoá mang CÙNG một đối tượng. Bản Node nào đọc
+ * khoá nào cũng ra đúng một bảng export, nên không có nhánh hành vi thứ hai để
+ * mà lệch. Node cũng không từ chối khoá lạ - Node 22 lặng lẽ bỏ qua `exports`
+ * thay vì ném, và đó chính là thứ khiến lỗi cũ khó lần.
  */
 type MockModuleOptions = { exports?: Record<string, unknown> };
 const mockModule = (specifier: string, options: MockModuleOptions): Promise<unknown> =>
   (mock as unknown as {
-    module: (s: string, o: MockModuleOptions) => Promise<unknown>;
-  }).module(specifier, options);
+    module: (
+      s: string,
+      o: MockModuleOptions & { namedExports?: Record<string, unknown> },
+    ) => Promise<unknown>;
+  }).module(specifier, { ...options, namedExports: options.exports });
 
 // ---------------------------------------------------------------------------
 
@@ -224,8 +260,7 @@ async function mountRoom(options: { strict?: boolean } = {}) {
     });
     // Cho `import()` động trong canvas kịp giải quyết rồi để React xả effect.
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      await drainTurns();
     });
   };
 
