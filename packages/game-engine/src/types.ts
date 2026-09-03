@@ -69,17 +69,13 @@ export interface NightState {
       secondaryTargetId?: string;
       secondaryIsWolf?: boolean;
       secondaryTeam?: Team;
-      unknown?: boolean;
     }
   >;
   priestTarget: string | null;
   /** Linh Mục đã chọn không dùng nước thánh đêm nay */
   priestSkipped: boolean;
   detectiveTargets: { target1: string; target2: string } | null;
-  detectiveResults: Record<
-    string,
-    { target1Id: string; target2Id: string; sameTeam: boolean; unknown?: boolean }
-  >;
+  detectiveResults: Record<string, { target1Id: string; target2Id: string; sameTeam: boolean }>;
   priestResults: Record<string, { targetId: string; isWolf: boolean }>;
   /**
    * Mục tiêu Sát Nhân đã chốt cho đêm nay; `null` là chưa chọn hoặc đã bỏ qua.

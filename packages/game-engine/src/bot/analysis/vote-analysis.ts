@@ -85,9 +85,11 @@ function finalMutationByVoter(mutations: readonly VoteMutation[]): Map<string, V
 /**
  * Đọc lại một vòng đề cử đã công khai và rút ra bằng chứng hành vi.
  *
- * Không rule nào ở đây dùng phe thật của ai: role người chết vẫn ẩn tới hết
- * ván, nên "người bị treo hoá ra là Dân" không phải là một tín hiệu hợp lệ
- * trong Phase 1. Mọi kết luận chỉ dựa trên pattern công khai.
+ * Không rule nào ở đây dùng phe thật của ai. Mọi kết luận chỉ dựa trên pattern
+ * công khai, và ranh giới đó là cố ý: luật mặc định giấu vai người chết tới hết
+ * ván, nên "người bị treo hoá ra là Dân" không phải một tín hiệu tồn tại. Biến
+ * thể luật `revealRoleOnDeath` làm nó tồn tại, và nó sống ở MỘT chỗ khác -
+ * `verdict-review.ts` - chứ không trộn vào đây.
  *
  * `analyticalSkill` không bao giờ bóp méo hard fact: một BOT kém quan sát chỉ
  * bỏ sót candidate, chứ không đổi actor, target hay nguồn của bằng chứng.

@@ -1635,6 +1635,21 @@ describe("Trọng số phiếu không rò ra view", () => {
     expect(e.voteTally().players[prey.id]).toBe(2);
   });
 
+  it("Tiếng Hú không cộng phiếu cho ai khi bầy Sói bỏ phiếu trắng", () => {
+    const e = votingEngine();
+    e.state.howlBonusDay = e.state.round;
+    const wolves = e.alivePlayers().filter((p) => roleTeam(p.role) === "wolves");
+    const villagers = e.alivePlayers().filter((p) => roleTeam(p.role) === "village");
+
+    // Cả bầy chọn "không treo ai" - đúng nước đi khi phe làng đang dồn phiếu
+    // vào một con Sói. Phe làng dồn vào chính con Sói đó.
+    for (const wolf of wolves) e.submitVote(wolf.id, null, 10_000);
+    e.submitVote(villagers[0].id, wolves[0].id, 11_000);
+
+    // Phiếu ẩn "có lợi cho phe Sói" không được đẩy đồng bọn lên giá treo cổ.
+    expect(e.voteTally().players[wolves[0].id]).toBe(1);
+  });
+
   it("ngưỡng và số phiếu phiên toà đếm đầu người, không đếm trọng số", () => {
     const e = withMayor(makeEngine(6));
     nominate(e, "p2");

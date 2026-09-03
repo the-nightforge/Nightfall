@@ -29,6 +29,8 @@
     "selfplay": "tsx apps/server/scripts/selfplay.ts",
     "prerole-power": "npm run build:deps",
     "role-power": "tsx apps/server/scripts/role-power.ts",
+    "prereveal-ab": "npm run build:deps",
+    "reveal-ab": "tsx apps/server/scripts/reveal-ab.ts",
     "prelint": "npm run build:deps",
     "lint": "npm run lint --workspace @masoi/shared && npm run lint --workspace @masoi/game-engine && npm run lint --workspace @masoi/web && npm run lint --workspace @masoi/server",
     "db:migrate": "npm run db:migrate --workspace @masoi/server",

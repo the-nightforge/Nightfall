@@ -376,18 +376,12 @@ export function NightPanel({ snapshot, onAction }: Props) {
             {night?.seerResult && (
               <div className="mb-2 rounded-lg bg-night-800 p-2.5 text-sm">
                 <p className="text-[13px] text-mist-strong">Kết quả soi gần nhất:</p>
-                {night.seerResult.unknown ? (
-                  <p className="mt-1 font-bold text-amber-300">
-                    Bóng tối bao phủ: Không thể nhận diện phe của {night.seerResult.targetName} (UNKNOWN).
-                  </p>
-                ) : (
-                  <p className="mt-1">
-                    <b>{night.seerResult.targetName}</b> là{" "}
-                    <b className={seerReading(night.seerResult.team, night.seerResult.isWolf).className}>
-                      {seerReading(night.seerResult.team, night.seerResult.isWolf).label}
-                    </b>
-                  </p>
-                )}
+                <p className="mt-1">
+                  <b>{night.seerResult.targetName}</b> là{" "}
+                  <b className={seerReading(night.seerResult.team, night.seerResult.isWolf).className}>
+                    {seerReading(night.seerResult.team, night.seerResult.isWolf).label}
+                  </b>
+                </p>
                 {night.seerResult.secondaryTargetName && (
                   <p className="mt-1">
                     Mục tiêu 2: <b>{night.seerResult.secondaryTargetName}</b> là{" "}
@@ -432,20 +426,8 @@ export function NightPanel({ snapshot, onAction }: Props) {
                 <p className="text-[13px] text-mist-strong">Kết quả điều tra gần nhất:</p>
                 <p className="mt-1">
                   <b>{night.detectiveResult.target1.name}</b> và <b>{night.detectiveResult.target2.name}</b>:{" "}
-                  <b
-                    className={
-                      night.detectiveResult.unknown
-                        ? "text-mist/70"
-                        : night.detectiveResult.sameTeam
-                          ? "text-indigo-300"
-                          : "text-amber-300"
-                    }
-                  >
-                    {night.detectiveResult.unknown
-                      ? "KHÔNG THỂ XÁC ĐỊNH"
-                      : night.detectiveResult.sameTeam
-                        ? "CÙNG PHE"
-                        : "KHÁC PHE"}
+                  <b className={night.detectiveResult.sameTeam ? "text-indigo-300" : "text-amber-300"}>
+                    {night.detectiveResult.sameTeam ? "CÙNG PHE" : "KHÁC PHE"}
                   </b>
                 </p>
               </div>

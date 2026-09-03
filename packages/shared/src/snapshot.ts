@@ -142,12 +142,11 @@ export interface NightActionView {
      * thì không có trường này và phải rơi về `isWolf`.
      */
     team?: Team;
-    isWolf?: boolean;
+    isWolf: boolean;
     secondaryTargetId?: string;
     secondaryTargetName?: string;
     secondaryTeam?: Team;
     secondaryIsWolf?: boolean;
-    unknown?: boolean;
   } | null;
   /** Với Tiên Tri Tập Sự: cờ đánh dấu đã thức tỉnh thừa kế kỹ năng soi */
   apprenticeAwakened?: boolean;
@@ -155,8 +154,7 @@ export interface NightActionView {
   detectiveResult?: {
     target1: { id: string; name: string };
     target2: { id: string; name: string };
-    sameTeam?: boolean;
-    unknown?: boolean;
+    sameTeam: boolean;
   } | null;
   /** Với Linh Mục: cờ đánh dấu đã dùng bình Nước thánh chưa */
   priestHolyWaterUsed?: boolean;

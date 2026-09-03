@@ -89,6 +89,8 @@ export interface BotKnowledgeInput {
   selfRole: BotKnowledgeView["selfRole"];
   players: readonly BotPlayerKnowledge[];
   knownRoles: BotKnowledgeView["knownRoles"];
+  /** Luật phòng, công khai với cả bàn. Xem `BotKnowledgeView.revealRoleOnDeath`. */
+  revealRoleOnDeath: boolean;
   seerResult: BotKnowledgeView["seerResult"];
   /** Suy từ chính cấu hình phòng; xem `BotKnowledgeView.neutralRolesInPlay`. */
   neutralRolesInPlay: BotKnowledgeView["neutralRolesInPlay"];
@@ -121,6 +123,7 @@ export function buildBotKnowledgeView(input: BotKnowledgeInput): BotKnowledgeVie
     selfRole: input.selfRole,
     players: input.players.map((player) => ({ ...player })),
     knownRoles: { ...input.knownRoles },
+    revealRoleOnDeath: input.revealRoleOnDeath,
     seerResult: input.seerResult ? { ...input.seerResult } : null,
     neutralRolesInPlay: [...input.neutralRolesInPlay],
     night: input.night ? copyNightKnowledge(input.night) : null,

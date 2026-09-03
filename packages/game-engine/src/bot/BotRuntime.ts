@@ -3,6 +3,11 @@ import { analyzeChat } from "./analysis/chat-analysis";
 import { claimEvidence } from "./analysis/claim-credibility";
 import { applySocialEvidence } from "./analysis/social-analysis";
 import { analyzeVoteRecap } from "./analysis/vote-analysis";
+import {
+  analyzeRevealedVerdict,
+  finalBallotSourceId,
+  lynchedIdOf,
+} from "./analysis/verdict-review";
 import { applyEvidence, applyTrustEvidence, decayBeliefs } from "./belief/belief-state";
 import { applyPrivateInformation } from "./belief/private-info";
 import {
@@ -251,6 +256,9 @@ export class BotRuntime {
     this.ingestSeerResult(knowledge);
     this.ingestRoleClaims(knowledge);
     this.ingestRecaps(knowledge);
+    // Phải chạy SAU `ingestRecaps`: nguồn của mỗi mảnh là lá phiếu Treo/Tha đã
+    // được ghi thành memory ở đó, và `applyEvidence` từ chối nguồn chưa thấy.
+    this.ingestVerdictReviews(knowledge);
     this.ingestChat(context);
 
     // Phải chạy SAU `ingestDeaths`, `ingestRecaps` và `ingestChat`: cả ba đẩy
@@ -859,6 +867,61 @@ export class BotRuntime {
         }
         applyEvidence(this.state, item, this.weights);
         if (item.targetId) applySocialEvidence(this.state, item, this.weights);
+      }
+    }
+  }
+
+  /**
+   * Chấm lại những phiên toà mà vai của người bị treo đã lộ.
+   *
+   * Chỉ chạy được khi biến thể luật `revealRoleOnDeath` bật - luật mặc định
+   * không đưa vai người chết vào `knownRoles`, nên `role` dưới đây luôn
+   * `undefined` và vòng lặp không làm gì. Không có nhánh nào phải thêm cho luật
+   * mặc định: sự vắng mặt của dữ liệu CHÍNH LÀ cái cổng.
+   *
+   * Đánh dấu theo VÒNG chứ không theo lá phiếu: một phiên toà được chấm đúng
+   * một lần, còn `observe()` thì chạy nhiều lần mỗi vòng và `updateBelief` cộng
+   * dồn. Chỉ đánh dấu khi đã thật sự có vai để chấm, nếu không một lần
+   * `observe()` chạy trước lúc lộ vai sẽ nuốt mất cả phiên toà.
+   */
+  private ingestVerdictReviews(knowledge: BotKnowledgeView): void {
+    // Gác theo LUẬT chứ không theo sự có mặt của vai trong `knownRoles`: một
+    // con Sói vẫn nhớ vai của đồng bọn vừa bị treo kể cả khi cờ tắt, và chấm
+    // lại phán quyết dựa trên thông tin riêng đó sẽ (a) đổi hành vi của luật
+    // mặc định, (b) làm bài đo A/B mất đúng cái tính "chỉ đổi một biến" là lý
+    // do duy nhất nó tồn tại.
+    if (knowledge.revealRoleOnDeath !== true) return;
+
+    for (const recap of knowledge.publicVoteHistory) {
+      const accusedId = lynchedIdOf(recap);
+      if (accusedId === null) continue;
+
+      const role = knowledge.knownRoles[accusedId];
+      if (role === undefined) continue;
+
+      const marker = `verdict-review:${recap.round}`;
+      if (this.state.seenEventIds.includes(marker)) continue;
+      this.state.seenEventIds.push(marker);
+
+      for (const item of analyzeRevealedVerdict(
+        recap,
+        role,
+        this.state.personality.analyticalSkill,
+        this.rng,
+        this.weights,
+      )) {
+        // `seenEventIds` là hàng đợi có trần: một ván rất dài có thể đã đẩy lá
+        // phiếu này ra khỏi bộ nhớ, và lúc đó `validateEvidence` sẽ ném. Bỏ
+        // qua mảnh mất nguồn thay vì làm sập lượt của bot.
+        if (!this.state.seenEventIds.includes(finalBallotSourceId(recap.round, item.actorId))) {
+          continue;
+        }
+        applyEvidence(this.state, item, this.weights);
+        // Cả hai chiều đều chạm trust, khác với đường claim ở `observe()`. Ở đó
+        // một lời buộc tội không được phép tự nó đốt trust của người bị tố. Ở
+        // đây thì không có ai tố ai: sự thật đã lộ, và một phán đoán sai đã
+        // được kiểm chứng thì đúng là một lý do để tin người đó ít đi.
+        applyTrustEvidence(this.state, item, this.weights);
       }
     }
   }

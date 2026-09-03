@@ -121,8 +121,14 @@ describe("scheduleNightBots · deterministic", () => {
     const room = nightRoom();
 
     scheduleNightBots(room);
-    await vi.advanceTimersByTimeAsync(20_000);
+    // Dừng lại ĐÚNG lúc mọi lượt đêm đã nộp. Nộp xong là đêm tự khép sớm, và
+    // pha ngày ngay sau đó gọi nhà cung cấp một cách hoàn toàn hợp lệ - chạy
+    // quá mốc này là đo nhầm pha khác.
+    for (let tick = 0; tick < 20 && !room.engine!.allNightActionsDone(); tick++) {
+      await vi.advanceTimersByTimeAsync(1_000);
+    }
 
+    expect(room.engine!.allNightActionsDone()).toBe(true);
     expect(brainControl.renderDaySpeech).not.toHaveBeenCalled();
   });
 

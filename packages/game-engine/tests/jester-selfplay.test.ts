@@ -118,5 +118,8 @@ describe("Thằng Hề trong ván self-play trọn vẹn", () => {
       ).length;
 
     expect(Math.abs(wins(DECK) - wins({ ...DECK, jester: false }))).toBeLessThanOrEqual(8);
-  });
+    // 60 ván, ~1.9s khi chạy một mình - dưới trần 5s mặc định, nhưng không đủ
+    // xa nó: chạy chung cả bộ song song là thỉnh thoảng timeout, và một bài đo
+    // cán cân hỏng vì máy bận thì đọc y hệt như cán cân thật sự lệch.
+  }, 30_000);
 });

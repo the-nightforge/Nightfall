@@ -481,13 +481,21 @@ describe("Sát Nhân - tương tác", () => {
       { id: "villager", name: "Dân", role: "VILLAGER" },
       { id: "villager2", name: "Dân 2", role: "VILLAGER" },
     ];
-    const e = engineWith({ config: { ...CONFIG, jester: true, detective: true } }, seats);
-    e.submitNightAction("detective", "DETECTIVE_CHECK", "killer", "jester");
-    expect(e.state.night.detectiveResults.detective.sameTeam).toBe(false);
+    /*
+     * Hai lượt soi, hai ĐÊM - không phải hai lời gọi trong cùng một đêm: Thám
+     * Tử chỉ được điều tra một lần mỗi đêm, vì kết quả về ngay lúc nộp.
+     */
+    const config = { ...CONFIG, jester: true, detective: true };
+    const different = engineWith({ config }, seats);
+    different.submitNightAction("detective", "DETECTIVE_CHECK", "killer", "jester");
+    // `neutral` là một NHÃN, không phải một phe: hai vai trung lập không đứng
+    // cùng nhau, và Thám Tử phải đọc ra đúng điều đó.
+    expect(different.state.night.detectiveResults.detective.sameTeam).toBe(false);
 
     // Và hai người CÙNG phe thật vẫn báo đúng.
-    e.submitNightAction("detective", "DETECTIVE_CHECK", "villager", "villager2");
-    expect(e.state.night.detectiveResults.detective.sameTeam).toBe(true);
+    const same = engineWith({ config }, seats);
+    same.submitNightAction("detective", "DETECTIVE_CHECK", "villager", "villager2");
+    expect(same.state.night.detectiveResults.detective.sameTeam).toBe(true);
   });
 
   it("Tiên Tri soi Sát Nhân nhận PHE TRUNG LẬP, không nhận tên vai", () => {
