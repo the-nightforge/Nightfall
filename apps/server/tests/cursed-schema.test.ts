@@ -24,12 +24,16 @@ describe("Contract của Kẻ Nguyền Rủa", () => {
   });
 
   it("được tính vào cân bằng vai trò như các role đặc biệt khác", () => {
+    // Mọi mốc dời lên 8: `MIN_PLAYERS_TO_START` lên 8 từ 2026-09-04, và dưới
+    // ngưỡng đó `validateRoomConfig` trả lỗi số người trước khi tới được phép
+    // đếm ghế. Hình dạng của test giữ nguyên - một ca thừa ghế, một ca vừa khít,
+    // một ca thừa ghế trở lại.
     const base = { ...DEFAULT_ROOM_CONFIG, werewolves: 2, seer: true, guard: true, witch: true };
-    expect(validateRoomConfig({ ...base, hunter: false, cursed: false }, 6)).toBeNull();
-    // 2 Sói + 4 vai đặc biệt = 6 vai cho đúng 6 người: hết chỗ cho Dân Làng.
-    expect(validateRoomConfig({ ...base, hunter: true, cursed: true }, 7)).toBe(
-      "Phải còn chỗ cho Dân Làng",
-    );
+    expect(validateRoomConfig({ ...base, hunter: false, cursed: false }, 8)).toBeNull();
+    // 2 Sói + 6 vai đặc biệt = 8 vai cho đúng 8 người: hết chỗ cho Dân Làng.
+    expect(
+      validateRoomConfig({ ...base, hunter: true, cursed: true, mayor: true }, 8),
+    ).toBe("Phải còn chỗ cho Dân Làng");
     expect(validateRoomConfig({ ...base, hunter: true, cursed: true }, 8)).toBeNull();
   });
 });

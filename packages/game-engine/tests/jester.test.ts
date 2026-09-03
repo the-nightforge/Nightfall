@@ -401,8 +401,12 @@ describe("Thằng Hề - bộ bài và cấu hình", () => {
   });
 
   it("chiếm một ghế: cấu hình phải còn chỗ cho Dân Làng", () => {
-    // 6 người: 1 Sói + Tiên Tri + Bảo Vệ + Phù Thuỷ + Thợ Săn + Hề = 6 vai
-    // đặc biệt, không còn ghế nào cho Dân Làng.
+    // 8 người, không phải 6: `MIN_PLAYERS_TO_START` lên 8 từ 2026-09-04, và
+    // dưới ngưỡng đó `validateRoomConfig` trả lỗi số người trước khi tới được
+    // phép đếm ghế mà test này muốn khẳng định.
+    //
+    // 1 Sói + Tiên Tri + Bảo Vệ + Phù Thuỷ + Thợ Săn + Thám Tử + Thị Trưởng +
+    // Hề = 8 vai đặc biệt cho đúng 8 ghế, không còn chỗ nào cho Dân Làng.
     const full: RoomConfig = {
       ...DEFAULT_ROOM_CONFIG,
       werewolves: 1,
@@ -410,9 +414,11 @@ describe("Thằng Hề - bộ bài và cấu hình", () => {
       guard: true,
       witch: true,
       hunter: true,
+      detective: true,
+      mayor: true,
       jester: true,
     };
-    expect(validateRoomConfig(full, 6)).toBe("Phải còn chỗ cho Dân Làng");
-    expect(validateRoomConfig({ ...full, jester: false }, 6)).toBeNull();
+    expect(validateRoomConfig(full, 8)).toBe("Phải còn chỗ cho Dân Làng");
+    expect(validateRoomConfig({ ...full, jester: false }, 8)).toBeNull();
   });
 });

@@ -150,7 +150,22 @@ export const LAST_LETTER_MAX_LENGTH = 100;
 export const GHOST_AUTHOR_ID = "__ghost__";
 export const GHOST_AUTHOR_NAME = "Một linh hồn";
 
-export const MIN_PLAYERS_TO_START = 6;
+/**
+ * Nâng từ 6 lên 8 vì luật, không vì sản phẩm.
+ *
+ * Ở 6 người, `checkWin` (`sói >= số người còn lại`) cho phe làng đúng HAI ca
+ * chết trước khi chạm thế cân bằng, mà đêm đi trước nên đêm 1 đã tiêu mất một.
+ * Làng vì thế phải treo trúng hai lần LIÊN TIẾP, lần đầu diễn ra trước khi có
+ * bất kỳ thông tin nào. Đo self-play: 26% làng thắng, 1.97 vòng/ván.
+ *
+ * Và nó không sửa được bằng bộ bài: mọi cấu hình 2 Sói ở 6 người đều trần
+ * khoảng 32% (thêm Phù Thuỷ 32.3%, thêm Thị Trưởng 25.7%), vì bàn đã hết ghế
+ * để nhét thêm vai chức năng. Còn hạ xuống 1 Sói thì bật lên 60% - một ván mà
+ * phe Sói gần như không thắng nổi. Không có điểm nào ở giữa.
+ *
+ * 8 là cỡ phòng nhỏ nhất mà preset đo ra quanh 50%.
+ */
+export const MIN_PLAYERS_TO_START = 8;
 export const MAX_PLAYERS_PER_ROOM = 15;
 
 export const CHAT_CHANNELS = ["lobby", "day", "wolves", "dead"] as const;

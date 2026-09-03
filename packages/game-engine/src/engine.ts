@@ -570,6 +570,22 @@ export class GameEngine {
       case "GUARDIAN_PROTECT": {
         if (p.role !== "GUARDIAN_ANGEL") throw new GameError("Chỉ Thiên Thần Hộ Mệnh mới được bảo vệ");
         if (!targetId || !target) throw new GameError("Hãy chọn một người để bảo vệ");
+        /*
+         * Không tự đỡ, gương theo Bảo Vệ ngay trên.
+         *
+         * Trước đây đây là vai DUY NHẤT tự nhắm được mình: Bảo Vệ, Tiên Tri và
+         * Linh Mục đều loại chính mình, còn vai này thì không - không có lý do
+         * nào được viết ra, không có test, README cũng không nói. Nó là chỗ sót.
+         *
+         * Và nó không vô hại: hai lượt, không mất phí mỗi đêm, nên với một Thiên
+         * Thần đã lộ mặt thì tự đỡ là nước đi trội tuyệt đối. Vai bảo vệ LÀNG khi
+         * ấy thành vai tự bảo toàn, đúng thứ mà luật của Bảo Vệ sinh ra để chặn.
+         * "Chỉ có 2 lượt nên tự đỡ đã tự mang chi phí" không cứu được lập luận:
+         * Bảo Vệ cũng đánh đổi đúng một lượt như thế mỗi đêm mà vẫn bị cấm.
+         */
+        if (targetId === playerId) {
+          throw new GameError("Thiên Thần Hộ Mệnh không thể tự bảo vệ mình");
+        }
         const charges = st.guardianAngelCharges[playerId] ?? 2;
         if (charges <= 0) throw new GameError("Thiên Thần Hộ Mệnh đã hết lượt bảo vệ");
         if (targetId === st.guardianAngelPrevious) {
@@ -591,6 +607,24 @@ export class GameEngine {
         }
         if (targetId === secondaryTargetId) {
           throw new GameError("Không thể chọn cùng một người chơi 2 lần");
+        }
+        /*
+         * Thám Tử không được ghép chính mình vào cặp.
+         *
+         * Không phải một luật cho gọn: tự ghép biến vai này THÀNH Tiên Tri. Thám
+         * Tử biết chắc phe của chính nó, nên cặp `mình + X` đọc ra "cùng phe" là
+         * X thuộc phe làng, "khác phe" là X thuộc Sói hoặc trung lập - một lượt
+         * soi mỗi đêm, đúng thứ mà kết quả hai người vốn KHÔNG được phép nói.
+         * Cái giá thiết kế của vai này là không biết ai trong hai người là Sói;
+         * tự ghép xoá sạch cái giá đó.
+         *
+         * Hàng rào phải nằm ở đây chứ không chỉ ở `legalTargets`: danh sách hợp
+         * lệ là gợi ý cho client và cho BOT, còn engine mới là nơi có quyền cưỡng
+         * chế. Lõi BOT vốn đã tự loại mình (`bot/roles/detective.ts`), nên lỗ này
+         * chỉ người thật khai thác được - tức self-play không bao giờ đo thấy nó.
+         */
+        if (targetId === playerId || secondaryTargetId === playerId) {
+          throw new GameError("Thám Tử không thể tự đưa mình vào cặp kiểm tra");
         }
         const t1 = this.player(targetId);
         const t2 = this.player(secondaryTargetId);
@@ -1968,17 +2002,19 @@ export class GameEngine {
         .filter((player) => player.id !== viewer.id)
         .map((player) => player.id);
     } else if (viewer.role === "DETECTIVE") {
-      // Thám Tử cần ĐÚNG hai người còn sống khác nhau; engine cho phép tự soi
-      // mình nên danh sách không loại viewer.
-      if (alive.length >= 2) {
+      // Thám Tử cần ĐÚNG hai người còn sống khác nhau, và KHÔNG có mình trong
+      // đó - xem hàng rào cùng tên ở `submitNightAction`.
+      const targets = alive.filter((player) => player.id !== viewer.id).map((player) => player.id);
+      if (targets.length >= 2) {
         legalActions.push("DETECTIVE_CHECK");
-        legalTargets.DETECTIVE_CHECK = alive.map((player) => player.id);
+        legalTargets.DETECTIVE_CHECK = targets;
       }
     } else if (viewer.role === "GUARDIAN_ANGEL") {
-      // Hai lượt cả ván, và không đỡ lại đúng người đêm trước.
+      // Hai lượt cả ván, không đỡ lại đúng người đêm trước, và không tự đỡ -
+      // xem hàng rào cùng tên ở `submitNightAction`.
       const charges = st.guardianAngelCharges[viewer.id] ?? 2;
       const targets = alive
-        .filter((player) => player.id !== st.guardianAngelPrevious)
+        .filter((player) => player.id !== st.guardianAngelPrevious && player.id !== viewer.id)
         .map((player) => player.id);
       if (charges > 0 && targets.length > 0) {
         legalActions.push("GUARDIAN_PROTECT");

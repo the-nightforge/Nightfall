@@ -71,7 +71,7 @@ function friendly(warning: string, score: number, playerCount: number): string {
   }
   if (warning.startsWith("Không có preset")) {
     /*
-     * `PRESET_DECKS` phủ đúng 6..15 - tức là trọn khoảng người chơi hợp lệ - nên
+     * `PRESET_DECKS` phủ đúng 8..15 - tức là trọn khoảng người chơi hợp lệ - nên
      * cảnh báo này chỉ nổ khi phòng CHƯA ĐỦ người, không bao giờ vì thừa người.
      * Bản cũ nói "Bạn vẫn chơi được", hứa đúng cái điều mà `validateRoomConfig`
      * đang từ chối ngay dòng bên cạnh.

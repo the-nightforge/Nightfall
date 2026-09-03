@@ -130,7 +130,7 @@ export function Lobby({
           * Dưới mốc bắt đầu KHÔNG chấm cân bằng.
           *
           * `calculateBalanceScore` vẫn trả về một con số cho bàn 1 người, và
-          * `PRESET_DECKS` phủ đúng 6..15 nên nó luôn kèm "Không có preset". Kết
+          * `PRESET_DECKS` phủ đúng 8..15 nên nó luôn kèm "Không có preset". Kết
           * quả ở bản cũ: phòng 1 người hiện một thanh cân bằng 58 điểm, một
           * cảnh báo đội hình nghiêng, và một câu bảo "Bạn vẫn chơi được" - ngay
           * dưới dòng header nói còn thiếu 5 người. Chấm điểm một bàn chưa tồn

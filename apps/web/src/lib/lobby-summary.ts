@@ -160,7 +160,7 @@ export interface DeckStage {
  *
  * Dưới `MIN_PLAYERS_TO_START`, mọi con số cân bằng đều là chấm điểm cho một bàn
  * chưa tồn tại: `calculateBalanceScore` vẫn chạy và vẫn trả về một con số, còn
- * `PRESET_DECKS` phủ đúng 6..15 nên nó luôn kèm theo "Không có preset". Phòng 1
+ * `PRESET_DECKS` phủ đúng 8..15 nên nó luôn kèm theo "Không có preset". Phòng 1
  * người vì thế từng hiện cùng lúc "Cần thêm 5 người nữa để bắt đầu", "Bộ bài
  * cho 1 người", một thanh cân bằng 58 điểm, và một câu bảo "Bạn vẫn chơi được".
  *

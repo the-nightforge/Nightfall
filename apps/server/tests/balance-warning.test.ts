@@ -82,8 +82,11 @@ describe("balance warning snapshot", () => {
       code: "SNAP2",
       hostId: "p1",
       status: "LOBBY",
-      members: makeMembers(6),
-      config: { ...PRESET_DECKS[6] },
+      // 8 chứ không phải 6: preset 6 đã gỡ khi `MIN_PLAYERS_TO_START` lên 8, và
+      // `{ ...PRESET_DECKS[6] }` khi đó lặng lẽ thành `{}` - test vẫn xanh mà
+      // không còn chấm một preset nào cả.
+      members: makeMembers(8),
+      config: { ...PRESET_DECKS[8] },
       engine: null,
       chatLog: [],
       createdAt: 0,
