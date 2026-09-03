@@ -51,3 +51,34 @@ export interface WebglInputs {
 export function canUseWebgl(inputs: WebglInputs): boolean {
   return inputs.mode === "video" && !inputs.saveData && inputs.webgl2;
 }
+
+/**
+ * Máy này có WebGL2 không. Hỏi ĐÚNG MỘT LẦN cho cả phiên.
+ *
+ * Phép thử này tạo một context THẬT, và context là tài nguyên có hạn - trình
+ * duyệt chỉ cho chừng 16 cái rồi bắt đầu đá cái CŨ NHẤT, mà cái cũ nhất chính
+ * là renderer đang dùng. Gọi lại mỗi lần đổi thiết lập nghĩa là người chơi gạt
+ * công tắc vài chục lần là tự tay giết 3D của chính mình. Câu trả lời không đổi
+ * trong một phiên, nên nhớ lại là đủ.
+ *
+ * Ở CẤP MODULE chứ không nằm trong một component: hai nơi hỏi câu này - chuyển
+ * cảnh trong ván và màn "Hồi ức Ngôi Làng" - và hai bản nhớ riêng nghĩa là hai
+ * context bị đốt thay vì một.
+ */
+let webgl2Support: boolean | null = null;
+
+export function hasWebgl2(): boolean {
+  if (webgl2Support !== null) return webgl2Support;
+  if (typeof document === "undefined") return false;
+  try {
+    const probe = document.createElement("canvas");
+    const context = probe.getContext("webgl2");
+    // Trả context lại ngay thay vì để trình duyệt tự thu: một context sống lay
+    // lắt vẫn tính vào hạn mức.
+    context?.getExtension("WEBGL_lose_context")?.loseContext();
+    webgl2Support = context !== null;
+  } catch {
+    webgl2Support = false;
+  }
+  return webgl2Support;
+}

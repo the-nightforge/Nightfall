@@ -4,6 +4,20 @@ const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      /**
+       * Điện thoại NẰM NGANG, và chỉ điện thoại.
+       *
+       * `landscape` sẵn có của Tailwind bắt cả desktop - một màn 1440x900 cũng
+       * là khung ngang - nên nó không dùng được cho thứ cần phân biệt ở đây:
+       * chiều cao còn lại. Điều kiện phải có CẢ hướng lẫn trần chiều cao.
+       *
+       * Đặt tên một lần ở đây thay vì viết thẳng `[@media...]:` tại chỗ dùng:
+       * lớp arbitrary ấy dài tới mức che lấp cái nó đang làm, và lặp lại sáu
+       * lần trong một component thì không ai sửa nổi nữa.
+       */
+      screens: {
+        "phone-landscape": { raw: "(orientation: landscape) and (max-height: 560px)" },
+      },
       colors: {
         night: {
           950: "#070b14",

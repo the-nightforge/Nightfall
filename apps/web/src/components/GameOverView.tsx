@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { m } from "motion/react";
 import {
   buildCaseFile,
@@ -28,6 +29,20 @@ import { CaseShareCard } from "./CaseShareCard";
 import { HunterShotTimeline } from "./HunterShotTimeline";
 import { LastLetterArchive } from "./LastLetterArchive";
 import { NightRecapTimeline } from "./NightRecapTimeline";
+
+/**
+ * "Hồi ức Ngôi Làng" nạp theo yêu cầu, không bao giờ sớm hơn.
+ *
+ * `next/dynamic` với `ssr: false`, và component chỉ được DỰNG sau cú bấm - hai
+ * điều kiện tách bạch nhưng đều cần: `dynamic` giữ chunk ra khỏi bản dựng đầu,
+ * còn việc dựng có điều kiện giữ nó ra khỏi cả lượt tải chunk. Bản thân
+ * `three` còn nằm sau một tầng `import()` nữa bên trong `VillageMemoryCanvas`,
+ * nên máy không dựng nổi 3D thì không tốn một byte nào cho nó.
+ */
+const VillageMemoryExperience = dynamic(
+  () => import("./VillageMemoryExperience").then((mod) => mod.VillageMemoryExperience),
+  { ssr: false },
+);
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -113,6 +128,12 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
    */
   const caseFile = useMemo(() => buildCaseFile(snapshot), [snapshot]);
 
+  // Màn hồi ức 3D. `open` bắt đầu ở false và KHÔNG có nhánh nào tự bật nó: ván
+  // vừa xong là lúc người chơi muốn đọc bảng vai trò, không phải lúc bị kéo vào
+  // một đoạn phim. Nút mở giữ ref để focus quay về đúng nó khi dialog đóng.
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const memoryButtonRef = useRef<HTMLButtonElement>(null);
+
   // Kết quả cá nhân và bước ngoặt phải sống ở TRANG, không chỉ trong ảnh chia
   // sẻ: ở bản cũ chỉ tấm thumbnail mới nói được ván này ngoặt ở đâu.
   const outcome = personalOutcome(snapshot);
@@ -190,6 +211,42 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
           </div>
         </div>
       </m.div>
+
+      {/*
+        * Xem lại ván bằng mô hình làng 3D.
+        *
+        * Đứng RIÊNG giữa thẻ hero và khối hành động sau trận, không nhét vào
+        * `PostMatchActions`: khối kia trả lời "làm gì tiếp", còn nút này trả
+        * lời "vừa rồi đã xảy ra chuyện gì" - hai câu hỏi khác nhau, và trộn
+        * chúng vào một hàng sẽ phá đúng thứ bậc CTA mà khối đó dựng ra.
+        *
+        * Cũng KHÔNG nằm trong mục "Diễn biến trận": mục đó mặc định thu gọn,
+        * và một tính năng chỉ thấy được sau khi mở một thẻ gấp thì gần như
+        * không tồn tại.
+        *
+        * Chỉ hiện khi có hồ sơ vụ án - không có hồ sơ thì không có gì để dựng
+        * thành hồi ức, và một nút mở ra màn hình rỗng là một lời hứa hão.
+        */}
+      {caseFile && (
+        <div className="flex justify-center">
+          <button
+            ref={memoryButtonRef}
+            className="btn-secondary min-h-11 px-5"
+            onClick={() => setMemoryOpen(true)}
+          >
+            <span aria-hidden="true">🏘</span> Xem Hồi ức 3D
+          </button>
+        </div>
+      )}
+
+      {caseFile && memoryOpen && (
+        <VillageMemoryExperience
+          snapshot={snapshot}
+          file={caseFile}
+          triggerRef={memoryButtonRef}
+          onClose={() => setMemoryOpen(false)}
+        />
+      )}
 
       <PostMatchActions
         canReset={canReset}
