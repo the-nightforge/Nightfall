@@ -5,7 +5,7 @@
 **A real-time multiplayer Werewolf (Mafia) game — 13 roles, 15 dynamic events, voice chat, and AI bots that actually reason.**
 
 [![CI](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-2959%20passing-brightgreen)](#testing)
+[![Tests](https://img.shields.io/badge/tests-3429%20passing-brightgreen)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
@@ -452,11 +452,17 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 
 | Package | Runner | Tests |
 |---|---|---|
-| `@masoi/shared` | Vitest | **80** |
-| `@masoi/game-engine` | Vitest | **1514** |
-| `@masoi/server` | Vitest | **807** |
-| `@masoi/web` | `node:test` | **558** |
-| | | **2959 total** |
+| `@masoi/shared` | Vitest | **97** |
+| `@masoi/game-engine` | Vitest | **1534** |
+| `@masoi/server` | Vitest | **861** |
+| `@masoi/web` | `node:test` | **937** |
+| | | **3429 total** |
+
+> **Run the web suite on Node 20.19**, the version CI pins. `TrialStage.test.tsx`
+> is the one suite that mounts a real React tree, and it drives `node:test`'s
+> experimental module mocking — an API whose option names changed after Node 20.
+> On Node 22 its 11 tests fail on the mock wiring, not on the component. Every
+> other suite is version-independent.
 
 Every package typechecks its tests as well as its sources — `npm run lint` runs `tsc` over both. This matters more than it sounds: the server's tests were unchecked until recently, and in that gap more than forty fixtures drifted away from the types they claimed to build, several of them still setting engine fields that had been renamed away.
 
