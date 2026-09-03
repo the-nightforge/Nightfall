@@ -469,24 +469,47 @@ describe("import chậm", () => {
     const root = createRoot(host);
 
     /*
-     * KHÔNG xả microtask giữa hai lần render.
+     * Cuộc đua ở đây được DÀN, không phải được đua.
      *
-     * `import("three")` trong canvas chỉ giải quyết ở microtask; giữ nguyên
-     * hàng đợi thì DEFENSE và FINAL_VOTE cùng tới trước khi cảnh kịp dựng -
-     * đúng cảnh máy chậm mà bản cũ để màn mở đầu ghi đè camera của pha bỏ phiếu.
+     * Điều kiện cần tái hiện là: lô OPENING của DEFENSE tới tay canvas trong
+     * lúc cảnh 3D CHƯA dựng xong, rồi cảnh mới dựng xong khi pha đã sang
+     * FINAL_VOTE. Bản cũ tạo điều kiện đó bằng cách gọi `root.render` ngoài
+     * `act()` và trông chờ `import("three")` chưa kịp giải quyết. Cả hai vế đều
+     * không có gì bảo đảm: React 19 cảnh báo đúng về update ngoài `act` và
+     * không hứa hẹn thứ tự, còn "chưa kịp" thì tuỳ phiên bản Node.
+     *
+     * Bản này dựa vào một bảo đảm của chính ngôn ngữ thay vì vào tốc độ máy:
+     * `import()` KHÔNG BAO GIỜ giải quyết đồng bộ, và `await act(...)` chỉ nhả
+     * microtask chứ không nhả vòng macrotask - mà loader của Node thì cần vòng
+     * macrotask. Nên trong ba lần render dưới đây, cảnh CHẮC CHẮN chưa dựng, ở
+     * mọi phiên bản Node. Mọi render đều nằm trong `act()`, không còn update
+     * nào lọt ra ngoài.
      */
     await act(async () => {
       root.render(React.createElement(Room, { snap: snapshot({ phase: "VOTING" }) }));
     });
     await act(async () => {
-      await Promise.resolve();
+      root.render(React.createElement(Room, { snap: defense() }));
     });
-    root.render(React.createElement(Room, { snap: defense() }));
-    root.render(React.createElement(Room, { snap: finalVote() }));
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
+      root.render(React.createElement(Room, { snap: finalVote() }));
+    });
+
+    /*
+     * Hai lượt xả, không phải một.
+     *
+     * Lượt đầu để effect dò WebGL chạy và canvas mount - canvas chỉ xuất hiện ở
+     * lượt commit SAU khi `webgl2` bật. Lượt sau mới là lúc `import()` của
+     * canvas có vòng macrotask để giải quyết và cảnh dựng xong. Gộp làm một thì
+     * canvas mount đúng vào cuối lượt xả và không còn vòng nào cho `import()` -
+     * đó chính là trạng thái mà bản trước mắc kẹt: cảnh không bao giờ dựng, và
+     * khẳng định cuối đọc phải `undefined`.
+     */
+    await act(async () => {
+      await drainTurns();
+    });
+    await act(async () => {
+      await drainTurns();
     });
 
     assert.equal(opened(), 0, "màn mở đầu đã lỗi thời thì bỏ, không ghi đè pha mới");

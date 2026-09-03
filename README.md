@@ -458,15 +458,6 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `@masoi/web` | `node:test` | **937** |
 | | | **3429 total** |
 
-> **One known failure**, in `TrialStage.test.tsx` — the one suite that mounts a
-> real React tree. Its "slow import" case calls `root.render` twice *outside*
-> `act()` on purpose, to catch a stale opening beat overwriting a newer phase.
-> React 19 warns about un-acted updates and makes no promise about how they
-> interleave, so the case passes on the Node the author wrote it on and fails on
-> Node 22. Making it version-independent means staging that race deliberately
-> rather than racing the real `import()`. The other 936 tests pass on Node 20
-> through 24.
-
 Every package typechecks its tests as well as its sources — `npm run lint` runs `tsc` over both. This matters more than it sounds: the server's tests were unchecked until recently, and in that gap more than forty fixtures drifted away from the types they claimed to build, several of them still setting engine fields that had been renamed away.
 
 The engine suite includes seeded self-play runs that assert invariants across hundreds of full matches — no illegal move is ever accepted, no bot ever learns a role it should not know, and the same seed reproduces a match bit-for-bit.
