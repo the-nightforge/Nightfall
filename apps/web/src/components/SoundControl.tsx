@@ -14,18 +14,26 @@ import {
   saveCinematicSettings,
   type CinematicSettings,
 } from "@/lib/cinematic-settings";
+import {
+  DEFAULT_LIVE_TRIAL_SETTINGS,
+  applyLiveTrialSettings,
+  loadLiveTrialSettings,
+  type LiveTrialSettings,
+} from "@/lib/live-trial-settings";
 
 export function SoundControl() {
   // Khởi tạo bằng mặc định chứ không đọc localStorage ngay: server render
   // không có localStorage, đọc ở đây sẽ lệch giữa server và client.
   const [settings, setSettings] = useState<AudioSettings>(DEFAULT_SETTINGS);
   const [cinematic, setCinematic] = useState<CinematicSettings>(DEFAULT_CINEMATIC_SETTINGS);
+  const [liveTrial, setLiveTrial] = useState<LiveTrialSettings>(DEFAULT_LIVE_TRIAL_SETTINGS);
   const [unlocked, setUnlocked] = useState(true);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     setSettings(loadSettings());
     setCinematic(loadCinematicSettings());
+    setLiveTrial(loadLiveTrialSettings());
     setUnlocked(audioEngine.isUnlocked());
     return audioEngine.onUnlock(() => setUnlocked(true));
   }, []);
@@ -38,6 +46,20 @@ export function SoundControl() {
     // `storage` của trình duyệt chỉ bắn sang TAB KHÁC chứ không bắn cho chính
     // tab vừa ghi, nên phải tự gọi một tiếng.
     window.dispatchEvent(new Event("masoi:cinematic-settings"));
+  }
+
+  /*
+   * Thiết lập CÁ NHÂN, không phải add-on của phòng.
+   *
+   * Không cần quyền host, không đụng tới luật, và hai người cùng phòng chọn
+   * khác nhau là chuyện bình thường - người này xem sân khấu 3D, người kia xem
+   * bảng phiếu như cũ, cả hai vẫn nhìn cùng một ván. Gạt giữa lúc đang xử cũng
+   * không mất phiếu: `useLiveTrial` vẫn đọc snapshot suốt, chỉ là không vẽ.
+   */
+  function updateLiveTrial(enabled: boolean): void {
+    const next = { ...liveTrial, enabled };
+    setLiveTrial(next);
+    applyLiveTrialSettings(next);
   }
 
   function update(patch: Partial<AudioSettings>): void {
@@ -108,6 +130,21 @@ export function SoundControl() {
               className="h-4 w-4 shrink-0 accent-blood-500"
               checked={cinematic.reduced}
               onChange={(event) => updateCinematic({ reduced: event.target.checked })}
+            />
+          </label>
+
+          <label className="mt-2 flex cursor-pointer items-center justify-between gap-2 border-t border-white/[0.08] pt-2 text-xs text-mist/80">
+            <span>
+              Phiên toà sống
+              <span className="block text-[11px] text-mist/60">
+                Sân khấu 3D cho pha biện hộ và bỏ phiếu xác nhận.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              className="h-4 w-4 shrink-0 accent-blood-500"
+              checked={liveTrial.enabled}
+              onChange={(event) => updateLiveTrial(event.target.checked)}
             />
           </label>
 
