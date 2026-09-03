@@ -34,6 +34,7 @@ import {
   cancelDiscussionScheduler,
   runDiscussionScheduler,
 } from "./discussion-scheduler";
+import { isBotControlled } from "./seat-control";
 import {
   DISCONNECT_GRACE_MS,
   clearDiscussionSkipVotes,
@@ -438,7 +439,7 @@ export function scheduleHunterBot(room: Room): void {
   if (!scheduledReaction || scheduledReaction.resolved) return;
 
   const member = room.members.find(
-    (candidate) => candidate.playerId === scheduledReaction.hunterId && candidate.isBot,
+    (candidate) => candidate.playerId === scheduledReaction.hunterId && isBotControlled(candidate),
   );
   if (!member) return;
 
@@ -450,6 +451,9 @@ export function scheduleHunterBot(room: Room): void {
     scheduledEngine.state.phase === "HUNTER_SHOT" &&
     scheduledEngine.state.hunterReaction === scheduledReaction &&
     scheduledReaction.hunterId === member.playerId &&
+    // Người chơi quay lại trước mốc hẹn thì trả ghế cho họ; `member` là tham
+    // chiếu sống nên `connected` ở đây luôn là hiện tại.
+    isBotControlled(member) &&
     !scheduledReaction.resolved;
 
   // Một mốc duy nhất. Lõi chạy đồng bộ nên không có kết quả về muộn để phải
@@ -751,7 +755,7 @@ export function scheduleNightBots(room: Room): void {
   );
 
   for (const member of room.members) {
-    if (!member.isBot) continue;
+    if (!isBotControlled(member)) continue;
 
     const view = buildSnapshot(room, member.playerId);
     // canAct đã loại Phù Thuỷ ở chặng một và loại Sói ở chặng hai; cờ acted
@@ -764,6 +768,10 @@ export function scheduleNightBots(room: Room): void {
     setRoomTimer(room.code, () => {
       try {
         if (!room.engine || room.engine.state.phase !== "NIGHT") return;
+        // Người chơi quay lại trước khi mốc hẹn nổ thì ghế trả về cho họ:
+        // `member` là tham chiếu sống, ws.ts cập nhật `connected` ngay khi
+        // socket nối lại.
+        if (!isBotControlled(member)) return;
 
         const runtime = session.runtimeFor(member.playerId);
         const context = buildBotDecisionContext(room, member.playerId);
@@ -997,7 +1005,7 @@ export function scheduleFinalVoteBots(room: Room): void {
   const deadlineMs = Math.max(0, windowMs - FINAL_VOTE_BOT_DEADLINE_BUFFER_MS);
 
   for (const member of room.members) {
-    if (!member.isBot) continue;
+    if (!isBotControlled(member)) continue;
     const view = buildSnapshot(room, member.playerId);
     if (!view.trial?.canVote) continue;
 
@@ -1007,6 +1015,10 @@ export function scheduleFinalVoteBots(room: Room): void {
     setRoomTimer(room.code, () => {
       try {
         if (!room.engine || room.engine.state.phase !== "FINAL_VOTE") return;
+        // Người chơi quay lại trước khi mốc hẹn nổ thì ghế trả về cho họ:
+        // `member` là tham chiếu sống, ws.ts cập nhật `connected` ngay khi
+        // socket nối lại.
+        if (!isBotControlled(member)) return;
 
         const runtime = session.runtimeFor(member.playerId);
         const context = buildBotDecisionContext(room, member.playerId);
@@ -1083,7 +1095,7 @@ export function scheduleVoteBots(room: Room): void {
   const window = room.config.voteSeconds * 1_000;
 
   for (const member of room.members) {
-    if (!member.isBot) continue;
+    if (!isBotControlled(member)) continue;
 
     const rng = session.rngFor(member.playerId, "vote-schedule");
     const delays = VOTE_CHECKPOINTS.map(([start, spread]) =>
@@ -1094,6 +1106,7 @@ export function scheduleVoteBots(room: Room): void {
       setRoomTimer(room.code, () => {
         try {
           if (!room.engine || room.engine.state.phase !== "VOTING") return;
+          if (!isBotControlled(member)) return;
 
           const vote = deterministicVote(room, member.playerId);
           if (!vote) return;

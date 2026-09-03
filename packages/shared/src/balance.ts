@@ -2,19 +2,55 @@ import type { Role } from "./roles";
 import type { RoomConfig } from "./phases";
 import type { BalanceWarningView } from "./snapshot";
 
+/**
+ * Sức nặng của mỗi vai, tính bằng "hơn một lá Dân Làng bao nhiêu".
+ *
+ * Bảng này KHÔNG còn là số đoán tay: nó hiệu chỉnh từ
+ * `apps/server/scripts/role-power.ts`, chạy self-play so cặp trên đúng bộ seed -
+ * mỗi preset chạy hai lần, một lần nguyên vẹn và một lần gỡ đúng một vai ra (ghế
+ * trống thành Dân Làng), rồi lấy chênh lệch tỉ lệ thắng. Đó đúng bằng đại lượng
+ * `calculateBalanceScore` cần, vì nó chỉ dùng bảng này để đo ĐỘ LỆCH của một bộ
+ * bài so với preset chứ không chấm bộ bài một cách tuyệt đối.
+ *
+ * Số đo (150 ván/ô, mẫu = số preset chứa vai đó):
+ *   WOLF_CUB +18.7% (7) · SEER +5.5% (10) · WITCH +2.4% (9) · HUNTER +2.1% (10)
+ *   GUARD +2.0% (9) · DETECTIVE +1.9% (7) · MAYOR +1.9% (6)
+ *   GUARDIAN_ANGEL -0.2% (3) · PRIEST -1.3% (2) · APPRENTICE_SEER -5.3% (2)
+ *   CURSED -11.3% (2)
+ *
+ * Bảng KHÔNG chép thẳng số đo, và có hai lý do:
+ *
+ * 1. Đây là BOT đánh BOT. Lõi bot suy luận kém hơn người, mà phe làng thì sống
+ *    bằng suy luận còn phe Sói chỉ cần giết - nên mọi preset đo ra 14-41% cho
+ *    phe làng. Con số nói "bot khai thác được bao nhiêu từ vai này". Vai cần đọc
+ *    vị và nói dối bị đo thấp hơn giá trị thật trên bàn người.
+ * 2. Bốn dòng cuối chỉ có 2-3 mẫu, phần lớn rơi vào đúng hai preset tệ nhất cho
+ *    phe làng. Chúng được kéo xuống theo hướng số đo, không bị lật hẳn theo nó.
+ *
+ * Thứ số đo nói chắc chắn và bảng cũ nói sai:
+ * - Tiên Tri đứng RIÊNG một bậc trên đầu, còn Phù Thuỷ/Bảo Vệ/Thám Tử/Thợ Săn/
+ *   Thị Trưởng là một bậc phẳng. Bảng cũ trải chúng ra 5/4/4/3/2 mà không có gì
+ *   đỡ.
+ * - Sói Con là lá mạnh nhất trong cả bộ bài, hơn hẳn một con Sói thường.
+ * - Kẻ Nguyền Rủa là lá có HẠI cho phe làng, không phải lá lợi: nó ngồi ghế làng
+ *   nhưng bị cắn thì đổi phe. Bảng cũ cho nó +3 và vì thế bật Kẻ Nguyền Rủa lên
+ *   làm điểm cân bằng nghiêng về phía làng - ngược hẳn thực tế.
+ */
 export const ROLE_POWER: Record<Role, number> = {
   WEREWOLF: 5,
-  WOLF_CUB: 4,
+  WOLF_CUB: 6,
   SEER: 5,
-  APPRENTICE_SEER: 2.5,
-  DETECTIVE: 4,
-  GUARD: 4,
-  GUARDIAN_ANGEL: 3,
-  PRIEST: 2.5,
-  WITCH: 5,
+  APPRENTICE_SEER: 1.5,
+  DETECTIVE: 3,
+  GUARD: 3,
+  GUARDIAN_ANGEL: 2,
+  PRIEST: 2,
+  WITCH: 3,
   HUNTER: 3,
-  MAYOR: 2,
-  CURSED: 3,
+  MAYOR: 2.5,
+  // Âm là có chủ ý, xem chú thích trên: bảng đo "đóng góp cho phe đang giữ lá
+  // này", và lá này đóng góp âm cho phe làng.
+  CURSED: -2,
   VILLAGER: 0.5,
 };
 

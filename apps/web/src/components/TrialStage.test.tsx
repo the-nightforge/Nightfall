@@ -55,28 +55,94 @@ const sceneCalls: SceneCall[] = [];
 let scenesBuilt = 0;
 /** Máy giả lập có dựng được 3D không. Test lật cờ này để đi đường 2D. */
 let webglSupported = true;
+/** Số lần effect dò WebGL đã chạy. Là tín hiệu "đã có gì đó xảy ra" cho `drainTurns`. */
+let webglCalls = 0;
 
 function resetScene(): void {
   sceneCalls.length = 0;
   scenesBuilt = 0;
+  webglCalls = 0;
   webglSupported = true;
+}
+
+/**
+ * Trần số vòng xả. Chỉ để một lỗi treo hiện ra thành test đỏ thay vì treo mãi -
+ * KHÔNG phải một mốc cần chỉnh cho khớp máy.
+ */
+const DRAIN_MAX_TURNS = 100;
+/** Bao nhiêu vòng liền im lặng thì coi là đã xong. */
+const DRAIN_IDLE_TURNS = 3;
+
+/**
+ * Xả hàng đợi cho tới khi mọi thứ THÔI ĐỔI, không phải cho tới một số vòng
+ * định sẵn.
+ *
+ * `import("three")` và `import("@/lib/live-trial-scene")` trong canvas không
+ * giải quyết trong microtask - chúng đi qua loader của Node, nên cần vòng
+ * MACROTASK, và cần bao nhiêu vòng thì tuỳ phiên bản Node lẫn tốc độ máy. Bản
+ * đầu xả đúng hai microtask, vừa đủ trên máy người viết và không bao giờ đủ
+ * trên Node 22; thay nó bằng một số cứng lớn hơn cũng chỉ là dời chỗ đoán.
+ *
+ * Điều kiện dừng vì thế là quan sát, không phải đếm: chờ tới khi ĐÃ có hoạt
+ * động rồi im được vài vòng liền. `seenActivity` là mấu chốt - thiếu nó thì
+ * "chưa kịp bắt đầu" trông y hệt "đã xong", và vòng lặp thoát ngay ở vòng đầu.
+ *
+ * Còn `host` trả lời câu hỏi thứ hai: sân khấu đã mount chưa. Chưa mount thì
+ * không có `import()` nào đang chờ và cũng sẽ không có - render đó chỉ dựng một
+ * cây rỗng (`Room` trả null khi chưa có phiên toà) - nên thoát ngay thay vì
+ * ngồi hết trần. Thiếu lối thoát này thì mỗi render như vậy tốn trọn 100 vòng,
+ * và cả file chạy lâu gấp ba mà không kiểm thêm được gì.
+ */
+async function drainTurns(host: HTMLElement): Promise<void> {
+  const mounted = () => host.querySelector('[aria-label="Sân khấu phiên toà"]') !== null;
+  const signal = () => `${webglCalls}:${scenesBuilt}:${sceneCalls.length}`;
+  let seenActivity = false;
+  let idle = 0;
+
+  for (let turn = 0; turn < DRAIN_MAX_TURNS; turn += 1) {
+    const before = signal();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    if (signal() !== before) {
+      seenActivity = true;
+      idle = 0;
+      continue;
+    }
+    idle += 1;
+    if (seenActivity && idle >= DRAIN_IDLE_TURNS) return;
+    if (!seenActivity && !mounted()) return;
+  }
 }
 
 const opened = () => sceneCalls.filter((c) => c.name === "playOpening").length;
 
 /*
- * `mock.module` với `options.exports`.
+ * `mock.module` đổi tên tuỳ chọn giữa các bản Node, nên ở đây gửi CẢ HAI.
  *
- * Repo ghim `@types/node@^20`, còn runtime là Node 24: kiểu ở đó chỉ biết
- * `namedExports` (đã bị chính Node đánh dấu deprecated và in cảnh báo mỗi lần
- * gọi). Dùng đúng API hiện tại rồi khai kiểu tại chỗ, thay vì dùng API cũ chỉ
- * để chiều một gói kiểu đã lạc hậu.
+ * Node 20 và 22 đọc `namedExports`; Node 24 đổi sang `exports` và đánh dấu
+ * `namedExports` là deprecated. Bản trước chỉ gửi `exports` - đúng trên máy
+ * người viết (Node 24), nhưng trên Node 20/22 tuỳ chọn đó bị bỏ qua LẶNG LẼ và
+ * mock cài vào một module rỗng. Triệu chứng hiện ra cách chỗ sai vài lớp:
+ * `hasWebgl2 is not a function` ở giữa một effect của React. CI ghim 20.19.x
+ * nên đây không phải chuyện lý thuyết.
+ *
+ * Gửi cả hai an toàn hơn rẽ nhánh theo `process.version`: bản nào cũng đọc khoá
+ * nó biết và bỏ qua khoá kia, kể cả một bản Node sau này lại đổi lần nữa. Giá
+ * phải trả nhiều nhất là một dòng cảnh báo deprecated, không phải test đỏ.
+ *
+ * Điều làm cách này an toàn: hai khoá mang CÙNG một đối tượng. Bản Node nào đọc
+ * khoá nào cũng ra đúng một bảng export, nên không có nhánh hành vi thứ hai để
+ * mà lệch. Node cũng không từ chối khoá lạ - Node 22 lặng lẽ bỏ qua `exports`
+ * thay vì ném, và đó chính là thứ khiến lỗi cũ khó lần.
  */
 type MockModuleOptions = { exports?: Record<string, unknown> };
 const mockModule = (specifier: string, options: MockModuleOptions): Promise<unknown> =>
   (mock as unknown as {
-    module: (s: string, o: MockModuleOptions) => Promise<unknown>;
-  }).module(specifier, options);
+    module: (
+      s: string,
+      o: MockModuleOptions & { namedExports?: Record<string, unknown> },
+    ) => Promise<unknown>;
+  }).module(specifier, { ...options, namedExports: options.exports });
 
 // ---------------------------------------------------------------------------
 
@@ -134,7 +200,10 @@ before(async () => {
   // không gán đè được, nên nó lật cái biến này.
   await mockModule("../lib/cinematic-webgl.ts", {
     exports: {
-      hasWebgl2: () => webglSupported,
+      hasWebgl2: () => {
+        webglCalls += 1;
+        return webglSupported;
+      },
       renderScale: (dpr: number) => Math.min(dpr || 1, 1.5),
       MAX_RENDER_SCALE: 1.5,
       canUseWebgl: () => true,
@@ -224,8 +293,7 @@ async function mountRoom(options: { strict?: boolean } = {}) {
     });
     // Cho `import()` động trong canvas kịp giải quyết rồi để React xả effect.
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      await drainTurns(host);
     });
   };
 
@@ -434,24 +502,47 @@ describe("import chậm", () => {
     const root = createRoot(host);
 
     /*
-     * KHÔNG xả microtask giữa hai lần render.
+     * Cuộc đua ở đây được DÀN, không phải được đua.
      *
-     * `import("three")` trong canvas chỉ giải quyết ở microtask; giữ nguyên
-     * hàng đợi thì DEFENSE và FINAL_VOTE cùng tới trước khi cảnh kịp dựng -
-     * đúng cảnh máy chậm mà bản cũ để màn mở đầu ghi đè camera của pha bỏ phiếu.
+     * Điều kiện cần tái hiện là: lô OPENING của DEFENSE tới tay canvas trong
+     * lúc cảnh 3D CHƯA dựng xong, rồi cảnh mới dựng xong khi pha đã sang
+     * FINAL_VOTE. Bản cũ tạo điều kiện đó bằng cách gọi `root.render` ngoài
+     * `act()` và trông chờ `import("three")` chưa kịp giải quyết. Cả hai vế đều
+     * không có gì bảo đảm: React 19 cảnh báo đúng về update ngoài `act` và
+     * không hứa hẹn thứ tự, còn "chưa kịp" thì tuỳ phiên bản Node.
+     *
+     * Bản này dựa vào một bảo đảm của chính ngôn ngữ thay vì vào tốc độ máy:
+     * `import()` KHÔNG BAO GIỜ giải quyết đồng bộ, và `await act(...)` chỉ nhả
+     * microtask chứ không nhả vòng macrotask - mà loader của Node thì cần vòng
+     * macrotask. Nên trong ba lần render dưới đây, cảnh CHẮC CHẮN chưa dựng, ở
+     * mọi phiên bản Node. Mọi render đều nằm trong `act()`, không còn update
+     * nào lọt ra ngoài.
      */
     await act(async () => {
       root.render(React.createElement(Room, { snap: snapshot({ phase: "VOTING" }) }));
     });
     await act(async () => {
-      await Promise.resolve();
+      root.render(React.createElement(Room, { snap: defense() }));
     });
-    root.render(React.createElement(Room, { snap: defense() }));
-    root.render(React.createElement(Room, { snap: finalVote() }));
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
+      root.render(React.createElement(Room, { snap: finalVote() }));
+    });
+
+    /*
+     * Hai lượt xả, không phải một.
+     *
+     * Lượt đầu để effect dò WebGL chạy và canvas mount - canvas chỉ xuất hiện ở
+     * lượt commit SAU khi `webgl2` bật. Lượt sau mới là lúc `import()` của
+     * canvas có vòng macrotask để giải quyết và cảnh dựng xong. Gộp làm một thì
+     * canvas mount đúng vào cuối lượt xả và không còn vòng nào cho `import()` -
+     * đó chính là trạng thái mà bản trước mắc kẹt: cảnh không bao giờ dựng, và
+     * khẳng định cuối đọc phải `undefined`.
+     */
+    await act(async () => {
+      await drainTurns(host);
+    });
+    await act(async () => {
+      await drainTurns(host);
     });
 
     assert.equal(opened(), 0, "màn mở đầu đã lỗi thời thì bỏ, không ghi đè pha mới");

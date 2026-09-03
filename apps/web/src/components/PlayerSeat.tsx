@@ -5,6 +5,7 @@ import { ROLE_META, type PlayerView } from "@masoi/shared";
 import { roleLabel } from "@/lib/cursed";
 import { breathOffsetFor } from "@/lib/avatar";
 import type { AvatarId } from "@/lib/avatar-art";
+import { NOTE_META, type NoteMark } from "@/lib/player-notes";
 import { Avatar } from "./Avatar";
 
 interface Props {
@@ -28,6 +29,8 @@ interface Props {
   onSelect?: () => void;
   /** Lớp phiếu bay cần đo vị trí ô này để biết bay tới đâu. */
   seatRef?: (el: HTMLButtonElement | null) => void;
+  /** Dấu ghi chú riêng của người xem, nếu họ đã đặt một dấu lên ô này. */
+  mark?: NoteMark;
 }
 
 /**
@@ -49,6 +52,7 @@ export function PlayerSeat({
   disabledReason,
   onSelect,
   seatRef,
+  mark,
 }: Props) {
   const dead = !player.alive;
   const votes = player.voteCount ?? 0;
@@ -132,6 +136,22 @@ export function PlayerSeat({
           className="absolute left-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-blood-500 text-xs font-bold leading-none text-white ring-1 ring-white/30"
         >
           ✓
+        </span>
+      )}
+
+      {/*
+        * Dấu ghi chú ở góc DƯỚI trái: ba góc kia đã có chủ - dấu tích chọn ở
+        * trên trái, huy hiệu phiếu ở trên phải. Nó cố tình mờ hơn mọi thứ khác
+        * trong ô: đây là suy đoán của riêng người xem, không phải sự thật của
+        * ván, và nó không được đọc át số phiếu thật.
+        */}
+      {mark && !dead && (
+        <span
+          className="absolute bottom-1 left-1 rounded-full bg-night-950/80 px-1 text-[0.7rem] leading-tight ring-1 ring-white/15"
+          title={`${NOTE_META[mark].label} (ghi chú riêng của bạn)`}
+          aria-label={`Ghi chú của bạn: ${NOTE_META[mark].label}`}
+        >
+          {NOTE_META[mark].icon}
         </span>
       )}
 

@@ -5,7 +5,7 @@
 **A real-time multiplayer Werewolf (Mafia) game — 13 roles, 15 dynamic events, voice chat, and AI bots that actually reason.**
 
 [![CI](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-2959%20passing-brightgreen)](#testing)
+[![Tests](https://img.shields.io/badge/tests-3429%20passing-brightgreen)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
@@ -52,13 +52,13 @@ The interesting parts are not the CRUD. They are:
 |  | Feature |
 |---|---|
 | 🎭 | **13 roles** across two teams, with a role registry designed for adding more |
-| 🎲 | **15 dynamic events** that reshape a round (Curfew, Blood Moon, Day of Truth, …) |
+| 🎲 | **15 dynamic events** that reshape a round in chaos rooms (Curfew, Blood Moon, Day of Truth, …) |
 | ⚖️ | **Balance analyzer** that scores a deck against per-player-count presets and blocks unfair ranked configs |
 | 🗳️ | **Two-stage voting** — nomination, defense speech, then a final Hang/Spare trial |
 | 🤖 | **AI bots** with deterministic decision-making and LLM-phrased speech, including role claims and counter-claims |
 | 🎙️ | **Daytime voice chat** via LiveKit, with server-enforced speaking rights |
 | 📱 | **Mobile-first UI** with cinematic phase transitions |
-| 🔁 | **Reconnect support** — refresh or drop out and rejoin the same match |
+| 🔁 | **Reconnect support** — refresh or drop out and rejoin the same match; a seat abandoned past the grace window is played by the bot brain until its owner returns |
 | 📜 | **Full night recap** at game over: every role action, every death, and why |
 | 💬 | **Full chat reveal** at game over — the wolves' den and the dead's channel open up once roles are public |
 | 🗂️ | **Case file** at game over: 3-5 turning points picked from authoritative match data, with a shareable 9:16 card |
@@ -278,11 +278,14 @@ Countdowns are driven by `phaseEndsAt`, an epoch timestamp issued by the server.
 
 - `VOTING` **nominates** a defendant; it no longer kills anyone directly. Every daytime death goes through `FINAL_VOTE`.
 - **Votes are changeable until the deadline.** Only the final choice counts, which is exactly why the voting phase does *not* end early when everyone has voted — ending early would lock in the last voter's click.
-- **Ballots become public once the round closes.** During voting you see only tallies; afterwards you see who voted for whom and when they switched. Trial Hang/Spare ballots are revealed after the verdict.
+- **Nomination ballots are public while you vote.** You see who voted for whom in real time, and afterwards you also see when they switched. Trial Hang/Spare ballots are revealed after the verdict.
+- **Displayed counts are head counts; hidden weights only decide.** The Mayor's double vote and the Howl of the Pack bonus vote never show up in a tally, because the ballot list beside it is public — a visible weight would be a subtraction away from outing a hidden role. The same holds for the trial's conviction threshold, which is derived from the electorate's weight.
 - A tie eliminates nobody.
 - **Dead players' roles stay hidden until `GAME_OVER`** — for humans and bots alike. Death reveals nothing.
 
 ### Dynamic events
+
+**Chaos rooms only.** Ranked rooms — the default — run with no events at all, by design.
 
 15 events can fire to reshape a round, each with a beneficiary and a power rating the balance analyzer accounts for:
 
@@ -439,6 +442,7 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `npm run db:migrate` | `prisma migrate deploy` |
 | `npm run db:generate` | `prisma generate` |
 | `npm run selfplay` | Run bot self-play batches and print a report |
+| `npm run role-power` | Measure each role's marginal win-rate contribution by paired self-play, to recalibrate `ROLE_POWER` |
 | `npm run bot:probe` | One real LLM call against a fake match, to validate keys and prompts |
 | `npm run voice:probe` | One real LiveKit round trip, to validate credentials and token grants |
 | `npm run test:e2e` | Socket.IO smoke test; needs a running local server. Not yet a release gate |
@@ -448,11 +452,11 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 
 | Package | Runner | Tests |
 |---|---|---|
-| `@masoi/shared` | Vitest | **80** |
-| `@masoi/game-engine` | Vitest | **1514** |
-| `@masoi/server` | Vitest | **807** |
-| `@masoi/web` | `node:test` | **558** |
-| | | **2959 total** |
+| `@masoi/shared` | Vitest | **97** |
+| `@masoi/game-engine` | Vitest | **1534** |
+| `@masoi/server` | Vitest | **861** |
+| `@masoi/web` | `node:test` | **937** |
+| | | **3429 total** |
 
 Every package typechecks its tests as well as its sources — `npm run lint` runs `tsc` over both. This matters more than it sounds: the server's tests were unchecked until recently, and in that gap more than forty fixtures drifted away from the types they claimed to build, several of them still setting engine fields that had been renamed away.
 

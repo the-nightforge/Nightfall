@@ -27,6 +27,8 @@
     "voice:probe": "tsx apps/server/scripts/voice-probe.ts",
     "preselfplay": "npm run build:deps",
     "selfplay": "tsx apps/server/scripts/selfplay.ts",
+    "prerole-power": "npm run build:deps",
+    "role-power": "tsx apps/server/scripts/role-power.ts",
     "prelint": "npm run build:deps",
     "lint": "npm run lint --workspace @masoi/shared && npm run lint --workspace @masoi/game-engine && npm run lint --workspace @masoi/web && npm run lint --workspace @masoi/server",
     "db:migrate": "npm run db:migrate --workspace @masoi/server",

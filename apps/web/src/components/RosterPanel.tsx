@@ -12,6 +12,7 @@ import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { useSpeakers } from "@/components/VoiceProvider";
 import { roleLabel } from "@/lib/cursed";
 import { listItemMotion } from "@/lib/motion";
+import { NOTE_META, usePlayerNotes } from "@/lib/player-notes";
 import { Avatar } from "./Avatar";
 import { AvatarPicker } from "./AvatarPicker";
 
@@ -44,6 +45,8 @@ export function RosterPanel({ snapshot, lobby }: Props) {
   const roster = snapshot.players.map((p) => p.id).join(",");
   const avatars = useMemo(() => assignAvatars(roster ? roster.split(",") : []), [roster]);
   const [showPicker, setShowPicker] = useState(false);
+  const { notes, cycle, clearAll } = usePlayerNotes(snapshot.code);
+  const notedCount = Object.keys(notes).length;
 
   const count = snapshot.players.length;
   const alive = snapshot.players.filter((p) => p.alive).length;
@@ -69,7 +72,20 @@ export function RosterPanel({ snapshot, lobby }: Props) {
       <div className="mb-2.5 flex shrink-0 items-baseline justify-between gap-2">
         <h3 className="font-display text-lg font-bold text-white">Người chơi</h3>
         {/* Đếm theo sức chứa phòng: "15/6" đọc như phòng đang quá tải. */}
-        <span className="shrink-0 text-sm font-semibold text-mist-strong">
+        <span className="flex shrink-0 items-center gap-2 text-sm font-semibold text-mist-strong">
+          {/* Chỉ mọc ra khi đã có dấu để xoá: một nút "Xoá ghi chú" hiện thường
+            * trực trên cột này là một lời hứa về tính năng mà phần lớn thời gian
+            * không có gì để thực hiện. */}
+          {!lobby && notedCount > 0 && (
+            <button
+              type="button"
+              className="rounded px-1.5 py-0.5 text-xs font-semibold text-mist-strong ring-1 ring-white/15 transition hover:text-white hover:ring-white/40"
+              onClick={clearAll}
+              title="Xoá mọi dấu ghi chú của bạn trong phòng này"
+            >
+              Xoá {notedCount} dấu
+            </button>
+          )}
           {lobby ? `${count}/${MAX_PLAYERS_PER_ROOM}` : `${alive}/${count} sống`}
         </span>
       </div>
@@ -240,6 +256,40 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                       </m.span>
                     )}
                   </AnimatePresence>
+                )}
+
+                {/*
+                  * Dấu ghi chú, chỉ trong ván và chỉ trên người khác.
+                  *
+                  * Ở hàng này chứ không ở lưới ghế giữa: mỗi ghế trong lưới là
+                  * MỘT nút bỏ phiếu, và một nút thứ hai lồng bên trong vừa
+                  * không hợp lệ về HTML vừa biến một cú bấm nhầm thành một lá
+                  * phiếu nhầm. Lưới chỉ hiển thị dấu, đổi dấu thì làm ở đây.
+                  */}
+                {!lobby && player.alive && player.id !== meId && (
+                  <button
+                    type="button"
+                    className={`grid h-[22px] w-[22px] shrink-0 place-items-center rounded-md text-xs leading-none ring-1 transition ${
+                      notes[player.id]
+                        ? "bg-night-700 ring-white/30"
+                        : "bg-night-800/60 text-mist-strong opacity-40 ring-white/10 hover:opacity-100 group-hover:opacity-100"
+                    }`}
+                    title={
+                      notes[player.id]
+                        ? `${NOTE_META[notes[player.id]!].label} - bấm để đổi dấu`
+                        : `Ghi chú riêng về ${player.name}`
+                    }
+                    aria-label={
+                      notes[player.id]
+                        ? `Ghi chú về ${player.name}: ${NOTE_META[notes[player.id]!].label}. Bấm để đổi dấu.`
+                        : `Đặt ghi chú riêng về ${player.name}`
+                    }
+                    onClick={() => cycle(player.id)}
+                  >
+                    <span aria-hidden="true">
+                      {notes[player.id] ? NOTE_META[notes[player.id]!].icon : "✎"}
+                    </span>
+                  </button>
                 )}
 
                 {lobby?.isHost && player.id !== meId && (
