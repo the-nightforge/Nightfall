@@ -39,19 +39,17 @@ export interface SeerResultView {
   targetName: string;
   /** Phe đọc ra được; `neutral` là "Phe trung lập", không kèm vai. */
   team?: Team;
-  isWolf?: boolean;
+  isWolf: boolean;
   secondaryTargetId?: string;
   secondaryTargetName?: string;
   secondaryTeam?: Team;
   secondaryIsWolf?: boolean;
-  unknown?: boolean;
 }
 
 export interface DetectiveResultView {
   target1: { id: string; name: string };
   target2: { id: string; name: string };
-  sameTeam?: boolean;
-  unknown?: boolean;
+  sameTeam: boolean;
 }
 
 export interface PriestResultView {
@@ -381,9 +379,7 @@ export class GameEngine {
       if (lastResult) {
         const target1Name = this.player(lastResult.target1Id)?.name ?? "?";
         const target2Name = this.player(lastResult.target2Id)?.name ?? "?";
-        const announcement = lastResult.unknown
-          ? `Kết quả Thám Tử: Không thể xác định phe của ${target1Name} và ${target2Name}!`
-          : `Kết quả Thám Tử: ${target1Name} và ${target2Name} là ${lastResult.sameTeam ? "CÙNG PHE" : "KHÁC PHE"}!`;
+        const announcement = `Kết quả Thám Tử: ${target1Name} và ${target2Name} là ${lastResult.sameTeam ? "CÙNG PHE" : "KHÁC PHE"}!`;
         activeEvent = { ...event, announcement };
       }
     } else if (event?.id === "MORNING_REPORT") {
@@ -495,6 +491,19 @@ export class GameEngine {
       case "SEE": {
         const canSee = p.role === "SEER" || (p.role === "APPRENTICE_SEER" && st.apprenticeAwakened);
         if (!canSee) throw new GameError("Chỉ Tiên Tri (hoặc Tiên Tri Tập Sự đã thức tỉnh) mới được soi");
+        // MỘT lượt soi mỗi đêm, chốt ngay tại lần nộp đầu.
+        //
+        // Sói, Bảo Vệ và Linh Mục được đổi ý tới hết đêm vì lựa chọn của họ
+        // KHÔNG trả lại thông tin gì; kết quả soi thì hiện ra ngay trong
+        // snapshot của chính lần nộp này. Không có hàng rào ở đây thì "đổi ý"
+        // trở thành "soi lại", và soi lại không giới hạn là quét sạch cả làng
+        // trong một đêm - đủ để kết thúc ván ngay đêm 1.
+        //
+        // Ba chỗ khác của engine (`acted`, `nightActionPending`, và bộ chọn
+        // hành động hợp lệ của BOT) từ trước tới nay đã coi "có kết quả soi" là
+        // "đã hết lượt". Dòng này chỉ mang luật ấy về đúng nơi có quyền cưỡng
+        // chế: client giấu nút đi không phải là một hàng rào.
+        if (st.night.seerResults[playerId]) throw new GameError("Bạn đã soi trong đêm nay");
         if (st.activeEvent?.id === "MOONLESS_NIGHT") {
           throw new GameError("Đêm Không Trăng: Tiên Tri không thể soi đêm nay");
         }
@@ -572,6 +581,11 @@ export class GameEngine {
       }
       case "DETECTIVE_CHECK": {
         if (p.role !== "DETECTIVE") throw new GameError("Chỉ Thám Tử mới được kiểm tra");
+        // Cùng lý do với lượt soi ở trên: kết quả về ngay lúc nộp, nên lần nộp
+        // đầu tiên là lần duy nhất.
+        if (st.night.detectiveResults[playerId]) {
+          throw new GameError("Thám Tử đã điều tra trong đêm nay");
+        }
         if (!targetId || !secondaryTargetId) {
           throw new GameError("Thám Tử cần chọn đủ 2 người chơi khác nhau để kiểm tra");
         }
@@ -726,6 +740,23 @@ export class GameEngine {
     // Bình cứu chỉ dùng được khi đêm nay thật sự có nạn nhân bị cắn.
     const canHeal = !st.healUsed && st.night.killTarget !== null;
     return canHeal || !st.poisonUsed;
+  }
+
+  /**
+   * Mọi người sống còn lượt đêm đều đã nộp xong.
+   *
+   * Dùng chung ĐÚNG vị từ `nightActionPending` mà `canAct` của UI đang dùng,
+   * nên "màn hình của tôi đã hết việc" và "cả bàn đã hết việc" không thể lệch
+   * nhau. Một bảng liệt kê vai riêng ở đây sẽ quên mất Tiên Tri Tập Sự vừa thức
+   * tỉnh, hoặc quên rằng Phù Thuỷ chưa tới lượt khi phiếu Sói chưa khoá.
+   *
+   * Phù Thuỷ trước lúc khoá phiếu tính là ĐÃ XONG, và đó là chủ ý: chặng một
+   * chốt phiếu Sói, chặng hai mới là cửa sổ của cô ta.
+   */
+  allNightActionsDone(): boolean {
+    return this.alivePlayers().every(
+      (p) => !this.hasNightAction(p.role) || !this.nightActionPending(p),
+    );
   }
 
   /** Nới hạn của pha hiện tại; dùng để mở cửa sổ riêng cho Phù Thuỷ. */
@@ -1059,19 +1090,15 @@ export class GameEngine {
           bestWolfTarget = tid;
         }
       }
+      // Không Sói nào bầu ai thì KHÔNG có phiếu ẩn nào cả.
+      //
+      // Ở đây từng có một đường lui cộng +1 cho người đang dẫn đầu toàn cục.
+      // Người dẫn đầu khi bầy Sói đứng ngoài chính là người phe LÀNG đang đề
+      // cử - rất thường là một con Sói. Một sự kiện mang nhãn "có lợi cho phe
+      // Sói" khi đó tự đẩy đồng bọn lên giá treo cổ, và đẩy đúng vào lúc bầy đã
+      // cố tình bỏ phiếu trắng để tránh chuyện đó.
       if (bestWolfTarget) {
         players[bestWolfTarget] = (players[bestWolfTarget] ?? 0) + 1;
-      } else {
-        // fallback: add to overall leader
-        let bestId: string | null = null;
-        let bestCount = -1;
-        for (const [tid, cnt] of Object.entries(players)) {
-          if (cnt > bestCount) {
-            bestCount = cnt;
-            bestId = tid;
-          }
-        }
-        if (bestId) players[bestId] = (players[bestId] ?? 0) + 1;
       }
     }
     return { players, noElimination };
@@ -1621,6 +1648,9 @@ export class GameEngine {
     const st = this.state;
     const viewer = this.player(viewerId);
     const revealAll = st.phase === "GAME_OVER";
+    // Biến thể luật đang đo, xem `RoomConfig.revealRoleOnDeath`. Phòng thật
+    // luôn thấy `undefined` ở đây.
+    const revealDead = st.config.revealRoleOnDeath === true;
     // Sói luôn biết đồng bọn của mình
     const viewerIsWolf = viewer !== undefined && viewer.alive && roleTeam(viewer.role) === "wolves";
 
@@ -1636,11 +1666,12 @@ export class GameEngine {
       name: p.name,
       alive: p.alive,
       isBot: p.isBot,
-      role: revealAll
-        ? p.role
-        : viewerIsWolf && p.id !== viewerId && roleTeam(p.role) === "wolves"
+      role:
+        revealAll || (revealDead && !p.alive)
           ? p.role
-          : undefined,
+          : viewerIsWolf && p.id !== viewerId && roleTeam(p.role) === "wolves"
+            ? p.role
+            : undefined,
       // Đồng bọn Sói chỉ được biết đây là một con Sói, không được biết nó vốn
       // là Kẻ Nguyền Rủa: gốc nguyền rủa chỉ lộ cùng lúc với toàn bộ vai trò.
       cursedTurned: revealAll ? p.cursedTurned === true : undefined,
@@ -1656,21 +1687,18 @@ export class GameEngine {
         // Kết quả lưu trước bản này không có `team`; rơi về đúng thứ nó có.
         // `isWolf === false` ở một bản ghi cũ vẫn nghĩa là "phe làng", vì lúc
         // đó chưa có vai nào ngoài hai phe.
-        team: seerResultEntry.unknown
-          ? undefined
-          : seerResultEntry.team ?? (seerResultEntry.isWolf ? "wolves" : "village"),
-        isWolf: seerResultEntry.unknown ? undefined : seerResultEntry.isWolf,
+        team: seerResultEntry.team ?? (seerResultEntry.isWolf ? "wolves" : "village"),
+        isWolf: seerResultEntry.isWolf,
         secondaryTargetId: seerResultEntry.secondaryTargetId,
         secondaryTargetName: seerResultEntry.secondaryTargetId
           ? this.player(seerResultEntry.secondaryTargetId)?.name ?? "?"
           : undefined,
         secondaryTeam:
-          seerResultEntry.unknown || seerResultEntry.secondaryTargetId === undefined
+          seerResultEntry.secondaryTargetId === undefined
             ? undefined
             : seerResultEntry.secondaryTeam ??
               (seerResultEntry.secondaryIsWolf ? "wolves" : "village"),
-        secondaryIsWolf: seerResultEntry.unknown ? undefined : seerResultEntry.secondaryIsWolf,
-        unknown: seerResultEntry.unknown,
+        secondaryIsWolf: seerResultEntry.secondaryIsWolf,
       };
     }
 
@@ -1686,8 +1714,7 @@ export class GameEngine {
               id: detectiveEntry.target2Id,
               name: this.player(detectiveEntry.target2Id)?.name ?? "?",
             },
-            sameTeam: detectiveEntry.unknown ? undefined : detectiveEntry.sameTeam,
-            unknown: detectiveEntry.unknown,
+            sameTeam: detectiveEntry.sameTeam,
           }
         : null;
 
@@ -1826,6 +1853,13 @@ export class GameEngine {
         }
       }
     }
+    // Phải khớp ĐÚNG `snapshotFor`: một biến thể luật mà BOT không nhìn thấy sẽ
+    // đo ra "không ảnh hưởng gì" bất kể nó ảnh hưởng thế nào tới người thật.
+    if (st.config.revealRoleOnDeath === true) {
+      for (const player of st.players) {
+        if (!player.alive) knownRoles[player.id] = player.role;
+      }
+    }
 
     const seerResultEntry = st.night.seerResults[botId];
     const seerResult = seerResultEntry
@@ -1848,6 +1882,7 @@ export class GameEngine {
       selfRole: viewer.role,
       players: st.players.map(({ id, name, alive }) => ({ id, name, alive })),
       knownRoles,
+      revealRoleOnDeath: st.config.revealRoleOnDeath === true,
       seerResult,
       night: this.botNightKnowledgeFor(viewer),
       // Danh tính bị cáo là công khai ở hai pha này - cả phòng đang nhìn vào

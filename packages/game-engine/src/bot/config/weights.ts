@@ -684,6 +684,17 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     COUNTER_CLAIM: { weight: 6, confidence: 0.5 },
     ACCUSE: { weight: 4, confidence: 0.45 },
     DEFEND: { weight: 3, confidence: 0.4 },
+    // Nặng hơn mọi tín hiệu hành vi khác, và có lý do: đây là thứ DUY NHẤT
+    // trong bảng đã được sự thật kiểm chứng, thay vì suy ra từ dáng vẻ của một
+    // lá phiếu. Phán SAI nặng hơn phán ĐÚNG vì đẩy nhầm một người phe làng lên
+    // giá treo cổ là việc Sói làm cả ván, còn treo trúng Sói thì nửa bàn cùng
+    // bỏ phiếu nên nó không tách được ai ra khỏi đám đông.
+    //
+    // Hai ô này chỉ có người đọc khi biến thể luật `revealRoleOnDeath` bật
+    // (xem `RoomConfig`), nên thêm chúng vào bảng gốc KHÔNG đổi hành vi của
+    // v1..v6 ở phòng thật - vì vậy không có version bump nào ở đây.
+    VERDICT_MISS: { weight: 14, confidence: 0.8 },
+    VERDICT_HIT: { weight: 10, confidence: 0.7 },
   }),
 
   memoryImportance: Object.freeze({

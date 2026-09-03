@@ -23,7 +23,7 @@ test("EventBanner shows the public result of Judgment Day", () => {
   assert.match(html, /Kết quả Thám Tử: Khải và Linh là KHÁC PHE!/);
 });
 
-test("NightPanel renders an obscured Detective result as unknown", () => {
+test("NightPanel renders a Detective result as CÙNG PHE / KHÁC PHE", () => {
   const snapshot: RoomSnapshot = {
     code: "ECLIPSE",
     hostId: "det",
@@ -51,7 +51,7 @@ test("NightPanel renders an obscured Detective result as unknown", () => {
       detectiveResult: {
         target1: { id: "wolf", name: "Khải" },
         target2: { id: "villager", name: "Linh" },
-        unknown: true,
+        sameTeam: false,
       },
     },
     hunterShot: null,
@@ -76,6 +76,6 @@ test("NightPanel renders an obscured Detective result as unknown", () => {
     createElement(NightPanel, { snapshot, onAction: () => undefined }),
   );
 
-  assert.match(html, /KHÔNG THỂ XÁC ĐỊNH/);
-  assert.doesNotMatch(html, /CÙNG PHE|KHÁC PHE/);
+  assert.match(html, /KHÁC PHE/);
+  assert.doesNotMatch(html, /CÙNG PHE/);
 });

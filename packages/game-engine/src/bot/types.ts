@@ -45,7 +45,17 @@ export type PublicEvidenceKind =
   | "ROLE_CLAIM"
   | "COUNTER_CLAIM"
   | "ACCUSE"
-  | "DEFEND";
+  | "DEFEND"
+  /**
+   * Phán đoán đã được KIỂM CHỨNG: một lá phiếu Treo/Tha đọc ngược lại sau khi
+   * vai của người bị treo lộ ra. Xem `analysis/verdict-review.ts`.
+   *
+   * Vẫn là bằng chứng CÔNG KHAI - ai bỏ phiếu gì nằm trong recap, và vai người
+   * chết chỉ lộ khi biến thể luật `revealRoleOnDeath` bật. Vì vậy nó decay như
+   * mọi tín hiệu hành vi khác chứ không được miễn như thông tin riêng của vai.
+   */
+  | "VERDICT_HIT"
+  | "VERDICT_MISS";
 
 export type EvidenceKind =
   | PublicEvidenceKind
@@ -370,6 +380,19 @@ export interface BotKnowledgeView {
   selfRole: Role;
   players: BotPlayerKnowledge[];
   knownRoles: Record<string, Role>;
+  /**
+   * Biến thể luật `revealRoleOnDeath` (xem `RoomConfig`) có đang bật không.
+   *
+   * Là LUẬT PHÒNG, tức thông tin công khai với cả bàn - không phải một thứ
+   * engine lọc theo vai. Lõi cần nó vì `knownRoles` không nói được vì sao một
+   * vai lọt vào bảng: một con Sói vẫn nhớ vai của đồng bọn đã bị treo kể cả khi
+   * cờ tắt, và thứ đó là thông tin RIÊNG. `verdict-review.ts` chỉ được phép
+   * chạy trên thông tin cả bàn cùng thấy, nên cờ này là cổng duy nhất đúng.
+   *
+   * Optional vì mọi phòng thật chạy với nó tắt; đường vào duy nhất là harness
+   * self-play.
+   */
+  revealRoleOnDeath?: boolean;
   /**
    * Kết quả soi gần nhất. `team` là câu trả lời đầy đủ, `isWolf` là hệ quả của
    * nó - lõi phải đọc `team` khi cần phân biệt "phe làng" với "phe trung lập",

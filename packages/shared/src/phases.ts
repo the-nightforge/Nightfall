@@ -60,6 +60,24 @@ export interface RoomConfig {
    * Optional vì snapshot Redis ghi trước bản này không có nó.
    */
   lastLetter?: boolean;
+  /**
+   * BIẾN THỂ LUẬT ĐANG ĐO, chưa phải một lựa chọn của phòng.
+   *
+   * Bật lên thì vai của người chết lộ ngay, thay vì giữ kín tới `GAME_OVER`.
+   * Không có ở sảnh chờ và không nằm trong schema socket, nên phòng thật luôn
+   * chạy với nó `undefined`; đường vào duy nhất là harness self-play.
+   *
+   * Lý do nó tồn tại: `ROLE_POWER` ghi lại rằng mọi preset đo ra 14-41% cho phe
+   * làng, và quy hết cho "bot suy luận kém hơn người". Luật hiện tại lấy đi gần
+   * hết nguồn XÁC NHẬN của phe làng - chết không lộ vai, trọng số Thị Trưởng
+   * ẩn, phiếu Treo/Tha chỉ mở sau phán quyết - mà xác nhận thì phe làng sống
+   * bằng nó còn phe Sói thì không cần. Cờ này tách hai giả thuyết đó ra bằng
+   * `apps/server/scripts/reveal-ab.ts`, thay vì để phỏng đoán quyết hộ.
+   *
+   * ĐÃ ĐO XONG: Δ -1.2 điểm, tức luật không phải thủ phạm - xem phần KẾT QUẢ ĐO
+   * trong script đó. Cờ ở lại vì bài đo còn phải chạy lại mỗi khi lõi bot đổi.
+   */
+  revealRoleOnDeath?: boolean;
   /** giây */
   nightSeconds: number;
   discussionSeconds: number;

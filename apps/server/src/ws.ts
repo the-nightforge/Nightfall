@@ -42,6 +42,7 @@ import {
 import {
   maybeEndFinalVoteEarly,
   maybeEndWitchWindow,
+  maybeLockWolvesEarly,
   scheduleDiscussionSkipRecheck,
   submitDiscussionSkip,
   submitGhostMessage,
@@ -329,6 +330,10 @@ export function setupSocket(io: SocketServer): void {
         primaryTarget,
         secondaryTarget,
       );
+      // Sau `submitNightAction`, nên một lượt bị từ chối đã ném ra trước khi
+      // tới đây. Hai hàm phủ hai chặng của đêm và loại trừ nhau qua
+      // `wolvesLocked`.
+      maybeLockWolvesEarly(room);
       maybeEndWitchWindow(room);
       broadcastRoom(roomCode);
       void persistRoom(room);

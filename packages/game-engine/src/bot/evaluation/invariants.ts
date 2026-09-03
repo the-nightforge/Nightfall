@@ -138,6 +138,11 @@ function isWolfTeam(role: Role | undefined): boolean {
 }
 
 export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor {
+  /**
+   * Biến thể luật đang đo, đọc thẳng từ record chứ không thêm tham số: record
+   * đã mang `config`, và một tham số thứ hai là một chỗ nữa để quên truyền.
+   */
+  const deadRolesPublic = record.config.revealRoleOnDeath === true;
   const violations: InvariantViolation[] = [];
   const recent: string[] = [];
   /** Một vi phạm lặp lại mỗi vòng sẽ nhấn chìm báo cáo; ghi mỗi loại một lần / người. */
@@ -177,11 +182,17 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
       for (const [otherId, role] of Object.entries(knowledge.knownRoles)) {
         if (otherId === self) continue;
 
+        // Biến thể luật `revealRoleOnDeath` (xem `RoomConfig`): khi bật, vai
+        // của người CHẾT là thông tin công khai nên không còn là rò rỉ. Vai
+        // người SỐNG vẫn bị gác nguyên như cũ - đó mới là thứ invariant này tồn
+        // tại để bảo vệ, và một bài đo luật không được phép nới nó ra.
+        const deadRoleIsPublic = deadRolesPublic && !truth.alive[otherId];
+
         // Luật duy nhất cho phép biết vai người khác: cùng phe Sói. Kiểm theo
         // PHE chứ không theo mã vai - Sói Con và Kẻ Nguyền Rủa đã hoá Sói đều
         // hợp lệ, và một kiểm tra chỉ so với "WEREWOLF" sẽ báo động giả ở đúng
         // những cấu hình vai mà nó cần bảo vệ nhất.
-        if (!selfIsWolf || !isWolfTeam(truth.roles[otherId])) {
+        if (!deadRoleIsPublic && (!selfIsWolf || !isWolfTeam(truth.roles[otherId]))) {
           auditor.report("ROLE_LEAK", {
             ...at,
             expected: `${self} không được biết vai của ${otherId}`,
@@ -190,8 +201,9 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
           continue;
         }
 
-        // Sói đã chết mất liên lạc với bầy.
-        if (!truth.alive[self]) {
+        // Sói đã chết mất liên lạc với bầy. Không áp khi vai đó vốn đã công
+        // khai: lúc ấy người xem biết được không phải nhờ tư cách đồng bọn.
+        if (!deadRoleIsPublic && !truth.alive[self]) {
           auditor.report("WOLF_ALLY_SCOPE", {
             ...at,
             expected: `${self} đã chết nên không còn thấy đồng bọn`,
@@ -210,7 +222,9 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
       }
 
       // --- Vai người chết ẩn tới GAME_OVER ---
-      if (knowledge.phase !== "GAME_OVER") {
+      // Trừ khi biến thể `revealRoleOnDeath` đang bật, và khi đó chính cái ẩn
+      // này là thứ đang được đo.
+      if (!deadRolesPublic && knowledge.phase !== "GAME_OVER") {
         for (const [otherId, role] of Object.entries(knowledge.knownRoles)) {
           if (otherId === self || truth.alive[otherId]) continue;
           // Đồng bọn Sói đã chết vẫn được nhớ - Sói biết bầy của mình là ai,

@@ -709,3 +709,160 @@ describe("Đổi ý trong đêm không đốt mất lượt", () => {
     expect(engine.state.poisonUsed).toBe(false);
   });
 });
+
+describe("Vai thông tin chỉ có MỘT lượt mỗi đêm", () => {
+  it("Tiên Tri không soi được người thứ hai trong cùng một đêm", () => {
+    const state = createTestState([
+      { id: "seer", role: "SEER" },
+      { id: "v1", role: "VILLAGER" },
+      { id: "w1", role: "WEREWOLF" },
+      { id: "w2", role: "WEREWOLF" },
+    ]);
+    const engine = new GameEngine(state);
+
+    engine.submitNightAction("seer", "SEE", "v1");
+    expect(() => engine.submitNightAction("seer", "SEE", "w1")).toThrow(/đã soi/);
+
+    // Kết quả giữ nguyên ở mục tiêu đầu: lần nộp bị từ chối không được ghi đè.
+    const snap = engine.snapshotFor("seer");
+    expect(snap.nightInfo?.seerResult?.targetId).toBe("v1");
+    expect(snap.nightInfo?.seerResult?.isWolf).toBe(false);
+  });
+
+  it("Thám Tử không điều tra được cặp thứ hai trong cùng một đêm", () => {
+    const state = createTestState([
+      { id: "det", role: "DETECTIVE" },
+      { id: "v1", role: "VILLAGER" },
+      { id: "w1", role: "WEREWOLF" },
+      { id: "w2", role: "WEREWOLF" },
+    ]);
+    const engine = new GameEngine(state);
+
+    engine.submitNightAction("det", "DETECTIVE_CHECK", "v1", "w1");
+    expect(() => engine.submitNightAction("det", "DETECTIVE_CHECK", "w1", "w2")).toThrow(/đã điều tra/);
+
+    const snap = engine.snapshotFor("det");
+    expect(snap.nightInfo?.detectiveResult?.target2.id).toBe("w1");
+    expect(snap.nightInfo?.detectiveResult?.sameTeam).toBe(false);
+  });
+
+  it("cả làng không bị quét sạch trong một đêm", () => {
+    const state = createTestState([
+      { id: "seer", role: "SEER" },
+      { id: "v1", role: "VILLAGER" },
+      { id: "v2", role: "VILLAGER" },
+      { id: "w1", role: "WEREWOLF" },
+      { id: "w2", role: "WEREWOLF" },
+    ]);
+    const engine = new GameEngine(state);
+
+    let resolved = 0;
+    for (const targetId of ["v1", "v2", "w1", "w2"]) {
+      try {
+        engine.submitNightAction("seer", "SEE", targetId);
+        resolved += 1;
+      } catch {
+        /* đúng như mong đợi từ lần thứ hai trở đi */
+      }
+    }
+
+    expect(resolved).toBe(1);
+    expect(Object.keys(engine.state.night.seerResults)).toHaveLength(1);
+  });
+});
+
+describe("allNightActionsDone", () => {
+  it("false khi còn người chưa nộp, true khi mọi lượt đã xong", () => {
+    const state = createTestState([
+      { id: "seer", role: "SEER" },
+      { id: "guard", role: "GUARD" },
+      { id: "v1", role: "VILLAGER" },
+      { id: "w1", role: "WEREWOLF" },
+    ]);
+    const engine = new GameEngine(state);
+
+    expect(engine.allNightActionsDone()).toBe(false);
+    engine.submitNightAction("w1", "KILL", "v1");
+    expect(engine.allNightActionsDone()).toBe(false);
+    engine.submitNightAction("seer", "SEE", "w1");
+    expect(engine.allNightActionsDone()).toBe(false);
+    engine.submitNightAction("guard", "GUARD", "v1");
+    expect(engine.allNightActionsDone()).toBe(true);
+  });
+
+  it("Dân Làng và người chết không giữ đêm lại", () => {
+    const state = createTestState([
+      { id: "v1", role: "VILLAGER" },
+      { id: "v2", role: "VILLAGER" },
+      { id: "seer", role: "SEER", alive: false },
+      { id: "w1", role: "WEREWOLF" },
+    ]);
+    const engine = new GameEngine(state);
+
+    engine.submitNightAction("w1", "KILL", "v1");
+    expect(engine.allNightActionsDone()).toBe(true);
+  });
+
+  it("Phù Thuỷ chỉ giữ đêm lại sau khi phiếu Sói đã khoá", () => {
+    const state = createTestState([
+      { id: "witch", role: "WITCH" },
+      { id: "v1", role: "VILLAGER" },
+      { id: "w1", role: "WEREWOLF" },
+    ]);
+    const engine = new GameEngine(state);
+
+    engine.submitNightAction("w1", "KILL", "v1");
+    // Chặng một: chưa tới lượt Phù Thuỷ, nên đêm đã đủ điều kiện chốt phiếu Sói.
+    expect(engine.allNightActionsDone()).toBe(true);
+
+    engine.lockWolves();
+    // Chặng hai: giờ mới là lượt của cô ta.
+    expect(engine.allNightActionsDone()).toBe(false);
+    engine.submitNightAction("witch", "SKIP", null);
+    expect(engine.allNightActionsDone()).toBe(true);
+  });
+});
+
+describe("revealRoleOnDeath (biến thể luật đang đo)", () => {
+  function deadRolesState(reveal: boolean) {
+    const state = createTestState([
+      { id: "seer", role: "SEER", alive: false },
+      { id: "v1", role: "VILLAGER", alive: false },
+      { id: "guard", role: "GUARD", alive: true },
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "w2", role: "WEREWOLF", alive: true },
+    ]);
+    state.config = { ...state.config, revealRoleOnDeath: reveal };
+    return new GameEngine(state);
+  }
+
+  it("tắt: vai người chết vẫn kín, đúng như luật mặc định", () => {
+    const engine = deadRolesState(false);
+
+    const seen = engine.snapshotFor("guard").players.filter((p) => p.role !== undefined);
+    expect(seen).toHaveLength(0);
+    expect(engine.botKnowledgeFor("guard").knownRoles).toEqual({ guard: "GUARD" });
+  });
+
+  it("bật: đưa vai người chết vào knownRoles", () => {
+    const engine = deadRolesState(true);
+
+    // Cả hai đường phải khớp nhau: một biến thể luật mà BOT không nhìn thấy sẽ
+    // đo ra "không ảnh hưởng gì" bất kể nó ảnh hưởng thế nào tới người thật.
+    const seen = engine.snapshotFor("guard").players.filter((p) => p.role !== undefined);
+    expect(seen.map((p) => p.id).sort()).toEqual(["seer", "v1"]);
+    expect(engine.botKnowledgeFor("guard").knownRoles).toEqual({
+      guard: "GUARD",
+      seer: "SEER",
+      v1: "VILLAGER",
+    });
+  });
+
+  it("bật: KHÔNG đụng tới vai người còn sống", () => {
+    const engine = deadRolesState(true);
+
+    const known = engine.botKnowledgeFor("guard").knownRoles;
+    expect(known.w1).toBeUndefined();
+    expect(known.w2).toBeUndefined();
+  });
+});

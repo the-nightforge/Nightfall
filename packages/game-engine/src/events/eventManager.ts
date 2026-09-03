@@ -94,10 +94,14 @@ export const GAME_EVENTS: Record<GameEventId, GameEventDefinition> = {
   HOWL_OF_THE_PACK: {
     id: "HOWL_OF_THE_PACK",
     name: "Tiếng Hú Bầy Sói",
-    description: "Cộng 1 phiếu ẩn cho phe Sói vào ngày kế tiếp.",
+    description: "Cộng 1 phiếu ẩn cho phe Sói vào vòng đề cử ngày kế tiếp.",
     targetPhase: "DAY",
     beneficiary: "wolves",
-    power: 3,
+    // 1 chứ không phải 3, và con số này giờ có người đọc (`balancedPool`).
+    // Phiếu ẩn chỉ cộng vào `voteTally`, tức là chỉ đổi được AI RA ĐỨNG TOÀ.
+    // Phiên toà sau đó vẫn đòi quá bán trên `finalVoteTally`, nơi không có
+    // phiếu ẩn nào. Một sự kiện không giết được ai thì không đáng 3 điểm.
+    power: 1,
   },
   BLOOD_MOON: {
     id: "BLOOD_MOON",
@@ -132,6 +136,47 @@ export const GAME_EVENTS: Record<GameEventId, GameEventDefinition> = {
     power: 2,
   },
 };
+
+/**
+ * Độ nghiêng tích luỹ của các sự kiện đã nổ, dương là đang lợi cho phe Sói.
+ *
+ * `power` và `beneficiary` khai báo trên từng sự kiện từ đầu nhưng chưa có ai
+ * đọc - bộ chọn bốc đều tay trong nhóm hợp lệ, nên một phòng chaos hoàn toàn có
+ * thể ăn Đêm Không Trăng, Bóng Sói rồi Trăng Máu liên tiếp mà không có gì cản.
+ */
+function eventTilt(history: readonly GameEventView[]): number {
+  return history.reduce((acc, event) => {
+    if (event.beneficiary === "wolves") return acc + event.power;
+    if (event.beneficiary === "village") return acc - event.power;
+    return acc;
+  }, 0);
+}
+
+/**
+ * Trần độ nghiêng: quá mốc này thì phe đang dẫn bị loại khỏi lượt bốc kế tiếp.
+ *
+ * `power` chạy từ 1 tới 4, nên mốc 3 nghĩa là "một sự kiện mạnh dẫn trước là
+ * hết phần" - độ nghiêng thực tế không vượt quá 2 + 4 = 6.
+ */
+const TILT_LIMIT = 3;
+
+/**
+ * Nhóm bốc đã lọc theo độ nghiêng. Sự kiện trung lập luôn được giữ.
+ *
+ * Lọc rỗng thì trả lại nguyên nhóm ban đầu: một luật cân bằng không được phép
+ * biến thành "chaos hết sự kiện". Thà nghiêng thêm một nấc còn hơn tắt hẳn tính
+ * năng mà người chơi vừa bật.
+ */
+function balancedPool(
+  eligible: GameEventDefinition[],
+  history: readonly GameEventView[],
+): GameEventDefinition[] {
+  const tilt = eventTilt(history);
+  if (Math.abs(tilt) < TILT_LIMIT) return eligible;
+  const leader = tilt > 0 ? "wolves" : "village";
+  const filtered = eligible.filter((event) => event.beneficiary !== leader);
+  return filtered.length > 0 ? filtered : eligible;
+}
 
 export function selectEvent(
   state: GameState,
@@ -179,15 +224,9 @@ export function selectEvent(
       if (!hasDead) return false;
     }
 
-    if (event.id === "AMNESTY_DAY") {
-      const last = eventHistory.at(-1);
-      if (last?.id === "AMNESTY_DAY") return false;
-    }
-
-    if (event.id === "MORNING_REPORT") {
-      const last = eventHistory.at(-1);
-      if (last?.id === "MORNING_REPORT") return false;
-    }
+    // KHÔNG có chốt "không lặp lại hai lần liền" cho Ngày Hoà Hoãn hay Bản Tin
+    // Bình Minh: dòng `eventHistory.some(...)` ngay đầu bộ lọc đã cho mỗi sự
+    // kiện đúng một lần cả ván, nên một chốt như vậy không bao giờ chạy tới.
 
     return true;
   });
@@ -195,7 +234,8 @@ export function selectEvent(
   if (eligibleEvents.length === 0) return null;
   if (rng() >= 0.6) return null;
 
-  const def = eligibleEvents[Math.floor(rng() * eligibleEvents.length)];
+  const pool = balancedPool(eligibleEvents, eventHistory);
+  const def = pool[Math.floor(rng() * pool.length)];
   return {
     ...def,
     round: state.round,
