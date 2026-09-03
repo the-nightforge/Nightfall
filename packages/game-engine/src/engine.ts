@@ -480,6 +480,19 @@ export class GameEngine {
       case "SEE": {
         const canSee = p.role === "SEER" || (p.role === "APPRENTICE_SEER" && st.apprenticeAwakened);
         if (!canSee) throw new GameError("Chỉ Tiên Tri (hoặc Tiên Tri Tập Sự đã thức tỉnh) mới được soi");
+        // MỘT lượt soi mỗi đêm, chốt ngay tại lần nộp đầu.
+        //
+        // Sói, Bảo Vệ và Linh Mục được đổi ý tới hết đêm vì lựa chọn của họ
+        // KHÔNG trả lại thông tin gì; kết quả soi thì hiện ra ngay trong
+        // snapshot của chính lần nộp này. Không có hàng rào ở đây thì "đổi ý"
+        // trở thành "soi lại", và soi lại không giới hạn là quét sạch cả làng
+        // trong một đêm - đủ để kết thúc ván ngay đêm 1.
+        //
+        // Ba chỗ khác của engine (`acted`, `nightActionPending`, và bộ chọn
+        // hành động hợp lệ của BOT) từ trước tới nay đã coi "có kết quả soi" là
+        // "đã hết lượt". Dòng này chỉ mang luật ấy về đúng nơi có quyền cưỡng
+        // chế: client giấu nút đi không phải là một hàng rào.
+        if (st.night.seerResults[playerId]) throw new GameError("Bạn đã soi trong đêm nay");
         if (st.activeEvent?.id === "MOONLESS_NIGHT") {
           throw new GameError("Đêm Không Trăng: Tiên Tri không thể soi đêm nay");
         }
@@ -548,6 +561,11 @@ export class GameEngine {
       }
       case "DETECTIVE_CHECK": {
         if (p.role !== "DETECTIVE") throw new GameError("Chỉ Thám Tử mới được kiểm tra");
+        // Cùng lý do với lượt soi ở trên: kết quả về ngay lúc nộp, nên lần nộp
+        // đầu tiên là lần duy nhất.
+        if (st.night.detectiveResults[playerId]) {
+          throw new GameError("Thám Tử đã điều tra trong đêm nay");
+        }
         if (!targetId || !secondaryTargetId) {
           throw new GameError("Thám Tử cần chọn đủ 2 người chơi khác nhau để kiểm tra");
         }
@@ -702,6 +720,23 @@ export class GameEngine {
     // Bình cứu chỉ dùng được khi đêm nay thật sự có nạn nhân bị cắn.
     const canHeal = !st.healUsed && st.night.killTarget !== null;
     return canHeal || !st.poisonUsed;
+  }
+
+  /**
+   * Mọi người sống còn lượt đêm đều đã nộp xong.
+   *
+   * Dùng chung ĐÚNG vị từ `nightActionPending` mà `canAct` của UI đang dùng,
+   * nên "màn hình của tôi đã hết việc" và "cả bàn đã hết việc" không thể lệch
+   * nhau. Một bảng liệt kê vai riêng ở đây sẽ quên mất Tiên Tri Tập Sự vừa thức
+   * tỉnh, hoặc quên rằng Phù Thuỷ chưa tới lượt khi phiếu Sói chưa khoá.
+   *
+   * Phù Thuỷ trước lúc khoá phiếu tính là ĐÃ XONG, và đó là chủ ý: chặng một
+   * chốt phiếu Sói, chặng hai mới là cửa sổ của cô ta.
+   */
+  allNightActionsDone(): boolean {
+    return this.alivePlayers().every(
+      (p) => !this.hasNightAction(p.role) || !this.nightActionPending(p),
+    );
   }
 
   /** Nới hạn của pha hiện tại; dùng để mở cửa sổ riêng cho Phù Thuỷ. */
@@ -1034,19 +1069,15 @@ export class GameEngine {
           bestWolfTarget = tid;
         }
       }
+      // Không Sói nào bầu ai thì KHÔNG có phiếu ẩn nào cả.
+      //
+      // Ở đây từng có một đường lui cộng +1 cho người đang dẫn đầu toàn cục.
+      // Người dẫn đầu khi bầy Sói đứng ngoài chính là người phe LÀNG đang đề
+      // cử - rất thường là một con Sói. Một sự kiện mang nhãn "có lợi cho phe
+      // Sói" khi đó tự đẩy đồng bọn lên giá treo cổ, và đẩy đúng vào lúc bầy đã
+      // cố tình bỏ phiếu trắng để tránh chuyện đó.
       if (bestWolfTarget) {
         players[bestWolfTarget] = (players[bestWolfTarget] ?? 0) + 1;
-      } else {
-        // fallback: add to overall leader
-        let bestId: string | null = null;
-        let bestCount = -1;
-        for (const [tid, cnt] of Object.entries(players)) {
-          if (cnt > bestCount) {
-            bestCount = cnt;
-            bestId = tid;
-          }
-        }
-        if (bestId) players[bestId] = (players[bestId] ?? 0) + 1;
       }
     }
     return { players, noElimination };

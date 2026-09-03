@@ -194,6 +194,25 @@ function lockWolves(room: Room): void {
 }
 
 /**
+ * Chốt phiếu Sói ngay khi mọi người còn lượt đã nộp xong.
+ *
+ * Cùng khuôn với `maybeEndWitchWindow` ngay dưới, và cùng lý do: hạn chót của
+ * pha là trần chứ không phải nhịp. Không có hàm này thì một phòng 6 người với
+ * một Sói, một Tiên Tri và một Bảo Vệ vẫn ngồi hết `nightSeconds` sau khi cả ba
+ * đã bấm xong - nhân lên 4-6 đêm mỗi ván.
+ *
+ * `armStep` tăng `phaseSeq`, nên mốc hẹn dài đang chờ tự hết hiệu lực; không
+ * cần gỡ tay. Chỉ gọi SAU một lần nộp thành công: gọi sau một lần nộp bị engine
+ * từ chối sẽ đẩy lùi mốc 800ms mỗi lần một BOT lỡ tay nộp lại.
+ */
+export function maybeLockWolvesEarly(room: Room): void {
+  if (!room.engine || room.engine.state.phase !== "NIGHT") return;
+  if (room.engine.state.night.wolvesLocked) return;
+  if (!room.engine.allNightActionsDone()) return;
+  armStep(room, { name: "lockWolves" }, 800);
+}
+
+/**
  * Đóng cửa sổ Phù Thuỷ ngay khi cô ta đã quyết, khỏi bắt cả phòng ngồi chờ hết
  * 15 giây, để không phải chờ toàn bộ cửa sổ đêm.
  */
@@ -722,6 +741,9 @@ function applyNight(room: Room, botId: string, decision: NightDecision | null): 
     } else {
       engine(room).submitNightAction(botId, decision.action, decision.targetId);
     }
+    // Trong `try` và sau lời gọi: chỉ một lần nộp THÀNH CÔNG mới được rút ngắn
+    // đêm. Một lượt bị engine từ chối không đổi gì để mà kiểm lại.
+    maybeLockWolvesEarly(room);
   } catch {
     /* engine là trọng tài cuối; sai luật thì bot bỏ lượt */
   }
