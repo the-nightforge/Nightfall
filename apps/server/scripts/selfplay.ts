@@ -11,6 +11,7 @@ import {
   type BotWeights,
   type SelfPlayBatchInput,
 } from "@masoi/game-engine";
+import { PRESET_DECKS, type RoomConfig } from "@masoi/shared";
 
 /**
  * Runner self-play — vỏ I/O quanh một nhân THUẦN.
@@ -34,6 +35,8 @@ interface Options {
   verifyReplay: boolean;
   out: string | null;
   quiet: boolean;
+  /** Dùng bộ bài chuẩn của số người đó thay cho bộ bài mặc định của runner. */
+  preset: boolean;
 }
 
 function usage(): string {
@@ -46,6 +49,7 @@ function usage(): string {
     "  --players <số>      Số người mỗi ván (mặc định: 8)",
     "  --max-rounds <số>   Trần số vòng (mặc định: 20)",
     `  --weights <ver>     Phiên bản trọng số (có: ${presets})`,
+    "  --preset            Dùng PRESET_DECKS của số người đó (bộ bài thật của ván xếp hạng)",
     "  --events            Bật sự kiện cân bằng động",
     "  --no-speech         Tắt lời nói giữa các BOT",
     "  --verify-replay     Chạy lại mỗi ván để bắt REPLAY_DIVERGENCE (chậm gấp đôi)",
@@ -66,6 +70,7 @@ function parseArgs(argv: readonly string[]): Options {
     verifyReplay: false,
     out: null,
     quiet: false,
+    preset: false,
   };
 
   const number = (raw: string | undefined, flag: string): number => {
@@ -96,6 +101,9 @@ function parseArgs(argv: readonly string[]): Options {
         // một lỗi đánh máy ở đây được trả lời ngay thay vì sinh ra 300 ván sai.
         options.weights = weightsPreset(argv[++i] ?? "");
         break;
+      case "--preset":
+        options.preset = true;
+        break;
       case "--events":
         options.events = true;
         break;
@@ -124,6 +132,15 @@ function parseArgs(argv: readonly string[]): Options {
   return options;
 }
 
+function presetDeck(playerCount: number): RoomConfig {
+  const deck = PRESET_DECKS[playerCount];
+  if (!deck) {
+    const known = Object.keys(PRESET_DECKS).join(", ");
+    throw new Error(`--preset không có bộ bài chuẩn cho ${playerCount} người (có: ${known})`);
+  }
+  return deck;
+}
+
 /** Commit hiện tại, hoặc `null`. Không bao giờ làm hỏng cả lần chạy. */
 function currentCommit(): string | null {
   try {
@@ -145,6 +162,10 @@ function main(): void {
     events: options.events,
     speech: options.speech,
     verifyReplay: options.verifyReplay,
+    // Bộ bài mặc định của runner (2 Sói, Tiên Tri, Bảo Vệ, Phù Thuỷ) không đổi
+    // theo số người, nên một batch 15 người mặc định KHÔNG đo bộ bài mà ván 15
+    // người thật sự chia. `--preset` là cách hỏi đúng câu hỏi đó.
+    config: options.preset ? presetDeck(options.players) : undefined,
   };
 
   const startedAt = performance.now();
