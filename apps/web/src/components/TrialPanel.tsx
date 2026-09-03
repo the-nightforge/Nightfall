@@ -10,13 +10,26 @@ import { DefenseVotePanel } from "./DefenseVotePanel";
 interface Props {
   snapshot: RoomSnapshot;
   onFinalVote: (guilty: boolean) => void;
+  /**
+   * Sân khấu "Phiên toà sống" đang hiện ngay phía trên.
+   *
+   * Khi bật, sân khấu đã sở hữu khối bị cáo (avatar, tên, chặng, trạng thái
+   * quyền nói) và cả bảng số Treo/Tha kèm ngưỡng kết án. Thẻ này bỏ đúng hai
+   * phần đó đi - in lần thứ hai thì người chơi phải tự đối chiếu hai bảng số
+   * giống hệt nhau xem có chỗ nào lệch không, và hai cái nút quyết định bị đẩy
+   * xuống dưới một màn cuộn.
+   *
+   * Những gì Ở LẠI đây thì luôn ở lại, bật hay tắt: hai cái nút, phù hiệu Thị
+   * Trưởng, dòng "không bỏ phiếu tính là Tha", và khối "Vì sao bị đề cử".
+   */
+  liveStage?: boolean;
 }
 
 /**
  * Hai pha của phiên toà dùng chung một component: cả hai đều xoay quanh đúng
  * một bị cáo và cùng bảng phiếu sơ bộ, tách đôi chỉ tạo hai chỗ để lệch nhau.
  */
-export function TrialPanel({ snapshot, onFinalVote }: Props) {
+export function TrialPanel({ snapshot, onFinalVote, liveStage = false }: Props) {
   const roster = snapshot.players.map((p) => p.id).join(",");
   const avatars = useMemo(() => assignAvatars(roster ? roster.split(",") : []), [roster]);
 
@@ -40,7 +53,9 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
 
   return (
     <div className="space-y-3">
-      {/* Bị cáo là trung tâm của cả hai pha, nên trao hẳn cho họ một khu riêng. */}
+      {/* Bị cáo là trung tâm của cả hai pha, nên trao hẳn cho họ một khu riêng -
+        * trừ khi "Phiên toà sống" đang dựng đúng khu đó ngay phía trên. */}
+      {!liveStage && (
       <div
         className={`card py-6 text-center ${
           myTurn
@@ -131,6 +146,7 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
           </p>
         )}
       </div>
+      )}
 
       {/*
         * CẢ HAI pha của phiên toà dùng chung một khối: tóm tắt ở trên, lịch sử
@@ -166,9 +182,15 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
             </p>
           )}
           {/* 13px chứ không phải 12px: đây là luật quyết định kết cục của cả
-            * pha, không phải một dòng chú thích dưới chân thẻ. */}
+            * pha, không phải một dòng chú thích dưới chân thẻ.
+            *
+            * Ngưỡng kết án lùi lên sân khấu khi sân khấu đang bật - nó ở đó
+            * cạnh chính bảng số mà nó nói về. Vế "không bỏ phiếu tính là Tha"
+            * thì ở LẠI: đó là luật của hai cái nút ngay bên dưới, không phải
+            * một con số trên bảng đếm. */}
           <p className="mb-3 text-[13px] text-mist-strong">
-            Cần {trial.guiltyRequired} phiếu Treo để kết án. Không bỏ phiếu tính là Tha.
+            {!liveStage && <>Cần {trial.guiltyRequired} phiếu Treo để kết án. </>}
+            Không bỏ phiếu tính là Tha.
           </p>
 
           {/*
@@ -176,6 +198,7 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
             * biết là phe Treo đã tới ngưỡng chưa, và hai con số cạnh nhau bắt họ
             * tự làm phép trừ đó trong đầu.
             */}
+          {!liveStage && (
           <div className="mt-1">
             <div className="flex h-2.5 overflow-hidden rounded-full bg-night-800">
               <div
@@ -196,6 +219,7 @@ export function TrialPanel({ snapshot, onFinalVote }: Props) {
               </span>
             </div>
           </div>
+          )}
 
           {trial.canVote ? (
             <div className="mt-3 flex gap-2">

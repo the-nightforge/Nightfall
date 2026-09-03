@@ -12,6 +12,7 @@ import {
   presentChannels,
 } from "@/lib/chat-channels";
 import { usePhaseMarkers } from "@/lib/use-phase-markers";
+import { useLiveTrial } from "@/lib/useLiveTrial";
 import { useRoomSocket } from "@/lib/useRoomSocket";
 import { VoiceControl } from "@/components/VoiceControl";
 import { VoiceProvider } from "@/components/VoiceProvider";
@@ -28,6 +29,7 @@ import { DayView, EliminationView } from "@/components/DayViews";
 import { GameOverView } from "@/components/GameOverView";
 import { HunterShotPanel } from "@/components/HunterShotPanel";
 import { TrialPanel } from "@/components/TrialPanel";
+import { TrialStage } from "@/components/TrialStage";
 import { Lobby } from "@/components/Lobby";
 import { SoundControl } from "@/components/SoundControl";
 import { EventBanner } from "@/components/EventBanner";
@@ -44,6 +46,17 @@ export default function RoomPage() {
   const room = useRoomSocket(code);
   const snapshot = room.snapshot;
   useGameAudio(snapshot);
+  /*
+   * "Phiên toà sống" đọc TỪNG snapshot, kể cả những pha không có phiên toà nào.
+   *
+   * Vì vậy nó nằm ở đây chứ không trong component sân khấu: trí nhớ của nó phải
+   * sống qua cả ván thì mới phân biệt được "phiên toà vừa mở ra trước mắt tôi"
+   * với "phiên toà đã mở từ trước khi tôi vào" - xem `useLiveTrial`. Nó cũng
+   * chạy khi người chơi đã TẮT tính năng, để bật lại giữa phiên không mất trạng
+   * thái và không phát bù một xâu hiệu ứng đã trôi qua.
+   */
+  const live = useLiveTrial(snapshot, room.connected);
+  const liveStage = live.enabled && live.view !== null;
   /*
    * Bản nháp chat sống ở đây chứ không trong ChatBox.
    *
@@ -117,6 +130,7 @@ export default function RoomPage() {
           <TrialPanel
             snapshot={snapshot}
             onFinalVote={(guilty) => room.emit("game:final-vote", { guilty })}
+            liveStage={liveStage}
           />
         );
       case "ELIMINATION":
@@ -142,7 +156,7 @@ export default function RoomPage() {
         return null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snapshot, isHost]);
+  }, [snapshot, isHost, liveStage]);
 
   function leaveRoom() {
     room.emit("room:leave");
@@ -374,6 +388,28 @@ export default function RoomPage() {
             <div className="lg:hidden">
               <VoiceControl snapshot={snapshot} />
             </div>
+
+            {/*
+              * Sân khấu phiên toà đứng NGOÀI `AnimatePresence`, và đó là điều
+              * kiện để nó tồn tại được.
+              *
+              * Khối bên dưới lấy `key` theo pha, nên nội dung pha bị THÁO rồi
+              * dựng lại ở mỗi cạnh pha - kể cả DEFENSE -> FINAL_VOTE, vốn là đi
+              * tiếp trong cùng một phiên toà. Đặt sân khấu vào trong đó nghĩa là
+              * huỷ context WebGL và dựng lại đúng vào giây người chơi bấm Treo
+              * hay Tha, rồi huỷ lần nữa ngay trước lúc tuyên án. Ở đây nó giữ
+              * nguyên MỘT renderer suốt cả ba chặng và tự tháo khi phiên toà
+              * kết thúc (`live.view` về null).
+              */}
+            {snapshot && liveStage && live.view && (
+              <TrialStage
+                view={live.view}
+                beats={live.beats}
+                beatsId={live.beatsId}
+                onBeatsConsumed={live.consumeBeats}
+                snapshot={snapshot}
+              />
+            )}
 
             {/*
               * mode="wait" để hai pha không chồng lên nhau giữa chừng làm nhảy layout.
