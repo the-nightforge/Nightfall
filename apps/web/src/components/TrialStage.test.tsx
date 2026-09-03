@@ -126,23 +126,49 @@ const opened = () => sceneCalls.filter((c) => c.name === "playOpening").length;
  * `hasWebgl2 is not a function` ở giữa một effect của React. CI ghim 20.19.x
  * nên đây không phải chuyện lý thuyết.
  *
- * Gửi cả hai an toàn hơn rẽ nhánh theo `process.version`: bản nào cũng đọc khoá
- * nó biết và bỏ qua khoá kia, kể cả một bản Node sau này lại đổi lần nữa. Giá
- * phải trả nhiều nhất là một dòng cảnh báo deprecated, không phải test đỏ.
+ * Nhưng KHÔNG được gửi cả hai cùng lúc: từ Node 24 hai khoá loại trừ nhau và
+ * `normalizeModuleMockOptions` ném thẳng `ERR_INVALID_ARG_VALUE` - "The property
+ * 'options.exports' cannot be used with 'options.namedExports'". Node 22 nhận cả
+ * hai (đã đo trên 22.23.2), Node 24 thì không, nên "bản nào cũng bỏ qua khoá nó
+ * không biết" chỉ đúng một chiều.
  *
- * Điều làm cách này an toàn: hai khoá mang CÙNG một đối tượng. Bản Node nào đọc
- * khoá nào cũng ra đúng một bảng export, nên không có nhánh hành vi thứ hai để
- * mà lệch. Node cũng không từ chối khoá lạ - Node 22 lặng lẽ bỏ qua `exports`
- * thay vì ném, và đó chính là thứ khiến lỗi cũ khó lần.
+ * Vậy: THỬ cả hai trước, và chỉ khi runtime từ chối mới gửi riêng `exports`.
+ * Cách này không đọc `process.version` - nó hỏi chính runtime đang chạy, nên một
+ * bản Node sau này gỡ hẳn `namedExports` cũng rơi đúng vào nhánh thứ hai. Lần
+ * thử đầu KHÔNG cài được mock nào khi nó ném, nên không có nguy cơ mock đôi.
  */
-type MockModuleOptions = { exports?: Record<string, unknown> };
-const mockModule = (specifier: string, options: MockModuleOptions): Promise<unknown> =>
-  (mock as unknown as {
-    module: (
-      s: string,
-      o: MockModuleOptions & { namedExports?: Record<string, unknown> },
-    ) => Promise<unknown>;
-  }).module(specifier, { ...options, namedExports: options.exports });
+type MockExports = Record<string, unknown>;
+type MockModuleFn = (s: string, o: Record<string, unknown>) => Promise<unknown>;
+
+/**
+ * Đổi đường dẫn tương đối thành URL tuyệt đối TRƯỚC khi đưa cho `mock.module`.
+ *
+ * Node 22 phân giải specifier tương đối của `mock.module` theo điểm vào của tiến
+ * trình chứ không theo file gọi, nên `"../lib/live-trial-scene.ts"` trỏ ra một
+ * đường không tồn tại và mock được đăng ký ở một chỗ KHÔNG AI import. Không có
+ * lỗi nào cả - module thật vẫn chạy, rồi vỡ ở tận trong nó ("THREE.Group is not
+ * a constructor", vì `three` thì lại mock được do nó là specifier trần).
+ *
+ * `new URL(rel, import.meta.url)` bỏ hẳn câu hỏi "tương đối với cái gì".
+ */
+const fromHere = (relative: string): string => new URL(relative, import.meta.url).href;
+
+const mockModule = async (specifier: string, options: { exports: MockExports }): Promise<unknown> => {
+  // Gọi qua chính đối tượng `mock`: `MockTracker#module` đọc một private field
+  // (`#mocks`), nên tách hàm ra biến rồi gọi trần là mất `this` và ném ngay.
+  const tracker = mock as unknown as { module: MockModuleFn };
+  try {
+    return await tracker.module(specifier, {
+      exports: options.exports,
+      namedExports: options.exports,
+    });
+  } catch {
+    // Bắt mọi lỗi chứ không riêng ERR_INVALID_ARG_VALUE: nếu lần hai cũng hỏng
+    // thì lỗi THẬT nổi lên từ đó, còn nếu chỉ là chuyện tên tuỳ chọn thì lần hai
+    // chạy được. Không nuốt lỗi nào cả.
+    return tracker.module(specifier, { exports: options.exports });
+  }
+};
 
 // ---------------------------------------------------------------------------
 
@@ -179,7 +205,7 @@ before(async () => {
    * Bản dựng cảnh giả: giữ nguyên hợp đồng `TrialSceneHandle`, chỉ ghi lại ai
    * gọi gì. Đây là chỗ duy nhất test nhìn thấy `playOpening`.
    */
-  await mockModule("../lib/live-trial-scene.ts", {
+  await mockModule(fromHere("../lib/live-trial-scene.ts"), {
     exports: {
       buildTrialScene: () => {
         scenesBuilt += 1;
@@ -198,7 +224,7 @@ before(async () => {
   // Máy "có" WebGL2: `hasWebgl2` dựng một context thật, thứ happy-dom không có.
   // Đọc qua `webglSupported` vì namespace của một ES module là bất biến - test
   // không gán đè được, nên nó lật cái biến này.
-  await mockModule("../lib/cinematic-webgl.ts", {
+  await mockModule(fromHere("../lib/cinematic-webgl.ts"), {
     exports: {
       hasWebgl2: () => {
         webglCalls += 1;
@@ -512,19 +538,33 @@ describe("import chậm", () => {
      * không hứa hẹn thứ tự, còn "chưa kịp" thì tuỳ phiên bản Node.
      *
      * Bản này dựa vào một bảo đảm của chính ngôn ngữ thay vì vào tốc độ máy:
-     * `import()` KHÔNG BAO GIỜ giải quyết đồng bộ, và `await act(...)` chỉ nhả
-     * microtask chứ không nhả vòng macrotask - mà loader của Node thì cần vòng
-     * macrotask. Nên trong ba lần render dưới đây, cảnh CHẮC CHẮN chưa dựng, ở
-     * mọi phiên bản Node. Mọi render đều nằm trong `act()`, không còn update
-     * nào lọt ra ngoài.
+     * `act()` ĐỒNG BỘ không thể chờ một promise, còn `import()` thì không bao
+     * giờ giải quyết đồng bộ. Nên sau ba lần render dưới đây, cảnh CHẮC CHẮN
+     * chưa dựng - ở mọi phiên bản Node, dù loader nhanh đến đâu.
+     *
+     * Phải là `act` đồng bộ chứ không phải `await act(async …)`: bản async nhả
+     * microtask, và khi `three` lẫn module dựng cảnh đều đã bị mock (và đã nằm
+     * trong cache của loader sau những test trước trong file này), `import()`
+     * giải quyết ngay trong microtask. Lúc đó cảnh dựng xong NGAY Ở PHA DEFENSE,
+     * cuộc đua không còn, và test hoá ra chỉ đang khẳng định một thứ khác.
+     *
+     * `act` đồng bộ vẫn xả effect và vẫn gộp lô, nên canvas vẫn mount đủ hai
+     * lượt commit (lượt sau khi effect dò WebGL bật `webgl2`) và vẫn kịp gửi lô
+     * OPENING cho người điều phối - chỉ có `import()` là chắc chắn còn dang dở.
      */
-    await act(async () => {
+    act(() => {
       root.render(React.createElement(Room, { snap: snapshot({ phase: "VOTING" }) }));
     });
-    await act(async () => {
+    act(() => {
       root.render(React.createElement(Room, { snap: defense() }));
     });
-    await act(async () => {
+
+    // Tiền đề của cả bài. Nếu một ngày nó sai, test này phải đỏ NGAY Ở ĐÂY với
+    // lý do đúng, chứ không đỏ ở khẳng định cuối với lý do gây hiểu nhầm.
+    assert.equal(scenesBuilt, 0, "tiền đề: cảnh chưa dựng xong khi pha còn là DEFENSE");
+    assert.equal(opened(), 0, "tiền đề: chưa có màn mở đầu nào chạy");
+
+    act(() => {
       root.render(React.createElement(Room, { snap: finalVote() }));
     });
 
