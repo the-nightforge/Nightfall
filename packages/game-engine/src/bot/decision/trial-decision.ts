@@ -106,6 +106,34 @@ export function decideFinalVote(
     return { kind: "FINAL_VOTE", guilty: true, confidence: 1, evidence: [] };
   }
 
+  /*
+   * Kẻ Báo Thù bỏ TREO khi bị cáo chính là mục tiêu của nó - và CHỈ khi đó.
+   *
+   * Đây là toàn bộ điều kiện thắng của vai này gói trong một lá phiếu, nên nó
+   * đứng trên mọi phép đọc belief: bằng chứng công khai nói gì cũng không đổi
+   * được câu trả lời cho đúng một cái tên.
+   *
+   * KHÁC hẳn hai nhánh trung lập ở trên, và chỗ khác nhau là điều quan trọng
+   * nhất của nhánh này: Hề bỏ Tha cho MỌI bị cáo và Sát Nhân bỏ Treo cho MỌI
+   * bị cáo, còn ở đây chỉ có một cái tên được đối xử đặc biệt. Với mọi bị cáo
+   * khác, Kẻ Báo Thù rơi xuống đúng bảng điểm mà cả làng đang dùng - một người
+   * bỏ Treo cho tất cả hoặc Tha cho tất cả là một người bị đọc vị sau hai
+   * phiên toà, và nó thì cần sống tới phiên toà của mục tiêu.
+   *
+   * Không có nhánh nào cho "chính mình bị xử": engine không cho bị cáo bỏ
+   * phiếu về phiên toà của mình (`canFinalVote` loại `accusedId === botId`),
+   * nên lá phiếu này luôn nói về người khác. Việc tự bảo vệ khi bị xử nằm ở
+   * `decideDefenseSpeech`, và ở đó Kẻ Báo Thù đi đúng đường `SURVIVE` mặc
+   * định - KHÔNG dùng nhánh bất cần của Thằng Hề.
+   */
+  if (
+    context.knowledge.selfRole === "EXECUTIONER" &&
+    context.knowledge.executionerTargetId === accusedId
+  ) {
+    probe?.fallback("Kẻ Báo Thù kết tội mục tiêu của mình: đây là toàn bộ điều kiện thắng của nó");
+    return { kind: "FINAL_VOTE", guilty: true, confidence: 1, evidence: [] };
+  }
+
   const entry = state.suspicion[accusedId];
   const suspicion = entry?.score ?? 0;
   const trust = state.trust[accusedId]?.score ?? 0;

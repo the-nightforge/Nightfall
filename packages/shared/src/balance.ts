@@ -76,6 +76,22 @@ export const ROLE_POWER: Record<Role, number> = {
    * được bật, thay vì để một điểm số 40-60 đứng ra bảo lãnh cho bộ bài.
    */
   SERIAL_KILLER: 0,
+  /**
+   * 0, và cùng lý do hình thức với hai vai trung lập trên: `villageRoles` và
+   * `wolfRoles` lọc theo `roleTeam`, nên con số này không bao giờ được cộng vào
+   * vế nào của phép trừ.
+   *
+   * ĐỌC ĐÚNG con số 0 này. Nó KHÔNG nói "lá bài này vô hại", và cũng không nói
+   * "đã đo ra 0". Kẻ Báo Thù không giết ai và không có kỹ năng nào, nên phần
+   * ảnh hưởng mà thang đo BẮT được là đúng một ghế Dân Làng bị lấy đi
+   * (`villagePower` giảm 0.5) - y hệt Thằng Hề. Phần thang đo KHÔNG bắt được
+   * thì lớn hơn thế: cả ván nó vận động để làng treo cổ MỘT người vô tội cụ
+   * thể, tức một áp lực có hướng nhằm thẳng vào phe Dân, và một bảng cộng trừ
+   * sức mạnh hai phe không có ô nào cho đại lượng đó. Chưa có batch self-play
+   * nào đo vai này, nên `generateWarnings` nói thẳng giới hạn ấy thay vì để
+   * một điểm số 40-60 đứng ra bảo lãnh.
+   */
+  EXECUTIONER: 0,
 };
 
 /**
@@ -109,6 +125,7 @@ function preset(overrides: Partial<RoomConfig>): RoomConfig {
     // hay Sát Nhân không bao giờ được coi là "preset chuẩn".
     jester: false,
     serialKiller: false,
+    executioner: false,
     seer: false,
     guard: false,
     witch: false,
@@ -222,6 +239,12 @@ export const PRESET_DECKS: Record<number, RoomConfig> = {
  * tầm với của phép chấm. So khớp bằng một tiền tố chép tay ở phía web là chỗ để
  * hai bên trôi khỏi nhau ngay lần sửa câu chữ đầu tiên.
  */
+export const UNMEASURED_EXECUTIONER_WARNING =
+  "Bộ bài có Kẻ Báo Thù - một người chơi vận động cả ván để làng treo cổ đúng một người vô tội. BalanceScore chỉ chấm cán cân Dân/Sói nên nó KHÔNG đo được lá bài này.";
+
+/**
+ * Cùng loại với hằng số ngay trên và cùng lý do tồn tại, chỉ khác lá bài.
+ */
 export const UNMEASURED_NEUTRAL_WARNING =
   "Bộ bài có Sát Nhân - một bên thứ ba tranh phần thắng chung. BalanceScore chỉ chấm cán cân Dân/Sói nên nó KHÔNG đo được lá bài này.";
 
@@ -257,6 +280,8 @@ export function specialRoleList(config: RoomConfig): Role[] {
   if (config.jester) roles.push("JESTER");
   // Tối đa một Sát Nhân, cùng lý do và cùng cách với hai lá trên.
   if (config.serialKiller) roles.push("SERIAL_KILLER");
+  // Tối đa một Kẻ Báo Thù, cùng lý do và cùng cách với ba lá trên.
+  if (config.executioner) roles.push("EXECUTIONER");
   return roles;
 }
 
@@ -355,6 +380,24 @@ export function generateWarnings(config: RoomConfig, playerCount: number): Balan
    */
   if (config.serialKiller) {
     warnings.push(UNMEASURED_NEUTRAL_WARNING);
+  }
+
+  /*
+   * Kẻ Báo Thù cũng nằm ngoài thang đo, và vì một lý do KHÁC Sát Nhân - nên nó
+   * là một cảnh báo riêng chứ không dùng chung câu chữ.
+   *
+   * Sát Nhân nằm ngoài vì nó là một bên thứ ba giết mỗi đêm. Kẻ Báo Thù thì
+   * không giết ai: thứ nó làm là dồn phiếu và lời nói của cả ván vào việc treo
+   * cổ MỘT người phe Dân. Phép trừ `villagePower - wolfPower` bắt được đúng một
+   * phần của điều đó (một ghế Dân Làng mất đi) và bỏ sót phần còn lại, nên con
+   * số vẫn nằm gọn trong 40-60 trong khi phe Dân đang gánh thêm một áp lực có
+   * hướng mà không lá bài nào trong bảng mô tả được.
+   *
+   * Cảnh báo, KHÔNG chặn: bộ bài này hợp lệ và host được quyền mở nó. Thứ bị
+   * chặn là việc đọc một con số 40-60 thành "đã cân bằng".
+   */
+  if (config.executioner) {
+    warnings.push(UNMEASURED_EXECUTIONER_WARNING);
   }
 
   const presetDeck = PRESET_DECKS[playerCount];

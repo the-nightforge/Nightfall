@@ -299,8 +299,12 @@ describe("cổng tái lập: v7 không đổi một bit nào", () => {
     expect(move?.targetId).not.toBe("trusted");
   });
 
-  it("v8 là bản mặc định đang chạy", () => {
-    expect(DEFAULT_BOT_WEIGHTS.version).toBe("8.0.0");
+  it("v8 bật hành vi Sát Nhân, và bản mặc định thừa kế nó", () => {
+    // `DEFAULT_BOT_WEIGHTS` đã lên v9 (Kẻ Báo Thù). Điều test này khoá KHÔNG
+    // phải "mặc định là v8" mà là "bản đang chạy có hành vi Sát Nhân bật" -
+    // v9 kế thừa nguyên nhóm `serialKiller` của v8, nên khẳng định đó vẫn
+    // đúng và không bị một lần nâng phiên bản làm mất hiệu lực.
+    expect(DEFAULT_BOT_WEIGHTS.serialKiller).toBe(BOT_WEIGHTS_V8.serialKiller);
     expect(BOT_WEIGHTS_V7.serialKiller.nightThreatWeight).toBe(0);
     expect(BOT_WEIGHTS_V8.serialKiller.nightThreatWeight).toBeGreaterThan(0);
   });

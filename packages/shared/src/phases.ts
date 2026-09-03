@@ -87,6 +87,18 @@ export interface RoomConfig {
    * chỗ khác cũng bắt đầu coi chúng là một.
    */
   serialKiller?: boolean;
+  /**
+   * Kẻ Báo Thù - vai TRUNG LẬP thứ ba, tối đa một lá mỗi ván.
+   *
+   * Optional và mặc định TẮT vì cùng ba lý do với `jester` và `serialKiller`:
+   * snapshot Redis ghi trước bản này không có trường đó, không preset nào chứa
+   * vai này, và host phải tự bật trong bộ bài tuỳ chỉnh.
+   *
+   * Một công tắc RIÊNG, không dùng chung với hai vai kia: ba vai cùng mang nhãn
+   * `neutral` nhưng chơi ba ván khác nhau, và gộp chúng vào một cờ là bước đầu
+   * tiên để mọi chỗ khác cũng bắt đầu coi chúng là một.
+   */
+  executioner?: boolean;
   mode?: RoomMode;
   /**
    * Bật voice chat cho phòng. Mặc định tắt: phòng không bật thì không có gì

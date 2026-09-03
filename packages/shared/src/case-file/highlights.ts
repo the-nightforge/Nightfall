@@ -187,9 +187,22 @@ function trialHighlights(data: CaseData): CaseCandidate[] {
           title: "Làng tóm đúng Sói",
           description: `${name} bị treo cổ với ${verdictTally(judgment.guilty, judgment.innocent)}. Đúng là ${roleLabelOf(accused)}.`,
         },
+        /*
+         * Câu chữ rẽ theo VAI, không theo nhãn phe.
+         *
+         * "Đó đúng là thứ họ đi tìm" là câu đúng cho Thằng Hề và sai cho hai
+         * vai trung lập còn lại: Sát Nhân bị treo là thua, và Kẻ Báo Thù bị
+         * treo là mất luôn cả nhiệm vụ lẫn đường lui hoá Hề. Một câu chung cho
+         * cả nhãn `neutral` là đúng cái lỗi mà nhánh ba này sinh ra để chữa,
+         * chỉ lùi vào sâu hơn một bậc.
+         */
         NEUTRAL_LYNCHED: {
-          title: "Kẻ trung lập toại nguyện",
-          description: `Làng treo cổ ${name} với ${verdictTally(judgment.guilty, judgment.innocent)}. ${name} là ${roleLabelOf(accused)} - đó đúng là thứ họ đi tìm.`,
+          title:
+            accused.role === "JESTER" ? "Kẻ trung lập toại nguyện" : "Làng treo nhầm kẻ ngoài cuộc",
+          description:
+            accused.role === "JESTER"
+              ? `Làng treo cổ ${name} với ${verdictTally(judgment.guilty, judgment.innocent)}. ${name} là ${roleLabelOf(accused)} - đó đúng là thứ họ đi tìm.`
+              : `Làng treo cổ ${name} với ${verdictTally(judgment.guilty, judgment.innocent)}. ${name} là ${roleLabelOf(accused)} - không phải Sói, và cũng không hề muốn kết cục này.`,
         },
       }[lynchType];
       out.push(

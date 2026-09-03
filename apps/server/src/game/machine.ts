@@ -121,6 +121,20 @@ function sync(room: Room): void {
  */
 function checkWinOrContinue(room: Room, next: () => void): void {
   const e = engine(room);
+  /*
+   * Kẻ Báo Thù mất mục tiêu thì hoá Thằng Hề, và chỗ đó là ĐÂY.
+   *
+   * Hàm này là cửa duy nhất mà cả hai đường chết đi qua trước khi ván được
+   * chốt: `continueAfterDeathResult` khi không có Thợ Săn nào phải bắn, và
+   * `finishHunterShot` sau khi phát bắn đã xử xong. Vì vậy nó đứng đúng sau
+   * "cả đợt chết và chuỗi phản ứng Thợ Săn liên quan" và đúng trước
+   * `checkWin` - nếu đặt sớm hơn, một Kẻ Báo Thù sắp trúng đạn của Thợ Săn sẽ
+   * kịp đổi vai trong cùng cái đợt chết đã hạ nó.
+   *
+   * `settleExecutioner` tự chặn lặp, nên một bước chuyển pha chạy lại sau khôi
+   * phục không đổi vai ai lần thứ hai.
+   */
+  e.settleExecutioner();
   const winner = e.checkWin();
   if (winner) {
     e.finishGame(winner);
@@ -131,6 +145,21 @@ function checkWinOrContinue(room: Room, next: () => void): void {
 }
 
 export function startGame(room: Room): void {
+  /*
+   * Dựng engine TRƯỚC khi động vào phòng, và giữ nó trong một biến cục bộ.
+   *
+   * `GameEngine.create` có thể NÉM - hôm nay là khi bộ bài có Kẻ Báo Thù mà
+   * không còn ai phe Dân để làm mục tiêu. Ở thứ tự cũ, lời ném đó rơi vào giữa
+   * một chuỗi đã kịp xoá chat, xoá thư, sinh `gameId` mới và đặt lại
+   * `phaseSeq`, để lại một phòng nửa chừng: `status` vẫn là LOBBY nhưng mọi
+   * thứ khác đã bị dọn cho một ván không bao giờ bắt đầu. Dựng trước thì lỗi
+   * bật ra khi phòng còn nguyên vẹn, và người chơi chỉ thấy đúng một thông báo.
+   */
+  const engineForGame = GameEngine.create(
+    room.members.map((m) => ({ id: m.playerId, name: m.name, isBot: m.isBot })),
+    room.config,
+  );
+
   room.chatLog = [];
   clearDiscussionSkipVotes(room.code);
   // Ván mới, sổ thư trắng: một lá thư của ván trước mở ra giữa ván này sẽ nói
@@ -146,8 +175,7 @@ export function startGame(room: Room): void {
   room.resultWritten = false;
   room.pendingStep = null;
   room.phaseSeq = 0;
-  const players = room.members.map((m) => ({ id: m.playerId, name: m.name, isBot: m.isBot }));
-  room.engine = GameEngine.create(players, room.config);
+  room.engine = engineForGame;
   room.status = "IN_GAME";
   pendingEndFinalVote.set(room.code, false);
   // Ván mới thì nhận thức của BOT phải bắt đầu lại từ đầu: giữ lại brain của

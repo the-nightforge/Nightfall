@@ -1,6 +1,7 @@
 import {
   MAX_PLAYERS_PER_ROOM,
   MIN_PLAYERS_TO_START,
+  UNMEASURED_EXECUTIONER_WARNING,
   UNMEASURED_NEUTRAL_WARNING,
   type BalanceWarningView,
 } from "@masoi/shared";
@@ -98,6 +99,12 @@ function friendly(warning: string, score: number, playerCount: number): string {
      */
     return "Ván có Sát Nhân: một bên thứ ba giết mỗi đêm và tranh phần thắng chung. Điểm cân bằng chỉ chấm cán cân Dân/Sói, nên nó không nói được gì về lá bài này.";
   }
+  if (warning === UNMEASURED_EXECUTIONER_WARNING) {
+    // Cùng lý do với nhánh ngay trên và cùng cách viết: KHÔNG có lời khuyên
+    // "hãy chỉnh lại X". Bộ bài này không lệch, nó chỉ có một lá mà phép chấm
+    // không với tới.
+    return "Ván có Kẻ Báo Thù: một người chơi vận động cả ván để làng treo cổ đúng một người vô tội. Điểm cân bằng chỉ chấm cán cân Dân/Sói, nên nó không đo được sức nặng của lá bài này.";
+  }
   return warning;
 }
 
@@ -116,7 +123,8 @@ export function balanceCopy(
    * nó. Một host đọc câu đó sẽ đi sửa một thứ không hỏng.
    */
   const tiltWarnings = balance.warnings.filter(
-    (warning) => warning !== UNMEASURED_NEUTRAL_WARNING,
+    (warning) =>
+      warning !== UNMEASURED_NEUTRAL_WARNING && warning !== UNMEASURED_EXECUTIONER_WARNING,
   );
   const advice: string[] = [];
   for (const warning of balance.warnings) {

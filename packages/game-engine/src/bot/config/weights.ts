@@ -230,6 +230,45 @@ export interface SerialKillerWeights {
   avoidOwnVictimWeight: number;
 }
 
+/**
+ * Kẻ Báo Thù: một chiến thuật DỒN PHIẾU, không phải một chiến thuật đêm.
+ *
+ * Nó không có lượt đêm nào và không có bằng chứng nào - thứ duy nhất nó có là
+ * một cái tên mà engine đưa cho, và một ngày để thuyết phục cả làng treo cái
+ * tên đó. Vì vậy cả nhóm này chỉ nghiêng đúng một thứ: bảng điểm bỏ phiếu.
+ *
+ * `targetPush === 0` TẮT toàn bộ nhóm và là cổng DUY NHẤT, đúng thói quen của
+ * nhóm `jester` và nhóm `serialKiller`.
+ */
+export interface ExecutionerWeights {
+  /**
+   * Cộng vào điểm bỏ phiếu của MỤC TIÊU.
+   *
+   * `0` TẮT cả nhóm: BOT Kẻ Báo Thù bỏ phiếu y hệt một Dân Làng và KHÔNG rút
+   * số ngẫu nhiên nào, nên mọi ván tái lập theo cấu hình cũ vẫn đúng từng bit.
+   */
+  targetPush: number;
+  /**
+   * Trừ vào điểm của MỌI người khác.
+   *
+   * Cần vế thứ hai này vì `targetPush` một mình chỉ nâng mục tiêu lên; khi cả
+   * làng đang dồn vào một người khác thì con số đó vẫn thua. Nhỏ hơn hẳn
+   * `targetPush`: nó chỉ để kéo bàn về phía mục tiêu, không được biến BOT
+   * thành kẻ phản đối mọi phiên toà - một người bênh tất cả trừ một người là
+   * một người dễ đọc.
+   */
+  othersDamping: number;
+  /**
+   * Trừ vào điểm của mục tiêu khi mục tiêu đang được cả làng TIN.
+   *
+   * Không phải sự nhút nhát mà là nhịp: chỉ vào người cả làng vừa dựa vào, và
+   * không có gì trong tay, là cách nhanh nhất để chính mình lên giá treo thay
+   * họ. Nhân với `trust` của mục tiêu nên nó tự nhạt đi khi uy tín người đó
+   * lung lay.
+   */
+  protectedTargetPenalty: number;
+}
+
 export interface SuspicionWeights {
   /** Bằng chứng chắc chắn đáng giá hơn cùng một điểm nghi ngờ không có lý do. */
   evidenceConfidenceBonus: number;
@@ -555,6 +594,7 @@ export interface BotWeights {
   readonly claim: ClaimWeights;
   readonly jester: JesterWeights;
   readonly serialKiller: SerialKillerWeights;
+  readonly executioner: ExecutionerWeights;
 }
 
 /** Cho phép ghi đè từng nhánh mà không phải khai lại cả cây. */
@@ -641,6 +681,7 @@ const REQUIRED_GROUPS: ReadonlyArray<keyof BotWeights> = [
   "claim",
   "jester",
   "serialKiller",
+  "executioner",
 ];
 
 function isFiniteNumber(value: unknown): value is number {
@@ -1011,6 +1052,20 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     quietNightFromRound: 0,
     bandwagonBonus: 0,
     avoidOwnVictimWeight: 0,
+  }),
+
+  /**
+   * TẮT toàn bộ ở v1, cùng lý do và cùng cách với ba nhóm ngay trên.
+   *
+   * v1-v8 là những mốc so sánh đã đo xong, và Kẻ Báo Thù chưa tồn tại khi
+   * chúng được đo. Với nhóm này bằng 0, một BOT Kẻ Báo Thù chạy dưới các cấu
+   * hình đó bỏ phiếu y hệt một Dân Làng và KHÔNG rút số ngẫu nhiên nào - nên
+   * mọi test tái lập khoá theo v1/v2/v3 vẫn đúng từng bit. Bản bật thật là v9.
+   */
+  executioner: Object.freeze({
+    targetPush: 0,
+    othersDamping: 0,
+    protectedTargetPenalty: 0,
   }),
 }) as BotWeights;
 
@@ -1516,6 +1571,53 @@ export const BOT_WEIGHTS_V8: BotWeights = Object.freeze({
 });
 
 /**
+ * v9 - Kẻ Báo Thù, vai TRUNG LẬP thứ ba.
+ *
+ * Nhóm `executioner` là nhóm DUY NHẤT đổi, và nó chỉ có tác dụng khi trên bàn
+ * thật sự có một Kẻ Báo Thù. Không preset bộ bài nào chứa vai này, nên mọi số
+ * liệu self-play của v1-v8 vẫn so sánh được trực tiếp với v9.
+ *
+ * Cùng cách đặt số với v8 và cùng lời cảnh báo: các con số đặt theo THANG đã
+ * biết (suspicion/trust thật có p90 ≈ 1.8, p99 ≈ 8.6) và theo quan hệ với hai
+ * nhóm trung lập kia, chứ KHÔNG qua một batch quét tham số. Nói thẳng điều đó
+ * ra để người hiệu chỉnh sau biết chỗ nào còn dư địa.
+ */
+export const BOT_WEIGHTS_V9: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V8,
+  version: "9.0.0",
+
+  executioner: Object.freeze({
+    /**
+     * 6 - nặng, và nặng có chủ đích.
+     *
+     * Đây là ĐÒN BẨY DUY NHẤT của cả vai: không lượt đêm, không thông tin, chỉ
+     * một lá phiếu và một ngày để lái nó. Con số nằm giữa p90 (1.8) và p99
+     * (8.6) của thang suspicion - đủ để mục tiêu leo lên đầu bảng khi bàn chưa
+     * có ai nổi bật, nhưng KHÔNG đủ để nuốt một kết quả soi đã ghim 100. Một
+     * Kẻ Báo Thù bỏ qua cả một con Sói đã lộ mặt để chỉ vào mục tiêu của mình
+     * là một Kẻ Báo Thù bị đọc vị trong đúng một vòng.
+     */
+    targetPush: 6,
+    /**
+     * 1.5 - nhỏ hơn `targetPush` bốn lần.
+     *
+     * Nó chỉ nghiêng bàn về phía mục tiêu khi hai ứng viên đang ngang nhau; nó
+     * không được biến BOT thành người bênh vực mọi bị cáo.
+     */
+    othersDamping: 1.5,
+    /**
+     * 1.0 - nhân với `trust` của chính mục tiêu.
+     *
+     * Ở mức này, một mục tiêu đã được Tiên Tri soi sạch (trust ghim 100) kéo
+     * `targetPush` xuống âm sâu, tức BOT tạm buông - đúng nước đi đúng, vì chỉ
+     * vào người vừa được bảo lãnh công khai là tự nộp mình. Với một mục tiêu
+     * chưa ai để ý (trust ≈ 0) thì số hạng này gần như không tồn tại.
+     */
+    protectedTargetPenalty: 1,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
@@ -1524,8 +1626,9 @@ export const BOT_WEIGHTS_V8: BotWeights = Object.freeze({
  * truyền `weights` (bao gồm `session-registry.ts`, chỗ ván thật dựng runtime)
  * lập tức chạy bản mới mà không phải sửa. v5.0.0 và v6.0.0 đưa ngưỡng của ba
  * vai có quyền năng dùng-một-lần (Phù Thuỷ, Thợ Săn, Linh Mục) về thang belief
- * thật; v7.0.0 bật hành vi của Thằng Hề; v8.0.0 bật hành vi của Sát Nhân.
+ * thật; v7.0.0 bật hành vi của Thằng Hề; v8.0.0 bật hành vi của Sát Nhân;
+ * v9.0.0 bật hành vi của Kẻ Báo Thù.
  * v1-v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset đích
  * danh, không bao giờ dựa vào hằng số này.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V8;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V9;
