@@ -55,32 +55,62 @@ const sceneCalls: SceneCall[] = [];
 let scenesBuilt = 0;
 /** Máy giả lập có dựng được 3D không. Test lật cờ này để đi đường 2D. */
 let webglSupported = true;
+/** Số lần effect dò WebGL đã chạy. Là tín hiệu "đã có gì đó xảy ra" cho `drainTurns`. */
+let webglCalls = 0;
 
 function resetScene(): void {
   sceneCalls.length = 0;
   scenesBuilt = 0;
+  webglCalls = 0;
   webglSupported = true;
 }
 
 /**
- * Số vòng macrotask xả sau mỗi lần render.
- *
- * `import("three")` và `import("@/lib/live-trial-scene")` trong canvas KHÔNG
- * giải quyết trong microtask - chúng đi qua loader của Node, nên cần vòng
- * macrotask, và cần bao nhiêu vòng thì tuỳ phiên bản. Bản trước xả đúng hai
- * microtask: vừa đủ trên máy người viết, và không bao giờ đủ trên Node 22, nơi
- * canvas mount SAU khi khẳng định đã chạy - nên test đỏ ở dòng nói về
- * `playOpening` chứ không ở dòng nói về việc chờ.
- *
- * Con số này rộng rãi có chủ ý. Nó không phải một mốc thời gian cần chỉnh cho
- * khớp: mỗi vòng thoát ngay khi hàng đợi rỗng nên phần dư gần như không tốn gì,
- * và chính biên rộng mới là thứ giữ cho bộ test không còn phụ thuộc phiên bản.
+ * Trần số vòng xả. Chỉ để một lỗi treo hiện ra thành test đỏ thay vì treo mãi -
+ * KHÔNG phải một mốc cần chỉnh cho khớp máy.
  */
-const RENDER_DRAIN_TURNS = 20;
+const DRAIN_MAX_TURNS = 100;
+/** Bao nhiêu vòng liền im lặng thì coi là đã xong. */
+const DRAIN_IDLE_TURNS = 3;
 
-async function drainTurns(): Promise<void> {
-  for (let turn = 0; turn < RENDER_DRAIN_TURNS; turn += 1) {
+/**
+ * Xả hàng đợi cho tới khi mọi thứ THÔI ĐỔI, không phải cho tới một số vòng
+ * định sẵn.
+ *
+ * `import("three")` và `import("@/lib/live-trial-scene")` trong canvas không
+ * giải quyết trong microtask - chúng đi qua loader của Node, nên cần vòng
+ * MACROTASK, và cần bao nhiêu vòng thì tuỳ phiên bản Node lẫn tốc độ máy. Bản
+ * đầu xả đúng hai microtask, vừa đủ trên máy người viết và không bao giờ đủ
+ * trên Node 22; thay nó bằng một số cứng lớn hơn cũng chỉ là dời chỗ đoán.
+ *
+ * Điều kiện dừng vì thế là quan sát, không phải đếm: chờ tới khi ĐÃ có hoạt
+ * động rồi im được vài vòng liền. `seenActivity` là mấu chốt - thiếu nó thì
+ * "chưa kịp bắt đầu" trông y hệt "đã xong", và vòng lặp thoát ngay ở vòng đầu.
+ *
+ * Còn `host` trả lời câu hỏi thứ hai: sân khấu đã mount chưa. Chưa mount thì
+ * không có `import()` nào đang chờ và cũng sẽ không có - render đó chỉ dựng một
+ * cây rỗng (`Room` trả null khi chưa có phiên toà) - nên thoát ngay thay vì
+ * ngồi hết trần. Thiếu lối thoát này thì mỗi render như vậy tốn trọn 100 vòng,
+ * và cả file chạy lâu gấp ba mà không kiểm thêm được gì.
+ */
+async function drainTurns(host: HTMLElement): Promise<void> {
+  const mounted = () => host.querySelector('[aria-label="Sân khấu phiên toà"]') !== null;
+  const signal = () => `${webglCalls}:${scenesBuilt}:${sceneCalls.length}`;
+  let seenActivity = false;
+  let idle = 0;
+
+  for (let turn = 0; turn < DRAIN_MAX_TURNS; turn += 1) {
+    const before = signal();
     await new Promise((resolve) => setTimeout(resolve, 0));
+
+    if (signal() !== before) {
+      seenActivity = true;
+      idle = 0;
+      continue;
+    }
+    idle += 1;
+    if (seenActivity && idle >= DRAIN_IDLE_TURNS) return;
+    if (!seenActivity && !mounted()) return;
   }
 }
 
@@ -170,7 +200,10 @@ before(async () => {
   // không gán đè được, nên nó lật cái biến này.
   await mockModule("../lib/cinematic-webgl.ts", {
     exports: {
-      hasWebgl2: () => webglSupported,
+      hasWebgl2: () => {
+        webglCalls += 1;
+        return webglSupported;
+      },
       renderScale: (dpr: number) => Math.min(dpr || 1, 1.5),
       MAX_RENDER_SCALE: 1.5,
       canUseWebgl: () => true,
@@ -260,7 +293,7 @@ async function mountRoom(options: { strict?: boolean } = {}) {
     });
     // Cho `import()` động trong canvas kịp giải quyết rồi để React xả effect.
     await act(async () => {
-      await drainTurns();
+      await drainTurns(host);
     });
   };
 
@@ -506,10 +539,10 @@ describe("import chậm", () => {
      * khẳng định cuối đọc phải `undefined`.
      */
     await act(async () => {
-      await drainTurns();
+      await drainTurns(host);
     });
     await act(async () => {
-      await drainTurns();
+      await drainTurns(host);
     });
 
     assert.equal(opened(), 0, "màn mở đầu đã lỗi thời thì bỏ, không ghi đè pha mới");
