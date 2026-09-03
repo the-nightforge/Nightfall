@@ -1,3 +1,4 @@
+import { isPersonalWinCondition } from "@masoi/shared";
 import type { CaseFile, MatchHistoryEntry } from "@masoi/shared";
 import { getIdentity } from "./identity";
 
@@ -30,10 +31,35 @@ export async function fetchMatchHistory(signal?: AbortSignal): Promise<HistoryOu
     if (!res.ok) return { kind: "error" };
 
     const data = (await res.json()) as { matches?: MatchHistoryEntry[] };
-    return { kind: "ok", matches: data.matches ?? [] };
+    return { kind: "ok", matches: (data.matches ?? []).map(normalizeEntry) };
   } catch {
     return { kind: "error" };
   }
+}
+
+/**
+ * Chuẩn hoá MỘT ván đọc từ dây về đúng hình dạng mà giao diện được phép tin.
+ *
+ * Đây là biên duy nhất mà dữ liệu của server đi vào web, nên nó cũng là chỗ
+ * duy nhất được phép quyết định "thiếu trường nghĩa là gì". Hai thứ khác nhau
+ * cùng phải quy về `null`:
+ *
+ *  - Server CŨ không gửi `myPersonalWin` (`undefined`). Web và server deploy
+ *    rời nhau, nên đây là trạng thái bình thường trong vài phút mỗi lần phát
+ *    hành, không phải một lỗi.
+ *  - Server gửi một điều kiện mà bản build này không hiểu. Cùng lý do với
+ *    `isRole` ở `toHistoryEntry` phía server: cột Json giữ nguyên hình dạng của
+ *    bản đã ghi nó, và tra một chuỗi lạ vào `PERSONAL_WIN_LABELS` ra
+ *    `undefined` ngay giữa lúc render TRANG CHỦ.
+ *
+ * Gộp cả hai về `null` ở đây nghĩa là mọi component phía sau chỉ phải hiểu MỘT
+ * trạng thái "không có thành tích", thay vì ba.
+ */
+function normalizeEntry(entry: MatchHistoryEntry): MatchHistoryEntry {
+  const win = entry.myPersonalWin;
+  const valid =
+    win != null && isPersonalWinCondition(win.condition) && typeof win.round === "number";
+  return { ...entry, myPersonalWin: valid ? win : null };
 }
 
 /**

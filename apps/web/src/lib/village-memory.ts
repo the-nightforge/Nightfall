@@ -66,7 +66,17 @@ export type VillageEffect =
   | "GENERIC";
 
 /** Sắc ánh đèn của một nếp nhà. Chỉ là TRANG TRÍ - nghĩa nằm ở `roleLabel`. */
-export type VillageAccent = "wolf" | "guard" | "seer" | "witch" | "hunter" | "villager";
+export type VillageAccent =
+  | "wolf"
+  | "guard"
+  | "seer"
+  | "witch"
+  | "hunter"
+  | "villager"
+  // Vai TRUNG LẬP có sắc riêng, không mượn sắc Dân Làng: màn hồi ức là bản
+  // dựng lại một ván đã lật bài, nên xếp Thằng Hề vào cùng màu với phe làng là
+  // kể sai chính ván vừa xong.
+  | "jester";
 
 export interface VillageHouse {
   playerId: string;
@@ -185,6 +195,7 @@ export function ringRadius(count: number): number {
 
 function accentFor(role: Role): VillageAccent {
   if (ROLE_META[role].team === "wolves") return "wolf";
+  if (ROLE_META[role].team === "neutral") return "jester";
   switch (role) {
     case "GUARD":
     case "GUARDIAN_ANGEL":

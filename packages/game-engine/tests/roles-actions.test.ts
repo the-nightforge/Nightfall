@@ -559,6 +559,7 @@ describe("Night Recap - đủ diễn biến vai trò mở rộng", () => {
         seer: { id: "seer", name: "Player 1" },
         target: { id: "w1", name: "Player 2" },
         isWolf: true,
+        team: "wolves",
         secondaryTarget: { id: "v1", name: "Player 3" },
         secondaryIsWolf: false,
       },

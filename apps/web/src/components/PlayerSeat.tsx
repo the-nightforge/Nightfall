@@ -3,6 +3,7 @@
 import { AnimatePresence, m } from "motion/react";
 import { ROLE_META, type PlayerView } from "@masoi/shared";
 import { roleLabel } from "@/lib/cursed";
+import { TEAM_TAG_CLASS } from "@/lib/team-tone";
 import { breathOffsetFor } from "@/lib/avatar";
 import type { AvatarId } from "@/lib/avatar-art";
 import { NOTE_META, type NoteMark } from "@/lib/player-notes";
@@ -238,13 +239,7 @@ export function PlayerSeat({
         {isHost && <Tag cls="bg-amber-800/80 text-amber-100">Chủ</Tag>}
         {player.isBot && <Tag cls="bg-slate-700 text-slate-100">Bot</Tag>}
         {player.role && (
-          <Tag
-            cls={
-              ROLE_META[player.role].team === "wolves"
-                ? "bg-blood-600/80 text-white"
-                : "bg-emerald-900/80 text-emerald-200"
-            }
-          >
+          <Tag cls={TEAM_TAG_CLASS[ROLE_META[player.role].team]}>
             {roleLabel(player)}
           </Tag>
         )}

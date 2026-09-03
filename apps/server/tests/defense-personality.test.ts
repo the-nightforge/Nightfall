@@ -45,7 +45,7 @@ function defenseRequest(style: ReturnType<typeof deriveSpeechStyle>): SpeechRequ
     seq: 0,
     round: 2,
     players: [{ id: "bot", name: "An", alive: true }],
-    defense: { votesAgainstMe: 3, alsoAccused: [] },
+    defense: { votesAgainstMe: 3, alsoAccused: [], stance: "SURVIVE" },
   };
 }
 

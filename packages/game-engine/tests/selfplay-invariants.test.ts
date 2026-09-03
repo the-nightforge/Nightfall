@@ -199,7 +199,7 @@ describe("từng bất biến đều bắt được lỗi cố ý", () => {
     expect(
       idsFrom((a) =>
         a.checkKnowledge(
-          knowledge({ seerResult: { targetId: "ally", targetName: "A", isWolf: true } }),
+          knowledge({ seerResult: { targetId: "ally", targetName: "A", isWolf: true, team: "wolves" } }),
           state(),
           truth(),
         ),
@@ -215,7 +215,7 @@ describe("từng bất biến đều bắt được lỗi cố ý", () => {
             botId: "seer",
             selfRole: "SEER",
             knownRoles: { seer: "SEER" },
-            seerResult: { targetId: "villager", targetName: "V", isWolf: true },
+            seerResult: { targetId: "villager", targetName: "V", isWolf: true, team: "wolves" },
           }),
           state(),
           truth(),
@@ -234,7 +234,7 @@ describe("từng bất biến đều bắt được lỗi cố ý", () => {
       botId: "seer",
       selfRole: "SEER",
       knownRoles: { seer: "SEER" },
-      seerResult: { targetId: "villager", targetName: "V", isWolf: true },
+      seerResult: { targetId: "villager", targetName: "V", isWolf: true, team: "wolves" },
     });
 
     expect(
@@ -267,7 +267,7 @@ describe("từng bất biến đều bắt được lỗi cố ý", () => {
             botId: "seer",
             selfRole: "SEER",
             knownRoles: { seer: "SEER" },
-            seerResult: { targetId: "villager", targetName: "V", isWolf: true },
+            seerResult: { targetId: "villager", targetName: "V", isWolf: true, team: "wolves" },
           }),
           state(),
           truth({
@@ -285,7 +285,7 @@ describe("từng bất biến đều bắt được lỗi cố ý", () => {
     expect(
       idsFrom((a) =>
         a.checkKnowledge(
-          knowledge({ seerResult: { targetId: "ally", targetName: "A", isWolf: true } }),
+          knowledge({ seerResult: { targetId: "ally", targetName: "A", isWolf: true, team: "wolves" } }),
           state(),
           truth({ shadowedSeerResults: new Set(["me:ally"]) }),
         ),

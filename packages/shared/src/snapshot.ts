@@ -1,6 +1,48 @@
 import type { Phase, RoomConfig, Winner } from "./phases";
-import type { Role } from "./roles";
+import type { Role, Team } from "./roles";
 import type { GameEventId } from "./events";
+
+/**
+ * Điều kiện thắng CÁ NHÂN đã đạt được, tách hẳn khỏi `Winner`.
+ *
+ * Hai đại lượng khác nhau và phải ở hai trường khác nhau: `Winner` là phe
+ * thắng chung và nó KẾT THÚC ván, còn một thắng lợi cá nhân chỉ được ghi nhận
+ * rồi ván chạy tiếp. Nhét Thằng Hề vào `Winner` sẽ vừa cắt ngang ván vừa buộc
+ * mọi chỗ đọc `winner` phải xử lý một giá trị không phải phe nào.
+ *
+ * Tập ĐÓNG, và cố ý không có "điều kiện chung của phe trung lập": vai trung lập
+ * tiếp theo sẽ có luật thắng của riêng nó, không mặc định dùng lại luật này.
+ */
+export const PERSONAL_WIN_CONDITIONS = ["JESTER_LYNCHED"] as const;
+export type PersonalWinCondition = (typeof PERSONAL_WIN_CONDITIONS)[number];
+
+/**
+ * Điều kiện này có phải một điều kiện mà bản build HIỆN TẠI hiểu không.
+ *
+ * Cùng lý do với `isRole`: dữ liệu đọc lên từ cột Json của một ván cũ mang hình
+ * dạng của bản build đã ghi nó, và tra một chuỗi lạ vào bảng nhãn sẽ ra
+ * undefined ngay giữa lúc render lịch sử.
+ */
+export function isPersonalWinCondition(value: unknown): value is PersonalWinCondition {
+  return (
+    typeof value === "string" &&
+    (PERSONAL_WIN_CONDITIONS as readonly string[]).includes(value)
+  );
+}
+
+export const PERSONAL_WIN_LABELS: Record<PersonalWinCondition, string> = {
+  JESTER_LYNCHED: "Thằng Hề - bị treo cổ",
+};
+
+/** Một thắng lợi cá nhân đã ghi nhận, đúng một lần cho mỗi người trong ván. */
+export interface PersonalWin {
+  playerId: string;
+  name: string;
+  role: Role;
+  condition: PersonalWinCondition;
+  /** Vòng mà điều kiện được thoả. */
+  round: number;
+}
 
 export interface BalanceWarningView {
   score: number;
@@ -88,9 +130,22 @@ export interface NightActionView {
   seerResult?: {
     targetId: string;
     targetName: string;
+    /**
+     * Phe đọc ra được của mục tiêu.
+     *
+     * Thêm cạnh `isWolf` chứ không thay nó: kỹ năng vốn chỉ trả lời "có phải
+     * Sói không", và một vai TRUNG LẬP làm câu trả lời nhị phân đó nói dối -
+     * "không phải Sói" bị đọc thành "người của làng". Trường này nói đúng thứ
+     * Tiên Tri thấy: `neutral` là "Phe trung lập", không kèm vai cụ thể.
+     *
+     * Optional vì web và server deploy rời nhau: client mới chạy với server cũ
+     * thì không có trường này và phải rơi về `isWolf`.
+     */
+    team?: Team;
     isWolf?: boolean;
     secondaryTargetId?: string;
     secondaryTargetName?: string;
+    secondaryTeam?: Team;
     secondaryIsWolf?: boolean;
     unknown?: boolean;
   } | null;
@@ -221,6 +276,8 @@ export interface NightRecap {
     seer: RecapPlayer;
     target: RecapPlayer;
     isWolf: boolean;
+    /** Phe đọc ra được; vắng mặt ở lịch sử đêm ghi trước khi có vai trung lập. */
+    team?: Team;
     /** Mục tiêu soi thứ 2 khi có sự kiện Màn Sương Tan; vắng mặt ở đêm thường. */
     secondaryTarget?: RecapPlayer;
     secondaryIsWolf?: boolean;
@@ -333,6 +390,17 @@ export interface RoomSnapshot {
   lastNightDeaths: { playerId: string; name: string }[];
   lastEliminated: { playerId: string; name: string } | null;
   winner: Winner;
+  /**
+   * Thắng lợi CÁ NHÂN đã ghi nhận trong ván này.
+   *
+   * Lọc theo người nhận, đúng như mọi trường bí mật khác: trước `GAME_OVER`
+   * người xem chỉ thấy mục của CHÍNH mình. Phát cả danh sách ra sớm sẽ lộ vai
+   * của người vừa bị treo, trong khi luật của phòng là cái chết không tiết lộ
+   * gì cho tới lúc lật bài.
+   *
+   * Optional vì web và server deploy rời nhau.
+   */
+  personalWins?: PersonalWin[];
   chatLog: ChatMessage[];
   log: string[];
   /** Cảnh báo cân bằng lobby; null khi chưa tính hoặc cân bằng. */
@@ -456,6 +524,14 @@ export interface MatchHistoryPlayer {
   name: string;
   role: Role;
   alive: boolean;
+  /**
+   * Thắng lợi cá nhân của người này trong ván đó; vắng mặt là không có.
+   *
+   * Chỉ mang điều kiện và vòng: id, tên và vai đã nằm ngay trên cùng object.
+   * Optional vì ván ghi trước bản này không có trường đó - và đó chính là cách
+   * lịch sử cũ vẫn đọc được.
+   */
+  personalWin?: { condition: PersonalWinCondition; round: number };
 }
 
 export interface MatchHistoryEntry {
@@ -468,6 +544,24 @@ export interface MatchHistoryEntry {
   /** Vai của chính người đang hỏi; null với ván cũ chưa lưu id người chơi. */
   myRole: Role | null;
   mySurvived: boolean | null;
+  /**
+   * Thắng lợi cá nhân của chính người đang hỏi; `null` khi không có.
+   *
+   * Trường riêng chứ không bắt giao diện tự dò trong `players`: `players`
+   * không mang id người xem, đúng như `myRole`/`mySurvived` đã phải tồn tại vì
+   * lý do đó. Cũng `null` với ván cũ chưa lưu id người chơi.
+   *
+   * OPTIONAL, và đó là một sự thật về triển khai chứ không phải một chỗ nới
+   * lỏng: web và server deploy RỜI NHAU, nên một client mới nói chuyện với
+   * server cũ sẽ nhận payload KHÔNG CÓ trường này. Khai nó là `| null` thôi là
+   * nói dối về hình dạng dữ liệu thật, và lời nói dối đó đã sinh ra đúng một
+   * lỗi: `myPersonalWin !== null` đọc `undefined` thành "có thắng cá nhân", tức
+   * một ván thua hiện ra là "Thắng" ở màn lịch sử.
+   *
+   * Mọi chỗ đọc phải so bằng `!= null` (bắt cả hai) hoặc đọc bản đã chuẩn hoá ở
+   * biên - xem `fetchMatchHistory` bên web.
+   */
+  myPersonalWin?: { condition: PersonalWinCondition; round: number } | null;
   players: MatchHistoryPlayer[];
   /**
    * Hồ sơ vụ án chốt lúc ván kết thúc; null với ván ghi trước khi có cột này.

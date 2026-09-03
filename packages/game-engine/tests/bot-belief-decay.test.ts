@@ -170,7 +170,7 @@ describe("applyPrivateInformation", () => {
       state,
       knowledge({
         selfRole: "SEER",
-        seerResult: { targetId: "b", targetName: "B", isWolf: true },
+        seerResult: { targetId: "b", targetName: "B", isWolf: true, team: "wolves" },
       }),
     );
 
@@ -187,7 +187,7 @@ describe("applyPrivateInformation", () => {
       state,
       knowledge({
         selfRole: "SEER",
-        seerResult: { targetId: "b", targetName: "B", isWolf: false },
+        seerResult: { targetId: "b", targetName: "B", isWolf: false, team: "village" },
       }),
     );
 
@@ -216,7 +216,7 @@ describe("applyPrivateInformation", () => {
     const state = stateFor();
     const view = knowledge({
       selfRole: "SEER",
-      seerResult: { targetId: "b", targetName: "B", isWolf: false },
+      seerResult: { targetId: "b", targetName: "B", isWolf: false, team: "village" },
     });
 
     applyPrivateInformation(state, view);
@@ -233,7 +233,7 @@ describe("applyPrivateInformation", () => {
       state,
       knowledge({
         selfRole: "SEER",
-        seerResult: { targetId: "b", targetName: "B", isWolf: true },
+        seerResult: { targetId: "b", targetName: "B", isWolf: true, team: "wolves" },
       }),
     );
 
@@ -258,7 +258,7 @@ describe("BotRuntime · tích hợp decay và thông tin riêng", () => {
     bot.observe(
       context({
         selfRole: "SEER",
-        seerResult: { targetId: "b", targetName: "B", isWolf: true },
+        seerResult: { targetId: "b", targetName: "B", isWolf: true, team: "wolves" },
       }),
     );
 
@@ -297,7 +297,7 @@ describe("BotRuntime · tích hợp decay và thông tin riêng", () => {
           context({
             round,
             selfRole: "SEER",
-            seerResult: { targetId: "b", targetName: "B", isWolf: true },
+            seerResult: { targetId: "b", targetName: "B", isWolf: true, team: "wolves" },
           }),
         );
       }

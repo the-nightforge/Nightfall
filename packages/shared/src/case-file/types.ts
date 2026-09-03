@@ -8,6 +8,12 @@ import type { Winner } from "../phases";
 export type CaseHighlightType =
   | "INNOCENT_LYNCHED"
   | "WOLF_LYNCHED"
+  /**
+   * Một vai TRUNG LẬP bị treo. Đứng riêng vì nó không phải án oan (làng không
+   * mất người của mình) mà cũng không phải "tóm đúng Sói" - nó là lúc kẻ trung
+   * lập đạt đúng thứ nó đi tìm.
+   */
+  | "NEUTRAL_LYNCHED"
   | "HUNTER_MISFIRE"
   | "HUNTER_REVENGE"
   | "CURSED_TURNED"

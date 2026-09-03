@@ -62,6 +62,9 @@ function intentLine(request: SpeechRequest): string {
       // nhưng không lộ AI đã bỏ phiếu đó, nên không có một "author" cụ thể để
       // phản bác như DISAGREE thường dùng. `request.defense` (thêm bên dưới)
       // mới là chỗ mang khung cảnh thật của lượt này.
+      //
+      // Chỉ nhánh SURVIVE mới rơi vào đây: lõi không bao giờ chọn DISAGREE cho
+      // một bị cáo không định thanh minh (xem `decideDefenseSpeech`).
       return request.defense
         ? "Bạn đang bị dồn tới mức phải tự bào chữa. Hãy phản bác lại việc mình bị nghi ngờ."
         : `Bạn không đồng tình với ${author} về chuyện ${who}.`;
@@ -116,6 +119,42 @@ function untrusted(tag: string, lines: string[]): string[] {
   ];
 }
 
+/**
+ * Khung cảnh của lượt tự bào chữa, viết theo THÁI ĐỘ mà lõi đã chốt.
+ *
+ * Bản trước chỉ có một khối, kết bằng "Nói một hoặc hai câu để thuyết phục làng
+ * đừng treo bạn." - một chỉ thị đúng với gần hết bộ bài và sai hoàn toàn với
+ * một vai thắng bằng cách bị treo. Prompt không được tự đoán bị cáo muốn gì;
+ * `stance` là câu trả lời do lõi cấp.
+ *
+ * Cả hai nhánh đều KHÔNG nhắc tới vai của người nói - đúng như khối này vốn
+ * không nhắc (`roleContext` cũ đã bị bỏ hẳn khỏi prompt bào chữa).
+ */
+function defenseLines(defense: NonNullable<SpeechRequest["defense"]>): string[] {
+  const shared = [
+    "Bạn đang ở lượt tự bào chữa trong phiên xử - chỉ mình bạn được nói lúc này.",
+    `Bạn vừa bị vote sơ bộ đưa ra treo cổ với ${defense.votesAgainstMe} phiếu.`,
+    ...(defense.alsoAccused.length > 0
+      ? [`Những người khác cũng đang bị nhắm tới: ${defense.alsoAccused.join(", ")}.`]
+      : []),
+  ];
+
+  if (defense.stance === "INDIFFERENT") {
+    return [
+      ...shared,
+      // Ba điều cấm, và cả ba đều cần: không thanh minh (nếu không thì lời bào
+      // chữa lại cứu bị cáo), không xin bị treo (một câu như thế thì cả làng
+      // tha ngay), không nói ra vai (lời khai cũng làm hỏng y hệt).
+      "Bạn KHÔNG buồn thanh minh. Nói đúng MỘT câu ngắn, bâng quơ hoặc pha trò.",
+      "Không thanh minh, không đưa bằng chứng, không nài nỉ ai tha cho bạn.",
+      "Cũng KHÔNG được bảo họ hãy treo bạn, và không nói ra vai của bạn.",
+      "",
+    ];
+  }
+
+  return [...shared, "Nói một hoặc hai câu để thuyết phục làng đừng treo bạn.", ""];
+}
+
 export function buildDaySpeechPrompt(request: SpeechRequest): PromptSpec {
   const evidenceLines = request.evidence.length
     ? request.evidence.map((item) => `- [${item.sourceId}] ${item.summary}`)
@@ -140,17 +179,7 @@ export function buildDaySpeechPrompt(request: SpeechRequest): PromptSpec {
       // Chỉ khác rỗng ở lượt tự bào chữa (pha DEFENSE). Số phiếu và danh sách
       // người cũng bị nhắm đã công khai ở pha này - KHÔNG phải vai thật, thứ
       // roleContext cũ từng đưa vào đây và đã bị bỏ hẳn khỏi prompt này.
-      ...(request.defense
-        ? [
-            "Bạn đang ở lượt tự bào chữa trong phiên xử - chỉ mình bạn được nói lúc này.",
-            `Bạn vừa bị vote sơ bộ đưa ra treo cổ với ${request.defense.votesAgainstMe} phiếu.`,
-            ...(request.defense.alsoAccused.length > 0
-              ? [`Những người khác cũng đang bị nhắm tới: ${request.defense.alsoAccused.join(", ")}.`]
-              : []),
-            "Nói một hoặc hai câu để thuyết phục làng đừng treo bạn.",
-            "",
-          ]
-        : []),
+      ...(request.defense ? defenseLines(request.defense) : []),
       ...untrusted(
         "quoted_data",
         request.replyTo ? [`${request.replyTo.actorName}: ${request.replyTo.text}`] : [],

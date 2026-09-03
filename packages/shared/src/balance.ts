@@ -1,3 +1,4 @@
+import { roleTeam } from "./roles";
 import type { Role } from "./roles";
 import type { RoomConfig } from "./phases";
 import type { BalanceWarningView } from "./snapshot";
@@ -52,6 +53,16 @@ export const ROLE_POWER: Record<Role, number> = {
   // này", và lá này đóng góp âm cho phe làng.
   CURSED: -2,
   VILLAGER: 0.5,
+  /**
+   * 0, và con số này KHÔNG đi vào cả `villagePower` lẫn `wolfPower`: Thằng Hề
+   * là vai trung lập nên nó không đóng góp cho phe nào (xem `villageRoles`).
+   *
+   * Ảnh hưởng thật của nó lên bảng cân bằng vẫn có và vẫn đúng dấu: bật Thằng
+   * Hề là lấy mất một ghế Dân Làng, nên `villagePower` giảm đúng 0.5 - một lá
+   * hơi bất lợi cho làng, đúng như bản chất của nó (làng mất một lá phiếu biết
+   * suy luận và có thêm một người chủ động phá ngày).
+   */
+  JESTER: 0,
 };
 
 /**
@@ -80,6 +91,10 @@ const BASE_TIMINGS: Pick<
 function preset(overrides: Partial<RoomConfig>): RoomConfig {
   return {
     werewolves: 2,
+    // Không preset nào chứa Thằng Hề, và khai báo tường minh ở đây là cách
+    // khẳng định điều đó: `isPresetDeck` so từng khoá, nên một bộ bài bật Hề
+    // không bao giờ được coi là "preset chuẩn".
+    jester: false,
     seer: false,
     guard: false,
     witch: false,
@@ -210,6 +225,10 @@ export function specialRoleList(config: RoomConfig): Role[] {
   if (config.mayor) roles.push("MAYOR");
   // Tối đa một Kẻ Nguyền Rủa mỗi ván: một lá duy nhất trong bộ bài.
   if (config.cursed) roles.push("CURSED");
+  // Tối đa một Thằng Hề mỗi ván, cùng lý do và cùng cách: cấu hình là boolean
+  // nên "tối đa 1" là tính chất của kiểu dữ liệu, không phải một phép kiểm tra
+  // ai đó phải nhớ viết.
+  if (config.jester) roles.push("JESTER");
   return roles;
 }
 
@@ -230,11 +249,20 @@ function sumPower(roles: Role[]): number {
 }
 
 function wolfRoles(roles: Role[]): Role[] {
-  return roles.filter((r) => r === "WEREWOLF" || r === "WOLF_CUB");
+  return roles.filter((r) => roleTeam(r) === "wolves");
 }
 
+/**
+ * Suy ra từ `roleTeam` chứ không phải "mọi thứ không phải Sói".
+ *
+ * Định nghĩa cũ (`r !== "WEREWOLF" && r !== "WOLF_CUB"`) trùng kết quả khi chỉ
+ * có hai phe, nhưng nó xếp một vai TRUNG LẬP vào sức mạnh của làng - tức bảng
+ * cân bằng sẽ tính Thằng Hề như một người sẽ cố giúp làng thắng, đúng ngược
+ * điều nó làm. Vai trung lập không nằm ở cả hai vế, nên nó chỉ ảnh hưởng tới
+ * điểm số qua đúng thứ nó thật sự lấy đi: một ghế Dân Làng.
+ */
 function villageRoles(roles: Role[]): Role[] {
-  return roles.filter((r) => r !== "WEREWOLF" && r !== "WOLF_CUB");
+  return roles.filter((r) => roleTeam(r) === "village");
 }
 
 function infoPower(roles: Role[]): number {

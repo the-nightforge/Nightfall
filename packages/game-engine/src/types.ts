@@ -4,7 +4,9 @@ import type {
   GamePhase,
   HunterShotRecap,
   NightRecap,
+  PersonalWin,
   RoomConfig,
+  Team,
   VoteMutation,
   Winner,
 } from "@masoi/shared";
@@ -53,7 +55,23 @@ export interface NightState {
   poisonTarget: string | null;
   /** Phù Thủy đã chủ động bỏ qua cả hai bình trong đêm này */
   witchSkipped: boolean;
-  seerResults: Record<string, { targetId: string; isWolf: boolean; secondaryTargetId?: string; secondaryIsWolf?: boolean; unknown?: boolean }>;
+  /**
+   * `team` đi CẠNH `isWolf`, không thay nó: `isWolf` vẫn là thứ mọi luật cũ
+   * đọc, còn `team` mang câu trả lời đầy đủ để một mục tiêu trung lập không bị
+   * báo về là "người của làng". Optional vì state lưu trước bản này không có nó.
+   */
+  seerResults: Record<
+    string,
+    {
+      targetId: string;
+      isWolf: boolean;
+      team?: Team;
+      secondaryTargetId?: string;
+      secondaryIsWolf?: boolean;
+      secondaryTeam?: Team;
+      unknown?: boolean;
+    }
+  >;
   priestTarget: string | null;
   /** Linh Mục đã chọn không dùng nước thánh đêm nay */
   priestSkipped: boolean;
@@ -176,6 +194,21 @@ export interface GameState {
   deadCanSpeakChosenId: string | null;
   howlBonusDay: number | null;
   dayOfTruthClaims: Record<string, string | null>;
+  /**
+   * Thắng lợi CÁ NHÂN đã ghi nhận trong ván, theo thứ tự xảy ra.
+   *
+   * Tách hẳn khỏi `winner`: ghi một mục ở đây KHÔNG kết thúc ván và KHÔNG đổi
+   * phe thắng chung. Ván chạy tiếp, và mục này sống tới `GAME_OVER` bất kể sau
+   * đó Dân hay Sói thắng.
+   *
+   * Mỗi người tối đa một mục cả ván - `recordPersonalWin` gác điều đó, nên một
+   * pha bị chạy lại (khôi phục sau restart, một bước về muộn) không nhân đôi
+   * được thành tích.
+   *
+   * Optional vì state lưu trước bản này không có trường đó; constructor chuẩn
+   * hoá về mảng rỗng khi nạp lại.
+   */
+  personalWins?: PersonalWin[];
 }
 
 export class GameError extends Error {

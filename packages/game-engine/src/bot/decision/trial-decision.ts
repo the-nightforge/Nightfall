@@ -68,6 +68,23 @@ export function decideFinalVote(
     return { kind: "FINAL_VOTE", guilty: false, confidence: 1, evidence: [] };
   }
 
+  /*
+   * Thằng Hề luôn bỏ THA, và đó là một nước đi chứ không phải một sự lười.
+   *
+   * Bị cáo không được bỏ phiếu cho chính mình (engine chặn), nên lá phiếu này
+   * luôn nói về NGƯỜI KHÁC - tức về một cái giá treo mà Hề không được đứng
+   * trên. Kéo phiên toà đó về không có hai cái lợi cùng lúc: ngày hôm nay chưa
+   * tiêu xong nên Hề còn cơ hội, và một người khăng khăng tha kẻ mà cả làng vừa
+   * đồng thuận đưa ra xử chính là người bị soi kỹ nhất vào ngày mai.
+   *
+   * Đứng ngay sau nhánh Sói và TRƯỚC mọi phép đọc belief: với Hề, bằng chứng
+   * công khai nói gì cũng không đổi được câu trả lời.
+   */
+  if (context.knowledge.selfRole === "JESTER") {
+    probe?.fallback("Thằng Hề không giúp treo ai khác: mỗi phiên toà của người khác là một ngày mất trắng");
+    return { kind: "FINAL_VOTE", guilty: false, confidence: 1, evidence: [] };
+  }
+
   const entry = state.suspicion[accusedId];
   const suspicion = entry?.score ?? 0;
   const trust = state.trust[accusedId]?.score ?? 0;

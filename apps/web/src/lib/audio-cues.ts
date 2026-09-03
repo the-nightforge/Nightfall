@@ -35,7 +35,12 @@ export function cuesFor(prev: RoomSnapshot | null, next: RoomSnapshot): Cue[] {
 
   const role = next.you?.role;
   if (changed && next.phase === "GAME_OVER" && next.winner && role) {
-    cues.push(roleTeam(role) === next.winner ? "win" : "lose");
+    // Hai đường thắng, đúng như `personalOutcome`: phe của mình về nhất, HOẶC
+    // mình đã đạt điều kiện thắng riêng. Chỉ đọc phe sẽ phát tiếng thua vào
+    // đúng lúc người chơi vừa thắng - và tiếng là thứ họ nghe trước cả khi kịp
+    // đọc dòng chữ nào.
+    const personalWin = (next.personalWins ?? []).some((win) => win.playerId === next.you?.id);
+    cues.push(personalWin || roleTeam(role) === next.winner ? "win" : "lose");
   }
 
   return cues;

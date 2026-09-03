@@ -7,6 +7,7 @@ import {
   BOT_WEIGHTS_V4,
   BOT_WEIGHTS_V5,
   BOT_WEIGHTS_V6,
+  BOT_WEIGHTS_V7,
   DEFAULT_BOT_WEIGHTS,
   resolveWeights,
   validateWeights,
@@ -359,7 +360,7 @@ describe("trọng số được nối vào quyết định", () => {
       const state = stateFor();
       applyPrivateInformation(
         state,
-        knowledge({ seerResult: { targetId: "a", targetName: "A", isWolf: true } }),
+        knowledge({ seerResult: { targetId: "a", targetName: "A", isWolf: true, team: "wolves" } }),
         weights,
       );
       return state.suspicion.a.reasons.at(-1)!.weight;
@@ -662,14 +663,16 @@ describe("v2 là cấu hình production", () => {
     return rates;
   }
 
-  it("mặc định trỏ tới v6", () => {
+  it("mặc định trỏ tới v7", () => {
     // Cùng cơ chế rollout mà docstring của `DEFAULT_BOT_WEIGHTS` mô tả: nâng
     // chính hằng số này lên bản mới để `session-registry.ts` (chỗ ván thật
     // dựng `BotRuntime`, không tự truyền `weights`) chạy bản mới mà không phải
-    // sửa. v5 đưa ngưỡng của Phù Thuỷ và Thợ Săn về thang belief thật; v2-v4
-    // vẫn tồn tại nguyên vẹn làm mốc so sánh.
-    expect(DEFAULT_BOT_WEIGHTS.version).toBe("6.0.0");
-    expect(weightsPreset("6.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    // sửa. v5 đưa ngưỡng của Phù Thuỷ và Thợ Săn về thang belief thật, v6 làm
+    // nốt Linh Mục, v7 bật hành vi của Thằng Hề; v2-v4 vẫn tồn tại nguyên vẹn
+    // làm mốc so sánh.
+    expect(DEFAULT_BOT_WEIGHTS.version).toBe("7.0.0");
+    expect(weightsPreset("7.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    expect(weightsPreset("6.0.0")).toBe(BOT_WEIGHTS_V6);
     expect(weightsPreset("5.0.0")).toBe(BOT_WEIGHTS_V5);
     expect(weightsPreset("4.0.0")).toBe(BOT_WEIGHTS_V4);
     expect(weightsPreset("3.0.0")).toBe(BOT_WEIGHTS_V3);
@@ -886,6 +889,37 @@ describe("nhóm trọng số claim", () => {
       if (key === "version" || key === "roleThresholds") continue;
       expect(BOT_WEIGHTS_V6[key]).toBe(BOT_WEIGHTS_V5[key]);
     }
+  });
+
+  it("v7 khác v6 ĐÚNG ở nhóm jester và version", () => {
+    for (const key of Object.keys(BOT_WEIGHTS_V6) as Array<keyof typeof BOT_WEIGHTS_V6>) {
+      if (key === "version" || key === "jester") continue;
+      expect(BOT_WEIGHTS_V7[key]).toBe(BOT_WEIGHTS_V6[key]);
+    }
+  });
+
+  it("v1-v6 giữ hành vi Thằng Hề TẮT hoàn toàn", () => {
+    // Đây là điều kiện để mọi test tái lập khoá theo v1/v2/v3 còn đúng: dưới
+    // các cấu hình đó, một con BOT Hề không nghiêng bảng điểm và không rút một
+    // số ngẫu nhiên nào. Quét cả nhóm chứ không chỉ `bluffChance`, vì bất kỳ
+    // số hạng khác 0 nào cũng đủ để đổi thứ tự một lá phiếu.
+    for (const preset of [BOT_WEIGHTS_V1, BOT_WEIGHTS_V2, BOT_WEIGHTS_V3, BOT_WEIGHTS_V4, BOT_WEIGHTS_V5, BOT_WEIGHTS_V6]) {
+      for (const value of Object.values(preset.jester)) {
+        expect(value).toBe(0);
+      }
+    }
+  });
+
+  it("v7 để Thằng Hề dám khai láo hơn Sói, và sớm hơn Sói", () => {
+    // Quan hệ này là điều `weights.ts` tuyên bố thành lời: Sói khai láo là
+    // đánh cược mạng, còn Hề bị bắt bài chính là thắng. Hai con số rời nhau ở
+    // đây thì lần hiệu chỉnh sau sẽ lặng lẽ làm Hề rụt rè hơn Sói.
+    expect(BOT_WEIGHTS_V7.jester.bluffChance).toBeGreaterThan(
+      BOT_WEIGHTS_V7.claim.wolfBluffChance,
+    );
+    expect(BOT_WEIGHTS_V7.jester.bluffFromRound).toBeLessThan(
+      BOT_WEIGHTS_V7.claim.wolfBluffFromRound,
+    );
   });
 
   it("v6 giữ Nước thánh khó hơn bình độc, đúng vì nó có phản đòn", () => {

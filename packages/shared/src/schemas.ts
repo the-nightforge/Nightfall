@@ -34,6 +34,7 @@ export const roomConfigSchema = z
     guardianAngel: bool.optional(),
     priest: bool.optional(),
     mayor: bool.optional(),
+    jester: bool.optional(),
     mode: roomModeSchema.optional(),
     voice: bool.optional(),
     lastLetter: bool.optional(),
@@ -68,7 +69,10 @@ export function validateRoomConfig(config: RoomConfig, playerCount: number): str
     (config.detective ? 1 : 0) +
     (config.guardianAngel ? 1 : 0) +
     (config.priest ? 1 : 0) +
-    (config.mayor ? 1 : 0);
+    (config.mayor ? 1 : 0) +
+    // Thằng Hề chiếm một ghế như mọi vai đặc biệt khác, dù nó không thuộc phe
+    // làng: chỗ này đếm GHẾ ĐÃ BỊ LẤY, không đếm sức mạnh của phe nào.
+    (config.jester ? 1 : 0);
   const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0);
   const totalRoles = wolfCount + specials;
   if (totalRoles > playerCount) {
@@ -77,6 +81,9 @@ export function validateRoomConfig(config: RoomConfig, playerCount: number): str
   if (totalRoles === playerCount) {
     return "Phải còn chỗ cho Dân Làng";
   }
+  // `playerCount - wolfCount` là "số người KHÔNG phải Sói", nên Thằng Hề được
+  // tính vào đó - đúng bằng cách `checkWin` đếm thế cân bằng của bầy Sói. Hai
+  // phép đếm khác nhau ở đây sẽ cho phép mở một ván mà Sói đã thắng từ đêm đầu.
   if (wolfCount >= playerCount - wolfCount) {
     return "Số Ma Sói phải ít hơn phe làng";
   }

@@ -9,6 +9,7 @@ import {
 import { ROLE_ICON_PATHS } from "@/lib/role-art";
 import {
   CONFIG_KEY,
+  NEUTRAL_ROLES,
   VILLAGE_ROLES,
   WOLF_SPECIAL_ROLES,
   deckCounts,
@@ -70,6 +71,28 @@ export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
         ))}
       </Section>
 
+      {/*
+        * Nhóm TRUNG LẬP đứng riêng, giữa hai phe.
+        *
+        * Không nhét vào một trong hai nhóm kia dù nó chỉ có một lá: bộ bài là
+        * chỗ host đọc để biết ván sắp tới có gì, và một Thằng Hề nằm dưới nhãn
+        * "Phe Dân Làng" là một lời nói dối ngay tại màn hình quyết định - đúng
+        * cái điều mà cả vai này sinh ra để làm với NGƯỜI CHƠI, không phải với
+        * người đang xếp bài.
+        */}
+      <Section label="Phe Trung lập" tone="neutral">
+        {NEUTRAL_ROLES.map((role) => (
+          <RoleCard
+            key={role}
+            role={role}
+            count={config[CONFIG_KEY[role]] ? 1 : 0}
+            enabled={!!config[CONFIG_KEY[role]]}
+            locked={!isHost}
+            onToggle={() => toggle(role)}
+          />
+        ))}
+      </Section>
+
       <Section label="Phe Ma Sói" tone="wolves">
         <RoleCard
           role="WEREWOLF"
@@ -119,21 +142,59 @@ function Section({
   children,
 }: {
   label: string;
-  tone: "village" | "wolves";
+  tone: DeckTone;
   children: React.ReactNode;
 }) {
   return (
     <div className="mb-4 last:mb-0">
-      <p
-        className={`mb-2 text-[11px] font-bold uppercase tracking-[0.2em] ${
-          tone === "wolves" ? "text-blood-400" : "text-emerald-300"
-        }`}
-      >
+      <p className={`mb-2 text-[11px] font-bold uppercase tracking-[0.2em] ${TONE.text[tone]}`}>
         {label}
       </p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{children}</div>
     </div>
   );
+}
+
+/**
+ * Bảng màu theo phe, tra từ MỘT chỗ.
+ *
+ * Trước khi có phe thứ ba, mỗi chỗ dùng màu chỉ cần một biểu thức ba ngôi
+ * `wolf ? ... : ...` - và có sáu chỗ như vậy trong file này. Thêm một phe vào
+ * cách đó nghĩa là sáu biểu thức lồng nhau, và mỗi lần thêm phe sau này lại
+ * phải tìm cho đủ sáu.
+ */
+type DeckTone = "village" | "wolves" | "neutral";
+
+const TONE: Record<"text" | "card" | "halo" | "fill" | "dot", Record<DeckTone, string>> = {
+  text: {
+    village: "text-emerald-300",
+    wolves: "text-blood-400",
+    neutral: "text-amber-300",
+  },
+  card: {
+    village: "border-emerald-500/25 bg-emerald-900/10 shadow-[inset_0_1px_0_rgba(52,211,153,0.12)]",
+    wolves: "border-blood-500/40 bg-blood-600/10 shadow-[inset_0_1px_0_rgba(244,71,96,0.15)]",
+    neutral: "border-amber-500/30 bg-amber-900/10 shadow-[inset_0_1px_0_rgba(251,191,36,0.14)]",
+  },
+  halo: {
+    village: "bg-gradient-to-br from-emerald-600/20 to-emerald-900/20 ring-emerald-500/25",
+    wolves: "bg-gradient-to-br from-blood-600/30 to-blood-900/20 ring-blood-500/30",
+    neutral: "bg-gradient-to-br from-amber-600/25 to-amber-900/20 ring-amber-500/30",
+  },
+  fill: {
+    village: "fill-emerald-200",
+    wolves: "fill-blood-300",
+    neutral: "fill-amber-200",
+  },
+  dot: {
+    village: "bg-emerald-500",
+    wolves: "bg-blood-500",
+    neutral: "bg-amber-500",
+  },
+};
+
+function toneFor(role: Role): DeckTone {
+  return ROLE_META[role].team;
 }
 
 function RoleCard({
@@ -150,7 +211,7 @@ function RoleCard({
   onToggle: () => void;
 }) {
   const meta = ROLE_META[role];
-  const wolf = meta.team === "wolves";
+  const tone = toneFor(role);
 
   return (
     <button
@@ -160,29 +221,19 @@ function RoleCard({
       title={meta.description}
       aria-label={`${meta.name}: ${meta.description}`}
       className={`group flex flex-col items-center rounded-xl border px-3 py-3 text-center transition hover:scale-[1.02] active:scale-[0.98]
-        ${
-          enabled
-            ? wolf
-              ? "border-blood-500/40 bg-blood-600/10 shadow-[inset_0_1px_0_rgba(244,71,96,0.15)]"
-              : "border-emerald-500/25 bg-emerald-900/10 shadow-[inset_0_1px_0_rgba(52,211,153,0.12)]"
-            : "border-night-600/50 bg-night-800/30 opacity-45"
-        }
+        ${enabled ? TONE.card[tone] : "border-night-600/50 bg-night-800/30 opacity-45"}
         ${locked ? "cursor-default" : "cursor-pointer hover:border-white/25"}`}
     >
       <span
         className={`grid h-12 w-12 place-items-center rounded-full ring-1 transition-transform group-hover:scale-110 ${
-          enabled
-            ? wolf
-              ? "bg-gradient-to-br from-blood-600/30 to-blood-900/20 ring-blood-500/30"
-              : "bg-gradient-to-br from-emerald-600/20 to-emerald-900/20 ring-emerald-500/25"
-            : "bg-night-800 ring-white/5"
+          enabled ? TONE.halo[tone] : "bg-night-800 ring-white/5"
         }`}
       >
         <svg
           viewBox="0 0 512 512"
           aria-hidden="true"
           className={`h-7 w-7 drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)] ${
-            enabled ? (wolf ? "fill-blood-300" : "fill-emerald-200") : "fill-mist/35"
+            enabled ? TONE.fill[tone] : "fill-mist/35"
           }`}
         >
           <path d={ROLE_ICON_PATHS[role]} />
@@ -191,7 +242,7 @@ function RoleCard({
 
       <span
         className={`mt-1.5 text-xs font-bold uppercase tracking-wide ${
-          enabled ? (wolf ? "text-blood-400" : "text-emerald-300") : "text-mist/65"
+          enabled ? TONE.text[tone] : "text-mist/65"
         }`}
       >
         {meta.name}
@@ -202,7 +253,7 @@ function RoleCard({
       </span>
 
       <span className="mt-1.5 flex items-center gap-1 text-[11px] font-bold">
-        <span className={`h-1.5 w-1.5 rounded-full ${enabled ? (wolf ? "bg-blood-500" : "bg-emerald-500") : "bg-mist/30"}`} aria-hidden="true" />
+        <span className={`h-1.5 w-1.5 rounded-full ${enabled ? TONE.dot[tone] : "bg-mist/30"}`} aria-hidden="true" />
         <span className={enabled ? "text-white" : "text-mist/60"}>
           {count > 0 ? `×${count}` : role === "VILLAGER" ? "lấp chỗ" : "—"}
         </span>

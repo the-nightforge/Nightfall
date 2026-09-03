@@ -11,6 +11,10 @@ import {
   voteLeader,
   type BotClaimIntention,
 } from "./decision/claim-decision";
+import {
+  decideDefenseSpeech,
+  type BotDefenseIntention,
+} from "./decision/defense-decision";
 import { decideGhostWhisper, type BotGhostWhisperIntention } from "./decision/ghost-decision";
 import {
   decideLastLetter,
@@ -379,6 +383,25 @@ export class BotRuntime {
    * `decideChatClaim` đọc tham số này (Sói khai láo chủ động) không áp dụng
    * cho một bị cáo đang bị dồn.
    */
+  /**
+   * Trọn lượt tự bào chữa: nói GÌ, và với thái độ nào.
+   *
+   * Thay cho cặp "`decideDefenseClaim` + một đường lui viết ở scheduler". Đường
+   * lui đó là một quyết định gameplay nằm ngoài lõi, và vì nằm ngoài lõi nên nó
+   * không nhìn thấy vai - kết quả là mọi bị cáo, kể cả Thằng Hề, đều được dựng
+   * thành một người đang cố sống.
+   *
+   * `stance` đi kèm chứ không suy ra được từ `intention`: hai vai có thể cùng
+   * chọn im lặng vì hai lý do trái ngược, và tầng diễn đạt cần biết lý do nào
+   * để viết đúng chỉ thị.
+   */
+  decideDefense(context: BotDecisionContext): BotDefenseIntention {
+    const run = this.beginTracedDecision();
+    const defense = decideDefenseSpeech(context, this.state, run.rng, this.style, this.weights);
+    run.finish(context, "SPEECH", defense.intention.targetId ?? null, defense.intention.kind);
+    return defense;
+  }
+
   decideDefenseClaim(context: BotDecisionContext): BotSpeechIntention | null {
     const run = this.beginTracedDecision();
     const claim = decideChatClaim(context, this.state, run.rng, null, this.weights);

@@ -32,7 +32,7 @@ function defenseRequest(over: Partial<SpeechRequest> = {}): SpeechRequest {
     evidence: [],
     targetName: null,
     recentSpeechSourceIds: [],
-    defense: { votesAgainstMe: 3, alsoAccused: [] },
+    defense: { votesAgainstMe: 3, alsoAccused: [], stance: "SURVIVE" },
     ...over,
   };
 }

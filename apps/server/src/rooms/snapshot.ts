@@ -255,6 +255,10 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
     lastNightDeaths: gameView?.lastNightDeaths ?? [],
     lastEliminated: gameView?.lastEliminated ?? null,
     winner: gameView?.winner ?? null,
+    // Đã lọc theo người xem ở engine (`personalWinsFor`): trước GAME_OVER thì
+    // chỉ còn đúng mục của chính họ. Không có tầng lọc nào ở đây, và cũng không
+    // được có - một tầng thứ hai là một chỗ nữa để hai luật trôi lệch.
+    personalWins: gameView?.personalWins ?? [],
     chatLog: visibleChatLog(room, viewerId),
     log: gameView?.log ?? [],
     dayOfTruthClaims: gameView?.dayOfTruthClaims ?? {},

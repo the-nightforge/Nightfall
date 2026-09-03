@@ -10,10 +10,12 @@ import {
   type HunterShotRecap,
   type HunterShotView,
   type NightRecap,
+  type PersonalWin,
   type PublicVoteChoice,
   type RecapPlayer,
   type Role,
   type RoomConfig,
+  type Team,
   type TrialRecap,
   type TrialView,
   type Winner,
@@ -35,9 +37,12 @@ import {
 export interface SeerResultView {
   targetId: string;
   targetName: string;
+  /** Phe đọc ra được; `neutral` là "Phe trung lập", không kèm vai. */
+  team?: Team;
   isWolf?: boolean;
   secondaryTargetId?: string;
   secondaryTargetName?: string;
+  secondaryTeam?: Team;
   secondaryIsWolf?: boolean;
   unknown?: boolean;
 }
@@ -124,6 +129,8 @@ export interface PlayerGameView {
   pendingLastStandVictim?: { playerId: string; name: string } | null;
   /** Lượt nói của linh hồn, tính riêng cho người xem. Xem RoomSnapshot. */
   deadCanSpeak: { canAct: boolean } | null;
+  /** Thắng lợi cá nhân, đã lọc theo quyền của người xem. Xem `personalWinsFor`. */
+  personalWins: PersonalWin[];
 }
 
 const recapPlayer = (player: EnginePlayer | undefined): RecapPlayer | null =>
@@ -193,6 +200,11 @@ export class GameEngine {
     this.state.deadCanSpeakChosenId ??= null;
     this.state.howlBonusDay ??= null;
     this.state.dayOfTruthClaims ??= {};
+    // State lưu trước khi có vai trung lập không có hai trường dưới. Mặc định
+    // an toàn là "role tắt, chưa ai thắng cá nhân": không ván cũ nào bỗng dưng
+    // mọc thêm một thành tích.
+    this.state.personalWins ??= [];
+    this.state.config.jester ??= false;
     // State lưu trước khi có Kẻ Nguyền Rủa không có hai trường dưới đây. Mặc
     // định an toàn là "role tắt, chưa ai bị nguyền": không ván cũ nào bỗng dưng
     // mọc thêm một người đã đổi phe.
@@ -271,6 +283,9 @@ export class GameEngine {
       deadCanSpeakChosenId: null,
       howlBonusDay: null,
       dayOfTruthClaims: {},
+      // Ván mới, sổ thành tích trắng. Không đọc lại từ đâu cả: một thắng lợi cá
+      // nhân thuộc về ĐÚNG một ván.
+      personalWins: [],
     };
     return new GameEngine(state);
   }
@@ -487,7 +502,7 @@ export class GameEngine {
         if (targetId === playerId) throw new GameError("Không thể soi chính mình");
 
         let secTargetId: string | undefined;
-        let secIsWolf: boolean | undefined;
+        let secTeam: Team | undefined;
 
         if (secondaryTargetId) {
           if (st.activeEvent?.id !== "CLEARING_MIST") {
@@ -497,28 +512,37 @@ export class GameEngine {
           if (!secTarget || !secTarget.alive) throw new GameError("Mục tiêu soi thứ 2 không hợp lệ");
           if (targetId === secondaryTargetId) throw new GameError("Không thể soi cùng 1 người 2 lần");
           secTargetId = secondaryTargetId;
-          secIsWolf = roleTeam(secTarget.role) === "wolves";
+          secTeam = roleTeam(secTarget.role);
         }
 
         const isWolfShadow = st.activeEvent?.id === "WOLF_SHADOW";
         const shouldFlip = isWolfShadow && rng() < 0.3;
-        let isWolf = roleTeam(target.role) === "wolves";
-        if (shouldFlip) isWolf = !isWolf;
-        if (secIsWolf !== undefined && shouldFlip) secIsWolf = !secIsWolf;
+        /*
+         * Kết quả soi là một PHE, và `isWolf` là hệ quả của nó.
+         *
+         * Trước đây chỉ có `isWolf`, và với hai phe thì "không phải Sói" đúng
+         * bằng "phe làng". Với một vai trung lập thì câu đó thành lời nói dối:
+         * Tiên Tri phải đọc ra "Phe trung lập" chứ không phải một lời bảo đảm
+         * rằng người kia đứng về phía làng.
+         *
+         * Bóng Sói lật kết quả thì lật cả hai cho khớp nhau: một mục tiêu bị
+         * lật luôn hiện ra là Sói (hoặc là làng nếu nó vốn là Sói), chứ không
+         * bao giờ là một phe thứ ba mà nó không hề thuộc về.
+         */
+        const flipTeam = (team: Team): Team =>
+          shouldFlip ? (team === "wolves" ? "village" : "wolves") : team;
+        const team = flipTeam(roleTeam(target.role));
+        if (secTeam !== undefined) secTeam = flipTeam(secTeam);
 
-        const seerResult: {
-          targetId: string;
-          isWolf: boolean;
-          secondaryTargetId?: string;
-          secondaryIsWolf?: boolean;
-          unknown?: boolean;
-        } = {
+        const seerResult: GameState["night"]["seerResults"][string] = {
           targetId,
-          isWolf,
+          isWolf: team === "wolves",
+          team,
         };
         if (secTargetId !== undefined) {
           seerResult.secondaryTargetId = secTargetId;
-          seerResult.secondaryIsWolf = secIsWolf;
+          seerResult.secondaryIsWolf = secTeam === "wolves";
+          seerResult.secondaryTeam = secTeam;
         }
 
         st.night.seerResults[playerId] = seerResult;
@@ -916,6 +940,7 @@ export class GameEngine {
           seer,
           target,
           isWolf: result.isWolf,
+          team: result.team,
           secondaryTarget,
           secondaryIsWolf: secondaryTarget ? result.secondaryIsWolf : undefined,
         }];
@@ -1239,6 +1264,22 @@ export class GameEngine {
     if (lynched) {
       accused.alive = false;
       eliminated = { playerId: accused.id, name: accused.name };
+      /*
+       * Thắng lợi của Thằng Hề được ghi NGAY ĐÂY, trước mọi phản ứng chết khác
+       * và trước `checkWin` ở `continueAfterDeathResult`.
+       *
+       * Vị trí là một phần của luật, không phải một chi tiết cài đặt. Ván có
+       * thể kết thúc ngay sau cú treo này (phát bắn của Thợ Săn hạ nốt con Sói
+       * cuối, hoặc chính cú treo đưa bầy Sói tới thế cân bằng), và nếu thành
+       * tích được ghi sau khi kiểm tra kết thúc thì đúng những ván ấy sẽ nuốt
+       * mất nó.
+       *
+       * Chỉ tính CHẾT DO PHÁN QUYẾT TREO CỔ. Bị đề cử, được tha, chết vì Sói,
+       * vì độc, vì Nước thánh hay vì Thợ Săn đều không đi qua nhánh này - và đó
+       * là lý do lời gọi nằm trong `if (lynched)` chứ không ở một chỗ chung
+       * cho mọi cái chết.
+       */
+      this.recordPersonalWinForLynch(accused);
       if (accused.role === "SEER") {
         st.apprenticeAwakened = true;
       }
@@ -1378,12 +1419,87 @@ export class GameEngine {
     return trimmed;
   }
 
+  // ---- Thắng lợi cá nhân ----
+
+  /** Sổ thành tích của ván, luôn là một mảng (state cũ có thể thiếu trường). */
+  personalWins(): PersonalWin[] {
+    return (this.state.personalWins ??= []);
+  }
+
+  /**
+   * Ghi một thắng lợi cá nhân, ĐÚNG MỘT LẦN cho mỗi người.
+   *
+   * Chốt trùng lặp bằng `playerId` chứ không bằng điều kiện: một người chỉ có
+   * một vai, nên hai mục cho cùng một người luôn là cùng một thành tích được
+   * ghi hai lần - đúng thứ xảy ra khi một bước chuyển pha chạy lại sau khôi
+   * phục. Trả về mục vừa ghi, hoặc `null` khi đã có sẵn.
+   */
+  private recordPersonalWin(
+    player: EnginePlayer,
+    condition: PersonalWin["condition"],
+  ): PersonalWin | null {
+    const wins = this.personalWins();
+    if (wins.some((win) => win.playerId === player.id)) return null;
+    const win: PersonalWin = {
+      playerId: player.id,
+      name: player.name,
+      role: player.role,
+      condition,
+      round: this.state.round,
+    };
+    wins.push(win);
+    /*
+     * KHÔNG ghi log ở đây. `state.log` đi thẳng vào snapshot công khai, và luật
+     * của phòng là cái chết không tiết lộ vai cho tới `GAME_OVER` - một dòng
+     * "Thằng Hề đã thắng" ngay lúc treo là lật bài giữa ván. Dòng log được
+     * thêm ở `finishGame`, đúng lúc mọi vai đã công khai.
+     */
+    return win;
+  }
+
+  /**
+   * Người vừa bị treo có đạt điều kiện thắng cá nhân nào không.
+   *
+   * Một `switch` theo vai chứ không phải một cờ "là vai trung lập": vai trung
+   * lập tiếp theo sẽ có luật thắng của riêng nó, và mặc định của bảng này là
+   * KHÔNG ai thắng gì cả khi bị treo.
+   */
+  private recordPersonalWinForLynch(accused: EnginePlayer): void {
+    if (accused.role === "JESTER") {
+      this.recordPersonalWin(accused, "JESTER_LYNCHED");
+    }
+  }
+
+  /**
+   * Sổ thành tích đã lọc cho MỘT người xem.
+   *
+   * Ở `GAME_OVER` mọi vai đã lộ nên danh sách mở hết. Trước đó, người xem chỉ
+   * thấy mục của chính mình: một mục công khai giữa ván sẽ nói cho cả phòng
+   * biết vai của người vừa bị treo, đúng điều mà luật "cái chết không tiết lộ
+   * gì" cấm.
+   */
+  private personalWinsFor(viewerId: string): PersonalWin[] {
+    const wins = this.personalWins();
+    const visible =
+      this.state.phase === "GAME_OVER" ? wins : wins.filter((win) => win.playerId === viewerId);
+    return visible.map((win) => ({ ...win }));
+  }
+
   // ---- Điều kiện thắng ----
 
   checkWin(): Winner {
     const st = this.state;
     if (st.hunterReaction && !st.hunterReaction.resolved) return null;
     const wolvesAlive = this.aliveWolves().length;
+    /*
+     * "Không phải Sói", không phải "phe làng".
+     *
+     * Một vai trung lập còn sống được tính vào đây: bầy Sói chưa nắm được làng
+     * chừng nào còn một người ngoài bầy ngồi đó bỏ phiếu, bất kể người ấy chơi
+     * cho ai. Đối xứng ở vế trên: hết Sói là làng thắng, kể cả khi Thằng Hề
+     * vẫn còn sống - thắng lợi của nó là một sổ riêng, không phải một phe thứ
+     * ba tranh phần thắng chung.
+     */
     const othersAlive = this.alivePlayers().length - wolvesAlive;
     if (wolvesAlive === 0) return "village";
     if (wolvesAlive >= othersAlive) return "wolves";
@@ -1396,6 +1512,14 @@ export class GameEngine {
     // Không đặt hạn chót: ván chỉ về lobby khi chủ phòng bấm reset, không tự động.
     this.state.phaseEndsAt = null;
     this.state.log.push(winner === "wolves" ? "Phe Ma Sói chiến thắng!" : "Phe Dân Làng chiến thắng!");
+    // Thành tích cá nhân được nói ra ĐÚNG LÚC NÀY: `GAME_OVER` là lúc mọi vai
+    // đã công khai, nên dòng log này không lộ thêm gì. Nó cũng là lý do dòng
+    // đó không được viết ngay lúc ghi nhận, xem `recordPersonalWin`.
+    for (const win of this.personalWins()) {
+      this.state.log.push(
+        `${ROLE_META[win.role].name} ${win.name} đã đạt mục tiêu riêng và thắng cá nhân.`,
+      );
+    }
   }
 
   // ---- View ----
@@ -1529,11 +1653,22 @@ export class GameEngine {
       seerResult = {
         targetId: seerResultEntry.targetId,
         targetName: this.player(seerResultEntry.targetId)?.name ?? "?",
+        // Kết quả lưu trước bản này không có `team`; rơi về đúng thứ nó có.
+        // `isWolf === false` ở một bản ghi cũ vẫn nghĩa là "phe làng", vì lúc
+        // đó chưa có vai nào ngoài hai phe.
+        team: seerResultEntry.unknown
+          ? undefined
+          : seerResultEntry.team ?? (seerResultEntry.isWolf ? "wolves" : "village"),
         isWolf: seerResultEntry.unknown ? undefined : seerResultEntry.isWolf,
         secondaryTargetId: seerResultEntry.secondaryTargetId,
         secondaryTargetName: seerResultEntry.secondaryTargetId
           ? this.player(seerResultEntry.secondaryTargetId)?.name ?? "?"
           : undefined,
+        secondaryTeam:
+          seerResultEntry.unknown || seerResultEntry.secondaryTargetId === undefined
+            ? undefined
+            : seerResultEntry.secondaryTeam ??
+              (seerResultEntry.secondaryIsWolf ? "wolves" : "village"),
         secondaryIsWolf: seerResultEntry.unknown ? undefined : seerResultEntry.secondaryIsWolf,
         unknown: seerResultEntry.unknown,
       };
@@ -1658,6 +1793,7 @@ export class GameEngine {
         ? { playerId: st.pendingLastStandVictim.playerId, name: this.player(st.pendingLastStandVictim.playerId)?.name ?? "?" }
         : null,
       deadCanSpeak: this.deadCanSpeakViewFor(viewerId),
+      personalWins: this.personalWinsFor(viewerId),
     };
   }
 
@@ -1697,6 +1833,9 @@ export class GameEngine {
           targetId: seerResultEntry.targetId,
           targetName: this.player(seerResultEntry.targetId)?.name ?? "?",
           isWolf: seerResultEntry.isWolf,
+          // Cùng đường rơi về như `snapshotFor`: lõi BOT không được thấy nhiều
+          // hơn người chơi thật, và cũng không được thấy ít hơn.
+          team: seerResultEntry.team ?? (seerResultEntry.isWolf ? "wolves" : "village"),
         }
       : null;
 

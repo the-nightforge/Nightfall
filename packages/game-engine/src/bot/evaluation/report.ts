@@ -1,6 +1,13 @@
 import type { Team } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
-import { collectMetrics, type Ratio, type RoleMetrics, type SelfPlayMetrics, type TeamMetrics } from "./metrics";
+import {
+  collectMetrics,
+  type Ratio,
+  type RoleMetrics,
+  type SelfPlayMetrics,
+  type SelfPlayMetricsBundle,
+  type TeamMetrics,
+} from "./metrics";
 import type { InvariantViolation } from "./invariants";
 import { replayCommand, runSelfPlay, type SelfPlayGame, type SelfPlayInput } from "./selfplay";
 
@@ -46,7 +53,7 @@ export interface SelfPlayReport {
     room: SelfPlayGame["record"]["config"];
   };
   metrics: SelfPlayMetrics;
-  metricsByTeam: Record<Team, TeamMetrics>;
+  metricsByTeam: SelfPlayMetricsBundle["byTeam"];
   metricsByRole: RoleMetrics[];
   violations: InvariantViolation[];
   failedSeeds: Array<{ seed: string; reason: string; replay: string }>;

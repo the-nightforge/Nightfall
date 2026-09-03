@@ -34,6 +34,9 @@ export const ACCENT_HEX: Record<VillageAccent, number> = {
   witch: 0x3fbf7a,
   hunter: 0xd08a3a,
   villager: 0x6b7a94,
+  // Hổ phách, đứng riêng khỏi cả sắc đỏ của Sói lẫn sắc xám-lam của làng - đúng
+  // sắc mà bộ bài, thẻ vai và màn kết thúc đang dùng cho phe trung lập.
+  jester: 0xd9a521,
 };
 
 /** Sắc chủ đạo của từng hiệu ứng. Bản 2D dùng đúng bảng này cho viền thẻ. */

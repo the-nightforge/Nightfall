@@ -31,6 +31,16 @@ export const VILLAGE_ROLES: Role[] = [
 
 export const WOLF_SPECIAL_ROLES: Role[] = ["WOLF_CUB"];
 
+/**
+ * Vai TRUNG LẬP, bày thành nhóm thứ ba trong bộ bài.
+ *
+ * Không gộp vào `VILLAGE_ROLES` dù chúng cùng "không phải Sói": bộ bài là chỗ
+ * host đọc để hiểu ván sắp tới, và xếp Thằng Hề dưới nhãn "Phe Dân Làng" là nói
+ * dối ngay ở màn hình quyết định. `deckCounts` vẫn cộng chúng vào `specials` vì
+ * chúng chiếm ghế y hệt - hai câu hỏi khác nhau, hai chỗ khác nhau.
+ */
+export const NEUTRAL_ROLES: Role[] = ["JESTER"];
+
 /** Khoá cấu hình tương ứng với từng vai bật/tắt được. */
 export const CONFIG_KEY: Record<string, keyof RoomConfig> = {
   SEER: "seer",
@@ -44,6 +54,7 @@ export const CONFIG_KEY: Record<string, keyof RoomConfig> = {
   MAYOR: "mayor",
   CURSED: "cursed",
   WOLF_CUB: "wolfCub",
+  JESTER: "jester",
 };
 
 export interface DeckCounts {
@@ -59,7 +70,12 @@ export interface DeckCounts {
  * bản xem trước, không phải một luật chia bài thứ hai.
  */
 export function deckCounts(config: RoomConfig, playerCount: number): DeckCounts {
-  const specials = VILLAGE_ROLES.filter((role) => config[CONFIG_KEY[role]]).length;
+  // Vai trung lập được cộng vào `specials` vì chúng chiếm ghế đúng như mọi vai
+  // đặc biệt khác - `villagers` là phần CÒN LẠI, và bỏ sót chúng ở đây sẽ đếm
+  // thừa một Dân Làng không tồn tại.
+  const specials = [...VILLAGE_ROLES, ...NEUTRAL_ROLES].filter(
+    (role) => config[CONFIG_KEY[role]],
+  ).length;
   const wolves = config.werewolves + WOLF_SPECIAL_ROLES.filter((r) => config[CONFIG_KEY[r]]).length;
   return { wolves, specials, villagers: Math.max(0, playerCount - wolves - specials) };
 }

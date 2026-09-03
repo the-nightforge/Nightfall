@@ -8,7 +8,9 @@ import {
   momentLabel,
   roundsLabel,
   ROLE_META,
+  TEAM_LABELS,
   type CaseHighlight,
+  type PersonalWin,
   type PlayerView,
   type RoomSnapshot,
   type Team,
@@ -19,6 +21,7 @@ import { roleLabel } from "@/lib/cursed";
 import {
   decisiveHighlight,
   personalOutcome,
+  personalWinLabel,
   winnerCopy,
   type PersonalOutcome,
 } from "@/lib/game-over-summary";
@@ -120,7 +123,18 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
     snapshot.players.filter((p) => p.role && ROLE_META[p.role].team === team);
   const wolves = byTeam("wolves");
   const village = byTeam("village");
+  const neutrals = byTeam("neutral");
   const winners = wolvesWin ? wolves : village;
+
+  /*
+   * Thắng lợi cá nhân của CẢ PHÒNG. Ở `GAME_OVER` engine mở hết sổ này, nên
+   * đây là chỗ duy nhất trong ván nó được nói ra công khai.
+   *
+   * Đứng RIÊNG với "Người thắng cuộc" ngay dưới: hai câu trả lời cho hai câu
+   * hỏi khác nhau, và gộp một Thằng Hề vào hàng avatar của phe thắng sẽ nói
+   * rằng nó chơi cho phe đó - đúng điều nó không làm.
+   */
+  const personalWins: PersonalWin[] = snapshot.personalWins ?? [];
 
   /*
    * Hồ sơ vụ án. `buildCaseFile` tự gác pha và trả null nếu ván chưa thật sự
@@ -210,6 +224,25 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
             ))}
           </div>
         </div>
+
+        {personalWins.length > 0 && (
+          <div className="mt-4 border-t border-white/[0.08] pt-4">
+            <p className="text-center text-xs font-semibold uppercase tracking-[0.25em] text-amber-300/90">
+              Thắng cá nhân
+            </p>
+            <ul className="mt-2 space-y-1.5">
+              {personalWins.map((win) => (
+                <li
+                  key={win.playerId}
+                  className="rounded-lg border border-amber-500/35 bg-amber-900/15 px-3 py-2 text-center text-sm text-amber-100"
+                >
+                  <span className="font-semibold text-white">{win.name}</span>{" "}
+                  <span className="text-amber-200/90">— {personalWinLabel(win)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </m.div>
 
       {/*
@@ -270,19 +303,37 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
           */}
         <div className="flex flex-wrap items-start gap-3">
           <TeamPanel
-            title="Phe Ma Sói"
+            title={`Phe ${TEAM_LABELS.wolves}`}
             players={wolves}
             avatars={avatars}
             won={wolvesWin}
             accent="wolves"
           />
           <TeamPanel
-            title="Phe Dân Làng"
+            title={`Phe ${TEAM_LABELS.village}`}
             players={village}
             avatars={avatars}
             won={!wolvesWin}
             accent="village"
           />
+          {/*
+            * Bảng thứ ba chỉ hiện khi ván CÓ vai trung lập. Luôn hiện thì mọi
+            * ván thường sẽ có một panel rỗng, và luôn ẩn thì Thằng Hề biến mất
+            * khỏi màn lật bài - hai cách hỏng đối xứng nhau.
+            *
+            * `won={false}` là đúng: cột này không bao giờ là "phe chiến thắng".
+            * Thắng lợi của người trong đó đã được nói ở khối "Thắng cá nhân"
+            * phía trên, và đó là chỗ duy nhất nói được nó cho đúng.
+            */}
+          {neutrals.length > 0 && (
+            <TeamPanel
+              title={`Phe ${TEAM_LABELS.neutral}`}
+              players={neutrals}
+              avatars={avatars}
+              won={false}
+              accent="neutral"
+            />
+          )}
         </div>
       </section>
 
@@ -370,6 +421,19 @@ function YourResult({ outcome }: { outcome: PersonalOutcome }) {
           </div>
         </dl>
       </div>
+
+      {/*
+        * Dòng RIÊNG, không nhét vào `verdict`.
+        *
+        * "Bạn thắng" ở trên đúng, nhưng nó không nói được bằng cách nào - và
+        * với một thắng lợi cá nhân thì "bằng cách nào" mới là toàn bộ nội dung:
+        * phe thắng chung có thể là một phe mà người này không hề thuộc về.
+        */}
+      {outcome.personalWin && (
+        <p className="mt-2.5 rounded-lg border border-amber-500/35 bg-amber-900/15 px-3 py-2 text-center text-[13px] font-semibold text-amber-200">
+          {personalWinLabel(outcome.personalWin)}
+        </p>
+      )}
     </div>
   );
 }
@@ -479,6 +543,18 @@ function PostMatchActions({
  * một danh sách phẳng theo thứ tự ghế - đọc danh sách phẳng phải tự dò từng dòng
  * mới trả lời được đúng câu đó.
  */
+/**
+ * Màu tiêu đề và viền của một bảng vai theo phe.
+ *
+ * Bảng tra thay cho `wolfSide ? ... : ...`: với hai phe thì biểu thức đó còn
+ * đúng, nhưng phe thứ ba sẽ lặng lẽ mượn màu của phe Dân Làng ở mọi chỗ dùng.
+ */
+const PANEL_ACCENT: Record<Team, { border: string; title: string }> = {
+  wolves: { border: "border-blood-500/50", title: "text-blood-400" },
+  village: { border: "border-emerald-500/40", title: "text-emerald-300" },
+  neutral: { border: "border-amber-500/40", title: "text-amber-300" },
+};
+
 function TeamPanel({
   title,
   players,
@@ -490,21 +566,14 @@ function TeamPanel({
   players: PlayerView[];
   avatars: Record<string, AvatarId>;
   won: boolean;
-  accent: "wolves" | "village";
+  accent: Team;
 }) {
-  const wolfSide = accent === "wolves";
   return (
     <section
-      className={`card min-w-[17rem] flex-1 ${
-        won ? (wolfSide ? "border-blood-500/50" : "border-emerald-500/40") : ""
-      }`}
+      className={`card min-w-[17rem] flex-1 ${won ? PANEL_ACCENT[accent].border : ""}`}
     >
       <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h3
-          className={`font-display text-lg font-bold ${
-            wolfSide ? "text-blood-400" : "text-emerald-300"
-          }`}
-        >
+        <h3 className={`font-display text-lg font-bold ${PANEL_ACCENT[accent].title}`}>
           {title}
           {/* Chữ, không phải viền sáng: một cái viền thắng cuộc thì trình đọc
             * màn hình lẫn ảnh chụp đen trắng đều không thấy. */}
@@ -544,11 +613,7 @@ function TeamPanel({
               >
                 {player.name}
               </span>
-              <span
-                className={`block truncate text-[13px] ${
-                  wolfSide ? "text-blood-400" : "text-emerald-300"
-                }`}
-              >
+              <span className={`block truncate text-[13px] ${PANEL_ACCENT[accent].title}`}>
                 {roleLabel(player)}
               </span>
             </span>
