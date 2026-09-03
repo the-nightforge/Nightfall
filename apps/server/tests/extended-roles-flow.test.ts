@@ -149,13 +149,15 @@ describe("Extended Roles and Events Server Flow Integration", () => {
     expect(gaSnapBefore.night?.guardianAngelCharges).toBe(2);
 
     engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v1");
-    const gaSnapAfter = buildSnapshot(room, "ga");
-    expect(gaSnapAfter.night?.guardianAngelCharges).toBe(1);
+    // Charge chỉ mất khi đêm khép lại, nên tới lúc này vẫn còn nguyên hai: đêm
+    // còn mở thì người chơi còn được đổi mục tiêu.
+    expect(buildSnapshot(room, "ga").night?.guardianAngelCharges).toBe(2);
 
     engine.submitNightAction("w1", "KILL", "v1");
     engine.resolveNight();
 
     expect(engine.player("v1")?.alive).toBe(true);
+    expect(engine.state.guardianAngelCharges["ga"]).toBe(1);
   });
 
   it("handles Priest holy water success vs failure", () => {
@@ -169,12 +171,13 @@ describe("Extended Roles and Events Server Flow Integration", () => {
 
     // Priest sprays Wolf
     engine.submitNightAction("priest", "HOLY_WATER", "w1");
-    const snap = buildSnapshot(room, "priest");
-    expect(snap.night?.priestHolyWaterUsed).toBe(true);
+    // Bình cũng vậy: đánh dấu đã dùng lúc khép đêm, không phải lúc bấm.
+    expect(buildSnapshot(room, "priest").night?.priestHolyWaterUsed).toBe(false);
 
     const deaths = engine.resolveNight();
     expect(deaths.map((d) => d.playerId)).toContain("w1");
     expect(engine.player("priest")?.alive).toBe(true);
+    expect(engine.state.priestHolyWaterUsed["priest"]).toBe(true);
   });
 
   it("handles Wolf Cub rage triggering double bite next night", () => {
