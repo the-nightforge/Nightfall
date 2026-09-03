@@ -326,7 +326,7 @@ describe("bot runtime observation pipeline", () => {
     const runtime = observingRuntime();
     const ctx = context({ legal: ["b", "c"], round: 2 });
     ctx.knowledge.lastNightDeaths = [{ playerId: "d", name: "D" }];
-    ctx.knowledge.seerResult = { targetId: "b", targetName: "B", isWolf: true };
+    ctx.knowledge.seerResult = { targetId: "b", targetName: "B", isWolf: true, team: "wolves" };
 
     runtime.observe(ctx);
 

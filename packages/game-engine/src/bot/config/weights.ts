@@ -87,7 +87,63 @@ export interface MemoryImportanceWeights {
 export interface PrivateInfoWeights {
   seerWolf: number;
   seerClear: number;
+  /**
+   * Soi ra một mục tiêu thuộc phe TRUNG LẬP.
+   *
+   * Nhẹ hơn `seerClear` một cách có chủ đích, và không phải vì kết quả kém chắc
+   * chắn - nó chắc chắn y hệt. Nó nói ÍT hơn: "không phải Sói" chứ không phải
+   * "người của làng". Ghim tin tưởng lên trần cho một kẻ trung lập là đem uy
+   * tín của Tiên Tri ra bảo lãnh cho một người không chơi cho làng.
+   */
+  neutralClear: number;
+  /**
+   * Điểm tin tưởng mà một kết quả soi TRUNG LẬP ghim vào.
+   *
+   * Phải là một giá trị TUYỆT ĐỐI chứ không phải một mức cộng thêm, và đó là
+   * điều kiện để nó idempotent: `observe()` chạy nhiều lần mỗi vòng, nên một
+   * số hạng cộng dồn sẽ khiến niềm tin phụ thuộc vào việc scheduler gọi mấy
+   * lần - một biến số không liên quan gì tới ván đấu, và đủ để phá tính tái lập
+   * theo seed. Hai kết quả soi kia đã ghim ở `MAX_BELIEF_SCORE` vì đúng lý do
+   * đó; nhánh trung lập cần một mốc riêng chỉ vì nó KHÔNG được lên tới trần.
+   *
+   * 30 trên thang 100: đủ để BOT thôi nghi và không phí một ngày treo nhầm,
+   * không đủ để nó đứng ra bảo lãnh cho một kẻ không chơi cho làng.
+   */
+  neutralClearTrust: number;
   knownAlly: number;
+}
+
+/**
+ * Hành vi của BOT Thằng Hề.
+ *
+ * Tách thành nhóm riêng chứ không nhét vào `deceptionRisk`: nhóm kia mô tả
+ * NGUY CƠ BỊ LỘ của một con Sói đang giấu mình, còn nhóm này mô tả một mục tiêu
+ * ngược hẳn - cố tình bị lộ. Trộn chúng lại sẽ khiến việc hiệu chỉnh phe Sói
+ * lặng lẽ kéo theo hành vi của Hề.
+ */
+export interface JesterWeights {
+  /**
+   * Nhân với `trust` của mục tiêu.
+   *
+   * Đây là lõi chiến thuật: chỉ vào đúng người mà cả làng đang tin nhất là
+   * cách nhanh nhất để bị đọc thành Sói - tức là được đưa lên giá treo, đúng
+   * thứ Hề đi tìm.
+   */
+  contrarianTrustBonus: number;
+  /**
+   * Trừ thẳng vào người đang dẫn phiếu.
+   *
+   * Hùa theo đám đông là hành vi an toàn nhất trên bàn, và an toàn là điều tệ
+   * nhất với Hề: một ngày kết thúc bằng việc treo người khác là một ngày Hề
+   * mất trắng.
+   */
+  bandwagonPenalty: number;
+  /** Nhân với `suspicion`: tránh chỉ vào người cả làng đã nghi sẵn. */
+  crowdSuspicionDamping: number;
+  /** Xác suất Hề dám tung một lời khai láo, trước khi nhân tính cách. */
+  bluffChance: number;
+  /** Vòng sớm nhất Hề khai láo chủ động. */
+  bluffFromRound: number;
 }
 
 export interface SuspicionWeights {
@@ -413,6 +469,7 @@ export interface BotWeights {
   readonly limits: MemoryLimits;
   readonly conversation: ConversationWeights;
   readonly claim: ClaimWeights;
+  readonly jester: JesterWeights;
 }
 
 /** Cho phép ghi đè từng nhánh mà không phải khai lại cả cây. */
@@ -470,6 +527,8 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   // hoá. Một giá trị 1.5 ở đây không ném ở đâu cả, nó chỉ lặng lẽ làm sai.
   ["claim", "underFireFactor"],
   ["claim", "wolfBluffChance"],
+  // Cùng lý do: so THẲNG với `rng()` trong `decideChatClaim`.
+  ["jester", "bluffChance"],
 ];
 
 /** Nhóm mà mọi kiểm tra sâu bên dưới giả định là có mặt. */
@@ -493,6 +552,7 @@ const REQUIRED_GROUPS: ReadonlyArray<keyof BotWeights> = [
   "limits",
   "conversation",
   "claim",
+  "jester",
 ];
 
 function isFiniteNumber(value: unknown): value is number {
@@ -645,7 +705,13 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     directQuestion: 3,
   }),
 
-  privateInfo: Object.freeze({ seerWolf: 400, seerClear: -120, knownAlly: -80 }),
+  privateInfo: Object.freeze({
+    seerWolf: 400,
+    seerClear: -120,
+    neutralClear: -40,
+    neutralClearTrust: 30,
+    knownAlly: -80,
+  }),
 
   suspicion: Object.freeze({
     evidenceConfidenceBonus: 8,
@@ -810,6 +876,22 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     voteInconsistencyPenalty: 0,
     wolfBluffChance: 0,
     wolfBluffFromRound: 0,
+  }),
+
+  /**
+   * TẮT toàn bộ ở v1, cùng lý do và cùng cách với nhóm `claim` ngay trên.
+   *
+   * v1-v6 là những mốc so sánh đã đo xong, và Thằng Hề chưa tồn tại khi chúng
+   * được đo. Để nhóm này bằng 0 nghĩa là một con BOT Hề chạy dưới các cấu hình
+   * đó chơi thụ động và KHÔNG rút một số ngẫu nhiên nào - tức mọi test tái lập
+   * khoá theo v1/v2/v3 vẫn đúng từng bit. Bản bật thật là v7.
+   */
+  jester: Object.freeze({
+    contrarianTrustBonus: 0,
+    bandwagonPenalty: 0,
+    crowdSuspicionDamping: 0,
+    bluffChance: 0,
+    bluffFromRound: 0,
   }),
 }) as BotWeights;
 
@@ -1146,6 +1228,80 @@ export const BOT_WEIGHTS_V6: BotWeights = Object.freeze({
 });
 
 /**
+ * v7 — Thằng Hề, vai TRUNG LẬP đầu tiên.
+ *
+ * Nhóm `jester` là nhóm DUY NHẤT đổi, và nó chỉ có tác dụng khi trên bàn thật
+ * sự có một Thằng Hề. Không preset nào chứa vai này, nên mọi số liệu self-play
+ * của v1-v6 vẫn so sánh được trực tiếp với v7.
+ *
+ * Các con số dưới đây đặt theo THANG đã biết (p90 ≈ 1.8, p99 ≈ 8.6 của
+ * suspicion thật) và theo quan hệ với các ngưỡng đã đo, chứ KHÔNG qua một batch
+ * quét tham số như v2/v5/v6. Cần nói thẳng điều đó ra để người hiệu chỉnh sau
+ * biết chỗ nào còn dư địa.
+ *
+ * Thứ đã đo được (150 ván × bộ bài 9 người có Thợ Săn, một Thằng Hề mỗi ván):
+ *
+ * | | có Hề | không Hề |
+ * | --- | --- | --- |
+ * | Làng thắng | 48.0% | 51.3% |
+ * | Hề bị TREO | 36.0% (54/150) | - |
+ * | Hề chết vì nguyên nhân khác | 43.3% | - |
+ * | Hề sống tới cuối (tức là thua) | 20.7% | - |
+ * | Vi phạm bất biến | 0 | 0 |
+ *
+ * Hai điều bảng này nói. Thứ nhất, chiến thuật CHẠY: hơn một phần ba số ván
+ * kết thúc bằng đúng cái giá treo mà Hề đi tìm, và mọi lần nó ra toà đều thành
+ * bản án - nó không tự bào chữa. Thứ hai, nó KHÔNG lật cán cân: chênh lệch
+ * 3.3% cho phe làng khớp với đúng thứ nó lấy đi trên bảng cân bằng, một ghế
+ * Dân Làng.
+ */
+export const BOT_WEIGHTS_V7: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V6,
+  version: "7.0.0",
+
+  jester: Object.freeze({
+    /**
+     * 2.0 nhân với `trust`, trên thang belief THẬT (p90 ≈ 1.8).
+     *
+     * Đủ để lật thứ tự: nó át hẳn `trust.damping` (0.2) - số hạng duy nhất
+     * khác trong `selectVote` có đọc `trust` - nên người được làng tin nhất
+     * leo lên đầu bảng của Hề thay vì bị đẩy xuống. Không đặt cao hơn: mục
+     * tiêu là một cáo buộc TRÔNG NHƯ suy luận tồi, không phải một hằng số nuốt
+     * chửng mọi bằng chứng khác và biến Hề thành một cái máy bấm cùng một tên
+     * suốt ván.
+     */
+    contrarianTrustBonus: 2,
+    /**
+     * 8 - trên p99 của thang suspicion (8.6) đúng một chút.
+     *
+     * Nó phải đủ nặng để thắng cả một nghi ngờ đã có bằng chứng: hùa theo đám
+     * đông là nước đi duy nhất mà Hề tuyệt đối không được làm, vì một ngày kết
+     * thúc bằng việc treo người khác là một ngày Hề mất trắng.
+     */
+    bandwagonPenalty: 8,
+    /** Nhẹ, chỉ để phá hoà: người cả làng đã nghi thì Hề không cần chỉ thêm. */
+    crowdSuspicionDamping: 1,
+    /**
+     * 0.5 trước khi nhân `deceptionSkill` × `riskTolerance`, tức cao hơn hẳn
+     * `claim.wolfBluffChance` (0.35).
+     *
+     * Một con Sói khai láo là đang ĐÁNH CƯỢC: khai hớ thì chết. Hề thì ngược
+     * hẳn - bị bắt bài chính là thắng, nên nó không có gì để mất khi mở miệng,
+     * và một con Hề im lặng là một con Hề chắc chắn thua.
+     */
+    bluffChance: 0.5,
+    /**
+     * Vòng 1, sớm hơn Sói (vòng 2) đúng một vòng.
+     *
+     * Hề chỉ có chừng ấy ngày để bị treo, và mỗi đêm trôi qua là một cơ hội
+     * nữa để nó chết vì một nhát cắn - cái chết KHÔNG tính cho nó. Đợi tới
+     * vòng 2 là tự bỏ một phần ba số ngày của mình.
+     */
+    bluffFromRound: 1,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
@@ -1154,9 +1310,8 @@ export const BOT_WEIGHTS_V6: BotWeights = Object.freeze({
  * truyền `weights` (bao gồm `session-registry.ts`, chỗ ván thật dựng runtime)
  * lập tức chạy bản mới mà không phải sửa. v5.0.0 và v6.0.0 đưa ngưỡng của ba
  * vai có quyền năng dùng-một-lần (Phù Thuỷ, Thợ Săn, Linh Mục) về thang belief
- * thật: để chúng nằm ngoài mặc định là để ba vai đó dựng xong mà cả ván thật
- * không bao giờ dùng tới bình hay phát bắn. v1-v4 không bị ảnh hưởng - test
+ * thật; v7.0.0 bật hành vi của Thằng Hề. v1-v4 không bị ảnh hưởng - test
  * tái lập của chúng luôn truyền preset đích danh, không bao giờ dựa vào hằng
  * số này.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V6;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V7;

@@ -972,6 +972,7 @@ describe("Lịch sử diễn biến ban đêm", () => {
           seer: { id: seer.id, name: seer.name },
           target: { id: wolf.id, name: wolf.name },
           isWolf: true,
+          team: "wolves",
         }],
         witch: {
           usedHeal: true,

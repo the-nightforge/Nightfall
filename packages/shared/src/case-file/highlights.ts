@@ -31,6 +31,10 @@ export interface CaseCandidate extends CaseHighlight {
  */
 export const IMPORTANCE: Record<CaseHighlightType, number> = {
   INNOCENT_LYNCHED: 92,
+  // Ngay dưới án oan và trên "tóm đúng Sói": một ván có Thằng Hề bị treo thì
+  // đó chính là chuyện đáng kể nhất của ván, vì nó vừa quyết định thắng lợi cá
+  // nhân vừa nói cho làng biết họ đã tiêu cả một ngày vào đâu.
+  NEUTRAL_LYNCHED: 90,
   WOLF_LYNCHED: 88,
   HUNTER_MISFIRE: 86,
   HUNTER_REVENGE: 84,
@@ -58,14 +62,18 @@ const LATE_WINDOW_FRACTION = 0.75;
 const phaseRank = (phase: "night" | "day") => (phase === "night" ? 0 : 1);
 
 /**
- * Vai của một người phe làng, kèm vế "phe Dân Làng" khi cần.
+ * Vai của một người KHÔNG thuộc phe Sói, kèm vế tên phe khi cần.
  *
  * Với chính vai Dân Làng thì tên vai ĐÃ là tên phe, nên thêm vế kia thành
  * "Dân Làng, phe Dân Làng" - nói hai lần cùng một điều.
+ *
+ * Nhận cả vai trung lập: câu "một phát đạn lạc" đúng với mọi mục tiêu không
+ * phải Sói, và gọi Thằng Hề là "phe Dân Làng" thì sai hẳn sự thật của ván.
  */
-function villageRoleClause(player: CaseFilePlayer): string {
+function nonWolfRoleClause(player: CaseFilePlayer): string {
   const label = roleLabelOf(player);
-  return label === "Dân Làng" ? label : `${label}, phe Dân Làng`;
+  if (label === "Dân Làng") return label;
+  return `${label}, phe ${teamLabel(player.team)}`;
 }
 
 /**
@@ -150,28 +158,43 @@ function trialHighlights(data: CaseData): CaseCandidate[] {
     const tally = { guilty: judgment.guilty, innocent: judgment.innocent, abstain: judgment.abstain };
 
     if (judgment.lynched) {
-      out.push(
+      /*
+       * BA nhánh, không hai. Trước khi có vai trung lập, "không phải phe làng"
+       * đồng nghĩa với "là Sói" nên nhánh else nói thẳng "Làng tóm đúng Sói".
+       * Câu đó bây giờ sẽ gọi Thằng Hề là một con Sói bị tóm - vừa sai vừa che
+       * mất đúng khoảnh khắc quyết định của ván có Hề.
+       */
+      const lynchType =
         accused.team === "village"
-          ? candidate(
-              "INNOCENT_LYNCHED",
-              day.round,
-              "day",
-              key,
-              "Án oan giữa ban ngày",
-              `Làng treo cổ ${name} với ${verdictTally(judgment.guilty, judgment.innocent)}. ${name} là ${villageRoleClause(accused)}.`,
-              [accusedId],
-              { kind: "lynch", accusedId, ...tally },
-            )
-          : candidate(
-              "WOLF_LYNCHED",
-              day.round,
-              "day",
-              key,
-              "Làng tóm đúng Sói",
-              `${name} bị treo cổ với ${verdictTally(judgment.guilty, judgment.innocent)}. Đúng là ${roleLabelOf(accused)}.`,
-              [accusedId],
-              { kind: "lynch", accusedId, ...tally },
-            ),
+          ? "INNOCENT_LYNCHED"
+          : accused.team === "wolves"
+            ? "WOLF_LYNCHED"
+            : "NEUTRAL_LYNCHED";
+      const lynchCopy = {
+        INNOCENT_LYNCHED: {
+          title: "Án oan giữa ban ngày",
+          description: `Làng treo cổ ${name} với ${verdictTally(judgment.guilty, judgment.innocent)}. ${name} là ${nonWolfRoleClause(accused)}.`,
+        },
+        WOLF_LYNCHED: {
+          title: "Làng tóm đúng Sói",
+          description: `${name} bị treo cổ với ${verdictTally(judgment.guilty, judgment.innocent)}. Đúng là ${roleLabelOf(accused)}.`,
+        },
+        NEUTRAL_LYNCHED: {
+          title: "Kẻ trung lập toại nguyện",
+          description: `Làng treo cổ ${name} với ${verdictTally(judgment.guilty, judgment.innocent)}. ${name} là ${roleLabelOf(accused)} - đó đúng là thứ họ đi tìm.`,
+        },
+      }[lynchType];
+      out.push(
+        candidate(
+          lynchType,
+          day.round,
+          "day",
+          key,
+          lynchCopy.title,
+          lynchCopy.description,
+          [accusedId],
+          { kind: "lynch", accusedId, ...tally },
+        ),
       );
       continue;
     }
@@ -270,14 +293,16 @@ function hunterHighlights(data: CaseData): CaseCandidate[] {
     const participants = [shot.hunter.id, shot.target.id];
 
     out.push(
-      target.team === "village"
+      // Không phải Sói là một phát đạn lạc, kể cả khi nạn nhân là vai trung
+      // lập: làng không thu được gì từ nó.
+      target.team !== "wolves"
         ? candidate(
             "HUNTER_MISFIRE",
             shot.round,
             phase,
             key,
             "Phát đạn lạc",
-            `Thợ Săn ${shot.hunter.name} ngã xuống và bắn theo ${shot.target.name} — ${villageRoleClause(target)}.`,
+            `Thợ Săn ${shot.hunter.name} ngã xuống và bắn theo ${shot.target.name} — ${nonWolfRoleClause(target)}.`,
             participants,
             evidence,
           )

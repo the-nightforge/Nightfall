@@ -177,7 +177,12 @@ describe("bot knowledge security boundary", () => {
   it("exposes only the viewer seer result", () => {
     const view = seerFixture().botKnowledgeFor("dead-seer");
 
-    expect(view.seerResult).toEqual({ targetId: "wolf-a", targetName: "Sói A", isWolf: true });
+    expect(view.seerResult).toEqual({
+      targetId: "wolf-a",
+      targetName: "Sói A",
+      isWolf: true,
+      team: "wolves",
+    });
     expect(seerFixture().botKnowledgeFor("villager").seerResult).toBeNull();
   });
 

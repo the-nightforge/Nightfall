@@ -51,7 +51,7 @@ function defenseRequest(over: Partial<SpeechRequest> = {}): SpeechRequest {
       tone: "FIRM",
     },
     targetName: null,
-    defense: { votesAgainstMe: 3, alsoAccused: ["Sang"] },
+    defense: { votesAgainstMe: 3, alsoAccused: ["Sang"], stance: "SURVIVE" },
     ...over,
   });
 }

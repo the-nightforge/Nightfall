@@ -73,12 +73,25 @@ export async function writeGameResultOnce(room: Room): Promise<void> {
         // chỉ ghi được chứ không tra ngược được - đó là lý do nó nằm im từ đầu.
         // `playerRoles` là cột Json nên thêm trường không cần migration; ván cũ
         // thiếu `id` đơn giản là không khớp truy vấn nào.
-        playerRoles: state.players.map((p) => ({
-          id: p.id,
-          name: p.name,
-          role: p.role,
-          alive: p.alive,
-        })),
+        /*
+         * `personalWin` đi CHUNG vào cột Json này thay vì một cột riêng, và đó
+         * là lý do nó không cần migration - đúng cách `id` đã được thêm vào
+         * trước đây. Ván cũ không có trường này đọc lên thành `undefined`, tức
+         * "không có thắng lợi cá nhân nào", đúng sự thật của chúng.
+         *
+         * Không mang `playerId`/`name`/`role`: ba trường đó đã nằm ngay trên
+         * cùng object, và một bản sao thứ hai là một chỗ để chúng lệch nhau.
+         */
+        playerRoles: state.players.map((p) => {
+          const win = (state.personalWins ?? []).find((item) => item.playerId === p.id);
+          return {
+            id: p.id,
+            name: p.name,
+            role: p.role,
+            alive: p.alive,
+            ...(win ? { personalWin: { condition: win.condition, round: win.round } } : {}),
+          };
+        }),
         // `startedAt`, KHÔNG phải `createdAt`: xem chú thích của trường đó
         // trong `rooms/store.ts`. Rơi về `createdAt` cho phòng đọc lên từ ảnh
         // chụp ghi trước khi có trường này - một con số hơi rộng vẫn tốt hơn NaN.

@@ -2,7 +2,7 @@
 
 # 🐺 Ma Sói Online
 
-**A real-time multiplayer Werewolf (Mafia) game — 13 roles, 15 dynamic events, voice chat, and AI bots that actually reason.**
+**A real-time multiplayer Werewolf (Mafia) game — 14 roles, 15 dynamic events, voice chat, and AI bots that actually reason.**
 
 [![CI](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-3429%20passing-brightgreen)](#testing)
@@ -51,7 +51,7 @@ The interesting parts are not the CRUD. They are:
 
 |  | Feature |
 |---|---|
-| 🎭 | **13 roles** across two teams, with a role registry designed for adding more |
+| 🎭 | **14 roles** across three teams — village, wolves, and a neutral who wins alone |
 | 🎲 | **15 dynamic events** that reshape a round in chaos rooms (Curfew, Blood Moon, Day of Truth, …) |
 | ⚖️ | **Balance analyzer** that scores a deck against per-player-count presets and blocks unfair ranked configs |
 | 🗳️ | **Two-stage voting** — nomination, defense speech, then a final Hang/Spare trial |
@@ -231,7 +231,7 @@ Each stage has its own cooldown after a `429`, so exhausting one provider's quot
 
 ### Roles
 
-Village wins by eliminating every wolf. Wolves win once they equal or outnumber the village.
+Village wins by eliminating every wolf. Wolves win once they equal or outnumber everyone else. A neutral role wins on its own condition without ending the match — see the Jester below.
 
 <details open>
 <summary><b>Wolf team</b></summary>
@@ -259,6 +259,21 @@ Village wins by eliminating every wolf. Wolves win once they equal or outnumber 
 | Mayor | Thị Trưởng | Daytime votes count double |
 | Cursed | Kẻ Nguyền Rủa | No night action. Surviving a first wolf bite turns them **into a wolf** |
 | Villager | Dân Làng | No ability — discussion and voting only |
+
+</details>
+
+<details open>
+<summary><b>Neutral</b></summary>
+
+| Role | Vietnamese | Ability |
+|---|---|---|
+| Jester | Thằng Hề | No night action. Wins **alone** by getting itself lynched during the day |
+
+The Jester is neither villager nor wolf. It wins only by dying to a **lynch verdict** — dying to wolves, poison, holy water or the Hunter does not count, and surviving to the end is a loss. Its win is recorded as a *personal* win: the match keeps going and the winning **team** is still decided by the usual rule. A living Jester counts toward the non-wolf side when the wolves check for parity, and the village still wins once the last wolf is gone.
+
+The Seer reading a Jester sees **"Phe trung lập"** — neutral team, not the specific role. The Detective reads it as a different team from both village and wolves. Holy water thrown at it backfires and kills the Priest, exactly as it would on any non-wolf.
+
+It is **off by default and in no preset deck** — the host has to enable it in a custom deck, and only one may be in play.
 
 </details>
 

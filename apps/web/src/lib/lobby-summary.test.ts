@@ -52,6 +52,20 @@ describe("deckCounts", () => {
     assert.equal(counts.villagers, 5);
   });
 
+  it("Thằng Hề chiếm một ghế: bớt một Dân Làng chứ không thêm một Dân Làng", () => {
+    /*
+     * `specials` ở đây đếm GHẾ ĐÃ BỊ LẤY, không đếm sức mạnh của phe nào - nên
+     * một vai trung lập vẫn phải vào đó. Bỏ sót nó sẽ hiện ra một con số Dân
+     * Làng nhiều hơn thực tế đúng một người, ngay ở màn host xếp bài.
+     */
+    const withJester = deckCounts(config({ werewolves: 2, seer: true, jester: true }), 8);
+    const without = deckCounts(config({ werewolves: 2, seer: true }), 8);
+
+    assert.equal(withJester.wolves, without.wolves);
+    assert.equal(withJester.specials, without.specials + 1);
+    assert.equal(withJester.villagers, without.villagers - 1);
+  });
+
   it("bài nhiều hơn người thì số Dân Làng dừng ở 0, không xuống âm", () => {
     const counts = deckCounts(
       config({ werewolves: 4, seer: true, witch: true, guard: true, hunter: true }),
@@ -64,6 +78,12 @@ describe("deckCounts", () => {
 describe("isPresetDeck", () => {
   it("đúng preset chuẩn thì nhận ra", () => {
     assert.equal(isPresetDeck(PRESET_DECKS[8], 8), true);
+  });
+
+  it("bật Thằng Hề là rời khỏi preset chuẩn", () => {
+    // Không preset nào chứa vai trung lập, nên nhãn "Preset chuẩn" phải tắt
+    // ngay khi host bật nó lên.
+    assert.equal(isPresetDeck({ ...PRESET_DECKS[8], jester: true }, 8), false);
   });
 
   it("bật thêm một vai là đã rời preset", () => {

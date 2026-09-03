@@ -32,6 +32,7 @@ const ROLE_PHRASES: Array<[string, Role]> = [
   ["tiên tri tập sự", "APPRENTICE_SEER"],
   ["thiên thần hộ mệnh", "GUARDIAN_ANGEL"],
   ["thiên thần", "GUARDIAN_ANGEL"],
+  ["thằng hề", "JESTER"],
   ["thám tử", "DETECTIVE"],
   ["linh mục", "PRIEST"],
   ["thị trưởng", "MAYOR"],
@@ -45,6 +46,10 @@ const ROLE_PHRASES: Array<[string, Role]> = [
   ["bảo vệ", "GUARD"],
   ["ma sói", "WEREWOLF"],
   ["sói", "WEREWOLF"],
+  // "hề" đứng SAU "thằng hề" vì bảng này khớp theo thứ tự, cụm dài trước. Nó
+  // an toàn dù là một từ rất thường gặp ("không hề", "hề hấn") vì chỗ khớp chỉ
+  // nhìn phần NGAY SAU "tôi là"/"X là", và phải khớp trọn từ.
+  ["hề", "JESTER"],
   ["dân", "VILLAGER"],
 ];
 

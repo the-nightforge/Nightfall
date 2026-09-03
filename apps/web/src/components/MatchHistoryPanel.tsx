@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { ROLE_META, momentLabel, type MatchHistoryEntry } from "@masoi/shared";
+import {
+  PERSONAL_WIN_LABELS,
+  ROLE_META,
+  momentLabel,
+  type MatchHistoryEntry,
+  type Team,
+} from "@masoi/shared";
 import {
   fetchMatchHistory,
   formatDurationClock,
@@ -121,6 +127,13 @@ export function MatchHistoryPanel() {
   );
 }
 
+/** Màu tên vai trong đội hình, theo phe. Xem `PANEL_ACCENT` ở `GameOverView`. */
+const ROSTER_TEAM_TEXT: Record<Team, string> = {
+  wolves: "text-blood-400/90",
+  village: "text-emerald-300/90",
+  neutral: "text-amber-300/90",
+};
+
 function MatchRow({ match }: { match: MatchHistoryEntry }) {
   const [open, setOpen] = useState(false);
   // Ván ghi trước khi hồ sơ được lưu thì không có gì để mở ra - hàng vẫn xem
@@ -130,8 +143,22 @@ function MatchRow({ match }: { match: MatchHistoryEntry }) {
 
   // Thắng/thua tính theo PHE của vai mình cầm, không theo việc còn sống: sống
   // tới cuối trong một ván thua vẫn là thua.
+  //
+  // Trừ một đường thứ hai: thắng lợi CÁ NHÂN. Một Thằng Hề bị treo đã thắng
+  // ván đó, kể cả khi phe thắng chung là phe nó không thuộc về - nên `myTeam`
+  // một mình sẽ ghi "Thua" vào đúng ván mà người chơi đã thắng.
+  /*
+   * `!= null` bắt CẢ HAI, và đó là điểm mấu chốt chứ không phải một thói quen
+   * viết code. `myPersonalWin` là optional vì server cũ không gửi nó (xem chú
+   * thích của trường đó): `!== null` đọc `undefined` thành "có thắng cá nhân",
+   * nên mọi ván thua đọc từ một server cũ đều hiện ra là "Thắng".
+   *
+   * `fetchMatchHistory` đã quy `undefined` về `null` ở biên, nên dòng này là
+   * lớp thứ hai - và nó vẫn cần thiết: kiểu dữ liệu cho phép `undefined`, và
+   * một chỗ đọc mới sau này sẽ không đi qua cái biên đó.
+   */
   const myTeam = match.myRole ? ROLE_META[match.myRole].team : null;
-  const won = myTeam === null ? null : match.winner === myTeam;
+  const won = myTeam === null ? null : match.myPersonalWin != null || match.winner === myTeam;
   const wolvesWon = match.winner === "wolves";
 
   return (
@@ -261,14 +288,16 @@ function MatchRow({ match }: { match: MatchHistoryEntry }) {
               >
                 {player.name}
               </span>
-              <span
-                className={`shrink-0 ${
-                  ROLE_META[player.role].team === "wolves"
-                    ? "text-blood-400/90"
-                    : "text-emerald-300/90"
-                }`}
-              >
+              <span className={`shrink-0 ${ROSTER_TEAM_TEXT[ROLE_META[player.role].team]}`}>
                 {ROLE_META[player.role].name}
+                {/* Huy hiệu thắng cá nhân đứng ngay cạnh vai, vì nó chỉ có
+                  * nghĩa khi đọc cùng vai đó. Ván ghi trước bản này không có
+                  * trường này và đơn giản là không có huy hiệu. */}
+                {player.personalWin && (
+                  <span className="ml-1 text-amber-300" title={PERSONAL_WIN_LABELS[player.personalWin.condition]}>
+                    ★
+                  </span>
+                )}
               </span>
             </li>
           ))}

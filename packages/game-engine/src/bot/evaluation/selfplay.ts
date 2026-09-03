@@ -1,4 +1,12 @@
-import { ROLE_META, type GamePhase, type Phase, type Role, type RoomConfig, type Winner } from "@masoi/shared";
+import {
+  ROLE_META,
+  type GamePhase,
+  type PersonalWin,
+  type Phase,
+  type Role,
+  type RoomConfig,
+  type Winner,
+} from "@masoi/shared";
 import { GameEngine } from "../../engine";
 import { detectCoalitions } from "../analysis/coalition";
 import { BotRuntime } from "../BotRuntime";
@@ -152,6 +160,20 @@ export interface SelfPlayGame {
    * vào một `BotDecisionContext`: BOT phải chơi mù đúng như người thật.
    */
   roles: Record<string, Role>;
+  /**
+   * Thắng lợi CÁ NHÂN mà engine đã ghi nhận trong ván này.
+   *
+   * Cần thiết vì `winner` không nói được điều đó: một vai trung lập thắng bằng
+   * một điều kiện riêng, nên mọi tầng đo suy thắng-thua từ `winner` sẽ luôn
+   * chấm nó là thua. Chép nguyên từ `engine.personalWins()` chứ không dựng lại
+   * từ `events`: đọc lại một cái chết "lynch" rồi TỰ KẾT LUẬN ai thắng là dựng
+   * một bản sao thứ hai của luật, và bản sao đó sẽ trôi lệch khỏi engine.
+   *
+   * Optional vì `SelfPlayGame` được ghi thẳng ra JSON bởi
+   * `npm run selfplay -- --out`: báo cáo lưu trước bản này không có trường đó,
+   * và tầng đo phải đọc được chúng.
+   */
+  personalWins?: PersonalWin[];
 }
 
 function baseConfig(over: Partial<RoomConfig> = {}): RoomConfig {
@@ -878,6 +900,9 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     violations: auditor.violations,
     traces: collector?.traces ?? [],
     roles: finalTruth.roles,
+    // Bản SAO, không phải tham chiếu sống vào state của engine - cùng lý do
+    // với mọi thứ khác đi ra khỏi một ván đã kết thúc.
+    personalWins: engine.personalWins().map((win) => ({ ...win })),
   };
 
   // ---- helpers đóng gói engine/log ----

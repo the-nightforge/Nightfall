@@ -1,7 +1,10 @@
 import {
+  PERSONAL_WIN_LABELS,
   ROLE_META,
+  TEAM_LABELS,
   type CaseFile,
   type CaseHighlight,
+  type PersonalWin,
   type RoomSnapshot,
   type Team,
   type Winner,
@@ -30,8 +33,18 @@ export interface WinnerCopy {
 }
 
 export function winnerCopy(winner: Exclude<Winner, null>): WinnerCopy {
-  const teamName = winner === "wolves" ? "Ma Sói" : "Dân Làng";
+  const teamName = TEAM_LABELS[winner];
   return { team: winner, teamName, headline: `Phe ${teamName} chiến thắng` };
+}
+
+/**
+ * Nhãn của một thắng lợi CÁ NHÂN, để màn kết thúc phân biệt được nó với phe
+ * thắng. Hai câu, không phải một: "Phe Dân Làng chiến thắng" và "Thắng cá nhân:
+ * Thằng Hề - bị treo cổ" đều đúng trong cùng một ván, và trộn chúng lại sẽ
+ * buộc màn hình phải chọn một cái để nói dối.
+ */
+export function personalWinLabel(win: PersonalWin): string {
+  return `Thắng cá nhân: ${PERSONAL_WIN_LABELS[win.condition]}`;
 }
 
 export interface PersonalOutcome {
@@ -50,6 +63,14 @@ export interface PersonalOutcome {
    */
   verdict: string;
   statusLabel: string;
+  /**
+   * Thắng lợi cá nhân của chính người xem; `null` khi không có.
+   *
+   * Tách khỏi `won` chứ không gộp: `won` trả lời "tôi thắng hay thua", còn
+   * trường này trả lời "thắng bằng đường nào" - và màn kết thúc phải nói được
+   * cả hai, vì phe thắng chung có thể là một phe mà người này không thuộc về.
+   */
+  personalWin: PersonalWin | null;
 }
 
 /**
@@ -64,13 +85,23 @@ export function personalOutcome(snapshot: RoomSnapshot): PersonalOutcome | null 
   if (!you || !you.role || !snapshot.winner) return null;
 
   const team = ROLE_META[you.role].team;
-  const won = team === snapshot.winner;
+  /*
+   * HAI đường thắng, và chúng độc lập với nhau.
+   *
+   * Phe thắng là đường cũ. Đường thứ hai là sổ thắng lợi cá nhân: một Thằng Hề
+   * bị treo đã thắng rồi, và nó thắng bất kể sau đó Dân hay Sói về nhất - đúng
+   * như engine ghi nhận. Chỉ đọc `team === winner` sẽ báo "Bạn thua" cho một
+   * người vừa đạt được đúng điều họ chơi cả ván để đạt.
+   */
+  const personalWin = (snapshot.personalWins ?? []).find((win) => win.playerId === you.id) ?? null;
+  const won = personalWin !== null || team === snapshot.winner;
   return {
     won,
     team,
-    teamName: team === "wolves" ? "Ma Sói" : "Dân Làng",
+    teamName: TEAM_LABELS[team],
     roleName: roleLabel(you),
     alive: you.alive,
+    personalWin,
     verdict: won ? "Bạn thắng" : "Bạn thua",
     statusLabel: you.alive ? "Sống sót" : "Đã bị loại",
   };

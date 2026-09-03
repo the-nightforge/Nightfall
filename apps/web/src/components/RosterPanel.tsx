@@ -11,6 +11,7 @@ import {
 import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { useSpeakers } from "@/components/VoiceProvider";
 import { roleLabel } from "@/lib/cursed";
+import { TEAM_TAG_CLASS } from "@/lib/team-tone";
 import { listItemMotion } from "@/lib/motion";
 import { NOTE_META, usePlayerNotes } from "@/lib/player-notes";
 import { Avatar } from "./Avatar";
@@ -322,9 +323,7 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                   {player.role && (
                     <span
                       className={`max-w-full truncate rounded px-1.5 py-0.5 text-xs font-semibold ${
-                        ROLE_META[player.role].team === "wolves"
-                          ? "bg-blood-600/70 text-white"
-                          : "bg-emerald-900/80 text-emerald-200"
+                        TEAM_TAG_CLASS[ROLE_META[player.role].team]
                       }`}
                     >
                       {roleLabel(player)}

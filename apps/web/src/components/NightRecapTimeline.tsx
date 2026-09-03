@@ -197,8 +197,21 @@ export function NightRecapTimeline({
                         night.seerChecks.map((check) => (
                           <Line key={`${check.seer.id}-${check.target.id}`} actor="Tiên Tri">
                             {check.seer.name} soi <b className="text-white">{check.target.name}</b>{" "}
-                            <Verdict tone={check.isWolf ? "bad" : "good"}>
-                              {check.isWolf ? "là Ma Sói" : "không phải Ma Sói"}
+                            {/* `team` mới nói đủ: "không phải Ma Sói" đúng với
+                              * một vai trung lập nhưng đọc ra như một lời bảo
+                              * lãnh cho phe làng, và dòng thời gian này là bản
+                              * kể lại chính xác của ván vừa xong. Ván ghi trước
+                              * bản này không có `team` và rơi về câu cũ. */}
+                            <Verdict
+                              tone={
+                                check.team === "neutral" ? "warn" : check.isWolf ? "bad" : "good"
+                              }
+                            >
+                              {check.team === "neutral"
+                                ? "thuộc phe trung lập"
+                                : check.isWolf
+                                  ? "là Ma Sói"
+                                  : "không phải Ma Sói"}
                             </Verdict>
                             {check.secondaryTarget && (
                               <>
