@@ -6,6 +6,7 @@ import {
   actLabel,
   myVoteLabel,
   scaleTilt,
+  stageOwnsCinematic,
   stepTrialStage,
   tallyAnnouncement,
   trialKey,
@@ -516,5 +517,23 @@ describe("không rò rỉ thông tin riêng tư", () => {
         ] as Array<keyof TrialStageView>
       ).sort(),
     );
+  });
+});
+
+describe("ai sở hữu cảnh chuyển pha", () => {
+  /*
+   * Hai chỗ cùng biết vẽ một phiên toà, nên phải có ĐÚNG MỘT chỗ quyết định ai
+   * sở hữu cảnh nào. Sân khấu luôn có mặt, nên hai cảnh này luôn thuộc về nó -
+   * kể cả khi máy không dựng nổi 3D, vì bản 2D vẫn tự tuyên án bằng chữ.
+   */
+  it("sân khấu sở hữu cả cảnh mở phiên toà lẫn cảnh phán quyết", () => {
+    assert.equal(stageOwnsCinematic("TRIAL"), true);
+    assert.equal(stageOwnsCinematic("VERDICT"), true);
+  });
+
+  it("không đụng tới cảnh của những pha khác", () => {
+    for (const kind of ["NIGHTFALL", "DAWN", "VILLAGE_WIN", "WOLVES_WIN", "SPIRIT"] as const) {
+      assert.equal(stageOwnsCinematic(kind), false, kind);
+    }
   });
 });

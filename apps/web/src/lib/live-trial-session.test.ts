@@ -85,20 +85,18 @@ const elimination = (lynched: boolean) =>
  * `render()` là một lần effect chạy; `mountStage()` là một lần sân khấu được
  * dựng và nhận lô đang chờ - đúng việc mà `TrialStage` làm trong effect của nó.
  */
-function harness(initial: Partial<{ connected: boolean; enabled: boolean }> = {}) {
+function harness(initial: Partial<{ connected: boolean }> = {}) {
   let session: LiveTrialSession = EMPTY_LIVE_TRIAL_SESSION;
   let connected = initial.connected ?? false;
-  let enabled = initial.enabled ?? true;
 
   return {
     get session() {
       return session;
     },
-    /** Một lần hook chạy với đúng ba đầu vào của nó. */
-    render(snapshotValue: RoomSnapshot | null, patch: Partial<{ connected: boolean; enabled: boolean }> = {}) {
+    /** Một lần hook chạy với đúng hai đầu vào của nó. */
+    render(snapshotValue: RoomSnapshot | null, patch: Partial<{ connected: boolean }> = {}) {
       if (patch.connected !== undefined) connected = patch.connected;
-      if (patch.enabled !== undefined) enabled = patch.enabled;
-      session = advanceLiveTrial(session, { snapshot: snapshotValue, connected, enabled });
+      session = advanceLiveTrial(session, { snapshot: snapshotValue, connected });
       return pendingBeats(session);
     },
     /** Sân khấu được dựng: nó lấy lô đang chờ rồi báo đã nhận. */
@@ -157,7 +155,7 @@ describe("A. mount lúc chưa có snapshot", () => {
   });
 });
 
-describe("B. tắt/bật và dựng lại sân khấu", () => {
+describe("B. dựng lại sân khấu", () => {
   it("dựng lại sân khấu mà chưa có snapshot mới thì KHÔNG phát lại lô cũ", () => {
     const app = harness();
     app.render(null);
@@ -165,9 +163,10 @@ describe("B. tắt/bật và dựng lại sân khấu", () => {
     assert.deepEqual(app.render(defense()), [{ kind: "OPENING" }]);
     app.mountStage();
 
-    // Tắt rồi bật lại, không có snapshot nào mới ở giữa.
-    app.render(app.session.lastSnapshot, { enabled: false });
-    app.render(app.session.lastSnapshot, { enabled: true });
+    // Hook chạy thêm vài lượt trên đúng snapshot đó - chuyện xảy ra suốt, vì
+    // trang render lại vì nhiều lý do khác ngoài "có snapshot mới".
+    app.render(app.session.lastSnapshot);
+    app.render(app.session.lastSnapshot);
     assert.deepEqual(app.mountStage(), [], "màn mở đầu đã tiêu thụ, không được diễn lần hai");
   });
 
@@ -177,51 +176,37 @@ describe("B. tắt/bật và dựng lại sân khấu", () => {
     app.render(snapshot({ phase: "VOTING" }), { connected: true });
     app.render(defense());
     app.mountStage();
-    // Không gạt công tắc, chỉ là canvas bị tháo rồi dựng lại.
+    // Màn hình thấp thì sân khấu rơi về bản 2D và canvas bị THÁO; xoay dọc lại
+    // là một lần dựng mới.
     assert.deepEqual(app.mountStage(), []);
     assert.deepEqual(app.mountStage(), []);
   });
 
-  it("hiệu ứng xảy ra TRONG LÚC tắt không được phát bù khi bật lại", () => {
-    const app = harness();
-    app.render(null);
-    app.render(snapshot({ phase: "VOTING" }), { connected: true, enabled: false });
-    // Cả phần đầu phiên toà diễn ra trong lúc tính năng đang tắt: một màn mở
-    // đầu và hai lá phiếu.
-    app.render(defense(), { enabled: false });
-    app.render(finalVote({ guiltyVotes: 1 }), { enabled: false });
-    app.render(finalVote({ guiltyVotes: 2 }), { enabled: false });
-
-    const beats = app.render(app.session.lastSnapshot, { enabled: true });
-    assert.deepEqual(beats, [], "bật lên chỉ được thấy trạng thái hiện tại");
-    assert.equal(app.session.view?.guilty, 2, "nhưng số phiếu phải đúng ngay");
-  });
-
-  it("tắt giữa phiên không làm mất phiếu, quyền bỏ phiếu hay lá phiếu của mình", () => {
+  it("dựng lại giữa phiên không làm mất phiếu, quyền bỏ phiếu hay lá phiếu của mình", () => {
     const app = harness();
     app.render(null);
     app.render(snapshot({ phase: "VOTING" }), { connected: true });
     app.render(finalVote({ guiltyVotes: 3, innocentVotes: 1, hasVoted: true, myVote: false, canVote: false }));
 
     const before = app.session.view;
-    app.render(app.session.lastSnapshot, { enabled: false });
-    app.render(app.session.lastSnapshot, { enabled: true });
+    app.render(app.session.lastSnapshot);
+    app.render(app.session.lastSnapshot);
 
-    assert.deepEqual(app.session.view, before, "trạng thái sân khấu không đổi vì một công tắc hiển thị");
+    assert.deepEqual(app.session.view, before, "trạng thái sân khấu không đổi vì một lần render thừa");
   });
 
-  it("bật lại rồi mới có phiếu mới thì lô mới VẪN được phát", () => {
+  it("render thừa xong mới có phiếu mới thì lô mới VẪN được phát", () => {
     const app = harness();
     app.render(null);
     app.render(snapshot({ phase: "VOTING" }), { connected: true });
-    app.render(finalVote({ guiltyVotes: 1 }), { enabled: false });
-    app.render(finalVote({ guiltyVotes: 1 }), { enabled: true });
+    app.render(finalVote({ guiltyVotes: 1 }));
+    app.render(finalVote({ guiltyVotes: 1 }));
 
     const beats = app.render(finalVote({ guiltyVotes: 2 }));
     assert.deepEqual(beats, [{ kind: "STAMP", side: "guilty" }]);
   });
 
-  it("hook chạy lại vì công tắc, không phải vì snapshot mới, thì không sinh hiệu ứng", () => {
+  it("hook chạy lại mà không có snapshot mới thì không sinh hiệu ứng", () => {
     const app = harness();
     app.render(null);
     app.render(snapshot({ phase: "VOTING" }), { connected: true });

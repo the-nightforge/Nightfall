@@ -16,7 +16,6 @@ import {
 } from "@/lib/cinematic-settings";
 import { canUseWebgl, hasWebgl2, hasWebglScene } from "@/lib/cinematic-webgl";
 import { stageOwnsCinematic } from "@/lib/live-trial";
-import { LIVE_TRIAL_SETTINGS_EVENT, loadLiveTrialSettings } from "@/lib/live-trial-settings";
 import { useModalFocus } from "@/lib/useModalFocus";
 import { CinematicCanvas } from "./CinematicCanvas";
 import { VillageSilhouette } from "./VillageSilhouette";
@@ -81,14 +80,6 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
   // deps thì đổi thiết lập giữa pha sẽ chạy lại effect và ghi đè `previous`.
   const modeRef = useRef(mode);
   modeRef.current = mode;
-  /*
-   * "Phiên toà sống" đang bật thì HAI cảnh của phiên toà thuộc về nó.
-   *
-   * Ref chứ không phải state, cùng lý do với `modeRef`: chỉ effect chọn cảnh
-   * đọc giá trị này, và để nó vào state sẽ bắt cả lớp phủ render lại mỗi lần
-   * người chơi gạt một công tắc ở thanh trên.
-   */
-  const liveTrialRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const skipRef = useRef<HTMLButtonElement>(null);
 
@@ -126,15 +117,6 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
     };
   }, []);
 
-  useEffect(() => {
-    const apply = () => {
-      liveTrialRef.current = loadLiveTrialSettings().enabled;
-    };
-    apply();
-    window.addEventListener(LIVE_TRIAL_SETTINGS_EVENT, apply);
-    return () => window.removeEventListener(LIVE_TRIAL_SETTINGS_EVENT, apply);
-  }, []);
-
   const finish = useCallback(() => {
     setPlaying(null);
     setVideoReady(false);
@@ -159,17 +141,14 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
      * Nhường hai cảnh phiên toà cho sân khấu "Phiên toà sống".
      *
      * Đặt SAU `played.add` chứ không trước, đúng như nhánh "none" ngay dưới:
-     * khoá đã tiêu là đã tiêu. Tắt tính năng giữa phiên toà mà cảnh mở đầu vẫn
-     * còn nguyên khoá thì người chơi sẽ lĩnh một màn "Phiên toà bắt đầu" ở giữa
-     * vòng bỏ phiếu xác nhận - một đoạn chuyển cảnh cho một chuyện đã xảy ra từ
-     * trước đó nửa phút.
+     * khoá đã tiêu là đã tiêu.
      *
      * Đây cũng là chỗ DUY NHẤT quyết định ai sở hữu hai cảnh đó: không có cảnh
      * mở đầu nào phát hai lần, và không có phán quyết nào chồng lên phán quyết.
-     * Khi tính năng tắt, hoặc khi nó rơi về bản 2D, luồng ở đây vẫn y như cũ -
-     * bản 2D của sân khấu vẫn tự tuyên án bằng chữ.
+     * Kể cả khi sân khấu rơi về bản 2D nó vẫn giữ quyền - bản 2D vẫn tự tuyên
+     * án bằng chữ.
      */
-    if (stageOwnsCinematic(next.kind, liveTrialRef.current)) return;
+    if (stageOwnsCinematic(next.kind)) return;
     if (modeRef.current === "none") return;
     setVideoReady(false);
     setPlaying(next);

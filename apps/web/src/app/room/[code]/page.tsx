@@ -51,12 +51,10 @@ export default function RoomPage() {
    *
    * Vì vậy nó nằm ở đây chứ không trong component sân khấu: trí nhớ của nó phải
    * sống qua cả ván thì mới phân biệt được "phiên toà vừa mở ra trước mắt tôi"
-   * với "phiên toà đã mở từ trước khi tôi vào" - xem `useLiveTrial`. Nó cũng
-   * chạy khi người chơi đã TẮT tính năng, để bật lại giữa phiên không mất trạng
-   * thái và không phát bù một xâu hiệu ứng đã trôi qua.
+   * với "phiên toà đã mở từ trước khi tôi vào" - xem `useLiveTrial`.
    */
   const live = useLiveTrial(snapshot, room.connected);
-  const liveStage = live.enabled && live.view !== null;
+  const liveStage = live.view !== null;
   /*
    * Bản nháp chat sống ở đây chứ không trong ChatBox.
    *
