@@ -13,6 +13,7 @@ export const ROLES = [
   "MAYOR",
   "CURSED",
   "VILLAGER",
+  "JESTER",
 ] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -29,7 +30,31 @@ export function isRole(value: unknown): value is Role {
   return typeof value === "string" && Object.hasOwn(ROLE_META, value);
 }
 
-export type Team = "wolves" | "village";
+/**
+ * Phe của một vai.
+ *
+ * `neutral` KHÔNG phải "một phe thứ ba có chung điều kiện thắng". Nó chỉ nói
+ * đúng một điều: vai này không đứng cùng Dân cũng không đứng cùng Sói, nên mọi
+ * phép kiểm tra đồng đội (soi, so phe, chat của bầy Sói, bảng tổng kết) phải
+ * trả lời "khác phe" với cả hai bên. Điều kiện thắng của một vai trung lập là
+ * chuyện RIÊNG của vai đó - hôm nay chỉ có Thằng Hề, và luật thắng của nó nằm
+ * ở `personalWins` trong engine chứ không ở đây.
+ */
+export type Team = "wolves" | "village" | "neutral";
+
+/**
+ * Tên phe hiển thị cho người chơi. Một bảng duy nhất vì cả web lẫn hồ sơ vụ án
+ * đều phải gọi ba phe bằng đúng ba chữ ấy.
+ */
+export const TEAM_LABELS: Record<Team, string> = {
+  wolves: "Ma Sói",
+  village: "Dân Làng",
+  neutral: "Trung lập",
+};
+
+export function teamName(team: Team): string {
+  return TEAM_LABELS[team];
+}
 
 export interface RoleMeta {
   id: Role;
@@ -131,6 +156,15 @@ export const ROLE_META: Record<Role, RoleMeta> = {
     description: "Không có kỹ năng đặc biệt, thảo luận và bỏ phiếu vào ban ngày.",
     team: "village",
   },
+  JESTER: {
+    id: "JESTER",
+    name: "Thằng Hề",
+    description: "Đánh lừa mọi người để bị treo cổ ban ngày. Bạn chỉ thắng khi bị treo cổ.",
+    // Trung lập, và KHÔNG có nightOrder: Thằng Hề không thức dậy, không gây sát
+    // thương, không có kỹ năng giết ai. `hasNightAction` suy ra từ đúng trường
+    // này nên không chỗ nào phải liệt kê tên vai lần thứ hai.
+    team: "neutral",
+  },
 };
 
 export function roleTeam(role: Role): Team {
@@ -144,7 +178,12 @@ export function roleTeam(role: Role): Team {
  * thêm một vai làng mới vào `ROLES` là nó tự vào đây - không có cái danh sách
  * thứ hai nào để quên cập nhật.
  *
- * Hai loại trừ, và cả hai đều có lý do:
+ * Vai TRUNG LẬP không bao giờ vào đây, và đó là hệ quả của chính điều kiện
+ * `team === "village"` chứ không phải một loại trừ chép tay: Thằng Hề không
+ * giữ thông tin nào của làng, nên bầy Sói không có lý do phải cắn nó khi nó lộ
+ * mặt - đúng câu hỏi mà tập này trả lời.
+ *
+ * Hai loại trừ trong phe làng, và cả hai đều có lý do:
  * - `VILLAGER`: không có gì để lộ, nên khai ra cũng không đặt cược gì.
  * - `CURSED`: ban đêm không làm gì và bầy Sói KHÔNG có lý do giết nó (cắn trúng
  *   thì nó thành Sói). Nó nằm phe làng lúc chia bài nhưng không mang rủi ro của

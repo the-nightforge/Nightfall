@@ -6,7 +6,7 @@ import { GameEventView, RoomSnapshot, NightActionView } from "../src/snapshot";
 import { gameActionPayload, roomConfigSchema, validateRoomConfig } from "../src/schemas";
 
 describe("Shared Roles", () => {
-  it("includes all 12 roles with valid meta", () => {
+  it("includes all 14 roles with valid meta", () => {
     const expected = [
       "WEREWOLF",
       "WOLF_CUB",
@@ -21,6 +21,7 @@ describe("Shared Roles", () => {
       "MAYOR",
       "CURSED",
       "VILLAGER",
+      "JESTER",
     ] as const;
 
     for (const r of expected) {
@@ -47,6 +48,9 @@ describe("Shared Roles", () => {
     expect(roleTeam("MAYOR")).toBe("village");
     expect(roleTeam("CURSED")).toBe("village");
     expect(roleTeam("VILLAGER")).toBe("village");
+    // Phe thứ ba: KHÔNG phải "village", và cũng không phải "wolves". Mọi phép
+    // so đồng đội trong game đọc đúng trường này.
+    expect(roleTeam("JESTER")).toBe("neutral");
   });
 
   it("orders night roles correctly in ROLE_ORDER_FOR_NIGHT", () => {

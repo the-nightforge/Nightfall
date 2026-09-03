@@ -1,7 +1,13 @@
 import { Router } from "express";
 import { prisma } from "./db";
 import { newToken, sha256 } from "./util";
-import { isRole, nicknameSchema, type MatchHistoryEntry, type MatchHistoryPlayer } from "@masoi/shared";
+import {
+  isPersonalWinCondition,
+  isRole,
+  nicknameSchema,
+  type MatchHistoryEntry,
+  type MatchHistoryPlayer,
+} from "@masoi/shared";
 import { redis } from "./redis";
 import { config } from "./config";
 import { allowAction } from "./rate-limit";
@@ -41,7 +47,26 @@ export function toHistoryEntry(row: GameResultRow, viewerId: string): MatchHisto
    * dòng đó thiếu một người trong đội hình - đổi lại trang vẫn sống.
    */
   const players: MatchHistoryPlayer[] = Array.isArray(row.playerRoles)
-    ? (row.playerRoles as MatchHistoryPlayer[]).filter((player) => isRole(player?.role))
+    ? (row.playerRoles as MatchHistoryPlayer[])
+        .filter((player) => isRole(player?.role))
+        /*
+         * `personalWin` đi qua đúng cái sàng mà `role` vừa đi qua, và vì cùng
+         * một lý do: nó là JSON do MỘT bản build nào đó ghi ra, nên một điều
+         * kiện đã đổi tên hay bị gỡ vẫn nằm nguyên trong lịch sử. Tra thẳng
+         * chuỗi đó vào `PERSONAL_WIN_LABELS` ra `undefined`, và trang lịch sử
+         * ở TRANG CHỦ sẽ hỏng theo đúng kiểu không tự thoát ra được.
+         *
+         * Bỏ trường lạ chứ không bỏ cả người: một thành tích không đọc nổi thì
+         * dòng đó vẫn còn nguyên đội hình, chỉ thiếu một cái huy hiệu.
+         */
+        .map((player) => {
+          const win = player.personalWin;
+          if (win && isPersonalWinCondition(win.condition) && typeof win.round === "number") {
+            return player;
+          }
+          const { personalWin: _dropped, ...rest } = player;
+          return rest;
+        })
     : [];
   const me = players.find((p) => p.id === viewerId) ?? null;
 
@@ -53,6 +78,7 @@ export function toHistoryEntry(row: GameResultRow, viewerId: string): MatchHisto
     endedAt: row.createdAt.getTime(),
     myRole: me?.role ?? null,
     mySurvived: me ? me.alive : null,
+    myPersonalWin: me?.personalWin ?? null,
     players,
     caseFile: row.caseFile ?? null,
   };

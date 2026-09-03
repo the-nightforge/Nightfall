@@ -86,7 +86,7 @@ describe("decideFinalVote", () => {
     bot.observe(
       context({
         selfRole: "SEER",
-        seerResult: { targetId: "a", targetName: "A", isWolf: false },
+        seerResult: { targetId: "a", targetName: "A", isWolf: false, team: "village" },
       }),
     );
 
@@ -121,7 +121,7 @@ describe("decideFinalVote", () => {
     bot.observe(
       context({
         selfRole: "SEER",
-        seerResult: { targetId: "a", targetName: "A", isWolf: true },
+        seerResult: { targetId: "a", targetName: "A", isWolf: true, team: "wolves" },
       }),
     );
     void state;

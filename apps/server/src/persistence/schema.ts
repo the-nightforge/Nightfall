@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CHAT_CHANNELS, PHASES, ROLES, roomConfigSchema } from "@masoi/shared";
+import { CHAT_CHANNELS, PERSONAL_WIN_CONDITIONS, PHASES, ROLES, roomConfigSchema } from "@masoi/shared";
 import type {
   ChatMessage,
   DayVoteRecap,
@@ -7,9 +7,11 @@ import type {
   GamePhase,
   HunterShotRecap,
   NightRecap,
+  PersonalWin,
   PublicVoteChoice,
   Role,
   RoomConfig,
+  Team,
   VoteMutation,
   Winner,
 } from "@masoi/shared";
@@ -58,6 +60,8 @@ const oneOf = <T extends string>(values: readonly string[]): z.ZodType<T> =>
 
 const gamePhaseSchema = oneOf<GamePhase>(PHASES.filter((phase) => phase !== "LOBBY"));
 const roleSchema = oneOf<Role>(ROLES);
+const teamSchema = oneOf<Team>(["wolves", "village", "neutral"]);
+const personalWinConditionSchema = oneOf<PersonalWin["condition"]>(PERSONAL_WIN_CONDITIONS);
 const winnerSchema = z.union([
   z.literal("wolves"),
   z.literal("village"),
@@ -96,8 +100,13 @@ const nightStateSchema = z.object({
     z.object({
       targetId: z.string(),
       isWolf: z.boolean(),
+      // OPTIONAL vì đây là trường thêm sau: kết quả soi ghi trước bản này chỉ
+      // có `isWolf`, và bắt buộc `team` sẽ làm mọi ván đang chạy trượt schema
+      // ngay lúc deploy. Engine rơi về `isWolf` khi thiếu nó.
+      team: teamSchema.optional(),
       secondaryTargetId: z.string().optional(),
       secondaryIsWolf: z.boolean().optional(),
+      secondaryTeam: teamSchema.optional(),
       unknown: z.boolean().optional(),
     }),
   ),
@@ -171,6 +180,27 @@ export const gameStateSchema = z.object({
   deadCanSpeakChosenId: z.string().nullable(),
   howlBonusDay: z.number().nullable(),
   dayOfTruthClaims: z.record(z.string(), z.string().nullable()),
+  /**
+   * STRICT chứ không phải `objectOf`: đây là dữ liệu MANG QUYẾT ĐỊNH - nó là
+   * kết quả cuối cùng của một người chơi, và một mục méo sẽ hiện ra ở màn kết
+   * thúc lẫn lịch sử trận mà không có gì sửa lại được.
+   *
+   * OPTIONAL vì cùng lý do với `kickedPlayerIds`/`startedAt` ở dưới: bắt buộc
+   * một trường thêm sau là làm mọi snapshot đã ghi trước bản này trượt schema
+   * rồi rơi vào `quarantine` - tức giết sạch các ván đang chạy ngay lúc deploy.
+   * Constructor của engine chuẩn hoá về mảng rỗng.
+   */
+  personalWins: z
+    .array(
+      z.object({
+        playerId: z.string(),
+        name: z.string(),
+        role: roleSchema,
+        condition: personalWinConditionSchema,
+        round: z.number().int().min(0),
+      }),
+    )
+    .optional(),
 });
 
 // ---- Brain của BOT ----

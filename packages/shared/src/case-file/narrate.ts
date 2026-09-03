@@ -1,4 +1,5 @@
-import { ROLE_META } from "../roles";
+import { ROLE_META, TEAM_LABELS } from "../roles";
+import type { Team } from "../roles";
 import type { CaseFilePlayer } from "./types";
 
 /**
@@ -26,8 +27,14 @@ export function roleLabelOf(player: CaseFilePlayer | undefined): string {
   return ROLE_META[player.role].name;
 }
 
-export function teamLabel(team: "wolves" | "village"): string {
-  return team === "wolves" ? "Ma Sói" : "Dân Làng";
+/**
+ * Nhận cả ba phe chứ không chỉ hai: `CaseFilePlayer.team` là `Team` đầy đủ, nên
+ * một chữ ký hai phe ở đây chỉ đúng cho tới lá bài trung lập đầu tiên. Bảng nhãn
+ * dùng chung với giao diện để hồ sơ và màn kết thúc không gọi cùng một phe bằng
+ * hai cái tên.
+ */
+export function teamLabel(team: Team): string {
+  return TEAM_LABELS[team];
 }
 
 /**

@@ -428,12 +428,12 @@ export function tallyAnnouncement(view: TrialStageView): string {
  * (tuyên án) là hai cảnh mà sân khấu tự diễn lấy; phát cả hai bản là hai màn mở
  * đầu chồng nhau rồi hai phán quyết chồng nhau.
  *
- * Tắt tính năng thì trả lại nguyên vẹn cho lớp phủ chuyển cảnh - luồng cũ không
- * đổi một dòng nào. Rơi về bản 2D cũng KHÔNG trả lại: bản 2D của sân khấu vẫn
- * tuyên án bằng chữ và vẫn đổi ánh sáng, nên nó vẫn là chủ sở hữu.
+ * Rơi về bản 2D KHÔNG trả lại quyền: bản 2D của sân khấu vẫn tuyên án bằng chữ
+ * và vẫn đổi ánh sáng, nên nó vẫn là chủ sở hữu. Đó là lý do hàm này không hỏi
+ * gì về khả năng dựng 3D của máy - sân khấu luôn có mặt, chỉ là bằng chất liệu
+ * nào.
  */
-export function stageOwnsCinematic(kind: CinematicKind, liveTrialEnabled: boolean): boolean {
-  if (!liveTrialEnabled) return false;
+export function stageOwnsCinematic(kind: CinematicKind): boolean {
   return kind === "TRIAL" || kind === "VERDICT";
 }
 
@@ -505,8 +505,6 @@ export interface LiveTrialInputs {
   snapshot: RoomSnapshot | null;
   /** Socket đang nối. Từ `useRoomSocket`, không phải suy đoán. */
   connected: boolean;
-  /** Người chơi đang BẬT tính năng. */
-  enabled: boolean;
 }
 
 /** Lô nhịp diễn còn chờ người nhận; rỗng khi đã có người nhận hoặc đã bị bỏ. */
@@ -531,13 +529,9 @@ export function consumeLiveTrialBeats(session: LiveTrialSession, id: number): Li
  *
  * Thứ tự các cửa ở đây là thứ tự của những thứ đã từng hỏng, nên đừng đảo:
  *
- *   1. Tắt tính năng thì lô đang chờ bị BỎ ngay, không phải để dành. Bật lại
- *      giữa phiên chỉ được dựng trạng thái hiện tại - phát bù những gì đã xảy
- *      ra trong lúc tắt là kể lại một chuyện người chơi đã bỏ lỡ, đúng vào lúc
- *      họ đang phải quyết định.
- *   2. Cùng một snapshot (so tham chiếu) thì không bước máy trạng thái. Hook
+ *   1. Cùng một snapshot (so tham chiếu) thì không bước máy trạng thái. Hook
  *      chạy lại vì nhiều lý do khác ngoài "có snapshot mới".
- *   3. Snapshot bù sau khi nối lại chỉ dựng trạng thái, không diễn.
+ *   2. Snapshot bù sau khi nối lại chỉ dựng trạng thái, không diễn.
  */
 export function advanceLiveTrial(
   session: LiveTrialSession,
@@ -547,18 +541,15 @@ export function advanceLiveTrial(
   const resyncPending = session.resyncPending || reconnected;
 
   if (inputs.snapshot === session.lastSnapshot) {
-    const next: LiveTrialSession = { ...session, connected: inputs.connected, resyncPending };
-    // Tắt giữa chừng: bỏ lô đang chờ. Không có ai để nhận nó, và giữ lại thì
-    // nó sẽ nổ ra ngay khi người chơi bật lại.
-    return inputs.enabled ? next : { ...next, consumedId: next.beatsId };
+    return { ...session, connected: inputs.connected, resyncPending };
   }
 
   const step = stepTrialStage(session.memory, trialStageInput(inputs.snapshot));
-  // Lô chỉ được PHÁT khi có người xem, và khi nó mô tả một chuyện vừa xảy ra
-  // trước mắt họ. Ngoài hai điều đó thì nó vẫn được đếm số nhưng đánh dấu tiêu
-  // thụ luôn - `beatsId` không bao giờ lùi, nên không có đường nào để một lô
-  // đã bỏ quay lại.
-  const play = step.beats.length > 0 && inputs.enabled && !resyncPending;
+  // Lô chỉ được PHÁT khi nó mô tả một chuyện vừa xảy ra trước mắt người xem.
+  // Ngoài điều đó thì nó vẫn được đếm số nhưng đánh dấu tiêu thụ luôn -
+  // `beatsId` không bao giờ lùi, nên không có đường nào để một lô đã bỏ quay
+  // lại.
+  const play = step.beats.length > 0 && !resyncPending;
   const beatsId = step.beats.length > 0 ? session.beatsId + 1 : session.beatsId;
 
   return {

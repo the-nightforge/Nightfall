@@ -3,6 +3,7 @@ import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { detectiveStrategy } from "./detective";
 import { guardStrategy } from "./guard";
 import { guardianAngelStrategy } from "./guardian-angel";
+import { jesterStrategy } from "./jester";
 import { priestStrategy } from "./priest";
 import { seerStrategy } from "./seer";
 import { passiveStrategy, type BotRoleStrategy } from "./strategy";
@@ -36,6 +37,11 @@ const REGISTRY: Partial<Record<Role, (role: Role, weights: BotWeights) => BotRol
   DETECTIVE: detectiveStrategy,
   PRIEST: priestStrategy,
   WITCH: witchStrategy,
+  // Thằng Hề KHÔNG rơi về `passiveStrategy`, dù nó không có hành động đêm:
+  // mặc định "không thiên vị" của strategy nền là chiến thuật của một Dân Làng,
+  // và một con Hề chơi như Dân Làng thì không bao giờ đạt được điều kiện thắng
+  // của chính nó. Xem `roles/jester.ts`.
+  JESTER: jesterStrategy,
 };
 
 export function strategyFor(

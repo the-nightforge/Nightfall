@@ -2,10 +2,43 @@
 
 import { useState } from "react";
 import { m } from "motion/react";
-import { ROLE_META, type Role, type RoomSnapshot } from "@masoi/shared";
+import { ROLE_META, TEAM_LABELS, type Role, type RoomSnapshot, type Team } from "@masoi/shared";
 import { myCursedNote } from "@/lib/cursed";
 import { roleGoal } from "@/lib/role-goal";
 import { ROLE_ICON_PATHS } from "@/lib/role-art";
+
+/**
+ * Bộ màu của thẻ vai theo phe.
+ *
+ * Bảng tra thay cho các biểu thức `isWolf ? ... : ...` rải khắp component: với
+ * hai phe, "không phải Sói" đồng nghĩa với "phe làng" nên một biểu thức ba ngôi
+ * còn đúng. Với phe thứ ba thì mỗi biểu thức đó là một chỗ để Thằng Hề hiện ra
+ * dưới màu và nhãn của phe Dân Làng - tức là thẻ vai nói dối chính người vừa
+ * nhận vai.
+ */
+const TEAM_SKIN: Record<Team, { card: string; halo: string; fill: string; label: string; title: string }> = {
+  wolves: {
+    card: "border-blood-500 bg-blood-600/10",
+    halo: "bg-gradient-to-br from-blood-600/30 to-blood-900/25 ring-blood-500/35",
+    fill: "fill-blood-300",
+    label: "text-blood-400/90",
+    title: "text-blood-400",
+  },
+  village: {
+    card: "border-emerald-600/60 bg-emerald-900/10",
+    halo: "bg-gradient-to-br from-emerald-600/25 to-emerald-900/25 ring-emerald-500/30",
+    fill: "fill-emerald-200",
+    label: "text-emerald-300/90",
+    title: "text-emerald-300",
+  },
+  neutral: {
+    card: "border-amber-500/60 bg-amber-900/10",
+    halo: "bg-gradient-to-br from-amber-600/25 to-amber-900/25 ring-amber-500/30",
+    fill: "fill-amber-200",
+    label: "text-amber-300/90",
+    title: "text-amber-300",
+  },
+};
 
 /**
  * Mặt ngửa của thẻ vai.
@@ -25,46 +58,24 @@ export function RoleCard({ role }: { role: Role | undefined }) {
     );
   }
   const meta = ROLE_META[role];
-  const isWolf = meta.team === "wolves";
+  const skin = TEAM_SKIN[meta.team];
 
   return (
-    <div
-      className={`card border-2 text-center ${
-        isWolf ? "border-blood-500 bg-blood-600/10" : "border-emerald-600/60 bg-emerald-900/10"
-      }`}
-    >
-      <span
-        className={`mx-auto grid h-20 w-20 place-items-center rounded-full ring-1 ${
-          isWolf
-            ? "bg-gradient-to-br from-blood-600/30 to-blood-900/25 ring-blood-500/35"
-            : "bg-gradient-to-br from-emerald-600/25 to-emerald-900/25 ring-emerald-500/30"
-        }`}
-      >
+    <div className={`card border-2 text-center ${skin.card}`}>
+      <span className={`mx-auto grid h-20 w-20 place-items-center rounded-full ring-1 ${skin.halo}`}>
         <svg
           viewBox="0 0 512 512"
           aria-hidden="true"
-          className={`h-11 w-11 drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] ${
-            isWolf ? "fill-blood-300" : "fill-emerald-200"
-          }`}
+          className={`h-11 w-11 drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] ${skin.fill}`}
         >
           <path d={ROLE_ICON_PATHS[role]} />
         </svg>
       </span>
 
-      <p
-        className={`mt-3 text-[11px] font-bold uppercase tracking-[0.25em] ${
-          isWolf ? "text-blood-400/90" : "text-emerald-300/90"
-        }`}
-      >
-        {isWolf ? "Phe Ma Sói" : "Phe Dân Làng"}
+      <p className={`mt-3 text-[11px] font-bold uppercase tracking-[0.25em] ${skin.label}`}>
+        Phe {TEAM_LABELS[meta.team]}
       </p>
-      <h2
-        className={`mt-1 font-display text-3xl font-bold ${
-          isWolf ? "text-blood-400" : "text-emerald-300"
-        }`}
-      >
-        {meta.name}
-      </h2>
+      <h2 className={`mt-1 font-display text-3xl font-bold ${skin.title}`}>{meta.name}</h2>
 
       <div className="mt-4 space-y-2 text-left">
         <Line label="Kỹ năng">{meta.description}</Line>

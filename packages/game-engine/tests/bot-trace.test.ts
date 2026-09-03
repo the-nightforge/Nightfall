@@ -315,7 +315,7 @@ describe("nội dung trace", () => {
     // không nói lên điều gì. Thứ đổi belief là quan sát.
     const { runtime, trace } = runtimeWithTrace();
     const ctx = context({
-      seerResult: { targetId: "a", targetName: "A", isWolf: true },
+      seerResult: { targetId: "a", targetName: "A", isWolf: true, team: "wolves" },
     });
     runtime.observe(ctx);
     runtime.decideVote(ctx);
@@ -471,7 +471,7 @@ describe("ranh giới knowledge của trace", () => {
     const { runtime, trace } = runtimeWithTrace();
     const ctx = context({
       selfRole: "SEER",
-      seerResult: { targetId: "a", targetName: "A", isWolf: true },
+      seerResult: { targetId: "a", targetName: "A", isWolf: true, team: "wolves" },
     });
     runtime.observe(ctx);
     runtime.decideVote(ctx);

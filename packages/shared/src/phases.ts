@@ -36,6 +36,15 @@ export interface RoomConfig {
   guardianAngel?: boolean;
   priest?: boolean;
   mayor?: boolean;
+  /**
+   * Thằng Hề - vai TRUNG LẬP, tối đa một lá mỗi ván.
+   *
+   * Optional vì cùng lý do với mọi tuỳ chọn thêm sau: snapshot Redis và cấu
+   * hình phòng ghi trước bản này không có trường đó, và bắt buộc nó sẽ làm mọi
+   * ván đang chạy trượt schema ngay lúc deploy. Mặc định TẮT: không preset nào
+   * chứa Thằng Hề, host phải tự bật trong bộ bài tuỳ chỉnh.
+   */
+  jester?: boolean;
   mode?: RoomMode;
   /**
    * Bật voice chat cho phòng. Mặc định tắt: phòng không bật thì không có gì

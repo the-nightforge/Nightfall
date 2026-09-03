@@ -11,7 +11,6 @@ import {
   type TrialStageBeat,
   type TrialStageView,
 } from "./live-trial";
-import { LIVE_TRIAL_SETTINGS_EVENT, loadLiveTrialSettings } from "./live-trial-settings";
 
 /**
  * Không bao giờ cấp phát một mảng rỗng mới.
@@ -23,8 +22,6 @@ import { LIVE_TRIAL_SETTINGS_EVENT, loadLiveTrialSettings } from "./live-trial-s
 const NO_BEATS: TrialStageBeat[] = [];
 
 export interface LiveTrial {
-  /** Người chơi đã bật tính năng trong thiết lập cá nhân. */
-  enabled: boolean;
   /** Trạng thái sân khấu, hoặc null khi lúc này không có phiên toà nào. */
   view: TrialStageView | null;
   /** Nhịp diễn CHƯA có ai nhận. Rỗng là không có gì để diễn. */
@@ -51,23 +48,16 @@ export interface LiveTrial {
  *      dựng khi đã có bị cáo, nên nếu trí nhớ nằm trong nó thì snapshot đầu tiên
  *      nó thấy luôn trùng với lúc phiên toà mở ra - và không có cách nào phân
  *      biệt "vừa mở ra trước mắt tôi" với "đã mở từ trước khi tôi tới".
- *   2. Nó cũng phải sống qua những lúc sân khấu bị THÁO: tắt công tắc, xoay
- *      ngang điện thoại, hay rơi về bản 2D. Lô nhịp diễn đã phát mà nằm lại
- *      trong state thì mỗi lần dựng lại là một lần phát lại.
+ *   2. Nó cũng phải sống qua những lúc sân khấu bị THÁO: xoay ngang điện thoại
+ *      (màn hình thấp thì rơi về bản 2D), mất WebGL, hay cảnh 3D vỡ giữa chừng.
+ *      Lô nhịp diễn đã phát mà nằm lại trong state thì mỗi lần dựng lại là một
+ *      lần phát lại.
  *
  * Toàn bộ quyết định vòng đời nằm ở `advanceLiveTrial`/`consumeLiveTrialBeats` -
  * hai hàm thuần có test riêng ở `live-trial-session.test.ts`. Ở đây chỉ còn ba
  * việc: gọi chúng, cất kết quả vào state, và đưa `consumeBeats` xuống dưới.
  */
 export function useLiveTrial(snapshot: RoomSnapshot | null, connected: boolean): LiveTrial {
-  /*
-   * Khởi tạo TẮT rồi mới đọc localStorage sau khi hydrate.
-   *
-   * `localStorage` không tồn tại ở server, đọc thẳng trong lúc render thì cây
-   * DOM hai bên lệch nhau. Mặc định của tính năng cũng là tắt, nên khoảnh khắc
-   * trước khi effect chạy không hề nhấp nháy.
-   */
-  const [enabled, setEnabled] = useState(false);
   const session = useRef<LiveTrialSession>(EMPTY_LIVE_TRIAL_SESSION);
   const [published, setPublished] = useState<{
     view: TrialStageView | null;
@@ -76,17 +66,7 @@ export function useLiveTrial(snapshot: RoomSnapshot | null, connected: boolean):
   }>({ view: null, beats: NO_BEATS, beatsId: 0 });
 
   useEffect(() => {
-    const apply = () => setEnabled(loadLiveTrialSettings().enabled);
-    apply();
-    // Công tắc nằm ở `SoundControl`, một component khác hẳn nhánh cây này.
-    // `storage` của trình duyệt chỉ bắn sang TAB KHÁC, nên phải có tiếng gọi
-    // riêng cho chính tab vừa ghi.
-    window.addEventListener(LIVE_TRIAL_SETTINGS_EVENT, apply);
-    return () => window.removeEventListener(LIVE_TRIAL_SETTINGS_EVENT, apply);
-  }, []);
-
-  useEffect(() => {
-    const next = advanceLiveTrial(session.current, { snapshot, connected, enabled });
+    const next = advanceLiveTrial(session.current, { snapshot, connected });
     session.current = next;
     const beats = pendingBeats(next);
     setPublished((previous) => {
@@ -97,7 +77,7 @@ export function useLiveTrial(snapshot: RoomSnapshot | null, connected: boolean):
       }
       return { view: next.view, beats: beats.length === 0 ? NO_BEATS : beats, beatsId: next.beatsId };
     });
-  }, [snapshot, connected, enabled]);
+  }, [snapshot, connected]);
 
   const consumeBeats = useCallback((id: number) => {
     const next = consumeLiveTrialBeats(session.current, id);
@@ -114,7 +94,6 @@ export function useLiveTrial(snapshot: RoomSnapshot | null, connected: boolean):
   }, []);
 
   return {
-    enabled,
     view: published.view,
     beats: published.beats,
     beatsId: published.beatsId,

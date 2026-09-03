@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ROLE_META, type RoomSnapshot } from "@masoi/shared";
 import { PlayerGrid } from "./PlayerGrid";
 import { canActAtNight } from "@/lib/night-role";
+import { seerReading } from "@/lib/seer-reading";
 import {
   WOLF_TALLY_EMPTY,
   wolfBiteLabel,
@@ -372,15 +373,27 @@ export function NightPanel({ snapshot, onAction }: Props) {
                 <p className="text-[13px] text-mist-strong">Kết quả soi gần nhất:</p>
                 <p className="mt-1">
                   <b>{night.seerResult.targetName}</b> là{" "}
-                  <b className={night.seerResult.isWolf ? "text-blood-400" : "text-emerald-300"}>
-                    {night.seerResult.isWolf ? "Ma Sói!" : "Phe làng"}
+                  <b className={seerReading(night.seerResult.team, night.seerResult.isWolf).className}>
+                    {seerReading(night.seerResult.team, night.seerResult.isWolf).label}
                   </b>
                 </p>
                 {night.seerResult.secondaryTargetName && (
                   <p className="mt-1">
                     Mục tiêu 2: <b>{night.seerResult.secondaryTargetName}</b> là{" "}
-                    <b className={night.seerResult.secondaryIsWolf ? "text-blood-400" : "text-emerald-300"}>
-                      {night.seerResult.secondaryIsWolf ? "Ma Sói!" : "Phe làng"}
+                    <b
+                      className={
+                        seerReading(
+                          night.seerResult.secondaryTeam,
+                          night.seerResult.secondaryIsWolf,
+                        ).className
+                      }
+                    >
+                      {
+                        seerReading(
+                          night.seerResult.secondaryTeam,
+                          night.seerResult.secondaryIsWolf,
+                        ).label
+                      }
                     </b>
                   </p>
                 )}

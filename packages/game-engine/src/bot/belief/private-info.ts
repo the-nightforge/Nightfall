@@ -101,6 +101,17 @@ export function applyPrivateInformation(
       );
       pinScore(state.suspicion, result.targetId, MAX_BELIEF_SCORE, round);
     } else {
+      /*
+       * "Không phải Sói" và "người của làng" là HAI điều khác nhau, và chỉ điều
+       * đầu tiên là thứ lượt soi vừa chứng minh.
+       *
+       * Một mục tiêu TRUNG LẬP vẫn được xoá sạch nghi ngờ - nó thật sự không
+       * phải Sói, nên treo nó là tiêu một ngày của làng. Nhưng nó KHÔNG được
+       * ghim tin tưởng lên trần như một người làng: nó không chơi cho làng, và
+       * một Tiên Tri đi bảo lãnh cho nó bằng uy tín của mình sẽ trả giá đúng
+       * lúc nó bắt đầu phá. `neutralClear` vì thế nhẹ hơn `seerClear`.
+       */
+      const neutral = result.team === "neutral";
       applyTrustEvidence(
         state,
         evidenceFor(
@@ -109,15 +120,36 @@ export function applyPrivateInformation(
             kind: "SEER_RESULT_CLEAR",
             sourceId,
             actorId: result.targetId,
-            weight: weights.privateInfo.seerClear,
-            summary: `soi ra ${result.targetName} không phải Sói`,
+            weight: neutral ? weights.privateInfo.neutralClear : weights.privateInfo.seerClear,
+            summary: neutral
+              ? `soi ra ${result.targetName} thuộc phe trung lập`
+              : `soi ra ${result.targetName} không phải Sói`,
           },
           round,
         ),
         weights,
       );
+      /*
+       * GHIM cả hai nhánh, chỉ khác MỐC.
+       *
+       * `pinScore` không phải một chi tiết trang trí: nó là thứ làm cho việc áp
+       * lại cùng một kết quả trở nên idempotent, và `observe()` thì chạy nhiều
+       * lần mỗi vòng. Bản đầu của nhánh trung lập chỉ bỏ lời gọi ghim đi - với
+       * ý đúng là "đừng lên trần" - nhưng hệ quả là `applyTrustEvidence` cộng
+       * dồn mỗi lần gọi: cùng một lượt soi cho ra 29.88 → 59.76 → 89.64 → 100
+       * chỉ vì scheduler gọi bốn lần, trong khi danh sách bằng chứng vẫn đúng
+       * một mục.
+       *
+       * Mốc thấp hơn trần giữ nguyên điều cần giữ: "không phải Sói" KHÁC
+       * "đồng đội thuộc phe Dân".
+       */
+      pinScore(
+        state.trust,
+        result.targetId,
+        neutral ? weights.privateInfo.neutralClearTrust : MAX_BELIEF_SCORE,
+        round,
+      );
       // Đã biết chắc không phải Sói thì mọi nghi ngờ tích trước đó là rác.
-      pinScore(state.trust, result.targetId, MAX_BELIEF_SCORE, round);
       pinScore(state.suspicion, result.targetId, 0, round);
     }
   }

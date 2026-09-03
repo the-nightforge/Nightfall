@@ -258,7 +258,13 @@ describe("Tiên Tri soi Kẻ Nguyền Rủa", () => {
   it("thấy là dân làng trước khi chuyển phe", () => {
     const engine = cursedEngine();
     engine.submitNightAction("seer", "SEE", "cursed");
-    expect(engine.state.night.seerResults.seer).toEqual({ targetId: "cursed", isWolf: false });
+    // `team` đi kèm `isWolf`: Kẻ Nguyền Rủa lúc chưa bị cắn vẫn đọc ra "village",
+    // không phải "neutral" - nó là một lá bài của phe làng cho tới lúc đổi phe.
+    expect(engine.state.night.seerResults.seer).toEqual({
+      targetId: "cursed",
+      isWolf: false,
+      team: "village",
+    });
   });
 
   it("thấy là Ma Sói sau khi chuyển phe", () => {
@@ -270,7 +276,11 @@ describe("Tiên Tri soi Kẻ Nguyền Rủa", () => {
 
     engine.setPhase("NIGHT", 30_000);
     engine.submitNightAction("seer", "SEE", "cursed");
-    expect(engine.state.night.seerResults.seer).toEqual({ targetId: "cursed", isWolf: true });
+    expect(engine.state.night.seerResults.seer).toEqual({
+      targetId: "cursed",
+      isWolf: true,
+      team: "wolves",
+    });
   });
 });
 

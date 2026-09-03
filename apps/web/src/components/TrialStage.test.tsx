@@ -298,7 +298,7 @@ async function mountRoom(options: { strict?: boolean } = {}) {
 
   function Room({ snap, connected }: { snap: Snapshot | null; connected: boolean }) {
     const live = useLiveTrial(snap, connected);
-    if (!snap || !live.enabled || !live.view) return null;
+    if (!snap || !live.view) return null;
     return React.createElement(TrialStage, {
       view: live.view,
       beats: live.beats,
@@ -333,12 +333,6 @@ async function mountRoom(options: { strict?: boolean } = {}) {
   };
 }
 
-function enable(on: boolean): void {
-  localStorage.setItem("masoi.live-trial", JSON.stringify({ enabled: on }));
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event("masoi:live-trial-settings"));
-  }
-}
 
 before(() => {
   localStorage.clear();
@@ -354,7 +348,6 @@ after(() => {
 describe("mở phiên toà: OPENING phải tới được cảnh 3D", () => {
   it("bật sẵn, thảo luận → DEFENSE: playOpening chạy ĐÚNG MỘT LẦN", async () => {
     resetScene();
-    enable(true);
     const room = await mountRoom();
 
     // Một snapshot hợp lệ NGOÀI phiên toà - đây là thứ phân biệt "đã vào bàn"
@@ -370,7 +363,6 @@ describe("mở phiên toà: OPENING phải tới được cảnh 3D", () => {
 
   it("render lại và snapshot lặp không làm nó chạy lần hai", async () => {
     resetScene();
-    enable(true);
     const room = await mountRoom();
     await room.render(snapshot({ phase: "VOTING" }));
 
@@ -390,7 +382,6 @@ describe("mở phiên toà: OPENING phải tới được cảnh 3D", () => {
 
   it("KHÔNG dựng lại cảnh theo từng snapshot", async () => {
     resetScene();
-    enable(true);
     const room = await mountRoom();
     await room.render(snapshot({ phase: "VOTING" }));
     await room.render(defense());
@@ -406,7 +397,6 @@ describe("mở phiên toà: OPENING phải tới được cảnh 3D", () => {
 
   it("phiếu về sau vẫn có con dấu - lần sửa này không đổi đường của STAMP", async () => {
     resetScene();
-    enable(true);
     const room = await mountRoom();
     await room.render(snapshot({ phase: "VOTING" }));
     await room.render(defense());
@@ -421,51 +411,18 @@ describe("mở phiên toà: OPENING phải tới được cảnh 3D", () => {
 describe("những lúc KHÔNG được mở màn", () => {
   it("snapshot đầu tiên đã là DEFENSE (F5 giữa pha): không mở màn", async () => {
     resetScene();
-    enable(true);
     const room = await mountRoom();
     await room.render(defense());
     assert.equal(opened(), 0, "phiên toà đã diễn từ trước khi người chơi tới");
     await room.unmount();
   });
 
-  it("tắt rồi bật lại sau khi đã mở màn: không chạy lại", async () => {
-    resetScene();
-    enable(true);
-    const room = await mountRoom();
-    await room.render(snapshot({ phase: "VOTING" }));
-    const opening = defense();
-    await room.render(opening);
-    assert.equal(opened(), 1);
-
-    enable(false);
-    await room.render(opening);
-    enable(true);
-    await room.render(opening);
-
-    assert.equal(opened(), 1, "gạt một công tắc hiển thị không diễn lại chuyện cũ");
-    await room.unmount();
-  });
-
-  it("bật tính năng GIỮA phiên toà: không phát bù màn mở đầu", async () => {
-    resetScene();
-    enable(false);
-    const room = await mountRoom();
-    await room.render(snapshot({ phase: "VOTING" }));
-    await room.render(defense());
-    assert.equal(opened(), 0, "đang tắt thì không có gì để diễn");
-
-    enable(true);
-    await room.render(defense());
-    assert.equal(opened(), 0, "bật lên chỉ được thấy trạng thái hiện tại");
-    await room.unmount();
-  });
 });
 
 describe("bản dự phòng 2D", () => {
   it("máy không dựng được 3D: không có playOpening, và lô bị bỏ hẳn", async () => {
     resetScene();
     webglSupported = false;
-    enable(true);
 
     const room = await mountRoom();
     await room.render(snapshot({ phase: "VOTING" }));
@@ -481,7 +438,6 @@ describe("bản dự phòng 2D", () => {
   it("từ 2D sang 3D không phát lại lô đã bỏ", async () => {
     resetScene();
     webglSupported = false;
-    enable(true);
 
     const room = await mountRoom();
     await room.render(snapshot({ phase: "VOTING" }));
@@ -503,7 +459,6 @@ describe("bản dự phòng 2D", () => {
 describe("import chậm", () => {
   it("cảnh dựng xong SAU khi đã sang FINAL_VOTE: không chạy màn mở đầu cũ", async () => {
     resetScene();
-    enable(true);
 
     const React = await import("react");
     const { act } = await import("react");
@@ -513,7 +468,7 @@ describe("import chậm", () => {
 
     function Room({ snap }: { snap: Snapshot | null }) {
       const live = useLiveTrial(snap, true);
-      if (!snap || !live.enabled || !live.view) return null;
+      if (!snap || !live.view) return null;
       return React.createElement(TrialStage, {
         view: live.view,
         beats: live.beats,
@@ -597,7 +552,6 @@ describe("import chậm", () => {
 describe("React Strict Mode", () => {
   it("effect chạy hai lượt vẫn chỉ một màn mở đầu", async () => {
     resetScene();
-    enable(true);
     const room = await mountRoom({ strict: true });
     await room.render(snapshot({ phase: "VOTING" }));
     await room.render(defense());

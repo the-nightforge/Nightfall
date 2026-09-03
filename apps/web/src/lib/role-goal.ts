@@ -1,4 +1,4 @@
-import { roleTeam, type Role } from "@masoi/shared";
+import { roleTeam, type Role, type Team } from "@masoi/shared";
 
 /**
  * Mục tiêu của vai, nói theo ĐIỀU KIỆN THẮNG thật.
@@ -14,8 +14,30 @@ import { roleTeam, type Role } from "@masoi/shared";
  * cho từng vai chỉ đẻ ra mười ba câu phải giữ cho khớp với hai dòng luật thắng
  * duy nhất ở engine.
  */
+const TEAM_GOALS: Record<Team, string> = {
+  wolves:
+    "Cùng đồng bọn loại dần dân làng, cho tới khi số Sói còn sống bằng hoặc hơn phần còn lại.",
+  village: "Tìm ra và loại hết Ma Sói. Làng chỉ thắng khi không còn con Sói nào sống sót.",
+  /*
+   * Phe trung lập KHÔNG nói theo phe, và đây là ngoại lệ có lý do chứ không
+   * phải một lỗ hổng của quy tắc trên: vai trung lập không có luật thắng chung
+   * nào để mà tóm tắt - mỗi vai có luật riêng. Hôm nay chỉ có một vai như vậy,
+   * nên bảng dưới đây ghi thẳng luật của nó; vai trung lập thứ hai sẽ cần một
+   * bảng theo VAI, không phải theo phe.
+   */
+  neutral: "",
+};
+
+/** Mục tiêu riêng của từng vai trung lập; xem chú thích `neutral` ở trên. */
+const NEUTRAL_ROLE_GOALS: Partial<Record<Role, string>> = {
+  JESTER:
+    "Khiến cả làng tin bạn là Sói và treo cổ bạn giữa ban ngày. Bạn CHỈ thắng khi chết vì phán quyết treo cổ - chết vì Sói, độc hay Thợ Săn đều không tính, và sống tới cuối ván là thua.",
+};
+
 export function roleGoal(role: Role): string {
-  return roleTeam(role) === "wolves"
-    ? "Cùng đồng bọn loại dần dân làng, cho tới khi số Sói còn sống bằng hoặc hơn phần còn lại."
-    : "Tìm ra và loại hết Ma Sói. Làng chỉ thắng khi không còn con Sói nào sống sót.";
+  const team = roleTeam(role);
+  if (team === "neutral") {
+    return NEUTRAL_ROLE_GOALS[role] ?? "Đạt điều kiện thắng riêng của vai này.";
+  }
+  return TEAM_GOALS[team];
 }

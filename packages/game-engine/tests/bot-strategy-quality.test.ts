@@ -258,7 +258,7 @@ describe("4. Tiên Tri dùng kết quả soi mà không tự lộ quá sớm", (
       round: 1,
       selfRole: "SEER",
       knownRoles: { me: "SEER" },
-      seerResult: { targetId: "a", targetName: "A", isWolf: true },
+      seerResult: { targetId: "a", targetName: "A", isWolf: true, team: "wolves" },
     });
 
   it("vòng 1: vẫn bầu đúng con Sói đã soi trúng", () => {
@@ -304,7 +304,7 @@ describe("4. Tiên Tri dùng kết quả soi mà không tự lộ quá sớm", (
       round: 3,
       selfRole: "SEER",
       knownRoles: { me: "SEER" },
-      seerResult: { targetId: "a", targetName: "A", isWolf: true },
+      seerResult: { targetId: "a", targetName: "A", isWolf: true, team: "wolves" },
     });
     runtime.observe(ctx);
     const speech = runtime.decideSpeech(ctx, runtime.decideVote(ctx));
@@ -489,7 +489,7 @@ describe("9. BOT đổi phiếu khi có bằng chứng mới mạnh hơn", () =>
       myVote: { type: "PLAYER", targetId: "a" },
       selfRole: "SEER",
       knownRoles: { me: "SEER" },
-      seerResult: { targetId: "b", targetName: "B", isWolf: true },
+      seerResult: { targetId: "b", targetName: "B", isWolf: true, team: "wolves" },
     });
     runtime.observe(after);
     expect(chosen(runtime.decideVote(after))).toBe("b");

@@ -1,3 +1,4 @@
+import type { DefenseStance } from "@masoi/game-engine";
 import type { BotSpeechIntention, BotSpeechStyle } from "@masoi/game-engine";
 
 /**
@@ -102,7 +103,18 @@ export interface SpeechRequest {
    * chúng vào prompt không phải một rò rỉ. Khác hẳn `roleContext` cũ (đã bị bỏ
    * khỏi prompt bào chữa): cái đó đưa VAI THẬT vào, thứ không ai được thấy.
    */
-  defense: { votesAgainstMe: number; alsoAccused: string[] } | null;
+  defense: {
+    votesAgainstMe: number;
+    alsoAccused: string[];
+    /**
+     * Bị cáo này có đang cố sống hay không - do LÕI quyết, không do prompt đoán.
+     *
+     * Trước đây trường này không tồn tại và tầng diễn đạt tự giả định
+     * "SURVIVE": mọi lượt bào chữa đều kèm câu "hãy thuyết phục làng đừng treo
+     * bạn". Với Thằng Hề, đó là chỉ thị làm hỏng đúng điều kiện thắng của nó.
+     */
+    stance: DefenseStance;
+  } | null;
 }
 
 /** Kết quả một lượt diễn đạt, kèm nguồn gốc của câu chữ để còn đo được. */

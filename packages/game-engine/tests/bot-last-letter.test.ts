@@ -137,7 +137,7 @@ describe("nội dung theo vai", () => {
     const letter = decideLastLetter(
       context({
         selfRole: "SEER",
-        seerResult: { targetId: "p3", targetName: "Cường", isWolf: true },
+        seerResult: { targetId: "p3", targetName: "Cường", isWolf: true, team: "wolves" },
       }),
       brain({ p2: 40 }),
     );
@@ -196,7 +196,7 @@ describe("không rò thông tin bí mật", () => {
     const letter = decideLastLetter(
       context({
         selfRole: "SEER",
-        seerResult: { targetId: "p3", targetName: "Cường", isWolf: false },
+        seerResult: { targetId: "p3", targetName: "Cường", isWolf: false, team: "village" },
         knownRoles: { p4: "WEREWOLF" as Role },
       }),
       brain({ p2: 40 }),

@@ -43,6 +43,19 @@ export function decideRoleClaim(
     return { role: COVER, reason: "Sói không bao giờ tự khai" };
   }
 
+  /*
+   * Thằng Hề khai một vai CHỨC NĂNG, ngược hẳn logic của mọi vai khác ở hàm này.
+   *
+   * Lý lẽ nền của hàm - "khai vai chức năng là chỉ cho bầy Sói biết đêm nay cắn
+   * ai" - vẫn đúng, chỉ là cái giá đó không còn là giá với Hề: bị chú ý là điều
+   * nó muốn, và một cái chết ban đêm thì dù sao cũng không tính cho nó. Đổi lại
+   * nó nhận đúng thứ cần: một lời khai kiểm chứng được, mà người thật sẽ đứng
+   * lên phản bác.
+   */
+  if (role === "JESTER") {
+    return { role: "SEER", reason: "Thằng Hề khai láo một vai chức năng để bị phản bác và bị treo" };
+  }
+
   const canSee = role === "SEER" || role === "APPRENTICE_SEER";
   const foundWolf = state.knownInformation.seerResults.some(
     (memory) => memory.data.isWolf === true,
@@ -254,6 +267,47 @@ export function decideChatClaim(
     }
   }
 
+  // ---- Thằng Hề: khai láo để bị bắt bài ----
+  //
+  // Đứng TRƯỚC nhánh Sói khai láo chỉ vì hai nhánh loại trừ nhau (`isWolf`);
+  // thứ tự giữa chúng không đổi kết quả của bất kỳ con BOT nào.
+  //
+  // Vai nhắm tới là một vai đã có NGƯỜI KHÁC nhận, nếu có: một lời khai đè lên
+  // lời khai của người khác buộc bàn phải xử một trong hai, và Hề chỉ cần được
+  // xử. Khi chưa ai khai gì thì nó tự mở màn bằng Tiên Tri - lời khai nặng
+  // nhất, cũng là lời dễ bị người thật lật nhất.
+  if (role === "JESTER" && knowledge.round >= weights.jester.bluffFromRound) {
+    // Cổng tái lập: cấu hình chưa bật hành vi Hề thì thoát TRƯỚC khi rút số.
+    if (weights.jester.bluffChance > 0) {
+      const dare =
+        weights.jester.bluffChance *
+        state.personality.deceptionSkill *
+        state.personality.riskTolerance;
+      if (rng() < dare) {
+        const collision = claimsInOrder(state).find(
+          (memory) =>
+            memory.actorId !== me &&
+            alivePlayers.has(memory.actorId) &&
+            isPowerRole((memory.data.role as Role | undefined) ?? COVER),
+        );
+        const collidedRole = collision
+          ? ((collision.data.role as Role | undefined) ?? "SEER")
+          : "SEER";
+        return {
+          role: collidedRole,
+          kind: collision ? "COUNTER" : "PROACTIVE",
+          // Chỉ đích danh đúng người nó vừa bỏ phiếu: lời nói và lá phiếu của
+          // Hề phải đi cùng nhau thì cáo buộc mới đủ nghiêm túc để bị phản đòn.
+          accusedId: collision ? null : voteTargetId,
+          counterTargetId: collision ? collision.actorId : null,
+          reason: collision
+            ? "Thằng Hề đè lên lời khai của người khác để bàn buộc phải xử một trong hai"
+            : "Thằng Hề khai láo vai chức năng để tự đẩy mình lên giá treo",
+        };
+      }
+    }
+  }
+
   // ---- PROACTIVE: Sói khai láo ----
   if (isWolf && knowledge.round >= weights.claim.wolfBluffFromRound) {
     // Ai trong bầy đứng ra nói dối: con còn sống có id nhỏ nhất. Luật CỤC BỘ -
@@ -285,6 +339,17 @@ export function decideChatClaim(
   const underFire =
     knowledge.trialAccusedId === me || voteLeader(knowledge.currentVoteCounts.players) === me;
   if (underFire) {
+    /*
+     * Hề đang bị dồn thì IM. Nhánh này là "lôi lá bài cuối ra để sống", và với
+     * Hề thì sống chính là thua - một lời bào chữa thuyết phục ở đây có thể phá
+     * hỏng đúng cái nó vừa mất cả ván để dựng.
+     *
+     * Không phải là không nói gì: `planSpeech` vẫn đi tiếp xuống các nhánh
+     * phản hồi và cáo buộc, nên Hề vẫn cãi cọ. Nó chỉ không đưa ra một lời khai
+     * kiểm chứng được vào đúng lúc lời khai đó cứu được nó.
+     */
+    if (role === "JESTER") return null;
+
     if (!isWolf && isPowerRole(role)) {
       return {
         role,

@@ -1,4 +1,4 @@
-import type { DayVoteRecap, GameEventId, Phase, PublicVoteChoice, Role } from "@masoi/shared";
+import type { DayVoteRecap, GameEventId, Phase, PublicVoteChoice, Role, Team } from "@masoi/shared";
 
 export type BotRng = () => number;
 
@@ -393,7 +393,12 @@ export interface BotKnowledgeView {
    * self-play.
    */
   revealRoleOnDeath?: boolean;
-  seerResult: { targetId: string; targetName: string; isWolf: boolean } | null;
+  /**
+   * Kết quả soi gần nhất. `team` là câu trả lời đầy đủ, `isWolf` là hệ quả của
+   * nó - lõi phải đọc `team` khi cần phân biệt "phe làng" với "phe trung lập",
+   * vì `isWolf === false` chỉ nói được "không phải Sói".
+   */
+  seerResult: { targetId: string; targetName: string; isWolf: boolean; team: Team } | null;
   /** `null` ngoài pha đêm, khi bot đã chết, hoặc khi vai không hành động đêm. */
   night: NightKnowledge | null;
   /**

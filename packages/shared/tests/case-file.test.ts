@@ -18,6 +18,7 @@ function cast(): PlayerView[] {
     { id: "p-baove", name: "Bảo Vệ", alive: true, isBot: false, role: "GUARD" },
     { id: "p-linhmuc", name: "Linh Mục", alive: false, isBot: false, role: "PRIEST" },
     { id: "p-dan", name: "Dân Làng", alive: false, isBot: false, role: "VILLAGER" },
+    { id: "p-he", name: "Thằng Hề", alive: true, isBot: false, role: "JESTER" },
   ];
 }
 
@@ -188,6 +189,40 @@ describe("highlight · treo cổ", () => {
   it("treo nhầm Dân Làng thì là INNOCENT_LYNCHED", () => {
     const file = buildCaseFile(snap({ dayVoteHistory: [trialDay(2, "p-dan", true)] }));
     expect(typesOf(file)).toContain("INNOCENT_LYNCHED");
+  });
+
+  it("treo một vai TRUNG LẬP thì là NEUTRAL_LYNCHED, không phải hai loại kia", () => {
+    /*
+     * Trước khi có phe thứ ba, "không phải phe làng" đồng nghĩa với "là Sói",
+     * nên nhánh else nói thẳng "Làng tóm đúng Sói". Câu đó sẽ gọi Thằng Hề là
+     * một con Sói bị tóm - vừa sai vừa che mất đúng khoảnh khắc quyết định của
+     * cả ván có Hề.
+     */
+    const file = buildCaseFile(snap({ dayVoteHistory: [trialDay(2, "p-he", true)] }));
+    const types = typesOf(file);
+    expect(types).toContain("NEUTRAL_LYNCHED");
+    expect(types).not.toContain("WOLF_LYNCHED");
+    expect(types).not.toContain("INNOCENT_LYNCHED");
+
+    const highlight = file!.highlights.find((h) => h.type === "NEUTRAL_LYNCHED")!;
+    expect(highlight.description).toContain("Thằng Hề");
+    // KHÔNG được nói nó thuộc phe Dân Làng - đó là cả điểm của phe thứ ba.
+    expect(highlight.description).not.toContain("phe Dân Làng");
+  });
+
+  it("Thợ Săn bắn trúng vai trung lập vẫn là một phát đạn LẠC", () => {
+    // Làng không thu được gì từ nó, nên nó không thể là "phát đạn cuối cùng".
+    const shots: HunterShotRecap[] = [
+      {
+        round: 2,
+        hunter: { id: "p-thosan", name: "Thợ Săn" },
+        target: { id: "p-he", name: "Thằng Hề" },
+        source: "night",
+      },
+    ];
+    const types = typesOf(buildCaseFile(snap({ hunterShots: shots })));
+    expect(types).toContain("HUNTER_MISFIRE");
+    expect(types).not.toContain("HUNTER_REVENGE");
   });
 
   it("evidence mang đúng số phiếu để test không phải so chuỗi", () => {

@@ -940,22 +940,19 @@ function scheduleDefenseBot(room: Room, accusedId: string): void {
       const context = buildBotDecisionContext(room, member.playerId);
       runtime.observe(context);
 
-      // Lõi quyết có khai vai hay không - đúng nhánh UNDER_FIRE của
-      // `decideChatClaim` (Task 3), dựng sẵn thành `BotSpeechIntention` bởi
-      // `decideDefenseClaim`. `null` là bị cáo không có gì để khai; lượt bào
-      // chữa vẫn phải nói gì đó, nên rơi về một ý định DISAGREE không chỉ đích
-      // danh ai - vote công khai lộ AI đang bị nhắm, không lộ AI đã bỏ phiếu,
-      // nên không có "kẻ tố cáo" cụ thể để phản bác. Đây KHÔNG phải một quyết
-      // định gameplay - hình dạng của nó cố định bất kể tính cách hay ván đấu -
-      // nên không cần đi qua một hàm lõi riêng; phần biến thiên duy nhất
-      // (giọng điệu) vẫn bám theo `style` như mọi speech act khác.
-      const speech: BotSpeechIntention = runtime.decideDefenseClaim(context) ?? {
-        kind: "DISAGREE",
-        topic: "SUSPICION",
-        confidence: 0.5,
-        evidence: [],
-        tone: runtime.style.harshness >= 0.6 ? "TENSE" : "FIRM",
-      };
+      /*
+       * TOÀN BỘ lượt bào chữa do lõi quyết, kể cả đường lui.
+       *
+       * Bản trước gọi `decideDefenseClaim` rồi tự dựng một ý định DISAGREE khi
+       * lõi trả `null`. Đường lui viết ở đây trông vô hại - hình dạng của nó cố
+       * định - nhưng nó là một quyết định gameplay đặt ở tầng IO, và tầng này
+       * KHÔNG nhìn thấy vai. Hệ quả: mọi bị cáo đều được dựng thành một người
+       * đang cố sống, kể cả Thằng Hề, vai mà sống chính là thua.
+       *
+       * `stance` đi cùng ý định và được chuyển thẳng xuống prompt: tầng diễn
+       * đạt không được phép tự đoán bị cáo này muốn gì.
+       */
+      const { intention: speech, stance } = runtime.decideDefense(context);
 
       // Số phiếu và danh sách đồng-bị-nhắm đã công khai ở pha DEFENSE (đúng dữ
       // liệu `RoomSnapshot.players[].voteCount` cũ từng đọc) - khác hẳn vai
@@ -972,7 +969,7 @@ function scheduleDefenseBot(room: Room, accusedId: string): void {
 
       const request: SpeechRequest = {
         ...toSpeechRequest(room, member, context, speech),
-        defense: { votesAgainstMe, alsoAccused },
+        defense: { votesAgainstMe, alsoAccused, stance },
       };
 
       // Cùng một hàm với mọi lời nói khác: cổng CLAIM_INTEGRITY và bảng mẫu dự
