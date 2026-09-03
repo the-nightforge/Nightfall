@@ -30,16 +30,23 @@ jobs:
           # một đánh đổi có ý thức chứ không phải sơ suất.
           #
           # `TrialStage.test.tsx` mount cây React thật và dùng module mocking của
-          # `node:test` - thứ vừa mới có từ v20.18.0 và còn đang thực nghiệm.
-          # Suite web đỏ trên runner 20.19 kể từ khi file đó vào repo, trong khi
-          # cùng bộ test xanh 937/937 trên 22.x. Chạy test ở đúng phiên bản mà
-          # người phát triển chạy đáng giá hơn là chạy ở phiên bản của image
-          # server - mã server không có phần nào phụ thuộc phiên bản, còn bộ test
-          # thì có.
+          # `node:test` - thứ còn đang thực nghiệm và hành xử khác nhau theo bản:
           #
-          # Nếu sau này muốn khớp lại: nâng Dockerfile.server lên node:22-alpine
+          #   20.19  `mock.module` chưa có tuỳ chọn `exports`, và bỏ qua nó LẶNG
+          #          LẼ; mock cài vào một module rỗng.
+          #   22.x   mock module cục bộ nạp bằng `import()` động KHÔNG ăn (module
+          #          thật vẫn chạy), trong khi specifier trần như `three` thì ăn.
+          #          Đã đo trên cả Windows lẫn container linux: 931/937.
+          #   24.x   cả hai đều đúng: 937/937, đo trên Windows và trên
+          #          node:24-alpine.
+          #
+          # Nên đây là phiên bản THẤP NHẤT chạy được bộ test này, không phải một
+          # lựa chọn cho mới. Mã server không có phần nào phụ thuộc phiên bản,
+          # còn bộ test thì có.
+          #
+          # Nếu sau này muốn khớp lại: nâng Dockerfile.server lên node:24-alpine
           # cùng lúc, đừng hạ dòng này xuống một mình.
-          node-version: 22.x
+          node-version: 24.x
           cache: npm
 
       - name: Install
