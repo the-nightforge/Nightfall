@@ -57,9 +57,21 @@ function buildCast(snapshot: RoomSnapshot): CaseFilePlayer[] {
       id: player.id,
       name: player.name,
       role: player.role,
-      // Phép ghi đè vai DUY NHẤT của engine là Kẻ Nguyền Rủa hoá Sói, nên cờ này
-      // là đủ để suy ngược vai lúc chia bài.
-      originRole: player.cursedTurned === true ? "CURSED" : player.role,
+      /*
+       * Engine có ĐÚNG HAI phép ghi đè vai, và hai cờ dưới đây là hai bằng
+       * chứng của chúng - nên vai lúc chia bài suy ngược lại được chính xác:
+       *  - Kẻ Nguyền Rủa bị cắn hoá Sói (`cursedTurned`);
+       *  - Kẻ Báo Thù mất mục tiêu và hoá Thằng Hề (`executionerTurned`).
+       *
+       * Hai cờ không bao giờ cùng bật trên một người: một vai trung lập không
+       * bị nguyền được, và một Kẻ Nguyền Rủa không có mục tiêu để mà mất.
+       */
+      originRole:
+        player.cursedTurned === true
+          ? "CURSED"
+          : player.executionerTurned === true
+            ? "EXECUTIONER"
+            : player.role,
       team: roleTeam(player.role),
       alive: player.alive,
       isBot: player.isBot,

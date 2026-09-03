@@ -13,7 +13,18 @@ import type { GameEventId } from "./events";
  * Tập ĐÓNG, và cố ý không có "điều kiện chung của phe trung lập": vai trung lập
  * tiếp theo sẽ có luật thắng của riêng nó, không mặc định dùng lại luật này.
  */
-export const PERSONAL_WIN_CONDITIONS = ["JESTER_LYNCHED"] as const;
+export const PERSONAL_WIN_CONDITIONS = [
+  "JESTER_LYNCHED",
+  /**
+   * Kẻ Báo Thù đã CÒN SỐNG vào đúng lúc mục tiêu của nó bị treo cổ.
+   *
+   * Một điều kiện RIÊNG chứ không dùng lại `JESTER_LYNCHED`: hai luật nói về
+   * hai cái chết khác nhau (mình bị treo / người khác bị treo), và một điều
+   * kiện dùng chung sẽ khiến bảng nhãn, lịch sử trận và mọi phép đếm gộp hai
+   * thành tích trái ngược nhau làm một.
+   */
+  "EXECUTIONER_TARGET_LYNCHED",
+] as const;
 export type PersonalWinCondition = (typeof PERSONAL_WIN_CONDITIONS)[number];
 
 /**
@@ -32,6 +43,7 @@ export function isPersonalWinCondition(value: unknown): value is PersonalWinCond
 
 export const PERSONAL_WIN_LABELS: Record<PersonalWinCondition, string> = {
   JESTER_LYNCHED: "Thằng Hề - bị treo cổ",
+  EXECUTIONER_TARGET_LYNCHED: "Kẻ Báo Thù - mục tiêu bị treo cổ",
 };
 
 /** Một thắng lợi cá nhân đã ghi nhận, đúng một lần cho mỗi người trong ván. */
@@ -91,6 +103,12 @@ export interface PlayerView {
    * thấy `role` là WEREWOLF chứ không biết gốc nguyền rủa.
    */
   cursedTurned?: boolean;
+  /**
+   * Người này vốn là Kẻ Báo Thù và đã hoá Thằng Hề vì mục tiêu chết bởi một
+   * nguồn khác. Chỉ đi kèm khi `role` được phép lộ hoàn toàn - trước
+   * `GAME_OVER` không ai ngoài chính họ được biết chuyện đổi vai này.
+   */
+  executionerTurned?: boolean;
   /** Số phiếu đang có (chỉ trong VOTING) hoặc phiếu cuối (sau bỏ phiếu) */
   voteCount?: number;
   /** Chỉ dùng trong phòng chờ */
@@ -173,6 +191,34 @@ export interface NightActionView {
   poisonUsed?: boolean;
   /** Sói Con vừa chết vòng trước -> bầy Sói đêm nay được cắn 2 mục tiêu */
   wolfCubRageTonight?: boolean;
+}
+
+/**
+ * Nhiệm vụ RIÊNG của Kẻ Báo Thù, tính cho đúng một người.
+ *
+ * Không bao giờ có mặt trong snapshot của ai khác, kể cả khán giả đã chết và
+ * kể cả ở `GAME_OVER`: mục tiêu là một sự thật chỉ chủ nhân nó được biết trong
+ * ván, và phần tổng kết sau ván đã có `personalWins` cùng `executionerTurned`
+ * nói đủ mà không cần một đường thứ hai.
+ *
+ * KHÔNG mang vai của mục tiêu - Kẻ Báo Thù chỉ biết DANH TÍNH người đó, không
+ * biết họ cầm lá gì.
+ */
+export interface ExecutionerView {
+  /**
+   * Người phải bị treo cổ. Đứng yên cả ván, kể cả khi họ đổi vai (Kẻ Nguyền
+   * Rủa hoá Sói) hoặc đã chết.
+   */
+  target: { id: string; name: string; alive: boolean } | null;
+  /** Điều kiện đã hoàn thành: mục tiêu bị treo trong lúc mình còn sống. */
+  won: boolean;
+  /**
+   * Đã hoá Thằng Hề vì mục tiêu chết bởi một nguồn KHÔNG phải treo cổ.
+   *
+   * Khi cờ này bật, `you.role` đã là `JESTER` và luật của Hề áp dụng từ đó -
+   * trường này chỉ để màn hình giải thích được VÌ SAO thẻ vai vừa đổi.
+   */
+  turnedJester: boolean;
 }
 
 export interface DiscussionSkipView {
@@ -362,6 +408,8 @@ export interface RoomSnapshot {
     alive: boolean;
     /** Chính viewer là Kẻ Nguyền Rủa đã hoá Sói. Không gửi cho ai khác. */
     cursedTurned?: boolean;
+    /** Chính viewer là Kẻ Báo Thù đã hoá Thằng Hề. Không gửi cho ai khác. */
+    executionerTurned?: boolean;
   } | null;
   players: PlayerView[];
   night: NightActionView | null;
@@ -414,6 +462,13 @@ export interface RoomSnapshot {
    * Optional vì web và server deploy rời nhau.
    */
   personalWins?: PersonalWin[];
+  /**
+   * Nhiệm vụ của Kẻ Báo Thù, đã tính riêng cho người nhận snapshot này.
+   *
+   * `null` với mọi người khác và với mọi ván không bật vai này. Optional vì web
+   * và server deploy rời nhau.
+   */
+  executioner?: ExecutionerView | null;
   chatLog: ChatMessage[];
   log: string[];
   /** Cảnh báo cân bằng lobby; null khi chưa tính hoặc cân bằng. */

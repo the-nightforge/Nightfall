@@ -952,6 +952,14 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   }
 
   function finished(): boolean {
+    /*
+     * Đứng NGAY TRƯỚC `checkWin`, đúng vị trí mà `checkWinOrContinue` bên
+     * server đặt nó: đợt chết và chuỗi Thợ Săn đi kèm đã xử xong, ván chưa
+     * được chốt. Hai chỗ chốt kết quả duy nhất của dự án, cùng một thứ tự -
+     * lệch nhau thì một Kẻ Báo Thù trong harness sẽ chơi theo một luật khác
+     * với một Kẻ Báo Thù trong phòng thật.
+     */
+    engine.settleExecutioner();
     const winner = engine.checkWin();
     if (!winner) return false;
     engine.finishGame(winner, tick(1_000));

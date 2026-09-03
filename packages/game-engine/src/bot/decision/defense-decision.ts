@@ -106,6 +106,21 @@ export function decideDefenseSpeech(
   }
 
   /*
+   * KHÔNG có nhánh nào cho hai vai trung lập còn lại, và đó là một quyết định
+   * chứ không phải một chỗ bỏ sót.
+   *
+   * Giả định ngầm "người bị đưa ra treo thì muốn sống" chỉ SAI với Thằng Hề.
+   * Sát Nhân bị treo là thua, và Kẻ Báo Thù bị treo là mất cả nhiệm vụ lẫn
+   * đường lui hoá Hề - cả hai đều phải đi đúng đường `SURVIVE` bên dưới. Gom
+   * chúng theo nhãn `neutral` sẽ chỉ thị cho hai con BOT làm đúng thứ phá hỏng
+   * điều kiện thắng của chính chúng.
+   *
+   * Một Kẻ Báo Thù ĐÃ hoá Thằng Hề thì `selfRole` đã là `JESTER`, nên nó rơi
+   * vào nhánh ngay trên - đổi thái độ ngay ở lượt bào chữa kế tiếp mà không
+   * cần một cờ nào.
+   */
+
+  /*
    * `voteTargetId: null` vì bị cáo không tự bỏ phiếu cho chính mình ở lượt này -
    * xem chú thích của `BotRuntime.decideDefenseClaim`, nhánh duy nhất đọc tham
    * số đó (Sói khai láo chủ động) không áp dụng cho một bị cáo đang bị dồn.

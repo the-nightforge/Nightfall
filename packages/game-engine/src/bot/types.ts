@@ -414,6 +414,24 @@ export interface BotKnowledgeView {
    * lời nguy hiểm hơn.
    */
   neutralRolesInPlay: Role[];
+  /**
+   * Mục tiêu của CHÍNH bot này, khi nó là Kẻ Báo Thù. `null` với mọi vai khác.
+   *
+   * Đây là thông tin RIÊNG đúng nghĩa - engine cấp nó, không suy ra được từ
+   * bất cứ thứ gì công khai - nên nó đi thẳng vào view như `seerResult`, và
+   * cũng như `seerResult` thì nó chỉ nói về một người.
+   *
+   * Nó nói người kia là MỤC TIÊU NHIỆM VỤ, và KHÔNG nói gì về vai của họ. Lõi
+   * tuyệt đối không được biến nó thành bằng chứng "người này là Sói": mục tiêu
+   * luôn thuộc phe Dân, nên một suy luận như vậy vừa sai vừa tự đầu độc lớp sự
+   * thật mà mọi quyết định khác dựa vào. Nó chỉ được phép nghiêng LÁ PHIẾU.
+   *
+   * Cờ này vẫn khác `null` sau khi bot đã hoá Thằng Hề. Chiến thuật đọc `role`
+   * (đã là `JESTER`) để rẽ nhánh, không đọc trường này - xem `roles/registry`.
+   *
+   * Optional vì `BotKnowledgeView` được dựng lại từ record self-play cũ.
+   */
+  executionerTargetId?: string | null;
   /** `null` ngoài pha đêm, khi bot đã chết, hoặc khi vai không hành động đêm. */
   night: NightKnowledge | null;
   /**

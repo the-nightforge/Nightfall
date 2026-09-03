@@ -41,12 +41,21 @@ const TEAM_GOALS: Record<Team, string> = {
   neutral: "",
 };
 
-/** Mục tiêu riêng của từng vai trung lập; xem chú thích `neutral` ở trên. */
+/**
+ * Mục tiêu riêng của từng vai trung lập; xem chú thích `neutral` ở trên.
+ *
+ * Câu của Kẻ Báo Thù cố ý KHÔNG nói mục tiêu là ai: danh tính đó nằm ở khu
+ * nhiệm vụ riêng (`ExecutionerMission`), còn đây là bảng LUẬT dùng chung cho
+ * mọi người cầm lá đó. Nó cũng nói thẳng đường hoá Hề, vì một người chơi không
+ * được biết trước điều đó sẽ tưởng mình vừa mất trắng cả ván.
+ */
 const NEUTRAL_ROLE_GOALS: Partial<Record<Role, string>> = {
   SERIAL_KILLER:
     "Sống sót tới khi chỉ còn lại một mình bạn. Mỗi đêm bạn được giết một người - kể cả Ma Sói - và bạn KHÔNG đứng cùng phe với ai, kể cả vai trung lập khác. Bị treo cổ là thua.",
   JESTER:
     "Khiến cả làng tin bạn là Sói và treo cổ bạn giữa ban ngày. Bạn CHỈ thắng khi chết vì phán quyết treo cổ - chết vì Sói, độc hay Thợ Săn đều không tính, và sống tới cuối ván là thua.",
+  EXECUTIONER:
+    "Khiến cả làng treo cổ đúng MỘT người: mục tiêu bí mật của bạn. Bạn phải còn sống vào lúc bản án được thi hành - không cần chính bạn đề cử hay bỏ phiếu kết tội. Nếu mục tiêu chết vì một nguyên nhân khác, bạn hoá thành Thằng Hề và từ đó chỉ thắng khi CHÍNH BẠN bị treo.",
 };
 
 export function roleGoal(role: Role): string {

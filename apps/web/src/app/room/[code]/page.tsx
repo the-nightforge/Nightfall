@@ -26,6 +26,7 @@ import { RightMetaPanel } from "@/components/RightMetaPanel";
 import { RoleRevealView } from "@/components/RoleViews";
 import { NightPanel } from "@/components/NightPanel";
 import { DayView, EliminationView } from "@/components/DayViews";
+import { ExecutionerMission } from "@/components/ExecutionerMission";
 import { GameOverView } from "@/components/GameOverView";
 import { HunterShotPanel } from "@/components/HunterShotPanel";
 import { TrialPanel } from "@/components/TrialPanel";
@@ -434,6 +435,21 @@ export default function RoomPage() {
               * dòng đó, nên nó không được che. Đặt ở cấp trang chứ không trong
               * từng view vì thư có thể mở ở bất kỳ pha nào một cái chết xảy ra.
               */}
+            {/*
+              * Khu nhiệm vụ của Kẻ Báo Thù, ở cấp TRANG chứ không trong từng
+              * view pha.
+              *
+              * Nhiệm vụ này không thuộc về một pha nào: nó có nghĩa suốt cả
+              * ván, kể cả trong đêm mà vai này không có gì để làm, và nó phải
+              * đứng ngay đó vào đúng lúc người chơi đang chọn bỏ phiếu cho ai.
+              * Nhét nó vào `DayView` sẽ khiến nó biến mất ở mọi pha khác, và
+              * lặp lại nó ở từng view là bốn bản sao để trôi lệch.
+              *
+              * `snapshot.executioner` đã được server lọc theo chủ sở hữu, nên
+              * ở đây không có phép kiểm tra quyền nào - và không được có.
+              */}
+            {snapshot && <ExecutionerMission snapshot={snapshot} />}
+
             {snapshot && <LastLetterReveal snapshot={snapshot} />}
 
             {room.error && (

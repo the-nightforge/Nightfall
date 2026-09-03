@@ -36,6 +36,7 @@ export const roomConfigSchema = z
     mayor: bool.optional(),
     jester: bool.optional(),
     serialKiller: bool.optional(),
+    executioner: bool.optional(),
     mode: roomModeSchema.optional(),
     voice: bool.optional(),
     lastLetter: bool.optional(),
@@ -77,7 +78,9 @@ export function validateRoomConfig(config: RoomConfig, playerCount: number): str
     // Sát Nhân cũng vậy, và cũng chỉ một lá: cấu hình là boolean nên "tối đa 1"
     // là tính chất của kiểu dữ liệu, không phải một phép kiểm tra ai đó phải
     // nhớ viết.
-    (config.serialKiller ? 1 : 0);
+    (config.serialKiller ? 1 : 0) +
+    // Kẻ Báo Thù cũng vậy, và cũng chỉ một lá.
+    (config.executioner ? 1 : 0);
   const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0);
   const totalRoles = wolfCount + specials;
   if (totalRoles > playerCount) {
@@ -93,6 +96,20 @@ export function validateRoomConfig(config: RoomConfig, playerCount: number): str
   if (wolfCount >= playerCount - wolfCount) {
     return "Số Ma Sói phải ít hơn phe làng";
   }
+  /*
+   * KHÔNG có phép kiểm tra riêng nào cho "Kẻ Báo Thù phải có mục tiêu", và đó
+   * là một kết luận chứ không phải một chỗ bỏ sót.
+   *
+   * Vai đó cần ít nhất một người PHE DÂN trên bàn. Hai dòng luật ngay trên đã
+   * bảo đảm điều đó mạnh hơn mọi phép đếm thêm: `totalRoles === playerCount` bị
+   * từ chối, nên luôn còn ít nhất một ghế được Dân Làng lấp - và Dân Làng thì
+   * thuộc phe Dân. Thêm một `if` ở đây là thêm một nhánh không có đầu vào nào
+   * chạm tới được, tức một nhánh không ai kiểm chứng được là còn đúng.
+   *
+   * Hàng rào thật nằm ở `GameEngine.create`, chỗ bốc mục tiêu: nó ném khi
+   * không có ứng viên nào. Đó là nơi đúng, vì nó gác cả những lối vào KHÔNG đi
+   * qua hàm này - harness self-play và test dựng cấu hình thẳng bằng code.
+   */
   return null;
 }
 

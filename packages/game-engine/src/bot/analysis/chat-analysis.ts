@@ -33,6 +33,9 @@ const ROLE_PHRASES: Array<[string, Role]> = [
   ["thiên thần hộ mệnh", "GUARDIAN_ANGEL"],
   ["thiên thần", "GUARDIAN_ANGEL"],
   ["thằng hề", "JESTER"],
+  // Trước "kẻ" của bất kỳ cụm nào khác và trước "sói": "báo thù" một mình
+  // không phải một cái tên vai, nên chỉ cụm đủ ba tiếng mới được khớp.
+  ["kẻ báo thù", "EXECUTIONER"],
   // Trước "sát" bất kỳ và trước "thám tử": không có cụm nào ngắn hơn khớp được,
   // nhưng giữ đúng quy ước "cụm dài đứng trước" của bảng này.
   ["sát nhân", "SERIAL_KILLER"],

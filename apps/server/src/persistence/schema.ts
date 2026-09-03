@@ -90,6 +90,10 @@ const enginePlayerSchema = z.object({
   alive: z.boolean(),
   isBot: z.boolean(),
   cursedTurned: z.boolean().optional(),
+  // OPTIONAL vì cùng lý do với `cursedTurned` ngay trên: bắt buộc một trường
+  // thêm sau là làm mọi snapshot đã ghi trước bản này trượt schema rồi rơi vào
+  // `quarantine`. Constructor của engine chuẩn hoá về `false`.
+  executionerTurned: z.boolean().optional(),
 });
 
 const nightStateSchema = z.object({
@@ -204,6 +208,21 @@ export const gameStateSchema = z.object({
    * rồi rơi vào `quarantine` - tức giết sạch các ván đang chạy ngay lúc deploy.
    * Constructor của engine chuẩn hoá về mảng rỗng.
    */
+  /**
+   * Nhiệm vụ của Kẻ Báo Thù: `executionerId` -> `targetId`.
+   *
+   * STRICT chứ không phải `objectOf`, cùng thang đo với `personalWins` ngay
+   * dưới: đây là dữ liệu MANG QUYẾT ĐỊNH - nó là điều kiện thắng của một người
+   * chơi, và một giá trị méo ở đây sẽ lặng lẽ khiến họ không bao giờ thắng
+   * được, hoặc hoá Thằng Hề vào sai lúc.
+   *
+   * OPTIONAL vì cùng lý do với `personalWins`: bắt buộc một trường thêm sau là
+   * giết sạch các ván đang chạy ngay lúc deploy. Constructor của engine chuẩn
+   * hoá về object rỗng, tức "ván này không có ai mang nhiệm vụ" - đúng sự thật
+   * của một ván ghi trước bản này. Và quan trọng: nó KHÔNG bốc lại mục tiêu,
+   * nên một lần khôi phục không đổi nhiệm vụ của ai.
+   */
+  executionerTargets: z.record(z.string(), z.string()).optional(),
   personalWins: z
     .array(
       z.object({
