@@ -53,15 +53,12 @@ export interface NightState {
   poisonTarget: string | null;
   /** Phù Thủy đã chủ động bỏ qua cả hai bình trong đêm này */
   witchSkipped: boolean;
-  seerResults: Record<string, { targetId: string; isWolf: boolean; secondaryTargetId?: string; secondaryIsWolf?: boolean; unknown?: boolean }>;
+  seerResults: Record<string, { targetId: string; isWolf: boolean; secondaryTargetId?: string; secondaryIsWolf?: boolean }>;
   priestTarget: string | null;
   /** Linh Mục đã chọn không dùng nước thánh đêm nay */
   priestSkipped: boolean;
   detectiveTargets: { target1: string; target2: string } | null;
-  detectiveResults: Record<
-    string,
-    { target1Id: string; target2Id: string; sameTeam: boolean; unknown?: boolean }
-  >;
+  detectiveResults: Record<string, { target1Id: string; target2Id: string; sameTeam: boolean }>;
   priestResults: Record<string, { targetId: string; isWolf: boolean }>;
 }
 

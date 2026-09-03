@@ -340,7 +340,6 @@ describe("Event Modifiers in GameEngine", () => {
 
     const result = engine.snapshotFor("det").nightInfo?.detectiveResult;
     expect(result?.sameTeam).toBe(false);
-    expect(result?.unknown).toBeUndefined();
   });
 
   it("BLOODY_HUNT allows secondary wolf kill with 50% success probability", () => {
@@ -556,5 +555,87 @@ describe("Event Modifiers in GameEngine", () => {
     expect((GAME_EVENTS as any)["SHROUDED_ECLIPSE"]).toBeUndefined();
     expect(GAME_EVENTS["WOLF_SHADOW"]).toBeDefined();
     expect(Object.keys(GAME_EVENTS)).toHaveLength(15);
+  });
+});
+
+describe("Bộ chọn sự kiện cân theo độ nghiêng", () => {
+  function chaosState() {
+    const state = createTestState([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "w2", role: "WEREWOLF", alive: true },
+      { id: "seer", role: "SEER", alive: true },
+      { id: "guard", role: "GUARD", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v2", role: "VILLAGER", alive: true },
+    ]);
+    state.config.mode = "chaos";
+    return state;
+  }
+
+  /** Nổ đúng một sự kiện của phe đó vào lịch sử, không đụng state khác. */
+  function withHistory(state: GameState, ids: string[]) {
+    state.eventHistory = ids.map((id) => ({
+      ...GAME_EVENTS[id as keyof typeof GAME_EVENTS],
+      round: 1,
+    })) as GameEventView[];
+    return state;
+  }
+
+  /** Mọi sự kiện bốc được với bộ RNG quét hết nhóm. */
+  function reachable(state: GameState, phase: "NIGHT" | "DAY"): string[] {
+    const seen = new Set<string>();
+    for (let i = 0; i < 40; i++) {
+      let call = 0;
+      // Lần gọi đầu là cửa 0.6, lần sau là chỉ số trong nhóm.
+      const event = selectEvent(state, phase, () => (call++ === 0 ? 0 : i / 40));
+      if (event) seen.add(event.id);
+    }
+    return [...seen];
+  }
+
+  it("nhóm bốc mở cho cả hai phe khi độ nghiêng còn trong ngưỡng", () => {
+    // Bóng Sói (phe Sói, power 3) đưa độ nghiêng lên đúng 3... nên thay bằng
+    // một sự kiện nhẹ hơn để ở dưới ngưỡng.
+    const state = withHistory(chaosState(), ["CURFEW"]);
+    const ids = reachable(state, "NIGHT");
+    expect(ids).toContain("MOONLESS_NIGHT");
+    expect(ids).toContain("CLEARING_MIST");
+  });
+
+  it("phe Sói bị loại khỏi lượt bốc khi đã dẫn quá ngưỡng", () => {
+    // Bóng Sói: beneficiary "wolves", power 3 -> chạm đúng TILT_LIMIT.
+    const state = withHistory(chaosState(), ["WOLF_SHADOW"]);
+    const ids = reachable(state, "NIGHT");
+
+    expect(ids).not.toContain("MOONLESS_NIGHT");
+    expect(ids).not.toContain("BLOODY_HUNT");
+    expect(ids).not.toContain("BLOOD_MOON");
+    // Phe làng và trung lập vẫn còn nguyên cửa.
+    expect(ids).toContain("CLEARING_MIST");
+    expect(ids).toContain("PEACEFUL_NIGHT");
+  });
+
+  it("phe làng cũng bị loại khi chính họ dẫn quá ngưỡng", () => {
+    // Đêm Bình Yên: beneficiary "village", power 4.
+    const state = withHistory(chaosState(), ["PEACEFUL_NIGHT"]);
+    const ids = reachable(state, "NIGHT");
+
+    expect(ids).not.toContain("CLEARING_MIST");
+    expect(ids).toContain("MOONLESS_NIGHT");
+  });
+
+  it("không bao giờ tắt hẳn sự kiện: lọc rỗng thì trả lại nhóm ban đầu", () => {
+    // Cả hai sự kiện ngày trung lập đã dùng, độ nghiêng nghiêng hẳn về Sói.
+    // Nhóm ngày còn lại toàn phe Sói/làng, lọc xong vẫn phải bốc ra được gì đó.
+    const state = withHistory(chaosState(), [
+      "WOLF_SHADOW",
+      "CURFEW",
+      "AMNESTY_DAY",
+      "MORNING_REPORT",
+      "DEAD_CAN_SPEAK",
+      "DAY_OF_TRUTH",
+    ]);
+    const ids = reachable(state, "DAY");
+    expect(ids).toContain("HOWL_OF_THE_PACK");
   });
 });

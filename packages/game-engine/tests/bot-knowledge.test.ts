@@ -270,6 +270,10 @@ describe("bot knowledge security boundary", () => {
         "currentVoteCounts",
         "hasVoted",
         "knownRoles",
+        // Luật phòng, không phải thông tin theo vai: cả bàn cùng biết vai người
+        // chết có lộ hay không, và lõi cần phân biệt "vai này cả bàn cùng thấy"
+        // với "vai này chỉ mình tôi biết vì tôi là đồng bọn nó".
+        "revealRoleOnDeath",
         "lastNightDeaths",
         "legalVoteChoices",
         "myVote",

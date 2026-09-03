@@ -1,3 +1,4 @@
+import { roleTeam } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { BotBrainState, BotEvidence, BotKnowledgeView } from "../types";
 import { applyEvidence, applyTrustEvidence } from "./belief-state";
@@ -120,6 +121,13 @@ export function applyPrivateInformation(
       pinScore(state.suspicion, result.targetId, 0, round);
     }
   }
+
+  // Chỉ Sói mới có đồng đội. Cổng này KHÔNG thừa: biến thể luật
+  // `revealRoleOnDeath` đưa vai người chết vào `knownRoles` cho mọi người, nên
+  // không có nó thì một bot phe làng đọc thấy một cái xác Sói và ghim
+  // `trust = 100` / `suspicion = 0` lên đúng kẻ vừa bị lộ mặt - và `KNOWN_ALLY`
+  // được miễn decay nên nó không bao giờ tự gỡ. Ngược hẳn dấu của sự thật.
+  if (roleTeam(knowledge.selfRole) !== "wolves") return;
 
   for (const [playerId, role] of Object.entries(knowledge.knownRoles)) {
     if (playerId === state.playerId) continue;

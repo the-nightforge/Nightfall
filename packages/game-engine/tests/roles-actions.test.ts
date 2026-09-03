@@ -821,3 +821,47 @@ describe("allNightActionsDone", () => {
     expect(engine.allNightActionsDone()).toBe(true);
   });
 });
+
+describe("revealRoleOnDeath (biến thể luật đang đo)", () => {
+  function deadRolesState(reveal: boolean) {
+    const state = createTestState([
+      { id: "seer", role: "SEER", alive: false },
+      { id: "v1", role: "VILLAGER", alive: false },
+      { id: "guard", role: "GUARD", alive: true },
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "w2", role: "WEREWOLF", alive: true },
+    ]);
+    state.config = { ...state.config, revealRoleOnDeath: reveal };
+    return new GameEngine(state);
+  }
+
+  it("tắt: vai người chết vẫn kín, đúng như luật mặc định", () => {
+    const engine = deadRolesState(false);
+
+    const seen = engine.snapshotFor("guard").players.filter((p) => p.role !== undefined);
+    expect(seen).toHaveLength(0);
+    expect(engine.botKnowledgeFor("guard").knownRoles).toEqual({ guard: "GUARD" });
+  });
+
+  it("bật: đưa vai người chết vào knownRoles", () => {
+    const engine = deadRolesState(true);
+
+    // Cả hai đường phải khớp nhau: một biến thể luật mà BOT không nhìn thấy sẽ
+    // đo ra "không ảnh hưởng gì" bất kể nó ảnh hưởng thế nào tới người thật.
+    const seen = engine.snapshotFor("guard").players.filter((p) => p.role !== undefined);
+    expect(seen.map((p) => p.id).sort()).toEqual(["seer", "v1"]);
+    expect(engine.botKnowledgeFor("guard").knownRoles).toEqual({
+      guard: "GUARD",
+      seer: "SEER",
+      v1: "VILLAGER",
+    });
+  });
+
+  it("bật: KHÔNG đụng tới vai người còn sống", () => {
+    const engine = deadRolesState(true);
+
+    const known = engine.botKnowledgeFor("guard").knownRoles;
+    expect(known.w1).toBeUndefined();
+    expect(known.w2).toBeUndefined();
+  });
+});

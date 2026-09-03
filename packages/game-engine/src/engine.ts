@@ -35,18 +35,16 @@ import {
 export interface SeerResultView {
   targetId: string;
   targetName: string;
-  isWolf?: boolean;
+  isWolf: boolean;
   secondaryTargetId?: string;
   secondaryTargetName?: string;
   secondaryIsWolf?: boolean;
-  unknown?: boolean;
 }
 
 export interface DetectiveResultView {
   target1: { id: string; name: string };
   target2: { id: string; name: string };
-  sameTeam?: boolean;
-  unknown?: boolean;
+  sameTeam: boolean;
 }
 
 export interface PriestResultView {
@@ -366,9 +364,7 @@ export class GameEngine {
       if (lastResult) {
         const target1Name = this.player(lastResult.target1Id)?.name ?? "?";
         const target2Name = this.player(lastResult.target2Id)?.name ?? "?";
-        const announcement = lastResult.unknown
-          ? `Kết quả Thám Tử: Không thể xác định phe của ${target1Name} và ${target2Name}!`
-          : `Kết quả Thám Tử: ${target1Name} và ${target2Name} là ${lastResult.sameTeam ? "CÙNG PHE" : "KHÁC PHE"}!`;
+        const announcement = `Kết quả Thám Tử: ${target1Name} và ${target2Name} là ${lastResult.sameTeam ? "CÙNG PHE" : "KHÁC PHE"}!`;
         activeEvent = { ...event, announcement };
       }
     } else if (event?.id === "MORNING_REPORT") {
@@ -524,7 +520,6 @@ export class GameEngine {
           isWolf: boolean;
           secondaryTargetId?: string;
           secondaryIsWolf?: boolean;
-          unknown?: boolean;
         } = {
           targetId,
           isWolf,
@@ -1528,6 +1523,9 @@ export class GameEngine {
     const st = this.state;
     const viewer = this.player(viewerId);
     const revealAll = st.phase === "GAME_OVER";
+    // Biến thể luật đang đo, xem `RoomConfig.revealRoleOnDeath`. Phòng thật
+    // luôn thấy `undefined` ở đây.
+    const revealDead = st.config.revealRoleOnDeath === true;
     // Sói luôn biết đồng bọn của mình
     const viewerIsWolf = viewer !== undefined && viewer.alive && roleTeam(viewer.role) === "wolves";
 
@@ -1543,11 +1541,12 @@ export class GameEngine {
       name: p.name,
       alive: p.alive,
       isBot: p.isBot,
-      role: revealAll
-        ? p.role
-        : viewerIsWolf && p.id !== viewerId && roleTeam(p.role) === "wolves"
+      role:
+        revealAll || (revealDead && !p.alive)
           ? p.role
-          : undefined,
+          : viewerIsWolf && p.id !== viewerId && roleTeam(p.role) === "wolves"
+            ? p.role
+            : undefined,
       // Đồng bọn Sói chỉ được biết đây là một con Sói, không được biết nó vốn
       // là Kẻ Nguyền Rủa: gốc nguyền rủa chỉ lộ cùng lúc với toàn bộ vai trò.
       cursedTurned: revealAll ? p.cursedTurned === true : undefined,
@@ -1560,13 +1559,12 @@ export class GameEngine {
       seerResult = {
         targetId: seerResultEntry.targetId,
         targetName: this.player(seerResultEntry.targetId)?.name ?? "?",
-        isWolf: seerResultEntry.unknown ? undefined : seerResultEntry.isWolf,
+        isWolf: seerResultEntry.isWolf,
         secondaryTargetId: seerResultEntry.secondaryTargetId,
         secondaryTargetName: seerResultEntry.secondaryTargetId
           ? this.player(seerResultEntry.secondaryTargetId)?.name ?? "?"
           : undefined,
-        secondaryIsWolf: seerResultEntry.unknown ? undefined : seerResultEntry.secondaryIsWolf,
-        unknown: seerResultEntry.unknown,
+        secondaryIsWolf: seerResultEntry.secondaryIsWolf,
       };
     }
 
@@ -1582,8 +1580,7 @@ export class GameEngine {
               id: detectiveEntry.target2Id,
               name: this.player(detectiveEntry.target2Id)?.name ?? "?",
             },
-            sameTeam: detectiveEntry.unknown ? undefined : detectiveEntry.sameTeam,
-            unknown: detectiveEntry.unknown,
+            sameTeam: detectiveEntry.sameTeam,
           }
         : null;
 
@@ -1721,6 +1718,13 @@ export class GameEngine {
         }
       }
     }
+    // Phải khớp ĐÚNG `snapshotFor`: một biến thể luật mà BOT không nhìn thấy sẽ
+    // đo ra "không ảnh hưởng gì" bất kể nó ảnh hưởng thế nào tới người thật.
+    if (st.config.revealRoleOnDeath === true) {
+      for (const player of st.players) {
+        if (!player.alive) knownRoles[player.id] = player.role;
+      }
+    }
 
     const seerResultEntry = st.night.seerResults[botId];
     const seerResult = seerResultEntry
@@ -1740,6 +1744,7 @@ export class GameEngine {
       selfRole: viewer.role,
       players: st.players.map(({ id, name, alive }) => ({ id, name, alive })),
       knownRoles,
+      revealRoleOnDeath: st.config.revealRoleOnDeath === true,
       seerResult,
       night: this.botNightKnowledgeFor(viewer),
       // Danh tính bị cáo là công khai ở hai pha này - cả phòng đang nhìn vào
