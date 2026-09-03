@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
 import { assignAvatars, tintFor } from "@/lib/avatar";
 import { voteFlightsFor } from "@/lib/vote-motion";
+import { usePlayerNotes } from "@/lib/player-notes";
 import { PlayerSeat } from "./PlayerSeat";
 import { VoteFlightLayer, type Point, type VoteFlightSpec } from "./VoteFlightLayer";
 
@@ -47,6 +48,8 @@ export function PlayerGrid({
   // snapshot.you thay cho getIdentity(): id của chính người xem đã nằm sẵn
   // trong snapshot, không việc gì phải đọc localStorage ở mỗi lần render.
   const meId = snapshot.you?.id ?? null;
+  // Dấu ghi chú riêng của người xem; đổi dấu thì làm ở cột Người chơi.
+  const { notes } = usePlayerNotes(snapshot.code);
 
   // Gán lại chỉ khi TẬP người chơi đổi. Lưới này render lại theo từng lá phiếu,
   // mà bảng ảnh đại diện thì không phụ thuộc vào phiếu.
@@ -161,6 +164,7 @@ export function PlayerGrid({
               confirmed={isSelected && player.id === confirmedId}
               disabled={disabled}
               disabledReason={disabledReason}
+              mark={notes[player.id]}
             onSelect={onSelect ? () => onSelect(player.id) : undefined}
             seatRef={(el) => {
               if (el) seatEls.current.set(player.id, el);
