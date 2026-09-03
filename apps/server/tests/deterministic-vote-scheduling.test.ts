@@ -3,6 +3,7 @@ import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
 import { scheduleVoteBots } from "../src/game/machine";
+import { DISCONNECT_GRACE_MS } from "../src/game/discussion-skip";
 import { ROOM_SCAFFOLD } from "./helpers/room";
 import { NIGHT_SCAFFOLD } from "./helpers/night";
 import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
@@ -246,5 +247,61 @@ describe("scheduleVoteBots", () => {
     await runWholeVotingWindow(room);
 
     expect(runtimeControl.decideVote).not.toHaveBeenCalled();
+  });
+});
+
+describe("ghế bị bỏ giữa ván", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    runtimeControl.observe.mockReset();
+    runtimeControl.decideVote.mockReset();
+    runtimeControl.rngValues = [0, 0, 0];
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Đánh dấu một ghế người đã rớt được `ms` mili giây. */
+  function dropped(room: Room, playerId: string, ms: number): void {
+    const member = room.members.find((m) => m.playerId === playerId)!;
+    member.connected = false;
+    member.disconnectedAt = Date.now() - ms;
+  }
+
+  it("người rớt quá ân hạn thì máy bỏ phiếu thay", async () => {
+    const room = votingRoom();
+    dropped(room, "b", DISCONNECT_GRACE_MS + 1);
+    runtimeControl.decideVote.mockReturnValue(vote("c"));
+
+    scheduleVoteBots(room);
+    await runWholeVotingWindow(room);
+
+    expect(room.engine!.state.votes.b).toBe("c");
+  });
+
+  it("người còn trong ân hạn thì không ai đụng vào ghế", async () => {
+    const room = votingRoom();
+    dropped(room, "b", DISCONNECT_GRACE_MS - 1_000);
+    runtimeControl.decideVote.mockReturnValue(vote("c"));
+
+    scheduleVoteBots(room);
+    await runWholeVotingWindow(room);
+
+    expect(room.engine!.state.votes.b).toBeUndefined();
+  });
+
+  it("quay lại trước khi mốc hẹn nổ thì lấy lại ghế", async () => {
+    const room = votingRoom();
+    dropped(room, "b", DISCONNECT_GRACE_MS + 1);
+    runtimeControl.decideVote.mockReturnValue(vote("c"));
+
+    scheduleVoteBots(room);
+    const member = room.members.find((m) => m.playerId === "b")!;
+    member.connected = true;
+    member.disconnectedAt = null;
+    await runWholeVotingWindow(room);
+
+    expect(room.engine!.state.votes.b).toBeUndefined();
   });
 });
