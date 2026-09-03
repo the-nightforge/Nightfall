@@ -39,6 +39,14 @@ Mỗi cảnh cần **một file `.webm` và một file `.mp4`** trùng tên. Tr�
 | `event-village-boon` | Vận may đến với làng | sự kiện họ VILLAGE_BOON | 0,9s |
 | `event-rule-change` | Luật làng thay đổi | sự kiện họ RULE_CHANGE | 0,9s |
 | `event-spirit` | Linh hồn lên tiếng | sự kiện họ SPIRIT | 0,9s |
+| `killer-win` | Sát Nhân chiến thắng | vào `GAME_OVER`, Sát Nhân thắng | 2,0s |
+| `draw` | Không ai còn sống | vào `GAME_OVER`, ván hoà | 2,0s |
+
+**Hai dòng cuối CHƯA có file**, và đó là một trạng thái hợp lệ chứ không phải
+một việc đang bỏ dở: hai cảnh đó chạy bằng bản dựng CSS trong
+`src/app/cinematics.css`, đúng đường mặc định đã mô tả ở trên. Chúng cũng không
+nằm trong `nextClips`, nên không ai phải tải trước một file không tồn tại. Dựng
+clip cho chúng cần thêm hai cảnh vào `scripts/cinematic-scenes.mjs`.
 
 Danh sách này là bản chép tay của `CINEMATIC_CLIPS` trong
 `src/lib/cinematic-transition.ts` - file đó mới là nguồn sự thật, và test

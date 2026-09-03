@@ -8,7 +8,10 @@ import type { BotSpeechIntention, BotSpeechStyle } from "@masoi/game-engine";
  * `SKIP` — vô hại khi chỉ có provider sinh hành động, nhưng sai ngay khi lõi
  * deterministic tiếp quản, vì Phù Thuỷ chủ động bỏ lượt là một nước đi thật.
  *
- * Ba giá trị cuối đến từ các vai mở rộng (Thám Tử, Thiên Thần Hộ Mệnh, Linh Mục).
+ * Ba giá trị cuối đến từ các vai mở rộng (Thám Tử, Thiên Thần Hộ Mệnh, Linh Mục),
+ * và `SERIAL_KILL` từ Sát Nhân - một mã RIÊNG, không dùng lại `KILL` của bầy Sói:
+ * hai kỹ năng khác luật, khác nhịp và khác trạng thái, nên một mã dùng chung sẽ
+ * buộc engine phân giải theo vai người gửi.
  */
 export type NightActionType =
   | "KILL"
@@ -19,7 +22,8 @@ export type NightActionType =
   | "SKIP"
   | "DETECTIVE_CHECK"
   | "GUARDIAN_PROTECT"
-  | "HOLY_WATER";
+  | "HOLY_WATER"
+  | "SERIAL_KILL";
 
 export interface NightDecision {
   action: NightActionType;

@@ -90,6 +90,8 @@ export interface BotKnowledgeInput {
   players: readonly BotPlayerKnowledge[];
   knownRoles: BotKnowledgeView["knownRoles"];
   seerResult: BotKnowledgeView["seerResult"];
+  /** Suy từ chính cấu hình phòng; xem `BotKnowledgeView.neutralRolesInPlay`. */
+  neutralRolesInPlay: BotKnowledgeView["neutralRolesInPlay"];
   /** Engine đã quyết định vai này có được thấy gì; ở đây chỉ sao chép. */
   night: NightKnowledge | null;
   trialAccusedId: string | null;
@@ -120,6 +122,7 @@ export function buildBotKnowledgeView(input: BotKnowledgeInput): BotKnowledgeVie
     players: input.players.map((player) => ({ ...player })),
     knownRoles: { ...input.knownRoles },
     seerResult: input.seerResult ? { ...input.seerResult } : null,
+    neutralRolesInPlay: [...input.neutralRolesInPlay],
     night: input.night ? copyNightKnowledge(input.night) : null,
     trialAccusedId: input.trialAccusedId,
     canFinalVote: input.canFinalVote,

@@ -20,10 +20,12 @@ import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { roleLabel } from "@/lib/cursed";
 import {
   decisiveHighlight,
+  drawNote,
   personalOutcome,
   personalWinLabel,
   winnerCopy,
   type PersonalOutcome,
+  type WinnerCopy,
 } from "@/lib/game-over-summary";
 import { caseFileLetters } from "@/lib/last-letter";
 import { Avatar } from "./Avatar";
@@ -54,8 +56,18 @@ interface Props {
   onLeave: () => void;
 }
 
-/** Bảng màu theo phe thắng. Một chỗ khai báo, mọi khối trong màn đọc lại từ đây. */
-const ACCENT = {
+/**
+ * Bảng màu theo KẾT CỤC. Một chỗ khai báo, mọi khối trong màn đọc lại từ đây.
+ *
+ * Bốn khoá, không phải hai: `neutral` cho một ván Sát Nhân thắng (hổ phách,
+ * cùng sắc mà bộ bài và thẻ vai đang dùng cho phe trung lập) và `draw` cho một
+ * ván không ai thắng - xám tro, cố ý KHÔNG mượn sắc của phe nào, vì màu ở màn
+ * này là thứ người chơi đọc trước cả chữ.
+ */
+const ACCENT: Record<
+  WinnerCopy["tone"],
+  { text: string; border: string; ring: string; glow: string }
+> = {
   wolves: {
     text: "text-blood-400",
     border: "border-blood-500/70",
@@ -68,7 +80,19 @@ const ACCENT = {
     ring: "ring-emerald-500/50",
     glow: "radial-gradient(900px 520px at 50% 12%, rgba(52, 178, 140, 0.16), transparent 70%)",
   },
-} as const;
+  neutral: {
+    text: "text-amber-300",
+    border: "border-amber-500/60",
+    ring: "ring-amber-500/50",
+    glow: "radial-gradient(900px 520px at 50% 12%, rgba(217, 165, 33, 0.18), transparent 70%)",
+  },
+  draw: {
+    text: "text-mist-bright",
+    border: "border-night-600",
+    ring: "ring-mist/30",
+    glow: "radial-gradient(900px 520px at 50% 12%, rgba(148, 163, 184, 0.12), transparent 70%)",
+  },
+};
 
 /**
  * Màn kết thúc ván.
@@ -105,9 +129,21 @@ const ACCENT = {
  * `.btn-cta-neutral`.
  */
 export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
-  const wolvesWin = snapshot.winner === "wolves";
-  const accent = wolvesWin ? ACCENT.wolves : ACCENT.village;
-  const copy = winnerCopy(wolvesWin ? "wolves" : "village");
+  /*
+   * `snapshot.winner` là nguồn DUY NHẤT, và nó có BỐN giá trị.
+   *
+   * Bản cũ rút nó về một boolean `wolvesWin` ngay dòng đầu, nên mọi thứ dưới
+   * đây - màu, tiêu đề, danh sách người thắng, viền bảng vai - đều đọc "không
+   * phải Sói" thành "Dân Làng". Một ván Sát Nhân thắng khi đó hiện ra là phe
+   * Dân Làng chiến thắng, với chính người vừa giết cả làng đứng ngoài danh sách.
+   *
+   * `?? "draw"` chỉ chạm tới khi snapshot chưa có kết cục - màn này chỉ được
+   * dựng ở GAME_OVER nên đó là một trạng thái không tồn tại, và "hoà" là mặc
+   * định trung tính duy nhất không trao chiến thắng nhầm cho ai.
+   */
+  const matchOutcome = snapshot.winner ?? "draw";
+  const copy: WinnerCopy = winnerCopy(matchOutcome);
+  const accent = ACCENT[copy.tone];
   const roster = snapshot.players.map((p) => p.id).join(",");
   const avatars = useMemo(() => assignAvatars(roster ? roster.split(",") : []), [roster]);
 
@@ -124,7 +160,21 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
   const wolves = byTeam("wolves");
   const village = byTeam("village");
   const neutrals = byTeam("neutral");
-  const winners = wolvesWin ? wolves : village;
+  /*
+   * Hàng mặt của bên THẮNG.
+   *
+   * Với Sát Nhân thì đó là ĐÚNG một người, không phải cả nhóm trung lập: Thằng
+   * Hề cũng mang nhãn `neutral` và nó không thắng gì trong ván này. Ván hoà thì
+   * không có ai để bày ra, và khối bên dưới tự biến mất.
+   */
+  const winners =
+    matchOutcome === "wolves"
+      ? wolves
+      : matchOutcome === "village"
+        ? village
+        : matchOutcome === "serial_killer"
+          ? snapshot.players.filter((p) => p.role === "SERIAL_KILLER")
+          : [];
 
   /*
    * Thắng lợi cá nhân của CẢ PHÒNG. Ở `GAME_OVER` engine mở hết sổ này, nên
@@ -201,6 +251,9 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
 
         {decisive && <DecisiveMoment highlight={decisive} accentText={accent.text} />}
 
+        {/* Ván hoà không có ai để bày mặt ra, và một hàng rỗng dưới nhãn "Người
+          * thắng cuộc" đọc như một lỗi tải dữ liệu chứ không như một kết cục. */}
+        {winners.length > 0 && (
         <div className="mt-5 border-t border-white/[0.08] pt-4">
           {/* Ai thắng đọc nhanh nhất bằng mặt, không phải bằng cách dò bảng bên dưới. */}
           <p className="text-center text-xs font-semibold uppercase tracking-[0.25em] text-mist">
@@ -224,6 +277,13 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
             ))}
           </div>
         </div>
+        )}
+
+        {matchOutcome === "draw" && (
+          <p className="mt-5 border-t border-white/[0.08] pt-4 text-center text-sm text-mist-strong">
+            {drawNote(personalWins)}
+          </p>
+        )}
 
         {personalWins.length > 0 && (
           <div className="mt-4 border-t border-white/[0.08] pt-4">
@@ -306,14 +366,16 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
             title={`Phe ${TEAM_LABELS.wolves}`}
             players={wolves}
             avatars={avatars}
-            won={wolvesWin}
+            won={matchOutcome === "wolves"}
             accent="wolves"
           />
           <TeamPanel
             title={`Phe ${TEAM_LABELS.village}`}
             players={village}
             avatars={avatars}
-            won={!wolvesWin}
+            /* `!wolvesWin` ở bản cũ trao vòng nguyệt quế cho phe Dân Làng ở mọi
+             * ván không phải Sói thắng - kể cả ván họ chết sạch. */
+            won={matchOutcome === "village"}
             accent="village"
           />
           {/*
@@ -321,16 +383,17 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
             * ván thường sẽ có một panel rỗng, và luôn ẩn thì Thằng Hề biến mất
             * khỏi màn lật bài - hai cách hỏng đối xứng nhau.
             *
-            * `won={false}` là đúng: cột này không bao giờ là "phe chiến thắng".
-            * Thắng lợi của người trong đó đã được nói ở khối "Thắng cá nhân"
-            * phía trên, và đó là chỗ duy nhất nói được nó cho đúng.
+            * `won` giờ CÓ thể đúng, và chỉ đúng khi Sát Nhân thắng cả ván - đó
+            * là kết cục CHUNG, khác hẳn thắng lợi cá nhân của Thằng Hề (thứ
+            * được nói ở khối "Thắng cá nhân" phía trên và không bao giờ tô vòng
+            * nguyệt quế lên một cột phe).
             */}
           {neutrals.length > 0 && (
             <TeamPanel
               title={`Phe ${TEAM_LABELS.neutral}`}
               players={neutrals}
               avatars={avatars}
-              won={false}
+              won={matchOutcome === "serial_killer"}
               accent="neutral"
             />
           )}

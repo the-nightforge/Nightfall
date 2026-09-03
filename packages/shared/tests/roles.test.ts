@@ -62,6 +62,7 @@ describe("Shared Roles", () => {
     // Detective: 1.5
     // Werewolf: 2
     // Wolf Cub: 2
+    // Serial Killer: 2.2
     // Priest: 2.5
     // Witch: 3
     expect(ROLE_META.GUARD.nightOrder).toBe(0);
@@ -71,6 +72,7 @@ describe("Shared Roles", () => {
     expect(ROLE_META.DETECTIVE.nightOrder).toBe(1.5);
     expect(ROLE_META.WEREWOLF.nightOrder).toBe(2);
     expect(ROLE_META.WOLF_CUB.nightOrder).toBe(2);
+    expect(ROLE_META.SERIAL_KILLER.nightOrder).toBe(2.2);
     expect(ROLE_META.PRIEST.nightOrder).toBe(2.5);
     expect(ROLE_META.WITCH.nightOrder).toBe(3);
 
@@ -82,6 +84,7 @@ describe("Shared Roles", () => {
       "DETECTIVE",
       "WEREWOLF",
       "WOLF_CUB",
+      "SERIAL_KILLER",
       "PRIEST",
       "WITCH",
     ]);

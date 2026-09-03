@@ -3,11 +3,23 @@ import { roleTeam, type Role, type Team } from "@masoi/shared";
 /**
  * Mục tiêu của vai, nói theo ĐIỀU KIỆN THẮNG thật.
  *
- * Hai câu này chép lại đúng phép kiểm tra trong engine (`engine.ts`: hết Sói thì
- * làng thắng; số Sói còn sống bằng hoặc hơn phần còn lại thì Sói thắng), không
- * phải một lời khuyên chơi hay. Người mới hay tưởng phe Sói phải giết bằng hết
- * cả làng và cứ thế kéo dài ván ra, trong khi thực tế Sói đã thắng từ lúc hoà
+ * Hai câu này chép lại đúng phép kiểm tra trong engine (`checkWin`), không phải
+ * một lời khuyên chơi hay. Người mới hay tưởng phe Sói phải giết bằng hết cả
+ * làng và cứ thế kéo dài ván ra, trong khi thực tế Sói đã thắng từ lúc hoà
  * quân số.
+ *
+ * `checkWin` xét Sát Nhân TRƯỚC cả hai phe: còn một Sát Nhân sống thì không
+ * phe nào được tuyên thắng, kể cả khi con Sói cuối vừa ngã hoặc bầy Sói đã hoà
+ * quân số. Bỏ vế đó ra khỏi hai câu dưới là dạy người chơi một luật thắng mà
+ * engine không hề chạy - và dạy sai đúng chỗ đắt nhất, vì đó là chỗ một ván có
+ * Sát Nhân được quyết. Viết "nếu có" thay vì hai bảng câu chữ theo cấu hình
+ * phòng: câu vẫn đúng ở phòng không bật vai này, và một bảng thứ hai là một
+ * bảng nữa phải giữ cho khớp.
+ *
+ * Thằng Hề KHÔNG có mặt trong hai câu này, và đó là chủ ý: sổ thắng của nó là
+ * một sổ RIÊNG (`personalWins`), không phải một vế trong `checkWin`. Làng thắng
+ * được với một Thằng Hề còn sống nguyên trên bàn, nên bắt người chơi phải loại
+ * nó là bịa thêm một điều kiện không tồn tại.
  *
  * Nói theo phe chứ không theo từng vai: kỹ năng riêng của mỗi vai đã nằm trong
  * `ROLE_META.description` ngay bên trên, và viết thêm một câu mục tiêu riêng
@@ -16,8 +28,9 @@ import { roleTeam, type Role, type Team } from "@masoi/shared";
  */
 const TEAM_GOALS: Record<Team, string> = {
   wolves:
-    "Cùng đồng bọn loại dần dân làng, cho tới khi số Sói còn sống bằng hoặc hơn phần còn lại.",
-  village: "Tìm ra và loại hết Ma Sói. Làng chỉ thắng khi không còn con Sói nào sống sót.",
+    "Cùng đồng bọn loại dần dân làng, cho tới khi số Sói còn sống bằng hoặc hơn phần còn lại - và Sát Nhân, nếu có, phải chết trước đã.",
+  village:
+    "Tìm ra và loại hết Ma Sói, cùng Sát Nhân nếu phòng có vai đó. Làng chỉ thắng khi không còn con Sói nào lẫn Sát Nhân nào sống sót.",
   /*
    * Phe trung lập KHÔNG nói theo phe, và đây là ngoại lệ có lý do chứ không
    * phải một lỗ hổng của quy tắc trên: vai trung lập không có luật thắng chung
@@ -30,6 +43,8 @@ const TEAM_GOALS: Record<Team, string> = {
 
 /** Mục tiêu riêng của từng vai trung lập; xem chú thích `neutral` ở trên. */
 const NEUTRAL_ROLE_GOALS: Partial<Record<Role, string>> = {
+  SERIAL_KILLER:
+    "Sống sót tới khi chỉ còn lại một mình bạn. Mỗi đêm bạn được giết một người - kể cả Ma Sói - và bạn KHÔNG đứng cùng phe với ai, kể cả vai trung lập khác. Bị treo cổ là thua.",
   JESTER:
     "Khiến cả làng tin bạn là Sói và treo cổ bạn giữa ban ngày. Bạn CHỈ thắng khi chết vì phán quyết treo cổ - chết vì Sói, độc hay Thợ Săn đều không tính, và sống tới cuối ván là thua.",
 };

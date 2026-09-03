@@ -41,6 +41,7 @@ function context(options: {
   return {
     knowledge: {
       dayOfTruthClaims: {},
+      neutralRolesInPlay: [],
       activeEventId: null,
       botId: "me",
       round: options.round ?? 1,

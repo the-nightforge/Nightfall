@@ -27,6 +27,12 @@ export function deathCauseClause(cause: CaseDeathCause): string {
       return "bị làng treo cổ";
     case "hunter":
       return "trúng đạn Thợ Săn";
+    case "serial_killer":
+      // KHÔNG nói ra chữ "Sát Nhân": vế này in ở dòng kết mỗi đêm trong bản
+      // tường thuật cuối ván, nhưng cùng một bảng nhãn cũng phục vụ hồ sơ vụ
+      // án. Câu tả nhát dao mà không gọi tên vai giữ đúng luật "cái chết không
+      // tiết lộ nguồn" ở mọi chỗ dùng lại nó.
+      return "bị đâm trong đêm";
     default:
       return "gặp nạn";
   }

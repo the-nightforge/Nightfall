@@ -39,7 +39,7 @@ export const WOLF_SPECIAL_ROLES: Role[] = ["WOLF_CUB"];
  * dối ngay ở màn hình quyết định. `deckCounts` vẫn cộng chúng vào `specials` vì
  * chúng chiếm ghế y hệt - hai câu hỏi khác nhau, hai chỗ khác nhau.
  */
-export const NEUTRAL_ROLES: Role[] = ["JESTER"];
+export const NEUTRAL_ROLES: Role[] = ["JESTER", "SERIAL_KILLER"];
 
 /** Khoá cấu hình tương ứng với từng vai bật/tắt được. */
 export const CONFIG_KEY: Record<string, keyof RoomConfig> = {
@@ -55,6 +55,7 @@ export const CONFIG_KEY: Record<string, keyof RoomConfig> = {
   CURSED: "cursed",
   WOLF_CUB: "wolfCub",
   JESTER: "jester",
+  SERIAL_KILLER: "serialKiller",
 };
 
 export interface DeckCounts {

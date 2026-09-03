@@ -22,6 +22,8 @@ export const CINEMATIC_KINDS = [
   "VERDICT",
   "VILLAGE_WIN",
   "WOLVES_WIN",
+  "KILLER_WIN",
+  "DRAW",
   "WOLF_THREAT",
   "VILLAGE_BOON",
   "RULE_CHANGE",
@@ -123,6 +125,18 @@ const KIND_META: Record<CinematicKind, KindMeta> = {
   VERDICT: { clip: "verdict", durationMs: 1100, label: "Làng đã có phán quyết" },
   VILLAGE_WIN: { clip: "village-win", durationMs: 2000, label: "Dân Làng chiến thắng" },
   WOLVES_WIN: { clip: "wolves-win", durationMs: 2000, label: "Ma Sói chiến thắng" },
+  /*
+   * Hai cảnh này CHƯA có clip trong `public/cinematics`, và đó là một trạng
+   * thái hợp lệ chứ không phải một thiếu sót đang chờ sửa: overlay luôn dựng
+   * bản CSS trước rồi mới mờ chồng clip lên khi trình duyệt báo phát được, nên
+   * thiếu file cho ra đúng bản CSS - không màn hình đen, không chặn ván nào.
+   * Xem `public/cinematics/README.md`.
+   *
+   * Chúng cũng KHÔNG nằm trong `nextClips`: tải trước một file không tồn tại là
+   * một lượt 404 cho mọi người chơi ở mỗi vòng.
+   */
+  KILLER_WIN: { clip: "killer-win", durationMs: 2000, label: "Sát Nhân chiến thắng" },
+  DRAW: { clip: "draw", durationMs: 2000, label: "Không ai còn sống" },
   WOLF_THREAT: { clip: "event-wolf-threat", durationMs: 900, label: "Bầy Sói trỗi dậy" },
   VILLAGE_BOON: { clip: "event-village-boon", durationMs: 900, label: "Vận may đến với làng" },
   RULE_CHANGE: { clip: "event-rule-change", durationMs: 900, label: "Luật làng thay đổi" },
@@ -207,7 +221,16 @@ export function cinematicFor(prev: RoomSnapshot | null, next: RoomSnapshot): Cin
   if (!prev) return null;
 
   if (next.phase === "GAME_OVER" && prev.phase !== "GAME_OVER" && next.winner) {
-    const kind: CinematicKind = next.winner === "wolves" ? "WOLVES_WIN" : "VILLAGE_WIN";
+    /*
+     * Bốn kết cục, bốn cảnh. Biểu thức hai nhánh cũ chiếu màn "Dân Làng chiến
+     * thắng" lên đúng những ván mà cả làng vừa chết sạch.
+     */
+    const kind: CinematicKind = {
+      wolves: "WOLVES_WIN",
+      village: "VILLAGE_WIN",
+      serial_killer: "KILLER_WIN",
+      draw: "DRAW",
+    }[next.winner] as CinematicKind;
     return build(kind, `over:${next.winner}:${next.round}`);
   }
 

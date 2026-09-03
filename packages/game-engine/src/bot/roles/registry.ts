@@ -6,6 +6,7 @@ import { guardianAngelStrategy } from "./guardian-angel";
 import { jesterStrategy } from "./jester";
 import { priestStrategy } from "./priest";
 import { seerStrategy } from "./seer";
+import { serialKillerStrategy } from "./serial-killer";
 import { passiveStrategy, type BotRoleStrategy } from "./strategy";
 import { werewolfStrategy } from "./werewolf";
 import { witchStrategy } from "./witch";
@@ -42,6 +43,10 @@ const REGISTRY: Partial<Record<Role, (role: Role, weights: BotWeights) => BotRol
   // và một con Hề chơi như Dân Làng thì không bao giờ đạt được điều kiện thắng
   // của chính nó. Xem `roles/jester.ts`.
   JESTER: jesterStrategy,
+  // Sát Nhân có hành động đêm THẬT, nên nó bắt buộc phải có entry ở đây: rơi
+  // về `passiveStrategy` thì lượt đêm của cả vai này mất trắng mọi ván - engine
+  // vẫn chào một `SERIAL_KILL` hợp lệ, và không ai nhận.
+  SERIAL_KILLER: serialKillerStrategy,
 };
 
 export function strategyFor(

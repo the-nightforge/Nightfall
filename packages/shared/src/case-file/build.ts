@@ -1,3 +1,4 @@
+import { isMatchOutcome } from "../phases";
 import { roleTeam } from "../roles";
 import type { RoomSnapshot } from "../snapshot";
 import { collectCandidates, quietMatchHighlight, selectHighlights, type CaseData } from "./highlights";
@@ -175,7 +176,19 @@ function buildTimeline(data: CaseData): CaseTimelineEntry[] {
 export function buildCaseFile(snapshot: RoomSnapshot): CaseFile | null {
   if (snapshot.phase !== "GAME_OVER") return null;
   const winner = snapshot.winner;
-  if (winner !== "wolves" && winner !== "village") return null;
+  /*
+   * Nhận CẢ BỐN kết cục, kể cả `draw`.
+   *
+   * Bản đầu chỉ nhận `wolves`/`village` và trả `null` cho mọi thứ khác. Khi
+   * xuất hiện kết cục thứ ba, dòng đó lặng lẽ tắt hồ sơ vụ án, thẻ chia sẻ và
+   * màn hồi ức 3D của đúng những ván ly kỳ nhất - một ván Sát Nhân sống tới
+   * cuối, hoặc một đêm cả hai kẻ giết người cùng ngã xuống.
+   *
+   * `isMatchOutcome` chứ không phải một danh sách chép tay: đây là biên đọc dữ
+   * liệu (snapshot có thể tới từ một server khác phiên bản), và một chuỗi lạ
+   * phải rơi về `null` chứ không được đi tiếp vào bảng nhãn.
+   */
+  if (!isMatchOutcome(winner)) return null;
 
   const cast = buildCast(snapshot);
   const data: CaseData = {

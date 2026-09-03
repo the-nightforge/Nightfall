@@ -2,6 +2,7 @@ import {
   MAX_PLAYERS_PER_ROOM,
   ROLE_META,
   momentLabel,
+  outcomeHeadline,
   roleLabelOf,
   roundsLabel,
   teamLabel,
@@ -9,6 +10,7 @@ import {
   type CaseFilePlayer,
   type CaseHighlight,
   type CaseLastLetter,
+  type MatchOutcome,
   type RoomSnapshot,
   type Role,
   type Team,
@@ -76,7 +78,16 @@ export type VillageAccent =
   // Vai TRUNG LẬP có sắc riêng, không mượn sắc Dân Làng: màn hồi ức là bản
   // dựng lại một ván đã lật bài, nên xếp Thằng Hề vào cùng màu với phe làng là
   // kể sai chính ván vừa xong.
-  | "jester";
+  | "jester"
+  /*
+   * Sát Nhân có sắc RIÊNG, không dùng chung với Thằng Hề.
+   *
+   * Hai vai cùng nhãn `neutral` nhưng một vai giết người mỗi đêm còn vai kia
+   * không chạm vào ai. Cho chúng chung một màu là kể sai đúng cái ván mà màn
+   * này dựng lại - người xem sẽ thấy nếp nhà của hung thủ mang màu của lá bài
+   * vô hại nhất bàn.
+   */
+  | "killer";
 
 export interface VillageHouse {
   playerId: string;
@@ -136,7 +147,8 @@ export interface VillageStep {
 export interface VillageMemoryModel {
   caseId: string;
   title: string;
-  winner: "wolves" | "village";
+  /** Kết cục của ván, cả bốn giá trị. Xem `CaseFile.winner`. */
+  winner: MatchOutcome;
   winnerLabel: string;
   subtitle: string;
   houses: VillageHouse[];
@@ -195,6 +207,7 @@ export function ringRadius(count: number): number {
 
 function accentFor(role: Role): VillageAccent {
   if (ROLE_META[role].team === "wolves") return "wolf";
+  if (role === "SERIAL_KILLER") return "killer";
   if (ROLE_META[role].team === "neutral") return "jester";
   switch (role) {
     case "GUARD":
@@ -515,7 +528,10 @@ export function buildVillageMemory(
     caseId: file.caseId,
     title: VILLAGE_MEMORY_TITLE,
     winner: file.winner,
-    winnerLabel: `Phe ${teamLabel(file.winner)} chiến thắng`,
+    // `teamLabel(file.winner)` cũ tra một `MatchOutcome` vào bảng nhãn PHE: với
+    // `serial_killer` và `draw` nó ra `undefined`, và màn hồi ức mở đầu bằng
+    // dòng "Phe undefined chiến thắng".
+    winnerLabel: outcomeHeadline(file.winner),
     subtitle: `${roundsLabel(file.rounds)} · ${houses.length} người chơi`,
     houses,
     steps,

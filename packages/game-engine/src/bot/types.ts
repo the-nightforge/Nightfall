@@ -298,7 +298,8 @@ export type NightActionKind =
   | "SKIP"
   | "DETECTIVE_CHECK"
   | "GUARDIAN_PROTECT"
-  | "HOLY_WATER";
+  | "HOLY_WATER"
+  | "SERIAL_KILL";
 
 /**
  * Thông tin ban đêm của ĐÚNG một vai.
@@ -376,6 +377,20 @@ export interface BotKnowledgeView {
    * vì `isWolf === false` chỉ nói được "không phải Sói".
    */
   seerResult: { targetId: string; targetName: string; isWolf: boolean; team: Team } | null;
+  /**
+   * Vai TRUNG LẬP có trong bộ bài của ván này.
+   *
+   * CÔNG KHAI, không phải một rò rỉ: cấu hình phòng đi xuống mọi client trong
+   * `RoomSnapshot.config`, và cả phòng đọc được bộ bài ở sảnh chờ trước khi ván
+   * bắt đầu. Nó nói vai nào CÓ THỂ có mặt, không nói ai đang cầm lá nào.
+   *
+   * Cần thiết vì `neutral` một mình không còn đủ để kết luận: cùng một nhãn ấy,
+   * ván có Thằng Hề nghĩa là "vô hại với làng" còn ván có Sát Nhân nghĩa là
+   * "ứng viên số một cho kẻ đang giết người mỗi đêm". Không có trường này, lõi
+   * chỉ có một câu trả lời cho hai câu hỏi khác nhau - và nó sẽ chọn câu trả
+   * lời nguy hiểm hơn.
+   */
+  neutralRolesInPlay: Role[];
   /** `null` ngoài pha đêm, khi bot đã chết, hoặc khi vai không hành động đêm. */
   night: NightKnowledge | null;
   /**

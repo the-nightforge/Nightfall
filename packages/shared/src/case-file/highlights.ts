@@ -1,3 +1,5 @@
+import { outcomeName, outcomeTeam } from "../outcome";
+import type { MatchOutcome } from "../phases";
 import type { DayVoteRecap, HunterShotRecap, NightRecap } from "../snapshot";
 import { joinNames, nameOf, roleLabelOf, teamLabel } from "./narrate";
 import type { CaseFilePlayer, CaseHighlight, CaseHighlightType } from "./types";
@@ -8,7 +10,7 @@ export interface CaseData {
   nights: NightRecap[];
   days: DayVoteRecap[];
   shots: HunterShotRecap[];
-  winner: "wolves" | "village";
+  winner: MatchOutcome;
   rounds: number;
 }
 
@@ -52,6 +54,12 @@ export const IMPORTANCE: Record<CaseHighlightType, number> = {
   GUARD_SAVE: 66,
   LATE_VOTE_SWING: 64,
   SEER_FOUND_WOLF: 58,
+  /*
+   * Ngay dưới nhát cắn của bầy (BLOODBATH 72) và trên bình độc: một đêm mà Sát
+   * Nhân ra tay là một đêm có hai nguồn giết người trên bàn, và đó là thứ giải
+   * thích được cái chết mà "Sói cắn ai" một mình không giải thích nổi.
+   */
+  SERIAL_KILLER_STRIKE: 71,
   LONE_SURVIVOR: 54,
   QUIET_MATCH: 0,
 };
@@ -472,6 +480,32 @@ function nightHighlights(data: CaseData): CaseCandidate[] {
       );
     }
 
+    // Sát Nhân ra tay.
+    //
+    // Chỉ tính khi mục tiêu THẬT SỰ chết vì nhát dao đó: một cú đâm bị khiên
+    // hay bình cứu chặn lại không phải điểm ngoặt của ai cả, và bản thân việc
+    // Sát Nhân chọn ai thì không ai trong ván được biết.
+    const stabbed = night.serialKillerTarget ?? null;
+    if (stabbed && deaths.some((d) => d.player.id === stabbed.id && d.cause === "serial_killer")) {
+      const killer = data.cast.find((player) => player.role === "SERIAL_KILLER");
+      out.push(
+        candidate(
+          "SERIAL_KILLER_STRIKE",
+          round,
+          "night",
+          `serial-killer:${round}`,
+          "Một nhát dao trong đêm",
+          `${stabbed.name} ngã xuống không phải vì bầy Sói — Sát Nhân đi một mình và ra tay trong cùng đêm đó.`,
+          killer ? [killer.id, stabbed.id] : [stabbed.id],
+          {
+            kind: "serial-killer-strike",
+            killerId: killer?.id ?? stabbed.id,
+            victimId: stabbed.id,
+          },
+        ),
+      );
+    }
+
     // Tiên Tri soi trúng Sói.
     (night.seerChecks ?? []).forEach((check, index) => {
       if (!check.isWolf) return;
@@ -496,7 +530,17 @@ function nightHighlights(data: CaseData): CaseCandidate[] {
 // ---- Người sống sót cuối cùng ----
 
 function loneSurvivorHighlights(data: CaseData): CaseCandidate[] {
-  const survivors = data.cast.filter((player) => player.alive && player.team === data.winner);
+  /*
+   * Phe của bên THẮNG, không phải giá trị `winner` thô.
+   *
+   * `player.team === data.winner` chỉ đúng chừng nào mọi kết cục cũng là một
+   * `Team`. Với `serial_killer` thì phép so đó không bao giờ khớp - kẻ vừa
+   * thắng một mình lại là người duy nhất không được ghi nhận là sống sót cuối
+   * cùng - và với `draw` thì không còn ai sống để mà ghi.
+   */
+  const winningTeam = outcomeTeam(data.winner);
+  if (winningTeam === null) return [];
+  const survivors = data.cast.filter((player) => player.alive && player.team === winningTeam);
   if (survivors.length !== 1) return [];
   const survivor = survivors[0];
   return [
@@ -506,7 +550,7 @@ function loneSurvivorHighlights(data: CaseData): CaseCandidate[] {
       "day",
       "lone-survivor",
       "Người sống sót cuối cùng",
-      `${survivor.name} là người duy nhất của phe ${teamLabel(data.winner)} còn đứng khi màn khép lại.`,
+      `${survivor.name} là người duy nhất của phe ${teamLabel(winningTeam)} còn đứng khi màn khép lại.`,
       [survivor.id],
       { kind: "lone-survivor", playerId: survivor.id, team: survivor.team },
     ),
@@ -525,7 +569,10 @@ export function quietMatchHighlight(data: CaseData): CaseHighlight {
     round: data.rounds,
     phase: "day",
     title: "Một vụ án khép nhanh",
-    description: `Phe ${teamLabel(data.winner)} thắng sau ${data.rounds} ngày. Ván này không để lại điểm ngoặt nào đủ rõ để dựng thành hồ sơ.`,
+    description:
+      data.winner === "draw"
+        ? `Không ai sống sót sau ${data.rounds} ngày. Ván này không để lại điểm ngoặt nào đủ rõ để dựng thành hồ sơ.`
+        : `${outcomeName(data.winner)} thắng sau ${data.rounds} ngày. Ván này không để lại điểm ngoặt nào đủ rõ để dựng thành hồ sơ.`,
     participants: [],
     importance: IMPORTANCE.QUIET_MATCH,
     evidence: { kind: "quiet-match", rounds: data.rounds },

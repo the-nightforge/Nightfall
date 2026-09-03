@@ -81,12 +81,39 @@ export interface NightState {
     { target1Id: string; target2Id: string; sameTeam: boolean; unknown?: boolean }
   >;
   priestResults: Record<string, { targetId: string; isWolf: boolean }>;
+  /**
+   * Mục tiêu Sát Nhân đã chốt cho đêm nay; `null` là chưa chọn hoặc đã bỏ qua.
+   *
+   * Trạng thái RIÊNG, không dùng chung `wolfVotes` hay `killTarget`: Sát Nhân
+   * không bầu với ai và không đi cùng nhịp khoá phiếu của bầy Sói. Dùng chung
+   * một ô sẽ khiến `lockWolves` kiểm phiếu của nó, `witchPending` báo cho Phù
+   * Thuỷ nạn nhân của nó, và cả hai đều là luật sai.
+   *
+   * Optional vì snapshot ghi trước bản này không có trường đó; constructor của
+   * GameEngine chuẩn hoá về `null` khi nạp lại.
+   */
+  serialKillerTarget?: string | null;
+  /**
+   * Sát Nhân đã chủ động bỏ qua đêm nay.
+   *
+   * Cần một cờ riêng vì `serialKillerTarget === null` mang HAI nghĩa: chưa
+   * quyết, và quyết là không giết ai - đúng cặp trạng thái mà `priestSkipped`
+   * tồn tại để phân biệt.
+   */
+  serialKillerSkipped?: boolean;
 }
 
 export interface DeathInfo {
   playerId: string;
   name: string;
-  cause: "wolf" | "poison" | "priest" | "priest_backfire";
+  /**
+   * `serial_killer` là một nguồn RIÊNG, không phải một biến thể của `wolf`.
+   *
+   * Ba chỗ đọc nguyên nhân theo đúng chữ này và cả ba sẽ sai nếu gộp: Trăng Máu
+   * chỉ nạp lại khi bầy Sói không giết được ai, hoá Sói chỉ kích hoạt bằng một
+   * nhát cắn hợp lệ, và bản tường thuật kể hai cái chết bằng hai câu khác nhau.
+   */
+  cause: "wolf" | "poison" | "priest" | "priest_backfire" | "serial_killer";
 }
 
 export interface PublicDeath {

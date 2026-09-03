@@ -122,8 +122,13 @@ export function NightPanel({ snapshot, onAction }: Props) {
     />
   );
 
-  // Sói bỏ phiếu chứ không chốt, nên nhãn "Đã hành động" của các vai khác sẽ nói sai.
-  const showActedBadge = acted && role !== "WEREWOLF" && role !== "WOLF_CUB";
+  /*
+   * Sói bỏ phiếu chứ không chốt, nên nhãn "Đã hành động" của các vai khác sẽ
+   * nói sai. Sát Nhân cũng vậy nhưng vì lý do khác: nó đổi mục tiêu được tới
+   * khi trời sáng, nên "đã hành động" đọc như một cánh cửa đã đóng.
+   */
+  const showActedBadge =
+    acted && role !== "WEREWOLF" && role !== "WOLF_CUB" && role !== "SERIAL_KILLER";
 
   /*
    * Đồng đội trong phe Sói - những ô mà luật không cho nhắm tới.
@@ -489,7 +494,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
               )}
             </div>
             <p className="mb-2 text-[13px] text-mist-strong">
-              Bảo vệ 1 người khỏi đòn cắn của Sói (tối đa 2 lần cả ván, không chọn cùng 1 người 2 đêm liền).
+              Bảo vệ 1 người khỏi mọi đòn giết ban đêm (tối đa 2 lần cả ván, không chọn cùng 1 người 2 đêm liền).
             </p>
             {aliveOthers({
               allowSelf: true,
@@ -514,13 +519,13 @@ export function NightPanel({ snapshot, onAction }: Props) {
               </span>
             </div>
             <p className="mb-2 text-[13px] text-mist-strong">
-              Ném Nước thánh vào 1 người: Nếu là <b>Sói</b> thì Sói chết. Nếu là <b>Dân</b> thì Linh mục bị phản vệ tử vong!
+              Ném Nước thánh vào 1 người: Nếu là <b>Sói</b> thì Sói chết. Nếu <b>không phải Sói</b> thì Linh mục bị phản vệ tử vong!
             </p>
             {night?.priestResult && (
               <div className="mb-2 rounded-lg bg-night-800 p-2.5 text-sm">
                 <p className="text-[13px] text-mist-strong">Kết quả dùng Nước thánh:</p>
                 <p className="mt-1">
-                  Mục tiêu <b>{night.priestResult.target.name}</b> {night.priestResult.isWolf ? "là Ma Sói và đã bị thanh tẩy!" : "là Dân Làng vô tội!"}
+                  Mục tiêu <b>{night.priestResult.target.name}</b> {night.priestResult.isWolf ? "là Ma Sói và đã bị thanh tẩy!" : "không phải Ma Sói!"}
                 </p>
               </div>
             )}
@@ -573,6 +578,59 @@ export function NightPanel({ snapshot, onAction }: Props) {
             >
               🛡️ Bảo vệ người này
             </button>
+          </>
+        )}
+
+        {/* SÁT NHÂN */}
+        {role === "SERIAL_KILLER" && (
+          <>
+            <p className="mb-2 text-[13px] text-mist-strong">
+              Chọn một người để giết đêm nay, hoặc bỏ qua. Bạn đi{" "}
+              <b className="text-amber-300">một mình</b>: bầy Sói không phải đồng
+              minh của bạn, và bạn nhắm được cả họ.
+            </p>
+            {night?.serialKillerSkipped ? (
+              // Bỏ qua là quyết định CUỐI CÙNG của đêm (engine chặn mọi thao tác
+              // sau đó), nên màn hình phải nói ra điều đó thay vì bày lại lưới
+              // chọn người rồi để cú bấm bị từ chối.
+              <p className="rounded-lg bg-night-800 p-3 text-center text-sm text-mist-strong">
+                Bạn đã quyết định không ra tay đêm nay.
+              </p>
+            ) : (
+              <>
+                {aliveOthers({
+                  allowSelf: false,
+                  selectable: true,
+                  // Mục tiêu đã gửi hiện dấu "Phiếu của bạn" thay vì "Đang chọn":
+                  // đổi ý được tới hết đêm, nên người chơi phải phân biệt được
+                  // "đang cân nhắc" với "đã chốt".
+                  confirmedId: night?.serialKillerTarget ?? null,
+                })}
+                <button
+                  className="btn-primary mt-3 w-full"
+                  disabled={!selected}
+                  onClick={() => selected && onAction("SERIAL_KILL", selected)}
+                >
+                  🔪{" "}
+                  {night?.serialKillerTarget
+                    ? `Đổi mục tiêu sang người này`
+                    : "Ra tay với người này"}
+                </button>
+                <button
+                  className="btn-secondary mt-2 w-full"
+                  onClick={() => onAction("SKIP", null)}
+                >
+                  Không giết ai đêm nay
+                </button>
+                {night?.serialKillerTarget && (
+                  <p className="mt-2 text-center text-[13px] text-mist-strong">
+                    Mục tiêu đang chốt:{" "}
+                    <b className="text-blood-400">{nameOf(night.serialKillerTarget)}</b>. Bạn
+                    còn đổi ý được tới khi trời sáng.
+                  </p>
+                )}
+              </>
+            )}
           </>
         )}
 

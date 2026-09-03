@@ -1,3 +1,4 @@
+import type { MatchOutcome } from "@masoi/shared";
 import type { CaseCardModel } from "./case-card";
 
 /** Tỷ lệ 9:16, khớp khung ảnh dọc của mọi ứng dụng nhắn tin trên điện thoại. */
@@ -79,7 +80,29 @@ export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: 
   return lines;
 }
 
-function paintBackground(ctx: CanvasRenderingContext2D, winner: "wolves" | "village"): void {
+/**
+ * Quầng sáng theo KẾT CỤC, bốn nhánh.
+ *
+ * Bản cũ là một biểu thức ba ngôi trên `winner === "wolves"`, nên mọi ván không
+ * phải Sói thắng - kể cả ván Sát Nhân thắng và ván hoà - đều được tô sắc lục
+ * của phe Dân Làng lên đúng tấm ảnh đem đi khoe.
+ */
+const CARD_GLOW: Record<MatchOutcome, string> = {
+  wolves: "rgba(220, 38, 64, 0.30)",
+  village: "rgba(52, 178, 140, 0.26)",
+  serial_killer: "rgba(217, 165, 33, 0.28)",
+  draw: "rgba(148, 163, 184, 0.20)",
+};
+
+/** Sắc chữ tiêu đề, cùng bốn nhánh và cùng lý do với `CARD_GLOW`. */
+const CARD_ACCENT: Record<MatchOutcome, string> = {
+  wolves: COLORS.blood400,
+  village: COLORS.emeraldLight,
+  serial_killer: "#fcd34d",
+  draw: COLORS.mist,
+};
+
+function paintBackground(ctx: CanvasRenderingContext2D, winner: MatchOutcome): void {
   const base = ctx.createLinearGradient(0, 0, 0, CARD_HEIGHT);
   base.addColorStop(0, COLORS.night950);
   base.addColorStop(0.55, COLORS.night900);
@@ -89,7 +112,7 @@ function paintBackground(ctx: CanvasRenderingContext2D, winner: "wolves" | "vill
 
   // Quầng sáng theo phe thắng, đúng thủ pháp mà GameOverView đang dùng trên web.
   const glow = ctx.createRadialGradient(CARD_WIDTH / 2, 340, 0, CARD_WIDTH / 2, 340, 900);
-  glow.addColorStop(0, winner === "wolves" ? "rgba(220, 38, 64, 0.30)" : "rgba(52, 178, 140, 0.26)");
+  glow.addColorStop(0, CARD_GLOW[winner]);
   glow.addColorStop(1, "rgba(0, 0, 0, 0)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, CARD_WIDTH, 1200);
@@ -101,7 +124,7 @@ export function paintCaseCard(
   model: CaseCardModel,
   fonts: CardFonts,
 ): void {
-  const accent = model.winner === "wolves" ? COLORS.blood400 : COLORS.emeraldLight;
+  const accent = CARD_ACCENT[model.winner];
 
   paintBackground(ctx, model.winner);
 

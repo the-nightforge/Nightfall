@@ -5,6 +5,8 @@ import {
   PERSONAL_WIN_LABELS,
   ROLE_META,
   momentLabel,
+  outcomeHeadline,
+  roleWonOutcome,
   type MatchHistoryEntry,
   type Team,
 } from "@masoi/shared";
@@ -158,8 +160,22 @@ function MatchRow({ match }: { match: MatchHistoryEntry }) {
    * một chỗ đọc mới sau này sẽ không đi qua cái biên đó.
    */
   const myTeam = match.myRole ? ROLE_META[match.myRole].team : null;
-  const won = myTeam === null ? null : match.myPersonalWin != null || match.winner === myTeam;
-  const wolvesWon = match.winner === "wolves";
+  /*
+   * `roleWonOutcome`, KHÔNG phải `match.winner === myTeam`.
+   *
+   * Phép so cũ trả `false` cho một ván mà chính người này thắng với tư cách Sát
+   * Nhân (phe của vai đó là `neutral`), và cũng trả `false` cho ván hoà - vế
+   * sau thì đúng và phải giữ.
+   *
+   * `winner` ở lịch sử có thêm giá trị `"unknown"`, thứ không phải một kết cục:
+   * nó nghĩa là bản build này không đọc nổi cột đó. Với nó, câu trả lời đúng là
+   * "không biết" chứ không phải "thua".
+   */
+  const knownOutcome = match.winner === null || match.winner === "unknown" ? null : match.winner;
+  const won =
+    myTeam === null || knownOutcome === null
+      ? null
+      : match.myPersonalWin != null || roleWonOutcome(match.myRole!, knownOutcome);
 
   return (
     <li className="rounded-lg border border-white/[0.08] bg-night-800/50">
@@ -203,7 +219,7 @@ function MatchRow({ match }: { match: MatchHistoryEntry }) {
             {match.myRole ? (
               <Meta className="text-mist-bright">{ROLE_META[match.myRole].name}</Meta>
             ) : (
-              <Meta>{wolvesWon ? "Ma Sói thắng" : "Dân Làng thắng"}</Meta>
+              <Meta>{knownOutcome === null ? "Không rõ kết quả" : outcomeHeadline(knownOutcome)}</Meta>
             )}
 
             {match.mySurvived !== null && (

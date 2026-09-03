@@ -988,6 +988,7 @@ describe("Lịch sử diễn biến ban đêm", () => {
         detectiveChecks: [],
         priest: null,
         wolfSecondaryTarget: null,
+        serialKillerTarget: null,
       },
     ]);
   });

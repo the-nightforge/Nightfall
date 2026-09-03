@@ -4,9 +4,10 @@ import {
   DEFAULT_ROOM_CONFIG,
   type CaseFile,
   type CaseHighlight,
+  type PersonalWin,
   type RoomSnapshot,
 } from "@masoi/shared";
-import { decisiveHighlight, personalOutcome, winnerCopy } from "./game-over-summary";
+import { decisiveHighlight, drawNote, personalOutcome, winnerCopy } from "./game-over-summary";
 
 function snapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
   return {
@@ -82,6 +83,42 @@ describe("winnerCopy", () => {
     assert.equal(winnerCopy("village").headline, "Phe Dân Làng chiến thắng");
     assert.equal(winnerCopy("wolves").headline, "Phe Ma Sói chiến thắng");
     assert.equal(winnerCopy("wolves").teamName, "Ma Sói");
+  });
+});
+
+describe("drawNote", () => {
+  const jesterWin: PersonalWin = {
+    playerId: "jester",
+    name: "Thằng Hề",
+    role: "JESTER",
+    condition: "JESTER_LYNCHED",
+    round: 2,
+  };
+
+  it("hoà mà sổ thắng cá nhân RỖNG thì nói thẳng là không ai đạt mục tiêu", () => {
+    const note = drawNote([]);
+    assert.match(note, /Không còn ai sống sót/);
+    assert.match(note, /không ai đạt được mục tiêu/);
+  });
+
+  it("hoà mà Thằng Hề đã thắng thì KHÔNG được phủ nhận thành tích đó", () => {
+    /*
+     * Khối "Thắng cá nhân" hiện ngay dưới câu này. Bản cũ luôn ghi "không ai
+     * đạt được mục tiêu của mình", nên hai khối cạnh nhau nói ngược nhau về
+     * đúng một người - và người đó vừa thắng thật, engine đã ghi vào
+     * `personalWins` từ lúc búa gõ.
+     */
+    const note = drawNote([jesterWin]);
+    assert.doesNotMatch(note, /không ai đạt được mục tiêu/);
+    // Vế "không phe nào thắng" vẫn phải còn: hoà vẫn là hoà.
+    assert.match(note, /không phe nào thắng/);
+    assert.match(note, /mục tiêu riêng/);
+  });
+
+  it("nhiều người thắng cá nhân thì câu chữ không nói nhầm thành một người", () => {
+    const note = drawNote([jesterWin, { ...jesterWin, playerId: "jester2", name: "Hề 2" }]);
+    assert.doesNotMatch(note, /một người/);
+    assert.match(note, /có người đạt được mục tiêu riêng/);
   });
 });
 

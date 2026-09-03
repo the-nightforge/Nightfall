@@ -37,6 +37,10 @@ export const ACCENT_HEX: Record<VillageAccent, number> = {
   // Hổ phách, đứng riêng khỏi cả sắc đỏ của Sói lẫn sắc xám-lam của làng - đúng
   // sắc mà bộ bài, thẻ vai và màn kết thúc đang dùng cho phe trung lập.
   jester: 0xd9a521,
+  // Đỏ thẫm ngả tím: đứng riêng khỏi cả sắc đỏ máu của Sói lẫn hổ phách của
+  // Thằng Hề. Sát Nhân giết như Sói nhưng không thuộc về bầy nào, và màu ở đây
+  // phải nói đúng điều đó.
+  killer: 0x7a1f4a,
 };
 
 /** Sắc chủ đạo của từng hiệu ứng. Bản 2D dùng đúng bảng này cho viền thẻ. */

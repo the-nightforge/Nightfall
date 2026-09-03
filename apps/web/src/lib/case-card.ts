@@ -1,4 +1,11 @@
-import { momentLabel, roundsLabel, type CaseFile } from "@masoi/shared";
+import {
+  momentLabel,
+  outcomeHeadline,
+  outcomeName,
+  roundsLabel,
+  type CaseFile,
+  type MatchOutcome,
+} from "@masoi/shared";
 
 /** Trần độ dài mô tả trên thẻ. Dài hơn thì thẻ 9:16 hết chỗ cho điểm ngoặt sau. */
 export const CARD_TEXT_MAX = 110;
@@ -13,7 +20,7 @@ export interface CaseCardLine {
 
 export interface CaseCardModel {
   caseId: string;
-  winner: "wolves" | "village";
+  winner: MatchOutcome;
   headline: string;
   subline: string;
   lines: CaseCardLine[];
@@ -51,8 +58,16 @@ const CTA = "Chơi Ma Sói online";
  * phải nhớ đi kiểm mỗi lần sửa câu chữ.
  */
 export function buildCaseCardModel(file: CaseFile, options: CaseCardOptions): CaseCardModel {
-  const teamName = file.winner === "wolves" ? "Ma Sói" : "Dân Làng";
-  const headline = `Phe ${teamName} thắng`;
+  /*
+   * Nhãn kết cục lấy từ `@masoi/shared`, không dựng lại ở đây.
+   *
+   * Bản cũ viết `file.winner === "wolves" ? "Ma Sói" : "Dân Làng"` - đúng
+   * chừng nào chỉ có hai kết cục, và biến MỌI ván Sát Nhân thắng hay ván hoà
+   * thành "Phe Dân Làng thắng" trên đúng tấm ảnh người chơi đem đi khoe.
+   */
+  const headline = outcomeHeadline(file.winner);
+  // `null` chỉ ở ván hoà; câu chia sẻ bên dưới có nhánh riêng cho nó.
+  const winnerName = outcomeName(file.winner);
   const subline = `${roundsLabel(file.rounds)} · ${file.cast.length} người chơi`;
 
   const lines: CaseCardLine[] = file.highlights.map((highlight) => ({
@@ -72,7 +87,9 @@ export function buildCaseCardModel(file: CaseFile, options: CaseCardOptions): Ca
 
   const shareText = [
     `🕯️ Hồ sơ vụ án ${file.caseId}`,
-    `Phe ${teamName} thắng sau ${roundsLabel(file.rounds)}.`,
+    winnerName === null
+      ? `Không ai sống sót sau ${roundsLabel(file.rounds)}.`
+      : `${winnerName} thắng sau ${roundsLabel(file.rounds)}.`,
     "",
     ...shareLines,
     "",

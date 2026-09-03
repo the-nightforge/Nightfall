@@ -296,6 +296,10 @@ describe("bot knowledge security boundary", () => {
         "publicVoteHistory",
         "round",
         "seerResult",
+        // Vai TRUNG LẬP có trong bộ bài. Công khai y như `activeEventId`: cấu
+        // hình phòng đi xuống mọi client trong `RoomSnapshot.config`. Nó nói
+        // vai nào CÓ THỂ có mặt, không nói ai đang cầm lá nào.
+        "neutralRolesInPlay",
         "selfRole",
       ].sort(),
     );

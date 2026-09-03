@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { CaseFile } from "@masoi/shared";
+import type { CaseFile, MatchOutcome } from "@masoi/shared";
 import { buildCaseCardModel, type CaseCardModel } from "@/lib/case-card";
 import { CARD_HEIGHT, CARD_WIDTH, paintCaseCard, type CardFonts } from "@/lib/case-canvas";
 import {
@@ -13,6 +13,34 @@ import {
   type ShareOutcome,
 } from "@/lib/case-share";
 import { useModalFocus } from "@/lib/useModalFocus";
+
+/**
+ * Sắc chữ theo KẾT CỤC, bốn nhánh. Cùng bảng và cùng lý do với `CaseFileCard`:
+ * một biểu thức hai nhánh tô sắc phe Dân Làng lên cả ván Sát Nhân thắng lẫn ván
+ * hoà, ngay trên tấm ảnh người chơi đem đi khoe.
+ */
+const OUTCOME_ACCENT: Record<MatchOutcome, string> = {
+  wolves: "text-blood-400",
+  village: "text-emerald-300",
+  serial_killer: "text-amber-300",
+  draw: "text-mist-bright",
+};
+
+/** Quầng sáng của bản xem trước; giữ khớp `CARD_GLOW` bên `case-canvas`. */
+const OUTCOME_GLOW: Record<MatchOutcome, string> = {
+  wolves: "rgba(220, 38, 64, 0.30)",
+  village: "rgba(52, 178, 140, 0.26)",
+  serial_killer: "rgba(217, 165, 33, 0.28)",
+  draw: "rgba(148, 163, 184, 0.20)",
+};
+
+/** Gạch ngang dưới tiêu đề. */
+const OUTCOME_RULE: Record<MatchOutcome, string> = {
+  wolves: "bg-blood-500",
+  village: "bg-emerald-500",
+  serial_killer: "bg-amber-500",
+  draw: "bg-mist/40",
+};
 
 /**
  * Font cho canvas.
@@ -499,8 +527,7 @@ function CardPreview({
   triggerRef: React.RefObject<HTMLButtonElement | null>;
   onOpen: () => void;
 }) {
-  const wolvesWin = model.winner === "wolves";
-  const accent = wolvesWin ? "text-blood-400" : "text-emerald-300";
+  const accent = OUTCOME_ACCENT[model.winner];
 
   return (
     <button
@@ -522,9 +549,7 @@ function CardPreview({
       <div
         className="flex-1 overflow-hidden px-4 pt-5"
         style={{
-          background: wolvesWin
-            ? "radial-gradient(340px 200px at 50% 12%, rgba(220, 38, 64, 0.30), transparent 70%)"
-            : "radial-gradient(340px 200px at 50% 12%, rgba(52, 178, 140, 0.26), transparent 70%)",
+          background: `radial-gradient(340px 200px at 50% 12%, ${OUTCOME_GLOW[model.winner]}, transparent 70%)`,
         }}
       >
         <p className="text-center text-[8px] font-semibold uppercase tracking-[0.3em] text-mist/70">
@@ -535,7 +560,7 @@ function CardPreview({
           {model.headline}
         </p>
         <p className="text-center text-[9px] text-mist/70">{model.subline}</p>
-        <div className={`mx-auto mt-2 h-px w-12 ${wolvesWin ? "bg-blood-500" : "bg-emerald-500"}`} />
+        <div className={`mx-auto mt-2 h-px w-12 ${OUTCOME_RULE[model.winner]}`} />
 
         <ul className="mt-3 space-y-2">
           {model.lines.map((line, index) => (

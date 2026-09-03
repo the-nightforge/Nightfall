@@ -85,6 +85,27 @@ export function decideFinalVote(
     return { kind: "FINAL_VOTE", guilty: false, confidence: 1, evidence: [] };
   }
 
+  /*
+   * Sát Nhân luôn bỏ TREO, và đó là một nước đi chứ không phải sự thờ ơ.
+   *
+   * Bị cáo không được bỏ phiếu cho chính mình (engine chặn), nên lá phiếu này
+   * luôn nói về NGƯỜI KHÁC - tức về một người bớt đi giữa Sát Nhân và điều kiện
+   * thắng của nó, mà nó không phải trả bằng một đêm. Vế thứ hai quan trọng
+   * không kém: tới được phiên toà nghĩa là đa số bàn đã đồng thuận, và người
+   * khăng khăng tha kẻ mà cả làng vừa đưa ra xử chính là người bị soi kỹ nhất
+   * vào ngày mai.
+   *
+   * ĐỐI XỨNG với nhánh Thằng Hề ngay trên, và ngược dấu: Hề kéo mọi phiên toà
+   * của người khác về không để giữ lấy ngày cho mình.
+   *
+   * Đứng TRƯỚC mọi phép đọc belief: với Sát Nhân, bằng chứng công khai nói gì
+   * cũng không đổi được câu trả lời.
+   */
+  if (context.knowledge.selfRole === "SERIAL_KILLER") {
+    probe?.fallback("Sát Nhân bỏ Treo: mỗi bản án là một người bớt đi mà nó không phải tự tay giết");
+    return { kind: "FINAL_VOTE", guilty: true, confidence: 1, evidence: [] };
+  }
+
   const entry = state.suspicion[accusedId];
   const suspicion = entry?.score ?? 0;
   const trust = state.trust[accusedId]?.score ?? 0;

@@ -41,6 +41,7 @@ function contextFor(
       lastNightDeaths: [],
       activeEventId: null,
       dayOfTruthClaims: {},
+      neutralRolesInPlay: [],
       ...overrides,
     },
     visibleChat: [],

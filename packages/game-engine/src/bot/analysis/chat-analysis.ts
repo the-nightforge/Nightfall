@@ -33,6 +33,9 @@ const ROLE_PHRASES: Array<[string, Role]> = [
   ["thiên thần hộ mệnh", "GUARDIAN_ANGEL"],
   ["thiên thần", "GUARDIAN_ANGEL"],
   ["thằng hề", "JESTER"],
+  // Trước "sát" bất kỳ và trước "thám tử": không có cụm nào ngắn hơn khớp được,
+  // nhưng giữ đúng quy ước "cụm dài đứng trước" của bảng này.
+  ["sát nhân", "SERIAL_KILLER"],
   ["thám tử", "DETECTIVE"],
   ["linh mục", "PRIEST"],
   ["thị trưởng", "MAYOR"],

@@ -1,4 +1,9 @@
-import { MAX_PLAYERS_PER_ROOM, MIN_PLAYERS_TO_START, type BalanceWarningView } from "@masoi/shared";
+import {
+  MAX_PLAYERS_PER_ROOM,
+  MIN_PLAYERS_TO_START,
+  UNMEASURED_NEUTRAL_WARNING,
+  type BalanceWarningView,
+} from "@masoi/shared";
 
 /**
  * Dịch cảnh báo cân bằng sang tiếng người.
@@ -85,6 +90,14 @@ function friendly(warning: string, score: number, playerCount: number): string {
   if (warning.startsWith("Cấu hình mất cân bằng")) {
     return tiltAdvice(score);
   }
+  if (warning === UNMEASURED_NEUTRAL_WARNING) {
+    /*
+     * KHÔNG có lời khuyên "hãy chỉnh lại X" ở đây, và đó là điểm mấu chốt: bộ
+     * bài này không lệch, nó chỉ nằm ngoài thứ mà điểm số biết cách chấm. Một
+     * câu bảo host bật thêm một vai làng sẽ khiến họ đi sửa một bộ bài không hỏng.
+     */
+    return "Ván có Sát Nhân: một bên thứ ba giết mỗi đêm và tranh phần thắng chung. Điểm cân bằng chỉ chấm cán cân Dân/Sói, nên nó không nói được gì về lá bài này.";
+  }
   return warning;
 }
 
@@ -95,6 +108,16 @@ export function balanceCopy(
   mode: "ranked" | "chaos" = "ranked",
 ): BalanceCopy {
   const blocksStart = balance.blocking && mode === "ranked";
+  /*
+   * Cảnh báo "ngoài thang đo" KHÔNG phải một lời phàn nàn về đội hình.
+   *
+   * Nếu nó là cảnh báo duy nhất thì tiêu đề "Đội hình hơi lệch" nói sai: bộ bài
+   * đó cân đúng như mọi bộ bài khác, chỉ là phép chấm không với tới một lá của
+   * nó. Một host đọc câu đó sẽ đi sửa một thứ không hỏng.
+   */
+  const tiltWarnings = balance.warnings.filter(
+    (warning) => warning !== UNMEASURED_NEUTRAL_WARNING,
+  );
   const advice: string[] = [];
   for (const warning of balance.warnings) {
     const line = friendly(warning, balance.score, playerCount);
@@ -105,7 +128,11 @@ export function balanceCopy(
   return {
     blocking: balance.blocking,
     blocksStart,
-    headline: blocksStart ? "Đội hình chưa vào trận được" : "Đội hình hơi lệch",
+    headline: blocksStart
+      ? "Đội hình chưa vào trận được"
+      : tiltWarnings.length === 0
+        ? "Bộ bài có vai ngoài thang đo"
+        : "Đội hình hơi lệch",
     advice,
     technical: [...balance.warnings],
   };

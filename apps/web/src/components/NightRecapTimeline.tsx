@@ -15,6 +15,9 @@ const ACTOR_STYLE: Record<string, string> = {
   "Thiên Thần": "bg-cyan-900/50 text-cyan-300",
   "Thám Tử": "bg-violet-900/50 text-violet-300",
   "Linh Mục": "bg-rose-900/50 text-rose-300",
+  // Đỏ thẫm ngả tím, cùng sắc mà màn hồi ức 3D dùng cho nếp nhà của Sát Nhân:
+  // gần với Sói vì nó cũng giết, nhưng không phải sắc của bầy.
+  "Sát Nhân": "bg-fuchsia-950/60 text-fuchsia-300",
 };
 
 /**
@@ -265,6 +268,18 @@ export function NightRecapTimeline({
                             : `đã dùng Nước thánh ở Đêm ${holyWaterSpentAt}.`}
                         </Line>
                       ))}
+                    {roles.serialKiller && (
+                      <Line actor="Sát Nhân">
+                        {night.serialKillerTarget ? (
+                          <>
+                            ra tay với{" "}
+                            <b className="text-white">{night.serialKillerTarget.name}</b>.
+                          </>
+                        ) : (
+                          "không ra tay đêm nay."
+                        )}
+                      </Line>
+                    )}
                     {(() => {
                       const turned = cursedTurnedText(night);
                       return turned ? <Line actor="Nguyền">{turned}</Line> : null;

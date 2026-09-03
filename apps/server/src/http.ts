@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "./db";
 import { newToken, sha256 } from "./util";
 import {
+  isMatchOutcome,
   isPersonalWinCondition,
   isRole,
   nicknameSchema,
@@ -72,7 +73,16 @@ export function toHistoryEntry(row: GameResultRow, viewerId: string): MatchHisto
 
   return {
     roomCode: row.roomCode,
-    winner: row.winner as MatchHistoryEntry["winner"],
+    /*
+     * Đi qua đúng cái sàng mà `role` và `personalWin` đã đi qua, và vì cùng một
+     * lý do: `winner` là một cột CHUỖI TỰ DO do một bản build nào đó ghi ra.
+     * Một kết cục đã đổi tên hay bị gỡ vẫn nằm nguyên trong lịch sử, và ép kiểu
+     * thẳng sẽ đẩy chuỗi lạ đó vào bảng nhãn ở TRANG CHỦ.
+     *
+     * `"unknown"` đã có sẵn trong kiểu cho đúng trường hợp này: dòng lịch sử
+     * vẫn hiện, chỉ là không nói được ai thắng.
+     */
+    winner: isMatchOutcome(row.winner) ? row.winner : "unknown",
     rounds: row.round,
     durationSec: row.durationSec,
     endedAt: row.createdAt.getTime(),

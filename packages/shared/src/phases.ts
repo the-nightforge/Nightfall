@@ -18,7 +18,37 @@ export const PHASES = [
 export type Phase = (typeof PHASES)[number];
 export type GamePhase = Exclude<Phase, "LOBBY">;
 
-export type Winner = "wolves" | "village" | null;
+/**
+ * KẾT CỤC của một ván, không phải "phe nào mạnh hơn".
+ *
+ * Bốn giá trị, và chỉ hai trong số đó là một phe: `serial_killer` là một CON
+ * NGƯỜI thắng một mình, còn `draw` là "không ai thắng". Vì vậy mọi chỗ đọc
+ * trường này phải xử lý bốn nhánh chứ không được viết `winner === "wolves" ?
+ * ... : ...` - với hai giá trị thì biểu thức đó còn đúng, với bốn thì nó gán
+ * chiến thắng của Sát Nhân cho phe Dân Làng.
+ *
+ * `null` vẫn có nghĩa cũ và KHÔNG phải một kết cục: ván chưa xong.
+ *
+ * Khác hẳn `PersonalWin`: thắng lợi cá nhân của Thằng Hề được ghi vào sổ riêng
+ * và ván chạy tiếp, còn một giá trị ở đây KẾT THÚC ván.
+ */
+export const WINNERS = ["wolves", "village", "serial_killer", "draw"] as const;
+
+export type MatchOutcome = (typeof WINNERS)[number];
+
+export type Winner = MatchOutcome | null;
+
+/**
+ * Chuỗi này có phải một kết cục mà bản build HIỆN TẠI hiểu không.
+ *
+ * Cùng lý do với `isRole`: cột `winner` của bảng `GameResult` là một chuỗi tự
+ * do do một bản build nào đó ghi ra, nên lịch sử trận có thể mang một giá trị
+ * mà bản này chưa biết. Ép kiểu thẳng sẽ đẩy chuỗi lạ đó vào một bảng nhãn và
+ * làm hỏng TRANG CHỦ, đúng kiểu lỗi không tự thoát ra được.
+ */
+export function isMatchOutcome(value: unknown): value is MatchOutcome {
+  return typeof value === "string" && (WINNERS as readonly string[]).includes(value);
+}
 
 export type RoomMode = "ranked" | "chaos";
 
@@ -45,6 +75,18 @@ export interface RoomConfig {
    * chứa Thằng Hề, host phải tự bật trong bộ bài tuỳ chỉnh.
    */
   jester?: boolean;
+  /**
+   * Sát Nhân - vai TRUNG LẬP thứ hai, tối đa một lá mỗi ván.
+   *
+   * Optional và mặc định TẮT vì cùng ba lý do với `jester`: snapshot Redis ghi
+   * trước bản này không có trường đó, không preset nào chứa vai này, và host
+   * phải tự bật trong bộ bài tuỳ chỉnh.
+   *
+   * KHÔNG dùng chung cờ với `jester`: hai vai cùng nhãn `neutral` nhưng chơi
+   * hai ván khác nhau, và gộp chúng vào một công tắc là bước đầu tiên để mọi
+   * chỗ khác cũng bắt đầu coi chúng là một.
+   */
+  serialKiller?: boolean;
   mode?: RoomMode;
   /**
    * Bật voice chat cho phòng. Mặc định tắt: phòng không bật thì không có gì

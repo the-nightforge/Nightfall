@@ -162,6 +162,14 @@ export interface NightActionView {
   priestHolyWaterUsed?: boolean;
   /** Với Linh Mục: kết quả dùng Nước thánh gần nhất */
   priestResult?: { target: { id: string; name: string }; isWolf: boolean } | null;
+  /**
+   * Với Sát Nhân: mục tiêu đã chốt cho đêm nay, `null` là chưa chọn hoặc đã bỏ
+   * qua. CHỈ đi vào snapshot của chính Sát Nhân - không ai khác được biết đêm
+   * nay ai đang bị nhắm, kể cả nạn nhân.
+   */
+  serialKillerTarget?: string | null;
+  /** Với Sát Nhân: đã chủ động bỏ qua đêm nay. */
+  serialKillerSkipped?: boolean;
   /** Với Phù Thủy */
   healUsed?: boolean;
   poisonUsed?: boolean;
@@ -289,8 +297,15 @@ export interface NightRecap {
   };
   deaths: Array<{
     player: RecapPlayer;
-    cause: "wolf" | "poison" | "priest" | "priest_backfire";
+    cause: "wolf" | "poison" | "priest" | "priest_backfire" | "serial_killer";
   }>;
+  /**
+   * Mục tiêu Sát Nhân đã ra tay đêm đó; `null` khi không có hoặc khi ván không
+   * bật vai này. Trường RIÊNG chứ không gộp vào `wolfTarget`: hai đòn khác
+   * nguồn, và gộp chúng sẽ khiến bản tường thuật kể một cú đâm thành một nhát
+   * cắn. Vắng mặt ở lịch sử đêm ghi trước bản này.
+   */
+  serialKillerTarget?: RecapPlayer | null;
   /**
    * Kẻ Nguyền Rủa đã bị nguyền và hoá Sói trong đêm này; null khi không có.
    * Không bắt buộc vì lịch sử đêm lưu từ trước khi có role này thiếu trường đó.

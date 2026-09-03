@@ -87,6 +87,7 @@ describe("lời nhắm tới KHÔNG phải bằng chứng", () => {
     knowledge: {
       dayOfTruthClaims: {},
       activeEventId: null,
+      neutralRolesInPlay: [],
       botId: "p1",
       round: 1,
       phase: "DAY_DISCUSSION",
