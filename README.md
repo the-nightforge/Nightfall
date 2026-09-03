@@ -442,6 +442,7 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `npm run db:migrate` | `prisma migrate deploy` |
 | `npm run db:generate` | `prisma generate` |
 | `npm run selfplay` | Run bot self-play batches and print a report |
+| `npm run role-power` | Measure each role's marginal win-rate contribution by paired self-play, to recalibrate `ROLE_POWER` |
 | `npm run bot:probe` | One real LLM call against a fake match, to validate keys and prompts |
 | `npm run voice:probe` | One real LiveKit round trip, to validate credentials and token grants |
 | `npm run test:e2e` | Socket.IO smoke test; needs a running local server. Not yet a release gate |

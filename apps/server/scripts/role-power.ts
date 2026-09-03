@@ -73,6 +73,9 @@ function main(): void {
   for (const [countRaw, preset] of Object.entries(PRESET_DECKS)) {
     const playerCount = Number(countRaw);
     const seedBase = `power:${playerCount}`;
+    // Tiến độ ra stderr: một lượt quét đầy đủ mất vài phút, và một tiến trình
+    // im lặng hàng phút thì không phân biệt được với một tiến trình treo.
+    process.stderr.write(`preset ${playerCount}... `);
     const base = villageWinRate(playerCount, preset, games, seedBase);
     baselines.push([playerCount, base]);
 
@@ -85,6 +88,8 @@ function main(): void {
       const owned = role === "WOLF_CUB" ? -delta : delta;
       deltas.set(role, [...(deltas.get(role) ?? []), owned]);
     }
+    process.stderr.write(`làng thắng ${(base * 100).toFixed(1)}%
+`);
   }
 
   const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length;
