@@ -1,8 +1,5 @@
 import type { GameEventId, GameEventView } from "@masoi/shared";
 import type { GameState } from "../types";
-import { calculateMomentum } from "./momentum";
-
-const RANKED_NEUTRAL_EVENT_CHANCE = 0.65;
 
 export interface GameEventDefinition {
   id: GameEventId;
@@ -141,8 +138,10 @@ export function selectEvent(
   targetPhase: "NIGHT" | "DAY",
   rng: () => number = Math.random,
 ): GameEventView | null {
-  const mode = state.config.mode ?? "ranked";
-  if (mode === "ranked") return null;
+  // Chỉ chế độ chaos mới có sự kiện. Ranked cố ý không có, và "cố ý" ở đây
+  // nghĩa là không có nhánh chọn nào cho nó - từng có một bộ chọn theo momentum
+  // nằm sau lần return này và không bao giờ chạy được.
+  if ((state.config.mode ?? "ranked") !== "chaos") return null;
   const eventHistory = state.eventHistory ?? [];
 
   const eligibleEvents = Object.values(GAME_EVENTS).filter((event) => {
@@ -194,45 +193,11 @@ export function selectEvent(
   });
 
   if (eligibleEvents.length === 0) return null;
+  if (rng() >= 0.6) return null;
 
-  if (mode === "chaos") {
-    if (rng() >= 0.6) return null;
-    const randomIndex = Math.floor(rng() * eligibleEvents.length);
-    const def = eligibleEvents[randomIndex];
-    return {
-      ...def,
-      round: state.round,
-    };
-  }
-
-  // Ranked Mode
-  const momentum = calculateMomentum(state);
-  const majorEventsCount = eventHistory.filter((h) => h.power >= 4).length;
-  const totalEventsCount = eventHistory.length;
-
-  if (totalEventsCount >= 3) return null;
-
-  let targetBeneficiary: "village" | "wolves" | "neutral" | null = null;
-  if (momentum >= 0.35) {
-    targetBeneficiary = "village";
-  } else if (momentum <= -0.35) {
-    targetBeneficiary = "wolves";
-  } else {
-    targetBeneficiary = "neutral";
-  }
-
-  const candidateEvents = eligibleEvents.filter((event) => {
-    if (event.beneficiary !== targetBeneficiary) return false;
-    if (event.power >= 4 && majorEventsCount >= 1) return false;
-    return true;
-  });
-
-  if (candidateEvents.length === 0) return null;
-  if (targetBeneficiary === "neutral" && rng() >= RANKED_NEUTRAL_EVENT_CHANCE) return null;
-
-  const chosen = candidateEvents[Math.floor(rng() * candidateEvents.length)];
+  const def = eligibleEvents[Math.floor(rng() * eligibleEvents.length)];
   return {
-    ...chosen,
+    ...def,
     round: state.round,
   };
 }

@@ -1600,3 +1600,56 @@ describe("Phiên toà: biện hộ và bỏ phiếu xác nhận", () => {
     expect(engine.state.lastTrial).toBeNull();
   });
 });
+
+describe("Trọng số phiếu không rò ra view", () => {
+  /** Biến p1 thành Thị Trưởng ngay trên state, không phụ thuộc bộ chia bài. */
+  function withMayor(engine: GameEngine) {
+    engine.state.players.find((p) => p.id === "p1")!.role = "MAYOR";
+    return engine;
+  }
+
+  it("phiếu Thị Trưởng hiển thị là 1 nhưng quyết định như 2", () => {
+    const e = withMayor(votingEngine());
+    e.submitVote("p1", "p3", 10_000);
+    e.submitVote("p2", "p4", 11_000);
+
+    const seen = e.snapshotFor("p2").players;
+    expect(seen.find((p) => p.id === "p3")!.voteCount).toBe(1);
+    expect(seen.find((p) => p.id === "p4")!.voteCount).toBe(1);
+
+    // Nhìn thì hoà 1-1, nhưng x2 của Thị Trưởng mới là thứ kiểm phiếu.
+    expect(e.resolveNomination(25_000, 30_000)).toEqual({ kind: "TRIAL", accusedId: "p3" });
+  });
+
+  it("phiếu ẩn của Tiếng Hú Bầy Sói không hiện trong số đếm", () => {
+    const e = votingEngine();
+    e.state.howlBonusDay = e.state.round;
+    const wolf = e.alivePlayers().find((p) => roleTeam(p.role) === "wolves")!;
+    const prey = e.alivePlayers().find((p) => roleTeam(p.role) === "village")!;
+    e.submitVote(wolf.id, prey.id, 10_000);
+
+    const seen = e.snapshotFor(prey.id).players.find((p) => p.id === prey.id)!;
+    expect(seen.voteCount).toBe(1);
+    expect(e.voteTally().players[prey.id]).toBe(2);
+  });
+
+  it("ngưỡng và số phiếu phiên toà đếm đầu người, không đếm trọng số", () => {
+    const e = withMayor(makeEngine(6));
+    nominate(e, "p2");
+    e.beginFinalVote(20_000);
+
+    // 5 cử tri thật -> ngưỡng hiển thị 3, không phải 4 của bảng có trọng số.
+    expect(e.snapshotFor("p3").trialInfo).toMatchObject({ guiltyRequired: 3 });
+    expect(e.guiltyRequired()).toBe(4);
+
+    e.submitFinalVote("p1", true);
+    e.submitFinalVote("p3", true);
+    e.submitFinalVote("p4", false);
+    e.submitFinalVote("p5", false);
+    e.submitFinalVote("p6", false);
+
+    expect(e.snapshotFor("p3").trialInfo).toMatchObject({ guiltyVotes: 2, innocentVotes: 3 });
+    expect(e.resolveFinalVote()).toBeNull();
+    expect(e.state.lastTrial).toMatchObject({ guilty: 2, innocent: 3, lynched: false });
+  });
+});

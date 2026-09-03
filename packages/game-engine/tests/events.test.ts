@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { GameEngine } from "../src/engine";
-import { calculateMomentum } from "../src/events/momentum";
 import { selectEvent, GAME_EVENTS } from "../src/events/eventManager";
 import { GameState, EnginePlayer } from "../src/types";
 import { DEFAULT_ROOM_CONFIG, GameEventView } from "@masoi/shared";
@@ -82,80 +81,6 @@ function createTestState(players: Partial<EnginePlayer>[], overrides?: Partial<G
     ...overrides,
   };
 }
-
-describe("Momentum Calculation", () => {
-  it("returns 0 for initial balanced game state", () => {
-    const state = createTestState([
-      { id: "w1", role: "WEREWOLF", alive: true },
-      { id: "w2", role: "WEREWOLF", alive: true },
-      { id: "seer", role: "SEER", alive: true },
-      { id: "guard", role: "GUARD", alive: true },
-      { id: "witch", role: "WITCH", alive: true },
-      { id: "hunter", role: "HUNTER", alive: true },
-      { id: "v1", role: "VILLAGER", alive: true },
-      { id: "v2", role: "VILLAGER", alive: true },
-    ]);
-
-    const momentum = calculateMomentum(state);
-    expect(momentum).toBe(0);
-  });
-
-  it("returns negative momentum (< -0.35) when village is strongly favored", () => {
-    // 1 wolf dead, all village power roles alive
-    const state = createTestState([
-      { id: "w1", role: "WEREWOLF", alive: false },
-      { id: "w2", role: "WEREWOLF", alive: true },
-      { id: "seer", role: "SEER", alive: true },
-      { id: "guard", role: "GUARD", alive: true },
-      { id: "witch", role: "WITCH", alive: true },
-      { id: "hunter", role: "HUNTER", alive: true },
-      { id: "detective", role: "DETECTIVE", alive: true },
-      { id: "v1", role: "VILLAGER", alive: true },
-      { id: "v2", role: "VILLAGER", alive: true },
-    ]);
-
-    const momentum = calculateMomentum(state);
-    expect(momentum).toBeLessThan(-0.35);
-  });
-
-  it("returns positive momentum (> 0.35) when wolves are strongly favored", () => {
-    // Both wolves alive, Seer, Guard, Witch, Hunter all eliminated or power depleted
-    const state = createTestState(
-      [
-        { id: "w1", role: "WEREWOLF", alive: true },
-        { id: "w2", role: "WEREWOLF", alive: true },
-        { id: "seer", role: "SEER", alive: false },
-        { id: "guard", role: "GUARD", alive: false },
-        { id: "witch", role: "WITCH", alive: false },
-        { id: "hunter", role: "HUNTER", alive: false },
-        { id: "v1", role: "VILLAGER", alive: true },
-        { id: "v2", role: "VILLAGER", alive: false },
-      ],
-      { healUsed: true, poisonUsed: true },
-    );
-
-    const momentum = calculateMomentum(state);
-    expect(momentum).toBeGreaterThan(0.35);
-  });
-
-  it("returns -1.0 when all wolves are dead", () => {
-    const state = createTestState([
-      { id: "w1", role: "WEREWOLF", alive: false },
-      { id: "seer", role: "SEER", alive: true },
-      { id: "v1", role: "VILLAGER", alive: true },
-    ]);
-    expect(calculateMomentum(state)).toBe(-1.0);
-  });
-
-  it("returns 1.0 when all villagers are dead", () => {
-    const state = createTestState([
-      { id: "w1", role: "WEREWOLF", alive: true },
-      { id: "seer", role: "SEER", alive: false },
-      { id: "v1", role: "VILLAGER", alive: false },
-    ]);
-    expect(calculateMomentum(state)).toBe(1.0);
-  });
-});
 
 describe("Dynamic Event Selection", () => {
   it("selects nothing when the balanced-ranked neutral roll is 65% or higher", () => {
@@ -295,35 +220,15 @@ describe("Dynamic Event Selection", () => {
       { id: "v1", role: "VILLAGER", alive: true },
       { id: "v2", role: "VILLAGER", alive: true },
     ]);
-    state.config.mode = "ranked";
+    state.config.mode = "chaos";
 
-    const event = selectEvent(state, "NIGHT");
-    expect(event?.id).not.toBe("MOONLESS_NIGHT");
-  });
-
-  it("enforces max 1 major event per game in ranked mode", () => {
-    const state = createTestState([
-      { id: "w1", role: "WEREWOLF", alive: true },
-      { id: "w2", role: "WEREWOLF", alive: true },
-      { id: "seer", role: "SEER", alive: true },
-      { id: "guard", role: "GUARD", alive: false },
-      { id: "v1", role: "VILLAGER", alive: false },
-      { id: "v2", role: "VILLAGER", alive: true },
-    ]);
-    state.config.mode = "ranked";
-    const peacefulNightEvent: GameEventView = {
-      id: "PEACEFUL_NIGHT",
-      name: "Đêm Bình Yên",
-      description: "...",
-      targetPhase: "NIGHT",
-      round: 1,
-      beneficiary: "village",
-      power: 4,
-    };
-    state.eventHistory.push(peacefulNightEvent);
-
-    const event = selectEvent(state, "NIGHT");
-    expect(event?.id).not.toBe("PEACEFUL_NIGHT");
+    // rng() = 0 luôn qua cổng 0.6 và luôn chọn phần tử đầu, nên nếu hai sự kiện
+    // này còn lọt vào danh sách hợp lệ thì test bắt được ngay.
+    for (let i = 0; i < 20; i++) {
+      const event = selectEvent(state, "NIGHT", () => i / 20);
+      expect(event?.id).not.toBe("MOONLESS_NIGHT");
+      expect(event?.id).not.toBe("CLEARING_MIST");
+    }
   });
 
   it("chaos mode selects events randomly matching targetPhase", () => {

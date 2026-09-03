@@ -194,11 +194,13 @@ describe("Guardian Angel Role Actions", () => {
     expect(engine.snapshotFor("ga").nightInfo?.guardianAngelCharges).toBe(2);
 
     engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v1");
-    expect(engine.snapshotFor("ga").nightInfo?.guardianAngelCharges).toBe(1);
+    // Charge chưa mất khi đêm còn mở: người chơi vẫn được đổi ý.
+    expect(engine.snapshotFor("ga").nightInfo?.guardianAngelCharges).toBe(2);
 
     engine.submitNightAction("w1", "KILL", "v1");
     const deaths = engine.resolveNight();
 
+    expect(engine.state.guardianAngelCharges["ga"]).toBe(1);
     expect(deaths).toHaveLength(0);
     expect(engine.player("v1")?.alive).toBe(true);
   });
@@ -222,7 +224,8 @@ describe("Guardian Angel Role Actions", () => {
 
     // Protecting different target succeeds
     engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v2");
-    expect(engine.snapshotFor("ga").nightInfo?.guardianAngelCharges).toBe(0);
+    engine.resolveNight();
+    expect(engine.state.guardianAngelCharges["ga"]).toBe(0);
   });
 
   it("cannot protect when 0 charges left", () => {
@@ -251,10 +254,11 @@ describe("Priest Role Actions", () => {
     const engine = new GameEngine(state);
 
     engine.submitNightAction("priest", "HOLY_WATER", "w1");
-    const snap = engine.snapshotFor("priest");
-    expect(snap.nightInfo?.priestHolyWaterUsed).toBe(true);
+    // Bình chưa mất khi đêm còn mở.
+    expect(engine.snapshotFor("priest").nightInfo?.priestHolyWaterUsed).toBe(false);
 
     const deaths = engine.resolveNight();
+    expect(engine.state.priestHolyWaterUsed["priest"]).toBe(true);
     expect(deaths).toContainEqual({
       playerId: "w1",
       name: "Player 2",
@@ -627,5 +631,80 @@ describe("Mayor 2x Vote Weight", () => {
     const eliminated = engine.resolveFinalVote();
     expect(eliminated?.playerId).toBe("accused");
     expect(engine.player("accused")?.alive).toBe(false);
+  });
+});
+
+describe("Đổi ý trong đêm không đốt mất lượt", () => {
+  it("Thiên Thần đổi mục tiêu chỉ tốn 1 charge", () => {
+    const state = createTestState([
+      { id: "ga", role: "GUARDIAN_ANGEL" },
+      { id: "v1", role: "VILLAGER" },
+      { id: "v2", role: "VILLAGER" },
+      { id: "w1", role: "WEREWOLF" },
+    ]);
+    const engine = new GameEngine(state);
+
+    engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v1");
+    engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v2");
+    engine.submitNightAction("w1", "KILL", "v2");
+    const deaths = engine.resolveNight();
+
+    expect(deaths).toHaveLength(0);
+    expect(engine.state.guardianAngelCharges["ga"]).toBe(1);
+  });
+
+  it("Linh Mục đổi mục tiêu chỉ tốn 1 bình, và bình theo mục tiêu cuối", () => {
+    const state = createTestState([
+      { id: "priest", role: "PRIEST" },
+      { id: "w1", role: "WEREWOLF" },
+      { id: "w2", role: "WEREWOLF" },
+      { id: "v1", role: "VILLAGER" },
+      { id: "v2", role: "VILLAGER" },
+    ]);
+    const engine = new GameEngine(state);
+
+    // Bấm nhầm vào dân (phản vệ giết Linh Mục) rồi sửa lại thành Sói.
+    engine.submitNightAction("priest", "HOLY_WATER", "v1");
+    engine.submitNightAction("priest", "HOLY_WATER", "w1");
+    engine.resolveNight();
+
+    expect(engine.player("priest")?.alive).toBe(true);
+    expect(engine.player("w1")?.alive).toBe(false);
+  });
+
+  it("Linh Mục bỏ qua sau khi đã chọn thì không ném bình", () => {
+    const state = createTestState([
+      { id: "priest", role: "PRIEST" },
+      { id: "w1", role: "WEREWOLF" },
+      { id: "w2", role: "WEREWOLF" },
+      { id: "v1", role: "VILLAGER" },
+    ]);
+    const engine = new GameEngine(state);
+
+    engine.submitNightAction("priest", "HOLY_WATER", "w1");
+    engine.submitNightAction("priest", "SKIP", null);
+    engine.resolveNight();
+
+    expect(engine.player("w1")?.alive).toBe(true);
+    expect(engine.state.priestHolyWaterUsed["priest"]).toBeFalsy();
+  });
+
+  it("Phù Thuỷ bỏ qua sau khi đã chọn thuốc thì không dùng thuốc", () => {
+    const state = createTestState([
+      { id: "witch", role: "WITCH" },
+      { id: "v1", role: "VILLAGER" },
+      { id: "v2", role: "VILLAGER" },
+      { id: "w1", role: "WEREWOLF" },
+    ]);
+    const engine = new GameEngine(state);
+
+    engine.submitNightAction("w1", "KILL", "v1");
+    engine.lockWolves();
+    engine.submitNightAction("witch", "POISON", "v2");
+    engine.submitNightAction("witch", "SKIP", null);
+    engine.resolveNight();
+
+    expect(engine.player("v2")?.alive).toBe(true);
+    expect(engine.state.poisonUsed).toBe(false);
   });
 });

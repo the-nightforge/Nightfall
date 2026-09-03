@@ -1,7 +1,6 @@
 export * from "./types";
 export * from "./assignRoles";
 export * from "./engine";
-export * from "./events/momentum";
 export * from "./events/eventManager";
 export * from "./balance/analyzer";
 export * from "./balance/presets";

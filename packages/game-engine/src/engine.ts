@@ -542,8 +542,8 @@ export class GameEngine {
         if (targetId === st.guardianAngelPrevious) {
           throw new GameError("Không thể bảo vệ cùng một người hai đêm liên tiếp");
         }
+        // Charge trừ lúc khép đêm chứ không phải lúc bấm, xem `resolveNight`.
         st.night.guardianAngelTarget = targetId;
-        st.guardianAngelCharges[playerId] = charges - 1;
         break;
       }
       case "DETECTIVE_CHECK": {
@@ -577,8 +577,9 @@ export class GameEngine {
         if (st.night.priestSkipped) {
           throw new GameError("Linh Mục đã chọn không dùng Nước thánh đêm nay");
         }
+        // Bình đánh dấu đã dùng lúc khép đêm chứ không phải lúc bấm, xem
+        // `resolveNight`.
         st.night.priestTarget = targetId;
-        st.priestHolyWaterUsed[playerId] = true;
         break;
       }
       case "HEAL": {
@@ -597,12 +598,17 @@ export class GameEngine {
       case "SKIP": {
         if (targetId !== null) throw new GameError("Bỏ qua hành động không cần mục tiêu");
         if (p.role === "WITCH") {
+          // Dọn thuốc đã chọn trước đó: bỏ qua mà vẫn để nguyên lựa chọn cũ thì
+          // `resolveNight` vẫn đổ thuốc, và người chơi lãnh một bình họ đã rút lại.
+          st.night.healTonight = false;
+          st.night.poisonTarget = null;
           st.night.witchSkipped = true;
         } else if (roleTeam(p.role) === "wolves") {
           st.night.wolfVotes[playerId] = null;
         } else if (p.role === "PRIEST") {
           if (st.priestHolyWaterUsed[playerId]) throw new GameError("Bình Nước thánh đã được sử dụng");
           if (st.night.priestSkipped) throw new GameError("Linh Mục đã bỏ qua đêm nay");
+          st.night.priestTarget = null;
           st.night.priestSkipped = true;
         } else {
           throw new GameError("Chỉ Phù Thủy, Ma Sói hoặc Linh Mục mới được bỏ qua hành động");
@@ -764,6 +770,10 @@ export class GameEngine {
       const priestPlayer = this.alivePlayers().find((p) => p.role === "PRIEST");
       const target = this.player(st.night.priestTarget);
       if (priestPlayer && target && target.alive) {
+        // Cùng lý do với bình cứu của Phù Thuỷ ở dưới: bình chỉ mất khi đêm đã
+        // khép lại. Trừ ngay lúc bấm nghĩa là một cú bấm nhầm đốt luôn lượt duy
+        // nhất, trong khi Sói và Tiên Tri vẫn được đổi ý tới hết đêm.
+        st.priestHolyWaterUsed[priestPlayer.id] = true;
         const isWolf = roleTeam(target.role) === "wolves";
         st.night.priestResults[priestPlayer.id] = { targetId: target.id, isWolf };
         if (isWolf) {
@@ -829,6 +839,14 @@ export class GameEngine {
     }
 
     // Cập nhật trạng thái
+    if (st.night.guardianAngelTarget) {
+      // Trừ charge ở đây, không ở `submitNightAction`: xem chú thích của bình
+      // Nước thánh ngay trên.
+      const angel = this.alivePlayers().find((p) => p.role === "GUARDIAN_ANGEL");
+      if (angel) {
+        st.guardianAngelCharges[angel.id] = (st.guardianAngelCharges[angel.id] ?? 2) - 1;
+      }
+    }
     st.guardPrevious = st.night.guardTarget;
     st.guardianAngelPrevious = st.night.guardianAngelTarget;
     st.lastNightDeaths = deaths.map((d) => ({ playerId: d.playerId, name: d.name }));
@@ -981,19 +999,26 @@ export class GameEngine {
   /**
    * Tách phiếu người chơi khỏi phiếu không treo. Gộp chung vào một Record sẽ
    * cần một id giả cho lựa chọn không treo, và id đó sẽ rò ra snapshot cùng UI.
-   * Thị trưởng (MAYOR) có trọng số x2 phiếu.
+   * `weighted` là ranh giới giữa cái được NHÌN và cái được TÍNH.
+   *
+   * Trọng số x2 của Thị Trưởng và phiếu ẩn +1 của Tiếng Hú Bầy Sói đều đến từ
+   * vai/sự kiện còn đang giấu mặt. Danh sách phiếu (`openBallots`) thì công
+   * khai ngay trong lúc bỏ phiếu, nên nếu số đếm hiển thị có trọng số thì ai
+   * cũng trừ được: 3 lá phiếu mà đếm ra 4 nghĩa là Thị Trưởng vừa bầu người đó.
+   * Vì vậy view luôn gọi `weighted: false`, còn chỗ QUYẾT ĐỊNH ai ra toà mới
+   * gọi bản có trọng số.
    */
-  voteTally(): { players: Record<string, number>; noElimination: number } {
+  voteTally(weighted = true): { players: Record<string, number>; noElimination: number } {
     const players: Record<string, number> = {};
     let noElimination = 0;
     for (const [voterId, targetId] of Object.entries(this.state.votes)) {
       const voter = this.player(voterId);
-      const weight = voter?.role === "MAYOR" ? 2 : 1;
+      const weight = weighted && voter?.role === "MAYOR" ? 2 : 1;
       if (targetId === null) noElimination += weight;
       else players[targetId] = (players[targetId] ?? 0) + weight;
     }
     // HOWL_OF_THE_PACK hidden +1 for wolves next day
-    if (this.state.howlBonusDay !== null && this.state.howlBonusDay === this.state.round) {
+    if (weighted && this.state.howlBonusDay !== null && this.state.howlBonusDay === this.state.round) {
       // find target most voted by wolves to add hidden vote
       const wolfIds = new Set(this.alivePlayers().filter((p) => roleTeam(p.role) === "wolves").map((p) => p.id));
       const wolfTally: Record<string, number> = {};
@@ -1151,9 +1176,12 @@ export class GameEngine {
   /**
    * Kiểm phiếu xác nhận. Bỏ qua phiếu của người không còn sống: một phát bắn
    * của Thợ Săn có thể giết một cử tri giữa phiên toà.
-   * Thị trưởng (MAYOR) có trọng số x2 phiếu.
+   * `weighted` chia đôi giống hệt `voteTally`: view đếm đầu người, phần quyết
+   * định mới nhân trọng số Thị Trưởng. Cùng một lý do - `guiltyRequired` suy ra
+   * từ `eligible`, nên một ngưỡng có trọng số là lời khai rằng phòng này có một
+   * Thị Trưởng còn sống, ngay cả trước khi có ai bỏ phiếu.
    */
-  finalVoteTally(): { guilty: number; innocent: number; abstain: number; eligible: number } {
+  finalVoteTally(weighted = true): { guilty: number; innocent: number; abstain: number; eligible: number } {
     const trial = this.mustTrial();
     const voters = this.finalVoters();
     let guilty = 0;
@@ -1161,7 +1189,7 @@ export class GameEngine {
     let totalWeight = 0;
     let votedWeight = 0;
     for (const voter of voters) {
-      const weight = voter.role === "MAYOR" ? 2 : 1;
+      const weight = weighted && voter.role === "MAYOR" ? 2 : 1;
       totalWeight += weight;
       const vote = trial.finalVotes[voter.id];
       if (vote === undefined) continue;
@@ -1173,8 +1201,8 @@ export class GameEngine {
   }
 
   /** Số phiếu Treo tối thiểu để kết án. */
-  guiltyRequired(): number {
-    return Math.floor(this.finalVoteTally().eligible / 2) + 1;
+  guiltyRequired(weighted = true): number {
+    return Math.floor(this.finalVoteTally(weighted).eligible / 2) + 1;
   }
 
   /** Trả về người bị treo; tha hoặc không đủ phiếu trả về null. */
@@ -1182,12 +1210,16 @@ export class GameEngine {
     const st = this.state;
     if (st.phase !== "FINAL_VOTE") throw new GameError("Chỉ xử lý phiếu khi đang bỏ phiếu xác nhận");
     const trial = this.mustTrial();
-    const { guilty, innocent, abstain, eligible } = this.finalVoteTally();
+    const { eligible } = this.finalVoteTally();
+    const guiltyWeighted = this.finalVoteTally().guilty;
+    // Recap in ra cạnh chính danh sách phiếu của nó, nên các con số ở đây phải
+    // là đếm đầu người - bản có trọng số chỉ dùng để quyết `lynched`.
+    const { guilty, innocent, abstain } = this.finalVoteTally(false);
     const accused = this.mustPlayer(trial.accusedId);
 
     // Nhân đôi thay vì chia đôi: eligible lẻ sẽ đưa số thực vào một phép so sánh
     // quyết định ai sống ai chết. Phiếu trắng vì thế tính là Tha.
-    const lynched = eligible > 0 && guilty * 2 > eligible && accused.alive;
+    const lynched = eligible > 0 && guiltyWeighted * 2 > eligible && accused.alive;
 
     const recap = [...st.dayVoteHistory].reverse().find((item) => item.round === st.round);
     if (recap) {
@@ -1438,7 +1470,7 @@ export class GameEngine {
     const st = this.state;
     const trial = st.trial!;
     const accused = this.player(trial.accusedId);
-    const { guilty, innocent } = this.finalVoteTally();
+    const { guilty, innocent } = this.finalVoteTally(false);
     // Đọc trực tiếp finalVotes chứ không qua finalVoters(): người xem có thể đã
     // chết giữa phiên toà, và khi đó họ không còn là cử tri nhưng vẫn phải thấy
     // đúng lá phiếu mình đã bỏ.
@@ -1449,7 +1481,7 @@ export class GameEngine {
       accusedName: accused?.name ?? "?",
       guiltyVotes: guilty,
       innocentVotes: innocent,
-      guiltyRequired: this.guiltyRequired(),
+      guiltyRequired: this.guiltyRequired(false),
       canVote:
         st.phase === "FINAL_VOTE" &&
         viewer?.alive === true &&
@@ -1468,7 +1500,7 @@ export class GameEngine {
     // Sói luôn biết đồng bọn của mình
     const viewerIsWolf = viewer !== undefined && viewer.alive && roleTeam(viewer.role) === "wolves";
 
-    const tally = this.voteTally();
+    const tally = this.voteTally(false);
     // Số phiếu sơ bộ là bối cảnh của cả phiên toà: giấu đi trong lúc biện hộ thì
     // bị cáo không có gì để phản biện.
     const inTrialPhase = st.phase === "DEFENSE" || st.phase === "FINAL_VOTE";
@@ -1694,7 +1726,9 @@ export class GameEngine {
         st.trial.finalVotes[viewer.id] === undefined,
       hunterShot: this.botHunterShotKnowledgeFor(viewer),
       publicVoteHistory: st.dayVoteHistory,
-      currentVoteCounts: this.voteTally(),
+      // Đếm đầu người, đúng bằng thứ một người chơi nhìn thấy: cho BOT bản có
+      // trọng số là cho nó suy ra Thị Trưởng bằng dữ liệu không ai khác có.
+      currentVoteCounts: this.voteTally(false),
       // Phiếu của chính mình vẫn hiển thị sau khi pha bỏ phiếu đóng, đúng như
       // snapshotFor: nói với BOT rằng nó "chưa bầu" trong lúc biện hộ là một
       // lời khai sai, và lõi belief sẽ dựng memory từ lời khai đó.
