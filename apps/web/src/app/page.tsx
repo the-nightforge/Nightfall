@@ -14,6 +14,7 @@ import { BrandMark, VillageScene } from "@/components/HomeHero";
 import { JoinCodeFromQuery } from "@/components/JoinCodeFromQuery";
 import { MatchHistoryPanel } from "@/components/MatchHistoryPanel";
 import { AssetCredits } from "@/components/AssetCredits";
+import { InstallPrompt } from "@/components/InstallPrompt";
 
 /** Hành động đang chạy, hoặc null khi rảnh. */
 type Pending = "create" | "join" | null;
@@ -508,6 +509,20 @@ export default function Home() {
               * và `gap` của flex cũng không chừa chỗ cho một thẻ không tồn tại.
               */}
             <MatchHistoryPanel />
+
+            {/*
+              * Lời mời cài app: thẻ cuối cùng của cột, sau lịch sử ván.
+              *
+              * Đặt ở trang chủ chứ không ở layout là có chủ ý. Trong phòng chơi
+              * mọi pixel đều đang thuộc về một ván đang chạy, và thứ duy nhất
+              * một lời mời cài đặt làm được ở đó là chen vào giữa. Đây cũng là
+              * nơi duy nhất người ta còn đang cân nhắc "chơi cái này lâu dài
+              * không" - đúng lúc để hỏi.
+              *
+              * Tự ẩn hoàn toàn khi đã cài, đã đóng, hoặc khi trình duyệt không
+              * cho cài; xem `lib/pwa-install.ts`.
+              */}
+            <InstallPrompt />
           </div>
 
           {/*

@@ -410,7 +410,20 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
           event.stopPropagation();
           finish();
         }}
-        className="absolute bottom-6 right-5 rounded-full border border-white/25 bg-black/50 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        /*
+         * Khoảng cách mép cộng thêm vùng an toàn.
+         *
+         * Lớp phủ này `inset-0` và cố tình tràn kín màn hình - từ khi layout
+         * khai `viewport-fit=cover` thì nó tràn cả xuống dải home indicator,
+         * đúng như một đoạn phim nên làm. Riêng cái nút thì không: `bottom-6`
+         * là 24px, còn dải home indicator của iPhone chiếm 34px, nên nút "Bỏ
+         * qua" rơi trọn vào vùng iOS dành cho cử chỉ vuốt lên - chạm vào đó là
+         * thoát app chứ không phải bỏ qua chuyển cảnh.
+         *
+         * `right` cũng cộng: chuyển cảnh xem được ở cả hai chiều máy, và khi
+         * cầm ngang thì tai thỏ nằm ở đúng cạnh này.
+         */
+        className="absolute bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-[calc(1.25rem+env(safe-area-inset-right))] rounded-full border border-white/25 bg-black/50 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
       >
         Bỏ qua
       </button>
