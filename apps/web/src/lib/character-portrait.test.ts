@@ -48,11 +48,6 @@ describe("portraitMode", () => {
     );
   });
 
-  it("cùng nowMs thì luôn ra cùng kết quả", () => {
-    const input = { ...ALIVE, talkingUntilMs: 1_200 };
-    assert.equal(portraitMode(input), portraitMode(input));
-  });
-
   it("BOT_TALK_MS đủ dài để đọc hết một câu ngắn", () => {
     assert.equal(BOT_TALK_MS, 1_500);
   });

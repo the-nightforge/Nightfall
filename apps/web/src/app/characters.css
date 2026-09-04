@@ -20,7 +20,22 @@
   height: 100%;
   max-width: none;
   object-fit: cover;
-  will-change: transform;
+  /*
+   * NEO TRÁI bằng `position: absolute`, KHÔNG được center bằng grid/flex.
+   *
+   * `.character-portrait` (khung cha) từng dùng `grid place-items-center` để
+   * đặt ảnh này vào giữa. Ảnh rộng gấp 4 lần khung, và grid center một item to
+   * hơn container thì đẩy nó lệch -150% bề ngang container - `translateX(0)`
+   * khi đó không còn rơi đúng frame 0 nữa. Đo được trên khung 64px: `is-alive`
+   * (mặc định của mọi người chơi còn sống) lộ ra đúng đường nối giữa frame 1 và
+   * frame 2, còn `is-dead` trôi hẳn ra ngoài mép phải ảnh - một vòng tròn rỗng.
+   * Neo trái bằng absolute thì toạ độ 0% của ảnh luôn khớp mép trái khung, và
+   * bốn mốc `translateX` (0, -25%, -50%, -75%) mới đúng nghĩa bốn frame liên
+   * tiếp. `inset: 0 auto 0 0` khoá cạnh trên/dưới/trái, để `auto` ở phải cho
+   * `width: 400%` tự quyết bề ngang.
+   */
+  position: absolute;
+  inset: 0 auto 0 0;
 }
 
 /*
@@ -44,11 +59,21 @@
    * chứ không phải như mười lăm người đang ngồi.
    */
   animation-delay: calc(var(--breath-offset, 0) * -5.4s);
+  /*
+   * `will-change` chỉ đứng ở ĐÚNG hai luật có animation thật (đây và
+   * `is-talking` bên dưới) - không đặt ở `.character-portrait__sheet` gốc.
+   * Bộ art hiện tại là pack tĩnh nên phần lớn ô không hề mang `has-variants`;
+   * đặt `will-change` ở luật gốc thì mười lăm ảnh trong phòng bị đẩy lên
+   * compositor layer vĩnh viễn dù chẳng ô nào chạy animation - đúng cái giá
+   * pin mà cửa `has-variants` sinh ra để chặn.
+   */
+  will-change: transform;
 }
 
 /* Đang nói: đảo qua lại frame 0 và frame 2. */
 .character-portrait.has-variants.is-talking .character-portrait__sheet {
   animation: character-talk 0.28s steps(1, end) infinite;
+  will-change: transform;
 }
 
 /* Đã chết: frame 3, đứng yên. */
@@ -92,10 +117,12 @@
   .character-portrait.has-variants.is-alive .character-portrait__sheet {
     animation: none;
     transform: translateX(0);
+    will-change: auto;
   }
 
   .character-portrait.has-variants.is-talking .character-portrait__sheet {
     animation: none;
     transform: translateX(-50%);
+    will-change: auto;
   }
 }

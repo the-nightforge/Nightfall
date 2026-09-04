@@ -98,7 +98,7 @@ export function CharacterPortrait({
     <span
       className={`character-portrait is-${mode}${
         hasVariants(avatar) ? " has-variants" : ""
-      } grid place-items-center overflow-hidden rounded-full border border-white/10 transition-colors ${className}`}
+      } overflow-hidden rounded-full border border-white/10 transition-colors ${className}`}
       style={
         {
           background: alive ? tint : "rgba(120, 130, 150, 0.10)",

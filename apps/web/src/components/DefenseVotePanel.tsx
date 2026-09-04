@@ -2,9 +2,9 @@
 
 import { useId, useMemo, useState } from "react";
 import type { DayVoteRecap, RoomSnapshot } from "@masoi/shared";
-import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
+import { assignAvatars, tintFor } from "@/lib/avatar";
 import { summarizeDefenseVotes } from "@/lib/defense-votes";
-import { CharacterPortrait } from "./CharacterPortrait";
+import { Avatar } from "./Avatar";
 import { VoteHistoryPanel } from "./VoteHistoryPanel";
 
 interface Props {
@@ -80,11 +80,13 @@ export function DefenseVotePanel({ recap, players, accusedId, accusedName }: Pro
                 key={voterId}
                 className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-500/[0.12] py-1 pl-1 pr-2.5"
               >
-                <CharacterPortrait
+                {/* 24px: cỡ này khuôn mặt không mang thông tin gì, xem docstring
+                  * CharacterPortrait - nên chip biểu quyết dùng đĩa màu Avatar
+                  * chứ không tải sheet 256px chỉ để vẽ một đốm nhoè. */}
+                <Avatar
                   avatar={avatars[voterId]}
                   tint={tintFor(voterId)}
                   alive={playerMap.get(voterId)?.alive ?? true}
-                  breathOffset={breathOffsetFor(voterId)}
                   className="h-6 w-6 shrink-0"
                 />
                 <span className="max-w-[8rem] truncate text-[13px] font-semibold text-amber-100">
