@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { DEFAULT_ROOM_CONFIG, type PlayerView, type RoomSnapshot } from "@masoi/shared";
+import {
+  DEFAULT_ROOM_CONFIG,
+  deathCauseClause,
+  type PlayerView,
+  type RoomSnapshot,
+} from "@masoi/shared";
 import { assignAvatars } from "./avatar";
-import { deathCauseClause } from "./death-cause";
 import {
   MAX_KILL_PORTRAITS,
   isKillKind,
