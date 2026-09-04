@@ -10,6 +10,26 @@
  */
 
 .character-portrait {
+  /*
+   * `display` BẮT BUỘC phải có, đừng xoá.
+   *
+   * Khung là một `<span>`, mà span mặc định là `display: inline` - và
+   * `width`/`height` KHÔNG áp dụng cho hộp inline. Mọi nơi gọi đều đặt cỡ bằng
+   * class (`lobby-player-avatar` là 4rem, các chỗ khác là `h-16 w-16`...), nên
+   * thiếu dòng này thì cỡ bị bỏ qua sạch và cả khung co lại còn đúng bề dày
+   * viền: đo được 2x19px thay vì 66x66.
+   *
+   * Đã từng xảy ra thật. Bản đầu đặt `grid place-items-center` ngay trên
+   * className của component; lúc sửa lỗi chọn frame thì cả cụm đó bị gỡ đi vì
+   * `place-items-center` làm lệch ảnh, nhưng `grid` - thứ đang gánh `display` -
+   * bị gỡ theo. Chân dung biến mất khỏi toàn bộ ứng dụng mà không một test nào
+   * đỏ, vì happy-dom không có layout engine.
+   *
+   * `grid` chứ không phải `block` là để giữ nguyên hành vi hộp mà các nơi gọi
+   * vốn được thiết kế quanh nó (`Avatar` cũng là `grid`). Ảnh bên trong nằm
+   * `position: absolute` nên không có item nào trong luồng để grid sắp xếp.
+   */
+  display: grid;
   position: relative;
   overflow: hidden;
 }
