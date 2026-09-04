@@ -616,12 +616,31 @@ button.lobby-player-tile:active {
 }
 
 @media (min-width: 768px) {
+  .lobby-room-header { padding: 1.25rem 1.4rem; }
+  .lobby-player-board { padding: 1.35rem; }
+  .lobby-player-grid { gap: 0.85rem; }
+  .lobby-player-avatar, .lobby-empty-avatar { width: 4.5rem; height: 4.5rem; }
+}
+
+/*
+ * Tên phòng và cụm mã phòng đứng CẠNH nhau chỉ khi khối này đủ rộng cho cả hai.
+ *
+ * Cụm mã phòng + hai nút mời chiếm gọn 22rem không co được, nên dưới khoảng
+ * 44rem thì cột còn lại không đủ cho một dòng tiêu đề 36px: "Trước giờ trăng
+ * lên" gãy làm bốn dòng, mỗi dòng một chữ.
+ *
+ * Bề rộng đó KHÔNG đi cùng chiều với bề rộng màn hình, vì từ 1024px khối này
+ * chuyển vào cột trái của lưới phòng chờ (xem trang phòng): ở 1024 màn rộng
+ * hơn mà khối lại hẹp đi, còn 872px thì phải tới 1280px mới có. Nên khoảng
+ * 1024-1279 xếp chồng, hai đầu xếp ngang - đó là điều kiện thật, viết thẳng ra
+ * thay vì một mốc md duy nhất rồi sai ở giữa.
+ */
+@media (min-width: 768px) and (max-width: 1023.98px), (min-width: 1280px) {
   .lobby-room-header {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
     gap: 1.5rem;
-    padding: 1.25rem 1.4rem;
   }
 
   .lobby-room-header > .mt-5 {
@@ -630,9 +649,6 @@ button.lobby-player-tile:active {
   }
 
   .lobby-room-invite { margin-top: 0; }
-  .lobby-player-board { padding: 1.35rem; }
-  .lobby-player-grid { gap: 0.85rem; }
-  .lobby-player-avatar, .lobby-empty-avatar { width: 4.5rem; height: 4.5rem; }
 }
 
 @media (min-width: 1024px) {
