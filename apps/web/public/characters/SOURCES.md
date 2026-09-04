@@ -45,7 +45,19 @@ Cap `*` yeu nhat la turban/beard chung Eldrin — uu tien thay bang pack 2.
 ## Tai sinh
 
 Script: `tools/build-character-sheets.py`
-(chay `python build_sheets.py`, khong tham so).
+
+```
+python tools/build-character-sheets.py <thu-muc-pack>
+```
+
+`<thu-muc-pack>` la thu muc giai nen cua pack Studio Nik, tuc thu muc chua
+`Caius/`, `Eldrin/`, ... Duong dan nay la THAM SO chu khong viet cung trong
+script: no chi ton tai tren may da tai pack ve. Thu muc ghi ra thi suy tu vi
+tri chinh script nen khong can khai bao; muon ghi cho khac thi them `--out`.
+
+Script kiem du 12 file nguon TRUOC khi ghi bat cu gi - thieu mot anh giua
+chung thi 15 sheet da de len ban cu roi.
+
 Doi nguon art thi cap nhat bang nay + `AVATAR-CREDITS.md`, khong sua code.
 
 ## Đã đo, không phải phỏng đoán
