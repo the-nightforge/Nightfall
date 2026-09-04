@@ -778,6 +778,28 @@ describe("Đêm Cảnh Giác cho Bảo Vệ che 2 người", () => {
     expect([...seen]).not.toContain("VIGILANT_NIGHT");
   });
 
+  it("cả HAI người được che đêm nay đều bị cấm che lại đêm sau", () => {
+    const engine = guarded(true);
+    engine.submitNightAction("guard", "GUARD", "v1", "v2");
+    engine.submitNightAction("w1", "KILL", "v1");
+    engine.resolveNight(Date.now(), () => 0.9);
+
+    // Bản đầu chỉ nhớ mục tiêu CHÍNH, nên v2 che lại được ngay - một đường vòng
+    // qua đúng luật mà vai Bảo Vệ dựa vào.
+    expect(engine.state.guardPrevious).toBe("v1");
+    expect(engine.state.guardSecondPrevious).toBe("v2");
+
+    engine.setPhase("DAY_DISCUSSION", 30000);
+    engine.setPhase("NIGHT", 30000);
+    expect(() => engine.submitNightAction("guard", "GUARD", "v2")).toThrow(
+      /hai đêm liên tiếp/,
+    );
+    expect(() => engine.submitNightAction("guard", "GUARD", "v1")).toThrow(
+      /hai đêm liên tiếp/,
+    );
+    expect(engine.botKnowledgeFor("guard").night!.legalTargets.GUARD).not.toContain("v2");
+  });
+
   it("bot được mời mục tiêu thứ hai qua bonusSecondTargetFor", () => {
     expect(guarded(true).botKnowledgeFor("guard").night?.bonusSecondTargetFor).toBe("GUARD");
     expect(guarded(false).botKnowledgeFor("guard").night?.bonusSecondTargetFor).toBeNull();

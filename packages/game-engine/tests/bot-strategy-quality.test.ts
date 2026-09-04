@@ -110,6 +110,7 @@ function night(over: Partial<NightKnowledge> = {}): NightKnowledge {
       GUARDIAN_PROTECT: [],
       HOLY_WATER: [],
       SERIAL_KILL: [],
+      MEDIUM_CHECK: [],
     },
     wolfTarget: null,
     guardPrevious: null,

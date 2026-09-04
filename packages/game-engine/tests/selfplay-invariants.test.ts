@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PRESET_DECKS } from "@masoi/shared";
 import type { Phase, PublicVoteChoice, Role } from "@masoi/shared";
 import {
   createInvariantAuditor,
@@ -43,6 +44,7 @@ function truth(over: Partial<GroundTruth> = {}): GroundTruth {
     // chúng vào sẽ đo một thứ khác với thứ nó tưởng.
     activeEventId: over.activeEventId,
     shadowedSeerResults: over.shadowedSeerResults,
+    roleChangedIds: over.roleChangedIds,
   };
 }
 
@@ -62,6 +64,7 @@ function night(over: Partial<NightKnowledge> = {}): NightKnowledge {
       GUARDIAN_PROTECT: [],
       HOLY_WATER: [],
       SERIAL_KILL: [],
+      MEDIUM_CHECK: [],
     },
     wolfTarget: null,
     guardPrevious: null,
@@ -226,6 +229,50 @@ describe("từng bất biến đều bắt được lỗi cố ý", () => {
     ).toContain("SEER_RESULT_SCOPE");
   });
 
+  /*
+   * Vai bị GHI ĐÈ giữa ván, không phải engine nói dối.
+   *
+   * `seerReadsAsWolf` chỉ chữa được vế trước khi đổi: soi một Kẻ Phản Bội ra
+   * "không phải Sói" là ĐÚNG lúc soi. Sau `settleTraitor` thì vai đã là
+   * `WEREWOLF`, và chính kết quả đúng ấy bị đem ra tố cáo - tái hiện được ở
+   * preset 11 với `fam1-n11:56` và `fam2-n11:57`.
+   */
+  it("Kẻ Phản Bội đã thăng cấp: kết quả soi cũ được miễn trừ", () => {
+    expect(
+      idsFrom((a) =>
+        a.checkKnowledge(
+          knowledge({
+            botId: "seer",
+            selfRole: "SEER",
+            knownRoles: { seer: "SEER" },
+            seerResult: { targetId: "ally", targetName: "A", isWolf: false, team: "village" },
+          }),
+          state(),
+          truth({ roleChangedIds: new Set(["ally"]) }),
+        ),
+      ),
+    ).not.toContain("SEER_RESULT_SCOPE");
+  });
+
+  it("miễn trừ chỉ áp cho người ĐÃ đổi vai, không phải mọi con Sói", () => {
+    // Cùng một kết quả soi, chỉ khác việc `ally` có nằm trong tập đổi vai hay
+    // không: thiếu phép kiểm này thì miễn trừ trên có thể là một cái gỡ chung.
+    expect(
+      idsFrom((a) =>
+        a.checkKnowledge(
+          knowledge({
+            botId: "seer",
+            selfRole: "SEER",
+            knownRoles: { seer: "SEER" },
+            seerResult: { targetId: "ally", targetName: "A", isWolf: false, team: "village" },
+          }),
+          state(),
+          truth(),
+        ),
+      ),
+    ).toContain("SEER_RESULT_SCOPE");
+  });
+
   it("Bóng Sói: kết quả đã bị đảo vẫn được miễn trừ ở những vòng SAU", () => {
     // Sự kiện Bóng Sói cố tình đảo kết quả soi. Kết quả sai đó nằm lại trong
     // knowledge của Tiên Tri suốt phần còn lại của ván, nhưng sự kiện chỉ sống
@@ -356,6 +403,65 @@ describe("từng bất biến đều bắt được lỗi cố ý", () => {
           }),
           state(),
           truth({ alive: { seer: false } }),
+        ),
+      ),
+    ).toContain("DEAD_TARGET");
+  });
+
+  /*
+   * Bà Đồng LẬT bất biến chứ không được miễn trừ: ba phép kiểm dưới khoá cả hai
+   * chiều. Bản đầu chỉ gỡ điều kiện đi, và khi đó một `MEDIUM_CHECK` nhắm người
+   * còn sống - đúng thứ engine từ chối - sẽ đi qua auditor mà không ai kêu.
+   */
+  it("MEDIUM_CHECK nhắm người ĐÃ CHẾT là hợp lệ", () => {
+    expect(
+      idsFrom((a) =>
+        a.checkNightAction(
+          knowledge({ phase: "NIGHT" as Phase }),
+          {
+            kind: "NIGHT_ACTION",
+            action: "MEDIUM_CHECK",
+            targetId: "seer",
+            confidence: 0.5,
+            evidence: [],
+          },
+          truth({ alive: { seer: false } }),
+        ),
+      ),
+    ).not.toContain("DEAD_TARGET");
+  });
+
+  it("DEAD_TARGET: MEDIUM_CHECK nhắm người còn sống", () => {
+    expect(
+      idsFrom((a) =>
+        a.checkNightAction(
+          knowledge({ phase: "NIGHT" as Phase }),
+          {
+            kind: "NIGHT_ACTION",
+            action: "MEDIUM_CHECK",
+            targetId: "seer",
+            confidence: 0.5,
+            evidence: [],
+          },
+          truth(),
+        ),
+      ),
+    ).toContain("DEAD_TARGET");
+  });
+
+  it("DEAD_TARGET: engine chào một hồn còn sống cho Bà Đồng", () => {
+    expect(
+      idsFrom((a) =>
+        a.checkKnowledge(
+          knowledge({
+            phase: "NIGHT" as Phase,
+            night: night({
+              legalActions: ["MEDIUM_CHECK"],
+              legalTargets: { ...night().legalTargets, MEDIUM_CHECK: ["seer"] },
+            }),
+          }),
+          state(),
+          truth(),
         ),
       ),
     ).toContain("DEAD_TARGET");
@@ -507,6 +613,23 @@ describe("batch tự chơi", () => {
     );
     expect(found).toEqual([]);
   });
+
+  /*
+   * Bộ bài MẶC ĐỊNH của runner không có Bà Đồng, Trưởng Lão hay Kẻ Song Trùng,
+   * nên batch ngay trên chạy xanh suốt trong khi preset 17 vi phạm 9/10 ván.
+   * Preset thật là chỗ DUY NHẤT ba lá đó gặp nhau, và cũng là chỗ duy nhất một
+   * mục tiêu đêm hợp lệ lại là một người đã chết.
+   *
+   * Ít ván vì mỗi ván 17 người tốn hơn một giây: đây là hàng rào bắt một lớp
+   * lỗi xảy ra ở gần như mọi ván, không phải một phép đo cân bằng.
+   */
+  it("preset có Bà Đồng cũng không vi phạm bất biến", () => {
+    const found = Array.from({ length: 6 }, (_, i) =>
+      runSelfPlay({ seed: `preset17-${i}`, playerCount: 17, config: PRESET_DECKS[17] }),
+    ).flatMap((game) => game.violations.map((item) => `${item.seed} ${item.id}: ${item.actual}`));
+    expect(found).toEqual([]);
+    // Sáu ván 17 người tốn khoảng 6 giây, trên trần 5 giây mặc định của vitest.
+  }, 30_000);
 
   it("không ván nào rò rỉ vai", () => {
     const leaks = games.flatMap((game) =>

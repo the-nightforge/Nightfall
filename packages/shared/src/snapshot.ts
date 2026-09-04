@@ -174,6 +174,14 @@ export interface NightActionView {
     target2: { id: string; name: string };
     sameTeam: boolean;
   } | null;
+  /**
+   * Với Bà Đồng: vai thật của người đã chết mà cô ta gọi hồn đêm nay.
+   *
+   * Mang thẳng `role` chứ không phải `team` như Tiên Tri: đây là điểm khác biệt
+   * của lá bài. Đổi lại nó chỉ với tới người ĐÃ CHẾT, nên nó không chỉ ra được
+   * mối nguy nào đang còn sống - nó kiểm chứng lời khai ngược.
+   */
+  mediumResult?: { target: { id: string; name: string }; role: Role } | null;
   /** Với Linh Mục: cờ đánh dấu đã dùng bình Nước thánh chưa */
   priestHolyWaterUsed?: boolean;
   /** Với Linh Mục: kết quả dùng Nước thánh gần nhất */

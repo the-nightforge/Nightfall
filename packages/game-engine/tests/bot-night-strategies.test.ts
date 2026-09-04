@@ -28,6 +28,7 @@ function emptyTargets(): NightKnowledge["legalTargets"] {
     GUARDIAN_PROTECT: [],
     HOLY_WATER: [],
     SERIAL_KILL: [],
+    MEDIUM_CHECK: [],
   };
 }
 

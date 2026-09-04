@@ -15,6 +15,16 @@ import {
   deckCounts,
 } from "@/lib/lobby-summary";
 
+/**
+ * Biên số Ma Sói, bám theo `roomConfigSchema` ở `@masoi/shared`.
+ *
+ * Chép tay hai con số này là chấp nhận chúng trôi khỏi schema ở lần sửa sau -
+ * nhưng schema khai bằng `z.number().int().min(1).max(4)` nên không có hằng số
+ * nào để nhập. Nếu bảng cân bằng mở tới 5 Sói thì sửa CẢ HAI chỗ.
+ */
+const WOLF_MIN = 1;
+const WOLF_MAX = 4;
+
 interface Props {
   snapshot: RoomSnapshot;
   isHost: boolean;
@@ -42,7 +52,10 @@ export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
 
   const setWolves = (n: number) => {
     if (!isHost) return;
-    onUpdateConfig({ ...config, werewolves: n });
+    // Kẹp ở đây chứ không tin vào việc nút đã bị disable: `werewolves` đi thẳng
+    // vào `roomConfigSchema` (min 1, max 4) và một giá trị ngoài dải sẽ bị
+    // server từ chối bằng một dòng lỗi đỏ không nói được phải sửa gì.
+    onUpdateConfig({ ...config, werewolves: Math.min(WOLF_MAX, Math.max(WOLF_MIN, n)) });
   };
 
   return (
@@ -100,6 +113,11 @@ export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
           enabled
           locked
           onToggle={() => undefined}
+          stepper={
+            isHost
+              ? { value: config.werewolves, min: WOLF_MIN, max: WOLF_MAX, onChange: setWolves }
+              : undefined
+          }
         />
         {WOLF_SPECIAL_ROLES.map((role) => (
           <RoleCard
@@ -111,26 +129,6 @@ export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
             onToggle={() => toggle(role)}
           />
         ))}
-        {isHost && (
-          <div className="flex flex-col justify-center gap-1 rounded-xl border border-night-600/60 bg-night-800/40 px-3 py-2">
-            <span className="text-[11px] uppercase tracking-wider text-mist/65">Số Ma Sói</span>
-            <div className="flex gap-1">
-              {[1, 2, 3, 4].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => setWolves(n)}
-                  className={`h-8 flex-1 rounded-lg text-sm font-bold transition ${
-                    config.werewolves === n
-                      ? "bg-blood-500 text-white"
-                      : "bg-night-700/70 text-mist hover:bg-night-600"
-                  }`}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </Section>
     </div>
   );
@@ -203,33 +201,46 @@ function toneFor(role: Role): DeckTone {
   return ROLE_META[role].team;
 }
 
+interface Stepper {
+  value: number;
+  min: number;
+  max: number;
+  onChange: (next: number) => void;
+}
+
+/**
+ * Một lá trong bộ bài.
+ *
+ * Thẻ MANG SỐ (`stepper`) dựng bằng `div` chứ không phải `button` như thẻ bật
+ * tắt: hai nút −/+ nằm bên trong, và một `button` lồng trong `button` là HTML
+ * không hợp lệ - trình duyệt tự gỡ lồng, sau đó cú bấm "+" nổi lên thẻ cha và
+ * chạy luôn cả hành động của thẻ.
+ *
+ * Đó cũng là lý do ô "Số Ma Sói" từng đứng riêng bên dưới nhóm: đưa nó vào
+ * trong thẻ đòi đúng thay đổi cấu trúc này.
+ */
 function RoleCard({
   role,
   count,
   enabled,
   locked,
   onToggle,
+  stepper,
 }: {
   role: Role;
   count: number;
   enabled: boolean;
   locked: boolean;
   onToggle: () => void;
+  stepper?: Stepper;
 }) {
   const meta = ROLE_META[role];
   const tone = toneFor(role);
+  const shell = `group flex h-full flex-col items-center rounded-xl border px-3 py-3 text-center transition
+        ${enabled ? TONE.card[tone] : "border-night-600/50 bg-night-800/30 opacity-45"}`;
 
-  return (
-    <button
-      type="button"
-      disabled={locked}
-      onClick={onToggle}
-      title={meta.description}
-      aria-label={`${meta.name}: ${meta.description}`}
-      className={`group flex h-full flex-col items-center rounded-xl border px-3 py-3 text-center transition hover:scale-[1.02] active:scale-[0.98]
-        ${enabled ? TONE.card[tone] : "border-night-600/50 bg-night-800/30 opacity-45"}
-        ${locked ? "cursor-default" : "cursor-pointer hover:border-white/25"}`}
-    >
+  const body = (
+    <>
       <span
         className={`grid h-12 w-12 place-items-center rounded-full ring-1 transition-transform group-hover:scale-110 ${
           enabled ? TONE.halo[tone] : "bg-night-800 ring-white/5"
@@ -265,13 +276,83 @@ function RoleCard({
       </span>
 
       {/* mt-auto: mô tả dài ngắn khác nhau thì dòng số lượng vẫn nằm cùng
-          một mức ở đáy mọi thẻ trong hàng. */}
-      <span className="mt-auto flex items-center gap-1 pt-1.5 text-[11px] font-bold">
-        <span className={`h-1.5 w-1.5 rounded-full ${enabled ? TONE.dot[tone] : "bg-mist/30"}`} aria-hidden="true" />
-        <span className={enabled ? "text-white" : "text-mist/60"}>
-          {count > 0 ? `×${count}` : role === "VILLAGER" ? "lấp chỗ" : "—"}
+          một mức ở đáy mọi thẻ trong hàng. `h-full` trên `shell` là chỗ mà
+          `mt-auto` đẩy vào. */}
+      {stepper ? (
+        <span className="mt-auto flex items-center gap-1.5 pt-1.5">
+          <StepButton
+            label={`Bớt một ${meta.name}`}
+            disabled={stepper.value <= stepper.min}
+            onClick={() => stepper.onChange(stepper.value - 1)}
+          >
+            −
+          </StepButton>
+          <span className="min-w-[2ch] text-sm font-bold text-white tabular-nums">
+            ×{stepper.value}
+          </span>
+          <StepButton
+            label={`Thêm một ${meta.name}`}
+            disabled={stepper.value >= stepper.max}
+            onClick={() => stepper.onChange(stepper.value + 1)}
+          >
+            +
+          </StepButton>
         </span>
-      </span>
+      ) : (
+        <span className="mt-auto flex items-center gap-1 pt-1.5 text-[11px] font-bold">
+          <span className={`h-1.5 w-1.5 rounded-full ${enabled ? TONE.dot[tone] : "bg-mist/30"}`} aria-hidden="true" />
+          <span className={enabled ? "text-white" : "text-mist/60"}>
+            {count > 0 ? `×${count}` : role === "VILLAGER" ? "lấp chỗ" : "—"}
+          </span>
+        </span>
+      )}
+    </>
+  );
+
+  if (stepper) {
+    return (
+      <div className={shell} title={meta.description}>
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={locked}
+      onClick={onToggle}
+      title={meta.description}
+      aria-label={`${meta.name}: ${meta.description}`}
+      className={`${shell} hover:scale-[1.02] active:scale-[0.98] ${
+        locked ? "cursor-default" : "cursor-pointer hover:border-white/25"
+      }`}
+    >
+      {body}
+    </button>
+  );
+}
+
+function StepButton({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="grid h-7 w-7 place-items-center rounded-lg bg-night-700/70 text-sm font-bold text-mist transition hover:bg-night-600 hover:text-white disabled:cursor-default disabled:opacity-30 disabled:hover:bg-night-700/70"
+    >
+      {children}
     </button>
   );
 }

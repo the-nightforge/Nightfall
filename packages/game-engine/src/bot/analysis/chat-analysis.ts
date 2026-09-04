@@ -59,6 +59,14 @@ export const ROLE_PHRASES: ReadonlyArray<readonly [string, Role]> = [
   // nhưng giữ đúng quy ước "cụm dài đứng trước" của bảng này.
   ["sát nhân", "SERIAL_KILLER"],
   ["thám tử", "DETECTIVE"],
+  // "trưởng lão" trước "trưởng" của "thị trưởng"? Không đụng nhau - hai cụm
+  // khác tiếng đầu - nhưng giữ đúng quy ước cụm dài đứng trước của bảng.
+  ["trưởng lão", "ELDER"],
+  ["bà đồng", "MEDIUM"],
+  // "song trùng" không kèm "kẻ" vẫn là một cách gọi tự nhiên trong câu khai,
+  // và nó không đụng cụm nào khác trong bảng - cùng quy ước với "phản bội".
+  ["kẻ song trùng", "DOPPELGANGER"],
+  ["song trùng", "DOPPELGANGER"],
   ["linh mục", "PRIEST"],
   ["thị trưởng", "MAYOR"],
   ["sói con", "WOLF_CUB"],

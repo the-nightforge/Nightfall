@@ -10,6 +10,9 @@ export const ROLES = [
   "GUARDIAN_ANGEL",
   "PRIEST",
   "WITCH",
+  "ELDER",
+  "MEDIUM",
+  "DOPPELGANGER",
   "HUNTER",
   "MAYOR",
   "CURSED",
@@ -153,6 +156,47 @@ export const ROLE_META: Record<Role, RoleMeta> = {
       "Có 1 bình Nước thánh cả ván: Ném vào Sói thì Sói chết, ném vào người không phải Sói thì Linh mục chết do phản vệ.",
     team: "village",
     nightOrder: 2.5,
+  },
+  DOPPELGANGER: {
+    id: "DOPPELGANGER",
+    name: "Kẻ Song Trùng",
+    description:
+      "Khi người ĐẦU TIÊN của ván qua đời, bạn hoá thành đúng vai của họ - kể cả khi đó là một vai phe Sói.",
+    /*
+     * `village` là phe LÚC CHIA BÀI, và nó chỉ đúng cho tới cái chết đầu tiên.
+     *
+     * Không có phe riêng cho lá này: sau khi hoá, `role` bị ghi đè hẳn nên mọi
+     * phép hỏi phe đều tự đọc ra vai MỚI - đúng cách Kẻ Nguyền Rủa, Kẻ Phản Bội
+     * và Kẻ Báo Thù đã làm. Đây là lá thứ tư của khuôn đó, không phải một cơ
+     * chế mới.
+     */
+    team: "village",
+    /*
+     * KHÔNG có `nightOrder`: trước khi hoá vai nó không thức dậy, và sau khi
+     * hoá thì `nightOrder` được tra theo vai MỚI chứ không phải dòng này.
+     */
+  },
+  ELDER: {
+    id: "ELDER",
+    name: "Trưởng Lão",
+    description:
+      "Sống sót nhát cắn đầu tiên của bầy Sói. Nếu chính làng giết bạn (treo cổ, bình độc, đạn Thợ Săn) thì mọi kỹ năng đặc biệt của phe làng mất hiệu lực tới hết ván.",
+    /*
+     * KHÔNG có `nightOrder`: nó không thức dậy. Cả hai vế của lá này đều là
+     * phản ứng - một tấm đệm trước nhát cắn, và một cái bẫy dưới chân phe làng.
+     */
+    team: "village",
+  },
+  MEDIUM: {
+    id: "MEDIUM",
+    name: "Bà Đồng",
+    description: "Mỗi đêm chọn một người ĐÃ CHẾT để biết vai thật của họ.",
+    /*
+     * Cùng `nightOrder` với Tiên Tri: cả hai chỉ ĐỌC, không đổi gì trong đêm,
+     * nên thứ tự giữa chúng không quan sát được từ bên ngoài.
+     */
+    team: "village",
+    nightOrder: 1,
   },
   WITCH: {
     id: "WITCH",

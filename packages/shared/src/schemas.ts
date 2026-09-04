@@ -35,6 +35,9 @@ export const roomConfigSchema = z
     guardianAngel: bool.optional(),
     priest: bool.optional(),
     mayor: bool.optional(),
+    elder: bool.optional(),
+    medium: bool.optional(),
+    doppelganger: bool.optional(),
     jester: bool.optional(),
     serialKiller: bool.optional(),
     executioner: bool.optional(),
@@ -73,6 +76,9 @@ export function validateRoomConfig(config: RoomConfig, playerCount: number): str
     (config.guardianAngel ? 1 : 0) +
     (config.priest ? 1 : 0) +
     (config.mayor ? 1 : 0) +
+    (config.elder ? 1 : 0) +
+    (config.medium ? 1 : 0) +
+    (config.doppelganger ? 1 : 0) +
     // Thằng Hề chiếm một ghế như mọi vai đặc biệt khác, dù nó không thuộc phe
     // làng: chỗ này đếm GHẾ ĐÃ BỊ LẤY, không đếm sức mạnh của phe nào.
     (config.jester ? 1 : 0) +
