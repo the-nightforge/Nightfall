@@ -211,6 +211,7 @@ function emptyNight(wolfCubRageTonight = false): GameState["night"] {
     wolfCubRageTonight,
     wolvesLocked: false,
     guardTarget: null,
+    guardSecondTarget: null,
     guardianAngelTarget: null,
     healTonight: false,
     poisonTarget: null,
@@ -249,6 +250,7 @@ export class GameEngine {
     this.state.night.wolfCubRageTonight ??= false;
     this.state.night.wolvesLocked ??= false;
     this.state.night.witchSkipped ??= false;
+    this.state.night.guardSecondTarget ??= null;
     this.state.night.guardianAngelTarget ??= null;
     this.state.night.priestTarget ??= null;
     this.state.night.priestSkipped ??= false;
@@ -738,7 +740,31 @@ export class GameEngine {
         if (targetId === st.guardPrevious) {
           throw new GameError("Không thể bảo vệ cùng một người hai đêm liên tiếp");
         }
+        /*
+         * Mục tiêu thứ hai: gương đúng Màn Sương Tan của Tiên Tri ở trên.
+         *
+         * Mọi luật của lượt che đầu áp lại y nguyên cho lượt thứ hai - không tự
+         * che, không che lại người đêm trước, không trùng người vừa chọn. Nới
+         * một luật ra ở đây là biến sự kiện thành đường vòng qua chính luật của
+         * vai: "che 2 người" phải là hai lượt che, không phải một lượt che cộng
+         * một ngoại lệ.
+         */
+        let guardSecondId: string | null = null;
+        if (secondaryTargetId) {
+          if (st.activeEvent?.id !== "VIGILANT_NIGHT") {
+            throw new GameError("Chỉ được che 2 người khi có sự kiện Đêm Cảnh Giác");
+          }
+          const secTarget = this.player(secondaryTargetId);
+          if (!secTarget || !secTarget.alive) throw new GameError("Mục tiêu che thứ 2 không hợp lệ");
+          if (secondaryTargetId === playerId) throw new GameError("Bảo Vệ không thể tự bảo vệ mình");
+          if (secondaryTargetId === targetId) throw new GameError("Không thể che cùng 1 người 2 lần");
+          if (secondaryTargetId === st.guardPrevious) {
+            throw new GameError("Không thể bảo vệ cùng một người hai đêm liên tiếp");
+          }
+          guardSecondId = secondaryTargetId;
+        }
         st.night.guardTarget = targetId;
+        st.night.guardSecondTarget = guardSecondId;
         break;
       }
       case "GUARDIAN_PROTECT": {
@@ -1027,6 +1053,7 @@ export class GameEngine {
     // 1. Ghi nhận shields
     const guardedIds = new Set<string>();
     if (st.night.guardTarget) guardedIds.add(st.night.guardTarget);
+    if (st.night.guardSecondTarget) guardedIds.add(st.night.guardSecondTarget);
     if (st.night.guardianAngelTarget) guardedIds.add(st.night.guardianAngelTarget);
     /*
      * Trăng Máu: nạp từ đêm trước thì đêm nay 20% xuyên MỘT khiên.
@@ -1082,7 +1109,9 @@ export class GameEngine {
     const isPeacefulNight = st.activeEvent?.id === "PEACEFUL_NIGHT";
     const primaryWolfTarget = isPeacefulNight ? null : st.night.killTarget;
 
-    let secondaryTargetToProcess = st.night.wolfSecondaryTarget;
+    // Đêm Bình Yên tước CẢ lượt phụ: đêm Sói Con nổi giận là đêm duy nhất lượt
+    // phụ tồn tại mà không cần sự kiện, và đó đúng là đêm làng cần được cứu.
+    let secondaryTargetToProcess = isPeacefulNight ? null : st.night.wolfSecondaryTarget;
     if (st.activeEvent?.id === "BLOODY_HUNT" && secondaryTargetToProcess) {
       const success = rng() < 0.5;
       if (!success) {
@@ -2339,8 +2368,10 @@ export class GameEngine {
       // Danh tính phiếu ĐANG MỞ. Chỉ ở VOTING: từ DEFENSE trở đi vòng đã chốt
       // và recap trong dayVoteHistory là nguồn duy nhất, gửi cả hai thì client
       // có hai bản của cùng một sự thật.
+      // Phiếu Kín đóng đúng cửa sổ này lại: tổng phiếu vẫn hiện (`voteCount` của từng người),
+      // chỉ danh tính người bầu là biến mất.
       openBallots:
-        st.phase === "VOTING"
+        st.phase === "VOTING" && st.activeEvent?.id !== "SECRET_BALLOT"
           ? Object.entries(st.votes).map(([voterId, targetId]) => ({
               voterId,
               choice:
@@ -2666,6 +2697,14 @@ export class GameEngine {
       // Trừ chính mình: engine cấm tự soi, nên phải còn hai người KHÁC.
       const targets = this.alivePlayers().filter((player) => player.id !== viewer.id);
       return targets.length >= 2 ? "SEE" : null;
+    }
+    if (viewer.role === "GUARD" && st.activeEvent?.id === "VIGILANT_NIGHT") {
+      // Cùng bộ lọc mà `legalTargets.GUARD` dùng: chào một mục tiêu thứ hai mà
+      // engine sẽ ném là làm lõi AI mất trắng cả lượt che.
+      const targets = this.alivePlayers().filter(
+        (player) => player.id !== viewer.id && player.id !== st.guardPrevious,
+      );
+      return targets.length >= 2 ? "GUARD" : null;
     }
     return null;
   }

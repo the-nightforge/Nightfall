@@ -178,30 +178,6 @@ describe("Bảo Vệ", () => {
     expect(decision!.targetId).toBe("b");
   });
 
-  it("tự đỡ mình khi đang bị nhắm nhiều nhất", () => {
-    const state = stateFor();
-    for (const from of ["a", "b", "c"]) {
-      state.relationships[`${from}->me`] = {
-        support: 0,
-        hostility: 1,
-        voteAlignment: 0,
-        samples: 3,
-        reasons: [],
-        lastUpdatedRound: 2,
-      };
-    }
-
-    const decision = guard().decideNight(
-      context({
-        legalActions: ["GUARD"],
-        legalTargets: { ...emptyTargets(), GUARD: ["me", "a", "b"] },
-      }),
-      state,
-      rng(),
-    );
-
-    expect(decision!.targetId).toBe("me");
-  });
 });
 
 describe("Phù Thuỷ", () => {

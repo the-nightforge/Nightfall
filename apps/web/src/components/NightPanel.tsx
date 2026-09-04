@@ -23,6 +23,10 @@ export function NightPanel({ snapshot, onAction }: Props) {
   const night = snapshot.night;
   const [selected, setSelected] = useState<string | null>(null);
   const [wolfSecondary, setWolfSecondary] = useState<string | null>(null);
+  /** Người thứ hai của Bảo Vệ; chỉ dùng trong sự kiện Đêm Cảnh Giác. */
+  const [guardSecondary, setGuardSecondary] = useState<string | null>(null);
+  /** Người thứ hai của Tiên Tri; chỉ dùng trong sự kiện Màn Sương Tan. */
+  const [seerSecondary, setSeerSecondary] = useState<string | null>(null);
   const [detectiveTarget1, setDetectiveTarget1] = useState<string | null>(null);
   const [detectiveTarget2, setDetectiveTarget2] = useState<string | null>(null);
   const [poisoning, setPoisoning] = useState(false);
@@ -98,6 +102,8 @@ export function NightPanel({ snapshot, onAction }: Props) {
 
   const acted = night?.acted ?? false;
   const locked = night?.wolvesLocked ?? false;
+  const vigilantNight = snapshot.activeEvent?.id === "VIGILANT_NIGHT";
+  const clearingMist = snapshot.activeEvent?.id === "CLEARING_MIST";
   const nameOf = (id: string | null | undefined) =>
     snapshot.players.find((p) => p.id === id)?.name ?? "?";
   const aliveOthers = (opts?: {
@@ -404,14 +410,68 @@ export function NightPanel({ snapshot, onAction }: Props) {
                 )}
               </div>
             )}
-            {aliveOthers()}
-            <button
-              className="btn-primary mt-3 w-full"
-              disabled={!selected || acted}
-              onClick={() => selected && onAction("SEE", selected)}
-            >
-              🔮 Soi người này
-            </button>
+            {clearingMist && !acted ? (
+              /*
+               * Màn Sương Tan: hai ô soi, cùng cách bấm với Đêm Cảnh Giác của
+               * Bảo Vệ và đòn cắn kép của bầy Sói.
+               *
+               * Đường `secondaryTargetId` đã có trong engine từ đầu nhưng chưa
+               * bao giờ có nút bấm, nên tới trước bản này chỉ BOT dùng được sự
+               * kiện - một Tiên Tri người thật bốc trúng nó thì soi đúng một
+               * người như mọi đêm và không hề biết mình vừa mất lượt thứ hai.
+               */
+              <>
+                <div className="mb-2 rounded-lg border border-sky-500/40 bg-sky-900/20 p-2">
+                  <p className="text-xs font-bold text-sky-300">
+                    🌫️ Màn Sương Tan: bạn được soi 2 người!
+                  </p>
+                  <div className="mt-1 flex gap-1.5 text-xs">
+                    <span className={`rounded px-2 py-1 ${selected ? "bg-sky-600 text-white" : "bg-night-800 text-mist/65"}`}>
+                      Người 1: {selected ? nameOf(selected) : "chưa chọn"}
+                    </span>
+                    <span className={`rounded px-2 py-1 ${seerSecondary ? "bg-sky-600 text-white" : "bg-night-800 text-mist/65"}`}>
+                      Người 2: {seerSecondary ? nameOf(seerSecondary) : "chưa chọn"}
+                    </span>
+                    {seerSecondary && (
+                      <button className="text-mist/65 hover:text-white" onClick={() => setSeerSecondary(null)}>
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <PlayerGrid
+                  snapshot={snapshot}
+                  selectable={true}
+                  selectedIds={[selected, seerSecondary].filter((v): v is string => !!v)}
+                  onSelect={(id) => {
+                    if (selected === id) setSelected(null);
+                    else if (seerSecondary === id) setSeerSecondary(null);
+                    else if (!selected) setSelected(id);
+                    else if (!seerSecondary) setSeerSecondary(id);
+                    else setSelected(id);
+                  }}
+                  allowSelf={false}
+                />
+                <button
+                  className="btn-primary mt-3 w-full"
+                  disabled={!selected || acted}
+                  onClick={() => selected && onAction("SEE", selected, seerSecondary)}
+                >
+                  🔮 {seerSecondary ? "Soi hai người này" : "Soi người này"}
+                </button>
+              </>
+            ) : (
+              <>
+                {aliveOthers()}
+                <button
+                  className="btn-primary mt-3 w-full"
+                  disabled={!selected || acted}
+                  onClick={() => selected && onAction("SEE", selected)}
+                >
+                  🔮 Soi người này
+                </button>
+              </>
+            )}
           </>
         )}
 
@@ -549,17 +609,70 @@ export function NightPanel({ snapshot, onAction }: Props) {
                 </>
               )}
             </p>
-            {aliveOthers({
-              allowSelf: false,
-              disabledIds: night?.guardPrevious ? [night.guardPrevious] : undefined,
-            })}
-            <button
-              className="btn-primary mt-3 w-full"
-              disabled={!selected || acted}
-              onClick={() => selected && onAction("GUARD", selected)}
-            >
-              🛡️ Bảo vệ người này
-            </button>
+            {vigilantNight && !acted ? (
+              /*
+               * Đêm Cảnh Giác: hai ô che, chọn bằng chính lưới người chơi.
+               *
+               * Cùng cách bấm mà đòn cắn kép của bầy Sói đang dùng - ô trống kế
+               * tiếp nhận người vừa bấm, bấm lại người đã chọn thì bỏ ra. Người
+               * chơi không phải học hai thao tác cho cùng một việc.
+               */
+              <>
+                <div className="mb-2 rounded-lg border border-emerald-500/40 bg-emerald-900/20 p-2">
+                  <p className="text-xs font-bold text-emerald-300">
+                    🛡️ Đêm Cảnh Giác: bạn được che 2 người!
+                  </p>
+                  <div className="mt-1 flex gap-1.5 text-xs">
+                    <span className={`rounded px-2 py-1 ${selected ? "bg-emerald-600 text-white" : "bg-night-800 text-mist/65"}`}>
+                      Người 1: {selected ? nameOf(selected) : "chưa chọn"}
+                    </span>
+                    <span className={`rounded px-2 py-1 ${guardSecondary ? "bg-emerald-600 text-white" : "bg-night-800 text-mist/65"}`}>
+                      Người 2: {guardSecondary ? nameOf(guardSecondary) : "chưa chọn"}
+                    </span>
+                    {guardSecondary && (
+                      <button className="text-mist/65 hover:text-white" onClick={() => setGuardSecondary(null)}>
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <PlayerGrid
+                  snapshot={snapshot}
+                  selectable={true}
+                  selectedIds={[selected, guardSecondary].filter((v): v is string => !!v)}
+                  onSelect={(id) => {
+                    if (selected === id) setSelected(null);
+                    else if (guardSecondary === id) setGuardSecondary(null);
+                    else if (!selected) setSelected(id);
+                    else if (!guardSecondary) setGuardSecondary(id);
+                    else setSelected(id);
+                  }}
+                  disabledIds={night?.guardPrevious ? [night.guardPrevious] : undefined}
+                  allowSelf={false}
+                />
+                <button
+                  className="btn-primary mt-3 w-full"
+                  disabled={!selected || acted}
+                  onClick={() => selected && onAction("GUARD", selected, guardSecondary)}
+                >
+                  🛡️ {guardSecondary ? "Bảo vệ hai người này" : "Bảo vệ người này"}
+                </button>
+              </>
+            ) : (
+              <>
+                {aliveOthers({
+                  allowSelf: false,
+                  disabledIds: night?.guardPrevious ? [night.guardPrevious] : undefined,
+                })}
+                <button
+                  className="btn-primary mt-3 w-full"
+                  disabled={!selected || acted}
+                  onClick={() => selected && onAction("GUARD", selected)}
+                >
+                  🛡️ Bảo vệ người này
+                </button>
+              </>
+            )}
           </>
         )}
 

@@ -71,6 +71,8 @@ function StaticTint({ eventId }: { eventId: string }) {
     AMNESTY_DAY: "bg-white/8",
     MORNING_REPORT: "bg-sky-900/12",
     DEAD_CAN_SPEAK: "bg-violet-900/18",
+    SECRET_BALLOT: "bg-slate-900/30",
+    VIGILANT_NIGHT: "bg-emerald-900/16",
   };
   return <div className={`absolute inset-0 ${tint[eventId] ?? ""}`} />;
 }
@@ -420,6 +422,33 @@ function EventLayer({ id }: { id: string }) {
             <EventGlyph name="ghost" className="h-full w-full" />
           </m.div>
           <Motes count={8} size="h-1 w-1" color="bg-violet-300/25" duration={6} />
+        </>
+      );
+    case "SECRET_BALLOT":
+      return (
+        <>
+          <div className="absolute inset-0 bg-slate-950/22" />
+          <m.div
+            className={`absolute ${EDGE.topRight} h-20 w-20 text-slate-200/14`}
+            animate={{ opacity: [0.5, 0.9, 0.5] }}
+            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <EventGlyph name="flag" className="h-full w-full" />
+          </m.div>
+        </>
+      );
+    case "VIGILANT_NIGHT":
+      return (
+        <>
+          <div className="absolute inset-0 bg-emerald-950/16" />
+          <m.div
+            className={`absolute ${EDGE.bottomLeft} h-20 w-20 text-emerald-200/16`}
+            animate={{ scale: [1, 1.06, 1] }}
+            transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <EventGlyph name="shield" className="h-full w-full" />
+          </m.div>
+          <Motes count={6} size="h-1 w-1" color="bg-emerald-300/22" duration={7} />
         </>
       );
     default:
