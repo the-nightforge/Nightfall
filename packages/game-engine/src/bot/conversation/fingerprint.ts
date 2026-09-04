@@ -1,3 +1,4 @@
+import { fnv1a32 } from "../hash";
 import type { BotSpeechIntention } from "../types";
 
 /**
@@ -63,14 +64,9 @@ export function normalizeSpeechText(text: string): string {
   return tokens.slice(start).join(" ");
 }
 
-/** FNV-1a 32-bit, in ra hex 8 ký tự. Không phải RNG - cùng vào, cùng ra, mãi mãi. */
+/** FNV-1a 32-bit, in ra hex 8 ký tự. Xem `bot/hash.ts` cho hàm băm dùng chung. */
 function fnv1a32Hex(value: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
+  return fnv1a32(value).toString(16).padStart(8, "0");
 }
 
 /** Vân tay của VĂN BẢN đã phát. Bắt câu giống nhau sau chuẩn hoá. */
