@@ -3,6 +3,7 @@ import {
   RESULT_MS,
   ROLE_REVEAL_MS,
   ROLE_META,
+  deathCauseClause,
   isWolfPack,
   outcomeName,
   specialRoleList,
@@ -496,20 +497,31 @@ export class GameEngine {
         activeEvent = { ...event, announcement };
       }
     } else if (event?.id === "MORNING_REPORT") {
+      /*
+       * Bản tin nói NGUYÊN NHÂN, không đọc lại danh sách người chết.
+       *
+       * `lastNightDeaths` đã công khai cho cả phòng suốt NIGHT_RESULT lẫn
+       * DAY_DISCUSSION, nên một bản tin đọc lại tên người chết là hai điểm
+       * `power` đổi lấy một dòng chữ ai cũng đang nhìn thấy. `cause` thì ngược
+       * lại: `nightHistory` chỉ lộ ra client ở GAME_OVER, nên giữa ván nó là bí
+       * mật thật - và nó tách được nhát cắn của bầy Sói khỏi Bình Độc của Phù
+       * Thuỷ hay nhát dao trong đêm.
+       *
+       * Trung lập thật chứ không phải nhãn dán: làng đọc được bàn cờ, nhưng bầy
+       * Sói cũng biết cú cắn của mình có trúng không hay vừa bị một tay giết
+       * khác cướp mất mục tiêu.
+       */
       const lastNight = this.state.nightHistory.at(-1);
-      let announcement: string | undefined;
-      if (lastNight) {
-        const deaths = lastNight.deaths;
-        if (deaths.length === 0) {
-          announcement = `Đêm ${lastNight.round}: không ai thiệt mạng.`;
-        } else if (deaths.length === 1) {
-          announcement = `Đêm ${lastNight.round}: ${deaths[0].player.name} đã thiệt mạng.`;
-        } else {
-          const names = deaths.map((d) => d.player.name).join(", ");
-          announcement = `Đêm ${lastNight.round}: ${deaths.length} người thiệt mạng (${names}).`;
-        }
-      } else {
+      let announcement: string;
+      if (!lastNight) {
         announcement = `Bản tin bình minh: không có dữ liệu đêm trước.`;
+      } else if (lastNight.deaths.length === 0) {
+        announcement = `Đêm ${lastNight.round}: không ai thiệt mạng.`;
+      } else {
+        const clauses = lastNight.deaths.map(
+          (death) => `${death.player.name} ${deathCauseClause(death.cause)}`,
+        );
+        announcement = `Đêm ${lastNight.round}: ${clauses.join("; ")}.`;
       }
       activeEvent = { ...event, announcement };
     } else if (event?.id === "DEAD_CAN_SPEAK") {
@@ -1012,16 +1024,23 @@ export class GameEngine {
     const guardedIds = new Set<string>();
     if (st.night.guardTarget) guardedIds.add(st.night.guardTarget);
     if (st.night.guardianAngelTarget) guardedIds.add(st.night.guardianAngelTarget);
-    // BLOOD_MOON pierce: if armed from previous night, 20% chance to pierce one shield
+    /*
+     * Trăng Máu: nạp từ đêm trước thì đêm nay 20% xuyên MỘT khiên.
+     *
+     * Chỉ QUYẾT ĐỊNH ở đây, chưa xoá khiên nào - khiên nào bị xuyên phải đợi
+     * tới lúc biết Sói cắn ai. Trước đây chỗ này gỡ ngay phần tử đầu của Set,
+     * tức luôn là khiên của Bảo Vệ và không bao giờ là của Thiên Thần Hộ Mệnh,
+     * lại còn gỡ mà không cần biết người được che có nằm trong tầm cắn không:
+     * Bảo Vệ che A, Sói cắn B thì cú xuyên tiêu vào hư không.
+     *
+     * Cú tung xúc xắc vẫn nằm sau `guardedIds.size > 0` như cũ - đêm không có
+     * khiên nào thì không rút số, để dòng RNG của một ván không đổi.
+     */
+    let bloodMoonPierce = false;
     if (st.bloodMoonArmed) {
-      const wasArmed = st.bloodMoonArmed;
       st.bloodMoonArmed = false;
       st.bloodMoonUsed = true;
-      if (wasArmed && guardedIds.size > 0 && rng() < 0.2) {
-        const firstShield = guardedIds.values().next().value as string;
-        guardedIds.delete(firstShield);
-        st.log.push(`Trăng Máu xuyên thủng khiên bảo vệ!`);
-      }
+      bloodMoonPierce = guardedIds.size > 0 && rng() < 0.2;
     }
 
     // 2. Information results are already recorded during submitNightAction
@@ -1070,6 +1089,17 @@ export class GameEngine {
     const wolfTargets = [primaryWolfTarget, secondaryTargetToProcess].filter(
       (t): t is string => t !== null && t !== undefined,
     );
+
+    // Giờ mới biết Sói cắn ai: xuyên đúng khiên đang chắn một mục tiêu của Sói.
+    // Sói cắn hai người mà cả hai đều có khiên thì mục tiêu chính mất khiên
+    // trước - `wolfTargets` xếp chính trước phụ.
+    if (bloodMoonPierce) {
+      const pierced = wolfTargets.find((targetId) => guardedIds.has(targetId));
+      if (pierced) {
+        guardedIds.delete(pierced);
+        st.log.push(`Trăng Máu xuyên thủng khiên bảo vệ ${this.player(pierced)?.name ?? "?"}!`);
+      }
+    }
 
     for (const targetId of wolfTargets) {
       const victim = this.player(targetId);

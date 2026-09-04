@@ -1,13 +1,17 @@
-import type { CaseDeathCause } from "@masoi/shared";
+import type { CaseDeathCause } from "./case-file/types";
 
 /**
  * Nguyên nhân chết, viết như một MỆNH ĐỀ chứ không phải một cái nhãn.
  *
- * Màn kết thúc kể cùng một cái chết ở hai chỗ - dòng kết mỗi đêm trong
- * `NightRecapTimeline` và dòng thời gian rút gọn trong `CaseFileCard` - nên
- * câu chữ phải ở MỘT chỗ. Hai bảng nhãn song song là hai bảng sẽ trôi khỏi
- * nhau ở lần sửa sau: bản trước có "trúng độc của Phù Thủy" bên này và "trúng
- * độc" bên kia, cùng một cái chết mà đọc ra như hai chuyện.
+ * Cùng một cái chết được kể ở BA chỗ - dòng kết mỗi đêm trong
+ * `NightRecapTimeline`, dòng thời gian rút gọn trong `CaseFileCard`, và bản tin
+ * của sự kiện Bản Tin Bình Minh do engine dựng giữa ván - nên câu chữ phải ở
+ * MỘT chỗ. Hai bảng nhãn song song là hai bảng sẽ trôi khỏi nhau ở lần sửa sau:
+ * bản trước có "trúng độc của Phù Thủy" bên này và "trúng độc" bên kia, cùng
+ * một cái chết mà đọc ra như hai chuyện.
+ *
+ * Nằm ở `shared` chứ không ở `apps/web` vì lý do đó: engine là chỗ gọi thứ ba,
+ * và nó không với tới được thư mục của web.
  *
  * Mọi vế ở đây ghép thẳng được vào khuôn "<tên> <mệnh đề>", nên `priest_backfire`
  * KHÔNG được mang sẵn chữ "chết" của chính nó - chỗ gọi nào cần thì tự nối vế

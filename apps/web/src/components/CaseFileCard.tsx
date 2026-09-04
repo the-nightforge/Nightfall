@@ -1,6 +1,12 @@
 import { m } from "motion/react";
-import { momentLabel, roundsLabel, type CaseFile, type MatchOutcome } from "@masoi/shared";
-import { deathCauseClause } from "@/lib/death-cause";
+import {
+  deathCauseClause,
+  momentLabel,
+  roundsLabel,
+  type CaseFile,
+  type MatchOutcome,
+} from "@masoi/shared";
+
 import { listItemMotion } from "@/lib/motion";
 
 /**

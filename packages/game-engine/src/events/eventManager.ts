@@ -122,7 +122,7 @@ export const GAME_EVENTS: Record<GameEventId, GameEventDefinition> = {
   MORNING_REPORT: {
     id: "MORNING_REPORT",
     name: "Bản Tin Bình Minh",
-    description: "Công khai tóm tắt 1-2 dòng thật từ đêm trước.",
+    description: "Công khai NGUYÊN NHÂN của từng cái chết đêm qua (cắn, độc, dao, Nước thánh).",
     targetPhase: "DAY",
     beneficiary: "neutral",
     power: 2,
@@ -194,7 +194,15 @@ export function selectEvent(
     if (eventHistory.some((h) => h.id === event.id)) return false;
 
     // Specific prerequisites
-    if (event.id === "CLEARING_MIST" || event.id === "MOONLESS_NIGHT") {
+    // Cả ba đều là sự kiện CHỈ tác động lên lượt soi, nên cùng một hàng rào.
+    // Bóng Sói từng đứng ngoài danh sách này: nó vẫn nổ khi không còn ai soi,
+    // không làm gì cả, và cộng 3 điểm nghiêng cho phe Sói - tức tự khoá các sự
+    // kiện Sói thật ở những đêm sau. Một sự kiện phe Sói làm hại phe Sói.
+    if (
+      event.id === "CLEARING_MIST" ||
+      event.id === "MOONLESS_NIGHT" ||
+      event.id === "WOLF_SHADOW"
+    ) {
       const seerAlive = state.players.some(
         (p) => p.alive && (p.role === "SEER" || (p.role === "APPRENTICE_SEER" && state.apprenticeAwakened)),
       );
