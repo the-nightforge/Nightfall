@@ -16,6 +16,7 @@ import {
 } from "@/lib/live-trial";
 import { rendererState } from "@/lib/village-memory-playback";
 import { CharacterPortrait } from "./CharacterPortrait";
+import { WeightDecidedNote } from "./WeightDecidedNote";
 import { TrialStageCanvas } from "./TrialStageCanvas";
 import { useSpeakers } from "./VoiceProvider";
 
@@ -342,6 +343,8 @@ export function TrialStage({ view, beats, beatsId, onBeatsConsumed, snapshot }: 
 
         {view.verdict && <VerdictBanner view={view} reduced={reduced} />}
 
+        {view.yourWeightDecided && <WeightDecidedNote lynched={view.verdict === "LYNCHED"} />}
+
         {/*
           * MỘT vùng aria-live cho cả sân khấu, và nó bị tiết chế theo nhịp.
           *
@@ -462,7 +465,7 @@ function Tally({ view }: { view: TrialStageView }) {
       {view.required !== null && (
         <p className="mt-1.5 text-[13px] text-mist-strong">
           Cần <b className="font-bold text-white tabular-nums">{view.required}</b> phiếu Treo để kết
-          án.
+          án, nếu mọi lá phiếu đều nặng như nhau.
         </p>
       )}
 
