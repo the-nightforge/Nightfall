@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GameEngine, type GameState } from "@masoi/game-engine";
-import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
+import { DEFAULT_ROOM_CONFIG, MAX_PLAYERS_PER_ROOM } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
 
 const redisMocks = vi.hoisted(() => ({
@@ -240,15 +240,30 @@ describe("Hunter config compatibility", () => {
       isBot: false,
     });
 
+    /*
+     * Ngưỡng của chốt này là `MAX_PLAYERS_PER_ROOM - 1`, nên fixture phải SUY RA
+     * từ hằng số chứ không ghim số. Bản cũ ghim `werewolves: 10` để tổng chạm 14
+     * đúng bằng ngưỡng của trần 15; khi trần lên 20 thì 14 không còn chạm ngưỡng
+     * 19 nữa và test đỏ vì fixture cũ, không vì chốt hỏng.
+     *
+     * `- 5` là để bốn vai đếm được còn lại (Tiên Tri, Bảo Vệ, Phù Thuỷ, Thợ Săn)
+     * đưa tổng lên đúng `MAX_PLAYERS_PER_ROOM - 1`: chạm ngưỡng nhờ ĐÚNG lá cuối
+     * cùng, tức Thợ Săn.
+     */
+    const base = {
+      ...DEFAULT_ROOM_CONFIG,
+      werewolves: MAX_PLAYERS_PER_ROOM - 5,
+      seer: true,
+      guard: true,
+      witch: true,
+    };
+
+    // Không có Thợ Săn thì tổng thiếu đúng 1 để chạm ngưỡng - phải đi qua được.
+    expect(() => roomService.updateConfig("host", { ...base, hunter: false })).not.toThrow();
+
+    // Thêm Thợ Săn là chạm ngưỡng. Đây mới là điều test này nói: lá đó ĐƯỢC ĐẾM.
     expect(() =>
-      roomService.updateConfig("host", {
-        ...DEFAULT_ROOM_CONFIG,
-        werewolves: 10,
-        seer: true,
-        guard: true,
-        witch: true,
-        hunter: true,
-      }),
+      roomService.updateConfig("host", { ...base, hunter: true }),
     ).toThrow("Cấu hình vai trò không hợp lệ");
   });
 });
