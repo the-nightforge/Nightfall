@@ -14,7 +14,7 @@ import {
   type TrialStageView,
 } from "@/lib/live-trial";
 import { rendererState } from "@/lib/village-memory-playback";
-import { Avatar } from "./Avatar";
+import { CharacterPortrait } from "./CharacterPortrait";
 import { TrialStageCanvas } from "./TrialStageCanvas";
 import { useSpeakers } from "./VoiceProvider";
 
@@ -293,10 +293,11 @@ export function TrialStage({ view, beats, beatsId, onBeatsConsumed, snapshot }: 
                 className="seat-voice-halo pointer-events-none absolute -inset-1 rounded-full"
               />
             )}
-            <Avatar
+            <CharacterPortrait
               avatar={avatars[view.accusedId]}
               tint={tintFor(view.accusedId)}
               alive
+              speaking={speaking}
               breathOffset={breathOffsetFor(view.accusedId)}
               className="h-10 w-10 ring-2 ring-amber-500/50 sm:h-12 sm:w-12"
             />

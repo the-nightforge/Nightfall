@@ -17,7 +17,11 @@ import type { PlayerView } from "@masoi/shared";
  *     hình đọc lại cái tên đó - vài lần mỗi giây.
  */
 
-GlobalRegistrator.register();
+// happy-dom mặc định `location.href` là "about:blank". `CharacterPortrait`
+// dựng <img src="/characters/..."> khi có sheet, và `new URL(src, base)` với
+// base "about:blank" ném lỗi ngay trong lúc mount - ra một sự kiện `error` giả
+// trước cả khi ảnh kịp tải. Đặt sẵn một origin thật thì URL tương đối hợp lệ.
+GlobalRegistrator.register({ url: "http://localhost:3000/" });
 // React 19 đòi cờ này thì `act()` mới bao được effect; thiếu nó React chỉ cảnh
 // báo rồi bỏ qua, và test sẽ đọc trạng thái ở giữa chừng.
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -151,5 +155,15 @@ describe("PlayerSeat: trợ năng của trạng thái nói", () => {
 
     await quiet.cleanup();
     await talking.cleanup();
+  });
+});
+
+describe("PlayerSeat: chân dung sprite sheet", () => {
+  it("người chơi còn sống dựng đúng ảnh sprite sheet của avatar", async () => {
+    const seat = await mountSeat({ alive: true });
+    const sheetImg = seat.button.querySelector(".character-portrait__sheet");
+    assert.ok(sheetImg, "phải có ảnh sprite sheet, không rơi về SVG avatar cũ");
+    assert.equal(sheetImg?.getAttribute("src"), "/characters/hood.webp");
+    await seat.cleanup();
   });
 });

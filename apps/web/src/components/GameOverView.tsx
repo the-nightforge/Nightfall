@@ -28,8 +28,9 @@ import {
   type WinnerCopy,
 } from "@/lib/game-over-summary";
 import { caseFileLetters } from "@/lib/last-letter";
-import { Avatar } from "./Avatar";
+import { AssetCredits } from "./AssetCredits";
 import { CaseFileCard } from "./CaseFileCard";
+import { CharacterPortrait } from "./CharacterPortrait";
 import { CaseShareCard } from "./CaseShareCard";
 import { HunterShotTimeline } from "./HunterShotTimeline";
 import { LastLetterArchive } from "./LastLetterArchive";
@@ -262,7 +263,7 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
           <div className="mt-3 flex flex-wrap items-start justify-center gap-3">
             {winners.map((player) => (
               <div key={player.id} className="w-20">
-                <Avatar
+                <CharacterPortrait
                   avatar={player.avatarUrl ? player.avatarUrl : avatars[player.id]}
                   tint={tintFor(player.id)}
                   alive
@@ -437,6 +438,23 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
       </details>
 
       {caseFile && <CaseShareCard file={caseFile} shareOrigin={shareOrigin} />}
+
+      {/*
+        * Ghi công tài nguyên hình ảnh, LẶP LẠI ở đây.
+        *
+        * Bản duy nhất trước đó nằm ở trang chủ (`app/page.tsx`) - nhưng chân
+        * dung chỉ hiện trong `/room/*`, và một người vào bằng link mời không
+        * bao giờ tải trang chủ. Giấy phép CC BY đòi ghi công tới NGƯỜI DÙNG
+        * tác phẩm, tức là người đang nhìn thấy nó - nên bản ở trang chủ không
+        * đáp ứng được nghĩa vụ đó cho đúng những người chơi cần thấy nó.
+        *
+        * Đặt ở màn kết ván chứ không phải cột "Người chơi": cột đó sống suốt
+        * ván, cao cố định ở lg, và mọi centimet của nó đang dành cho danh sách
+        * còn sống/đã chết - thêm một khối cố định vào đó là bớt chỗ của chính
+        * UI đang chơi. Màn kết ván thì ngược lại: đã là một trang kết quả tĩnh,
+        * vốn đã cuộn tự do, và đa số người chơi hết một ván đều lướt tới đây.
+        */}
+      <AssetCredits />
     </div>
   );
 }
@@ -654,7 +672,7 @@ function TeamPanel({
             className="flex items-center gap-2.5 rounded-lg border border-white/[0.04] bg-night-800/50 px-2 py-1.5"
           >
             <span className="relative shrink-0">
-              <Avatar
+              <CharacterPortrait
                 avatar={player.avatarUrl ? player.avatarUrl : avatars[player.id]}
                 tint={tintFor(player.id)}
                 alive={player.alive}

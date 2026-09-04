@@ -80,6 +80,9 @@ export function DefenseVotePanel({ recap, players, accusedId, accusedName }: Pro
                 key={voterId}
                 className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-500/[0.12] py-1 pl-1 pr-2.5"
               >
+                {/* 24px: cỡ này khuôn mặt không mang thông tin gì, xem docstring
+                  * CharacterPortrait - nên chip biểu quyết dùng đĩa màu Avatar
+                  * chứ không tải sheet 256px chỉ để vẽ một đốm nhoè. */}
                 <Avatar
                   avatar={avatars[voterId]}
                   tint={tintFor(voterId)}

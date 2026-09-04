@@ -4,6 +4,7 @@ import { MotionProvider } from "@/components/MotionProvider";
 import "./globals.css";
 // Hệ chuyển cảnh có bảng CSS riêng - xem đầu file đó về lý do tách.
 import "./cinematics.css";
+import "./characters.css";
 
 /**
  * Cả hai font đều khai báo subset "vietnamese".
