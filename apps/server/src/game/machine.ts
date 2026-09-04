@@ -135,6 +135,7 @@ function checkWinOrContinue(room: Room, next: () => void): void {
    * `settleExecutioner` tự chặn lặp, nên một bước chuyển pha chạy lại sau khôi
    * phục không đổi vai ai lần thứ hai.
    */
+  e.settleTraitor();
   e.settleExecutioner();
   const winner = e.checkWin();
   if (winner) {

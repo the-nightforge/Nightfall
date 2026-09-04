@@ -3,6 +3,7 @@ import {
   RESULT_MS,
   ROLE_REVEAL_MS,
   ROLE_META,
+  isWolfPack,
   outcomeName,
   specialRoleList,
   roleTeam,
@@ -409,8 +410,15 @@ export class GameEngine {
     return this.state.players.filter((p) => p.alive);
   }
 
+  /**
+   * Bầy Sói còn sống - dùng cho phiếu cắn và chat đêm, KHÔNG dùng cho luật thắng.
+   *
+   * `isWolfPack` chứ không phải `roleTeam`: Kẻ Phản Bội thắng cùng phe Sói
+   * nhưng không bỏ phiếu cắn và không có mặt trong chat đêm. `checkWin` có phép
+   * đếm riêng và nó mới là chỗ hỏi về PHE.
+   */
   aliveWolves() {
-    return this.alivePlayers().filter((p) => roleTeam(p.role) === "wolves");
+    return this.alivePlayers().filter((p) => isWolfPack(p.role));
   }
 
   private queueHunterReaction(deaths: Array<{ playerId: string }>, source: "night" | "vote"): void {
@@ -572,15 +580,23 @@ export class GameEngine {
     if ((isWitchMedicine || (type === "SKIP" && p.role === "WITCH")) && st.night.witchSkipped) {
       throw new GameError("Phù Thủy đã bỏ qua dùng thuốc đêm nay");
     }
-    if ((type === "KILL" || (type === "SKIP" && roleTeam(p.role) === "wolves")) && st.night.wolvesLocked) {
+    if ((type === "KILL" || (type === "SKIP" && isWolfPack(p.role))) && st.night.wolvesLocked) {
       throw new GameError("Bầy Sói đã chốt mục tiêu đêm nay");
     }
 
     switch (type) {
       case "KILL": {
-        if (roleTeam(p.role) !== "wolves") throw new GameError("Chỉ Ma Sói mới được cắn");
+        if (!isWolfPack(p.role)) throw new GameError("Chỉ Ma Sói mới được cắn");
         if (!targetId || !target) throw new GameError("Hãy chọn một mục tiêu để cắn");
-        if (roleTeam(target.role) === "wolves") throw new GameError("Không thể cắn đồng bọn");
+        /*
+         * `isWolfPack`, KHÔNG phải `roleTeam`: bầy phải cắn được Kẻ Phản Bội.
+         *
+         * Bầy không biết nó là ai, nên một lời từ chối ở đây chính là một lời
+         * khai - người chơi thử từng tên cho tới khi engine kêu lên là biết.
+         * Ngược lại, một Kẻ Phản Bội chết vì đồng minh của chính nó là một kết
+         * cục hoàn toàn hợp lệ của lá bài này.
+         */
+        if (isWolfPack(target.role)) throw new GameError("Không thể cắn đồng bọn");
         // Một phiếu, không phải quyết định cuối: Sói được đổi ý tới lúc khoá phiếu.
         st.night.wolfVotes[playerId] = targetId;
         if (secondaryTargetId) {
@@ -588,7 +604,8 @@ export class GameEngine {
           if (!canDoubleKill) throw new GameError("Chỉ được cắn 2 mục tiêu khi có Sói Con phẫn nộ hoặc event Cuộc Săn Đẫm Máu");
           const secTarget = this.player(secondaryTargetId);
           if (!secTarget || !secTarget.alive) throw new GameError("Mục tiêu phụ không hợp lệ");
-          if (roleTeam(secTarget.role) === "wolves") throw new GameError("Không thể cắn đồng bọn");
+          // Cùng lý do với mục tiêu chính ngay trên.
+          if (isWolfPack(secTarget.role)) throw new GameError("Không thể cắn đồng bọn");
           if (targetId === secondaryTargetId) throw new GameError("Không thể cắn cùng một người 2 lần");
           st.night.wolfSecondaryTarget = secondaryTargetId;
         }
@@ -650,7 +667,7 @@ export class GameEngine {
           if (!secTarget || !secTarget.alive) throw new GameError("Mục tiêu soi thứ 2 không hợp lệ");
           if (targetId === secondaryTargetId) throw new GameError("Không thể soi cùng 1 người 2 lần");
           secTargetId = secondaryTargetId;
-          secTeam = roleTeam(secTarget.role);
+          secTeam = secTarget.role === "TRAITOR" ? "village" : roleTeam(secTarget.role);
         }
 
         const isWolfShadow = st.activeEvent?.id === "WOLF_SHADOW";
@@ -669,7 +686,19 @@ export class GameEngine {
          */
         const flipTeam = (team: Team): Team =>
           shouldFlip ? (team === "wolves" ? "village" : "wolves") : team;
-        const team = flipTeam(roleTeam(target.role));
+        /*
+         * Kẻ Phản Bội hiện ra là PHE LÀNG, không phải phe Sói.
+         *
+         * Đây là cả lá bài: nó thắng cùng phe Sói (`roleTeam` trả về `wolves`,
+         * và `checkWin` đếm nó) nhưng Tiên Tri soi không ra. Để `roleTeam` chạy
+         * thẳng ở đây thì nó chỉ còn là một con Sói không biết cắn.
+         *
+         * `village` chứ không phải `neutral`: nó không phải một phe thứ ba, và
+         * Tiên Tri phải đọc ra đúng thứ mà một người làng đọc ra.
+         */
+        const seenTeam = (role: Role): Team =>
+          role === "TRAITOR" ? "village" : roleTeam(role);
+        const team = flipTeam(seenTeam(target.role));
         if (secTeam !== undefined) secTeam = flipTeam(secTeam);
 
         const seerResult: GameState["night"]["seerResults"][string] = {
@@ -812,7 +841,7 @@ export class GameEngine {
           st.night.healTonight = false;
           st.night.poisonTarget = null;
           st.night.witchSkipped = true;
-        } else if (roleTeam(p.role) === "wolves") {
+        } else if (isWolfPack(p.role)) {
           st.night.wolfVotes[playerId] = null;
         } else if (p.role === "PRIEST") {
           if (st.priestHolyWaterUsed[playerId]) throw new GameError("Bình Nước thánh đã được sử dụng");
@@ -1006,7 +1035,14 @@ export class GameEngine {
         // khép lại. Trừ ngay lúc bấm nghĩa là một cú bấm nhầm đốt luôn lượt duy
         // nhất, trong khi Sói và Tiên Tri vẫn được đổi ý tới hết đêm.
         st.priestHolyWaterUsed[priestPlayer.id] = true;
-        const isWolf = roleTeam(target.role) === "wolves";
+        /*
+         * `isWolfPack`: ném Nước thánh vào Kẻ Phản Bội thì PHẢN VỆ, Linh Mục chết.
+         *
+         * Cùng một câu trả lời mà Tiên Tri đưa ra, và phải cùng: lá này là
+         * NGƯỜI, nó chỉ thắng cùng phe Sói. Hai nguồn xác nhận nói hai điều khác
+         * nhau về cùng một người là một lỗi, không phải một chiều sâu.
+         */
+        const isWolf = isWolfPack(target.role);
         st.night.priestResults[priestPlayer.id] = { targetId: target.id, isWolf };
         if (isWolf) {
           addDeath({ playerId: target.id, name: target.name, cause: "priest" });
@@ -1315,7 +1351,7 @@ export class GameEngine {
     // HOWL_OF_THE_PACK hidden +1 for wolves next day
     if (weighted && this.state.howlBonusDay !== null && this.state.howlBonusDay === this.state.round) {
       // find target most voted by wolves to add hidden vote
-      const wolfIds = new Set(this.alivePlayers().filter((p) => roleTeam(p.role) === "wolves").map((p) => p.id));
+      const wolfIds = new Set(this.alivePlayers().filter((p) => isWolfPack(p.role)).map((p) => p.id));
       const wolfTally: Record<string, number> = {};
       for (const [voterId, targetId] of Object.entries(this.state.votes)) {
         if (!wolfIds.has(voterId) || targetId === null) continue;
@@ -1800,6 +1836,50 @@ export class GameEngine {
    * đầu tiên, và nó cũng chính là điều làm cho một Kẻ Báo Thù đã chết không
    * thắng vì một cú treo xảy ra sau đó.
    */
+  /**
+   * Con Sói cuối cùng chết thì Kẻ Phản Bội HOÁ THÀNH Ma Sói.
+   *
+   * Không có luật này thì lá bài tự bẫy chính nó: `checkWin` đếm Kẻ Phản Bội
+   * vào phe Sói, nên "hết Sói là làng thắng" không bao giờ đúng chừng nào nó
+   * còn sống - trong khi không còn ai cắn ai vào ban đêm. Ván đấu khi đó chỉ
+   * còn là làng lần lượt treo cho tới khi tìm ra nó, mỗi ngày một người, không
+   * có áp lực nào từ phía đêm. Đó không phải một thế cờ, đó là một cái sảnh chờ.
+   *
+   * Hoá vai thay vì trao thắng lợi: từ giây này nó thức dậy, cắn được, và bị
+   * Tiên Tri soi ra. Nó phải TỰ thắng phần còn lại của ván bằng luật của một
+   * con Sói thật.
+   *
+   * GỌI Ở ĐÂU: cùng hai chỗ với `settleExecutioner` - sau khi cả đợt chết lẫn
+   * chuỗi phản ứng Thợ Săn đã xử xong, trước khi chốt kết quả ván. Vì sao phải
+   * đứng sau chuỗi Thợ Săn: một phát bắn đang treo có thể hạ chính Kẻ Phản Bội,
+   * và khi đó nó chết CÙNG đợt với con Sói cuối - không được thăng cấp.
+   *
+   * VÌ SAO KHÔNG nằm trong `checkWin`: hàm đó là một câu HỎI, được gọi để dò
+   * trạng thái ở hàng chục chỗ. Một phép ghi đè vai nấp trong một hàm đọc là
+   * thứ sẽ đổi ván đấu vào lúc không ai ngờ tới. Cùng lý do đã viết ở
+   * `settleExecutioner`.
+   *
+   * TỰ CHẶN LẶP: đổi xong thì `role` không còn là `TRAITOR`, nên lần gọi thứ
+   * hai không tìm thấy gì. Một pha chạy lại sau khôi phục vì thế vô hại.
+   */
+  settleTraitor(): void {
+    const packAlive = this.state.players.some((p) => p.alive && isWolfPack(p.role));
+    if (packAlive) return;
+    for (const player of this.state.players) {
+      if (player.role !== "TRAITOR") continue;
+      // Người đã CHẾT không thăng cấp: một xác không cắn ai, và để nó thành Sói
+      // sẽ khiến bảng tổng kết ghi sai vai mà nó đã sống và chết cùng.
+      if (!player.alive) continue;
+      player.role = "WEREWOLF";
+      player.traitorTurned = true;
+      /*
+       * KHÔNG ghi log: `state.log` đi thẳng vào snapshot công khai, và một dòng
+       * "ai đó vừa hoá Sói" vừa lộ vai vừa nói cho làng biết bầy đã sạch. Cùng
+       * lý do với `settleExecutioner` và `recordPersonalWin`.
+       */
+    }
+  }
+
   settleExecutioner(): void {
     const targets = this.executionerTargets();
     const won = new Set(this.personalWins().map((win) => win.playerId));
@@ -1963,7 +2043,7 @@ export class GameEngine {
   ): NightInfoView {
     const st = this.state;
     const locked = st.night.wolvesLocked;
-    const isWolf = roleTeam(viewer.role) === "wolves";
+    const isWolf = isWolfPack(viewer.role);
     const isWitch = viewer.role === "WITCH";
     const tally = isWolf ? this.wolfVoteTally() : null;
 
@@ -2020,7 +2100,7 @@ export class GameEngine {
         viewer.role === "SERIAL_KILLER" ? st.night.serialKillerSkipped === true : undefined,
       healUsed: st.healUsed,
       poisonUsed: st.poisonUsed,
-      wolfCubRageTonight: roleTeam(viewer.role) === "wolves" ? st.night.wolfCubRageTonight : undefined,
+      wolfCubRageTonight: isWolfPack(viewer.role) ? st.night.wolfCubRageTonight : undefined,
     };
   }
 
@@ -2060,7 +2140,7 @@ export class GameEngine {
     // luôn thấy `undefined` ở đây.
     const revealDead = st.config.revealRoleOnDeath === true;
     // Sói luôn biết đồng bọn của mình
-    const viewerIsWolf = viewer !== undefined && viewer.alive && roleTeam(viewer.role) === "wolves";
+    const viewerIsWolf = viewer !== undefined && viewer.alive && isWolfPack(viewer.role);
 
     const tally = this.voteTally(false);
     // Số phiếu sơ bộ là bối cảnh của cả phiên toà: giấu đi trong lúc biện hộ thì
@@ -2077,7 +2157,7 @@ export class GameEngine {
       role:
         revealAll || (revealDead && !p.alive)
           ? p.role
-          : viewerIsWolf && p.id !== viewerId && roleTeam(p.role) === "wolves"
+          : viewerIsWolf && p.id !== viewerId && isWolfPack(p.role)
             ? p.role
             : undefined,
       // Đồng bọn Sói chỉ được biết đây là một con Sói, không được biết nó vốn
@@ -2256,12 +2336,12 @@ export class GameEngine {
     const st = this.state;
     const viewer = this.mustPlayer(botId);
     // Sói chết mất liên lạc với bầy, giống hệt luật của snapshotFor.
-    const viewerIsWolf = viewer.alive && roleTeam(viewer.role) === "wolves";
+    const viewerIsWolf = viewer.alive && isWolfPack(viewer.role);
 
     const knownRoles: Record<string, Role> = { [viewer.id]: viewer.role };
     if (viewerIsWolf) {
       for (const player of st.players) {
-        if (player.id !== viewer.id && roleTeam(player.role) === "wolves") {
+        if (player.id !== viewer.id && isWolfPack(player.role)) {
           knownRoles[player.id] = player.role;
         }
       }
@@ -2349,7 +2429,7 @@ export class GameEngine {
     if (st.phase !== "NIGHT" || !viewer.alive) return null;
     if (!this.hasNightAction(viewer.role)) return null;
 
-    const isWolf = roleTeam(viewer.role) === "wolves";
+    const isWolf = isWolfPack(viewer.role);
     const isWitch = viewer.role === "WITCH";
     const alive = this.alivePlayers();
 
@@ -2545,7 +2625,7 @@ export class GameEngine {
   /** Vai này còn lượt đêm nay chưa. Cùng điều kiện `nightInfoFor` dùng cho UI. */
   private nightActionPending(viewer: EnginePlayer): boolean {
     const st = this.state;
-    if (roleTeam(viewer.role) === "wolves") {
+    if (isWolfPack(viewer.role)) {
       return st.night.wolfVotes[viewer.id] === undefined;
     }
     if (viewer.role === "SEER" || viewer.role === "APPRENTICE_SEER") {

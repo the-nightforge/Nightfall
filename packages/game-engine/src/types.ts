@@ -28,6 +28,13 @@ export interface EnginePlayer {
    */
   cursedTurned?: boolean;
   /**
+   * Người này vốn là Kẻ Phản Bội và đã hoá Ma Sói khi con Sói cuối cùng chết.
+   *
+   * Cùng vai trò với `cursedTurned`: `role` đã bị ghi đè nên không còn dấu vết
+   * nào của lá gốc, mà bảng tổng kết cuối ván thì phải kể đúng câu chuyện.
+   */
+  traitorTurned?: boolean;
+  /**
    * Kẻ Báo Thù đã mất mục tiêu và hoá Thằng Hề. Khi đó `role` đã được ghi đè
    * thành JESTER - cờ này chỉ giữ lại gốc báo thù để hiển thị cuối ván và để
    * chặn lần chuyển vai thứ hai.

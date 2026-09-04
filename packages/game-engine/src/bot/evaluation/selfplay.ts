@@ -965,6 +965,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
      * lệch nhau thì một Kẻ Báo Thù trong harness sẽ chơi theo một luật khác
      * với một Kẻ Báo Thù trong phòng thật.
      */
+    engine.settleTraitor();
     engine.settleExecutioner();
     const winner = engine.checkWin();
     if (!winner) return false;

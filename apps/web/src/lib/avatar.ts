@@ -32,10 +32,7 @@ function hash(text: string): number {
  * đang ngồi yên không được phép nhảy vì việc đó. Sắp xếp xong thì kết quả chỉ
  * phụ thuộc vào TẬP id, giống hệt nhau trên mọi máy.
  *
- * Vòng dò tìm được chỗ trống chừng nào số người còn <= số hình. Từ khi trần
- * phòng lên 20 (2026-09-04) mà `AVATAR_IDS` vẫn 16, bốn ghế cuối của một
- * phòng đầy sẽ nhận hình trùng - xem dòng ngay dưới vòng dò. Sắc nền riêng
- * (`tintFor`) vẫn tách được hai ô trùng hình.
+ * Một phòng tối đa 20 người mà có 20 hình, nên vòng dò luôn tìm được chỗ trống.
  */
 export function assignAvatars(playerIds: string[]): Record<string, AvatarId> {
   const result: Record<string, AvatarId> = {};

@@ -8,6 +8,7 @@ import { jesterStrategy } from "./jester";
 import { priestStrategy } from "./priest";
 import { seerStrategy } from "./seer";
 import { serialKillerStrategy } from "./serial-killer";
+import { traitorStrategy } from "./traitor";
 import { passiveStrategy, type BotRoleStrategy } from "./strategy";
 import { werewolfStrategy } from "./werewolf";
 import { witchStrategy } from "./witch";
@@ -30,6 +31,17 @@ const REGISTRY: Partial<Record<Role, (role: Role, weights: BotWeights) => BotRol
   // Sói Con dùng đúng chiến lược Sói: nó cắn cùng bầy, và cơ chế "chết thì bầy
   // được cắn hai" nằm ở engine chứ không phải ở lựa chọn của nó.
   WOLF_CUB: werewolfStrategy,
+  /*
+   * Kẻ Phản Bội KHÔNG dùng `werewolfStrategy`, dù nó thắng cùng phe Sói: chiến
+   * thuật đó dựng trên `knownRoles`, mà engine cố ý không phát bảng đó cho vai
+   * này. Nó cũng không rơi về `passiveStrategy`, vì mặc định "không thiên vị"
+   * là chiến thuật của một người muốn làng thắng. Xem `roles/traitor.ts`.
+   *
+   * KHÔNG có entry cho nó SAU khi hoá Ma Sói: `strategyFor` tra theo vai HIỆN
+   * TẠI, nên `settleTraitor` đổi `role` là nó tự nhận `werewolfStrategy` ở lời
+   * gọi kế tiếp - cùng cơ chế với Kẻ Báo Thù hoá Thằng Hề.
+   */
+  TRAITOR: traitorStrategy,
   SEER: seerStrategy,
   // Tiên Tri Tập Sự sau khi thức tỉnh soi y hệt Tiên Tri; trước đó engine đã
   // trả `night: null` nên strategy này không bao giờ được hỏi.

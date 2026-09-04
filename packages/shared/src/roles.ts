@@ -2,6 +2,7 @@
 export const ROLES = [
   "WEREWOLF",
   "WOLF_CUB",
+  "TRAITOR",
   "SEER",
   "APPRENTICE_SEER",
   "DETECTIVE",
@@ -82,6 +83,26 @@ export const ROLE_META: Record<Role, RoleMeta> = {
     description: "Cùng thức dậy với Sói. Khi Sói Con chết, đêm kế tiếp bầy Sói được cắn 2 mục tiêu.",
     team: "wolves",
     nightOrder: 2,
+  },
+  TRAITOR: {
+    id: "TRAITOR",
+    name: "Kẻ Phản Bội",
+    description:
+      "Thắng cùng phe Sói nhưng KHÔNG thuộc bầy: không có hành động đêm, không biết Sói là ai và Sói cũng không biết bạn. Tiên Tri soi ra bạn KHÔNG phải Sói. Khi con Sói cuối cùng chết, bạn hoá thành Ma Sói.",
+    /*
+     * `wolves`, và đây là toàn bộ vai trò của lá này: nó THẮNG cùng phe Sói.
+     *
+     * Nhưng "cùng phe" KHÔNG có nghĩa "trong bầy", và mọi chỗ trong engine từng
+     * dùng `roleTeam(...) === "wolves"` để trả lời câu hỏi thứ hai giờ phải hỏi
+     * `isWolfPack` - xem chú thích ở hàm đó. Đây là lá đầu tiên trong bộ bài
+     * làm hai câu hỏi ấy tách nhau ra.
+     */
+    team: "wolves",
+    /*
+     * KHÔNG có `nightOrder`: nó không thức dậy, không giết ai, không soi ai.
+     * `hasNightAction` suy ra từ đúng trường này - cùng cách Thằng Hề và Kẻ Báo
+     * Thù được khai báo - nên không chỗ nào phải liệt kê tên vai lần thứ hai.
+     */
   },
   SEER: {
     id: "SEER",
@@ -241,6 +262,26 @@ export function sameFaction(a: Role, b: Role): boolean {
   if (teamA !== teamB) return false;
   if (teamA === "neutral") return false;
   return true;
+}
+
+/**
+ * Lá này có nằm trong BẦY SÓI không - tức có thức dậy cùng bầy, biết mặt đồng
+ * bọn, và bị bầy coi là người nhà.
+ *
+ * KHÔNG phải `roleTeam(role) === "wolves"`, và đó là toàn bộ lý do hàm này tồn
+ * tại. Trước khi có Kẻ Phản Bội, hai câu hỏi ấy trùng kết quả ở mọi lá bài, nên
+ * engine dùng lẫn lộn chúng ở hơn hai chục chỗ: kênh chat đêm, danh sách mục
+ * tiêu không được cắn, bảng `knownRoles` phát cho từng con Sói, phiếu cắn, và
+ * phép đếm thế cân bằng của `checkWin`. Chỉ chỗ CUỐI hỏi về phe; tất cả những
+ * chỗ còn lại hỏi về bầy.
+ *
+ * Kẻ Phản Bội trả lời `false` ở đây và `"wolves"` ở `roleTeam`. Nó thắng cùng
+ * bầy mà không được bầy biết tới - đó là cả lá bài, và trộn hai câu hỏi lại sẽ
+ * xoá sạch nó: nó sẽ vào chat đêm của Sói ngay vòng một và nhìn thấy toàn bộ
+ * danh sách bầy.
+ */
+export function isWolfPack(role: Role): boolean {
+  return role === "WEREWOLF" || role === "WOLF_CUB";
 }
 
 /**
