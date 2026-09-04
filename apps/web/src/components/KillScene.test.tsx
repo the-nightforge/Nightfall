@@ -22,10 +22,11 @@ import type { KillSceneView } from "@/lib/kill-cinematic";
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function victims(count: number) {
+function victims(count: number): KillSceneView["victims"] {
   return Array.from({ length: count }, (_, i) => ({
     playerId: `p${i + 1}`,
     name: `Người ${i + 1}`,
+    avatar: "hood" as const,
     avatarUrl: null,
   }));
 }
@@ -66,13 +67,15 @@ const night = (count: number): KillSceneView => ({
   victims: victims(Math.min(count, 3)),
   total: count,
   overflow: Math.max(0, count - 3),
+  allVictimNames: Array.from({ length: count }, (_, i) => `Người ${i + 1}`),
 });
 
 const execution = (name = "Bị Cáo"): KillSceneView => ({
   mode: "EXECUTION",
-  victims: [{ playerId: "p9", name, avatarUrl: null }],
+  victims: [{ playerId: "p9", name, avatar: "hood", avatarUrl: null }],
   total: 1,
   overflow: 0,
+  allVictimNames: [name],
 });
 
 describe("KillScene: khuôn mặt nạn nhân", () => {
@@ -93,6 +96,51 @@ describe("KillScene: khuôn mặt nạn nhân", () => {
     const scene = await mountScene(execution("Bị Cáo"));
     assert.equal(scene.host.querySelectorAll("[data-kill-portrait]").length, 1);
     assert.ok(scene.text.includes("Bị Cáo"), scene.text);
+    await scene.unmount();
+  });
+
+  it("dùng ĐÚNG khuôn mặt đã chốt trong model, không tự tính lại", async () => {
+    /*
+     * Hồi quy của một lỗi thật. Bản đầu gọi lại `assignAvatars` từ riêng danh
+     * sách nạn nhân, và vì hàm đó dò chỗ trống theo cả tập id, kết quả khác hẳn
+     * bảng của bàn chơi: `p7` là `miner` trên lưới nhưng thành `farmer` khi
+     * tính một mình. Người vừa chết hiện lên với một khuôn mặt lạ, ở đúng cái
+     * cảnh sinh ra để nói "người này là ai".
+     *
+     * Hai avatar này đều CÓ sprite sheet, nên `<img src>` phân biệt được chúng.
+     */
+    const scene = await mountScene({
+      mode: "NIGHT",
+      victims: [{ playerId: "p7", name: "Người p7", avatar: "miner", avatarUrl: null }],
+      total: 1,
+      overflow: 0,
+      allVictimNames: ["Người p7"],
+    });
+    const img = scene.host.querySelector("[data-kill-portrait] img");
+    assert.ok(img, "phải dựng ảnh sprite sheet");
+    assert.match(img!.getAttribute("src") ?? "", /miner/);
+    assert.equal(/farmer/.test(img!.getAttribute("src") ?? ""), false);
+    await scene.unmount();
+  });
+
+  it("ảnh tự tải lên vẫn thắng khuôn mặt mặc định", async () => {
+    const scene = await mountScene({
+      mode: "NIGHT",
+      victims: [
+        {
+          playerId: "p7",
+          name: "Người p7",
+          avatar: "miner",
+          avatarUrl: "https://cdn.example/con-nguoi.png",
+        },
+      ],
+      total: 1,
+      overflow: 0,
+      allVictimNames: ["Người p7"],
+    });
+    const html = scene.host.innerHTML;
+    assert.ok(html.includes("cdn.example/con-nguoi.png"), html.slice(0, 400));
+    assert.equal(html.includes("/characters/miner"), false);
     await scene.unmount();
   });
 });
@@ -162,6 +210,63 @@ describe("KillScene: trình đọc màn hình và vòng đời", () => {
     const title = scene.host.querySelector("#cine-title-x");
     assert.ok(title, "phải có phần tử mang id của lớp phủ");
     assert.ok((title!.textContent ?? "").includes("Người 1"), title!.textContent ?? "");
+    await scene.unmount();
+  });
+
+  it("chỉ MỘT phần tử mang titleId", async () => {
+    const scene = await mountScene(night(5));
+    assert.equal(scene.host.querySelectorAll("#cine-title-x").length, 1);
+    await scene.unmount();
+  });
+
+  it("nhãn trợ năng đúng bằng killAnnouncement, không lẫn tiêu đề nhìn thấy", async () => {
+    /*
+     * Hồi quy của một lỗi thật. Bản đầu nhét câu `sr-only` vào BÊN TRONG chính
+     * thẻ tiêu đề mang `titleId`, nên tên dialog gộp cả hai và trình đọc màn
+     * hình đọc ra một câu lặp: "Không qua khỏi đêm nay. Trời đã sáng. Người 1
+     * không qua khỏi đêm nay."
+     *
+     * Giờ hai phần tử tách hẳn: cái nhìn thấy chỉ để nhìn, cái mang `titleId`
+     * chỉ mang đúng một câu.
+     */
+    const { killAnnouncement, killTitle } = await import("@/lib/kill-cinematic");
+    // MỘT nạn nhân: ở đây tiêu đề nhìn thấy ("Không qua khỏi đêm nay") và câu
+    // đầy đủ ("Trời đã sáng. Người 1 không qua khỏi đêm nay.") khác hẳn nhau,
+    // nên phép so BẰNG dưới đây bắt được ngay một bản sao thừa lọt vào nhãn.
+    const view = night(1);
+    const scene = await mountScene(view);
+
+    const label = scene.host.querySelector("#cine-title-x");
+    assert.ok(label);
+    // Bằng ĐÚNG, không phải "có chứa": bản lỗi cho ra nội dung gộp
+    // "Không qua khỏi đêm nayTrời đã sáng. Người 1 không qua khỏi đêm nay."
+    assert.equal(label!.textContent, killAnnouncement(view));
+
+    // Tiêu đề nhìn thấy vẫn còn trên màn, nhưng là một phần tử KHÁC và không
+    // lồng bên trong nhãn.
+    const heading = scene.host.querySelector(".kill-title");
+    assert.ok(heading);
+    assert.equal(heading!.textContent, killTitle(view));
+    assert.notEqual(heading, label);
+    assert.equal(label!.querySelector(".kill-title"), null);
+    await scene.unmount();
+  });
+
+  it("cả năm tên có mặt trong nhãn trợ năng, kể cả hai người không lên hình", async () => {
+    const view = night(5);
+    const scene = await mountScene(view);
+    const label = scene.host.querySelector("#cine-title-x")!.textContent ?? "";
+    for (const name of view.allVictimNames) assert.ok(label.includes(name), `${name} | ${label}`);
+    await scene.unmount();
+  });
+
+  it("phần chữ nhìn thấy được ẩn khỏi trình đọc màn hình để không đọc hai lần", async () => {
+    const scene = await mountScene(night(2));
+    for (const selector of [".kill-title", ".kill-eyebrow"]) {
+      const el = scene.host.querySelector(selector);
+      assert.ok(el, selector);
+      assert.equal(el!.getAttribute("aria-hidden"), "true", selector);
+    }
     await scene.unmount();
   });
 

@@ -1,4 +1,6 @@
 import type { RoomSnapshot } from "@masoi/shared";
+import { assignAvatars } from "./avatar";
+import type { AvatarId } from "./avatar-art";
 import type { CinematicKind } from "./cinematic-transition";
 
 /**
@@ -46,13 +48,28 @@ export type KillMode = "NIGHT" | "EXECUTION";
 /**
  * Một nạn nhân, ở đúng dạng mà cảnh cần vẽ.
  *
- * Ba trường và chỉ ba. Xem luật 1 ở đầu file về việc vì sao đây không phải một
- * `PlayerView`.
+ * Bốn trường và chỉ bốn. Xem luật 1 ở đầu file về việc vì sao đây không phải
+ * một `PlayerView`.
  */
 export interface KillVictim {
   playerId: string;
   name: string;
-  /** Ảnh người chơi tự tải lên, hoặc null để rơi về chân dung dựng từ id. */
+  /**
+   * Khuôn mặt mặc định, ĐÃ CHỐT ở đây chứ không để chỗ vẽ tự tính.
+   *
+   * `assignAvatars` không phải một hàm băm thuần từ id: nó dò chỗ trống để
+   * không ai trong phòng trùng mặt ai, nên kết quả cho MỘT id phụ thuộc vào cả
+   * TẬP id đưa vào. Bản đầu để `KillScene` gọi lại hàm đó với riêng danh sách
+   * nạn nhân, và bảng thu được khác hẳn bảng của bàn chơi - trong một phòng 20
+   * người, sáu id đổi mặt, ví dụ `p4` là `bandit` trên lưới nhưng thành
+   * `cultist` trong cảnh. Người vừa chết hiện lên với một khuôn mặt lạ, ở đúng
+   * cái cảnh sinh ra để nói "người này là ai".
+   *
+   * Chốt ở đây, tính từ TOÀN BỘ `players[]`, thì chỉ còn một nguồn sự thật và
+   * chỗ vẽ không còn quyền tính lại.
+   */
+  avatar: AvatarId;
+  /** Ảnh người chơi tự tải lên, hoặc null để dùng `avatar`. */
   avatarUrl: string | null;
 }
 
@@ -60,6 +77,18 @@ export interface KillSceneView {
   mode: KillMode;
   /** Những người LÊN HÌNH, tối đa `MAX_KILL_PORTRAITS`. */
   victims: KillVictim[];
+  /**
+   * Tên của TẤT CẢ nạn nhân, không cắt.
+   *
+   * Tách khỏi `victims` vì hai danh sách phục vụ hai giác quan khác nhau và chỉ
+   * một trong hai bị màn hình chặn. `victims` dừng ở ba vì đó là số khuôn mặt
+   * còn nhận ra được ở 390px; còn câu đọc cho trình đọc màn hình thì không có
+   * màn hình nào để mà chật. Bản đầu dùng chung một danh sách, nên với năm
+   * người chết, người dùng trình đọc màn hình chỉ nghe ba tên và một vế đếm -
+   * họ không có đường nào biết hai người còn lại là ai, trong khi mọi người
+   * khác chỉ cần nhìn xuống thẻ pha ngay bên dưới lớp phủ.
+   */
+  allVictimNames: string[];
   /** Số nạn nhân THẬT của mốc công bố này. Luôn >= `victims.length`. */
   total: number;
   /** `total - victims.length`. 0 nghĩa là không ai bị gộp vào chip đếm. */
@@ -116,21 +145,37 @@ export function killSceneFor(
         : [];
   if (deaths.length === 0) return null;
 
+  /*
+   * Bảng mặt tính từ TOÀN BỘ players[], đúng cái roster mà `PlayerGrid` và
+   * `TrialStage` đưa vào cùng hàm này.
+   *
+   * Đây là cả điểm của bản sửa: cùng một tập id thì `assignAvatars` cho cùng
+   * một bảng trên mọi máy và ở mọi chỗ vẽ. Đưa vào một tập nhỏ hơn - chẳng hạn
+   * riêng danh sách nạn nhân - là tính ra một bảng KHÁC, và người vừa chết đổi
+   * mặt so với ô của chính họ trên lưới.
+   */
+  const table = assignAvatars(snapshot.players.map((player) => player.id));
+
   const victims: KillVictim[] = deaths.slice(0, MAX_KILL_PORTRAITS).map((death) => ({
     playerId: death.playerId,
     name: death.name,
     /*
-     * Không tìm thấy trong `players[]` thì đi tiếp bằng chân dung dựng từ id.
+     * Không tìm thấy trong `players[]` thì tự gán một mặt cho riêng id đó.
      *
-     * Snapshot lệch nhau giữa hai lần deploy là chuyện có thật, và mất một
-     * khuôn mặt còn hơn mất cả mốc công bố của cả phòng.
+     * Snapshot lệch nhau giữa hai lần deploy là chuyện có thật, và ở đó không
+     * có "khuôn mặt trên bàn" nào để mà khớp - người này không có ô nào trên
+     * lưới cả. Một khuôn mặt tất định còn hơn `undefined` đi thẳng vào
+     * `CharacterPortrait`, và mất một khuôn mặt còn hơn mất cả mốc công bố.
      */
+    avatar: table[death.playerId] ?? assignAvatars([death.playerId])[death.playerId],
     avatarUrl: snapshot.players.find((p) => p.id === death.playerId)?.avatarUrl ?? null,
   }));
 
   return {
     mode,
     victims,
+    // Đủ tên, không cắt - xem `KillSceneView.allVictimNames`.
+    allVictimNames: deaths.map((death) => death.name),
     total: deaths.length,
     overflow: deaths.length - victims.length,
   };
@@ -171,8 +216,14 @@ export function killTitle(view: KillSceneView): string {
  * thường cũng không thấy mặt. Không ai được biến mất chỉ vì màn hình hẹp.
  */
 export function killAnnouncement(view: KillSceneView): string {
-  const names = view.victims.map((victim) => victim.name).join(", ");
-  const rest = view.overflow > 0 ? ` và ${view.overflow} người nữa` : "";
+  /*
+   * `allVictimNames`, KHÔNG phải `victims`.
+   *
+   * `victims` đã bị cắt còn ba từ trước - đó là trần của màn hình, không phải
+   * trần của một câu nói. Duyệt nó ở đây là lý do bản đầu đọc ra "ba tên và 2
+   * người nữa" cho một đêm chết năm người.
+   */
+  const names = joinNames(view.allVictimNames);
 
   if (view.mode === "EXECUTION") {
     return `${killEyebrow(view)}. ${names} đã bị treo cổ.`;
@@ -180,5 +231,17 @@ export function killAnnouncement(view: KillSceneView): string {
   if (view.total === 1) {
     return `${killEyebrow(view)}. ${names} không qua khỏi đêm nay.`;
   }
-  return `${killEyebrow(view)}. ${view.total} người không qua khỏi đêm nay: ${names}${rest}.`;
+  return `${killEyebrow(view)}. ${view.total} người không qua khỏi đêm nay: ${names}.`;
+}
+
+/**
+ * Nối tên thành một danh sách đọc lên nghe được: "A, B và C".
+ *
+ * Dấu phẩy cho tất cả trừ vế cuối. Một chuỗi toàn dấu phẩy đọc lên bằng giọng
+ * tổng hợp nghe như một danh sách chưa hết, và ở đây danh sách hết ở đâu là
+ * thông tin thật - nó nói cả làng còn lại bao nhiêu người.
+ */
+function joinNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} và ${names[names.length - 1]}`;
 }

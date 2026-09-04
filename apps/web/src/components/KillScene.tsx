@@ -1,6 +1,6 @@
 "use client";
 
-import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
+import { breathOffsetFor, tintFor } from "@/lib/avatar";
 import {
   killAnnouncement,
   killEyebrow,
@@ -42,14 +42,15 @@ interface Props {
 export function KillScene({ view, titleId }: Props) {
   const night = view.mode === "NIGHT";
   /*
-   * Bảng ảnh dựng từ CHÍNH những người lên hình, không phải từ cả phòng.
+   * Component này KHÔNG tự tính khuôn mặt.
    *
-   * `assignAvatars` tránh trùng trong phạm vi tập id nó nhận, nên tập nhỏ hơn
-   * có thể cho ra kết quả khác với lưới người chơi. Đổi lại là cảnh này không
-   * cần `players[]` - tức là nó không có đường nào chạm vào `role` của ai.
-   * Người đã tự tải ảnh lên thì dùng đúng ảnh đó và không đi qua bảng này.
+   * Bản đầu gọi `assignAvatars` ngay tại đây với riêng danh sách nạn nhân, và
+   * đó là một lỗi thật: hàm đó dò chỗ trống theo cả tập id, nên một tập nhỏ hơn
+   * cho ra một bảng khác hẳn bảng của bàn chơi - `p4` là `bandit` trên lưới
+   * nhưng thành `cultist` trong cảnh. Khuôn mặt giờ đã được `killSceneFor` chốt
+   * từ toàn bộ `players[]` và đi vào đây qua `victim.avatar`; ở đây không còn
+   * quyền tính lại nữa.
    */
-  const avatars = assignAvatars(view.victims.map((victim) => victim.playerId));
 
   return (
     <div className={`kill-scene ${night ? "kill-night" : "kill-gallows"}`}>
@@ -99,7 +100,6 @@ export function KillScene({ view, titleId }: Props) {
           <VictimFace
             key={victim.playerId}
             victim={victim}
-            avatar={avatars[victim.playerId]}
             /*
              * Lệch nhịp theo VỊ TRÍ, không theo id.
              *
@@ -127,34 +127,37 @@ export function KillScene({ view, titleId }: Props) {
       </div>
 
       {/* --- Chữ ------------------------------------------------------------ */}
+      {/*
+       * HAI phần tử tách hẳn nhau, không phải một phần tử mang cả hai vai.
+       *
+       * Bản đầu nhét câu đầy đủ vào BÊN TRONG chính thẻ mang `titleId`, nên tên
+       * của dialog là nội dung gộp của cả hai và trình đọc màn hình đọc ra một
+       * câu lặp: "Không qua khỏi đêm nay. Trời đã sáng. An không qua khỏi đêm
+       * nay."
+       *
+       * Giờ mỗi phần tử một việc: phần nhìn thấy chỉ để nhìn (và vì thế
+       * `aria-hidden` - từng chữ của nó đã có trong câu đầy đủ), còn phần mang
+       * `titleId` chỉ mang đúng một câu, là thứ DUY NHẤT được đọc lên về cảnh.
+       */}
       <div className="kill-caption">
-        <p className="kill-eyebrow">{killEyebrow(view)}</p>
-        <p id={titleId} className="kill-title">
+        <p className="kill-eyebrow" aria-hidden="true">
+          {killEyebrow(view)}
+        </p>
+        <p className="kill-title" aria-hidden="true">
           {killTitle(view)}
-          {/*
-           * Câu đầy đủ chỉ dành cho trình đọc màn hình.
-           *
-           * Lớp phủ trỏ `aria-labelledby` vào đúng phần tử này, nên đây là thứ
-           * DUY NHẤT được đọc lên về cảnh. Dòng nhìn thấy được cố tình ngắn và
-           * không mang tên (tên đã nằm dưới từng khuôn mặt); dòng này thì phải
-           * gọi đủ tên, kể cả những người bị gộp vào chip đếm.
-           */}
-          <span className="sr-only">{killAnnouncement(view)}</span>
+        </p>
+        {/* Gọi đủ tên, kể cả những người bị gộp vào chip đếm - xem
+          * `allVictimNames`. Đây là đường tiếp cận duy nhất tới hai cái tên
+          * không có chỗ trên màn 390px. */}
+        <p id={titleId} className="sr-only">
+          {killAnnouncement(view)}
         </p>
       </div>
     </div>
   );
 }
 
-function VictimFace({
-  victim,
-  avatar,
-  index,
-}: {
-  victim: KillVictim;
-  avatar: string;
-  index: number;
-}) {
+function VictimFace({ victim, index }: { victim: KillVictim; index: number }) {
   return (
     <span
       className="kill-victim"
@@ -165,7 +168,9 @@ function VictimFace({
     >
       <span className="kill-face">
         <CharacterPortrait
-          avatar={victim.avatarUrl ?? avatar}
+          // Ảnh tự tải lên là danh tính người chơi tự đặt nên nó luôn thắng;
+          // `victim.avatar` là khuôn mặt đã chốt theo bảng của cả phòng.
+          avatar={victim.avatarUrl ?? victim.avatar}
           tint={tintFor(victim.playerId)}
           /*
            * `alive` vẫn là TRUE ở đây, và đó là chủ đích.

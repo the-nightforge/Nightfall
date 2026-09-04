@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { DEFAULT_ROOM_CONFIG, type PlayerView, type RoomSnapshot } from "@masoi/shared";
+import { assignAvatars } from "./avatar";
 import { deathCauseClause } from "./death-cause";
 import {
   MAX_KILL_PORTRAITS,
@@ -101,6 +102,10 @@ describe("killSceneFor", () => {
     assert.equal(view?.victims.length, 1);
     assert.equal(view?.victims[0].name, "Vô Danh");
     assert.equal(view?.victims[0].avatarUrl, null);
+    // Và vẫn phải có một khuôn mặt mặc định chứ không phải undefined: chỗ gọi
+    // đưa thẳng giá trị này vào `CharacterPortrait`.
+    assert.equal(typeof view?.victims[0].avatar, "string");
+    assert.ok((view?.victims[0].avatar.length ?? 0) > 0);
   });
 
   it("đêm không ai chết thì không có cảnh kill nào - bình minh giữ nguyên", () => {
@@ -112,6 +117,29 @@ describe("killSceneFor", () => {
     assert.equal(view?.victims.length, MAX_KILL_PORTRAITS);
     assert.equal(view?.total, 5);
     assert.equal(view?.overflow, 5 - MAX_KILL_PORTRAITS);
+  });
+
+  it("giữ riêng danh sách ĐỦ tên, không bị cắt theo số chân dung", () => {
+    /*
+     * `victims` là thứ LÊN HÌNH và nó bị trần màn hình chặn ở ba. Nhưng bản
+     * tường thuật cho trình đọc màn hình thì không có màn hình nào để mà chật,
+     * nên nó cần một nguồn riêng - nếu không, người thứ tư trở đi biến mất khỏi
+     * mọi đường tiếp cận, chứ không chỉ khỏi hàng ảnh.
+     */
+    const view = killSceneFor("NIGHT_KILL", nightOf(5));
+    assert.equal(view?.allVictimNames.length, 5);
+    assert.deepEqual(view?.allVictimNames, [
+      "Người p1",
+      "Người p2",
+      "Người p3",
+      "Người p4",
+      "Người p5",
+    ]);
+  });
+
+  it("danh sách đủ tên chỉ có TÊN, không kèm gì khác", () => {
+    const view = killSceneFor("NIGHT_KILL", nightOf(4));
+    for (const name of view!.allVictimNames) assert.equal(typeof name, "string");
   });
 
   it("giữ nguyên thứ tự server, để cả phòng thấy cùng một hàng", () => {
@@ -132,8 +160,14 @@ describe("killSceneFor", () => {
     assert.equal(view?.total, 1);
     assert.equal(view?.overflow, 0);
     assert.deepEqual(view?.victims, [
-      { playerId: "p9", name: "Bị Cáo", avatarUrl: "https://cdn/b.png" },
+      {
+        playerId: "p9",
+        name: "Bị Cáo",
+        avatar: assignAvatars(["p9"]).p9,
+        avatarUrl: "https://cdn/b.png",
+      },
     ]);
+    assert.deepEqual(view?.allVictimNames, ["Bị Cáo"]);
   });
 
   it("được tha thì không có cảnh treo nào", () => {
@@ -158,7 +192,7 @@ describe("killSceneFor", () => {
 });
 
 describe("killSceneFor: không rò rỉ gì ngoài định danh công khai", () => {
-  it("model hiển thị chỉ có ba trường công khai của nạn nhân", () => {
+  it("model hiển thị chỉ có bốn trường công khai của nạn nhân", () => {
     const view = killSceneFor(
       "NIGHT_KILL",
       snap({
@@ -168,11 +202,90 @@ describe("killSceneFor: không rò rỉ gì ngoài định danh công khai", () 
         players: [player("p1", { name: "An", role: "WEREWOLF" })],
       }),
     );
+    /*
+     * `avatar` là trường thứ tư và nó KHÔNG phải một ngoại lệ của luật này:
+     * `assignAvatars` chỉ nhận vào tập playerId - thứ mà mọi client đều thấy -
+     * và cố ý không dính dáng gì tới vai trò. Xem `lib/avatar.ts`.
+     */
     assert.deepEqual(Object.keys(view!.victims[0]).sort(), [
+      "avatar",
       "avatarUrl",
       "name",
       "playerId",
     ]);
+  });
+});
+
+/**
+ * Khuôn mặt mặc định phải là khuôn mặt người chơi vẫn thấy trên bàn.
+ *
+ * `assignAvatars` không phải một hàm băm đơn giản: nó dò chỗ trống để không ai
+ * trùng ai, nên kết quả cho một id phụ thuộc vào CẢ TẬP id đưa vào. Tính bảng
+ * từ riêng danh sách nạn nhân là tính một bảng khác - và một người vừa chết
+ * hiện lên với khuôn mặt lạ ở đúng cái cảnh sinh ra để nói "người này là ai".
+ */
+describe("killSceneFor: khuôn mặt mặc định khớp với bàn chơi", () => {
+  /** Đúng cách `PlayerGrid` và `TrialStage` tính bảng: từ TOÀN BỘ players[]. */
+  const roster = Array.from({ length: 20 }, (_, i) => `p${i + 1}`);
+  const table = assignAvatars(roster);
+
+  function roomOf(deadIds: string[]): RoomSnapshot {
+    return snap({
+      phase: "NIGHT_RESULT",
+      lastNightDeaths: deadIds.map((id) => ({ playerId: id, name: `Người ${id}` })),
+      players: roster.map((id) => player(id, { name: `Người ${id}` })),
+    });
+  }
+
+  it("p4 trên bàn là `bandit`, và trong cảnh kill cũng phải là `bandit`", () => {
+    // Ca va chạm CỤ THỂ đã tái hiện được: tính riêng một mình `p4` ra `cultist`.
+    assert.equal(table.p4, "bandit");
+    assert.equal(assignAvatars(["p4"]).p4, "cultist");
+
+    const view = killSceneFor("NIGHT_KILL", roomOf(["p4"]));
+    assert.equal(view?.victims[0].avatar, "bandit");
+  });
+
+  it("mọi id trong phòng 20 người đều khớp bảng của bàn chơi", () => {
+    // Sáu trong hai mươi id đổi mặt khi tính riêng, nên quét cả roster chứ
+    // không chỉ khẳng định đúng một ca.
+    for (const id of roster) {
+      const view = killSceneFor("NIGHT_KILL", roomOf([id]));
+      assert.equal(view?.victims[0].avatar, table[id], id);
+    }
+  });
+
+  it("khớp cả khi chết nhiều người cùng lúc", () => {
+    const dead = ["p4", "p7", "p9"];
+    const view = killSceneFor("NIGHT_KILL", roomOf(dead));
+    assert.deepEqual(
+      view?.victims.map((v) => v.avatar),
+      dead.map((id) => table[id]),
+    );
+  });
+
+  it("người bị treo cũng lấy mặt từ bàn, không phải từ một mình họ", () => {
+    const room = snap({
+      phase: "ELIMINATION",
+      lastEliminated: { playerId: "p9", name: "Người p9" },
+      players: roster.map((id) => player(id, { name: `Người ${id}` })),
+    });
+    assert.notEqual(table.p9, assignAvatars(["p9"]).p9);
+    assert.equal(killSceneFor("EXECUTION", room)?.victims[0].avatar, table.p9);
+  });
+
+  it("ảnh tự tải lên vẫn được ưu tiên, và mặt mặc định vẫn được chốt sẵn", () => {
+    const room = snap({
+      phase: "NIGHT_RESULT",
+      lastNightDeaths: [{ playerId: "p4", name: "Người p4" }],
+      players: roster.map((id) =>
+        player(id, { name: `Người ${id}`, avatarUrl: id === "p4" ? "https://cdn/x.png" : null }),
+      ),
+    });
+    const victim = killSceneFor("NIGHT_KILL", room)!.victims[0];
+    assert.equal(victim.avatarUrl, "https://cdn/x.png");
+    // Mặt mặc định vẫn đúng bảng: nó là đường lui khi ảnh custom hỏng.
+    assert.equal(victim.avatar, table.p4);
   });
 });
 
@@ -203,10 +316,27 @@ describe("chữ trên cảnh kill", () => {
     for (const victim of view.victims) assert.ok(said.includes(victim.name), victim.name);
   });
 
-  it("người không lên hình vẫn được đếm bằng lời, không biến mất", () => {
-    const said = killAnnouncement(killSceneFor("NIGHT_KILL", nightOf(5))!);
+  it("năm người chết thì đọc đủ NĂM tên, không phải ba tên và một con số", () => {
+    /*
+     * Đây là hồi quy của một lỗi thật: bản đầu duyệt `victims`, vốn đã bị cắt
+     * còn ba, rồi bù bằng "và 2 người nữa". Người dùng trình đọc màn hình vì
+     * thế không có đường nào biết hai người còn lại là ai - trong khi mọi người
+     * khác chỉ cần nhìn xuống thẻ pha ngay bên dưới là đọc được đủ tên.
+     */
+    const view = killSceneFor("NIGHT_KILL", nightOf(5))!;
+    const said = killAnnouncement(view);
+    assert.equal(view.victims.length, MAX_KILL_PORTRAITS);
+    for (const name of view.allVictimNames) assert.ok(said.includes(name), `${name} | ${said}`);
     assert.ok(said.includes("5"), said);
-    assert.ok(said.includes("2 người nữa"), said);
+    // Và không còn cái vế đếm trống rỗng của bản cũ.
+    assert.equal(said.includes("người nữa"), false, said);
+  });
+
+  it("tám người chết trong một đêm vẫn đọc đủ tám tên", () => {
+    const view = killSceneFor("NIGHT_KILL", nightOf(8))!;
+    const said = killAnnouncement(view);
+    assert.equal(view.allVictimNames.length, 8);
+    for (const name of view.allVictimNames) assert.ok(said.includes(name), `${name} | ${said}`);
   });
 
   it("cảnh treo nói đúng chuyện công khai vừa xảy ra", () => {
