@@ -31,7 +31,7 @@ import { GameOverView } from "@/components/GameOverView";
 import { HunterShotPanel } from "@/components/HunterShotPanel";
 import { TrialPanel } from "@/components/TrialPanel";
 import { TrialStage } from "@/components/TrialStage";
-import { Lobby } from "@/components/Lobby";
+import { Lobby, LobbySettings } from "@/components/Lobby";
 import { SoundControl } from "@/components/SoundControl";
 import { EventBanner } from "@/components/EventBanner";
 import { MobileChatDock } from "@/components/MobileChatDock";
@@ -72,7 +72,8 @@ export default function RoomPage() {
     if (room.identityMissing) router.replace(`/?code=${code}`);
   }, [room.identityMissing, code, router]);
 
-  const isHost = !!snapshot && snapshot.hostId === getIdentity()?.playerId;
+  const identity = getIdentity();
+  const isHost = !!snapshot && snapshot.hostId === identity?.playerId;
   const droppedConnection = !!snapshot && !room.connected;
   const isLobby = snapshot?.phase === "LOBBY";
 
@@ -93,7 +94,6 @@ export default function RoomPage() {
             onReady={(ready) => room.emit("room:set-ready", { ready })}
             onStart={() => room.emit("room:start")}
             onAddBot={() => room.emit("room:add-bot")}
-            onUpdateConfig={(config) => room.emit("room:update-config", { config })}
           />
         );
       case "ROLE_REVEAL":
@@ -283,22 +283,6 @@ export default function RoomPage() {
         </header>
 
         {/*
-          * Đầu phòng chờ nằm NGOÀI lưới, vắt ngang cả ba vùng.
-          *
-          * Đặt nó trong cột giữa thì dưới lg nó rơi xuống SAU danh sách người
-          * chơi (cột trái cố ý lên trước ở phòng chờ), và người vừa mở link mời
-          * phải cuộn qua cả danh sách mới thấy mã phòng cùng nút mời bạn - đúng
-          * hai thứ họ cần trong mười giây đầu. Ở đây nó cũng thay luôn
-          * `PhaseBanner`: hai khối đó cùng nói "Phòng chờ", mà ở pha này thanh
-          * pha không có thêm gì để nói (chưa có hạn giờ, chưa có số vòng).
-          */}
-        {snapshot && snapshot.phase === "LOBBY" && (
-          <div className="mt-3 lg:mt-5">
-            <LobbyHeader snapshot={snapshot} code={code} />
-          </div>
-        )}
-
-        {/*
           * Dưới lg vẫn đúng một cột như cũ. Từ lg trở lên là ba vùng: người chơi,
           * nội dung pha, chat. Hai cột biên có bề rộng CỐ ĐỊNH và hẹp - chúng
           * không đẹp thêm khi rộng ra, chỉ nội dung pha mới dùng được chỗ thừa.
@@ -340,24 +324,48 @@ export default function RoomPage() {
             * ở đó nó chỉ để tra cứu, còn nội dung pha mới là thứ phải thao tác
             * ngay. Riêng phòng chờ thì ngược lại: câu hỏi đầu tiên luôn là ai đã
             * vào phòng, và bộ bài thì cuộn xuống xem lúc nào cũng được.
+            *
+            * Đầu phòng chờ nằm TRONG cột này chứ không vắt ngang phía trên lưới
+            * như trước, và đó là điều kiện để khung chat lên được màn hình đầu.
+            *
+            * Vắt ngang thì nó đẩy CẢ HAI cột xuống 150px, mà nó chỉ nói chuyện
+            * của cột trái: tên phòng, mã phòng, số người, ảnh đại diện - toàn
+            * những thứ đứng ngay trên bàn người chơi mới đọc thành một mạch. Cột
+            * phải thì trả giá bằng đúng 150px đó, và ở màn 1440x900 số đó là
+            * khoảng cách giữa "thấy khung chat" với "phải cuộn mới biết phòng có
+            * chat". Hai cột không chia sẻ hàng nào (`row-span` bên dưới), nên
+            * bên này cao thấp thế nào cũng không dịch được bên kia.
+            *
+            * Thứ tự trên điện thoại KHÔNG đổi: khối này vẫn là `order-1`, nên
+            * người vừa mở link mời vẫn gặp mã phòng và nút mời bạn trước hết,
+            * rồi mới tới danh sách người chơi.
+            *
+            * Nó cũng thay luôn `PhaseBanner`: hai khối đó cùng nói "Phòng chờ",
+            * mà ở pha này thanh pha không có thêm gì để nói (chưa có hạn giờ,
+            * chưa có số vòng).
+            *
+            * Phòng chờ dùng `div` chứ không `aside`: khối này chứa `h1` của cả
+            * trang, và một landmark "nội dung phụ" bọc lấy tiêu đề chính thì
+            * trình đọc màn hình đọc ra ngược hẳn tầm quan trọng thật.
             */}
-          <aside
-            className={`${
-              isLobby
-                ? "order-1 lg:col-start-1 lg:row-span-2 lg:row-start-1"
-                : "order-2 lg:min-h-0"
-            } lg:order-none`}
-          >
-            {snapshot && snapshot.phase === "LOBBY" ? (
-              <LobbyPlayerGrid
-                snapshot={snapshot}
-                isHost={isHost}
-                onKick={(targetId) => room.emit("room:kick", { targetId })}
-              />
-            ) : snapshot ? (
-              <RosterPanel snapshot={snapshot} />
-            ) : null}
-          </aside>
+          {isLobby ? (
+            <div className="order-1 flex min-w-0 flex-col gap-3 lg:order-none lg:col-start-1 lg:row-span-3 lg:row-start-1">
+              {snapshot && (
+                <>
+                  <LobbyHeader snapshot={snapshot} code={code} />
+                  <LobbyPlayerGrid
+                    snapshot={snapshot}
+                    isHost={isHost}
+                    onKick={(targetId) => room.emit("room:kick", { targetId })}
+                  />
+                </>
+              )}
+            </div>
+          ) : (
+            <aside className="order-2 lg:order-none lg:min-h-0">
+              {snapshot && <RosterPanel snapshot={snapshot} />}
+            </aside>
+          )}
 
           {/*
             * Cột giữa tự cuộn thay vì đẩy cả trang.
@@ -479,7 +487,7 @@ export default function RoomPage() {
             */}
           <div
             className={`hidden lg:order-none lg:flex lg:min-h-0 lg:flex-col lg:gap-3 ${
-              isLobby ? "lg:col-start-2 lg:row-start-2" : ""
+              isLobby ? "order-3 lg:col-start-2 lg:row-start-2" : ""
             }`}
           >
             <VoiceControl snapshot={snapshot} />
@@ -490,10 +498,21 @@ export default function RoomPage() {
               * bố cục này sinh ra để dẹp. Phòng chờ vẫn giữ trần thấp: chưa ai
               * nói gì mà dựng sẵn một khung rỗng cao 700px thì chính nó là
               * khoảng trống lớn nhất màn hình.
+              *
+              * Và ở phòng chờ trần đó phải đứng MỘT MÌNH, không kèm `flex-1`.
+              * `flex-1` là `flex-basis: 0`, nên chiều cao khai báo bị bỏ qua và
+              * khung tự phình theo số tin nhắn - đúng thứ trần này sinh ra để
+              * chặn. Trong ván thì ngược lại: ô chứa đã cao bằng màn hình sẵn,
+              * `flex-1` mới là thứ bảo khung lấy trọn phần còn lại.
+              *
+              * 300px ở phòng chờ chứ không phải 320: khung này giờ đứng TRONG
+              * màn hình đầu tiên, ngay dưới nút Bắt đầu, và mỗi pixel nó cao
+              * thêm là một pixel nó thò xuống dưới mép ở màn 1440x900. 300px
+              * vẫn đủ đầu khung, năm sáu dòng tin và ô nhập.
               */}
             <div
-              className={`min-h-0 flex-1 ${
-                isLobby ? "lg:h-[320px]" : "lg:min-h-[320px]"
+              className={`min-h-0 ${
+                isLobby ? "lg:h-[300px]" : "flex-1 lg:min-h-[320px]"
               }`}
             >
               <ChatBox
@@ -509,6 +528,31 @@ export default function RoomPage() {
               />
             </div>
           </div>
+
+          {/*
+            * Ba mục mở ra được của phòng chờ, TÁCH khỏi thẻ điều khiển ngay trên
+            * chúng - xem `LobbySettings`.
+            *
+            * Chúng đứng cuối cột phải vì khung chat phải chen vào giữa. Gộp lại
+            * trong `Lobby` thì ở màn 1440x900 chat bắt đầu quanh mốc 1000px:
+            * người vừa vào phòng phải cuộn xuống mới biết là phòng có chat, và
+            * cuộn xuống rồi thì mất nút Bắt đầu khỏi tầm mắt. Ba mục này thì
+            * ngược lại - host mở chúng đúng một lần lúc dựng ván, nên nằm dưới
+            * mép màn hình là ĐÚNG chỗ của chúng.
+            *
+            * Chúng là con thứ tư của lưới chứ không phải nội dung nhét vào một
+            * cột nào: thứ tự DOM ở đây trùng đúng thứ tự nhìn thấy, nên Tab đi
+            * từ thẻ điều khiển sang chat rồi mới tới đây, y như mắt.
+            */}
+          {isLobby && snapshot && identity && (
+            <div className="order-4 min-w-0 lg:order-none lg:col-start-2 lg:row-start-3">
+              <LobbySettings
+                snapshot={snapshot}
+                identity={identity}
+                onUpdateConfig={(config) => room.emit("room:update-config", { config })}
+              />
+            </div>
+          )}
         </div>
       </main>
 

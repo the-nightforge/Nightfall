@@ -39,19 +39,50 @@ interface Props {
 }
 
 /**
- * Khu giữa của phòng chờ.
+ * Số liệu dẫn xuất dùng chung cho khối điều khiển và nhóm thiết lập.
+ *
+ * Hai khối đó đã tách làm hai component (xem `Lobby`), nhưng chúng vẫn phải nói
+ * cùng một chuyện: thẻ vai đọc ra "Ranked" thì ô chế độ bên dưới cũng phải sáng
+ * ở Ranked, và cảnh báo cân bằng phải là ĐÚNG cảnh báo đang chặn nút Bắt đầu.
+ * Tính lại ở mỗi nơi một kiểu là hai nguồn sự thật; gom vào đây thì chỉ còn một.
+ */
+function lobbyModel(snapshot: RoomSnapshot, identity: Identity) {
+  const config = snapshot.config;
+  const count = snapshot.players.length;
+  const mode = config.mode ?? "ranked";
+  return {
+    config,
+    count,
+    mode,
+    isHost: snapshot.hostId === identity.playerId,
+    // Ưu tiên kết quả server; generateWarnings chỉ để xem trước tức thì lúc host
+    // vừa gạt một công tắc và snapshot mới chưa về.
+    balance: snapshot.balanceWarning ?? generateWarnings(config, count),
+    stage: deckStage(count),
+  };
+}
+
+/**
+ * Khối điều khiển của phòng chờ: đội hình, diễn biến và nút bắt đầu.
  *
  * Danh sách người chơi KHÔNG ở đây - nó là cột riêng bên trái, cùng một
  * component với lúc đang chơi, nên không còn hai cách trình bày người chơi phải
  * giữ cho khớp nhau. Tên phòng, mã phòng và bộ đếm người cũng không ở đây: chúng
  * nằm trong `LobbyHeader` ngay trên, nên thẻ này chỉ còn nói về BỘ BÀI.
  *
- * Bày theo lớp: thẻ đầu trả lời đúng câu hỏi của phút đầu tiên - "bấm bắt đầu
+ * Bày theo lớp: thẻ này trả lời đúng câu hỏi của phút đầu tiên - "bấm bắt đầu
  * được chưa, và nếu chưa thì vướng gì" - còn mười ba thẻ vai, năm ô thời gian
- * và công tắc voice lui vào hai mục mở ra được. Bản cũ trải hết ra cùng lúc và
+ * và công tắc voice lui vào `LobbySettings`. Bản cũ trải hết ra cùng lúc và
  * trên điện thoại nó dài hơn ba màn hình, trong đó phần host thực sự cần đọc
  * chiếm chưa tới một phần tư. Host lâu năm vẫn chỉnh được đúng mọi thứ như cũ,
  * chỉ thêm một cú bấm mở mục.
+ *
+ * `LobbySettings` là một component RIÊNG chứ không phải mấy thẻ nữa dưới đáy
+ * component này, và lý do là chỗ đứng của khung chat trên desktop. Cột phải xếp
+ * dọc: khối này, rồi chat, rồi mới tới nhóm thiết lập - nên trang phòng phải
+ * chèn được một thứ vào GIỮA hai nửa. Gộp chung một component thì thứ duy nhất
+ * làm được việc đó là `order` của CSS, và khi đó thứ tự Tab đi ngược thứ tự
+ * nhìn thấy: mắt đọc chat trước nhóm thiết lập, còn bàn phím thì ngược lại.
  *
  * Nút "Rời phòng" KHÔNG còn ở đây. Bản cũ có hai cái - một ở thanh đầu trang,
  * một chiếm trọn chiều ngang ngay dưới "Bắt đầu trận đấu" - và cái thứ hai có
@@ -64,28 +95,16 @@ export function Lobby({
   onReady,
   onStart,
   onAddBot,
-  onUpdateConfig,
-}: Props) {
-  const config = snapshot.config;
-  const isHost = snapshot.hostId === identity.playerId;
+}: Omit<Props, "onUpdateConfig">) {
+  const { config, count, mode, isHost, balance, stage } = lobbyModel(snapshot, identity);
   const me = snapshot.players.find((p) => p.id === identity.playerId);
-  const count = snapshot.players.length;
   const myReady = me?.ready ?? false;
   const unreadyGuests = snapshot.players.filter(
     (player) => !player.isBot && player.id !== snapshot.hostId && !player.ready,
   );
 
-  // Ưu tiên kết quả server; generateWarnings chỉ để xem trước tức thì lúc host
-  // vừa gạt một công tắc và snapshot mới chưa về.
-  const mode = config.mode ?? "ranked";
-  const balance = snapshot.balanceWarning ?? generateWarnings(config, count);
-  // Chế độ đi vào đây để thẻ cảnh báo biết mình đang CHẶN hay chỉ đang nhắc:
-  // Chaos bỏ qua chặn cân bằng, đúng như server.
-  const copy = balanceCopy(balance, count, mode);
   const counts = deckCounts(config, count);
   const onPreset = isPresetDeck(config, count);
-  const presetForCount = PRESET_DECKS[count];
-  const stage = deckStage(count);
   const activeRoles: Role[] = [
     "WEREWOLF",
     ...WOLF_SPECIAL_ROLES.filter((role) => config[CONFIG_KEY[role]]),
@@ -107,79 +126,104 @@ export function Lobby({
   });
 
   return (
-    <div className="space-y-3">
-      <section className="lobby-command-panel">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="lobby-kicker">Đội hình đêm nay</p>
-            <h2 className="font-display text-xl font-semibold text-white">Vai trò</h2>
-          </div>
-          <span className={`lobby-mode-pill ${mode === "ranked" ? "is-ranked" : "is-chaos"}`}>
-            {mode === "ranked" ? "Ranked" : "Chaos"}
-          </span>
+    <section className="lobby-command-panel">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="lobby-kicker">Đội hình đêm nay</p>
+          <h2 className="font-display text-xl font-semibold text-white">Vai trò</h2>
         </div>
+        <span className={`lobby-mode-pill ${mode === "ranked" ? "is-ranked" : "is-chaos"}`}>
+          {mode === "ranked" ? "Ranked" : "Chaos"}
+        </span>
+      </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          {visibleRoles.map((role) => {
-            const amount =
-              role === "WEREWOLF"
-                ? config.werewolves
-                : role === "VILLAGER"
-                  ? counts.villagers
-                  : 1;
-            return (
-              <span key={role} className="lobby-role-chip">
-                <svg viewBox="0 0 512 512" aria-hidden="true"><path d={ROLE_ICON_PATHS[role]} /></svg>
-                <span>{amount}</span>
-                <span className="truncate">{ROLE_META[role].name}</span>
-              </span>
-            );
-          })}
-          {activeRoles.length > visibleRoles.length && (
-            <span className="lobby-role-chip text-mist/75">+{activeRoles.length - visibleRoles.length}</span>
-          )}
-        </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {visibleRoles.map((role) => {
+          const amount =
+            role === "WEREWOLF"
+              ? config.werewolves
+              : role === "VILLAGER"
+                ? counts.villagers
+                : 1;
+          return (
+            <span key={role} className="lobby-role-chip">
+              <svg viewBox="0 0 512 512" aria-hidden="true"><path d={ROLE_ICON_PATHS[role]} /></svg>
+              <span>{amount}</span>
+              <span className="truncate">{ROLE_META[role].name}</span>
+            </span>
+          );
+        })}
+        {activeRoles.length > visibleRoles.length && (
+          <span className="lobby-role-chip text-mist/75">+{activeRoles.length - visibleRoles.length}</span>
+        )}
+      </div>
 
-        <p className="mt-3 text-[13px] leading-relaxed text-mist/70">
-          {stage.rated
-            ? `${onPreset ? "Đội hình chuẩn" : "Đội hình tuỳ chỉnh"} cho ${count} người.`
-            : stage.summary}
-        </p>
+      <p className="mt-3 text-[13px] leading-relaxed text-mist/70">
+        {stage.rated
+          ? `${onPreset ? "Đội hình chuẩn" : "Đội hình tuỳ chỉnh"} cho ${count} người.`
+          : stage.summary}
+      </p>
 
-        <div className="mt-4 border-t border-white/[0.08] pt-4">
-          <LobbyActivity snapshot={snapshot} />
-        </div>
+      <div className="mt-4 border-t border-white/[0.08] pt-4">
+        <LobbyActivity snapshot={snapshot} />
+      </div>
 
-        <div className="lobby-primary-action mt-4">
-          {isHost ? (
-            <button className="btn-cta w-full" onClick={onStart} disabled={block !== null}>
-              <span aria-hidden="true">◐</span>
-              Bắt đầu trò chơi
-            </button>
-          ) : (
-            <button
-              className={`btn-cta w-full ${myReady ? "is-ready" : ""}`}
-              onClick={() => onReady(!myReady)}
-              aria-pressed={myReady}
-            >
-              <span aria-hidden="true">{myReady ? "✓" : "○"}</span>
-              {myReady ? "Đã sẵn sàng" : "Sẵn sàng"}
-            </button>
-          )}
-          <BlockReason block={block} isHost={isHost} />
-        </div>
-        {isHost && count < MAX_PLAYERS_PER_ROOM && (
+      <div className="lobby-primary-action mt-4">
+        {isHost ? (
+          <button className="btn-cta w-full" onClick={onStart} disabled={block !== null}>
+            <span aria-hidden="true">◐</span>
+            Bắt đầu trò chơi
+          </button>
+        ) : (
           <button
-            type="button"
-            className="btn-tertiary lobby-add-bot mx-auto mt-2 flex min-h-11"
-            onClick={onAddBot}
-            disabled={count >= MAX_PLAYERS_PER_ROOM}
+            className={`btn-cta w-full ${myReady ? "is-ready" : ""}`}
+            onClick={() => onReady(!myReady)}
+            aria-pressed={myReady}
           >
-            + Thêm bot để chơi thử
+            <span aria-hidden="true">{myReady ? "✓" : "○"}</span>
+            {myReady ? "Đã sẵn sàng" : "Sẵn sàng"}
           </button>
         )}
-      </section>
+        <BlockReason block={block} isHost={isHost} />
+      </div>
+      {isHost && count < MAX_PLAYERS_PER_ROOM && (
+        <button
+          type="button"
+          className="btn-tertiary lobby-add-bot mx-auto mt-2 flex min-h-11"
+          onClick={onAddBot}
+          disabled={count >= MAX_PLAYERS_PER_ROOM}
+        >
+          + Thêm bot để chơi thử
+        </button>
+      )}
+    </section>
+  );
+}
 
+/**
+ * Ba mục mở ra được của phòng chờ: luật phòng, bộ bài và cài đặt nâng cao.
+ *
+ * Đứng SAU khung chat trên desktop, và đó là cả lý do nó tách khỏi `Lobby` -
+ * xem chú thích ở đó. Ba mục này là thứ host chỉnh một lần rồi quên, còn chat
+ * là thứ cả phòng dùng liên tục trong lúc chờ đủ người; để chúng đẩy chat xuống
+ * dưới mép màn hình là đổi chỗ đúng hai thứ đó cho nhau.
+ *
+ * Trên điện thoại không có gì chen vào giữa (chat đi qua `MobileChatDock`), nên
+ * thứ tự đọc vẫn y như một mạch cũ: thẻ điều khiển rồi tới ba mục này.
+ */
+export function LobbySettings({
+  snapshot,
+  identity,
+  onUpdateConfig,
+}: Pick<Props, "snapshot" | "identity" | "onUpdateConfig">) {
+  const { config, count, mode, isHost, balance, stage } = lobbyModel(snapshot, identity);
+  // Chế độ đi vào đây để thẻ cảnh báo biết mình đang CHẶN hay chỉ đang nhắc:
+  // Chaos bỏ qua chặn cân bằng, đúng như server.
+  const copy = balanceCopy(balance, count, mode);
+  const presetForCount = PRESET_DECKS[count];
+
+  return (
+    <div className="space-y-3">
       <Disclosure
         summary={isHost ? "Thiết lập ván" : "Luật của phòng"}
         hint="Chế độ, cân bằng và add-on"
