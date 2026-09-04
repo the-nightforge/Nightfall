@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
 import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
+import { sheetFor } from "@/lib/character-art";
 import { playbackMode, readNetworkHints, readPlaybackInputs } from "@/lib/cinematic-settings";
 import { hasWebgl2 } from "@/lib/cinematic-webgl";
 import {
@@ -150,13 +151,37 @@ export function TrialStage({ view, beats, beatsId, onBeatsConsumed, snapshot }: 
   const onFail = useCallback(() => setFailed(true), []);
 
   /*
-   * Model dựng cảnh chỉ đổi khi SĨ SỐ PHÒNG đổi.
+   * Model dựng cảnh chỉ đổi khi SĨ SỐ PHÒNG hoặc BỊ CÁO đổi.
    *
    * Cũng là deps của effect dựng scene. Một object mới ở mỗi snapshot là một
    * renderer mới ở mỗi snapshot, nên nó phải đi qua `useMemo` - và giá trị bên
    * trong cố ý là thứ duy nhất trong cả tính năng có quyền dựng lại cảnh.
+   *
+   * Bị cáo đổi nghĩa là một phiên toà KHÁC, và một phiên toà khác vốn đã dựng
+   * lại cảnh từ trước - nên thêm nó vào đây không mở thêm đường dựng lại nào.
+   *
+   * Chân dung bị cáo: cùng bộ sheet mà lớp chân dung 2D đang dùng, nên không
+   * tốn thêm một byte nào - tới lúc phiên toà mở, ảnh này đã nằm trong cache
+   * của trình duyệt vì ô người chơi vừa vẽ nó suốt cả pha ngày.
+   *
+   * Cùng bộ sheet mà lớp chân dung 2D đang dùng, nên không tốn thêm một byte
+   * nào: tới lúc phiên toà mở, ảnh này đã nằm trong cache của trình duyệt vì
+   * ô người chơi vừa vẽ nó suốt cả pha ngày.
+   *
+   * KHÔNG cần kiểm Save-Data ở đây: `hasWebgl2() && !readNetworkHints().saveData`
+   * đã tắt hẳn sân khấu 3D từ trước, nên không có sân khấu thì cũng không có
+   * chân dung để tải.
+   *
+   * `avatars` đã memo theo `roster`, còn `accusedId` cố định suốt một phiên -
+   * nên `model` vẫn giữ được ràng buộc ỔN ĐỊNH của nó.
    */
-  const model = useMemo(() => ({ audience: view.audience }), [view.audience]);
+  const model = useMemo(
+    () => ({
+      audience: view.audience,
+      portrait: sheetFor(avatars[view.accusedId] ?? "")?.src ?? null,
+    }),
+    [view.audience, avatars, view.accusedId],
+  );
   const sceneState = useMemo(
     () => ({
       act: view.act,
