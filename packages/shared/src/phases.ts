@@ -220,7 +220,23 @@ export const GHOST_AUTHOR_NAME = "Một linh hồn";
  * 8 là cỡ phòng nhỏ nhất mà preset đo ra quanh 50%.
  */
 export const MIN_PLAYERS_TO_START = 8;
-export const MAX_PLAYERS_PER_ROOM = 15;
+
+/**
+ * 20, nâng từ 15.
+ *
+ * Trần này gác HAI thứ khác nhau, và chỉ một trong hai đi theo con số:
+ *
+ * 1. Số ghế trong phòng - `PRESET_DECKS` phải có bộ bài cho mọi cỡ từ
+ *    `MIN_PLAYERS_TO_START` tới đây, nếu không `generateWarnings` phát
+ *    "Không có preset cho N người chơi" ở đúng những cỡ phòng vừa mở ra.
+ * 2. Số ẢNH ĐẠI DIỆN khác nhau mà một phòng cần. `AVATAR_IDS` có 16 hình, nên
+ *    từ người thứ 17 trở đi `assignAvatars` buộc phải cấp trùng hình - đường
+ *    lui đó vốn đã có sẵn và có chú thích, và sắc nền riêng của từng người vẫn
+ *    phân biệt được hai ô trùng hình. Muốn trả lại tính duy nhất tuyệt đối thì
+ *    phải bổ sung 4 hình vào `avatar-art.ts` (nguồn game-icons.net, nhớ cập
+ *    nhật cả bảng ghi công).
+ */
+export const MAX_PLAYERS_PER_ROOM = 20;
 
 export const CHAT_CHANNELS = ["lobby", "day", "wolves", "dead"] as const;
 export type ChatChannel = (typeof CHAT_CHANNELS)[number];

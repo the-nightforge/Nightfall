@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MAX_PLAYERS_PER_ROOM, MIN_PLAYERS_TO_START } from "@masoi/shared";
 import { EntryAttemptManager } from "@/lib/entry-attempt";
 import { runEntryAttempt, type CreatePlayerOutcome, type EntryPorts } from "@/lib/home-entry";
 import { getIdentity, saveIdentity, clearIdentity } from "@/lib/identity";
@@ -518,7 +519,7 @@ export default function Home() {
             */}
           <ul className="flex flex-wrap gap-2.5 lg:col-start-1 lg:row-start-2 lg:gap-3 lg:self-end">
             {[
-              ["6 - 15 người", "#9db2d5"],
+              [`${MIN_PLAYERS_TO_START} - ${MAX_PLAYERS_PER_ROOM} người`, "#9db2d5"],
               ["Chơi được với bot", "#e0a35c"],
               ["Chat riêng theo phe", "#f04760"],
             ].map(([label, dot]) => (
