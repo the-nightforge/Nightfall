@@ -9,7 +9,7 @@
   Xem `LICENSE.txt` trong zip goc. Khong xoa dong nay.
 - Comic-book style, file goc `256_original_*.png` (nen trang).
 
-## Anh xa 16 AvatarId -> 12 mat (4 mat dung chung, danh dau *)
+## Anh xa 20 AvatarId -> 12 mat (4 mat dung chung, danh dau *; 4 id chua co anh)
 
 | AvatarId   | Nguon    | Bien doi              |
 | ---------- | -------- | --------------------- |
@@ -29,29 +29,46 @@
 | cowled     | Sabine   | —                     |
 | hood       | Phaedra  | —                     |
 | beard      | Eldrin * | crop chat             |
+| wizard     | —        | CHUA CO ANH, hien SVG |
+| cultist    | —        | CHUA CO ANH, hien SVG |
+| spy        | —        | CHUA CO ANH, hien SVG |
+| bandit     | —        | CHUA CO ANH, hien SVG |
 
 Cap `*` yeu nhat la turban/beard chung Eldrin — uu tien thay bang pack 2.
 
-### Con thieu 8 khuon mat (do ngay 2026-09-04)
+Bon id cuoi them ngay 2026-09-04 de `AVATAR_IDS` du 20, bang tran phong. Chung
+co path trong `AVATAR_PATHS` nhung chua co sheet, nen hien net SVG mot mau. Mua
+duoc anh thi them mot dong vao `FILES` + `MAP` cua
+`tools/build-character-sheets.py`, chay lai script, roi them mot dong vao
+`CHARACTER_SHEETS` — khong sua code nao khac.
 
-Ngay 2026-09-04 tran phong len **20** (`MAX_PLAYERS_PER_ROOM`) trong khi
-`AVATAR_IDS` van 16, va 16 id nay chi ánh xa vao **12 khuon mat**. Hai con so
-do cong lai:
+### Con thieu 8 khuon mat (do lai ngay 2026-09-04, sau khi len 20 id)
 
-| So ghe | Trung ID hinh | Trung KHUON MAT | Ghe thua nhieu nhat |
-| ------ | ------------- | --------------- | ------------------- |
-| 15     | 0%            | 100%            | 4                   |
-| 16     | 0%            | 100%            | 4                   |
-| 20     | 100%          | 100%            | 8                   |
+Trong cung ngay 2026-09-04 co hai thay doi noi tiep nhau, va con so thay doi
+theo:
 
-Do bang 4000 phong ngau nhien moi cot. Doc nhu sau: o 15-16 ghe thi
-`assignAvatars` khong bao gio cap trung *id*, nhung vi 4 cap id dung chung mat
-goc nen gan nhu van nao cung co 4 cap nguoi trong giong nhau. O 20 ghe con
-thieu ca id, nen thanh 8 cap — tuc 16 tren 20 nguoi nam trong mot cap nhin
-giong ai do.
+1. Tran phong len **20** (`MAX_PLAYERS_PER_ROOM`) trong khi `AVATAR_IDS` con
+   16 — luc do bon ghe cuoi cua phong day bi cap TRUNG id.
+2. Them 4 id (`wizard`, `cultist`, `spy`, `bandit`) cho du 20. Trung id het,
+   nhung 4 id nay chua co sheet nen chung hien net SVG mot mau.
 
-**Can mua them 8 khuon mat.** 12 hien co + 8 = 20: vua du moi ghe mot mat
-rieng, va xoa luon 4 cap dung chung. Mot lan giai ca hai van de.
+Nen bay gio: **20 id, 16 co sheet, 16 id ay chi ánh xa vao 12 khuon mat.**
+
+| So ghe | O hien SVG (trung binh) | Van co mat trung | Nhieu nhat |
+| ------ | ----------------------- | ---------------- | ---------- |
+| 12     | 2.4                     | 86.4%            | 4 cap      |
+| 16     | 3.2                     | 99.7%            | 4 cap      |
+| 20     | 4.0                     | 100%             | 4 cap      |
+
+Do bang 4000 phong ngau nhien moi hang, tren chinh `assignAvatars` va bang
+sheet hien tai. Doc nhu sau: mot phong day co khoang **4 o hien bong SVG** giua
+mot ban toan anh chan dung, va **4 cap nguoi trong giong nhau** vi dung chung
+mat goc. Trung ID thi khong con nua.
+
+**Van la 8 khuon mat.** 12 hien co + 8 = 20: moi id mot mat rieng, xoa luon ca
+4 cap dung chung LAN 4 o bong SVG. Neu chi mua duoc 4 thi uu tien phu cho
+`wizard`/`cultist`/`spy`/`bandit` truoc — mot o bong den giua ban de nhin ra
+hon hai o hoi giong nhau.
 
 Uu tien mua tu CUNG tac gia neu co ban day du. Tron pack khac vao nghia la 12
 mat cu va 8 mat moi ngoi canh nhau trong cung mot ban, va lech phong cach o do
@@ -60,6 +77,11 @@ thi nhin ra ngay.
 Day la van de THAM MY, khong phai bug: moi ghe van co hinh, khong o nao trong,
 va `tintFor` van cho sac nen rieng nen hai o trung mat van phan biet duoc.
 Khong co gi xau di theo thoi gian.
+
+Mot cho nua chiu anh huong, ngoai luoi nguoi choi: **san khau phien toa**. Bi
+cao co sheet thi hien chan dung that; roi vao 1 trong 4 id chua co anh thi buc
+xet xu quay ve khoi dau tron nhu truoc — dung duong lui da thiet ke, khong phai
+loi. Xem `live-trial-scene.ts`.
 
 Them mot nhan vat = 5 buoc, xem `## Tai sinh` ben duoi. Them id vao
 `AVATAR_IDS` khi CHUA co sheet thi khong lam do suite: `portraitSource` roi ve
