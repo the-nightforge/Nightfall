@@ -114,21 +114,26 @@ Nhồi 256px xuống 24px vừa tốn băng thông vừa ra một vũng nhoè. N
 
 ## Kiến trúc
 
-Nguyên tắc: **cái gì sai được thì không được nằm trong JSX.** Web chạy
-`node:test` trên `src/lib/*.test.ts`, không có DOM, không mount được component —
-đúng lý do `live-trial.ts` và `village-memory.ts` đã tách model ra khỏi renderer.
+Nguyên tắc: **cái gì sai được thì không được nằm trong JSX.**
+
+Web chạy hai loại test: `src/lib/*.test.ts` là hàm thuần, còn
+`src/components/*.test.tsx` mount component thật bằng
+`@happy-dom/global-registrator`. Nên "không test được" không phải lý do — lý do
+là cái đã viết sẵn trong docstring của `PlayerSeat.test.tsx`: **luật thuần nằm ở
+`lib/`, còn component test chỉ giữ những gì chỉ nhìn thấy được trong DOM thật.**
+Một bảng ưu tiên đem đi kiểm bằng cách mount React thì mỗi tổ hợp tốn một lần
+render, và khi nó hỏng thì lỗi báo về một nút `<button>` chứ không về cái luật.
 
 ### `lib/character-portrait.ts` — model thuần
 
 Không import React, không chạm DOM, không đọc `Date.now` bên trong.
 
 ```ts
-export type PortraitMode = "dead" | "still" | "talking" | "alive";
+export type PortraitMode = "dead" | "talking" | "alive";
 
 export function portraitMode(inputs: {
   alive: boolean;
   speaking: boolean;              // đã qua seatShowsSpeaking ở nơi có nó
-  animated: boolean;              // false khi prefers-reduced-motion
   talkingUntilMs: number | null;  // cho bot, xem dưới
   nowMs: number;                  // tiêm từ ngoài
 }): PortraitMode;
@@ -140,7 +145,19 @@ export function portraitSource(inputs: {
 }): "upload" | "sheet" | "svg";
 ```
 
-Ưu tiên cứng: `dead` > `still` > `talking` > `alive`.
+Ưu tiên cứng: `dead` > `talking` > `alive`.
+
+**Sửa lại sau khi đọc `globals.css:238`:** bản duyệt đầu có bốn chế độ với `still`
+đứng trên `talking`, tức reduced-motion nuốt luôn trạng thái đang nói. Làm vậy là
+đi ngược triết lý đã ghi sẵn ở khối `prefers-reduced-motion` hiện có — nhịp thở
+bị tắt vì nó không mang tin, còn quầng "đang nói" thì **ở lại và chốt đứng yên**
+vì nó là thông tin thật. Miệng đang nói cũng là thông tin thật, nên đối xử y hệt:
+reduced-motion giữ nguyên chế độ `talking` và ghim frame `talk` (miệng mở, đứng
+yên), chứ không rơi về mặt bình thường.
+
+Hệ quả: `animated` biến mất khỏi model. Reduced-motion xử lý **hoàn toàn bằng
+CSS** trong khối media query đã có, đúng như `.avatar-breathe` đang làm. JS không
+đọc `matchMedia` cho việc này.
 
 Model **không tin caller**: người chết thì dù truyền `speaking: true` vẫn ra
 `dead`. `seatShowsSpeaking` đã lọc rồi, nhưng `TrialStage` gọi `useSpeakers()`
@@ -185,8 +202,8 @@ Dùng lại lối lập luận ba đầu vào của `playbackMode()` trong `cine
 | Chưa có sheet | `<Avatar>` SVG | Trạng thái ngày đầu, và nó phải đẹp |
 | `<img>` lỗi / decode fail | `<Avatar>` SVG | Không để ô trống |
 | Save-Data bật | `<Avatar>` SVG | Lý do là **băng thông** — không tải file |
-| `prefers-reduced-motion` | **Vẫn tải sheet**, frame `idle` đứng yên | Lý do là **sức khoẻ**, không phải băng thông. Mặt vẫn có, chỉ không nháy |
-| Ảnh người chơi tự tải lên | Đường `<img>` hiện tại | Không có biến thể, chế độ luôn `still` |
+| `prefers-reduced-motion` | **Vẫn tải sheet**, frame đứng yên — `talk` nếu đang nói, `idle` nếu không | Lý do là **sức khoẻ**, không phải băng thông. Mặt vẫn có, thông tin "đang nói" vẫn còn, chỉ không động |
+| Ảnh người chơi tự tải lên | Đường `<img>` hiện tại | Không có biến thể, không frame nào để hoán |
 
 Save-Data và `prefers-reduced-motion` ra hai kết quả **khác nhau**, đúng như
 `playbackMode` đã tách chúng. Người say chuyển động vẫn xứng đáng thấy khuôn mặt.
