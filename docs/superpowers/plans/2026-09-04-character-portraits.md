@@ -17,6 +17,9 @@
 - **Không sửa** `Avatar.tsx`, `avatar.ts`, `avatar-art.ts`, `seat-voice.ts`. Chúng là tầng fallback, phải còn nguyên.
 - `lib/character-portrait.ts` KHÔNG được import React, không chạm DOM, không gọi `Date.now()` bên trong — thời gian tiêm từ ngoài.
 - Frame order cố định: `["idle", "blink", "talk", "dead"]`, tương ứng offset `0%`, `-25%`, `-50%`, `-75%`.
+- **16 sheet ĐÃ có sẵn** trong `apps/web/public/characters/`, đều `1024×256`, 50–77KB. Không phải sinh, không được sửa file ảnh.
+- **Frame 1 và 2 hiện là bản sao của frame 0** (đo được: lệch trung bình 0.7–1.5/255, tức nhiễu nén). Chỉ frame 3 là khác thật. Vì vậy mọi sheet khai báo `variants: false` và CSS KHÔNG chạy animation cho chúng.
+- Trần dung lượng theo `SOURCES.md` đang có: **80KB mỗi sheet, 1200KB tổng**.
 - Ưu tiên chế độ cứng: `dead` > `talking` > `alive`.
 - `prefers-reduced-motion` xử lý **hoàn toàn bằng CSS**, không đọc `matchMedia` trong JS.
 - Lệnh test một file: `cd apps/web && npx tsx --experimental-test-module-mocks --test src/lib/<file>.test.ts`
@@ -36,7 +39,9 @@
 | `apps/web/src/app/characters.css` | Keyframe nháy mắt, mấp máy, ghim frame chết, khối reduced-motion |
 | `apps/web/src/components/CharacterPortrait.tsx` | Renderer mỏng: đọc hai hàm, gắn class, rơi về `<Avatar>` khi lỗi |
 | `apps/web/src/components/CharacterPortrait.test.tsx` | Mount thật: fallback khi ảnh lỗi, class theo chế độ |
-| `apps/web/public/characters/SOURCES.md` | Hợp đồng phong cách — prompt, khung hình, dải màu, ghi công |
+| `apps/web/public/characters/SOURCES.md` | Đã có — bổ sung, KHÔNG ghi đè |
+| `apps/web/src/components/AssetCredits.tsx` | Mặt ghi công CC BY trong game |
+| `tools/build-character-sheets.py` | Script dựng sheet, chuyển từ thư mục temp vào repo |
 
 ---
 
@@ -295,9 +300,11 @@ git commit -m "feat(portrait): model thuần cho chế độ hiển thị và ng
 - Produces:
   - `const PORTRAIT_FRAMES: readonly ["idle", "blink", "talk", "dead"]`
   - `const PORTRAIT_FRAME_COUNT: number` (bằng `4`)
-  - `const CHARACTER_SHEETS: Partial<Record<AvatarId, string>>`
-  - `sheetFor(avatar: string): string | null`
+  - `interface CharacterSheet { src: string; variants: boolean }`
+  - `const CHARACTER_SHEETS: Partial<Record<AvatarId, CharacterSheet>>` — **đủ 16 mục**
+  - `sheetFor(avatar: string): CharacterSheet | null`
   - `hasSheet(avatar: string): boolean`
+  - `hasVariants(avatar: string): boolean`
 
 - [ ] **Step 1: Viết test manifest**
 
@@ -314,14 +321,35 @@ import {
   PORTRAIT_FRAMES,
   PORTRAIT_FRAME_COUNT,
   hasSheet,
+  hasVariants,
   sheetFor,
 } from "./character-art";
 
 const PUBLIC_DIR = join(process.cwd(), "public", "characters");
-/** Trần mỗi sheet. Vượt là ảnh chưa nén đúng, không phải ảnh đẹp hơn. */
-const MAX_SHEET_BYTES = 120 * 1024;
-/** Trần tổng cho cả 16 nhân vật. */
-const MAX_TOTAL_BYTES = 1_400 * 1024;
+/** Trần theo SOURCES.md. Vượt là ảnh chưa nén đúng, không phải ảnh đẹp hơn. */
+const MAX_SHEET_BYTES = 80 * 1024;
+const MAX_TOTAL_BYTES = 1_200 * 1024;
+
+function fileOf(src: string): string {
+  return join(process.cwd(), "public", src.replace(/^\//, ""));
+}
+
+/**
+ * Kích thước một file WebP, đọc thẳng từ header.
+ *
+ * Chỉ hiểu chunk VP8X - đúng loại mà cả 16 sheet đang dùng. Gặp loại khác thì
+ * trả null và test bỏ qua, vì thà không kiểm còn hơn báo sai.
+ */
+function webpSize(path: string): { width: number; height: number } | null {
+  const head = readFileSync(path).subarray(0, 30);
+  if (head.subarray(0, 4).toString("latin1") !== "RIFF") return null;
+  if (head.subarray(8, 12).toString("latin1") !== "WEBP") return null;
+  if (head.subarray(12, 16).toString("latin1") !== "VP8X") return null;
+  return {
+    width: head.readUIntLE(24, 3) + 1,
+    height: head.readUIntLE(27, 3) + 1,
+  };
+}
 
 describe("manifest chân dung", () => {
   it("bốn frame, đúng thứ tự đã chốt trong spec", () => {
@@ -329,8 +357,15 @@ describe("manifest chân dung", () => {
     assert.equal(PORTRAIT_FRAME_COUNT, 4);
   });
 
+  it("mọi AvatarId đều có sheet", () => {
+    // Bắt lỗi "thêm nhân vật thứ 17, quên sinh sheet": nhân vật thiếu sheet sẽ
+    // im lặng hiện bóng đen giữa một bàn toàn mặt người.
+    for (const id of AVATAR_IDS) {
+      assert.ok(hasSheet(id), `${id} chưa có sheet`);
+    }
+  });
+
   it("mọi khoá trong bảng sheet phải là một AvatarId có thật", () => {
-    // Bắt lỗi gõ nhầm tên nhân vật: một khoá lạc sẽ im lặng không bao giờ khớp.
     for (const key of Object.keys(CHARACTER_SHEETS)) {
       assert.ok(
         (AVATAR_IDS as readonly string[]).includes(key),
@@ -340,40 +375,55 @@ describe("manifest chân dung", () => {
   });
 
   it("mọi sheet đã khai báo phải tồn tại thật trong public/", () => {
-    for (const [id, path] of Object.entries(CHARACTER_SHEETS)) {
-      assert.ok(path, `${id} khai báo sheet rỗng`);
-      const file = join(process.cwd(), "public", path.replace(/^\//, ""));
-      assert.doesNotThrow(() => statSync(file), `thiếu file cho ${id}: ${path}`);
+    for (const [id, sheet] of Object.entries(CHARACTER_SHEETS)) {
+      assert.ok(sheet?.src, `${id} khai báo sheet rỗng`);
+      assert.doesNotThrow(
+        () => statSync(fileOf(sheet!.src)),
+        `thiếu file cho ${id}: ${sheet!.src}`,
+      );
     }
   });
 
   it("không có file sheet mồ côi trong public/characters", () => {
     // Chiều ngược lại: file nằm đó mà không ai khai báo thì nó đang chiếm chỗ
     // trong repo mà không bao giờ được tải.
-    let files: string[];
-    try {
-      files = readdirSync(PUBLIC_DIR).filter((f) => f.endsWith(".webp"));
-    } catch {
-      return; // chưa có thư mục thì chưa có gì mồ côi
-    }
+    const files = readdirSync(PUBLIC_DIR).filter((f) => f.endsWith(".webp"));
     const declared = new Set(
-      Object.values(CHARACTER_SHEETS).map((p) => p!.split("/").pop()),
+      Object.values(CHARACTER_SHEETS).map((sheet) => sheet!.src.split("/").pop()),
     );
     for (const file of files) {
       assert.ok(declared.has(file), `${file} không được khai báo trong CHARACTER_SHEETS`);
     }
   });
 
-  it("sheetFor trả null cho nhân vật chưa vẽ", () => {
-    const undrawn = AVATAR_IDS.find((id) => !(id in CHARACTER_SHEETS));
-    if (!undrawn) return; // đã vẽ hết thì bỏ qua
-    assert.equal(sheetFor(undrawn), null);
-    assert.equal(hasSheet(undrawn), false);
+  it("mọi sheet phải là bốn frame vuông nằm ngang", () => {
+    // Sai kích thước là lỗi asset gây vỡ hình nặng nhất: CSS trượt theo phần
+    // trăm nên một file 3 frame sẽ hiện nửa mặt người này ghép nửa mặt người kia.
+    for (const [id, sheet] of Object.entries(CHARACTER_SHEETS)) {
+      const size = webpSize(fileOf(sheet!.src));
+      if (!size) continue;
+      assert.equal(
+        size.width,
+        size.height * PORTRAIT_FRAME_COUNT,
+        `${id} là ${size.width}x${size.height}, phải rộng gấp ${PORTRAIT_FRAME_COUNT} lần chiều cao`,
+      );
+    }
   });
 
-  it("hasSheet trả false cho chuỗi không phải AvatarId", () => {
+  it("bộ art hiện tại chưa có biến thể biểu cảm", () => {
+    // Đo được: frame 1 và 2 lệch frame 0 trung bình 0.7-1.5 trên 255, tức đúng
+    // bằng nhiễu nén WebP. Test này là cái chốt lại sự thật đó, để ngày nào có
+    // sheet thật thì người sửa buộc phải sửa cả đây - và nhớ ra là CSS sẽ bật.
+    for (const id of AVATAR_IDS) {
+      assert.equal(hasVariants(id), false, `${id} đang tự nhận có biến thể`);
+    }
+  });
+
+  it("hasSheet và hasVariants trả false cho chuỗi không phải AvatarId", () => {
     // Avatar tự tải lên đi vào đây dưới dạng một URL http.
     assert.equal(hasSheet("https://example.com/a.png"), false);
+    assert.equal(hasVariants("https://example.com/a.png"), false);
+    assert.equal(sheetFor("https://example.com/a.png"), null);
   });
 });
 
@@ -382,9 +432,8 @@ describe("ngân sách dung lượng", () => {
     // Không có test này thì một hôm nào đó một tấm PNG 4MB lọt vào và không ai
     // biết cho tới lúc người chơi 4G kêu.
     let total = 0;
-    for (const [id, path] of Object.entries(CHARACTER_SHEETS)) {
-      const file = join(process.cwd(), "public", path!.replace(/^\//, ""));
-      const size = statSync(file).size;
+    for (const [id, sheet] of Object.entries(CHARACTER_SHEETS)) {
+      const size = statSync(fileOf(sheet!.src)).size;
       assert.ok(size <= MAX_SHEET_BYTES, `${id} nặng ${size}B, trần ${MAX_SHEET_BYTES}B`);
       total += size;
     }
@@ -422,11 +471,7 @@ import { AVATAR_IDS, type AvatarId } from "./avatar-art";
  * là lập luận đã viết trong `avatar-art.ts`: một phòng hiển thị tới 15 ô, tách
  * file là 15 lượt round-trip trên 4G. Phòng đầy = 15 request thay vì 60.
  *
- * Bảng này CỐ Ý bắt đầu rỗng. Toàn bộ lớp chân dung chạy đúng khi chưa có tấm
- * ảnh nào - mọi nhân vật chưa khai báo sẽ rơi về `<Avatar>` SVG. Thêm dần từng
- * dòng khi sheet được vẽ xong, không cần đổi một dòng code nào khác.
- *
- * Hợp đồng phong cách để sinh sheet nằm ở `public/characters/SOURCES.md`.
+ * Nguồn art và cách dựng lại nằm ở `public/characters/SOURCES.md`.
  */
 
 /** Thứ tự frame trong sheet, trái sang phải. Đổi thứ tự là đổi luôn CSS. */
@@ -436,23 +481,53 @@ export type PortraitFrame = (typeof PORTRAIT_FRAMES)[number];
 
 export const PORTRAIT_FRAME_COUNT = PORTRAIT_FRAMES.length;
 
-/**
- * Nhân vật đã có sheet. Đường dẫn tính từ gốc `public/`.
- *
- * Ví dụ khi đã vẽ xong: `farmer: "/characters/farmer.webp"`.
- */
-export const CHARACTER_SHEETS: Partial<Record<AvatarId, string>> = {};
+export interface CharacterSheet {
+  /** Đường dẫn từ gốc `public/`. */
+  src: string;
+  /**
+   * Frame `blink` và `talk` có KHÁC frame `idle` thật không.
+   *
+   * Bộ art hiện tại là pack chân dung tĩnh, không có biến thể biểu cảm, nên
+   * frame 1 và 2 là bản sao của frame 0 - đo được lệch trung bình 0.7-1.5 trên
+   * 255, tức đúng bằng nhiễu nén WebP. Chạy animation để đổi sang một bức ảnh
+   * y hệt là đốt pin của mười lăm ô đổi lấy con số không, nên CSS chỉ bật
+   * animation khi cờ này bật.
+   *
+   * Ngày nào có sheet biến thể thật thì đổi `false` thành `true` ở đúng dòng
+   * đó - nháy mắt và mấp máy tự sống dậy, không đụng một dòng code nào.
+   */
+  variants: boolean;
+}
+
+export const CHARACTER_SHEETS: Partial<Record<AvatarId, CharacterSheet>> = {
+  farmer: { src: "/characters/farmer.webp", variants: false },
+  cook: { src: "/characters/cook.webp", variants: false },
+  blacksmith: { src: "/characters/blacksmith.webp", variants: false },
+  miner: { src: "/characters/miner.webp", variants: false },
+  monk: { src: "/characters/monk.webp", variants: false },
+  mustache: { src: "/characters/mustache.webp", variants: false },
+  jester: { src: "/characters/jester.webp", variants: false },
+  ranger: { src: "/characters/ranger.webp", variants: false },
+  captain: { src: "/characters/captain.webp", variants: false },
+  viking: { src: "/characters/viking.webp", variants: false },
+  pilgrim: { src: "/characters/pilgrim.webp", variants: false },
+  turban: { src: "/characters/turban.webp", variants: false },
+  sombrero: { src: "/characters/sombrero.webp", variants: false },
+  cowled: { src: "/characters/cowled.webp", variants: false },
+  hood: { src: "/characters/hood.webp", variants: false },
+  beard: { src: "/characters/beard.webp", variants: false },
+};
 
 const IDS: ReadonlySet<string> = new Set(AVATAR_IDS);
 
 /**
- * Đường dẫn sheet của một nhân vật, hoặc null nếu chưa vẽ.
+ * Sheet của một nhân vật, hoặc null nếu chưa có.
  *
  * Nhận `string` chứ không nhận `AvatarId` vì nơi gọi có thể đang cầm một URL
  * ảnh người chơi tự tải lên - xem `Avatar.tsx`, cùng một trường mang hai loại
  * giá trị. Chuỗi không phải AvatarId thì trả null, không ném.
  */
-export function sheetFor(avatar: string): string | null {
+export function sheetFor(avatar: string): CharacterSheet | null {
   if (!IDS.has(avatar)) return null;
   return CHARACTER_SHEETS[avatar as AvatarId] ?? null;
 }
@@ -460,12 +535,17 @@ export function sheetFor(avatar: string): string | null {
 export function hasSheet(avatar: string): boolean {
   return sheetFor(avatar) !== null;
 }
+
+/** Có đáng chạy animation cho nhân vật này không. */
+export function hasVariants(avatar: string): boolean {
+  return sheetFor(avatar)?.variants === true;
+}
 ```
 
 - [ ] **Step 4: Chạy test và typecheck**
 
 Run: `cd apps/web && npx tsx --experimental-test-module-mocks --test src/lib/character-art.test.ts`
-Expected: PASS (các test duyệt file sẽ bỏ qua vì bảng còn rỗng — đúng ý đồ)
+Expected: PASS. 16 sheet có thật nên mọi test duyệt file, kiểm kích thước và ngân sách đều chạy thật.
 
 Run: `npm run lint --workspace @masoi/web`
 Expected: không lỗi
@@ -519,8 +599,20 @@ Tạo `apps/web/src/app/characters.css`:
   will-change: transform;
 }
 
+/*
+ * Animation CHỈ chạy khi sheet có biến thể thật.
+ *
+ * Bộ art hiện tại là pack chân dung tĩnh: frame `blink` và `talk` là bản sao
+ * của `idle`, lệch nhau đúng bằng nhiễu nén. Cho mười lăm ô chạy animation
+ * vĩnh viễn để đổi sang một bức ảnh y hệt là đốt pin đổi lấy con số không -
+ * nên `has-variants` là cửa, và `character-art.ts` là nơi mở nó.
+ *
+ * Trạng thái "đang nói" KHÔNG mất đi khi cửa đóng: nó vẫn được vẽ bằng quầng
+ * ngoài khung (`.seat-voice-halo`), chỗ nó vốn thuộc về từ trước.
+ */
+
 /* Mặt bình thường: frame 0, thỉnh thoảng chớp sang frame 1. */
-.character-portrait.is-alive .character-portrait__sheet {
+.character-portrait.has-variants.is-alive .character-portrait__sheet {
   animation: character-blink 5.4s steps(1, end) infinite;
   /*
    * Lệch pha riêng của từng người, dùng lại đúng con số đã tính cho nhịp thở.
@@ -531,7 +623,7 @@ Tạo `apps/web/src/app/characters.css`:
 }
 
 /* Đang nói: đảo qua lại frame 0 và frame 2. */
-.character-portrait.is-talking .character-portrait__sheet {
+.character-portrait.has-variants.is-talking .character-portrait__sheet {
   animation: character-talk 0.28s steps(1, end) infinite;
 }
 
@@ -573,12 +665,12 @@ Tạo `apps/web/src/app/characters.css`:
    * "Đang nói" là thông tin thật - ai đang lên tiếng - nên giữ nguyên, chốt ở
    * frame miệng MỞ. Người bật thiết lập này vẫn nhìn lưới là biết ai đang nói.
    */
-  .character-portrait.is-alive .character-portrait__sheet {
+  .character-portrait.has-variants.is-alive .character-portrait__sheet {
     animation: none;
     transform: translateX(0);
   }
 
-  .character-portrait.is-talking .character-portrait__sheet {
+  .character-portrait.has-variants.is-talking .character-portrait__sheet {
     animation: none;
     transform: translateX(-50%);
   }
@@ -691,11 +783,12 @@ async function mountPortrait({
 }
 
 describe("CharacterPortrait", () => {
-  it("chưa có sheet thì hiện đúng bóng SVG cũ", async () => {
-    // Đây là trạng thái NGÀY ĐẦU: code lên main trước khi có tấm ảnh nào.
-    const view = await mountPortrait();
-    assert.ok(view.svg, "phải rơi về <svg> khi chưa có sheet");
-    assert.equal(view.sheet, null, "không được dựng khung sheet khi chưa có sheet");
+  it("nhân vật không có trong bảng sheet thì hiện bóng SVG cũ", async () => {
+    // Không có AvatarId nào rơi vào đây nữa (cả 16 đều có sheet), nhưng đường
+    // lui vẫn phải sống: một id lạ lọt vào từ snapshot cũ không được làm trống ô.
+    const view = await mountPortrait({ avatar: "khong-ton-tai" });
+    assert.ok(view.svg, "phải rơi về <svg> khi không tra được sheet");
+    assert.equal(view.sheet, null, "không được dựng khung sheet khi không có sheet");
     await view.cleanup();
   });
 
@@ -715,85 +808,70 @@ describe("CharacterPortrait", () => {
 /**
  * Nhánh CÓ sheet.
  *
- * `CHARACTER_SHEETS` rỗng ở đợt này nên không mount nào chạm tới nhánh sheet -
- * tức là nửa quan trọng hơn của component sẽ không có test nào cho tới khi tấm
- * ảnh đầu tiên xuất hiện. Không chấp nhận được: lúc đó lỗi sẽ lộ ra trên máy
- * người chơi chứ không phải ở đây.
- *
- * Bảng sheet là một object thường và `sheetFor` đọc nó tại thời điểm gọi, nên
- * chèn một dòng rồi xoá đi là đủ - không cần bộ máy mock module, không phải lo
- * alias `@/` phân giải ra đường dẫn nào. `node:test` chạy mỗi file test trong
- * một tiến trình riêng nên mutation này không rò sang `character-art.test.ts`,
- * nhưng vẫn dọn trong `finally` để hai test dưới đây độc lập với nhau.
+ * `hood` có sheet thật trong `public/characters/`, nên không cần chèn tay gì cả.
  */
 describe("CharacterPortrait khi đã có sheet", () => {
-  const SHEET = "/characters/hood.webp";
-
-  async function withSheet<T>(run: () => Promise<T>): Promise<T> {
-    const { CHARACTER_SHEETS } = await import("../lib/character-art");
-    CHARACTER_SHEETS.hood = SHEET;
-    try {
-      return await run();
-    } finally {
-      delete CHARACTER_SHEETS.hood;
-    }
-  }
-
   it("dựng khung sheet và gắn class theo chế độ", async () => {
-    await withSheet(async () => {
-      const view = await mountPortrait({ speaking: true });
-      assert.ok(view.sheet, "phải dựng <img> sheet khi đã có sheet");
-      assert.equal(view.sheet!.getAttribute("src"), SHEET);
-      assert.ok(
-        view.shell!.classList.contains("is-talking"),
-        `đang nói phải ra class is-talking, đang là "${view.shell!.className}"`,
-      );
-      assert.equal(view.svg, null, "có sheet rồi thì không dựng thêm <svg>");
-      await view.cleanup();
-    });
+    const view = await mountPortrait({ speaking: true });
+    assert.ok(view.sheet, "phải dựng <img> sheet");
+    assert.equal(view.sheet!.getAttribute("src"), "/characters/hood.webp");
+    assert.ok(
+      view.shell!.classList.contains("is-talking"),
+      `đang nói phải ra class is-talking, đang là "${view.shell!.className}"`,
+    );
+    assert.equal(view.svg, null, "có sheet rồi thì không dựng thêm <svg>");
+    await view.cleanup();
   });
 
   it("người chết ra class is-dead dù caller nói họ đang nói", async () => {
-    await withSheet(async () => {
-      const view = await mountPortrait({ alive: false, speaking: true });
-      assert.ok(view.shell!.classList.contains("is-dead"));
-      await view.cleanup();
-    });
+    const view = await mountPortrait({ alive: false, speaking: true });
+    assert.ok(view.shell!.classList.contains("is-dead"));
+    await view.cleanup();
+  });
+
+  it("KHÔNG gắn has-variants khi sheet chưa có biến thể thật", async () => {
+    // Đây là cái chặn mười lăm ô chạy animation vĩnh viễn để đổi sang một bức
+    // ảnh y hệt. Ngày nào sheet có biến thể thật thì test này phải được sửa
+    // cùng lúc với cờ trong character-art.ts - và đó là ý đồ.
+    const view = await mountPortrait();
+    assert.equal(
+      view.shell!.classList.contains("has-variants"),
+      false,
+      "bộ art hiện tại chưa có biến thể, không được bật animation",
+    );
+    await view.cleanup();
   });
 
   it("đặt --breath-offset lên chính phần tử chân dung", async () => {
     // PlayerSeat đặt biến này ở nút cha, nhưng RosterPanel và GameOverView thì
-    // không. Đặt tại chỗ thì nháy mắt lệch pha ở MỌI nơi gọi.
-    await withSheet(async () => {
-      const view = await mountPortrait({ breathOffset: 0.5 });
-      assert.match(
-        view.shell!.getAttribute("style") ?? "",
-        /--breath-offset:\s*0\.5/,
-        "thiếu lệch pha nháy mắt trên phần tử chân dung",
-      );
-      await view.cleanup();
-    });
+    // không. Đặt tại chỗ thì nháy mắt lệch pha ở MỌI nơi gọi - kể cả sau này,
+    // khi has-variants được bật.
+    const view = await mountPortrait({ breathOffset: 0.5 });
+    assert.match(
+      view.shell!.getAttribute("style") ?? "",
+      /--breath-offset:\s*0\.5/,
+      "thiếu lệch pha nháy mắt trên phần tử chân dung",
+    );
+    await view.cleanup();
   });
 
   it("ảnh hỏng thì rơi về SVG, không để lại khung rỗng", async () => {
-    await withSheet(async () => {
-      const { act } = await import("react");
-      const view = await mountPortrait();
-      assert.ok(view.sheet, "phải bắt đầu bằng nhánh sheet");
-      // Một file 404 sẽ 404 lại, nên component không được thử lại.
-      await act(async () => {
-        view.sheet!.dispatchEvent(new Event("error"));
-      });
-      // Đọc lại từ host chứ không dùng view.svg: view.svg chụp lúc mount, còn
-      // cây DOM đã render lại sau sự kiện lỗi.
-      assert.ok(view.host.querySelector("svg"), "sau lỗi ảnh phải hiện <svg>");
-      assert.equal(
-        view.host.querySelector(".character-portrait__sheet"),
-        null,
-        "không được giữ lại khung sheet sau khi ảnh hỏng",
-      );
-      await view.cleanup();
+    const { act } = await import("react");
+    const view = await mountPortrait();
+    assert.ok(view.sheet, "phải bắt đầu bằng nhánh sheet");
+    // Một file 404 sẽ 404 lại, nên component không được thử lại.
+    await act(async () => {
+      view.sheet!.dispatchEvent(new Event("error"));
     });
+    // Đọc lại từ host chứ không dùng view.svg: view.svg chụp lúc mount, còn
+    // cây DOM đã render lại sau sự kiện lỗi.
+    assert.ok(view.host.querySelector("svg"), "sau lỗi ảnh phải hiện <svg>");
+    assert.equal(
+      view.host.querySelector(".character-portrait__sheet"),
+      null,
+      "không được giữ lại khung sheet sau khi ảnh hỏng",
+    );
+    await view.cleanup();
   });
 });
 ```
@@ -812,7 +890,7 @@ Tạo `apps/web/src/components/CharacterPortrait.tsx`:
 
 import { useCallback, useState, useSyncExternalStore } from "react";
 import type { AvatarId } from "@/lib/avatar-art";
-import { hasSheet, sheetFor } from "@/lib/character-art";
+import { hasSheet, hasVariants, sheetFor } from "@/lib/character-art";
 import { portraitMode, portraitSource } from "@/lib/character-portrait";
 import { readNetworkHints } from "@/lib/cinematic-settings";
 import { Avatar } from "./Avatar";
@@ -906,7 +984,9 @@ export function CharacterPortrait({
 
   return (
     <span
-      className={`character-portrait is-${mode} grid place-items-center overflow-hidden rounded-full border border-white/10 transition-colors ${className}`}
+      className={`character-portrait is-${mode}${
+        hasVariants(avatar) ? " has-variants" : ""
+      } grid place-items-center overflow-hidden rounded-full border border-white/10 transition-colors ${className}`}
       style={
         {
           background: alive ? tint : "rgba(120, 130, 150, 0.10)",
@@ -916,7 +996,7 @@ export function CharacterPortrait({
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={sheetFor(avatar)!}
+        src={sheetFor(avatar)!.src}
         alt=""
         aria-hidden="true"
         onError={onError}
@@ -930,7 +1010,7 @@ export function CharacterPortrait({
 - [ ] **Step 4: Chạy test và typecheck**
 
 Run: `cd apps/web && npx tsx --experimental-test-module-mocks --test src/components/CharacterPortrait.test.tsx`
-Expected: PASS, cả 7 test
+Expected: PASS, cả 7 test (2 nhánh fallback + 5 nhánh sheet)
 
 Run: `npm run lint --workspace @masoi/web`
 Expected: không lỗi
@@ -1013,104 +1093,184 @@ git commit -m "feat(portrait): nối CharacterPortrait vào bảy chỗ hình l�
 
 ---
 
-### Task 6: Hợp đồng phong cách
+### Task 6: Bổ sung SOURCES.md và cứu script dựng sheet
 
 **Files:**
-- Create: `apps/web/public/characters/SOURCES.md`
+- Modify: `apps/web/public/characters/SOURCES.md` (**đã tồn tại — bổ sung, KHÔNG ghi đè**)
+- Create: `tools/build-character-sheets.py` (chuyển từ `%TEMP%`, không viết lại)
 
 **Interfaces:**
-- Consumes: `PORTRAIT_FRAMES` (Task 2) — thứ tự frame phải khớp
-- Produces: không gì (tài liệu)
+- Consumes: `CHARACTER_SHEETS` (Task 2) — bảng nhân vật trong tài liệu phải khớp
+- Produces: không gì (tài liệu và công cụ)
 
-- [ ] **Step 1: Viết hợp đồng**
+- [ ] **Step 1: Cứu script dựng sheet ra khỏi thư mục temp**
 
-Tạo `apps/web/public/characters/SOURCES.md`:
+`SOURCES.md` đang trỏ script tới `C:\Users\Admin\AppData\Local\Temp\opencode\build_sheets.py`. Windows dọn `%TEMP%` bất cứ lúc nào, và mất script thì không ai dựng lại được 16 sheet.
+
+Copy nguyên văn file đó sang `tools/build-character-sheets.py`. **Không sửa nội dung, không "cải tiến"** — nó đã chạy ra đúng 16 sheet đang có, và sửa mù một script chưa từng đọc là cách nhanh nhất để mất khả năng tái tạo.
+
+Nếu file không còn ở đó, DỪNG và báo lại — đừng viết một script mới rồi gọi nó là script cũ.
+
+- [ ] **Step 2: Cập nhật đường dẫn script trong SOURCES.md**
+
+Trong mục `## Tai sinh`, đổi đường dẫn temp thành `tools/build-character-sheets.py`.
+
+- [ ] **Step 3: Ghi lại ba sự thật đã đo được**
+
+Thêm vào cuối `apps/web/public/characters/SOURCES.md`:
 
 ```markdown
-# Chân dung nhân vật — nguồn và hợp đồng phong cách
+## Đã đo, không phải phỏng đoán
 
-Theo tiền lệ `public/audio/CREDITS.md`: mọi asset trong thư mục này phải ghi
-được nguồn gốc, và phải sinh lại được y hệt sáu tháng sau.
+**Frame 1 và 2 KHÔNG khác frame 0.** Đo trên `hood`, `farmer`, `viking`: lệch
+trung bình 0.7–1.5 trên 255, max 21–33 — đúng bằng nhiễu nén WebP. Frame 3 thì
+khác thật: lệch trung bình 4.9–8.4, max 68–74.
 
-## Định dạng bắt buộc
+Vì vậy mọi sheet khai báo `variants: false` trong
+`apps/web/src/lib/character-art.ts`, và CSS không chạy animation cho chúng.
+Ngày nào có sheet biến thể thật, đổi cờ đó thành `true` ở đúng dòng của nhân
+vật đó — nháy mắt và mấp máy tự sống dậy, không đụng code.
 
-- Một file `.webp` cho mỗi nhân vật, đặt tên đúng bằng `AvatarId`
-  (`farmer.webp`, `viking.webp`, …). Danh sách id nằm ở
-  `apps/web/src/lib/avatar-art.ts`.
-- **Bốn frame nằm ngang**, mỗi frame vuông 256×256, tổng 1024×256.
-- Thứ tự frame là HỢP ĐỒNG với `characters.css` — đổi thứ tự là hỏng hình:
+**Bốn khuôn mặt dùng chung.** `mustache` và `miner` cùng là Caius; `beard` và
+`turban` cùng là Eldrin; `pilgrim` và `cook` cùng là Indira; `sombrero` và
+`jester` cùng là Soleil. `assignAvatars` không cho trùng AvatarId nhưng KHÔNG
+biết bốn cặp này, nên một phòng 15 ghế gần như chắc chắn xếp một cặp cạnh nhau
+— hai khuôn mặt gần giống, một cái bị lật. Đây là lý do ưu tiên số một để thay
+pack, quan trọng hơn cả chuyện biến thể biểu cảm: chân dung tồn tại để phân biệt
+người này với người kia.
 
-  | # | Tên | Mắt | Miệng |
-  |---|---|---|---|
-  | 0 | `idle` | mở | ngậm |
-  | 1 | `blink` | nhắm | ngậm |
-  | 2 | `talk` | mở | mở |
-  | 3 | `dead` | nhắm | ngậm, mặt tái |
-
-- Trần dung lượng: 120KB mỗi file, 1.4MB cho cả bộ. Có test chặn
-  (`character-art.test.ts`), không phải lời khuyên.
-- Không sinh frame "vừa nhắm mắt vừa há miệng": nháy mắt bị chặn trong lúc đang
-  nói, nên tổ hợp đó không bao giờ hiện.
-
-## Hai ràng buộc BẮT BUỘC trong prompt
-
-**1. Dải màu hẹp, nền tối trầm. Không đỏ bão hoà, không xanh lá bão hoà.**
-Hai màu đó thuộc về tầng trạng thái: đỏ là ô đang bị nhắm, xám là đã chết. Chân
-dung rực rỡ sẽ đánh nhau với viền, và lúc phát hiện ra thì 16 tấm đã sinh xong.
-
-**2. Nhận ra được là cùng một người với bóng SVG.**
-`farmer` phải ra nông dân, `viking` phải ra viking. Hai hệ hình xuất hiện cạnh
-nhau trong cùng một màn — chân dung lớn ở ô người chơi, bóng 24px trong nhật ký
-phiếu — nên nếu chúng không khớp thì người xem đọc ra hai người khác nhau.
-
-## Prompt phong cách
-
-> _(điền khi chốt phong cách ở đợt 2 — cùng một prompt cho cả 16 nhân vật, chỉ
-> đổi phần mô tả nhân vật)_
-
-## Bảng nhân vật
-
-| id | Mô tả nhân vật trong prompt | Model | Ngày sinh | Ảnh tham chiếu |
-|---|---|---|---|---|
-| _(điền dần theo đợt 2 và đợt 3)_ | | | | |
-
-## Bản quyền
-
-Ảnh sinh bằng AI cho riêng dự án này. KHÔNG lấy từ game-icons.net — bộ SVG đơn
-sắc ở `avatar-art.ts` mới là bộ đó, và phần ghi công của nó nằm ở
-`apps/web/src/lib/AVATAR-CREDITS.md`, không trộn vào đây.
+**Kích thước là hợp đồng.** 1024×256, 4 frame vuông. `character-art.test.ts`
+đọc header WebP và chặn file sai tỉ lệ — CSS trượt theo phần trăm nên một sheet
+3 frame sẽ ghép nửa mặt người này với nửa mặt người kia.
 ```
 
-Lưu ý cho người thực thi: hai chỗ `_(điền…)_` là **có chủ ý** — chúng là chỗ dành cho đợt 2, khi phong cách được chốt trên máy thật. Không tự bịa prompt vào đó.
-
-- [ ] **Step 2: Chạy toàn bộ test web lần cuối**
+- [ ] **Step 4: Chạy toàn bộ test web**
 
 Run: `npm test --workspace @masoi/web`
 Expected: PASS toàn bộ
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add apps/web/public/characters/SOURCES.md
-git commit -m "docs(portrait): hợp đồng phong cách cho sheet chân dung"
+git add apps/web/public/characters/SOURCES.md tools/build-character-sheets.py
+git commit -m "docs(portrait): cứu script dựng sheet khỏi %TEMP%, ghi lại số đo biến thể"
+```
+
+---
+
+### Task 7: Ghi công CC BY trong game
+
+**Files:**
+- Create: `apps/web/src/components/AssetCredits.tsx`
+- Modify: `apps/web/src/app/page.tsx:536` (thêm ngay sau `</main>`)
+
+**Interfaces:**
+- Consumes: không gì
+- Produces: `AssetCredits()` — component không nhận prop
+
+**Vì sao task này tồn tại:** cả hai bộ art đều là CC BY, và CC BY bắt buộc ghi công **cho người dùng tác phẩm**, không phải ghi trong repo là xong. Hiện game **không có mặt ghi công nào** — `AVATAR-CREDITS.md` và `SOURCES.md` chỉ nằm trong mã nguồn. Nghĩa là nghĩa vụ CC BY 3.0 của bộ SVG game-icons.net đã chưa được đáp ứng từ trước, và pack Studio NIK vừa thêm một nghĩa vụ CC BY 4.0 nữa. Một dòng nhỏ trả nợ cả hai.
+
+- [ ] **Step 1: Viết component**
+
+Tạo `apps/web/src/components/AssetCredits.tsx`:
+
+```tsx
+/**
+ * Ghi công tài nguyên hình ảnh.
+ *
+ * Cả hai bộ art đều là CC BY, và giấy phép đó đòi ghi công CHO NGƯỜI DÙNG tác
+ * phẩm - một file markdown trong mã nguồn không đáp ứng được. Đây là mặt ghi
+ * công duy nhất của game, nên đừng xoá nó, và thay bộ art nào thì sửa đúng
+ * dòng của bộ đó.
+ *
+ * Nguồn đầy đủ: `src/lib/AVATAR-CREDITS.md` và `public/characters/SOURCES.md`.
+ */
+export function AssetCredits() {
+  return (
+    <footer className="mx-auto max-w-6xl px-4 pb-8 text-center text-[11px] leading-relaxed text-mist/35">
+      <p>
+        Chân dung nhân vật by{" "}
+        <a
+          href="https://studio-nik.itch.io"
+          target="_blank"
+          rel="noreferrer noopener"
+          className="underline decoration-mist/20 underline-offset-2 hover:text-mist/60"
+        >
+          Studio Nik
+        </a>{" "}
+        (CC BY 4.0) · Biểu tượng by Lorc, Delapouite và sbed tại{" "}
+        <a
+          href="https://game-icons.net"
+          target="_blank"
+          rel="noreferrer noopener"
+          className="underline decoration-mist/20 underline-offset-2 hover:text-mist/60"
+        >
+          game-icons.net
+        </a>{" "}
+        (CC BY 3.0)
+      </p>
+    </footer>
+  );
+}
+```
+
+- [ ] **Step 2: Nối vào trang chủ**
+
+Trong `apps/web/src/app/page.tsx`, thêm import ở đầu file:
+
+```ts
+import { AssetCredits } from "@/components/AssetCredits";
+```
+
+Rồi ngay sau `</main>` (dòng 536), trước `</>`, thêm:
+
+```tsx
+<AssetCredits />
+```
+
+- [ ] **Step 3: Typecheck và chạy toàn bộ test web**
+
+Run: `npm run lint --workspace @masoi/web`
+Expected: không lỗi
+
+Run: `npm test --workspace @masoi/web`
+Expected: PASS toàn bộ
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add apps/web/src/components/AssetCredits.tsx apps/web/src/app/page.tsx
+git commit -m "feat(web): mặt ghi công CC BY cho hai bộ art"
 ```
 
 ---
 
 ## Sau kế hoạch này
 
-Đợt 1 kết thúc ở đây: code đầy đủ, test xanh, giao diện giống hệt hôm nay vì
-chưa có sheet nào. Merge được vào `main` an toàn.
+Hết kế hoạch này thì 16 khuôn mặt thật đã thay xong 16 cái bóng đen, ở cả bảy
+mặt hình lớn. Đó là phần thắng lớn nhất của cả thiết kế và nó không phụ thuộc
+vào animation.
 
-**Đợt 2 (việc của tác giả, không phải của agent):** sinh 3 sheet theo hợp đồng,
-điền vào `CHARACTER_SHEETS`, xem chúng đứng cạnh `live-trial` và
-`village-memory` ở cỡ thật. Kiểm ở **cả 390px lẫn màn rộng** — lần duyệt UI
+Ba việc còn lại, xếp theo mức quan trọng — và thứ tự này KHÁC với bản kế hoạch
+đầu, vì bộ art thật đã trả lời vài câu hỏi mà lúc đó còn để ngỏ:
+
+**1. Thay bốn khuôn mặt dùng chung.** `mustache`/`miner`, `beard`/`turban`,
+`pilgrim`/`cook`, `sombrero`/`jester` — mỗi cặp là một khuôn mặt bị lật hoặc
+crop. Một phòng 15 ghế gần như chắc chắn xếp một cặp cạnh nhau. Chân dung tồn
+tại để phân biệt người này với người kia, nên đây là lỗi nặng hơn chuyện mặt
+đứng yên.
+
+**2. Sheet có biến thể biểu cảm thật.** Có rồi thì đổi `variants: false` thành
+`true` ở đúng dòng trong `character-art.ts`, sửa test tương ứng trong
+`character-art.test.ts` và `CharacterPortrait.test.tsx` — nháy mắt và mấp máy tự
+sống dậy. Không đụng CSS, không đụng component. Đây cũng là lúc lip-sync theo
+`useSpeakers()` mới thật sự hoạt động.
+
+**3. Nối `talkingUntilMs` cho bot.** Việc đầu tiên là **xác minh log chat có với
+tới `PlayerSeat` không** — chưa ai kiểm. Đường dây xấu thì báo lại, không kéo
+prop xuyên năm tầng component. Và việc này chỉ có nghĩa sau khi (2) xong: chưa
+có biến thể thì miệng bot mấp máy cũng không thấy gì.
+
+Kiểm giao diện ở **cả 390px lẫn màn rộng** trước khi gọi là xong. Lần duyệt UI
 trước chỉ verify ở 390px và trên màn 2559px kết quả là một cột 512px giữa bãi
-nền trống. Đây là cửa go/no-go: style hỏng thì vứt 3 tấm, không phải 64.
-
-**Đợt 3:** 13 sheet còn lại, thêm dòng vào `CHARACTER_SHEETS` và bảng trong
-`SOURCES.md`. Không đổi code.
-
-**Đợt 4:** nối `talkingUntilMs` cho bot. Việc đầu tiên là **xác minh log chat có
-với tới `PlayerSeat` không** — chưa ai kiểm. Đường dây xấu thì báo lại, không
-kéo prop xuyên năm tầng component.
+nền trống.
