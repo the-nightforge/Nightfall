@@ -559,7 +559,10 @@ function TimingConfig({
   return (
     <div>
       <p className="font-semibold text-white">Thời gian từng pha</p>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {/* Bảng cài đặt là cột hẹp: chia cột theo bề ngang thật của khung
+          chứ không theo breakpoint màn hình, nếu không ba cột sẽ chen vào
+          chỗ chỉ vừa hai và nhãn bị ngắt dòng. */}
+      <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-3">
         {(
           [
             // Khoảng hợp lệ phải khớp roomConfigSchema; đặc biệt finalVoteSeconds
@@ -571,16 +574,17 @@ function TimingConfig({
             ["finalVoteSeconds", "Bỏ phiếu xác nhận", 15, 60],
           ] as const
         ).map(([key, label, min, max]) => (
-          <label key={key} className="block text-sm">
+          <label key={key} className="flex h-full flex-col gap-1 text-sm">
             <span className="text-mist/90">
               {label}{" "}
-              <span className="text-mist/70">
+              <span className="whitespace-nowrap text-mist/70">
                 ({min}-{max}s)
               </span>
             </span>
+            {/* mt-auto: nhãn một dòng hay hai dòng thì ô nhập vẫn thẳng hàng nhau. */}
             <input
               type="number"
-              className="input mt-1"
+              className="input mt-auto"
               min={min}
               max={max}
               value={draft[key]}

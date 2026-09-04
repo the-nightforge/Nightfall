@@ -505,14 +505,18 @@ export default function RoomPage() {
               * chặn. Trong ván thì ngược lại: ô chứa đã cao bằng màn hình sẵn,
               * `flex-1` mới là thứ bảo khung lấy trọn phần còn lại.
               *
-              * 300px ở phòng chờ chứ không phải 320: khung này giờ đứng TRONG
-              * màn hình đầu tiên, ngay dưới nút Bắt đầu, và mỗi pixel nó cao
-              * thêm là một pixel nó thò xuống dưới mép ở màn 1440x900. 300px
-              * vẫn đủ đầu khung, năm sáu dòng tin và ô nhập.
+              * Trần phòng chờ đo theo CHIỀU CAO MÀN HÌNH chứ không phải một con
+              * số cứng. Khung này mất khoảng 165px cho đầu khung và ô nhập, nên
+              * 300px cứng chỉ chừa ~135px cho tin nhắn - hai dòng chat là đầy,
+              * trên màn nào cũng vậy, kể cả màn cao 1300px còn thừa cả mảng
+              * trống bên dưới. `clamp` giữ nguyên lý do 300px sinh ra (không
+              * thò xuống dưới mép ở 1440x900: 42vh = 378px, chỉ hơn cũ 78px)
+              * mà vẫn cho khung cao tới 560px trên màn cao. Cận dưới 320px để
+              * màn thấp vẫn còn đủ ô nhập và vài dòng tin.
               */}
             <div
               className={`min-h-0 ${
-                isLobby ? "lg:h-[300px]" : "flex-1 lg:min-h-[320px]"
+                isLobby ? "lg:h-[clamp(320px,42vh,560px)]" : "flex-1 lg:min-h-[320px]"
               }`}
             >
               <ChatBox
