@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#070b14" />
+    <title>Mất kết nối · Ma Sói Online</title>
+    <!--
+      Một file HTML đứng một mình, không font ngoài, không JS ngoài, không ảnh.
+      Nó là thứ duy nhất trong app phải hiển thị được KHI ĐÃ MẤT MẠNG, nên mọi
+      tham chiếu ra ngoài đều là một cách để nó hỏng đúng lúc cần nó nhất.
+      Font rơi về system-ui: chữ tiếng Việt có dấu hiển thị đủ trên mọi máy.
+    -->
+    <style>
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: grid;
+        place-items: center;
+        padding: 1.5rem;
+        color: #d7e2f5;
+        background:
+          radial-gradient(120% 60% at 78% 8%, rgba(150, 182, 240, 0.12), transparent 60%),
+          linear-gradient(180deg, #111a2e 0%, #070b14 62%);
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        width: 100%;
+        max-width: 26rem;
+        padding: 2rem 1.75rem;
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 1.25rem;
+        background: linear-gradient(180deg, rgba(38, 54, 90, 0.34), rgba(11, 17, 32, 0.74));
+        box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 1);
+      }
+      .mark {
+        display: block;
+        width: 4.5rem;
+        height: 4.5rem;
+        margin: 0 auto 1.25rem;
+        fill: #f04760;
+        filter: drop-shadow(0 2px 14px rgba(220, 38, 64, 0.45));
+      }
+      h1 { margin: 0 0 0.75rem; font-size: 1.375rem; color: #eef3fd; }
+      p { margin: 0 0 1.5rem; font-size: 0.9375rem; color: #a6bada; }
+      button {
+        width: 100%;
+        padding: 0.8125rem 1rem;
+        font: inherit;
+        font-weight: 600;
+        color: #fff;
+        cursor: pointer;
+        border: 0;
+        border-radius: 0.75rem;
+        background: linear-gradient(180deg, #dc2640, #b91c33);
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.16);
+      }
+      button:hover { background: linear-gradient(180deg, #f04760, #dc2640); }
+      button:focus-visible { outline: 2px solid #eef3fd; outline-offset: 2px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <!-- Cùng đường path với WolfMark.tsx: trang lỗi vẫn phải là cùng một game. -->
+      <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
+        <path
+          fill-rule="evenodd"
+          d="M12 8 L32 30 C40 26 60 26 68 30 L88 8 L84 40 C90 52 86 66 76 74 L50 95 L24 74 C14 66 10 52 16 40 Z
+             M30 46 L42 50 L38 58 L28 52 Z
+             M70 46 L58 50 L62 58 L72 52 Z
+             M50 70 L43 78 L50 83 L57 78 Z"
+        />
+      </svg>
+      <h1>Đang mất kết nối</h1>
+      <p>
+        Ma Sói Online cần mạng để giữ liên lạc với bàn chơi. Kiểm tra Wi-Fi hoặc dữ liệu di động
+        rồi thử lại - phòng của bạn vẫn còn đó nếu ván chưa kết thúc.
+      </p>
+      <button type="button" onclick="location.reload()">Thử lại</button>
+    </main>
+    <script>
+      // Mạng có lại thì tự vào, không bắt người ta ngồi canh cái nút.
+      addEventListener("online", function () {
+        location.reload();
+      });
+    </script>
+  </body>
+</html>

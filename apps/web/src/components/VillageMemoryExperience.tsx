@@ -195,6 +195,26 @@ export function VillageMemoryExperience({ snapshot, file, triggerRef, onClose }:
         aria-modal="true"
         aria-labelledby="village-memory-title"
         className="flex h-full w-full flex-col"
+        /*
+         * Vùng an toàn nằm ở LỚP TRONG, không phải lớp `bg-night-950` bên ngoài.
+         *
+         * Từ khi layout khai `viewport-fit=cover`, `env(safe-area-inset-*)` đổi
+         * từ 0 sang giá trị thật. Đó chính là thứ ta muốn cho cái nền: nó phải
+         * tràn lên dưới tai thỏ, nếu không thì đỉnh màn hình là một dải trắng
+         * cắt ngang một khung cảnh ban đêm. Nhưng NỘI DUNG thì không: thanh
+         * tiêu đề chỉ có `py-3`, mỏng hơn hẳn thanh trạng thái, nên nút "Đóng"
+         * sẽ nằm lọt dưới đó và không bấm được.
+         *
+         * Cả bốn cạnh chứ không riêng trên-dưới: hàng nút điều khiển có biến
+         * thể `phone-landscape:`, tức là màn này được dùng khi cầm máy ngang -
+         * và ở tư thế đó tai thỏ nằm ở CẠNH BÊN, đúng chỗ ba nút phát/tua.
+         */
+        style={{
+          paddingTop: "env(safe-area-inset-top)",
+          paddingBottom: "env(safe-area-inset-bottom)",
+          paddingLeft: "env(safe-area-inset-left)",
+          paddingRight: "env(safe-area-inset-right)",
+        }}
       >
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-white/[0.08] px-4 py-3 sm:px-6">
           <div className="min-w-0">
