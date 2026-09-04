@@ -31,14 +31,14 @@ import { GameOverView } from "@/components/GameOverView";
 import { HunterShotPanel } from "@/components/HunterShotPanel";
 import { TrialPanel } from "@/components/TrialPanel";
 import { TrialStage } from "@/components/TrialStage";
-import { Lobby, LobbySettings } from "@/components/Lobby";
+import { Lobby } from "@/components/Lobby";
+import { LobbySettingsDrawer } from "@/components/LobbySettingsDrawer";
 import { SoundControl } from "@/components/SoundControl";
 import { EventBanner } from "@/components/EventBanner";
 import { MobileChatDock } from "@/components/MobileChatDock";
 import { CinematicOverlay } from "@/components/CinematicOverlay";
 import { LastLetterReveal } from "@/components/LastLetterReveal";
 import { RoomInvite } from "@/components/RoomInvite";
-import { LobbyHeader } from "@/components/LobbyHeader";
 import { LobbyPlayerGrid } from "@/components/LobbyPlayerGrid";
 
 export default function RoomPage() {
@@ -194,34 +194,34 @@ export default function RoomPage() {
       {/* pb-28 chừa chỗ cho nút chat nổi ở đáy - thiếu nó thì nút cuối trang
         * (Bỏ phiếu, Rời phòng) nằm ngay dưới nút chat và bấm nhầm.
         *
-        * Phòng chờ hẹp hơn lúc chơi: 1600px là bề ngang cho một bàn 15 ô cộng
-        * hai cột biên, còn ở phòng chờ cột giữa chỉ có một thẻ thiết lập, và kéo
-        * nó ra 1600 thì mỗi dòng chữ dài quá tầm đọc trong khi thẻ vẫn trống
-        * hoác. 1440 là chỗ ba vùng còn thở mà không dãn ra.
-        *
-        * Trong ván, từ lg trở lên `main` là một KHUNG cao đúng bằng màn hình,
-        * không phải một tấm giấy dài.
+        * Từ lg trở lên `main` là một KHUNG cao đúng bằng màn hình ở MỌI pha,
+        * phòng chờ nay cũng vậy - không phải một tấm giấy dài.
         *
         * Bản cũ để cả trang tự cuộn: bàn chơi cao chừng 700px nằm dán lên mép
         * trên của một màn 1440x900 rồi bỏ trống gần hai trăm pixel bên dưới, và
         * mỗi lần chat dài ra là cả trang trôi - kể cả lưới bỏ phiếu đang thao
-        * tác dở. Cao 100dvh + `overflow-hidden` ở đây, cộng với ba cột tự cuộn
+        * tác dở. Cao 100dvh + `overflow-hidden` ở đây, cộng với các cột tự cuộn
         * bên trong, đổi lại đúng cảm giác một cái bàn: mọi thứ nằm trong khung
         * nhìn, phần nào dài thì phần đó cuộn.
+        *
+        * Phòng chờ theo cùng lối đó từ khi bộ bài 13 vai chuyển vào lớp phủ
+        * "Luật và vai trò": thứ duy nhất còn dài hơn màn hình đã có chỗ tự cuộn
+        * riêng, nên trang không còn lý do nào để trôi.
         *
         * KHÔNG hardcode chiều cao cho lưới (`calc(100dvh - 6rem)` chẳng hạn):
         * cụm mời + nút âm thanh trên đầu cao thấp khác nhau tuỳ có thông báo
         * hay không, và mọi hằng số đoán trước đều lệch đúng vào lúc đó. Để lưới
         * `flex-1` trong một cột flex thì nó tự lấy đúng phần còn lại.
         *
-        * Phòng chờ giữ nguyên lối cũ: ở đó nội dung ngắn, và ép nó vào một
-        * khung không cuộn thì bộ bài 13 vai không xem hết được.
+        * Bề ngang: 1600px là bề ngang cho một bàn 15 ô cộng hai cột biên. Phòng
+        * chờ chỉ có hai vùng nên dừng ở 1440 - quá mốc đó thì sân người chơi
+        * chỉ dãn ra thành những ô cách nhau quá xa để đọc thành một đám đông.
         */}
       <main
-        className={`mx-auto w-full max-w-lg px-3 pb-28 pt-4 lg:pb-6 ${
+        className={`mx-auto w-full max-w-lg px-3 pb-28 pt-4 lg:flex lg:h-[100dvh] lg:flex-col lg:overflow-hidden lg:pb-6 ${
           isLobby
-            ? "lobby-page md:max-w-3xl lg:max-w-[1320px] lg:px-6 lg:pb-12"
-            : "md:max-w-3xl lg:flex lg:h-[100dvh] lg:max-w-[1600px] lg:flex-col lg:overflow-hidden lg:px-4 xl:px-6"
+            ? "lobby-page md:max-w-3xl lg:max-w-[1440px] lg:px-6"
+            : "md:max-w-3xl lg:max-w-[1600px] lg:px-4 xl:px-6"
         }`}
       >
         <header className="flex shrink-0 items-center justify-between gap-2">
@@ -255,10 +255,19 @@ export default function RoomPage() {
             * ml-auto để cụm này vẫn dính mép phải khi nút rời phòng vắng mặt:
             * `justify-between` với một đứa con duy nhất sẽ dồn nó về bên TRÁI. */}
           <div className="ml-auto flex items-start gap-2">
-            {/* Trong phòng chờ cụm mời đã lên `LobbyHeader` cùng mã phòng và bộ
-              * đếm người; để lại bản thứ hai ở đây là hai mã phòng trên cùng một
-              * màn hình. */}
-            {!isLobby && <RoomInvite code={code} />}
+            {/*
+              * MỘT mã phòng cho cả trang, và nó ở đây.
+              *
+              * Phòng chờ từng có bản thứ hai trong `LobbyHeader` - hai mã phòng
+              * cùng lúc trên một màn hình, và người vừa nhận link phải đoán xem
+              * cái nào là cái thật. Giờ đầu bảng người chơi chỉ còn nói chuyện
+              * của bảng đó, còn mã phòng và hai nút mời đứng nguyên một hàng
+              * `Rời phòng | Mã phòng + Mời bạn | Âm thanh` ở đây.
+              *
+              * Cỡ `lg` chỉ dùng ở phòng chờ: đó là lúc mã phòng được đọc to lên
+              * cho bạn bè chép, còn trong ván nó chỉ là chỗ tra lại.
+              */}
+            <RoomInvite code={code} size={isLobby ? "lg" : "sm"} />
             <SoundControl />
             {/*
               * Điều kiện là `snapshot &&`, không phải chỉ `!connected`.
@@ -301,22 +310,41 @@ export default function RoomPage() {
           * ở nấc này vẫn dùng được đúng việc của chúng, còn chỗ tiết kiệm được
           * thì trả hết cho khu chơi, đúng thứ tự ưu tiên ở màn hình hẹp.
           *
-          * items-start chỉ dành cho phòng chờ. Trong ván ba cột phải cao bằng
-          * nhau và bằng khung - đó là thứ làm nó ra hình một cái bàn thay vì ba
-          * mẩu thẻ trôi lệch nhau ở nửa trên màn hình.
-          *
           * Trần 68rem + `my-auto`: trên màn rất cao (2559x1346 chẳng hạn) một
           * cái bàn kéo dài 1240px chỉ tạo ra khoảng trống BÊN TRONG cột chơi -
           * thứ không có gì để đổ vào mà cũng không được phép bịa nội dung ra
           * lấp. Chặn chiều cao rồi thả cho nó tự căn giữa thì phần thừa chuyển
           * ra ngoài thành lề trên/dưới cân nhau, và ba cột vẫn cao bằng nhau.
           * Dưới mốc đó (1080p trở xuống) trần không bao giờ chạm tới.
+          *
+          * Phòng chờ là hai vùng: sân người chơi và thanh điều khiển, chia
+          * 65/35 (1.85fr : 1fr). Cận dưới 21rem cho cột phải là bề ngang tối
+          * thiểu để một bong bóng chat không gãy làm ba dòng; ở 1024px cột đó
+          * rơi vào khoảng 22rem nên cận này không bao giờ phải ra tay, nó chỉ
+          * ở đó để một màn hẹp bất thường không bóp chat thành một sợi chỉ.
+          *
+          * Ba hàng của thanh điều khiển, và mỗi hàm minmax ở đây là một câu trả
+          * lời cho một câu hỏi khác nhau:
+          *
+          *   - `minmax(0,auto)` cho thẻ điều khiển: bình thường nó cao đúng
+          *     bằng nội dung, nhưng cận dưới 0 cho phép lưới BÓP nó lại khi màn
+          *     hình thấp. Để `auto` trơn thì ở 1024x768 nó giữ nguyên 476px và
+          *     đẩy khung chat lòi ra ngoài khung nhìn. Nó co được mà nút Bắt
+          *     đầu vẫn nguyên chỗ là nhờ `.lobby-command-summary` bên trong -
+          *     xem `Lobby`.
+          *   - `minmax(9.5rem,1fr)` cho chat: phần còn lại rơi HẾT vào đây, và
+          *     9.5rem là chiều cao thật của đầu khung cộng ô nhập - dưới mốc đó
+          *     khung chat không còn là một khung chat nữa.
+          *   - `auto` cho nút "Luật và vai trò": nó chỉ cao bằng chính nó.
+          *
+          * Nhờ thứ tự đó, nút Bắt đầu - nằm ở hàng đầu - không bao giờ bị một
+          * cuộc trò chuyện dài đẩy khỏi màn hình.
           */}
         <div
-          className={`mt-3 grid gap-3 ${
+          className={`mt-3 grid gap-3 lg:min-h-0 lg:flex-1 ${
             isLobby
-              ? "lg:grid-cols-[minmax(0,1.65fr)_minmax(20rem,0.72fr)] lg:items-start lg:gap-5"
-              : "lg:my-auto lg:max-h-[68rem] lg:min-h-0 lg:flex-1 lg:grid-cols-[14rem_minmax(0,1fr)_17.5rem] xl:grid-cols-[15rem_minmax(0,1fr)_23rem] xl:gap-4"
+              ? "lg:grid-cols-[minmax(0,1.85fr)_minmax(21rem,1fr)] lg:grid-rows-[minmax(0,auto)_minmax(9.5rem,1fr)_auto] lg:gap-x-5"
+              : "lg:my-auto lg:max-h-[68rem] lg:grid-cols-[14rem_minmax(0,1fr)_17.5rem] xl:grid-cols-[15rem_minmax(0,1fr)_23rem] xl:gap-4"
           }`}
         >
           {/*
@@ -325,20 +353,13 @@ export default function RoomPage() {
             * ngay. Riêng phòng chờ thì ngược lại: câu hỏi đầu tiên luôn là ai đã
             * vào phòng, và bộ bài thì cuộn xuống xem lúc nào cũng được.
             *
-            * Đầu phòng chờ nằm TRONG cột này chứ không vắt ngang phía trên lưới
-            * như trước, và đó là điều kiện để khung chat lên được màn hình đầu.
-            *
-            * Vắt ngang thì nó đẩy CẢ HAI cột xuống 150px, mà nó chỉ nói chuyện
-            * của cột trái: tên phòng, mã phòng, số người, ảnh đại diện - toàn
-            * những thứ đứng ngay trên bàn người chơi mới đọc thành một mạch. Cột
-            * phải thì trả giá bằng đúng 150px đó, và ở màn 1440x900 số đó là
-            * khoảng cách giữa "thấy khung chat" với "phải cuộn mới biết phòng có
-            * chat". Hai cột không chia sẻ hàng nào (`row-span` bên dưới), nên
-            * bên này cao thấp thế nào cũng không dịch được bên kia.
+            * Đầu phòng chờ nằm TRONG bảng người chơi chứ không vắt ngang phía
+            * trên lưới như trước, và đó là điều kiện để khung chat lên được màn
+            * hình đầu - xem `LobbyHeader`.
             *
             * Thứ tự trên điện thoại KHÔNG đổi: khối này vẫn là `order-1`, nên
-            * người vừa mở link mời vẫn gặp mã phòng và nút mời bạn trước hết,
-            * rồi mới tới danh sách người chơi.
+            * sau mã phòng ở thanh đầu trang, thứ gặp tiếp theo là danh sách
+            * người chơi, rồi mới tới thanh điều khiển.
             *
             * Nó cũng thay luôn `PhaseBanner`: hai khối đó cùng nói "Phòng chờ",
             * mà ở pha này thanh pha không có thêm gì để nói (chưa có hạn giờ,
@@ -347,18 +368,18 @@ export default function RoomPage() {
             * Phòng chờ dùng `div` chứ không `aside`: khối này chứa `h1` của cả
             * trang, và một landmark "nội dung phụ" bọc lấy tiêu đề chính thì
             * trình đọc màn hình đọc ra ngược hẳn tầm quan trọng thật.
+            *
+            * `row-span-3` + `min-h-0`: cột trái cao đúng bằng cả ba hàng của
+            * thanh điều khiển bên phải, và bảng bên trong tự cuộn phần lưới.
             */}
           {isLobby ? (
-            <div className="order-1 flex min-w-0 flex-col gap-3 lg:order-none lg:col-start-1 lg:row-span-3 lg:row-start-1">
+            <div className="order-1 flex min-w-0 flex-col lg:order-none lg:col-start-1 lg:row-span-3 lg:row-start-1 lg:min-h-0">
               {snapshot && (
-                <>
-                  <LobbyHeader snapshot={snapshot} code={code} />
-                  <LobbyPlayerGrid
-                    snapshot={snapshot}
-                    isHost={isHost}
-                    onKick={(targetId) => room.emit("room:kick", { targetId })}
-                  />
-                </>
+                <LobbyPlayerGrid
+                  snapshot={snapshot}
+                  isHost={isHost}
+                  onKick={(targetId) => room.emit("room:kick", { targetId })}
+                />
               )}
             </div>
           ) : (
@@ -379,13 +400,14 @@ export default function RoomPage() {
           <div
             className={`${
               isLobby
-                ? "order-2 lg:col-start-2 lg:row-start-1"
+                ? "order-2 lg:col-start-2 lg:row-start-1 lg:min-h-0"
                 : "lobby-roster-scroll order-1 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-1"
             } flex min-w-0 flex-col gap-3 lg:order-none`}
           >
             {snapshot && <EventBanner event={snapshot.activeEvent} />}
-            {/* Phòng chờ dùng `LobbyHeader` phía trên lưới thay cho thanh pha -
-              * xem chú thích ở chỗ dựng nó. */}
+            {/* Phòng chờ không có thanh pha: `LobbyHeader` - nay là đầu bảng
+              * người chơi ở cột trái - đã in tên cảnh, và ở pha này thanh pha
+              * không có thêm gì để nói (chưa có hạn giờ, chưa có số vòng). */}
             {snapshot && snapshot.phase !== "LOBBY" && <PhaseBanner snapshot={snapshot} />}
 
             {/* Voice là thao tác trực tiếp, không phải thông tin phụ: trên điện
@@ -423,7 +445,13 @@ export default function RoomPage() {
               * sang chuyện khác", không đủ để trì hoãn thông tin nào.
               */}
             <AnimatePresence mode="wait" initial={false}>
+              {/* Ở phòng chờ khối này phải TRUYỀN chiều cao xuống: thẻ điều
+                * khiển bên trong chỉ co được khi mọi tầng trên nó cũng co
+                * được, và một tầng duy nhất còn `min-height: auto` là đủ để cả
+                * chuỗi đứng im. Trong ván nó giữ nguyên hình cũ - ở đó cột
+                * giữa tự cuộn và không có gì phải co. */}
               <m.div
+                className={isLobby ? "flex min-h-0 flex-1 flex-col" : undefined}
                 key={snapshot?.phase ?? "connecting"}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -481,9 +509,10 @@ export default function RoomPage() {
             * khung chat rơi xuống quanh mốc 1800px. Trên điện thoại chat đi qua
             * MobileChatDock ở cuối file này thay vì nằm chờ cuối trang.
             *
-            * `sticky` chỉ còn dùng ở phòng chờ. Trong ván cả lưới đã cao đúng
-            * bằng khung nhìn và không cuộn, nên cột này tự đứng yên - dán thêm
-            * sticky vào một thứ vốn không trôi chỉ tổ thêm một tầng chồng lớp.
+            * Ở phòng chờ đây là hàng GIỮA của thanh điều khiển: voice rồi chat.
+            * Nó nhận `1fr` của lưới, nên chat lấy trọn phần chiều cao mà thẻ
+            * điều khiển và nút "Luật và vai trò" không dùng tới - không nhiều
+            * hơn, không ít hơn.
             */}
           <div
             className={`hidden lg:order-none lg:flex lg:min-h-0 lg:flex-col lg:gap-3 ${
@@ -492,33 +521,21 @@ export default function RoomPage() {
           >
             <VoiceControl snapshot={snapshot} />
             {/*
-              * Trong ván khung chat lấy TRỌN phần còn lại của cột chứ không bị
-              * chặn ở 520px: cột cao bằng màn hình, nên một trần cứng chỉ để
-              * lại một mảng trống dưới đáy cột phải - đúng khoảng trống mà cả
-              * bố cục này sinh ra để dẹp. Phòng chờ vẫn giữ trần thấp: chưa ai
-              * nói gì mà dựng sẵn một khung rỗng cao 700px thì chính nó là
-              * khoảng trống lớn nhất màn hình.
+              * Khung chat lấy TRỌN phần còn lại của cột chứ không bị chặn ở một
+              * con số đoán trước - ở mọi pha, phòng chờ nay cũng vậy.
               *
-              * Và ở phòng chờ trần đó phải đứng MỘT MÌNH, không kèm `flex-1`.
-              * `flex-1` là `flex-basis: 0`, nên chiều cao khai báo bị bỏ qua và
-              * khung tự phình theo số tin nhắn - đúng thứ trần này sinh ra để
-              * chặn. Trong ván thì ngược lại: ô chứa đã cao bằng màn hình sẵn,
-              * `flex-1` mới là thứ bảo khung lấy trọn phần còn lại.
-              *
-              * Trần phòng chờ đo theo CHIỀU CAO MÀN HÌNH chứ không phải một con
-              * số cứng. Khung này mất khoảng 165px cho đầu khung và ô nhập, nên
-              * 300px cứng chỉ chừa ~135px cho tin nhắn - hai dòng chat là đầy,
-              * trên màn nào cũng vậy, kể cả màn cao 1300px còn thừa cả mảng
-              * trống bên dưới. `clamp` giữ nguyên lý do 300px sinh ra (không
-              * thò xuống dưới mép ở 1440x900: 42vh = 378px, chỉ hơn cũ 78px)
-              * mà vẫn cho khung cao tới 560px trên màn cao. Cận dưới 320px để
-              * màn thấp vẫn còn đủ ô nhập và vài dòng tin.
+              * Bản trước cho phòng chờ một trần `clamp(320px,42vh,560px)` vì
+              * lúc đó cột phải là một tấm giấy dài tự do: không có trần thì
+              * khung phình theo số tin nhắn và đẩy nhóm thiết lập xuống vô tận.
+              * Giờ cột phải là ba hàng của một lưới cao đúng bằng màn hình, nên
+              * phần "còn lại" đã là một con số có thật - và nó luôn đúng, kể cả
+              * ở 768px chiều cao lẫn trên màn 1440 chiều cao, là hai chỗ mà mọi
+              * hằng số đều lệch.
               */}
-            <div
-              className={`min-h-0 ${
-                isLobby ? "lg:h-[clamp(320px,42vh,560px)]" : "flex-1 lg:min-h-[320px]"
-              }`}
-            >
+            {/* Sàn 320px chỉ dành cho trong ván, nơi cột phải không có gì khác
+              * tranh chỗ. Ở phòng chờ một sàn cứng sẽ đẩy khung chat lòi khỏi
+              * hàng của nó ngay khi voice bật lên trên màn cao 768px. */}
+            <div className={`min-h-0 flex-1 ${isLobby ? "" : "lg:min-h-[320px]"}`}>
               <ChatBox
                 heading={heading}
                 messages={room.messages}
@@ -534,23 +551,20 @@ export default function RoomPage() {
           </div>
 
           {/*
-            * Ba mục mở ra được của phòng chờ, TÁCH khỏi thẻ điều khiển ngay trên
-            * chúng - xem `LobbySettings`.
+            * Chân thanh điều khiển: một cái nút mở ra toàn bộ thiết lập ván.
             *
-            * Chúng đứng cuối cột phải vì khung chat phải chen vào giữa. Gộp lại
-            * trong `Lobby` thì ở màn 1440x900 chat bắt đầu quanh mốc 1000px:
-            * người vừa vào phòng phải cuộn xuống mới biết là phòng có chat, và
-            * cuộn xuống rồi thì mất nút Bắt đầu khỏi tầm mắt. Ba mục này thì
-            * ngược lại - host mở chúng đúng một lần lúc dựng ván, nên nằm dưới
-            * mép màn hình là ĐÚNG chỗ của chúng.
+            * Nó là con thứ tư của lưới chứ không phải nội dung nhét vào một cột
+            * nào, vì khung chat phải chen vào GIỮA nó và thẻ điều khiển. Thứ tự
+            * DOM ở đây trùng đúng thứ tự nhìn thấy, nên Tab đi từ thẻ điều
+            * khiển sang chat rồi mới tới đây, y như mắt.
             *
-            * Chúng là con thứ tư của lưới chứ không phải nội dung nhét vào một
-            * cột nào: thứ tự DOM ở đây trùng đúng thứ tự nhìn thấy, nên Tab đi
-            * từ thẻ điều khiển sang chat rồi mới tới đây, y như mắt.
+            * Trên điện thoại không có gì chen vào giữa (chat đi qua
+            * `MobileChatDock`), nên nó là thứ cuối cùng của một mạch đọc:
+            * người chơi, điều khiển, rồi luật.
             */}
           {isLobby && snapshot && identity && (
             <div className="order-4 min-w-0 lg:order-none lg:col-start-2 lg:row-start-3">
-              <LobbySettings
+              <LobbySettingsDrawer
                 snapshot={snapshot}
                 identity={identity}
                 onUpdateConfig={(config) => room.emit("room:update-config", { config })}

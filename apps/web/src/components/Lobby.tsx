@@ -65,10 +65,11 @@ function lobbyModel(snapshot: RoomSnapshot, identity: Identity) {
 /**
  * Khối điều khiển của phòng chờ: đội hình, diễn biến và nút bắt đầu.
  *
- * Danh sách người chơi KHÔNG ở đây - nó là cột riêng bên trái, cùng một
- * component với lúc đang chơi, nên không còn hai cách trình bày người chơi phải
- * giữ cho khớp nhau. Tên phòng, mã phòng và bộ đếm người cũng không ở đây: chúng
- * nằm trong `LobbyHeader` ngay trên, nên thẻ này chỉ còn nói về BỘ BÀI.
+ * Danh sách người chơi KHÔNG ở đây - nó là cả cột bên trái. Tên cảnh, chủ
+ * phòng và sĩ số cũng không: chúng là đầu của chính bảng người chơi
+ * (`LobbyHeader`). Mã phòng thì lên thanh đầu trang. Nên thẻ này chỉ còn nói
+ * đúng ba chuyện của phút chờ: BỘ BÀI nào, phòng đang ra sao, và bấm được
+ * chưa.
  *
  * Bày theo lớp: thẻ này trả lời đúng câu hỏi của phút đầu tiên - "bấm bắt đầu
  * được chưa, và nếu chưa thì vướng gì" - còn mười ba thẻ vai, năm ô thời gian
@@ -78,11 +79,10 @@ function lobbyModel(snapshot: RoomSnapshot, identity: Identity) {
  * chỉ thêm một cú bấm mở mục.
  *
  * `LobbySettings` là một component RIÊNG chứ không phải mấy thẻ nữa dưới đáy
- * component này, và lý do là chỗ đứng của khung chat trên desktop. Cột phải xếp
- * dọc: khối này, rồi chat, rồi mới tới nhóm thiết lập - nên trang phòng phải
- * chèn được một thứ vào GIỮA hai nửa. Gộp chung một component thì thứ duy nhất
- * làm được việc đó là `order` của CSS, và khi đó thứ tự Tab đi ngược thứ tự
- * nhìn thấy: mắt đọc chat trước nhóm thiết lập, còn bàn phím thì ngược lại.
+ * component này: nó không còn nằm trong dòng chảy của thanh điều khiển mà sống
+ * trong lớp phủ "Luật và vai trò" (`LobbySettingsDrawer`), mở ra từ một cái nút
+ * ở chân thanh. Thanh điều khiển xếp dọc: khối này, rồi voice, rồi chat, rồi
+ * nút mở thiết lập - và cả bốn phải cùng nằm trong một màn `100dvh`.
  *
  * Nút "Rời phòng" KHÔNG còn ở đây. Bản cũ có hai cái - một ở thanh đầu trang,
  * một chiếm trọn chiều ngang ngay dưới "Bắt đầu trận đấu" - và cái thứ hai có
@@ -112,7 +112,16 @@ export function Lobby({
     ...NEUTRAL_ROLES.filter((role) => config[CONFIG_KEY[role]]),
     ...(stage.rated && counts.villagers > 0 ? (["VILLAGER"] as Role[]) : []),
   ];
-  const visibleRoles = activeRoles.slice(0, 5);
+  /*
+   * Bốn thẻ vai, không phải năm.
+   *
+   * Thẻ này đứng trong một cột rộng khoảng 22rem ở 1024px, và ở bề ngang đó
+   * thẻ thứ năm luôn rơi xuống một hàng thứ ba - 37px chỉ để nói thêm đúng một
+   * cái tên vai, lấy thẳng từ chiều cao của khung chat ngay bên dưới. Bốn thẻ
+   * cộng phù hiệu "+n" vừa hai hàng ở mọi bề ngang mà cột này từng có, và
+   * người muốn xem đủ mười ba vai đã có "Luật và vai trò" ở chân thanh.
+   */
+  const visibleRoles = activeRoles.slice(0, 4);
 
   // Cùng bộ đầu vào và cùng thứ tự ưu tiên mà `RoomService.start` dùng -
   // startBlock chỉ gói lại chứ không đổi luật nào.
@@ -127,17 +136,28 @@ export function Lobby({
 
   return (
     <section className="lobby-command-panel">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="lobby-kicker">Đội hình đêm nay</p>
+      {/*
+        * Phần TÓM TẮT cuộn được, nút bấm thì không.
+        *
+        * Trên desktop thẻ này là hàng đầu của một thanh điều khiển cao đúng
+        * bằng màn hình, và ở 1024x768 - màn thấp nhất còn dựng hai cột - nó
+        * phải nhường chỗ cho khung chat bên dưới. Nhường bằng cách nào là câu
+        * hỏi thật: để cả thẻ tự co thì thứ bị đẩy ra khỏi khung nhìn là cái
+        * nằm CUỐI, tức đúng nút Bắt đầu. Nên chỗ co nằm ở đây, quanh phần tóm
+        * tắt bộ bài và diễn biến - hai thứ đọc một lần rồi thôi - còn nút thì
+        * đứng ngoài và không bao giờ trôi đi đâu.
+        *
+        * Ở 1440x900 và 1920x1080 không có gì cuộn: thẻ vừa đủ chỗ của nó.
+        */}
+      <div className="lobby-command-summary">
+        <div className="flex items-center justify-between gap-3">
           <h2 className="font-display text-xl font-semibold text-white">Vai trò</h2>
+          <span className={`lobby-mode-pill ${mode === "ranked" ? "is-ranked" : "is-chaos"}`}>
+            {mode === "ranked" ? "Ranked" : "Chaos"}
+          </span>
         </div>
-        <span className={`lobby-mode-pill ${mode === "ranked" ? "is-ranked" : "is-chaos"}`}>
-          {mode === "ranked" ? "Ranked" : "Chaos"}
-        </span>
-      </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         {visibleRoles.map((role) => {
           const amount =
             role === "WEREWOLF"
@@ -158,17 +178,18 @@ export function Lobby({
         )}
       </div>
 
-      <p className="mt-3 text-[13px] leading-relaxed text-mist/70">
+      <p className="mt-2.5 text-[13px] leading-relaxed text-mist/70">
         {stage.rated
           ? `${onPreset ? "Đội hình chuẩn" : "Đội hình tuỳ chỉnh"} cho ${count} người.`
           : stage.summary}
       </p>
 
-      <div className="mt-4 border-t border-white/[0.08] pt-4">
+      <div className="mt-3 border-t border-white/[0.08] pt-3">
         <LobbyActivity snapshot={snapshot} />
       </div>
+      </div>
 
-      <div className="lobby-primary-action mt-4">
+      <div className="lobby-primary-action mt-3">
         {isHost ? (
           <button className="btn-cta w-full" onClick={onStart} disabled={block !== null}>
             <span aria-hidden="true">◐</span>
@@ -203,13 +224,15 @@ export function Lobby({
 /**
  * Ba mục mở ra được của phòng chờ: luật phòng, bộ bài và cài đặt nâng cao.
  *
- * Đứng SAU khung chat trên desktop, và đó là cả lý do nó tách khỏi `Lobby` -
- * xem chú thích ở đó. Ba mục này là thứ host chỉnh một lần rồi quên, còn chat
- * là thứ cả phòng dùng liên tục trong lúc chờ đủ người; để chúng đẩy chat xuống
- * dưới mép màn hình là đổi chỗ đúng hai thứ đó cho nhau.
+ * Nội dung của lớp phủ "Luật và vai trò" - `LobbySettingsDrawer` là thứ dựng
+ * cái nút và cái lớp phủ, còn đây là ruột. Ba mục này là thứ host chỉnh một
+ * lần rồi quên, còn chat và nút Bắt đầu là thứ cả phòng nhìn liên tục trong
+ * lúc chờ đủ người; đứng thẳng trong thanh điều khiển thì chúng đẩy đúng hai
+ * thứ kia xuống dưới mép màn hình.
  *
- * Trên điện thoại không có gì chen vào giữa (chat đi qua `MobileChatDock`), nên
- * thứ tự đọc vẫn y như một mạch cũ: thẻ điều khiển rồi tới ba mục này.
+ * Vẫn là `<details>` xếp dọc chứ không phải tab: lớp phủ đã tự cuộn, và một
+ * mạch đọc từ trên xuống là thứ dùng được y hệt nhau trên điện thoại lẫn
+ * desktop.
  */
 export function LobbySettings({
   snapshot,

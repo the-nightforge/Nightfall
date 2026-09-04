@@ -7,6 +7,7 @@ import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { listItemMotion } from "@/lib/motion";
 import { useModalFocus } from "@/lib/useModalFocus";
 import { CharacterPortrait } from "./CharacterPortrait";
+import { LobbyHeader } from "./LobbyHeader";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -14,6 +15,14 @@ interface Props {
   onKick: (playerId: string) => void;
 }
 
+/**
+ * Sân người chơi của phòng chờ: cột trái, và là nội dung thị giác chính.
+ *
+ * Bảng này tự nó là một KHUNG cao bằng cột chứ không phải một tấm giấy dài:
+ * đầu bảng (`LobbyHeader`) và dòng chân đứng yên, chỉ lưới ở giữa cuộn. Nhờ
+ * vậy trên desktop cả sân, thanh điều khiển và khung chat cùng nằm trong một
+ * màn `100dvh` mà không phần nào phải cắt bớt nội dung.
+ */
 export function LobbyPlayerGrid({ snapshot, isHost, onKick }: Props) {
   const meId = snapshot.you?.id ?? null;
   const rosterKey = snapshot.players.map((player) => player.id).join(",");
@@ -29,7 +38,21 @@ export function LobbyPlayerGrid({ snapshot, isHost, onKick }: Props) {
   const count = snapshot.players.length;
   const freeSeats = Math.max(0, MAX_PLAYERS_PER_ROOM - count);
   const requiredSlots = Math.max(0, MIN_PLAYERS_TO_START - count);
-  const emptySlots = Math.min(freeSeats, Math.max(requiredSlots, freeSeats > 0 ? 1 : 0));
+  /*
+   * Ô trống là một lời NHẮC, không phải một bản kê chỗ còn thiếu.
+   *
+   * Mốc tối thiểu là 8, nên bản cũ - vẽ đủ `requiredSlots` ô - mở phòng ra là
+   * bảy khung gạch đứt vây quanh đúng một người: sân đọc ra như một chỗ trống
+   * chứ không như một chỗ đang tụ họp. Số người còn thiếu đã được nói bằng chữ
+   * và bằng thanh tiến độ ở đầu bảng, còn dòng chân nói nốt số ghế còn lại -
+   * lưới không phải gánh thêm việc đó.
+   *
+   * Ba cận: không nhiều hơn số ghế thật, không nhiều hơn số người ĐÃ vào, và
+   * không quá bốn. Còn ghế thì luôn giữ ít nhất một ô để sân không bao giờ
+   * đọc ra là đã đóng cửa.
+   */
+  const emptySlots =
+    freeSeats === 0 ? 0 : Math.max(1, Math.min(requiredSlots, count, 4));
 
   useEffect(() => {
     if (selectedId && !selected) setSelectedId(null);
@@ -43,21 +66,13 @@ export function LobbyPlayerGrid({ snapshot, isHost, onKick }: Props) {
   });
 
   return (
-    <section className="lobby-player-board">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="lobby-kicker">Dân làng đã đến</p>
-          <h2 className="font-display text-2xl font-semibold text-white sm:text-[28px]">
-            Người chơi
-          </h2>
-        </div>
-        <div className="text-right">
-          <strong className="font-display text-3xl font-semibold text-amber-100">{count}</strong>
-          <span className="ml-1 text-base text-mist/70">/ {MAX_PLAYERS_PER_ROOM}</span>
-        </div>
-      </div>
+    <section className="lobby-player-board" aria-label="Người chơi trong phòng">
+      <LobbyHeader snapshot={snapshot} />
 
-      <ul className="lobby-player-grid mt-5">
+      {/* Chỉ LƯỚI cuộn, không phải cả bảng: đầu bảng giữ sĩ số và tiến độ
+        * trong tầm mắt kể cả khi phòng đã đủ hai chục người. */}
+      <div className="lobby-player-scroll lobby-roster-scroll">
+      <ul className="lobby-player-grid">
         <AnimatePresence initial={false}>
         {snapshot.players.map((player, index) => {
           const isMe = player.id === meId;
@@ -152,9 +167,10 @@ export function LobbyPlayerGrid({ snapshot, isHost, onKick }: Props) {
         ))}
         </AnimatePresence>
       </ul>
+      </div>
 
       {freeSeats > emptySlots && (
-        <p className="mt-4 text-center text-[13px] text-mist/65">
+        <p className="mt-3 shrink-0 text-center text-[13px] text-mist/65">
           Và còn {freeSeats - emptySlots} vị trí trong làng
         </p>
       )}
