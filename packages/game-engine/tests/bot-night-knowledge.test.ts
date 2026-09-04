@@ -178,6 +178,21 @@ describe("NightKnowledge · ranh giới bảo mật", () => {
     expect(e.botKnowledgeFor(seer).night!.legalTargets.SEE).not.toContain(seer);
   });
 
+  it("Bảo Vệ không bao giờ được chào chính mình", () => {
+    /*
+     * Luật sống ở ĐÂY, không ở chiến thuật.
+     *
+     * `bot-night-strategies` từng có một test "tự đỡ mình khi đang bị nhắm" đưa
+     * thẳng `GUARD: ["me", ...]` vào chiến thuật rồi khẳng định nó chọn "me".
+     * Danh sách ấy engine không bao giờ sinh ra, nên test xanh trên một tình
+     * huống không tồn tại, và khoản thưởng tự đỡ mà nó bảo vệ chưa chạy lần nào.
+     */
+    const e = nightEngine();
+    const guard = idOf(e, "GUARD");
+
+    expect(e.botKnowledgeFor(guard).night!.legalTargets.GUARD).not.toContain(guard);
+  });
+
   it("Bảo Vệ không được đỡ lại mục tiêu đêm trước", () => {
     const e = nightEngine();
     const previous = idOf(e, "WITCH");

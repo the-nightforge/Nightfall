@@ -50,9 +50,6 @@ function tuned(over: Parameters<typeof resolveWeights>[0] = {}): BotWeights {
         abstainPressureCeiling: 0.3,
       },
       selfPreservation: {
-        guardSelfHostilityThreshold: 0.5,
-        guardSelfBonusBase: 60,
-        guardSelfBonusSpan: 60,
         guardSuspicionPenalty: 0.5,
         guardRepeatPenalty: 40,
       },

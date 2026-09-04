@@ -66,6 +66,14 @@ export interface NightState {
    */
   wolvesLocked: boolean;
   guardTarget: string | null;
+  /**
+   * Mục tiêu che thứ hai của Bảo Vệ; chỉ có trong sự kiện Đêm Cảnh Giác.
+   *
+   * OPTIONAL vì cùng lý do với `serialKillerSkipped`: bắt buộc một trường thêm
+   * sau là làm mọi snapshot đã ghi trước bản này trượt schema, và một ván thật
+   * đang chạy sẽ không khôi phục được. Constructor chuẩn hoá về null.
+   */
+  guardSecondTarget?: string | null;
   guardianAngelTarget: string | null;
   /** Phù Thuỷ đã quyết định dùng bình cứu cho nạn nhân đêm nay chưa */
   healTonight: boolean;

@@ -1,14 +1,20 @@
 import type { Role } from "@masoi/shared";
-import { incomingHostilityOf } from "../analysis/social-analysis";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { sumTerms, type TraceTerm } from "../trace/trace";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
 
 /**
- * Bảo Vệ đỡ người đáng tin nhất, và tự đỡ khi chính mình đang bị nhắm.
+ * Bảo Vệ đỡ người đáng tin nhất và chưa được đỡ gần đây.
  *
- * Người bị cả làng công kích ban ngày là người bầy Sói cũng muốn loại - hoặc vì
- * họ nguy hiểm, hoặc vì giết họ dễ đổ tội. Khi đó tự đỡ là nước đúng.
+ * KHÔNG có nhánh tự đỡ, và đó là chủ ý của luật chứ không phải thiếu sót: engine
+ * cấm Bảo Vệ tự bảo vệ mình, `legalTargets.GUARD` đã lọc chính mình ra trước khi
+ * chiến thuật nhìn thấy danh sách. Ở đây từng có một khoản thưởng "tự đỡ khi
+ * đang bị nhắm" cùng ba knob nuôi nó - không dòng nào chạy được lần nào, vì
+ * `me` không bao giờ nằm trong nhóm ứng viên.
+ *
+ * Nếu sau này muốn cho Bảo Vệ tự đỡ thì chỗ sửa là ENGINE, không phải file này:
+ * một khoản thưởng trong lõi AI trỏ vào nước đi mà engine sẽ từ chối chỉ làm
+ * hỏng lượt đêm.
  */
 export function guardStrategy(
   _role: Role = "GUARD",
@@ -35,7 +41,6 @@ export function guardStrategy(
       }
 
       const me = context.knowledge.botId;
-      const selfHostility = incomingHostilityOf(state, me);
       const tuning = weights.selfPreservation;
 
       // Ai đã được đỡ gần đây. Bảo Vệ luôn chọn "người đáng tin nhất" sẽ đỡ đúng
@@ -51,15 +56,10 @@ export function guardStrategy(
         .map((targetId) => {
           const trust = state.trust[targetId]?.score ?? 0;
           const suspicion = state.suspicion[targetId]?.score ?? 0;
-          const selfBonus =
-            targetId === me && selfHostility >= tuning.guardSelfHostilityThreshold
-              ? tuning.guardSelfBonusBase + selfHostility * tuning.guardSelfBonusSpan
-              : 0;
           // Đỡ người mình nghi là Sói thì vừa phí lượt vừa cứu nhầm phe.
           const terms: TraceTerm[] = [
             { name: "trust", value: trust },
             { name: "suspicionPenalty", value: -(suspicion * tuning.guardSuspicionPenalty) },
-            { name: "selfPreservation", value: selfBonus },
             {
               name: "repeatPenalty",
               value: guardedBefore.has(targetId) ? -tuning.guardRepeatPenalty : 0,
@@ -73,17 +73,24 @@ export function guardStrategy(
         .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));
 
       const winner = scored[0];
+      // Đêm Cảnh Giác mở lượt che thứ hai. Điều kiện do engine chốt ở
+      // `bonusSecondTargetFor`, giống hệt Màn Sương Tan của Tiên Tri: đọc thẳng
+      // `activeEventId` ở đây là dựng lại luật lần thứ hai, và bản sao đó sẽ
+      // trôi lệch khỏi `submitNightAction`.
+      const runnerUp = night.bonusSecondTargetFor === "GUARD" ? (scored[1]?.targetId ?? null) : null;
+
       return {
         kind: "NIGHT_ACTION",
         action: "GUARD",
         targetId: winner.targetId,
+        secondaryTargetId: runnerUp,
         confidence: weights.nightConfidence.guard,
         evidence: [
           nightEvidence(
             "DEFEND",
             context.knowledge.round,
             winner.targetId,
-            winner.targetId === me ? "tự đỡ vì đang bị nhắm" : "đỡ người đáng tin nhất",
+            "đỡ người đáng tin nhất",
             0,
             weights,
           ),
