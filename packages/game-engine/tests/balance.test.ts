@@ -24,32 +24,20 @@ describe("balance", () => {
       );
 
     /*
-     * MỘT NGOẠI LỆ CÓ TÊN, và nó là một BÁO ĐỘNG GIẢ đã kiểm chứng.
+     * KHÔNG còn ngoại lệ nào, và đường đi tới đó đáng ghi lại.
      *
-     * Preset 10 chấm ra `villagePower` 11.5 so với `wolfPower` 12, nên nó kêu ở
-     * phép kiểm "sức mạnh làng thấp hơn phe Sói". Đo thực tế cùng ngày, 600 ván
-     * trên 3 seed family với speech bật: 52.7% cho phe làng. Bộ bài không lệch;
-     * BẢNG SỐ lệch.
+     * Preset 10 từng chấm `villagePower` 11.5 < `wolfPower` 12 và tự kêu ở phép
+     * kiểm này, trong khi đo ra 52.7% - một báo động giả, từng được ghi đích
+     * danh ở đây kèm bằng chứng thay vì vá bằng cách vặn một con số cho vừa
+     * ngưỡng. Hai nghi phạm khi đó là `APPRENTICE_SEER` (vừa hạ 2 -> 1) và
+     * `WOLF_CUB` = 7 - dòng được đo thưa nhất bảng, đúng 2 mẫu.
      *
-     * Hai nghi phạm, chưa phân định được:
-     *  - `APPRENTICE_SEER` vừa hạ 2 -> 1 theo số đo ghép cặp (Δ -0.6). Đúng số
-     *    đo, và chính nó đẩy preset 10 qua mép.
-     *  - `WOLF_CUB` = 7 là dòng ĐƯỢC ĐO THƯA NHẤT bảng (2 mẫu, chú thích của
-     *    `ROLE_POWER` đã cảnh báo). 7 có thể đang quá cao.
-     *
-     * KHÔNG vặn số nào cho vừa ngưỡng: `ROLE_POWER` viết thẳng rằng ngưỡng phải
-     * giữ nguyên để bảng nói đúng số đo, chứ không sửa số cho vừa một ngưỡng cũ.
-     * Ngoại lệ vì thế được ghi ĐÍCH DANH ở đây thay vì nới lỏng phép kiểm - một
-     * preset MỚI nào trượt phép này vẫn làm test đỏ.
+     * Đo lại Sói Con trên bộ bài SINH RA thay vì preset cho ra 6, không phải 7
+     * (xem `ROLE_POWER`). Với 6 thì preset 10 chấm 11 so với 11.5 và phép kiểm
+     * im - ngoại lệ tự tan, do một phép đo độc lập không hề nhìn vào preset 10.
      */
-    const KNOWN_FALSE_ALARM = new Set(["10"]);
     for (const [count, deck] of Object.entries(PRESET_DECKS)) {
-      const warnings = absolute(deck, Number(count));
-      if (KNOWN_FALSE_ALARM.has(count)) {
-        expect(warnings.join(" ")).toMatch(/thấp hơn phe Sói/);
-        continue;
-      }
-      expect(warnings).toEqual([]);
+      expect(absolute(deck, Number(count))).toEqual([]);
     }
 
     // Đúng preset 12 người CŨ (3 Sói + Sói Con), đo ra 7.3% cho phe làng. Ngân

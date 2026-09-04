@@ -62,7 +62,45 @@ import type { BalanceWarningView } from "./snapshot";
  */
 export const ROLE_POWER: Record<Role, number> = {
   WEREWOLF: 5,
-  WOLF_CUB: 7,
+  /**
+   * 6, hạ từ 7. Đo trên CẢ BỘ BÀI chứ không chỉ preset - xem cảnh báo ngay dưới
+   * bảng này, lá mạnh nhất bộ bài từng là lá được đo thưa nhất (đúng 2 mẫu).
+   *
+   * Phép đo đúng cho con số này KHÔNG phải "thêm Sói Con vào", mà là "ĐỔI một
+   * Sói thường thành Sói Con, giữ nguyên tổng số Sói" - vì 7-so-với-5 khẳng
+   * định đúng chênh lệch đó. Bộ bài sinh ra tại chỗ với ba mức vai làng
+   * (mỏng/vừa/đầy), seed ghép cặp, speech bật, 300 ván mỗi ô:
+   *
+   *   kit   |  n | thường | có SC |     Δ
+   *   mỏng  |  9 |  33.3  | 22.7  | -10.7
+   *   mỏng  | 13 |  64.3  | 49.0  | -15.3
+   *   mỏng  | 18 |  75.3  | 79.7  |  +4.3
+   *   vừa   | 13 |  59.3  | 50.7  |  -8.7
+   *   vừa   | 18 |  78.0  | 78.7  |  +0.7
+   *   đầy   | 13 |  59.0  | 52.7  |  -6.3
+   *   đầy   | 18 |  77.0  | 81.0  |  +4.0
+   *                              Δ TB = -4.57
+   *
+   * Quy đổi bằng cùng cái neo mà `TRAITOR` dùng: một con Sói thay một ghế Dân
+   * Làng đáng -27 điểm cho 4.5 đơn vị, tức ~6 điểm mỗi đơn vị. -4.57 điểm vì
+   * thế là ~0.76 đơn vị, cho 5.76 - làm tròn lên 6. Con số 7 cũ khẳng định
+   * chênh lệch 2 đơn vị, tức đáng lẽ phải đo ra khoảng -12 điểm; nó đo ra một
+   * phần ba chỗ đó.
+   *
+   * DẤU ĐỔI CHIỀU THEO CỠ PHÒNG, và đó là điều đáng chú ý nhất: Sói Con hơn hẳn
+   * một con Sói thường ở bàn 9-13 người (-6 tới -15) nhưng KÉM hơn ở bàn 18
+   * (+0.7 tới +4.3, cả ba kit đều dương). Cơn phẫn nộ cho bầy cắn hai người
+   * trong MỘT đêm, mà giá trị của việc dồn hai cái chết vào một đêm giảm dần
+   * khi bàn còn nhiều người và ván còn nhiều đêm. Bảng này chỉ có một con số
+   * mỗi vai nên nó không diễn tả được điều đó - cùng giới hạn đã ghi ở `TRAITOR`.
+   *
+   * HỆ QUẢ: preset 10 (`1 WEREWOLF + WOLF_CUB`) hết báo động giả. Ở 7 nó chấm
+   * `wolfPower` 12 so với `villagePower` 11.5 và tự kêu "sức mạnh làng thấp hơn
+   * phe Sói" trong khi đo ra 52.7%. Ở 6 thì 11 so với 11.5, và phép kiểm im.
+   * Đây là số đo tự gỡ một ngoại lệ, KHÔNG phải một con số vặn cho vừa ngưỡng:
+   * phép đo trên chạy độc lập và không hề nhìn vào preset 10.
+   */
+  WOLF_CUB: 6,
   /**
    * 3.5, ĐÃ ĐO - thay cho con số 3 ước lượng lúc dựng vai.
    *
