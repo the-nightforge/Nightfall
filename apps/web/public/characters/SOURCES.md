@@ -32,6 +32,39 @@
 
 Cap `*` yeu nhat la turban/beard chung Eldrin — uu tien thay bang pack 2.
 
+### Con thieu 8 khuon mat (do ngay 2026-09-04)
+
+Ngay 2026-09-04 tran phong len **20** (`MAX_PLAYERS_PER_ROOM`) trong khi
+`AVATAR_IDS` van 16, va 16 id nay chi ánh xa vao **12 khuon mat**. Hai con so
+do cong lai:
+
+| So ghe | Trung ID hinh | Trung KHUON MAT | Ghe thua nhieu nhat |
+| ------ | ------------- | --------------- | ------------------- |
+| 15     | 0%            | 100%            | 4                   |
+| 16     | 0%            | 100%            | 4                   |
+| 20     | 100%          | 100%            | 8                   |
+
+Do bang 4000 phong ngau nhien moi cot. Doc nhu sau: o 15-16 ghe thi
+`assignAvatars` khong bao gio cap trung *id*, nhung vi 4 cap id dung chung mat
+goc nen gan nhu van nao cung co 4 cap nguoi trong giong nhau. O 20 ghe con
+thieu ca id, nen thanh 8 cap — tuc 16 tren 20 nguoi nam trong mot cap nhin
+giong ai do.
+
+**Can mua them 8 khuon mat.** 12 hien co + 8 = 20: vua du moi ghe mot mat
+rieng, va xoa luon 4 cap dung chung. Mot lan giai ca hai van de.
+
+Uu tien mua tu CUNG tac gia neu co ban day du. Tron pack khac vao nghia la 12
+mat cu va 8 mat moi ngoi canh nhau trong cung mot ban, va lech phong cach o do
+thi nhin ra ngay.
+
+Day la van de THAM MY, khong phai bug: moi ghe van co hinh, khong o nao trong,
+va `tintFor` van cho sac nen rieng nen hai o trung mat van phan biet duoc.
+Khong co gi xau di theo thoi gian.
+
+Them mot nhan vat = 5 buoc, xem `## Tai sinh` ben duoi. Luu y: **dung them id
+vao `AVATAR_IDS` khi chua co sheet** — `character-art.test.ts` khang dinh moi
+AvatarId deu co sheet, nen lam nua chung la suite do.
+
 ## Quy uoc sheet (pilot)
 
 - 1 file/avatar: `<avatarId>.webp`, dai `1024x256`, 4 frame 256px.
