@@ -36,6 +36,13 @@ const ROLE_PHRASES: Array<[string, Role]> = [
   // Trước "kẻ" của bất kỳ cụm nào khác và trước "sói": "báo thù" một mình
   // không phải một cái tên vai, nên chỉ cụm đủ ba tiếng mới được khớp.
   ["kẻ báo thù", "EXECUTIONER"],
+  // Ngay cạnh "kẻ báo thù" và cùng quy ước: cụm đủ ba tiếng mới khớp. Hai cái
+  // tên chia nhau tiếng "kẻ" nên cả hai phải là cụm đầy đủ, nếu không thì tiếng
+  // đó một mình sẽ khớp bừa vào cái đứng trước trong bảng.
+  ["kẻ phản bội", "TRAITOR"],
+  // "phản bội" không kèm "kẻ" vẫn là một cách gọi tự nhiên trong câu khai, và
+  // nó không đụng cụm nào khác trong bảng.
+  ["phản bội", "TRAITOR"],
   // Trước "sát" bất kỳ và trước "thám tử": không có cụm nào ngắn hơn khớp được,
   // nhưng giữ đúng quy ước "cụm dài đứng trước" của bảng này.
   ["sát nhân", "SERIAL_KILLER"],

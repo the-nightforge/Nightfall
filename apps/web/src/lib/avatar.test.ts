@@ -7,26 +7,11 @@ import { assignAvatars, breathOffsetFor, tintFor } from "./avatar";
 const ids = (count: number) => Array.from({ length: count }, (_, i) => `player-${i}`);
 
 describe("assignAvatars", () => {
-  it("không ai trùng hình chừng nào còn đủ hình", () => {
-    // Trần là SỐ HÌNH, không phải `MAX_PLAYERS_PER_ROOM`. Hai con số này trùng
-    // nhau tới khi trần phòng lên 20 (2026-09-04) trong khi `AVATAR_IDS` vẫn
-    // là 16 hình. Khẳng định tính duy nhất theo trần phòng khi đó không còn là
-    // một phép kiểm - nó là một điều bất khả.
-    const table = assignAvatars(ids(AVATAR_IDS.length));
-    const used = Object.values(table);
-    assert.equal(used.length, AVATAR_IDS.length);
-    assert.equal(new Set(used).size, AVATAR_IDS.length);
-  });
-
-  it("phòng đông hơn số hình thì cấp trùng, không bỏ trống ô nào", () => {
-    // Đường lui này vốn đã có trong `assignAvatars` và có chú thích ở đó; từ
-    // khi trần phòng lên 20 nó là đường đi THẬT của bốn ghế cuối, nên nó cần
-    // một phép kiểm thay vì một lời hứa trong bình luận.
+  it("phòng đầy vẫn không ai trùng hình", () => {
     const table = assignAvatars(ids(MAX_PLAYERS_PER_ROOM));
     const used = Object.values(table);
     assert.equal(used.length, MAX_PLAYERS_PER_ROOM);
-    assert.equal(new Set(used).size, Math.min(MAX_PLAYERS_PER_ROOM, AVATAR_IDS.length));
-    for (const id of used) assert.ok(AVATAR_IDS.includes(id));
+    assert.equal(new Set(used).size, MAX_PLAYERS_PER_ROOM);
   });
 
   it("thứ tự mảng không đổi kết quả: người vào sau không làm ai đổi mặt", () => {
@@ -57,13 +42,8 @@ describe("avatar art", () => {
     assert.deepEqual(Object.keys(AVATAR_PATHS).sort(), [...AVATAR_IDS].sort());
   });
 
-  it("đủ hình cho phần lớn một phòng đầy", () => {
-    // KHÔNG còn là `>= MAX_PLAYERS_PER_ROOM`: trần phòng lên 20 mà bộ hình vẫn
-    // 16. Ngưỡng 16 ở đây khoá lại chính bộ hình hiện có, để một lần "dọn dẹp"
-    // không lặng lẽ rút nó xuống - và bốn ghế chênh lệch đã có phép kiểm riêng
-    // ở `assignAvatars`. Bổ sung hình vào `avatar-art.ts` thì nâng số này lên
-    // và trả phép kiểm trùng hình kia về đúng ngưỡng mới.
-    assert.ok(AVATAR_IDS.length >= 16);
+  it("đủ hình cho một phòng đầy", () => {
+    assert.ok(AVATAR_IDS.length >= MAX_PLAYERS_PER_ROOM);
   });
 
   it("đã bỏ ô nền đen của bản gốc, chỉ còn hình", () => {
