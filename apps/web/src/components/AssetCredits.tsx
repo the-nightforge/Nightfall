@@ -10,7 +10,7 @@
  */
 export function AssetCredits() {
   return (
-    <footer className="mx-auto max-w-6xl px-4 pb-8 text-center text-[11px] leading-relaxed text-mist/35">
+    <footer className="mx-auto max-w-6xl px-4 pb-8 text-center text-[11px] leading-relaxed text-mist/65">
       <p>
         Chân dung nhân vật by{" "}
         <a
