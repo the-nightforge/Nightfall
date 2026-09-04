@@ -1,0 +1,101 @@
+/*
+ * Chân dung nhân vật: một sprite sheet bốn frame nằm ngang, hoán frame bằng
+ * cách trượt ảnh trong một khung tràn-ẩn.
+ *
+ * Vì sao trượt ảnh chứ không đổi `background-position`: cần `onError` của thẻ
+ * <img> để rơi về SVG khi file hỏng, mà `background-image` không báo lỗi gì cả.
+ *
+ * Không có vòng requestAnimationFrame nào ở đây. Mười lăm ô cùng nháy mắt bằng
+ * JS là mười lăm lần setState mỗi vài trăm ms; bằng CSS thì trình duyệt lo.
+ */
+
+.character-portrait {
+  position: relative;
+  overflow: hidden;
+}
+
+.character-portrait__sheet {
+  /* Bốn frame nằm ngang nên ảnh rộng gấp bốn khung. */
+  width: 400%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+  will-change: transform;
+}
+
+/*
+ * Animation CHỈ chạy khi sheet có biến thể thật.
+ *
+ * Bộ art hiện tại là pack chân dung tĩnh: frame `blink` và `talk` là bản sao
+ * của `idle`, lệch nhau đúng bằng nhiễu nén. Cho mười lăm ô chạy animation
+ * vĩnh viễn để đổi sang một bức ảnh y hệt là đốt pin đổi lấy con số không -
+ * nên `has-variants` là cửa, và `character-art.ts` là nơi mở nó.
+ *
+ * Trạng thái "đang nói" KHÔNG mất đi khi cửa đóng: nó vẫn được vẽ bằng quầng
+ * ngoài khung (`.seat-voice-halo`), chỗ nó vốn thuộc về từ trước.
+ */
+
+/* Mặt bình thường: frame 0, thỉnh thoảng chớp sang frame 1. */
+.character-portrait.has-variants.is-alive .character-portrait__sheet {
+  animation: character-blink 5.4s steps(1, end) infinite;
+  /*
+   * Lệch pha riêng của từng người, dùng lại đúng con số đã tính cho nhịp thở.
+   * Mười lăm khuôn mặt nháy mắt đồng pha đọc ra như cả lưới vừa giật một cái,
+   * chứ không phải như mười lăm người đang ngồi.
+   */
+  animation-delay: calc(var(--breath-offset, 0) * -5.4s);
+}
+
+/* Đang nói: đảo qua lại frame 0 và frame 2. */
+.character-portrait.has-variants.is-talking .character-portrait__sheet {
+  animation: character-talk 0.28s steps(1, end) infinite;
+}
+
+/* Đã chết: frame 3, đứng yên. */
+.character-portrait.is-dead .character-portrait__sheet {
+  animation: none;
+  transform: translateX(-75%);
+}
+
+@keyframes character-blink {
+  /* Mắt mở gần trọn chu kỳ; cái chớp chỉ chiếm ~4%, tức khoảng 216ms. */
+  0%,
+  92% {
+    transform: translateX(0);
+  }
+  96% {
+    transform: translateX(-25%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes character-talk {
+  0% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /*
+   * Cùng luật đã chốt ở globals.css: cái không mang tin thì tắt, cái MANG TIN
+   * thì ở lại và chốt đứng yên.
+   *
+   * Nháy mắt không mang tin gì - tắt hẳn, về frame 0.
+   * "Đang nói" là thông tin thật - ai đang lên tiếng - nên giữ nguyên, chốt ở
+   * frame miệng MỞ. Người bật thiết lập này vẫn nhìn lưới là biết ai đang nói.
+   */
+  .character-portrait.has-variants.is-alive .character-portrait__sheet {
+    animation: none;
+    transform: translateX(0);
+  }
+
+  .character-portrait.has-variants.is-talking .character-portrait__sheet {
+    animation: none;
+    transform: translateX(-50%);
+  }
+}
