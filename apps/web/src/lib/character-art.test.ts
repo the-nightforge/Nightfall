@@ -128,6 +128,52 @@ describe("ngân sách dung lượng", () => {
   });
 });
 
+describe("hợp đồng CSS của khung chân dung", () => {
+  /**
+   * Đọc thân của một luật CSS theo selector chính xác.
+   *
+   * Thô sơ, và cố ý: file này không có bộ phân tích CSS, còn thêm một phụ
+   * thuộc chỉ để đọc một luật thì đắt hơn thứ nó bảo vệ.
+   */
+  function ruleBody(css: string, selector: string): string | null {
+    const at = css.indexOf(`\n${selector} {`);
+    if (at === -1) return null;
+    const open = css.indexOf("{", at);
+    const close = css.indexOf("}", open);
+    return close === -1 ? null : css.slice(open + 1, close);
+  }
+
+  const css = readFileSync(join(process.cwd(), "src/app/characters.css"), "utf8");
+
+  it("khung phải khai báo display, nếu không cả chân dung biến mất", () => {
+    // Khung là một <span>, mặc định `display: inline`, mà hộp inline BỎ QUA
+    // width/height. Mọi nơi gọi đều đặt cỡ bằng class, nên thiếu `display` thì
+    // khung co lại còn đúng bề dày viền - đo được 2x19px thay vì 66x66.
+    //
+    // Đây là hồi quy đã xảy ra thật: `grid` từng nằm trên className của
+    // component và bị gỡ nhầm cùng `place-items-center`. Chân dung biến mất
+    // khỏi toàn bộ ứng dụng mà không một test nào đỏ, vì happy-dom không có
+    // layout engine. Test này là thứ đứng thay cho layout engine đó.
+    const body = ruleBody(css, ".character-portrait");
+    assert.ok(body, "không tìm thấy luật .character-portrait");
+    assert.match(
+      body!,
+      /(^|[;\s])display\s*:/,
+      "`.character-portrait` thiếu `display` - khung sẽ là inline và co về 0",
+    );
+  });
+
+  it("ảnh sheet phải neo trái, không được để bị căn giữa", () => {
+    // Ảnh rộng gấp 4 khung. Căn giữa nó thì toạ độ 0% của ảnh không còn khớp
+    // mép trái khung, và bốn mốc translateX mất hết ý nghĩa: `is-alive` lộ ra
+    // đường nối giữa frame 1 và 2, `is-dead` trôi hẳn ra ngoài mép phải ảnh.
+    const body = ruleBody(css, ".character-portrait__sheet");
+    assert.ok(body, "không tìm thấy luật .character-portrait__sheet");
+    assert.match(body!, /position\s*:\s*absolute/, "ảnh sheet phải neo bằng absolute");
+    assert.match(body!, /inset\s*:\s*0 auto 0 0/, "ảnh sheet phải khoá vào mép trái");
+  });
+});
+
 describe("ranh giới kiến trúc", () => {
   it("character-portrait.ts không được biết React hay DOM", () => {
     // Cùng mẹo mà live-trial-scene.test.ts dùng để chặn `three` lọt vào file sai.
