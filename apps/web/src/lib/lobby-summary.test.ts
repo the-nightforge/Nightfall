@@ -186,22 +186,26 @@ describe("startBlock", () => {
 
   /*
    * Hồi quy cho đúng cái phòng đã bắt gặp: host chốt preset ở một cỡ phòng,
-   * thêm một người vào, và bộ bài cũ ở bàn mới rơi ra ngoài ngưỡng 40-60 nên
-   * `blocking`. `validateRoomConfig` không thấy gì sai (nó chỉ đếm bài so với
-   * người), nên bản cũ để nút sáng.
+   * một người rời đi, và bộ bài cũ ở bàn nhỏ hơn rơi xuống dưới ngưỡng chặn.
+   * `validateRoomConfig` không thấy gì sai (nó chỉ đếm bài so với người), nên
+   * bản cũ để nút sáng.
    *
-   * Cặp số đổi từ (preset 7, bàn 8) sang (preset 9, bàn 10) vì preset 6 và 7 đã
-   * gỡ khi `MIN_PLAYERS_TO_START` lên 8. Chiều lệch cũng đảo theo: ca cũ chấm
-   * 33.5 (nghiêng về Sói), ca này chấm 62 (nghiêng về làng). Điều test khẳng
-   * định không đổi - Ranked chặn, Chaos cho qua - và nó không phụ thuộc chiều.
+   * Cặp số đổi từ (preset 7, bàn 8) sang (preset 10, bàn 9) vì preset 6 và 7
+   * đã gỡ khi `MIN_PLAYERS_TO_START` lên 8. Ngưỡng chặn giờ LỆCH VỀ MỘT PHÍA
+   * (xem chú thích "NGƯỠNG BẤT ĐỐI XỨNG" ở `generateWarnings`): chỉ điểm
+   * nghiêng về phe Sói (score < 40) mới khoá phòng, điểm nghiêng về phe Dân chỉ
+   * cảnh báo. Vì vậy cặp số ở đây PHẢI nghiêng về phe Sói - preset 9 dùng ở bàn
+   * 10 người giờ chấm 60.5 (nghiêng về làng) nên không còn `blocking` nữa;
+   * preset 10 dùng ở bàn 9 người chấm 39.5 (nghiêng về Sói) mới đúng kịch bản
+   * cần hồi quy.
    */
-  it("preset 9 người dùng ở phòng 10 người: Ranked chặn, Chaos cho qua", () => {
-    const config = PRESET_DECKS[9];
-    const balance = generateWarnings(config, 10);
+  it("preset 10 người dùng ở phòng 9 người: Ranked chặn, Chaos cho qua", () => {
+    const config = PRESET_DECKS[10];
+    const balance = generateWarnings(config, 9);
     assert.equal(balance.blocking, true, "tiền đề: engine phải coi đây là mất cân bằng");
-    assert.equal(validateRoomConfig(config, 10), null, "tiền đề: cấu hình không có lỗi nào khác");
+    assert.equal(validateRoomConfig(config, 9), null, "tiền đề: cấu hình không có lỗi nào khác");
 
-    const shared = { playerCount: 10, configError: validateRoomConfig(config, 10), unreadyNames: [] };
+    const shared = { playerCount: 9, configError: validateRoomConfig(config, 9), unreadyNames: [] };
     assert.deepEqual(
       startBlock({ ...shared, balanceBlocking: balance.blocking, mode: "ranked" }),
       { kind: "balance" },

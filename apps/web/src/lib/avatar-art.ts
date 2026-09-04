@@ -24,7 +24,7 @@
  *
  * Mỗi hình là một path duy nhất trong viewBox 0 0 512 512, đã bỏ ô nền đen của
  * bản gốc. Nhúng thẳng vào bundle chứ không để trong public/: một phòng hiển thị
- * tới 15 ô, tách file là 15 lượt round-trip trên 4G để đổi lấy ~12KB đã nén.
+ * tới 20 ô, tách file là 20 lượt round-trip trên 4G để đổi lấy ~12KB đã nén.
  */
 export const AVATAR_IDS = [
   "farmer",

@@ -1,6 +1,7 @@
 import {
   MAX_PLAYERS_PER_ROOM,
   MIN_PLAYERS_TO_START,
+  JESTER_LARGE_TABLE_WARNING,
   UNMEASURED_EXECUTIONER_WARNING,
   UNMEASURED_NEUTRAL_WARNING,
   type BalanceWarningView,
@@ -105,6 +106,14 @@ function friendly(warning: string, score: number, playerCount: number): string {
     // không với tới.
     return "Ván có Kẻ Báo Thù: một người chơi vận động cả ván để làng treo cổ đúng một người vô tội. Điểm cân bằng chỉ chấm cán cân Dân/Sói, nên nó không đo được sức nặng của lá bài này.";
   }
+  if (warning === JESTER_LARGE_TABLE_WARNING) {
+    /*
+     * KHÁC hai nhánh trên: ở đây CÓ một con số, và con số mới là nội dung. Vẫn
+     * không có lời khuyên "hãy chỉnh lại X" - bộ bài không lệch về phía Dân hay
+     * Sói, nó chỉ có một người chơi thứ ba đang thắng nhiều hơn cả hai phe.
+     */
+    return "Ván có Thằng Hề ở bàn đông: đo được nó thắng hơn nửa số ván từ 16 người trở lên, vì mỗi ngày thêm một phiên toà mà nó chỉ cần trúng một lần. Điểm cân bằng chỉ chấm cán cân Dân/Sói nên không thấy điều đó.";
+  }
   return warning;
 }
 
@@ -124,7 +133,11 @@ export function balanceCopy(
    */
   const tiltWarnings = balance.warnings.filter(
     (warning) =>
-      warning !== UNMEASURED_NEUTRAL_WARNING && warning !== UNMEASURED_EXECUTIONER_WARNING,
+      warning !== UNMEASURED_NEUTRAL_WARNING &&
+      warning !== UNMEASURED_EXECUTIONER_WARNING &&
+      // Cùng lý do với hai dòng trên: đây không phải lời phàn nàn về cán cân
+      // Dân/Sói, nên nó không được kéo tiêu đề thẻ thành "Đội hình hơi lệch".
+      warning !== JESTER_LARGE_TABLE_WARNING,
   );
   const advice: string[] = [];
   for (const warning of balance.warnings) {

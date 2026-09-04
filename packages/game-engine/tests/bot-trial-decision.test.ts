@@ -59,16 +59,50 @@ describe("decideFinalVote", () => {
     expect(decideFinalVote(context(), state, rng()).guilty).toBe(true);
   });
 
-  it("TREO khi không biết gì, vì tới được phiên toà nghĩa là làng đã chỉ vào người này", () => {
-    // Test này từng khẳng định điều NGƯỢC LẠI ("không biết gì thì tha"), với lý
-    // do mặc định Treo sẽ biến phiên toà thành một vụ hành quyết.
-    //
-    // Harness ở Task 9 bác bỏ: với mặc định Tha, phe làng thua 30/30 ván. Không
-    // ai bị kết án nên không có lịch sử phiếu, nên nghi ngờ mãi bằng 0, nên
-    // không ai bị kết án - một vòng lặp chết. Điều bị bỏ sót là đa số làng ĐÃ
-    // chỉ vào bị cáo trước khi tới đây; tha vì bản thân chưa có bằng chứng
-    // riêng là vứt bỏ phán đoán tập thể và tiêu một ngày.
-    expect(decideFinalVote(context(), stateFor(), rng()).guilty).toBe(true);
+  it("THA khi TUYỆT ĐỐI không biết gì - nhưng đó là một trạng thái tổng hợp", () => {
+    /*
+     * Test này đã đổi đáp án HAI LẦN, và cả hai lần đều vì số đo. Đọc cả ba đời
+     * trước khi đổi lần thứ ba.
+     *
+     * Đời 1 khẳng định "không biết gì thì THA", với lý do mặc định Treo biến mỗi
+     * phiên toà thành một vụ hành quyết.
+     *
+     * Đời 2 lật lại thành TREO: harness Task 9 đo được rằng với mặc định Tha,
+     * phe làng thua 30/30 ván - không ai bị kết án nên không có lịch sử phiếu,
+     * nên nghi ngờ mãi bằng 0, nên không ai bị kết án. Một vòng lặp chết.
+     *
+     * Đời 3 (bây giờ) trả về THA, và KHÔNG phải vì đời 2 sai. Đời 2 đúng về
+     * vòng lặp chết nhưng sửa nó bằng một liều quá tay: `spareTrustMargin` 15
+     * rồi 3, trên một thang suspicion có p50 = 0 và p90 = 1.8. Ngưỡng đó không
+     * chỉ bắt "không biết gì thì treo" - nó nuốt luôn mọi mức nghi ngờ THẬT nằm
+     * dưới nó, nên kết quả là treo 100.0% số bị cáo, đo ở n=12 trên 900 ván.
+     * v10 hạ margin về 0; xem `BOT_WEIGHTS_V10` cho bảng đo đầy đủ.
+     *
+     * VÒNG LẶP CHẾT KHÔNG QUAY LẠI, và đây là chỗ phải hiểu cho đúng vì sao.
+     * Trạng thái trong test này - suspicion 0 VÀ trust 0 - gần như không tồn tại
+     * ở một ván thật: tới được phiên toà nghĩa là đủ người đã bỏ phiếu đề cử,
+     * mà mỗi lá phiếu đó sinh bằng chứng, nên bị cáo thật luôn mang suspicion
+     * dương. Đo trên sáu cỡ phòng với margin 0: tỉ lệ treo 71-85%, và tỉ lệ
+     * thắng của phe làng KHÔNG đổi (Δ trung bình +0.6). Làng vẫn treo, chỉ là
+     * thôi treo những người mà không ai có một lý do nào.
+     *
+     * Vì vậy điều test này khoá là một RANH GIỚI, không phải hành vi thường gặp:
+     * khi thật sự không có một mảnh bằng chứng nào về một con người, câu trả lời
+     * là Tha. Nếu một lần hiệu chỉnh sau làm dòng này đỏ, hãy đo lại tỉ lệ treo
+     * trước khi sửa nó - một mặc định Treo quay lại đây sẽ không báo cho ai biết
+     * là nó cũng vừa kéo tỉ lệ treo về 100%.
+     */
+    expect(decideFinalVote(context(), stateFor(), rng()).guilty).toBe(false);
+  });
+
+  it("TREO khi có nghi ngờ dù nhỏ - đây mới là ca của một bị cáo thật", () => {
+    // Ca thường gặp, và là lý do hạ margin không hồi sinh vòng lặp chết: một
+    // người tới được phiên toà đã bị đủ phiếu đề cử chỉ vào, và mỗi lá phiếu ấy
+    // sinh bằng chứng. Chỉ cần suspicion nhỉnh hơn trust là bản án giữ nguyên.
+    const state = stateFor();
+    state.suspicion.a = { score: 1.8, reasons: [], lastUpdatedRound: 2 };
+
+    expect(decideFinalVote(context(), state, rng()).guilty).toBe(true);
   });
 
   it("THA khi có lý do TÍCH CỰC tin bị cáo vô tội", () => {

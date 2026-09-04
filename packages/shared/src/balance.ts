@@ -189,17 +189,55 @@ function preset(overrides: Partial<RoomConfig>): RoomConfig {
  *   14 | 3+Con   |  15.7%  | 3       |  50.0%
  *   15 | 3+Con   |  13.7%  | 3       |  42.7%
  *
+ * CẢNH BÁO 2026-09-04, ĐỌC TRƯỚC KHI TIN MỘT CON SỐ NÀO Ở TRÊN: cả cột "cũ" lẫn
+ * cột "mới" trong bảng ấy đo với `speech: false`, và chế độ đó KHÔNG phải trò
+ * chơi mà phòng thật đang chạy.
+ *
+ * Lời nói của BOT không phải lớp trang trí phủ lên một quyết định đã chốt. Nó
+ * đi qua `chat-analysis -> claim-credibility -> applyEvidence`, tức nó nuôi
+ * thẳng vào belief và đổi phiếu. `role-power.ts` tắt speech "chỉ để chạy nhanh
+ * hơn", với lý do "lõi quyết trước, câu chữ dựng sau" - lý do đó SAI. Đo lại
+ * cùng preset, 300 ván mỗi ô:
+ *
+ *   n  | speech tắt | speech BẬT | Δ
+ *    8 |    42.7    |    45.0    |  +2.3
+ *    9 |    42.7    |    50.0    |  +7.3
+ *   10 |    49.7    |    58.0    |  +8.3
+ *   11 |    37.3    |    41.0    |  +3.7
+ *   12 |    48.0    |    69.7    | +21.7
+ *   13 |    42.3    |    46.0    |  +3.7
+ *   14 |    34.7    |    51.3    | +16.7
+ *   15 |    40.0    |    63.7    | +23.7
+ *
+ * Δ chạy từ +2.3 tới +23.7 nên KHÔNG quy về một hệ số bù được: một bảng đo
+ * speech-tắt không dịch được sang phòng thật bằng bất kỳ phép cộng nào.
+ *
+ * Với `speech: true`, 600 ván/ô, chính bảng preset dưới đây đo ra:
+ *
+ *   n  |  8   |  9   |  10  |  11  |  12  |  13  |  14  |  15
+ *   %  | 51.0 | 51.2 | 49.3 | 36.0 | 41.0 | 43.8 | 47.2 | 53.5
+ *
+ * Tức bảng này ĐANG ở trong dải, và cỡ phòng lệch thật sự là 11 người (36.0) -
+ * không phải 10 và 12 như bảng speech-tắt tố cáo. Một lượt "sửa" theo bảng
+ * speech-tắt đã thử gỡ Kẻ Nguyền Rủa khỏi preset 10 và hạ preset 12 xuống 2 Sói;
+ * đo lại với speech bật thì hai bộ ấy vọt lên 62.0% và 70.8%, nên cả hai đã được
+ * TRẢ LẠI. Preset 15 giữ thay đổi (bỏ Kẻ Nguyền Rủa): 44.0 -> 53.5, đó là lần
+ * duy nhất trong ba lần mà số đo đúng chế độ cũng đồng ý.
+ *
  * Hai điều cần biết trước khi chỉnh tiếp bảng này:
  *
- * 1. SÀN NHIỄU LÀ ±5 ĐIỂM, cá biệt ±9. Đo lại CÙNG một cấu hình với bộ seed
- *    khác, 300 ván: 8 người ra 47.3% rồi 52.3%; 15 người ra 47.7% rồi 39.0%.
- *    Hiệu ứng số Sói (20-40 điểm) nằm rất cao trên sàn ấy nên tin được; hiệu
- *    ứng thêm/bớt một vai làng (0-8 điểm) thì KHÔNG. Đã thử nhét Thiên Thần và
- *    Linh Mục vào 11/12/15 và không kết luận được gì - đó là lý do vế làng ở
- *    đây không bị đụng tới một dòng nào.
+ * 1. ĐO VỚI `speech: true`. Xem ngay trên. Sàn nhiễu khi đó vẫn quanh ±3 với
+ *    600-900 ván (3 seed family x 200-300), nên hiệu ứng số Sói (20-30 điểm)
+ *    tin được, còn hiệu ứng thêm/bớt một vai làng (0-8 điểm) thì vẫn KHÔNG.
+ *    Ghi chú cũ "sàn nhiễu ±5, cá biệt ±9" là hiện vật của việc chạy một lượt
+ *    300 ván trên một seed base duy nhất.
  * 2. Đây là BOT đánh BOT, và bot làng bỏ phiếu trúng Sói chỉ 40-47%. Người thật
  *    đọc vị tốt hơn, nên chỉnh cho self-play chạm đúng 50% là đẩy phòng người
  *    sang phía làng. Dải 35-55% ở đây là cố ý chừa khoảng đó.
+ * 3. Harness self-play KHÔNG chạy pha DEFENSE: `runSelfPlay` đi thẳng từ
+ *    `resolveNomination` sang `beginFinalVote`, nên `decideDefense` chưa từng
+ *    chạy trong một ván đo nào. Mọi con số ở đây vì thế đo một ván mà bị cáo
+ *    không được tự bào chữa.
  *
  * Sói Con vì thế chỉ còn ở preset 9 và 10. Ở 11 và 15 nó đắt hơn hẳn một con
  * Sói thường (11 người: 30.5% với Con so với 40.5% không Con), và `ROLE_POWER`
@@ -216,7 +254,7 @@ function preset(overrides: Partial<RoomConfig>): RoomConfig {
  * 12: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, VILLAGER x3
  * 13: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, VILLAGER x3
  * 14: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, PRIEST, VILLAGER x3
- * 15: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, PRIEST, VILLAGER x2
+ * 15: WEREWOLF x3, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, PRIEST, VILLAGER x3
  */
 
 export const PRESET_DECKS: Record<number, RoomConfig> = {
@@ -273,7 +311,130 @@ export const PRESET_DECKS: Record<number, RoomConfig> = {
   }),
   15: preset({
     werewolves: 3,
+    seer: true,
+    apprenticeSeer: true,
+    witch: true,
+    guard: true,
+    detective: true,
+    hunter: true,
+    mayor: true,
+    guardianAngel: true,
+    priest: true,
+  }),
+  /*
+   * 16-20: bộ vai làng đã CẠN, nên lá điều chỉnh là Kẻ Nguyền Rủa.
+   *
+   * Cả năm bộ dùng trọn 9 vai chức năng phe làng - không còn lá nào để thêm.
+   * Cùng lúc, một con Sói ở cỡ này đáng tới 22 điểm tỉ lệ thắng (đo 200 ván/ô,
+   * speech bật):
+   *
+   *   n  | 3 sói | 4 sói | 5 sói
+   *   16 | 60.5  | 38.5  | 16.5
+   *   18 | 63.0  | 40.5  | 21.5
+   *   20 | 69.0  | 46.5  | 27.5
+   *
+   * Không có cách nào chọn giữa 60.5 và 38.5 mà trúng 50. Kẻ Nguyền Rủa lấp
+   * đúng khoảng đó: nó ngồi ghế phe làng nhưng `ROLE_POWER` của nó là -3, và đo
+   * thực tế hôm nay cho thấy gỡ nó khỏi preset 10/15 đáng +7.4 tới +9.9 điểm.
+   * Nó là NỬA CON SÓI của bộ bài này, và đó là lý do nó quay lại đây sau khi bị
+   * gỡ khỏi preset 15.
+   *
+   *   n  | bộ bài chọn         | chốt | (sàng @200) | phương án bị loại
+   *   16 | 3 sói + Nguyền Rủa  | 51.2 |    48.0     | 3 sói 60.5 / 4 sói 38.5
+   *   17 | 3 sói + Nguyền Rủa  | 52.8 |    47.0     | 4 sói 38.5
+   *   18 | 3 sói + Nguyền Rủa  | 58.0 |    56.5     | 4 sói 40.5
+   *   19 | 4 sói               | 50.8 |    52.5     | 3 sói + Nguyền Rủa 64.0
+   *   20 | 4 sói               | 52.0 |    46.5     | 4 sói + Nguyền Rủa 36.0
+   *
+   * Cột "chốt" là 600 ván/cỡ phòng (3 seed family x 200); cột trong ngoặc là
+   * lượt sàng 200 ván đã dùng để CHỌN bộ bài. Hai cột lệch nhau tới 5.8 điểm ở
+   * n=20, và đó là lời nhắc rằng lượt sàng chỉ đủ để phân biệt 3 với 4 Sói (cách
+   * nhau 22 điểm), không đủ để tin một con số lẻ.
+   *
+   * PHƯƠNG SAI Ở BÀN LỚN CAO HƠN HẲN bàn nhỏ: ba seed family của n=17 ra 50.0 /
+   * 62.5 / 46.0, của n=20 ra 58.0 / 44.5 / 53.5 - trải 16 điểm, trong khi ở
+   * n=10 ba family chỉ trải 3 điểm. Ván dài 7-9 vòng nên một cú treo trúng hay
+   * trượt sớm còn cả ván để nhân lên. Muốn kết luận gì ở dải này thì phải chạy
+   * nhiều seed family, không phải nhiều ván trên một family.
+   *
+   * 18 người ra 58.0, tức trên dải 45-55. Phương án còn lại (4 sói, 40.5) lệch
+   * xa hơn về phía kia, nên đây là chỗ tốt nhất mà bộ bài với tay tới được -
+   * vế làng đã dùng trọn 10 lá nên không còn gì để bớt ngoài việc đổi hẳn số Sói.
+   *
+   * CẢNH BÁO khi so với bảng 8-15 ở trên: bảng đó đo với `spareTrustMargin` 3
+   * (BOT_WEIGHTS_V9), còn bảng này đo sau khi mặc định chuyển sang V10 (margin
+   * 0). V10 đo ra tỉ lệ thắng của phe làng không đổi (Δ trung bình +0.6 trên
+   * sáu cỡ phòng), nên hai bảng so được với nhau - nhưng đó là một kết quả đo,
+   * không phải một điều hiển nhiên.
+   *
+   * KHÔNG bộ nào chạm trần 4 Sói của `roomConfigSchema`, và đó là một kết quả
+   * chứ không phải một ràng buộc: 5 Sói đo ra 16.5-27.5%, dưới sàn 35% ở cả ba
+   * cỡ phòng. Bảng trên là lý do đừng nâng trần đó.
+   *
+   * Ván ở cỡ này DÀI: 7.0 vòng ở 16 người tới 8.8 vòng ở 20, so với 3.3 vòng ở
+   * 8 người. Với `BASE_TIMINGS` thì một ván 20 người chạm 25-30 phút. Timing
+   * không bị đụng tới ở đây vì bàn đông cần NHIỀU thời gian nói hơn chứ không
+   * ít hơn, nhưng con số đó là một quyết định sản phẩm chưa ai ra.
+   *
+   * 16: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, PRIEST, VILLAGER x3
+   * 17: như trên, VILLAGER x4
+   * 18: như trên, VILLAGER x5
+   * 19: WEREWOLF x4, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, PRIEST, VILLAGER x6
+   * 20: như trên, VILLAGER x7
+   */
+  16: preset({
+    werewolves: 3,
     cursed: true,
+    seer: true,
+    apprenticeSeer: true,
+    witch: true,
+    guard: true,
+    detective: true,
+    hunter: true,
+    mayor: true,
+    guardianAngel: true,
+    priest: true,
+  }),
+  17: preset({
+    werewolves: 3,
+    cursed: true,
+    seer: true,
+    apprenticeSeer: true,
+    witch: true,
+    guard: true,
+    detective: true,
+    hunter: true,
+    mayor: true,
+    guardianAngel: true,
+    priest: true,
+  }),
+  18: preset({
+    werewolves: 3,
+    cursed: true,
+    seer: true,
+    apprenticeSeer: true,
+    witch: true,
+    guard: true,
+    detective: true,
+    hunter: true,
+    mayor: true,
+    guardianAngel: true,
+    priest: true,
+  }),
+  19: preset({
+    werewolves: 4,
+    seer: true,
+    apprenticeSeer: true,
+    witch: true,
+    guard: true,
+    detective: true,
+    hunter: true,
+    mayor: true,
+    guardianAngel: true,
+    priest: true,
+  }),
+  20: preset({
+    werewolves: 4,
     seer: true,
     apprenticeSeer: true,
     witch: true,
@@ -297,6 +458,38 @@ export const PRESET_DECKS: Record<number, RoomConfig> = {
  */
 export const UNMEASURED_EXECUTIONER_WARNING =
   "Bộ bài có Kẻ Báo Thù - một người chơi vận động cả ván để làng treo cổ đúng một người vô tội. BalanceScore chỉ chấm cán cân Dân/Sói nên nó KHÔNG đo được lá bài này.";
+
+/**
+ * Thằng Hề, và KHÁC hai hằng số kia ở chỗ nó nói một con số ĐÃ ĐO ĐƯỢC.
+ *
+ * Hai cảnh báo trên nói "thang đo không với tới lá này". Ở đây thì với tới rồi,
+ * và kết quả mới là thứ đáng cảnh báo: tỉ lệ thắng của Thằng Hề leo theo cỡ
+ * phòng vì nó chỉ cần trúng MỘT phiên toà, mà bàn càng đông thì càng nhiều
+ * phiên toà (240 ván/ô, speech bật):
+ *
+ *   n  |  8   |  12  |  16  |  18  |  20
+ *   Hề | 13.0 | 22.3 | 52.9 | 61.7 | 62.1
+ *
+ * Từ khoảng 16 người trở lên nó là lá DỄ THẮNG NHẤT bàn - hơn cả phe làng lẫn
+ * phe Sói - trong khi `ROLE_POWER` của nó là 0 và phép trừ `villagePower -
+ * wolfPower` chỉ thấy đúng một ghế Dân Làng bị lấy đi (-0.5 điểm).
+ *
+ * Vì vậy cảnh báo này CÓ ngưỡng người chơi, khác hai hằng số kia: ở bàn nhỏ con
+ * số 13-22% không có gì để nói, và phát một cảnh báo ở đó chỉ dạy host bỏ qua
+ * cảnh báo.
+ */
+export const JESTER_LARGE_TABLE_WARNING =
+  "Bộ bài có Thằng Hề ở bàn đông: đo được nó thắng 53-62% số ván từ 16 người trở lên, vì bàn càng đông càng nhiều phiên toà mà nó chỉ cần trúng một lần.";
+
+/**
+ * Cỡ phòng mà `JESTER_LARGE_TABLE_WARNING` bắt đầu có hiệu lực.
+ *
+ * 16 chứ không phải 15: 12 người đo ra 22.3% còn 16 người ra 52.9%, và bước
+ * nhảy nằm giữa hai mốc đó. Chưa có số cho 13-15, nên ngưỡng đặt ở mốc ĐÃ ĐO
+ * chứ không nội suy - một cảnh báo dựa trên số phỏng đoán thì không hơn gì một
+ * cảnh báo không có số.
+ */
+export const JESTER_LARGE_TABLE_MIN_PLAYERS = 16;
 
 /**
  * Cùng loại với hằng số ngay trên và cùng lý do tồn tại, chỉ khác lá bài.
@@ -414,10 +607,28 @@ export function generateWarnings(config: RoomConfig, playerCount: number): Balan
   const warnings: string[] = [];
   let blocking = false;
 
-  // Score thresholds
-  if (score < 40 || score > 60) {
-    warnings.push(`Cân bằng lệch: BalanceScore ${score} ngoài ngưỡng 40-60`);
+  /*
+   * NGƯỠNG BẤT ĐỐI XỨNG: chỉ chặn phía Sói.
+   *
+   * `score` chấm ĐỘ LỆCH so với preset cùng cỡ phòng, nên một ngưỡng đối xứng
+   * "40-60" phát biểu rằng preset đứng đúng giữa. Nó không đứng đúng giữa: đo
+   * lại 900 ván/cỡ phòng (3 seed family x 300) cho phe làng 33-45%, tức chính
+   * preset đã nghiêng về phe Sói. Với neo lệch như vậy, cận TRÊN chặn đúng
+   * những bộ bài đã kéo ván về gần 50% - bộ 12 người 2 Sói đo ra 47.9% mà ăn
+   * điểm 66.5 và bị chặn, trong khi bộ 12 người "2 Sói + Sói Con" đo ra 30.2%
+   * thì ăn 44 điểm và đi qua. Thước đo khi đó không gác cân bằng nữa, nó cưỡng
+   * chế độ lệch của chính preset.
+   *
+   * Cận DƯỚI ở lại nguyên vẹn và vẫn chặn: một bộ bài lệch về phe Sói so với
+   * một preset vốn đã lệch về phe Sói thì lệch gấp đôi, và đó đúng là thứ phải
+   * chặn. Cận trên hạ xuống mức cảnh báo - host vẫn được báo là bộ bài nghiêng
+   * về làng, chỉ không bị khoá phòng vì điều đó nữa.
+   */
+  if (score < 40) {
+    warnings.push(`Cân bằng lệch về phe Sói: BalanceScore ${score} dưới ngưỡng 40`);
     blocking = true;
+  } else if (score > 60) {
+    warnings.push(`Bộ bài nghiêng về phe Dân: BalanceScore ${score} trên ngưỡng 60`);
   } else if (score < 45 || score > 55) {
     warnings.push(`Cảnh báo cân bằng: BalanceScore ${score} ngoài ngưỡng 45-55`);
   }
@@ -505,6 +716,20 @@ export function generateWarnings(config: RoomConfig, playerCount: number): Balan
    */
   if (config.executioner) {
     warnings.push(UNMEASURED_EXECUTIONER_WARNING);
+  }
+
+  /*
+   * Thằng Hề ở bàn đông - xem `JESTER_LARGE_TABLE_WARNING` cho số đo.
+   *
+   * Cảnh báo, KHÔNG chặn, cùng lý do với hai lá trung lập kia: bộ bài hợp lệ và
+   * host được quyền mở nó. Thứ bị chặn là việc đọc một điểm số 40-60 thành "lá
+   * này không ảnh hưởng gì".
+   *
+   * Có ngưỡng người chơi, khác hai lá kia: ở bàn nhỏ Thằng Hề thắng 13-22% và
+   * không có gì để cảnh báo.
+   */
+  if (config.jester && playerCount >= JESTER_LARGE_TABLE_MIN_PLAYERS) {
+    warnings.push(JESTER_LARGE_TABLE_WARNING);
   }
 
   const presetDeck = PRESET_DECKS[playerCount];
