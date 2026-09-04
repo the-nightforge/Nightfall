@@ -104,6 +104,7 @@ const nightStateSchema = z.object({
   wolfCubRageTonight: z.boolean(),
   wolvesLocked: z.boolean(),
   guardTarget: z.string().nullable(),
+  guardSecondTarget: z.string().nullable().optional(),
   guardianAngelTarget: z.string().nullable(),
   healTonight: z.boolean(),
   poisonTarget: z.string().nullable(),

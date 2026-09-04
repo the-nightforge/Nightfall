@@ -7,3 +7,4 @@ export * from "./events";
 export * from "./balance";
 export * from "./voice";
 export * from "./case-file";
+export * from "./death-cause";

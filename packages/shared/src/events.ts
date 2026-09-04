@@ -67,4 +67,6 @@ export type GameEventId =
   | "BLOOD_MOON"
   | "WOLF_SHADOW"
   | "MORNING_REPORT"
-  | "DEAD_CAN_SPEAK";
+  | "DEAD_CAN_SPEAK"
+  | "SECRET_BALLOT"
+  | "VIGILANT_NIGHT";

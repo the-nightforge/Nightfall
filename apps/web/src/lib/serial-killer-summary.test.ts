@@ -10,7 +10,7 @@ import { personalOutcome, winnerCopy } from "./game-over-summary";
 import { cuesFor } from "./audio-cues";
 import { roleGoal } from "./role-goal";
 import { seerReading } from "./seer-reading";
-import { deathCauseClause } from "./death-cause";
+import { deathCauseClause } from "@masoi/shared";
 import { CONFIG_KEY, NEUTRAL_ROLES, deckCounts, isPresetDeck } from "./lobby-summary";
 import { PRESET_DECKS } from "./balance";
 import { ROLE_ICON_PATHS } from "./role-art";

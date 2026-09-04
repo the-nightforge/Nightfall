@@ -3,6 +3,7 @@ import {
   RESULT_MS,
   ROLE_REVEAL_MS,
   ROLE_META,
+  midGameDeathCauseClause,
   isWolfPack,
   outcomeName,
   specialRoleList,
@@ -210,6 +211,7 @@ function emptyNight(wolfCubRageTonight = false): GameState["night"] {
     wolfCubRageTonight,
     wolvesLocked: false,
     guardTarget: null,
+    guardSecondTarget: null,
     guardianAngelTarget: null,
     healTonight: false,
     poisonTarget: null,
@@ -248,6 +250,7 @@ export class GameEngine {
     this.state.night.wolfCubRageTonight ??= false;
     this.state.night.wolvesLocked ??= false;
     this.state.night.witchSkipped ??= false;
+    this.state.night.guardSecondTarget ??= null;
     this.state.night.guardianAngelTarget ??= null;
     this.state.night.priestTarget ??= null;
     this.state.night.priestSkipped ??= false;
@@ -496,20 +499,35 @@ export class GameEngine {
         activeEvent = { ...event, announcement };
       }
     } else if (event?.id === "MORNING_REPORT") {
+      /*
+       * Bản tin nói NGUYÊN NHÂN, không đọc lại danh sách người chết.
+       *
+       * `lastNightDeaths` đã công khai cho cả phòng suốt NIGHT_RESULT lẫn
+       * DAY_DISCUSSION, nên một bản tin đọc lại tên người chết là hai điểm
+       * `power` đổi lấy một dòng chữ ai cũng đang nhìn thấy. `cause` thì ngược
+       * lại: `nightHistory` chỉ lộ ra client ở GAME_OVER, nên giữa ván nó là bí
+       * mật thật - và nó tách được nhát cắn của bầy Sói khỏi Bình Độc của Phù
+       * Thuỷ hay nhát dao trong đêm.
+       *
+       * `midGameDeathCauseClause` chứ không phải bảng vế đầy đủ: hai cause của
+       * Linh Mục xác nhận một lá bài chứ không tả một cái chết - xem chú thích
+       * ở chính hàm đó.
+       *
+       * Trung lập thật chứ không phải nhãn dán: làng đọc được bàn cờ, nhưng bầy
+       * Sói cũng biết cú cắn của mình có trúng không hay vừa bị một tay giết
+       * khác cướp mất mục tiêu.
+       */
       const lastNight = this.state.nightHistory.at(-1);
-      let announcement: string | undefined;
-      if (lastNight) {
-        const deaths = lastNight.deaths;
-        if (deaths.length === 0) {
-          announcement = `Đêm ${lastNight.round}: không ai thiệt mạng.`;
-        } else if (deaths.length === 1) {
-          announcement = `Đêm ${lastNight.round}: ${deaths[0].player.name} đã thiệt mạng.`;
-        } else {
-          const names = deaths.map((d) => d.player.name).join(", ");
-          announcement = `Đêm ${lastNight.round}: ${deaths.length} người thiệt mạng (${names}).`;
-        }
-      } else {
+      let announcement: string;
+      if (!lastNight) {
         announcement = `Bản tin bình minh: không có dữ liệu đêm trước.`;
+      } else if (lastNight.deaths.length === 0) {
+        announcement = `Đêm ${lastNight.round}: không ai thiệt mạng.`;
+      } else {
+        const clauses = lastNight.deaths.map(
+          (death) => `${death.player.name} ${midGameDeathCauseClause(death.cause)}`,
+        );
+        announcement = `Đêm ${lastNight.round}: ${clauses.join("; ")}.`;
       }
       activeEvent = { ...event, announcement };
     } else if (event?.id === "DEAD_CAN_SPEAK") {
@@ -722,7 +740,31 @@ export class GameEngine {
         if (targetId === st.guardPrevious) {
           throw new GameError("Không thể bảo vệ cùng một người hai đêm liên tiếp");
         }
+        /*
+         * Mục tiêu thứ hai: gương đúng Màn Sương Tan của Tiên Tri ở trên.
+         *
+         * Mọi luật của lượt che đầu áp lại y nguyên cho lượt thứ hai - không tự
+         * che, không che lại người đêm trước, không trùng người vừa chọn. Nới
+         * một luật ra ở đây là biến sự kiện thành đường vòng qua chính luật của
+         * vai: "che 2 người" phải là hai lượt che, không phải một lượt che cộng
+         * một ngoại lệ.
+         */
+        let guardSecondId: string | null = null;
+        if (secondaryTargetId) {
+          if (st.activeEvent?.id !== "VIGILANT_NIGHT") {
+            throw new GameError("Chỉ được che 2 người khi có sự kiện Đêm Cảnh Giác");
+          }
+          const secTarget = this.player(secondaryTargetId);
+          if (!secTarget || !secTarget.alive) throw new GameError("Mục tiêu che thứ 2 không hợp lệ");
+          if (secondaryTargetId === playerId) throw new GameError("Bảo Vệ không thể tự bảo vệ mình");
+          if (secondaryTargetId === targetId) throw new GameError("Không thể che cùng 1 người 2 lần");
+          if (secondaryTargetId === st.guardPrevious) {
+            throw new GameError("Không thể bảo vệ cùng một người hai đêm liên tiếp");
+          }
+          guardSecondId = secondaryTargetId;
+        }
         st.night.guardTarget = targetId;
+        st.night.guardSecondTarget = guardSecondId;
         break;
       }
       case "GUARDIAN_PROTECT": {
@@ -1011,17 +1053,25 @@ export class GameEngine {
     // 1. Ghi nhận shields
     const guardedIds = new Set<string>();
     if (st.night.guardTarget) guardedIds.add(st.night.guardTarget);
+    if (st.night.guardSecondTarget) guardedIds.add(st.night.guardSecondTarget);
     if (st.night.guardianAngelTarget) guardedIds.add(st.night.guardianAngelTarget);
-    // BLOOD_MOON pierce: if armed from previous night, 20% chance to pierce one shield
+    /*
+     * Trăng Máu: nạp từ đêm trước thì đêm nay 20% xuyên MỘT khiên.
+     *
+     * Chỉ QUYẾT ĐỊNH ở đây, chưa xoá khiên nào - khiên nào bị xuyên phải đợi
+     * tới lúc biết Sói cắn ai. Trước đây chỗ này gỡ ngay phần tử đầu của Set,
+     * tức luôn là khiên của Bảo Vệ và không bao giờ là của Thiên Thần Hộ Mệnh,
+     * lại còn gỡ mà không cần biết người được che có nằm trong tầm cắn không:
+     * Bảo Vệ che A, Sói cắn B thì cú xuyên tiêu vào hư không.
+     *
+     * Cú tung xúc xắc vẫn nằm sau `guardedIds.size > 0` như cũ - đêm không có
+     * khiên nào thì không rút số, để dòng RNG của một ván không đổi.
+     */
+    let bloodMoonPierce = false;
     if (st.bloodMoonArmed) {
-      const wasArmed = st.bloodMoonArmed;
       st.bloodMoonArmed = false;
       st.bloodMoonUsed = true;
-      if (wasArmed && guardedIds.size > 0 && rng() < 0.2) {
-        const firstShield = guardedIds.values().next().value as string;
-        guardedIds.delete(firstShield);
-        st.log.push(`Trăng Máu xuyên thủng khiên bảo vệ!`);
-      }
+      bloodMoonPierce = guardedIds.size > 0 && rng() < 0.2;
     }
 
     // 2. Information results are already recorded during submitNightAction
@@ -1059,7 +1109,9 @@ export class GameEngine {
     const isPeacefulNight = st.activeEvent?.id === "PEACEFUL_NIGHT";
     const primaryWolfTarget = isPeacefulNight ? null : st.night.killTarget;
 
-    let secondaryTargetToProcess = st.night.wolfSecondaryTarget;
+    // Đêm Bình Yên tước CẢ lượt phụ: đêm Sói Con nổi giận là đêm duy nhất lượt
+    // phụ tồn tại mà không cần sự kiện, và đó đúng là đêm làng cần được cứu.
+    let secondaryTargetToProcess = isPeacefulNight ? null : st.night.wolfSecondaryTarget;
     if (st.activeEvent?.id === "BLOODY_HUNT" && secondaryTargetToProcess) {
       const success = rng() < 0.5;
       if (!success) {
@@ -1070,6 +1122,17 @@ export class GameEngine {
     const wolfTargets = [primaryWolfTarget, secondaryTargetToProcess].filter(
       (t): t is string => t !== null && t !== undefined,
     );
+
+    // Giờ mới biết Sói cắn ai: xuyên đúng khiên đang chắn một mục tiêu của Sói.
+    // Sói cắn hai người mà cả hai đều có khiên thì mục tiêu chính mất khiên
+    // trước - `wolfTargets` xếp chính trước phụ.
+    if (bloodMoonPierce) {
+      const pierced = wolfTargets.find((targetId) => guardedIds.has(targetId));
+      if (pierced) {
+        guardedIds.delete(pierced);
+        st.log.push(`Trăng Máu xuyên thủng khiên bảo vệ ${this.player(pierced)?.name ?? "?"}!`);
+      }
+    }
 
     for (const targetId of wolfTargets) {
       const victim = this.player(targetId);
@@ -1348,8 +1411,7 @@ export class GameEngine {
       if (targetId === null) noElimination += weight;
       else players[targetId] = (players[targetId] ?? 0) + weight;
     }
-    // HOWL_OF_THE_PACK hidden +1 for wolves next day
-    if (weighted && this.state.howlBonusDay !== null && this.state.howlBonusDay === this.state.round) {
+    if (weighted && this.howlBonusActive()) {
       // find target most voted by wolves to add hidden vote
       const wolfIds = new Set(this.alivePlayers().filter((p) => isWolfPack(p.role)).map((p) => p.id));
       const wolfTally: Record<string, number> = {};
@@ -1508,6 +1570,11 @@ export class GameEngine {
    * từ `eligible`, nên một ngưỡng có trọng số là lời khai rằng phòng này có một
    * Thị Trưởng còn sống, ngay cả trước khi có ai bỏ phiếu.
    */
+  /** Ngày mà phiếu ẩn của Tiếng Hú Bầy Sói có hiệu lực. */
+  private howlBonusActive(): boolean {
+    return this.state.howlBonusDay !== null && this.state.howlBonusDay === this.state.round;
+  }
+
   finalVoteTally(weighted = true): { guilty: number; innocent: number; abstain: number; eligible: number } {
     const trial = this.mustTrial();
     const voters = this.finalVoters();
@@ -1524,6 +1591,37 @@ export class GameEngine {
       if (vote) guilty += weight;
       else innocent += weight;
     }
+
+    /*
+     * Phiếu ẩn của Tiếng Hú đi vào CẢ phiên toà, không chỉ vòng đề cử.
+     *
+     * Trước đây nó chỉ cộng vào `voteTally`, tức chỉ đổi được AI RA ĐỨNG TOÀ;
+     * bản án sau đó vẫn đòi quá bán trên bảng phiếu này, nơi không có phiếu ẩn
+     * nào. Một sự kiện mang nhãn "có lợi cho phe Sói" mà không đổi được kết quả
+     * nào là một điểm `power` khống - và độ nghiêng lại trừ điểm đó vào quota
+     * sự kiện đêm thật của bầy Sói.
+     *
+     * `eligible` KHÔNG cộng theo: ngưỡng kết án suy ra từ nó, nên nâng cả hai
+     * lên là triệt tiêu đúng cái lợi vừa cho.
+     *
+     * Hướng phiếu bám theo đa số của bầy, và bầy im lặng thì không có phiếu ẩn
+     * nào - cùng một luật với `voteTally`, vì cùng một lý do: một phiếu ẩn tự
+     * chọn hướng sẽ có ngày treo cổ chính đồng bọn.
+     */
+    if (weighted && this.howlBonusActive()) {
+      let wolfGuilty = 0;
+      let wolfInnocent = 0;
+      for (const voter of voters) {
+        if (!isWolfPack(voter.role)) continue;
+        const vote = trial.finalVotes[voter.id];
+        if (vote === undefined) continue;
+        if (vote) wolfGuilty += 1;
+        else wolfInnocent += 1;
+      }
+      if (wolfGuilty > wolfInnocent) guilty += 1;
+      else if (wolfInnocent > wolfGuilty) innocent += 1;
+    }
+
     return { guilty, innocent, abstain: totalWeight - votedWeight, eligible: totalWeight };
   }
 
@@ -2270,8 +2368,10 @@ export class GameEngine {
       // Danh tính phiếu ĐANG MỞ. Chỉ ở VOTING: từ DEFENSE trở đi vòng đã chốt
       // và recap trong dayVoteHistory là nguồn duy nhất, gửi cả hai thì client
       // có hai bản của cùng một sự thật.
+      // Phiếu Kín đóng đúng cửa sổ này lại: tổng phiếu vẫn hiện (`voteCount` của từng người),
+      // chỉ danh tính người bầu là biến mất.
       openBallots:
-        st.phase === "VOTING"
+        st.phase === "VOTING" && st.activeEvent?.id !== "SECRET_BALLOT"
           ? Object.entries(st.votes).map(([voterId, targetId]) => ({
               voterId,
               choice:
@@ -2597,6 +2697,14 @@ export class GameEngine {
       // Trừ chính mình: engine cấm tự soi, nên phải còn hai người KHÁC.
       const targets = this.alivePlayers().filter((player) => player.id !== viewer.id);
       return targets.length >= 2 ? "SEE" : null;
+    }
+    if (viewer.role === "GUARD" && st.activeEvent?.id === "VIGILANT_NIGHT") {
+      // Cùng bộ lọc mà `legalTargets.GUARD` dùng: chào một mục tiêu thứ hai mà
+      // engine sẽ ném là làm lõi AI mất trắng cả lượt che.
+      const targets = this.alivePlayers().filter(
+        (player) => player.id !== viewer.id && player.id !== st.guardPrevious,
+      );
+      return targets.length >= 2 ? "GUARD" : null;
     }
     return null;
   }

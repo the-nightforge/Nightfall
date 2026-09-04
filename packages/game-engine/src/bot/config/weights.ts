@@ -345,10 +345,12 @@ export interface RecencyWeights {
 }
 
 export interface SelfPreservationWeights {
-  /** Trên mức thù địch này, Bảo Vệ coi chính mình là mục tiêu đêm nay. */
-  guardSelfHostilityThreshold: number;
-  guardSelfBonusBase: number;
-  guardSelfBonusSpan: number;
+  /*
+   * Ba knob `guardSelf*` từng đứng ở đây để nuôi một khoản thưởng "Bảo Vệ tự
+   * đỡ". Engine cấm tự đỡ, nên khoản thưởng ấy không bao giờ được cộng và ba
+   * knob này không bao giờ được đọc - đã xoá cả bốn cùng lúc. Muốn mở lại thì
+   * mở ở engine trước.
+   */
   /** Đỡ người mình nghi là Sói thì vừa phí lượt vừa cứu nhầm phe. */
   guardSuspicionPenalty: number;
   /**
@@ -642,7 +644,6 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   ["social", "deathMotiveConfidence"],
   ["recency", "beliefDecayPerRound"],
   ["recency", "memoryDecayPerRound"],
-  ["selfPreservation", "guardSelfHostilityThreshold"],
   ["selfPreservation", "guardSuspicionPenalty"],
   ["deceptionRisk", "abstainPressureCeiling"],
   ["roleThresholds", "guardianAngelWorthACharge"],
@@ -905,9 +906,6 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
   }),
 
   selfPreservation: Object.freeze({
-    guardSelfHostilityThreshold: 0.5,
-    guardSelfBonusBase: 60,
-    guardSelfBonusSpan: 60,
     guardSuspicionPenalty: 0.5,
     // Tắt ở v1: Phase 2 không có hành vi này và v1 phải tái lập Phase 2 từng bit.
     guardRepeatPenalty: 0,

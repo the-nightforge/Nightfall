@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { GameEngine } from "../src/engine";
 import { selectEvent, GAME_EVENTS } from "../src/events/eventManager";
 import { GameState, EnginePlayer } from "../src/types";
-import { DEFAULT_ROOM_CONFIG, GameEventView } from "@masoi/shared";
+import { DEFAULT_ROOM_CONFIG, deathCauseClause, GameEventView } from "@masoi/shared";
 
 function createTestState(players: Partial<EnginePlayer>[], overrides?: Partial<GameState>): GameState {
   const fullPlayers: EnginePlayer[] = players.map((p, i) => ({
@@ -82,133 +82,47 @@ function createTestState(players: Partial<EnginePlayer>[], overrides?: Partial<G
   };
 }
 
-describe("Dynamic Event Selection", () => {
-  it("selects nothing when the balanced-ranked neutral roll is 65% or higher", () => {
+describe("Dynamic Event Selection", () => {  it("ranked không có sự kiện, ở cả hai pha, và không đốt một lần rút RNG nào", () => {
+    // Bảy test riêng từng đứng ở đây, mỗi test dựng một thế trận khác nhau -
+    // Sói đang dẫn, làng đang dẫn, đã có kết quả Thám Tử - rồi cùng khẳng định
+    // `null`. Cả bảy đều dừng ở ĐÚNG MỘT câu `if (mode !== "chaos") return null`
+    // ngay đầu `selectEvent`, nên sáu cái sau không đo thêm được gì; tên chúng
+    // còn nhắc "balanced-ranked" từ thời ranked có bộ chọn riêng.
+    //
+    // Cái duy nhất đáng giữ là lần rút RNG: câu return phải nằm TRƯỚC mọi lần
+    // gọi `rng`, nếu không thì bật chaos giữa chừng sẽ lệch dòng số của ván.
     const state = createTestState([
       { id: "w1", role: "WEREWOLF", alive: true },
       { id: "w2", role: "WEREWOLF", alive: true },
       { id: "seer", role: "SEER", alive: true },
-      { id: "guard", role: "GUARD", alive: true },
-      { id: "v1", role: "VILLAGER", alive: true },
-      { id: "v2", role: "VILLAGER", alive: true },
-    ]);
-    state.config.mode = "ranked";
-
-    const event = selectEvent(state, "NIGHT", () => 0.65);
-    expect(event).toBeNull();
-  });
-
-  it("ranked never selects event even when roll is below threshold", () => {
-    const state = createTestState([
-      { id: "w1", role: "WEREWOLF", alive: true },
-      { id: "w2", role: "WEREWOLF", alive: true },
-      { id: "seer", role: "SEER", alive: true },
-      { id: "guard", role: "GUARD", alive: true },
-      { id: "v1", role: "VILLAGER", alive: true },
-      { id: "v2", role: "VILLAGER", alive: true },
-    ]);
-    state.config.mode = "ranked";
-
-    const event = selectEvent(state, "NIGHT", () => 0.1);
-    expect(event).toBeNull();
-  });
-
-  it("ranked never selects day event", () => {
-    const state = createTestState([
-      { id: "w1", role: "WEREWOLF", alive: true },
-      { id: "w2", role: "WEREWOLF", alive: true },
-      { id: "seer", role: "SEER", alive: true },
-      { id: "guard", role: "GUARD", alive: true },
-      { id: "v1", role: "VILLAGER", alive: true },
-      { id: "v2", role: "VILLAGER", alive: true },
-    ]);
-    state.config.mode = "ranked";
-
-    const event = selectEvent(state, "DAY", () => 0.1);
-    expect(event).toBeNull();
-  });
-
-  it("does not consume RNG when no neutral event is eligible for a balanced ranked phase", () => {
-    const state = createTestState([
-      { id: "w1", role: "WEREWOLF", alive: true },
-      { id: "w2", role: "WEREWOLF", alive: true },
-      { id: "seer", role: "SEER", alive: true },
-      { id: "guard", role: "GUARD", alive: true },
-      { id: "v1", role: "VILLAGER", alive: true },
-      { id: "v2", role: "VILLAGER", alive: true },
-    ]);
-    state.config.mode = "ranked";
-    state.eventHistory.push({
-      ...GAME_EVENTS.SILENT_NIGHT,
-      round: 1,
-    });
-    let rngCalls = 0;
-
-    const event = selectEvent(state, "NIGHT", () => {
-      rngCalls += 1;
-      return 0.1;
-    });
-
-    expect(event).toBeNull();
-    expect(rngCalls).toBe(0);
-  });
-
-  it("ranked never selects village event even when wolves are favored", () => {
-    const state = createTestState([
-      { id: "w1", role: "WEREWOLF", alive: true },
-      { id: "w2", role: "WEREWOLF", alive: true },
-      { id: "seer", role: "SEER", alive: true },
-      { id: "guard", role: "GUARD", alive: false },
-      { id: "witch", role: "WITCH", alive: false },
-      { id: "v1", role: "VILLAGER", alive: false },
-      { id: "v2", role: "VILLAGER", alive: false },
-      { id: "v3", role: "VILLAGER", alive: true },
-    ]);
-    state.config.mode = "ranked";
-
-    const event = selectEvent(state, "NIGHT");
-    expect(event).toBeNull();
-  });
-
-  it("ranked never selects wolves event even when village is favored", () => {
-    const state = createTestState([
-      { id: "w1", role: "WEREWOLF", alive: false },
-      { id: "w2", role: "WEREWOLF", alive: true },
-      { id: "seer", role: "SEER", alive: true },
-      { id: "guard", role: "GUARD", alive: true },
-      { id: "witch", role: "WITCH", alive: true },
-      { id: "hunter", role: "HUNTER", alive: true },
       { id: "detective", role: "DETECTIVE", alive: true },
+      { id: "guard", role: "GUARD", alive: true },
       { id: "v1", role: "VILLAGER", alive: true },
-      { id: "v2", role: "VILLAGER", alive: true },
     ]);
     state.config.mode = "ranked";
-
-    const event = selectEvent(state, "NIGHT");
-    expect(event).toBeNull();
-  });
-
-  it("ranked never selects JUDGMENT_DAY even when wolves are favored", () => {
-    const state = createTestState([
-      { id: "w1", role: "WEREWOLF", alive: true },
-      { id: "w2", role: "WEREWOLF", alive: true },
-      { id: "detective", role: "DETECTIVE", alive: true },
-      { id: "guard", role: "GUARD", alive: false },
-      { id: "witch", role: "WITCH", alive: false },
-      { id: "v1", role: "VILLAGER", alive: false },
-      { id: "v2", role: "VILLAGER", alive: true },
-    ]);
-    state.config.mode = "ranked";
+    // Thế trận thừa sự kiện hợp lệ ở cả hai pha: chaos ở đây sẽ bốc ra được.
     state.night.detectiveResults["detective"] = {
       target1Id: "w1",
-      target2Id: "v2",
+      target2Id: "v1",
       sameTeam: false,
     };
 
-    const event = selectEvent(state, "DAY", () => 0);
-    expect(event).toBeNull();
-  });
+    let rngCalls = 0;
+    const rng = () => {
+      rngCalls += 1;
+      return 0;
+    };
 
+    expect(selectEvent(state, "NIGHT", rng)).toBeNull();
+    expect(selectEvent(state, "DAY", rng)).toBeNull();
+    expect(rngCalls).toBe(0);
+
+    // Cùng thế trận đó, chaos phải bốc ra sự kiện - nếu không thì ba khẳng định
+    // trên xanh vì lý do sai.
+    state.config.mode = "chaos";
+    expect(selectEvent(state, "NIGHT", () => 0)).not.toBeNull();
+    expect(selectEvent(state, "DAY", () => 0)).not.toBeNull();
+  });
   it("does not select CLEARING_MIST or MOONLESS_NIGHT if Seer is dead and Apprentice is not awakened", () => {
     const state = createTestState([
       { id: "w1", role: "WEREWOLF", alive: false },
@@ -554,7 +468,7 @@ describe("Event Modifiers in GameEngine", () => {
   it("migrate cứng xóa SHROUDED_ECLIPSE", () => {
     expect((GAME_EVENTS as any)["SHROUDED_ECLIPSE"]).toBeUndefined();
     expect(GAME_EVENTS["WOLF_SHADOW"]).toBeDefined();
-    expect(Object.keys(GAME_EVENTS)).toHaveLength(15);
+    expect(Object.keys(GAME_EVENTS)).toHaveLength(17);
   });
 });
 
@@ -637,5 +551,468 @@ describe("Bộ chọn sự kiện cân theo độ nghiêng", () => {
     ]);
     const ids = reachable(state, "DAY");
     expect(ids).toContain("HOWL_OF_THE_PACK");
+  });
+
+  it("Bóng Sói bị chặn khi không còn ai soi, y như Đêm Không Trăng", () => {
+    // Cả ba sự kiện soi cùng một hàng rào: không còn Tiên Tri thì Bóng Sói chỉ
+    // là một slot đêm bị đốt cộng 3 điểm nghiêng khống cho phe Sói.
+    const state = chaosState();
+    state.players.find((p) => p.role === "SEER")!.alive = false;
+
+    const ids = reachable(state, "NIGHT");
+    expect(ids).not.toContain("WOLF_SHADOW");
+    expect(ids).not.toContain("MOONLESS_NIGHT");
+    expect(ids).not.toContain("CLEARING_MIST");
+    expect(ids).toContain("BLOOD_MOON");
+  });
+
+  it("Bóng Sói vẫn bốc được khi Tập Sự đã thức tỉnh", () => {
+    const state = chaosState();
+    state.players.find((p) => p.role === "SEER")!.role = "APPRENTICE_SEER";
+    state.apprenticeAwakened = true;
+
+    expect(reachable(state, "NIGHT")).toContain("WOLF_SHADOW");
+  });
+});
+
+describe("Độ nghiêng tính sự kiện đêm nặng gấp đôi sự kiện ngày", () => {
+  function state6() {
+    const st = createTestState([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "w2", role: "WEREWOLF", alive: true },
+      { id: "seer", role: "SEER", alive: true },
+      { id: "guard", role: "GUARD", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v2", role: "VILLAGER", alive: true },
+    ]);
+    st.config.mode = "chaos";
+    return st;
+  }
+
+  function poolAfter(ids: string[], phase: "NIGHT" | "DAY"): string[] {
+    const st = state6();
+    st.eventHistory = ids.map((id) => ({
+      ...GAME_EVENTS[id as keyof typeof GAME_EVENTS],
+      round: 1,
+    })) as GameEventView[];
+    const seen = new Set<string>();
+    for (let i = 0; i < 40; i++) {
+      let call = 0;
+      const event = selectEvent(st, phase, () => (call++ === 0 ? 0 : i / 40));
+      if (event) seen.add(event.id);
+    }
+    return [...seen];
+  }
+
+  it("một sự kiện NGÀY power 3 chưa chạm trần", () => {
+    // Ngày Phán Xét: phe làng, power 3, pha NGÀY -> nghiêng -3, dưới trần 6.
+    const ids = poolAfter(["JUDGMENT_DAY"], "NIGHT");
+    expect(ids).toContain("PEACEFUL_NIGHT");
+  });
+
+  it("một sự kiện ĐÊM power 3 thì chạm trần ngay", () => {
+    // Màn Sương Tan: cùng phe làng, cùng power 3, nhưng pha ĐÊM -> 3 x 2 = 6.
+    // Đây là cả điểm của thay đổi: một mẩu thông tin ban ngày không được tính
+    // ngang giá với một đêm đổi ai sống ai chết.
+    const ids = poolAfter(["CLEARING_MIST"], "NIGHT");
+    expect(ids).not.toContain("PEACEFUL_NIGHT");
+    expect(ids).not.toContain("VIGILANT_NIGHT");
+    expect(ids).toContain("MOONLESS_NIGHT");
+  });
+});
+
+describe("Đêm Bình Yên cứu được đêm Sói Con nổi giận", () => {
+  it("bốc được vào đêm nổi giận, còn Tử Thủ thì không", () => {
+    const st = createTestState([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "w2", role: "WEREWOLF", alive: true },
+      { id: "seer", role: "SEER", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v2", role: "VILLAGER", alive: true },
+    ]);
+    st.config.mode = "chaos";
+    st.night.wolfCubRageTonight = true;
+
+    const seen = new Set<string>();
+    for (let i = 0; i < 40; i++) {
+      let call = 0;
+      const event = selectEvent(st, "NIGHT", () => (call++ === 0 ? 0 : i / 40));
+      if (event) seen.add(event.id);
+    }
+    expect([...seen]).toContain("PEACEFUL_NIGHT");
+    expect([...seen]).not.toContain("LAST_STAND");
+    expect([...seen]).not.toContain("BLOODY_HUNT");
+  });
+
+  it("tước CẢ lượt cắn phụ, không chỉ lượt chính", () => {
+    const st = createTestState([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v2", role: "VILLAGER", alive: true },
+      { id: "v3", role: "VILLAGER", alive: true },
+    ]);
+    st.night.wolfCubRageTonight = true;
+    st.activeEvent = { ...GAME_EVENTS.PEACEFUL_NIGHT, round: 1 } as GameEventView;
+    const engine = new GameEngine(st);
+    engine.submitNightAction("w1", "KILL", "v1", "v2");
+
+    // Trước thay đổi này v2 vẫn chết: isPeacefulNight chỉ null mục tiêu chính.
+    expect(engine.resolveNight(Date.now(), () => 0.9)).toHaveLength(0);
+  });
+});
+
+describe("Đêm Tĩnh Lặng không nổ khi bầy Sói toàn bot", () => {
+  function reachableWith(wolvesAreBots: boolean): string[] {
+    const st = createTestState([
+      { id: "w1", role: "WEREWOLF", alive: true, isBot: wolvesAreBots },
+      { id: "w2", role: "WEREWOLF", alive: true, isBot: wolvesAreBots },
+      { id: "seer", role: "SEER", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+    ]);
+    st.config.mode = "chaos";
+    const seen = new Set<string>();
+    for (let i = 0; i < 40; i++) {
+      let call = 0;
+      const event = selectEvent(st, "NIGHT", () => (call++ === 0 ? 0 : i / 40));
+      if (event) seen.add(event.id);
+    }
+    return [...seen];
+  }
+
+  it("bầy toàn bot thì không bốc: bot không chat đêm nên không mất gì", () => {
+    expect(reachableWith(true)).not.toContain("SILENT_NIGHT");
+  });
+
+  it("còn một Sói người thật thì bốc bình thường", () => {
+    expect(reachableWith(false)).toContain("SILENT_NIGHT");
+  });
+});
+
+describe("Phiếu Kín giấu danh tính lá phiếu, không giấu tổng", () => {
+  function voting(withEvent: boolean) {
+    const st = createTestState([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v2", role: "VILLAGER", alive: true },
+    ]);
+    const engine = new GameEngine(st);
+    engine.setPhase("VOTING", 30000);
+    if (withEvent) {
+      engine.state.activeEvent = { ...GAME_EVENTS.SECRET_BALLOT, round: 1 } as GameEventView;
+    }
+    engine.submitVote("v1", "w1");
+    engine.submitVote("v2", "w1");
+    return engine.snapshotFor("v1");
+  }
+
+  it("ngày thường vẫn thấy ai bầu ai", () => {
+    expect(voting(false).openBallots).toHaveLength(2);
+  });
+
+  it("ngày Phiếu Kín thì danh sách rỗng", () => {
+    expect(voting(true).openBallots).toHaveLength(0);
+  });
+
+  it("tổng phiếu vẫn hiện: sự kiện giấu DANH TÍNH, không giấu kết quả", () => {
+    expect(voting(true).players.find((p) => p.id === "w1")?.voteCount).toBe(2);
+  });
+});
+
+describe("Đêm Cảnh Giác cho Bảo Vệ che 2 người", () => {
+  const roster: Partial<EnginePlayer>[] = [
+    { id: "w1", role: "WEREWOLF", alive: true },
+    { id: "guard", role: "GUARD", alive: true },
+    { id: "v1", role: "VILLAGER", alive: true },
+    { id: "v2", role: "VILLAGER", alive: true },
+  ];
+
+  function guarded(withEvent: boolean) {
+    const st = createTestState(roster);
+    if (withEvent) {
+      st.activeEvent = { ...GAME_EVENTS.VIGILANT_NIGHT, round: 1 } as GameEventView;
+    }
+    return new GameEngine(st);
+  }
+
+  it("khiên thứ hai chặn được nhát cắn", () => {
+    const engine = guarded(true);
+    engine.submitNightAction("guard", "GUARD", "v1", "v2");
+    engine.submitNightAction("w1", "KILL", "v2");
+    expect(engine.resolveNight(Date.now(), () => 0.9)).toHaveLength(0);
+  });
+
+  it("ngoài sự kiện thì engine từ chối người thứ hai", () => {
+    const engine = guarded(false);
+    expect(() => engine.submitNightAction("guard", "GUARD", "v1", "v2")).toThrow(
+      /Đêm Cảnh Giác/,
+    );
+  });
+
+  it("luật của Bảo Vệ áp nguyên cho lượt che thứ hai", () => {
+    const engine = guarded(true);
+    engine.state.guardPrevious = "v2";
+    expect(() => engine.submitNightAction("guard", "GUARD", "v1", "v2")).toThrow(
+      /hai đêm liên tiếp/,
+    );
+    expect(() => engine.submitNightAction("guard", "GUARD", "v1", "guard")).toThrow(
+      /tự bảo vệ/,
+    );
+    expect(() => engine.submitNightAction("guard", "GUARD", "v1", "v1")).toThrow(/2 lần/);
+  });
+
+  it("không còn Bảo Vệ sống thì không bốc, cùng hàng rào với 3 sự kiện soi", () => {
+    const st = createTestState([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "guard", role: "GUARD", alive: false },
+      { id: "seer", role: "SEER", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v2", role: "VILLAGER", alive: true },
+    ]);
+    st.config.mode = "chaos";
+    const seen = new Set<string>();
+    for (let i = 0; i < 40; i++) {
+      let call = 0;
+      const event = selectEvent(st, "NIGHT", () => (call++ === 0 ? 0 : i / 40));
+      if (event) seen.add(event.id);
+    }
+    expect([...seen]).not.toContain("VIGILANT_NIGHT");
+  });
+
+  it("bot được mời mục tiêu thứ hai qua bonusSecondTargetFor", () => {
+    expect(guarded(true).botKnowledgeFor("guard").night?.bonusSecondTargetFor).toBe("GUARD");
+    expect(guarded(false).botKnowledgeFor("guard").night?.bonusSecondTargetFor).toBeNull();
+  });
+});
+
+describe("Bản Tin Bình Minh nói nguyên nhân, không đọc lại tên người chết", () => {
+  /** Một đêm đã khép lại với đúng những cái chết yêu cầu, rồi mở ngày kế. */
+  function afterNight(deaths: Array<{ name: string; cause: string }>) {
+    const state = createTestState([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v2", role: "VILLAGER", alive: true },
+    ]);
+    const engine = new GameEngine(state);
+    engine.state.nightHistory = [
+      {
+        round: 1,
+        deaths: deaths.map((death) => ({
+          player: { id: death.name, name: death.name, role: "VILLAGER" },
+          cause: death.cause,
+        })),
+      },
+    ] as never;
+    return engine;
+  }
+
+  const report = (engine: GameEngine): string =>
+    engine.startDay(30000, Date.now(), () => 0, {
+      ...GAME_EVENTS.MORNING_REPORT,
+      round: 2,
+    } as GameEventView)!.announcement!;
+
+  it("tách nhát cắn của Sói khỏi Bình Độc của Phù Thuỷ", () => {
+    const text = report(
+      afterNight([
+        { name: "Nam", cause: "wolf" },
+        { name: "Lan", cause: "poison" },
+      ]),
+    );
+    expect(text).toContain("Nam bị Sói cắn");
+    expect(text).toContain("Lan trúng Bình Độc của Phù Thủy");
+  });
+
+  it("nhát dao trong đêm không gọi tên Sát Nhân", () => {
+    const text = report(afterNight([{ name: "Nam", cause: "serial_killer" }]));
+    expect(text).toContain("Nam bị đâm trong đêm");
+    expect(text).not.toContain("Sát Nhân");
+  });
+
+  it("không còn là bản sao của lastNightDeaths: chỉ tên thôi là chưa đủ", () => {
+    const text = report(afterNight([{ name: "Nam", cause: "wolf" }]));
+    // Câu cũ - "Nam đã thiệt mạng" - không nói gì mà cả phòng chưa nhìn thấy.
+    expect(text).not.toContain("đã thiệt mạng");
+  });
+
+  it("đêm không ai chết vẫn có bản tin", () => {
+    expect(report(afterNight([]))).toContain("không ai thiệt mạng");
+  });
+});
+
+describe("Bản tin không xác nhận lá bài của Linh Mục", () => {
+  function reportOf(cause: string): string {
+    const state = createTestState([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v2", role: "VILLAGER", alive: true },
+    ]);
+    const engine = new GameEngine(state);
+    engine.state.nightHistory = [
+      {
+        round: 1,
+        deaths: [{ player: { id: "x", name: "Nam", role: "VILLAGER" }, cause }],
+      },
+    ] as never;
+    return engine.startDay(30000, Date.now(), () => 0, {
+      ...GAME_EVENTS.MORNING_REPORT,
+      round: 2,
+    } as GameEventView)!.announcement!;
+  }
+
+  it("không gọi tên Linh Mục cũng không nói tới Nước thánh", () => {
+    const text = reportOf("priest");
+    expect(text).not.toContain("Linh Mục");
+    expect(text).not.toContain("Nước thánh");
+  });
+
+  it("trúng đích và phản vệ đọc ra y hệt nhau", () => {
+    // Để riêng thì vế "thanh tẩy" chỉ ra người chết là Sói, vế "phản vệ" chỉ ra
+    // người chết là Linh Mục. Cùng một câu thì không suy ngược được cái nào.
+    expect(reportOf("priest")).toBe(reportOf("priest_backfire"));
+  });
+
+  it("các nguyên nhân khác vẫn giữ nguyên vế đầy đủ", () => {
+    expect(reportOf("wolf")).toContain("bị Sói cắn");
+    expect(reportOf("poison")).toContain("Bình Độc");
+  });
+
+  it("bản tường thuật cuối ván vẫn kể đúng chuyện đã xảy ra", () => {
+    // Làm mờ là luật của GIỮA VÁN. Ván xong thì không còn gì để giấu.
+    expect(deathCauseClause("priest")).toContain("Nước thánh");
+    expect(deathCauseClause("priest_backfire")).not.toBe(deathCauseClause("priest"));
+  });
+});
+
+describe("Phiếu ẩn Tiếng Hú Bầy Sói đổi được bản án", () => {
+  /** Một phiên toà với `accused` đứng trước vành móng ngựa, Tiếng Hú đang hiệu lực. */
+  function trial(howl: boolean) {
+    const state = createTestState([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v2", role: "VILLAGER", alive: true },
+      { id: "accused", role: "VILLAGER", alive: true },
+    ]);
+    const engine = new GameEngine(state);
+    engine.state.phase = "FINAL_VOTE";
+    engine.state.trial = { accusedId: "accused", finalVotes: {} };
+    engine.state.howlBonusDay = howl ? engine.state.round : null;
+    return engine;
+  }
+
+  it("một phiếu Treo thiếu vẫn treo được người khi bầy Sói cũng đòi treo", () => {
+    // 3 cử tri, 1 phiếu Treo: 1*2 = 2, không quá 3 -> tha.
+    const without = trial(false);
+    without.submitFinalVote("w1", true);
+    without.submitFinalVote("v1", false);
+    expect(without.resolveFinalVote()).toBeNull();
+
+    // Cùng bảng phiếu đó, có Tiếng Hú: 2*2 = 4 > 3 -> treo.
+    const withHowl = trial(true);
+    withHowl.submitFinalVote("w1", true);
+    withHowl.submitFinalVote("v1", false);
+    expect(withHowl.resolveFinalVote()?.playerId).toBe("accused");
+  });
+
+  it("bầy Sói bỏ phiếu Tha thì phiếu ẩn đứng về phía Tha", () => {
+    // Bị cáo ở đây vẫn bị treo (2 Treo có trọng số = 4 > 3 cử tri), và đó là
+    // đúng: một phiếu ẩn không lật được mọi bản án. Điều phải đúng là HƯỚNG -
+    // phiếu ẩn bám theo bầy Sói, nên khi bầy đòi tha thì nó không được tự ý
+    // rơi vào cột Treo.
+    const engine = trial(true);
+    engine.submitFinalVote("w1", false);
+    engine.submitFinalVote("v1", true);
+    engine.submitFinalVote("v2", true);
+    expect(engine.finalVoteTally().innocent).toBe(2);
+    expect(engine.finalVoteTally().guilty).toBe(2);
+  });
+
+  it("bầy Sói im lặng thì không có phiếu ẩn nào", () => {
+    const engine = trial(true);
+    engine.submitFinalVote("v1", true);
+    expect(engine.finalVoteTally().guilty).toBe(1);
+  });
+
+  it("bảng phiếu hiển thị không được thấy phiếu ẩn", () => {
+    // Cùng lý do với trọng số Thị Trưởng: danh sách phiếu công khai, nên một
+    // con số lệch là tự khai ra sự kiện đang chạy.
+    const engine = trial(true);
+    engine.submitFinalVote("w1", true);
+    expect(engine.finalVoteTally(false).guilty).toBe(1);
+    expect(engine.finalVoteTally(true).guilty).toBe(2);
+  });
+
+  it("ngoài ngày Tiếng Hú thì không cộng gì", () => {
+    const engine = trial(true);
+    engine.state.howlBonusDay = engine.state.round + 1;
+    engine.submitFinalVote("w1", true);
+    expect(engine.finalVoteTally().guilty).toBe(1);
+  });
+});
+
+describe("Trăng Máu xuyên đúng khiên đang chắn mục tiêu Sói", () => {
+  /** Nạp Trăng Máu bằng một đêm 0 người chết, rồi mở đêm kế. */
+  function armed(players: Partial<EnginePlayer>[]) {
+    const state = createTestState(players);
+    state.activeEvent = { ...GAME_EVENTS.BLOOD_MOON, round: 1 } as GameEventView;
+    const engine = new GameEngine(state);
+    engine.submitNightAction("w1", "SKIP", null);
+    engine.resolveNight(Date.now(), () => 0.9);
+    expect(engine.state.bloodMoonArmed).toBe(true);
+
+    engine.setPhase("DAY_DISCUSSION", 30000);
+    engine.setPhase("NIGHT", 30000);
+    engine.state.activeEvent = null;
+    return engine;
+  }
+
+  it("không xuyên khiên của người Sói KHÔNG cắn", () => {
+    // Bảo Vệ che v1, Sói cắn v2. Cú xuyên trước đây gỡ khiên của v1 - người
+    // không hề bị nhắm - rồi tiêu mất, còn v2 thì chết sẵn không cần xuyên.
+    const engine = armed([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v2", role: "VILLAGER", alive: true },
+      { id: "guard", role: "GUARD", alive: true },
+    ]);
+    engine.submitNightAction("guard", "GUARD", "v1");
+    engine.submitNightAction("w1", "KILL", "v2");
+    engine.resolveNight(Date.now(), () => 0.1);
+
+    expect(engine.state.players.find((p) => p.id === "v1")!.alive).toBe(true);
+    expect(engine.state.log.some((line) => line.includes("Trăng Máu xuyên"))).toBe(false);
+  });
+
+  it("xuyên khiên của Thiên Thần Hộ Mệnh chứ không chỉ của Bảo Vệ", () => {
+    // Bảo Vệ che v1 (vào Set trước), Thiên Thần che v2, Sói cắn v2. Bản cũ luôn
+    // gỡ phần tử đầu Set nên v2 sống; giờ phải chết.
+    const engine = armed([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v2", role: "VILLAGER", alive: true },
+      { id: "guard", role: "GUARD", alive: true },
+      { id: "ga", role: "GUARDIAN_ANGEL", alive: true },
+    ]);
+    engine.submitNightAction("guard", "GUARD", "v1");
+    engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v2");
+    engine.submitNightAction("w1", "KILL", "v2");
+    const deaths = engine.resolveNight(Date.now(), () => 0.1);
+
+    expect(deaths.map((d) => d.playerId)).toContain("v2");
+    expect(engine.state.players.find((p) => p.id === "v1")!.alive).toBe(true);
+  });
+
+  it("trượt cửa 20% thì khiên giữ nguyên và lượt nạp vẫn tiêu", () => {
+    const engine = armed([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "guard", role: "GUARD", alive: true },
+    ]);
+    engine.submitNightAction("guard", "GUARD", "v1");
+    engine.submitNightAction("w1", "KILL", "v1");
+    const deaths = engine.resolveNight(Date.now(), () => 0.9);
+
+    expect(deaths.map((d) => d.playerId)).not.toContain("v1");
+    expect(engine.state.bloodMoonArmed).toBe(false);
+    expect(engine.state.bloodMoonUsed).toBe(true);
   });
 });

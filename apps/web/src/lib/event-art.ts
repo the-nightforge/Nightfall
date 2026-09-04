@@ -18,6 +18,8 @@ const EVENT_ICONS: Record<GameEventId, string> = {
   SILENT_NIGHT: "🤫",
   AMNESTY_DAY: "🕊️",
   CLEARING_MIST: "🌫️",
+  VIGILANT_NIGHT: "🛡️",
+  SECRET_BALLOT: "🗳️",
   PEACEFUL_NIGHT: "✨",
   JUDGMENT_DAY: "⚖️",
   LAST_STAND: "🛡️",
