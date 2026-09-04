@@ -638,4 +638,148 @@ describe("Bộ chọn sự kiện cân theo độ nghiêng", () => {
     const ids = reachable(state, "DAY");
     expect(ids).toContain("HOWL_OF_THE_PACK");
   });
+
+  it("Bóng Sói bị chặn khi không còn ai soi, y như Đêm Không Trăng", () => {
+    // Cả ba sự kiện soi cùng một hàng rào: không còn Tiên Tri thì Bóng Sói chỉ
+    // là một slot đêm bị đốt cộng 3 điểm nghiêng khống cho phe Sói.
+    const state = chaosState();
+    state.players.find((p) => p.role === "SEER")!.alive = false;
+
+    const ids = reachable(state, "NIGHT");
+    expect(ids).not.toContain("WOLF_SHADOW");
+    expect(ids).not.toContain("MOONLESS_NIGHT");
+    expect(ids).not.toContain("CLEARING_MIST");
+    expect(ids).toContain("BLOOD_MOON");
+  });
+
+  it("Bóng Sói vẫn bốc được khi Tập Sự đã thức tỉnh", () => {
+    const state = chaosState();
+    state.players.find((p) => p.role === "SEER")!.role = "APPRENTICE_SEER";
+    state.apprenticeAwakened = true;
+
+    expect(reachable(state, "NIGHT")).toContain("WOLF_SHADOW");
+  });
+});
+
+describe("Bản Tin Bình Minh nói nguyên nhân, không đọc lại tên người chết", () => {
+  /** Một đêm đã khép lại với đúng những cái chết yêu cầu, rồi mở ngày kế. */
+  function afterNight(deaths: Array<{ name: string; cause: string }>) {
+    const state = createTestState([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v2", role: "VILLAGER", alive: true },
+    ]);
+    const engine = new GameEngine(state);
+    engine.state.nightHistory = [
+      {
+        round: 1,
+        deaths: deaths.map((death) => ({
+          player: { id: death.name, name: death.name, role: "VILLAGER" },
+          cause: death.cause,
+        })),
+      },
+    ] as never;
+    return engine;
+  }
+
+  const report = (engine: GameEngine): string =>
+    engine.startDay(30000, Date.now(), () => 0, {
+      ...GAME_EVENTS.MORNING_REPORT,
+      round: 2,
+    } as GameEventView)!.announcement!;
+
+  it("tách nhát cắn của Sói khỏi Bình Độc của Phù Thuỷ", () => {
+    const text = report(
+      afterNight([
+        { name: "Nam", cause: "wolf" },
+        { name: "Lan", cause: "poison" },
+      ]),
+    );
+    expect(text).toContain("Nam bị Sói cắn");
+    expect(text).toContain("Lan trúng Bình Độc của Phù Thủy");
+  });
+
+  it("nhát dao trong đêm không gọi tên Sát Nhân", () => {
+    const text = report(afterNight([{ name: "Nam", cause: "serial_killer" }]));
+    expect(text).toContain("Nam bị đâm trong đêm");
+    expect(text).not.toContain("Sát Nhân");
+  });
+
+  it("không còn là bản sao của lastNightDeaths: chỉ tên thôi là chưa đủ", () => {
+    const text = report(afterNight([{ name: "Nam", cause: "wolf" }]));
+    // Câu cũ - "Nam đã thiệt mạng" - không nói gì mà cả phòng chưa nhìn thấy.
+    expect(text).not.toContain("đã thiệt mạng");
+  });
+
+  it("đêm không ai chết vẫn có bản tin", () => {
+    expect(report(afterNight([]))).toContain("không ai thiệt mạng");
+  });
+});
+
+describe("Trăng Máu xuyên đúng khiên đang chắn mục tiêu Sói", () => {
+  /** Nạp Trăng Máu bằng một đêm 0 người chết, rồi mở đêm kế. */
+  function armed(players: Partial<EnginePlayer>[]) {
+    const state = createTestState(players);
+    state.activeEvent = { ...GAME_EVENTS.BLOOD_MOON, round: 1 } as GameEventView;
+    const engine = new GameEngine(state);
+    engine.submitNightAction("w1", "SKIP", null);
+    engine.resolveNight(Date.now(), () => 0.9);
+    expect(engine.state.bloodMoonArmed).toBe(true);
+
+    engine.setPhase("DAY_DISCUSSION", 30000);
+    engine.setPhase("NIGHT", 30000);
+    engine.state.activeEvent = null;
+    return engine;
+  }
+
+  it("không xuyên khiên của người Sói KHÔNG cắn", () => {
+    // Bảo Vệ che v1, Sói cắn v2. Cú xuyên trước đây gỡ khiên của v1 - người
+    // không hề bị nhắm - rồi tiêu mất, còn v2 thì chết sẵn không cần xuyên.
+    const engine = armed([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v2", role: "VILLAGER", alive: true },
+      { id: "guard", role: "GUARD", alive: true },
+    ]);
+    engine.submitNightAction("guard", "GUARD", "v1");
+    engine.submitNightAction("w1", "KILL", "v2");
+    engine.resolveNight(Date.now(), () => 0.1);
+
+    expect(engine.state.players.find((p) => p.id === "v1")!.alive).toBe(true);
+    expect(engine.state.log.some((line) => line.includes("Trăng Máu xuyên"))).toBe(false);
+  });
+
+  it("xuyên khiên của Thiên Thần Hộ Mệnh chứ không chỉ của Bảo Vệ", () => {
+    // Bảo Vệ che v1 (vào Set trước), Thiên Thần che v2, Sói cắn v2. Bản cũ luôn
+    // gỡ phần tử đầu Set nên v2 sống; giờ phải chết.
+    const engine = armed([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "v2", role: "VILLAGER", alive: true },
+      { id: "guard", role: "GUARD", alive: true },
+      { id: "ga", role: "GUARDIAN_ANGEL", alive: true },
+    ]);
+    engine.submitNightAction("guard", "GUARD", "v1");
+    engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v2");
+    engine.submitNightAction("w1", "KILL", "v2");
+    const deaths = engine.resolveNight(Date.now(), () => 0.1);
+
+    expect(deaths.map((d) => d.playerId)).toContain("v2");
+    expect(engine.state.players.find((p) => p.id === "v1")!.alive).toBe(true);
+  });
+
+  it("trượt cửa 20% thì khiên giữ nguyên và lượt nạp vẫn tiêu", () => {
+    const engine = armed([
+      { id: "w1", role: "WEREWOLF", alive: true },
+      { id: "v1", role: "VILLAGER", alive: true },
+      { id: "guard", role: "GUARD", alive: true },
+    ]);
+    engine.submitNightAction("guard", "GUARD", "v1");
+    engine.submitNightAction("w1", "KILL", "v1");
+    const deaths = engine.resolveNight(Date.now(), () => 0.9);
+
+    expect(deaths.map((d) => d.playerId)).not.toContain("v1");
+    expect(engine.state.bloodMoonArmed).toBe(false);
+    expect(engine.state.bloodMoonUsed).toBe(true);
+  });
 });

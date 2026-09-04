@@ -1,7 +1,7 @@
 import { m } from "motion/react";
-import type { NightRecap, RoomConfig } from "@masoi/shared";
+import { deathCauseClause, type NightRecap, type RoomConfig } from "@masoi/shared";
 import { cursedTurnedText } from "@/lib/cursed";
-import { deathCauseClause } from "@/lib/death-cause";
+
 import { priestSpentRound, rolesInRecap } from "@/lib/night-recap-roles";
 import { listItemMotion } from "@/lib/motion";
 
