@@ -369,7 +369,13 @@ export class BotRuntime {
       weights: this.weights,
       probe: run.probe,
     });
-    run.finish(context, "SPEECH", speech?.targetId ?? null, speech?.kind ?? "im lặng");
+    run.finish(
+      context,
+      "SPEECH",
+      speech?.targetId ?? null,
+      speech?.kind ?? "im lặng",
+      speech?.reason,
+    );
     return speech;
   }
 
@@ -406,7 +412,13 @@ export class BotRuntime {
   decideDefense(context: BotDecisionContext): BotDefenseIntention {
     const run = this.beginTracedDecision();
     const defense = decideDefenseSpeech(context, this.state, run.rng, this.style, this.weights);
-    run.finish(context, "SPEECH", defense.intention.targetId ?? null, defense.intention.kind);
+    run.finish(
+      context,
+      "SPEECH",
+      defense.intention.targetId ?? null,
+      defense.intention.kind,
+      defense.intention.reason,
+    );
     return defense;
   }
 
@@ -438,7 +450,13 @@ export class BotRuntime {
         }
       : null;
 
-    run.finish(context, "SPEECH", intention?.targetId ?? null, intention?.kind ?? "im lặng");
+    run.finish(
+      context,
+      "SPEECH",
+      intention?.targetId ?? null,
+      intention?.kind ?? "im lặng",
+      intention?.reason,
+    );
     return intention;
   }
 
@@ -558,6 +576,7 @@ export class BotRuntime {
       decision: TraceDecisionKind,
       targetId: string | null,
       label: string,
+      reason?: string,
     ) => void;
   } {
     if (!this.trace) {
@@ -572,13 +591,16 @@ export class BotRuntime {
     return {
       rng,
       probe,
-      finish: (context, decision, targetId, label) => {
+      finish: (context, decision, targetId, label, reason) => {
         sink.record({
           botId: this.state.playerId,
           round: context.knowledge.round,
           phase: context.knowledge.phase,
           decision,
-          chosen: { targetId, label },
+          // Bỏ hẳn khoá khi không có lý do, thay vì để `reason: undefined`:
+          // `JSON.stringify` đằng nào cũng bỏ nó, nên giữ nó ở đây chỉ làm hai
+          // đường - trong bộ nhớ và trên đĩa - khác nhau mà không ai được gì.
+          chosen: reason === undefined ? { targetId, label } : { targetId, label, reason },
           candidates: probe.candidates,
           beliefBefore: this.beliefBefore,
           beliefAfter: this.beliefAfter,

@@ -189,7 +189,9 @@ export function TrialPanel({ snapshot, onFinalVote, liveStage = false }: Props) 
             * thì ở LẠI: đó là luật của hai cái nút ngay bên dưới, không phải
             * một con số trên bảng đếm. */}
           <p className="mb-3 text-[13px] text-mist-strong">
-            {!liveStage && <>Cần {trial.guiltyRequired} phiếu Treo để kết án. </>}
+            {!liveStage && (
+              <>Cần {trial.guiltyRequired} phiếu Treo để kết án, nếu mọi lá phiếu đều nặng như nhau. </>
+            )}
             Không bỏ phiếu tính là Tha.
           </p>
 

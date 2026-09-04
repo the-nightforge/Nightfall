@@ -432,7 +432,10 @@ describe("cán cân", () => {
 describe("thông báo cho trình đọc màn hình", () => {
   it("một câu cho cả bảng số, không phải một câu cho mỗi lá phiếu", () => {
     const view = trialStageCandidate(finalVote({ guiltyVotes: 3, innocentVotes: 1 }))!;
-    assert.equal(tallyAnnouncement(view), "Treo 3, Tha 1. Cần 4 phiếu Treo để kết án.");
+    assert.equal(
+      tallyAnnouncement(view),
+      "Treo 3, Tha 1. Cần 4 phiếu Treo để kết án, nếu mọi lá phiếu đều nặng như nhau.",
+    );
   });
 
   it("không rò rỉ gì ngoài những con số server đã gửi", () => {
@@ -450,6 +453,32 @@ describe("thông báo cho trình đọc màn hình", () => {
     // Cũng không được nói lá phiếu của chính người xem ra loa: vùng aria-live
     // đọc lên cho cả phòng nghe nếu ai đó đang chia sẻ màn hình hay dùng loa.
     assert.ok(!text.includes("Treo cổ"));
+  });
+
+  it("lời giải thích trọng số chỉ tới người mà server gửi cờ", () => {
+    const decided = trialStageCandidate(
+      snapshot({
+        phase: "ELIMINATION",
+        lastTrial: recap({ guilty: 3, innocent: 2, yourWeightDecided: true }),
+      }),
+    )!;
+    assert.equal(decided.yourWeightDecided, true);
+
+    // Cùng một bản án đó, nhìn từ một người xem bình thường.
+    const others = trialStageCandidate(
+      snapshot({ phase: "ELIMINATION", lastTrial: recap({ guilty: 3, innocent: 2 }) }),
+    )!;
+    assert.equal(others.yourWeightDecided, false);
+  });
+
+  it("server cũ không gửi cờ thì im lặng, không đoán", () => {
+    // Web và server deploy rời nhau: `undefined` ở đây nghĩa là "không biết", và
+    // một dòng chữ dựng lên từ chỗ không biết là một dòng chữ bịa.
+    const { yourWeightDecided: _omitted, ...legacy } = recap({ guilty: 3, innocent: 2 });
+    const view = trialStageCandidate(
+      snapshot({ phase: "ELIMINATION", lastTrial: legacy as TrialRecap }),
+    )!;
+    assert.equal(view.yourWeightDecided, false);
   });
 
   it("nhãn chặng nói đúng pha đang diễn", () => {
@@ -514,6 +543,9 @@ describe("không rò rỉ thông tin riêng tư", () => {
           "hasVoted",
           "myVote",
           "audience",
+          // Một cờ có/không, tính riêng cho người xem này và chỉ gửi cho người
+          // vốn đã biết mình mang trọng số ẩn. Không có id nào đi kèm nó.
+          "yourWeightDecided",
         ] as Array<keyof TrialStageView>
       ).sort(),
     );
@@ -535,5 +567,25 @@ describe("ai sở hữu cảnh chuyển pha", () => {
     for (const kind of ["NIGHTFALL", "DAWN", "VILLAGE_WIN", "WOLVES_WIN", "SPIRIT"] as const) {
       assert.equal(stageOwnsCinematic(kind), false, kind);
     }
+  });
+});
+
+describe("stageOwnsCinematic: cảnh treo cổ thuộc về lớp phủ, không thuộc sân khấu", () => {
+  it("EXECUTION KHÔNG do sân khấu sở hữu", () => {
+    /*
+     * Cái chết của một người là khoảnh khắc của CẢ PHÒNG, và nó phải phủ kín
+     * màn hình bằng khuôn mặt thật của người vừa ngã xuống. Sân khấu vẫn giữ
+     * nhịp phán quyết của nó - bảng tỉ số và dòng "Phán quyết: Treo cổ" còn
+     * nguyên khi lớp phủ tan - nên không có thông tin nào mất đi.
+     *
+     * `VERDICT` thì ngược lại và vẫn thuộc sân khấu: đó là cạnh của một phiên
+     * toà KHÔNG có ai chết (được tha, hoà phiếu, "không treo ai").
+     */
+    assert.equal(stageOwnsCinematic("EXECUTION"), false);
+    assert.equal(stageOwnsCinematic("VERDICT"), true);
+  });
+
+  it("NIGHT_KILL cũng vậy - sân khấu không có mặt trong đêm", () => {
+    assert.equal(stageOwnsCinematic("NIGHT_KILL"), false);
   });
 });

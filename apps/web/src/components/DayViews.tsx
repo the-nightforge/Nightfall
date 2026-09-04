@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
 import { OpenVotePanel } from "./OpenVotePanel";
+import { WeightDecidedNote } from "./WeightDecidedNote";
 import { PlayerGrid } from "./PlayerGrid";
 import { VoteHistoryPanel } from "./VoteHistoryPanel";
 import { DayOfTruthModal } from "./DayOfTruthModal";
@@ -372,6 +373,13 @@ export function EliminationView({ snapshot }: { snapshot: RoomSnapshot }) {
         // Không còn khẳng định hoà phiếu: không ai bị loại giờ có hai lý do
         // (hoà, hoặc "Không treo ai" thắng) mà snapshot không phân biệt.
           <h3 className="mt-2 font-display text-3xl font-bold text-white">Không ai bị loại hôm nay</h3>
+        )}
+        {/* Ngoài sân khấu Phiên toà sống, đây là màn phán quyết duy nhất mà một
+          * người chơi có thể gặp - lời giải thích phải có mặt ở cả hai. */}
+        {snapshot.lastTrial?.yourWeightDecided === true && (
+          <div className="mt-4 text-left">
+            <WeightDecidedNote lynched={snapshot.lastEliminated !== null} />
+          </div>
         )}
       </div>
       {latestRecap && <VoteHistoryPanel recap={latestRecap} players={snapshot.players} />}

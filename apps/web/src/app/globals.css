@@ -374,33 +374,50 @@ summary:focus-visible,
   text-transform: uppercase;
 }
 
-.lobby-room-header {
+/*
+ * Đầu bảng người chơi - trước đây là một thẻ riêng vắt ngang đầu trang.
+ *
+ * Không còn viền, nền hay bóng đổ của riêng nó: nó nằm TRONG
+ * `.lobby-player-board`, và một cái thẻ lồng trong một cái thẻ chỉ vẽ thêm một
+ * đường viền để mắt phải vượt qua. Thứ ngăn nó với lưới bên dưới là một vệt
+ * vàng mảnh, đúng vệt đã dùng ở bản cũ.
+ */
+.lobby-board-head {
   position: relative;
-  overflow: hidden;
-  padding: 1rem;
-  border: 1px solid rgba(238, 243, 253, 0.1);
-  border-radius: 1rem;
-  background:
-    radial-gradient(620px 180px at 8% -20%, rgba(119, 154, 211, 0.2), transparent 72%),
-    linear-gradient(120deg, rgba(12, 19, 34, 0.88), rgba(8, 13, 25, 0.72));
-  box-shadow: 0 22px 54px -38px rgba(0, 0, 0, 0.95);
+  flex: 0 0 auto;
+  padding-bottom: 0.85rem;
+  margin-bottom: 0.85rem;
 }
 
-.lobby-room-header::after {
+.lobby-board-head::after {
   content: "";
   position: absolute;
-  right: -10%;
-  bottom: -2px;
-  left: 32%;
+  right: 0;
+  bottom: 0;
+  left: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(230, 190, 106, 0.55), transparent);
+  background: linear-gradient(90deg, rgba(230, 190, 106, 0.5), rgba(230, 190, 106, 0.12), transparent);
 }
 
-.lobby-room-heading {
+.lobby-board-heading {
   display: flex;
   min-width: 0;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.85rem;
+}
+
+/* Một hàng chữ nhỏ gom chủ phòng, số người còn thiếu và nút đổi ảnh đại diện.
+ * Cho phép xuống dòng: ở cột hẹp 1024px tên chủ phòng dài cộng nút bên phải
+ * không nằm vừa một hàng, và bóp chúng lại thì tên bị cắt cụt. */
+.lobby-board-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  margin-top: 0.7rem;
+  color: rgba(199, 212, 233, 0.85);
+  font-size: 0.8125rem;
+  line-height: 1.4;
 }
 
 .lobby-room-moon,
@@ -415,30 +432,31 @@ summary:focus-visible,
 }
 
 .lobby-room-moon {
-  width: 2.9rem;
-  height: 2.9rem;
+  width: 2.4rem;
+  height: 2.4rem;
   border-radius: 50%;
 }
 
 .lobby-room-moon svg {
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 1.45rem;
+  height: 1.45rem;
   fill: currentColor;
 }
 
-.lobby-room-invite {
-  min-width: 0;
-  margin-top: 1rem;
-}
-
-.lobby-room-invite .btn-secondary {
-  border-color: rgba(226, 190, 118, 0.2);
-  background: rgba(11, 17, 32, 0.68);
-}
-
+/*
+ * Sân người chơi là một KHUNG, không phải một tấm giấy dài.
+ *
+ * Cột flex ở đây là thứ cho phép đầu bảng và dòng chân đứng yên trong khi chỉ
+ * `.lobby-player-scroll` cuộn. `min-height: 0` là bắt buộc: mặc định một item
+ * flex không co xuống dưới nội dung của nó, và thiếu dòng đó thì bảng cứ cao
+ * theo số người rồi lòi khỏi màn hình thay vì cuộn bên trong.
+ */
 .lobby-player-board {
   position: relative;
+  display: flex;
   min-width: 0;
+  min-height: 0;
+  flex-direction: column;
   overflow: hidden;
   padding: 1rem;
   border: 1px solid rgba(238, 243, 253, 0.1);
@@ -460,10 +478,33 @@ summary:focus-visible,
   mask-image: linear-gradient(to bottom, black, transparent 90%);
 }
 
+.lobby-player-scroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Chừa chỗ cho thanh cuộn để nó không đè lên mép ô ngoài cùng bên phải. */
+  padding-right: 0.25rem;
+}
+
+/*
+ * Số cột đo theo BỀ NGANG THẬT của bảng, không theo bề ngang màn hình.
+ *
+ * Bản cũ chốt 3/4/5 cột theo breakpoint, và từ 1024px bảng này tụt vào cột
+ * trái của lưới phòng chờ: màn rộng ra mà bảng lại hẹp đi, nên đúng ở 1024
+ * năm cột chen vào chỗ chỉ vừa bốn và tên người chơi bị cắt cụt. `auto-fit`
+ * hỏi thẳng cái khung đang chứa nó, nên nó đúng ở mọi bề ngang - kể cả những
+ * bề ngang chưa ai nghĩ tới.
+ *
+ * 6rem là ô hẹp nhất còn chứa vừa chân dung 4rem cộng một tên hai chữ - và nó
+ * cũng đúng là con số giữ được BA cột ở màn 390px, đúng bằng bản cũ chốt cứng.
+ * Nhích lên 6.5rem là mất một cột ở đó.
+ */
 .lobby-player-grid {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr));
   gap: 0.65rem;
 }
 
@@ -613,6 +654,32 @@ button.lobby-player-tile:active {
   padding: 1rem;
 }
 
+/*
+ * Từ lg thẻ điều khiển là một khung co được, với nút Bắt đầu neo ở đáy.
+ *
+ * `min-height: 0` trên cả thẻ lẫn phần tóm tắt là thứ cho phép nó co: thiếu nó
+ * thì một item flex không xuống dưới nội dung của chính nó, và ở 1024x768 thẻ
+ * này giữ nguyên 476px rồi đè lên khung chat bên dưới thay vì nhường chỗ.
+ *
+ * Dưới lg không áp dụng: ở đó thanh điều khiển là một mạch đọc dọc bình thường
+ * và nút Bắt đầu đã được `.lobby-primary-action` ghim xuống đáy màn hình.
+ */
+@media (min-width: 1024px) {
+  .lobby-command-panel {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+
+  .lobby-command-summary {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
 .lobby-role-chip {
   display: inline-flex;
   min-width: 0;
@@ -704,48 +771,114 @@ button.lobby-player-tile:active {
   box-shadow: 0 -28px 70px rgba(0, 0, 0, 0.55);
 }
 
-@media (min-width: 410px) {
-  .lobby-player-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/*
+ * Nút mở thiết lập, chân thanh điều khiển.
+ *
+ * Cùng hình dáng với một hàng `<summary>` của `.lobby-disclosure` mà nó thay
+ * thế - cùng chiều cao, cùng cặp chữ đậm/nhạt - để chủ phòng đã quen bản cũ
+ * không phải đi tìm lại thứ mình vẫn bấm.
+ */
+.lobby-settings-trigger {
+  display: flex;
+  width: 100%;
+  min-height: 3.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  text-align: left;
+  border: 1px solid rgba(238, 243, 253, 0.1);
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(13, 21, 38, 0.9), rgba(8, 13, 24, 0.82));
+  box-shadow: 0 20px 50px -38px rgba(0, 0, 0, 0.95);
+  transition: background-color var(--dur-base) var(--ease-out-soft);
+}
+
+.lobby-settings-trigger:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.lobby-settings-layer {
+  position: fixed;
+  z-index: 70;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+/*
+ * Tấm trượt lên từ đáy trên điện thoại, ngăn kéo bên phải trên desktop.
+ *
+ * `72dvh` trên điện thoại là đúng con số mà tấm trượt chat đang dùng: đủ để
+ * bộ bài 13 vai đọc được mà vẫn để lộ một dải phòng chờ phía trên, nên người
+ * dùng thấy ngay là mình đang ở một lớp phủ chứ không phải một trang mới.
+ */
+.lobby-settings-drawer {
+  position: relative;
+  display: flex;
+  width: 100%;
+  max-width: 34rem;
+  max-height: 82dvh;
+  flex-direction: column;
+  border: 1px solid rgba(238, 243, 253, 0.14);
+  border-radius: 1.25rem 1.25rem 0 0;
+  background: #0b1220;
+  box-shadow: 0 -28px 70px rgba(0, 0, 0, 0.6);
+}
+
+.lobby-settings-drawer-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid rgba(238, 243, 253, 0.1);
+}
+
+.lobby-settings-drawer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem calc(1rem + env(safe-area-inset-right)) calc(1.25rem + env(safe-area-inset-bottom))
+    calc(1rem + env(safe-area-inset-left));
+}
+
+@media (min-width: 640px) {
+  .lobby-settings-layer { align-items: center; padding: 1rem; }
+  .lobby-settings-drawer { max-height: min(46rem, 86dvh); border-radius: 1.25rem; }
+}
+
+/*
+ * Từ lg nó dạt hẳn về mép phải, cùng bên với thanh điều khiển đã mở ra nó.
+ *
+ * Một hộp giữa màn hình sẽ che mất chính sân người chơi - thứ mà chủ phòng
+ * đang vừa chỉnh bộ bài vừa liếc xem đã đủ người chưa.
+ */
+@media (min-width: 1024px) {
+  .lobby-settings-layer { align-items: stretch; justify-content: flex-end; padding: 0.75rem; }
+  .lobby-settings-drawer { max-width: 30rem; max-height: none; border-radius: 1.25rem; }
 }
 
 @media (min-width: 768px) {
-  .lobby-room-header { padding: 1.25rem 1.4rem; }
   .lobby-player-board { padding: 1.35rem; }
   .lobby-player-grid { gap: 0.85rem; }
   .lobby-player-avatar, .lobby-empty-avatar { width: 4.5rem; height: 4.5rem; }
 }
 
 /*
- * Tên phòng và cụm mã phòng đứng CẠNH nhau chỉ khi khối này đủ rộng cho cả hai.
+ * Từ lg sân người chơi cao ĐÚNG BẰNG cột của nó.
  *
- * Cụm mã phòng + hai nút mời chiếm gọn 22rem không co được, nên dưới khoảng
- * 44rem thì cột còn lại không đủ cho một dòng tiêu đề 36px: "Trước giờ trăng
- * lên" gãy làm bốn dòng, mỗi dòng một chữ.
- *
- * Bề rộng đó KHÔNG đi cùng chiều với bề rộng màn hình, vì từ 1024px khối này
- * chuyển vào cột trái của lưới phòng chờ (xem trang phòng): ở 1024 màn rộng
- * hơn mà khối lại hẹp đi, còn 872px thì phải tới 1280px mới có. Nên khoảng
- * 1024-1279 xếp chồng, hai đầu xếp ngang - đó là điều kiện thật, viết thẳng ra
- * thay vì một mốc md duy nhất rồi sai ở giữa.
+ * Không phải để lấp chỗ trống: một cái thẻ dừng ở giữa màn hình trong khi
+ * thanh điều khiển bên cạnh chạy hết chiều cao thì phần dưới nó thành một mảng
+ * trống có viền bao quanh - vẫn đúng bấy nhiêu khoảng trống, chỉ khác là bây
+ * giờ mắt phải đi qua một đường viền để tới nó. Cho bảng chiếm hết cột thì
+ * khoảng thở đó nằm BÊN TRONG sân, đọc ra như chỗ còn lại của một cái sân.
  */
-@media (min-width: 768px) and (max-width: 1023.98px), (min-width: 1280px) {
-  .lobby-room-header {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-    gap: 1.5rem;
-  }
-
-  .lobby-room-header > .mt-5 {
-    grid-column: 1 / -1;
-    margin-top: 0;
-  }
-
-  .lobby-room-invite { margin-top: 0; }
-}
-
 @media (min-width: 1024px) {
-  .lobby-player-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .lobby-player-board { flex: 1 1 auto; }
 }
 
 @media (max-width: 1023px) {

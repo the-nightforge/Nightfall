@@ -148,7 +148,13 @@ function Section({
       <p className={`mb-2 text-[11px] font-bold uppercase tracking-[0.2em] ${TONE.text[tone]}`}>
         {label}
       </p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{children}</div>
+      {/*
+        * Chia cột theo bề ngang THẬT của khung, không theo breakpoint màn hình:
+        * bảng này sống trong cột phải rộng chừng 290px, nên `sm:grid-cols-3`
+        * (đo màn hình) nhồi ba thẻ vào chỗ vừa hai và mỗi thẻ chỉ còn ~85px -
+        * đủ hẹp để mô tả vai bị cắt cụt ngay ở màn hình host dùng để xếp bài.
+        */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))] gap-2">{children}</div>
     </div>
   );
 }
@@ -230,7 +236,7 @@ function RoleCard({
 }) {
   const meta = ROLE_META[role];
   const tone = toneFor(role);
-  const shell = `group flex flex-col items-center rounded-xl border px-3 py-3 text-center transition
+  const shell = `group flex h-full flex-col items-center rounded-xl border px-3 py-3 text-center transition
         ${enabled ? TONE.card[tone] : "border-night-600/50 bg-night-800/30 opacity-45"}`;
 
   const body = (
@@ -259,12 +265,21 @@ function RoleCard({
         {meta.name}
       </span>
 
-      <span className="mt-1 line-clamp-3 min-h-[32px] px-1 text-center text-[11px] leading-snug text-mist/60">
+      {/*
+        * Mô tả hiện ĐỦ. `line-clamp-3` cắt mất đúng phần điều kiện của những
+        * vai rắc rối nhất ("Khi Tiên Tri chết, thừa kế..."), mà đó lại chính là
+        * thứ host cần đọc để quyết bật hay tắt. Thẻ cùng hàng vẫn cao bằng nhau
+        * vì ô lưới tự kéo giãn, nên bỏ trần không làm hàng lệch.
+        */}
+      <span className="mt-1 min-h-[32px] px-1 text-center text-[11px] leading-snug text-mist/60">
         {meta.description}
       </span>
 
+      {/* mt-auto: mô tả dài ngắn khác nhau thì dòng số lượng vẫn nằm cùng
+          một mức ở đáy mọi thẻ trong hàng. `h-full` trên `shell` là chỗ mà
+          `mt-auto` đẩy vào. */}
       {stepper ? (
-        <span className="mt-1.5 flex items-center gap-1.5">
+        <span className="mt-auto flex items-center gap-1.5 pt-1.5">
           <StepButton
             label={`Bớt một ${meta.name}`}
             disabled={stepper.value <= stepper.min}
@@ -284,7 +299,7 @@ function RoleCard({
           </StepButton>
         </span>
       ) : (
-        <span className="mt-1.5 flex items-center gap-1 text-[11px] font-bold">
+        <span className="mt-auto flex items-center gap-1 pt-1.5 text-[11px] font-bold">
           <span className={`h-1.5 w-1.5 rounded-full ${enabled ? TONE.dot[tone] : "bg-mist/30"}`} aria-hidden="true" />
           <span className={enabled ? "text-white" : "text-mist/60"}>
             {count > 0 ? `×${count}` : role === "VILLAGER" ? "lấp chỗ" : "—"}

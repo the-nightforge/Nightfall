@@ -53,6 +53,14 @@ export interface TrialStageView {
   thresholdReached: boolean;
   /** Chỉ khác null ở chặng VERDICT, và chỉ khi server đã chốt. */
   verdict: TrialVerdict | null;
+  /**
+   * Chính trọng số ẩn của NGƯỜI ĐANG XEM đã lật bản án này.
+   *
+   * Chỉ có thể đúng ở chặng VERDICT, và chỉ với người vốn đã biết mình mang
+   * trọng số đó - server không gửi nó cho ai khác. Đây là câu trả lời cho một
+   * người xem duy nhất, không phải một thông báo cho cả làng: xem `TrialRecap`.
+   */
+  yourWeightDecided: boolean;
   canSpeak: boolean;
   canVote: boolean;
   hasVoted: boolean;
@@ -111,6 +119,8 @@ export function trialStageCandidate(snapshot: RoomSnapshot | null): TrialStageVi
       required: trial.guiltyRequired,
       thresholdReached: trial.guiltyVotes >= trial.guiltyRequired && trial.guiltyRequired > 0,
       verdict: null,
+      // Chưa chốt thì chưa có bản án nào để mà lật.
+      yourWeightDecided: false,
       canSpeak: trial.canSpeak,
       canVote: trial.canVote,
       hasVoted: trial.hasVoted,
@@ -135,6 +145,9 @@ export function trialStageCandidate(snapshot: RoomSnapshot | null): TrialStageVi
       required: null,
       thresholdReached: false,
       verdict: last.lynched ? "LYNCHED" : "SPARED",
+      // `=== true` chứ không phải truthiness: server cũ không gửi trường này, và
+      // undefined ở đây nghĩa là "không biết", không phải "có".
+      yourWeightDecided: last.yourWeightDecided === true,
       // Phiên đã xử xong: không còn ai nói, không còn ai bỏ phiếu.
       canSpeak: false,
       canVote: false,
@@ -281,8 +294,10 @@ export function stepTrialStage(
 
     const view: TrialStageView = {
       ...candidate,
-      // Ngưỡng của phiên này vẫn phải đọc được ở màn tuyên án: nó là thứ giải
-      // thích vì sao 5 phiếu Treo lại thành "được tha".
+      // Ngưỡng của phiên này vẫn phải đọc được ở màn tuyên án: nó là con số mà
+      // bản án vừa tuyên phải được đọc CẠNH nó. Lưu ý nó không phải lời giải
+      // thích cho mọi bản án - 5 phiếu Treo trên ngưỡng 5 vẫn có thể thành "được
+      // tha", và người duy nhất được biết vì sao là người mang trọng số ẩn đó.
       required: memory.required,
       thresholdReached: memory.required !== null && candidate.guilty >= memory.required,
     };
@@ -415,7 +430,9 @@ export function tallyAnnouncement(view: TrialStageView): string {
     return view.verdict ? `Phán quyết cho ${view.accusedName}: ${verdictOutcome(view.verdict)}.` : "";
   }
   const threshold =
-    view.required === null ? "" : ` Cần ${view.required} phiếu Treo để kết án.`;
+    view.required === null
+      ? ""
+      : ` Cần ${view.required} phiếu Treo để kết án, nếu mọi lá phiếu đều nặng như nhau.`;
   return `Treo ${view.guilty}, Tha ${view.innocent}.${threshold}`;
 }
 

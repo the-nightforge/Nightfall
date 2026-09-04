@@ -37,6 +37,7 @@ import {
   type GameState,
   type NominationOutcome,
   type PublicDeath,
+  type TrialRecapState,
   type TrialState,
 } from "./types";
 
@@ -1736,8 +1737,11 @@ export class GameEngine {
      * nào là một điểm `power` khống - và độ nghiêng lại trừ điểm đó vào quota
      * sự kiện đêm thật của bầy Sói.
      *
-     * `eligible` KHÔNG cộng theo: ngưỡng kết án suy ra từ nó, nên nâng cả hai
-     * lên là triệt tiêu đúng cái lợi vừa cho.
+     * Hai hướng đi vào công thức bằng hai cửa khác nhau, và đó là chủ đích chứ
+     * không phải bất cẩn. Hướng Treo cộng thẳng vào `guilty` mà giữ nguyên
+     * `eligible` - nâng cả hai lên là triệt tiêu đúng cái lợi vừa cho. Hướng Tha
+     * thì ngược lại, phải nâng `eligible`, vì `innocent` không có mặt trong phép
+     * so sánh nào cả (xem chú thích tại chỗ ở nhánh đó).
      *
      * Hướng phiếu bám theo đa số của bầy, và bầy im lặng thì không có phiếu ẩn
      * nào - cùng một luật với `voteTally`, vì cùng một lý do: một phiếu ẩn tự
@@ -1753,11 +1757,59 @@ export class GameEngine {
         if (vote) wolfGuilty += 1;
         else wolfInnocent += 1;
       }
-      if (wolfGuilty > wolfInnocent) guilty += 1;
-      else if (wolfInnocent > wolfGuilty) innocent += 1;
+      if (wolfGuilty > wolfInnocent) {
+        guilty += 1;
+      } else if (wolfInnocent > wolfGuilty) {
+        /*
+         * Hướng Tha phải đi qua `totalWeight`, không phải chỉ `innocent`.
+         *
+         * `resolveFinalVote` quyết bằng `guilty * 2 > eligible` và KHÔNG hề đọc
+         * `innocent`: phiếu trắng đã tính là Tha, nên cột Tha không có tiếng nói
+         * riêng nào trong công thức. Cộng vào `innocent` rồi dừng ở đó là cộng
+         * vào một con số không ai hỏi tới - phiếu ẩn hướng Tha khi ấy không cứu
+         * được một bị cáo nào, đúng cái "điểm power khống" mà chú thích trên
+         * cảnh báo, chỉ là ở nửa còn lại.
+         *
+         * Nâng `eligible` mới là cách nói "có thêm một cử tri, và cử tri đó bỏ
+         * Tha": ngưỡng quá bán dâng lên đúng một phiếu. `votedWeight` đi theo vì
+         * cử tri ảo ấy có bỏ phiếu - để nó ngoài là biến phiếu ẩn thành một
+         * phiếu trắng trong `abstain`.
+         */
+        innocent += 1;
+        totalWeight += 1;
+        votedWeight += 1;
+      }
     }
 
     return { guilty, innocent, abstain: totalWeight - votedWeight, eligible: totalWeight };
+  }
+
+  /**
+   * Những cử tri mà PHẦN NẶNG THÊM của lá phiếu họ - không phải lá phiếu - đã
+   * một mình đổi bản án.
+   *
+   * Cách đo là đặt lại người đó thành một cử tri thường: bỏ đi phần trọng số
+   * thừa ở cả `guilty` lẫn `eligible`, rồi hỏi cùng một câu hỏi. Kết quả khác đi
+   * nghĩa là chính trọng số ấy quyết định, chứ không phải lá phiếu - một Thị
+   * Trưởng bỏ Treo giữa một bảng phiếu treo áp đảo không được nhận công.
+   *
+   * Bị cáo đã chết vì lý do khác thì `lynched` là false ở cả hai phép tính, nên
+   * không ai bị gán nhầm.
+   */
+  private weightDecidedVoterIds(guiltyWeighted: number, eligible: number, lynched: boolean): string[] {
+    const trial = this.mustTrial();
+    const accused = this.player(trial.accusedId);
+    const decided: string[] = [];
+    for (const voter of this.finalVoters()) {
+      if (voter.role !== "MAYOR") continue;
+      const vote = trial.finalVotes[voter.id];
+      const guiltyPlain = guiltyWeighted - (vote === true ? 1 : 0);
+      const eligiblePlain = eligible - 1;
+      const lynchedPlain =
+        eligiblePlain > 0 && guiltyPlain * 2 > eligiblePlain && accused?.alive === true;
+      if (lynchedPlain !== lynched) decided.push(voter.id);
+    }
+    return decided;
   }
 
   /** Số phiếu Treo tối thiểu để kết án. */
@@ -1780,6 +1832,9 @@ export class GameEngine {
     // Nhân đôi thay vì chia đôi: eligible lẻ sẽ đưa số thực vào một phép so sánh
     // quyết định ai sống ai chết. Phiếu trắng vì thế tính là Tha.
     const lynched = eligible > 0 && guiltyWeighted * 2 > eligible && accused.alive;
+    // Phải đọc trước khi `st.trial` bị xoá ở cuối hàm: nó cần chính bảng phiếu
+    // vừa kiểm.
+    const weightDecidedVoterIds = this.weightDecidedVoterIds(guiltyWeighted, eligible, lynched);
 
     const recap = [...st.dayVoteHistory].reverse().find((item) => item.round === st.round);
     if (recap) {
@@ -1833,6 +1888,7 @@ export class GameEngine {
       innocent,
       abstain,
       lynched,
+      weightDecidedVoterIds,
     };
     st.trial = null;
     st.log.push(
@@ -2389,6 +2445,19 @@ export class GameEngine {
     };
   }
 
+  /**
+   * Recap phiên toà đã xử xong, tính riêng cho một người xem.
+   *
+   * Việc duy nhất ở đây là ĐỔI DANH SÁCH THÀNH MỘT CÂU TRẢ LỜI: state giữ id của
+   * những cử tri có trọng số đã lật bản án, snapshot chỉ được mang đúng một cờ
+   * có/không cho chính người đang xem. Trả về `st.lastTrial` thẳng là gửi cả
+   * danh sách Thị Trưởng cho cả phòng.
+   */
+  private lastTrialViewFor(recap: TrialRecapState, viewerId: string): TrialRecap {
+    const { weightDecidedVoterIds, ...shared } = recap;
+    return { ...shared, yourWeightDecided: weightDecidedVoterIds?.includes(viewerId) === true };
+  }
+
   /** Khối phiên toà của một người xem. Chỉ gọi khi state.trial khác null. */
   private trialViewFor(viewerId: string, viewer: EnginePlayer | undefined): TrialView {
     const st = this.state;
@@ -2556,8 +2625,9 @@ export class GameEngine {
           : null,
       trialInfo: inTrialPhase && st.trial ? this.trialViewFor(viewerId, viewer) : null,
       lastTrial:
-        st.phase === "ELIMINATION" || st.phase === "CHECK_WIN" || st.phase === "GAME_OVER"
-          ? st.lastTrial
+        (st.phase === "ELIMINATION" || st.phase === "CHECK_WIN" || st.phase === "GAME_OVER") &&
+        st.lastTrial
+          ? this.lastTrialViewFor(st.lastTrial, viewerId)
           : null,
       hasVoted,
       // ?? null ở đây an toàn vì đã gác bằng hasVoted: chỉ đọc khi thật sự có

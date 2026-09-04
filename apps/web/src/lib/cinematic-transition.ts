@@ -18,8 +18,18 @@ import { WEBGL_KINDS } from "./cinematic-webgl";
 export const CINEMATIC_KINDS = [
   "NIGHTFALL",
   "DAWN",
+  /**
+   * Bình minh trên một đêm CÓ người ngã xuống.
+   *
+   * Một kind riêng chứ không phải một cờ trên `DAWN`, vì hai cảnh này loại trừ
+   * nhau ở đúng một chỗ (`phaseKind`) - và đó chính là thứ khiến không có đường
+   * nào để hai lớp phủ nối đuôi nhau trên cùng một cạnh.
+   */
+  "NIGHT_KILL",
   "TRIAL",
   "VERDICT",
+  /** Phán quyết mà làng THI HÀNH. `VERDICT` là phán quyết không có ai chết. */
+  "EXECUTION",
   "VILLAGE_WIN",
   "WOLVES_WIN",
   "KILLER_WIN",
@@ -42,8 +52,13 @@ export interface Cinematic {
    * màn hình chớp thêm một lần nữa.
    */
   key: string;
-  /** Tên file trong /cinematics, không kèm phần mở rộng. */
-  clip: string;
+  /**
+   * Tên file trong /cinematics, không kèm phần mở rộng.
+   *
+   * `null` nghĩa là cảnh này KHÔNG BAO GIỜ đi qua đường video - không phải
+   * "chưa dựng clip". Xem `KIND_META`.
+   */
+  clip: string | null;
   durationMs: number;
   /**
    * Nhãn của HỌ hình ảnh - "Luật làng thay đổi", "Màn đêm buông xuống".
@@ -107,7 +122,15 @@ const EVENT_FAMILY: Record<GameEventId, CinematicKind> = {
 };
 
 interface KindMeta {
-  clip: string;
+  /**
+   * Tên clip, hoặc `null` cho cảnh dựng bằng chân dung người chơi.
+   *
+   * `null` khác hẳn "chưa có file" (xem `KILLER_WIN`/`DRAW` bên dưới, hai cảnh
+   * có tên clip nhưng chưa dựng): một cảnh mang khuôn mặt của nạn nhân ĐÊM NAY
+   * thì không có đoạn phim dựng sẵn nào kể được, nên nó không được phép có
+   * đường video - kể cả khi ai đó thả một file trùng tên vào /public/cinematics.
+   */
+  clip: string | null;
   durationMs: number;
   label: string;
 }
@@ -125,6 +148,21 @@ const KIND_META: Record<CinematicKind, KindMeta> = {
   DAWN: { clip: "dawn", durationMs: 1200, label: "Trời sáng trên ngôi làng" },
   TRIAL: { clip: "trial", durationMs: 1000, label: "Phiên toà bắt đầu" },
   VERDICT: { clip: "verdict", durationMs: 1100, label: "Làng đã có phán quyết" },
+  /*
+   * Hai cảnh chân dung, và cả hai đều dài hơn mọi cạnh pha khác.
+   *
+   * 2200ms là một HẰNG SỐ, không phải một con số nhân với số nạn nhân. Cảnh này
+   * che mất bàn của cả phòng, nên trần phải là thứ không ai đọc được từ số
+   * người chết: tám người ngã trong một đêm vẫn đúng 2200ms, chỉ là ba khuôn
+   * mặt lệch nhịp nhau trong cùng một cửa sổ. Nối tám đoạn phim là bắt mười lăm
+   * người ngồi chờ, và đồng hồ pha ở server thì không chờ ai cả.
+   *
+   * Dài hơn 1200ms của `DAWN` vì cảnh này có ba nhịp phải kể (dựng - va chạm -
+   * lộ diện) chứ không phải một chuyển sắc; ngắn hơn 2500ms vì quá đó thì một
+   * người đang phải chọn mục tiêu sẽ thấy nó là một cái cửa chắn.
+   */
+  NIGHT_KILL: { clip: null, durationMs: 2200, label: "Đêm nay có người ngã xuống" },
+  EXECUTION: { clip: null, durationMs: 2200, label: "Bản án được thi hành" },
   VILLAGE_WIN: { clip: "village-win", durationMs: 2000, label: "Dân Làng chiến thắng" },
   WOLVES_WIN: { clip: "wolves-win", durationMs: 2000, label: "Ma Sói chiến thắng" },
   /*
@@ -149,8 +187,29 @@ export function cinematicMeta(kind: CinematicKind): KindMeta {
   return KIND_META[kind];
 }
 
-/** Mọi tên file cần có trong /public/cinematics; README ở đó liệt kê đúng danh sách này. */
-export const CINEMATIC_CLIPS: string[] = CINEMATIC_KINDS.map((kind) => KIND_META[kind].clip);
+/**
+ * Mọi tên file cần có trong /public/cinematics; README ở đó liệt kê đúng danh
+ * sách này.
+ *
+ * Lọc `null` chứ không phải "quên mất hai cảnh": cảnh chân dung không có file
+ * để mà thiếu, nên nó không được xuất hiện trong một danh sách mà cả README lẫn
+ * script dựng clip đều đọc như một bản kê việc phải làm.
+ */
+export const CINEMATIC_CLIPS: string[] = clipsOf(CINEMATIC_KINDS);
+
+/**
+ * Tên clip của một danh sách cảnh, đã bỏ những cảnh không có đường video.
+ *
+ * MỘT chỗ duy nhất làm việc lọc đó. Bốn nơi trong file này suy ra tên file từ
+ * `KIND_META`, và một nơi quên lọc là một lượt 404 cho mọi người chơi - hoặc
+ * tệ hơn, một cảnh chân dung âm thầm được nạp trước dưới dạng một file không
+ * bao giờ tồn tại.
+ */
+function clipsOf(kinds: readonly CinematicKind[]): string[] {
+  return kinds
+    .map((kind) => KIND_META[kind].clip)
+    .filter((clip): clip is string => clip !== null);
+}
 
 /**
  * Định danh của MỘT lần một sự kiện kích hoạt.
@@ -241,21 +300,45 @@ export function cinematicFor(prev: RoomSnapshot | null, next: RoomSnapshot): Cin
     return build(EVENT_FAMILY[next.activeEvent.id], `event:${activeKey}`, next.activeEvent);
   }
 
-  const kind = phaseKind(prev.phase, next.phase);
+  const kind = phaseKind(prev, next);
   if (!kind) return null;
   return build(kind, `phase:${kind}:${next.round}:${next.phase}`);
 }
 
-function phaseKind(from: Phase, to: Phase): CinematicKind | null {
+/**
+ * Cảnh của một cạnh pha.
+ *
+ * Nhận cả hai SNAPSHOT chứ không phải hai `Phase`, vì hai mốc công bố cần biết
+ * thêm đúng một điều ngoài tên pha: mốc này có ai chết không. Đó là dữ liệu
+ * công khai đã nằm sẵn trong snapshot - không có trường nào phải thêm vào, và
+ * `cause` lẫn danh tính kẻ ra tay vẫn không có mặt ở client.
+ *
+ * Cặp `DAWN`/`NIGHT_KILL` và cặp `VERDICT`/`EXECUTION` loại trừ nhau NGAY TẠI
+ * ĐÂY. Đó là toàn bộ cơ chế chống chồng cảnh: một cạnh đi qua đúng một nhánh,
+ * nên không tồn tại đường nào để hai lớp phủ nối đuôi nhau - không cần cờ, và
+ * không cần overlay tự nhớ mình vừa phát cái gì.
+ */
+function phaseKind(prev: RoomSnapshot, next: RoomSnapshot): CinematicKind | null {
+  const from: Phase = prev.phase;
+  const to: Phase = next.phase;
   if (from === to) return null;
   if (to === "NIGHT") return "NIGHTFALL";
   // NIGHT_RESULT chỉ vào được từ NIGHT, nhưng viết theo "vừa bước vào" thay vì
   // "đi từ NIGHT sang" để chèn thêm một pha đệm sau này không âm thầm mất cảnh.
-  if (to === "NIGHT_RESULT") return "DAWN";
+  if (to === "NIGHT_RESULT") {
+    return next.lastNightDeaths.length > 0 ? "NIGHT_KILL" : "DAWN";
+  }
   // Riêng phiên toà phải xét cả pha nguồn: DEFENSE -> FINAL_VOTE là đi TIẾP
   // trong cùng một phiên toà, không phải mở một phiên toà mới.
   if (from === "VOTING" && (to === "DEFENSE" || to === "FINAL_VOTE")) return "TRIAL";
-  if (from === "FINAL_VOTE" && to === "ELIMINATION") return "VERDICT";
+  if (from === "FINAL_VOTE" && to === "ELIMINATION") {
+    /*
+     * Được tha, hoà phiếu, hay "Không treo ai" thắng đều rơi về `VERDICT` - và
+     * `VERDICT` vẫn thuộc sân khấu "Phiên toà sống" (`stageOwnsCinematic`), tức
+     * là hành vi của ba kết cục đó không đổi một chút nào so với trước.
+     */
+    return next.lastEliminated ? "EXECUTION" : "VERDICT";
+  }
   return null;
 }
 
@@ -290,13 +373,16 @@ export function nextClips(phase: Phase): string[] {
         return [];
     }
   })();
-  return kinds.map((kind) => KIND_META[kind].clip);
+  return clipsOf(kinds);
 }
 
 /** Bốn clip của bốn họ sự kiện. */
-export const EVENT_CLIPS: string[] = ["WOLF_THREAT", "VILLAGE_BOON", "RULE_CHANGE", "SPIRIT"].map(
-  (kind) => KIND_META[kind as CinematicKind].clip,
-);
+export const EVENT_CLIPS: string[] = clipsOf([
+  "WOLF_THREAT",
+  "VILLAGE_BOON",
+  "RULE_CHANGE",
+  "SPIRIT",
+]);
 
 /**
  * Clip của những cảnh đã có bản 3D.
@@ -304,9 +390,7 @@ export const EVENT_CLIPS: string[] = ["WOLF_THREAT", "VILLAGE_BOON", "RULE_CHANG
  * Suy ra từ `WEBGL_KINDS` chứ không chép tay tên file: thêm một cảnh 3D thì
  * danh sách này tự đúng theo.
  */
-const WEBGL_CLIPS = new Set<string>(
-  [...WEBGL_KINDS].map((kind) => KIND_META[kind].clip),
-);
+const WEBGL_CLIPS = new Set<string>(clipsOf([...WEBGL_KINDS]));
 
 export interface PrefetchInputs {
   phase: Phase;

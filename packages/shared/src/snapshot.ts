@@ -310,6 +310,18 @@ export interface TrialRecap {
   innocent: number;
   abstain: number;
   lynched: boolean;
+  /**
+   * Chính trọng số ẩn của NGƯỜI ĐANG XEM đã lật bản án này.
+   *
+   * Tính riêng cho từng người xem, và chỉ đúng với người vốn đã biết mình mang
+   * trọng số đó - nên nó không nói ra bí mật nào mà người nhận chưa có. Cả làng
+   * chỉ thấy bảng phiếu đếm đầu người, và một bản án ngược với bảng phiếu ấy vẫn
+   * là chuyện phải tự suy ra.
+   *
+   * Không bắt buộc: web và server deploy rời nhau, client mới chạy với server cũ
+   * sẽ thấy undefined và phải im lặng chứ không được đoán.
+   */
+  yourWeightDecided?: boolean;
 }
 
 export interface HunterShotView {

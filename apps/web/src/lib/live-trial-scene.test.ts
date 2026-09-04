@@ -578,3 +578,119 @@ describe("giới hạn hiệu năng và luật của bản dựng", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Khuôn mặt bị cáo trên bục.
+ *
+ * Bản trước dựng cái đầu bằng một khối icosahedron trơn, và đó đúng là thứ
+ * camera zoom vào ở pha biện hộ - khoảnh khắc nặng nhất của cả ván. Bộ này
+ * kiểm ba chuyện mà một cái nhìn bằng mắt không khẳng định nổi: bục KHÔNG BAO
+ * GIỜ trống dù texture tải xong hay không, mặt luôn quay về camera, và bản án
+ * Treo làm khuôn mặt tái đi.
+ */
+
+/** Một texture giả, đủ để cảnh gắn vào material và để test theo dõi. */
+function fakeLoader(THREE_: typeof THREE) {
+  const calls: { url: string; fire: () => void }[] = [];
+  const load = (url: string, onLoad: () => void) => {
+    const tex = new THREE_.Texture();
+    calls.push({ url, fire: onLoad });
+    return tex;
+  };
+  return { load, calls };
+}
+
+function setupPortrait(portrait: string | null = "/characters/hood.webp") {
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(42, 16 / 9, 0.1, 200);
+  const registry = createDisposableRegistry();
+  const loader = fakeLoader(THREE);
+  const handle = buildTrialScene(
+    THREE,
+    scene,
+    { audience: 9, portrait },
+    { registry, loadTexture: loader.load },
+  );
+  return { scene, camera, registry, handle, loader };
+}
+
+const portraitOf = (scene: THREE.Scene) => scene.getObjectByName("accused-portrait");
+const headOf = (scene: THREE.Scene) => scene.getObjectByName("accused-head");
+
+describe("khuôn mặt bị cáo", () => {
+  it("không có chân dung thì chỉ có khối đầu, không dựng billboard", () => {
+    const { scene, loader } = setupPortrait(null);
+    assert.ok(headOf(scene), "phải còn khối đầu khi không có chân dung");
+    assert.equal(portraitOf(scene), undefined);
+    assert.equal(loader.calls.length, 0, "không có chân dung thì không tải texture gì");
+  });
+
+  it("có chân dung: bục vẫn có đầu trong lúc texture chưa về", () => {
+    // Trình dựng cảnh là ĐỒNG BỘ còn tải texture thì không. Nếu ẩn khối đầu
+    // ngay lúc dựng thì có một khoảng bục trống - đúng vào lúc camera đang
+    // tiến tới nó.
+    const { scene, loader } = setupPortrait();
+    assert.equal(loader.calls.length, 1);
+    assert.equal(loader.calls[0].url, "/characters/hood.webp");
+    assert.equal(headOf(scene)!.visible, true, "khối đầu phải còn hiện");
+    assert.equal(portraitOf(scene)!.visible, false, "chân dung chưa được hiện");
+  });
+
+  it("texture về thì đổi vai: hiện mặt, ẩn khối đầu", () => {
+    const { scene, loader } = setupPortrait();
+    loader.calls[0].fire();
+    assert.equal(portraitOf(scene)!.visible, true);
+    assert.equal(headOf(scene)!.visible, false);
+  });
+
+  it("texture hỏng thì khối đầu ở nguyên đó, không ai phải viết nhánh lỗi", () => {
+    // `fire` không bao giờ được gọi = ảnh 404 hoặc mạng chết. Không có gì đổi,
+    // và đó chính là đường lui.
+    const { scene } = setupPortrait();
+    assert.equal(headOf(scene)!.visible, true);
+    assert.equal(portraitOf(scene)!.visible, false);
+  });
+
+  it("mặt luôn quay về camera sau mỗi khung hình", () => {
+    const { scene, camera, handle, loader } = setupPortrait();
+    loader.calls[0].fire();
+    handle.update(now, camera);
+
+    const face = portraitOf(scene)!;
+    const facing = new THREE.Vector3(0, 0, 1).applyQuaternion(face.getWorldQuaternion(new THREE.Quaternion()));
+    const toCamera = camera.position.clone().sub(face.getWorldPosition(new THREE.Vector3())).normalize();
+    assert.ok(
+      facing.dot(toCamera) > 0.9,
+      `mặt phải hướng về camera, dot = ${facing.dot(toCamera).toFixed(3)}`,
+    );
+  });
+
+  it("bản án Treo làm khuôn mặt tái: đổi sang frame chết", () => {
+    const { scene, handle, loader } = setupPortrait();
+    loader.calls[0].fire();
+    const mat = (portraitOf(scene) as THREE.Mesh).material as THREE.MeshBasicMaterial;
+    assert.equal(mat.map!.offset.x, 0, "trước phán quyết là frame idle");
+
+    handle.setState({ act: "VERDICT", tilt: 1, verdict: "LYNCHED" }, { reduced: true, atMs: now });
+    assert.equal(mat.map!.offset.x, 0.75, "Treo thì phải là frame chết");
+  });
+
+  it("bản án Tha giữ nguyên mặt bình thường", () => {
+    const { scene, handle, loader } = setupPortrait();
+    loader.calls[0].fire();
+    const mat = (portraitOf(scene) as THREE.Mesh).material as THREE.MeshBasicMaterial;
+    handle.setState({ act: "VERDICT", tilt: -1, verdict: "SPARED" }, { reduced: true, atMs: now });
+    assert.equal(mat.map!.offset.x, 0);
+  });
+
+  it("dispose dọn cả texture của chân dung", () => {
+    const { handle, loader } = setupPortrait();
+    loader.calls[0].fire();
+    handle.dispose();
+    // Không có cờ `disposed` công khai trên Texture, nên kiểm bằng cách khác:
+    // gọi dispose hai lần không được ném, và cảnh đã tự nhận là đã dọn.
+    assert.doesNotThrow(() => handle.dispose());
+  });
+});

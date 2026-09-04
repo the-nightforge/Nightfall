@@ -223,7 +223,22 @@ export function TrialStageCanvas({
         // không còn ai cầm.
         const registry = createDisposableRegistry();
         resources.registry = registry;
-        const built = sceneModule.buildTrialScene(THREE, scene, model, { registry });
+        /*
+         * Hàm tải texture do PHÍA NÀY đưa vào, không phải bản dựng cảnh tự gọi.
+         *
+         * `live-trial-scene` có một luật đã đặt từ trước: nó không được nhắc tới
+         * `TextureLoader`, để việc dựng cảnh còn là một phép đồng bộ thuần chạy
+         * được trong `node:test`. Chỗ đúng để tải là đây - nơi đã sở hữu
+         * renderer, sổ tài nguyên và cả đường xử lý mất WebGL context.
+         *
+         * Không truyền `onError`: cảnh đã được dựng sao cho ảnh không về thì
+         * khối đầu trơn ở nguyên đó. Im lặng ở đây là đường lui, không phải lỗi
+         * bị nuốt.
+         */
+        const built = sceneModule.buildTrialScene(THREE, scene, model, {
+          registry,
+          loadTexture: (url, onLoad) => new THREE.TextureLoader().load(url, onLoad),
+        });
         resources.built = built;
 
         /*

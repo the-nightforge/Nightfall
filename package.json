@@ -27,6 +27,8 @@
     "voice:probe": "tsx apps/server/scripts/voice-probe.ts",
     "preselfplay": "npm run build:deps",
     "selfplay": "tsx apps/server/scripts/selfplay.ts",
+    "pretrace-view": "npm run build:deps",
+    "trace-view": "tsx apps/server/scripts/trace-view.ts",
     "prerole-power": "npm run build:deps",
     "role-power": "tsx apps/server/scripts/role-power.ts",
     "prereveal-ab": "npm run build:deps",

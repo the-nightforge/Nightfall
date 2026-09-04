@@ -21,8 +21,15 @@ import { createDisposableRegistry, type DisposableRegistry } from "./village-mem
  *      renderer thứ hai, không có scene thứ hai, không một `new` nào.
  *   2. Vòng vẽ không cấp phát: không mảng mới, không `Vector3` mới. Những gì
  *      cần đã nằm sẵn ở `tmp*`.
- *   3. Hình khối dựng tại chỗ bằng primitive của three. Không GLTF, không
- *      texture, không một file nào tải từ ngoài.
+ *   3. Hình khối dựng tại chỗ bằng primitive của three. Không GLTF, và file này
+ *      không tự tải gì từ ngoài - nó không được phép nhắc tới `TextureLoader`.
+ *
+ *      MỘT ngoại lệ, và nó không phá luật mà đi vòng qua: chân dung bị cáo là
+ *      một texture. Nhưng file này không tải nó - `TrialStageCanvas` đưa hàm
+ *      tải vào qua `options.loadTexture`. Nhờ vậy việc dựng cảnh vẫn là một
+ *      phép đồng bộ, vẫn chạy trong `node:test` không cần mạng lẫn GPU, và
+ *      quan trọng nhất: bục KHÔNG BAO GIỜ trống trong lúc chờ - khối đầu trơn
+ *      ở nguyên đó cho tới khi texture về, và ở lại luôn nếu nó không về.
  *   4. Không shadow map, không post-processing. Chiều sâu đến từ ba nguồn sáng
  *      và hai quầng sáng giả - tất cả gần như miễn phí.
  *
@@ -43,6 +50,7 @@ type Standard3D = import("three").MeshLambertMaterial;
 type Vector3D = import("three").Vector3;
 type Light3D = import("three").DirectionalLight;
 type BufferGeometry3D = import("three").BufferGeometry;
+type Texture3D = import("three").Texture;
 
 /** Cú lia camera giữa hai chặng. Ngắn hơn hẳn một nhịp thao tác. */
 export const CAMERA_GLIDE_MS = 900;
@@ -82,6 +90,17 @@ export interface TrialSceneModel {
    * `TrialStageView.audience`.
    */
   audience: number;
+  /**
+   * Sprite sheet chân dung của bị cáo, hoặc null/thiếu thì để khối đầu trơn.
+   *
+   * Đường dẫn tới file 4 frame ngang, đúng bộ mà lớp chân dung 2D đang dùng -
+   * xem `character-art.ts`. Cảnh chỉ lấy frame `idle` và frame `dead`.
+   *
+   * Null ở ba trường hợp: người chơi tự tải ảnh lên (ảnh đó không phải sheet 4
+   * frame nên cắt UV 25% sẽ ra một dải vô nghĩa), avatar chưa có sheet, và
+   * Save-Data. Cả ba đều rơi về khối đầu, y như trước khi có tính năng này.
+   */
+  portrait?: string | null;
 }
 
 export interface TrialSceneState {
@@ -122,6 +141,23 @@ export interface TrialSceneOptions {
    * mà chưa kịp `scene.add` sẽ không còn ai cầm.
    */
   registry?: DisposableRegistry;
+  /**
+   * Cách tải texture chân dung. KHÔNG có mặc định, và đó là chủ ý.
+   *
+   * File này có một luật đã đặt từ trước và vẫn còn đúng: bản dựng cảnh không
+   * tự tải tài nguyên ngoài - không `TextureLoader`, không `GLTFLoader`. Luật
+   * ấy giữ cho việc dựng cảnh là một phép ĐỒNG BỘ, thuần, chạy được trong
+   * `node:test` không cần mạng lẫn GPU, và không có đường nào để một cú fetch
+   * chen vào giữa một phiên toà đang diễn.
+   *
+   * Nên chân dung đi ngược lại: bên gọi - `TrialStageCanvas`, nơi vốn đã sở
+   * hữu renderer, sổ tài nguyên và cả đường xử lý mất WebGL context - đưa hàm
+   * tải vào. Thiếu nó thì cảnh chỉ đơn giản không có chân dung, y như trước.
+   *
+   * Tiện thể: tiêm được nghĩa là test khẳng định được CẢ HAI nửa của đường bất
+   * đồng bộ - lúc texture chưa về, và lúc nó về.
+   */
+  loadTexture?: (url: string, onLoad: () => void) => Texture3D;
 }
 
 // ---------------------------------------------------------------------------
@@ -226,7 +262,7 @@ export function buildTrialScene(
   const owned = options.registry === undefined;
 
   try {
-    return assemble(THREE, scene, model, registry, track, owned);
+    return assemble(THREE, scene, model, registry, track, owned, options.loadTexture);
   } catch (error) {
     // Sổ của chính mình thì tự dọn trước khi ném tiếp; sổ của bên gọi thì để
     // bên gọi dọn - họ còn cầm cả những thứ khác của cùng lần khởi tạo này.
@@ -242,6 +278,7 @@ function assemble(
   registry: DisposableRegistry,
   track: DisposableRegistry["track"],
   owned: boolean,
+  load: TrialSceneOptions["loadTexture"],
 ): TrialSceneHandle {
   const root = new THREE.Group();
   scene.add(root);
@@ -342,8 +379,19 @@ function assemble(
   accused.position.set(ACCUSED_X, 0.42, 0);
   root.add(accused);
 
+  const portraitUrl = model.portrait ?? null;
+
+  /*
+   * Có mặt người thật ở trên thì thân phải là QUẦN ÁO.
+   *
+   * `TRIAL_HEX.accused` là một sắc sáng trung tính, và dưới ngọn đèn ấm - điểm
+   * ấm duy nhất của cảnh - nó đọc ra như da thịt. Chấp nhận được khi cái đầu
+   * cũng cùng màu ấy, vì cả hình nộm là một khối trừu tượng. Nhưng khi bên trên
+   * là một khuôn mặt được vẽ, cái thân sáng màu da bên dưới biến nhân vật thành
+   * một người không mặc gì. Sắc tối hơn kéo nó về đúng nghĩa áo.
+   */
   const bodyGeo = track(new THREE.CylinderGeometry(0.23, 0.32, 0.92, 6));
-  const body = new THREE.Mesh(bodyGeo, accusedMat);
+  const body = new THREE.Mesh(bodyGeo, portraitUrl ? accusedShadeMat : accusedMat);
   body.position.y = 0.46;
   accused.add(body);
 
@@ -355,7 +403,56 @@ function assemble(
   const headGeo = track(new THREE.IcosahedronGeometry(0.17, 0));
   const head = new THREE.Mesh(headGeo, accusedMat);
   head.position.y = 1.12;
+  head.name = "accused-head";
   accused.add(head);
+
+  /*
+   * Khuôn mặt bị cáo, và vì sao nó dựng theo kiểu "cả hai cùng tồn tại".
+   *
+   * Hàm dựng cảnh là ĐỒNG BỘ, còn tải texture thì không. Ẩn khối đầu ngay lúc
+   * dựng nghĩa là có một quãng bục TRỐNG - rơi đúng vào lúc camera đang tiến
+   * tới nó ở cạnh mở phiên toà. Nên khối đầu cứ ở đó, billboard dựng sẵn nhưng
+   * ẩn, và chỉ khi texture về hai thứ mới đổi vai cho nhau.
+   *
+   * Phần thưởng: nếu ảnh 404 hay mạng chết thì `onLoad` không bao giờ chạy, và
+   * cảnh ở nguyên trạng thái cũ. Đường lui có sẵn mà không phải viết một nhánh
+   * xử lý lỗi nào.
+   *
+   * `MeshBasicMaterial` chứ KHÔNG phải lambert: cảnh này rất tối và chỉ có một
+   * nguồn ấm, nên bất cứ khuôn mặt nào ăn đèn của nó đều chìm thành một mảng
+   * bệt. Dựng thử cả hai rồi mới chốt - bản ăn đèn tệ hơn hẳn.
+   */
+  let portraitMesh: Mesh3D | null = null;
+  let portraitTex: Texture3D | null = null;
+
+  if (portraitUrl && load) {
+    const tex = load(portraitUrl, () => {
+      if (!portraitMesh) return;
+      portraitMesh.visible = true;
+      head.visible = false;
+    });
+    tex.colorSpace = THREE.SRGBColorSpace;
+    // Bốn frame nằm ngang; lấy frame 0 (`idle`). Xem `PORTRAIT_FRAMES`.
+    tex.repeat.set(0.25, 1);
+    tex.offset.set(0, 0);
+    track(tex);
+    portraitTex = tex;
+
+    const portraitGeo = track(new THREE.PlaneGeometry(0.46, 0.46));
+    const portraitMat = track(
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }),
+    );
+    portraitMesh = new THREE.Mesh(portraitGeo, portraitMat);
+    /*
+     * Cao 1.06 chứ không phải 1.12 của khối đầu: bức chân dung là ảnh BÁN THÂN,
+     * nên mép dưới của nó phải chìm vào bóng áo choàng thay vì cắt ngang qua.
+     * Nhích ra trước một chút để không z-fight với cái nón áo choàng.
+     */
+    portraitMesh.position.set(0, 1.06, 0.05);
+    portraitMesh.visible = false;
+    portraitMesh.name = "accused-portrait";
+    accused.add(portraitMesh);
+  }
 
   /*
    * Vũng đèn dưới chân, và quầng ấm sau lưng.
@@ -578,6 +675,19 @@ function assemble(
     setState(state, options) {
       if (disposed) return;
 
+      /*
+       * Bản án Treo làm khuôn mặt tái đi.
+       *
+       * Frame 3 của sheet là bản đã rút sắc và nâng sáng - cùng tấm ảnh, không
+       * tốn thêm byte nào. Đổi ở đây chứ không ở `playVerdict` vì `setState` là
+       * đường DUY NHẤT mà mọi phiên toà đều đi qua, kể cả khi khôi phục lại một
+       * ván đang dở: một người vào lại phòng sau khi bản án đã tuyên vẫn phải
+       * thấy đúng khuôn mặt ấy.
+       */
+      if (portraitTex) {
+        portraitTex.offset.x = state.verdict === "LYNCHED" ? 0.75 : 0;
+      }
+
       if (state.act !== currentAct) {
         // Đổi chặng: lia từ khung ĐANG hiện chứ không từ khung của chặng trước.
         // Một cú lia bị cắt ngang giữa chừng mà nhảy về điểm xuất phát cũ là một
@@ -651,6 +761,13 @@ function assemble(
       tmpTarget.set(now.tx, now.ty, now.tz);
       camera.position.copy(tmpPosition);
       camera.lookAt(tmpTarget);
+
+      /*
+       * Mặt quay theo camera, và phải làm SAU khi camera đã về chỗ của khung
+       * hình này - làm trước thì mặt luôn chậm một khung, và ở cạnh mở phiên
+       * toà (camera đang lia) một khung chậm là nhìn ra được.
+       */
+      if (portraitMesh) portraitMesh.lookAt(camera.position);
 
       // --- Cán cân ---
       const tiltT = easeInOut(progress(nowMs, tiltStart, tiltDuration));
