@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { m } from "motion/react";
 import { ROLE_META, TEAM_LABELS, type Role, type RoomSnapshot, type Team } from "@masoi/shared";
 import { myCursedNote } from "@/lib/cursed";
@@ -114,6 +114,39 @@ export function RoleRevealView({ snapshot }: { snapshot: RoomSnapshot }) {
   const [revealed, setRevealed] = useState(false);
   const role = snapshot.you?.role;
 
+  const hide = useCallback(() => setRevealed(false), []);
+
+  /*
+   * Lưới an toàn khi đang ngửa thẻ.
+   *
+   * Không phải thứ trang trí: mặt úp là cái nút, và ngay khi lật, mặt ấy quay
+   * lưng lại - trình duyệt có thể thôi không bắn `pointerup` vào nó nữa. Nếu
+   * chỉ trông vào handler trên nút thì có máy sẽ giữ thẻ ngửa vĩnh viễn sau
+   * một lần nhấn, tức là quay về đúng cái hành vi vừa bỏ đi.
+   *
+   * `blur` và `visibilitychange` là phần còn lại của cùng một lời hứa: chuyển
+   * app, khoá máy hay bị gọi điện thì thẻ phải úp trước khi màn hình rời khỏi
+   * tay người chơi, chứ không phải nằm đó chờ người kế tiếp nhìn vào.
+   */
+  useEffect(() => {
+    if (!revealed) return;
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") hide();
+    };
+    window.addEventListener("pointerup", hide);
+    window.addEventListener("pointercancel", hide);
+    window.addEventListener("blur", hide);
+    window.addEventListener("contextmenu", hide);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pointerup", hide);
+      window.removeEventListener("pointercancel", hide);
+      window.removeEventListener("blur", hide);
+      window.removeEventListener("contextmenu", hide);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [revealed, hide]);
+
   return (
     <div className="space-y-4">
       {/*
@@ -136,20 +169,59 @@ export function RoleRevealView({ snapshot }: { snapshot: RoomSnapshot }) {
           transition={{ duration: 0.62, ease: [0.32, 0.72, 0.24, 1] }}
         >
           <button
-            onClick={() => setRevealed(true)}
-            // pointer-events phải tắt tay: mặt quay lưng vẫn ăn click ở một số
-            // trình duyệt, và khi đó thẻ đã lật vẫn bị mặt úp chặn mất.
-            className={`col-start-1 row-start-1 w-full rounded-2xl border-2 border-night-600 bg-night-800 py-16 text-center transition [backface-visibility:hidden] hover:border-blood-500 ${
-              revealed ? "pointer-events-none" : ""
-            }`}
+            type="button"
+            aria-pressed={revealed}
+            onPointerDown={() => setRevealed(true)}
+            onPointerUp={hide}
+            onPointerLeave={hide}
+            onPointerCancel={hide}
+            // Giữ lâu trên di động mở menu "sao chép ảnh/chia sẻ" và nhả tay ra
+            // ngoài menu đó - chặn ở đây thì cái menu không bao giờ che mất thẻ
+            // vừa ngửa, và thẻ úp lại ngay thay vì nằm dưới menu.
+            onContextMenu={(e) => {
+              e.preventDefault();
+              hide();
+            }}
+            // Space/Enter phải theo đúng luật của chuột: giữ mới thấy, thả là
+            // hết. `preventDefault` để Space không cuộn trang, `repeat` để giữ
+            // lâu không bắn hàng chục lần setState.
+            onKeyDown={(e) => {
+              if (e.key !== " " && e.key !== "Enter") return;
+              e.preventDefault();
+              if (!e.repeat) setRevealed(true);
+            }}
+            onKeyUp={(e) => {
+              if (e.key === " " || e.key === "Enter") hide();
+            }}
+            // Tab đi chỗ khác lúc đang giữ phím thì `keyup` rơi vào phần tử
+            // khác, không ai úp thẻ lại nữa.
+            onBlur={hide}
+            // `touch-none`/`select-none`: giữ lâu là thao tác của thẻ này, không
+            // phải cái mở đầu cho cuộn trang hay bôi đen chữ.
+            className="col-start-1 row-start-1 w-full select-none touch-none rounded-2xl border-2 border-night-600 bg-night-800 py-16 text-center transition [backface-visibility:hidden] [-webkit-touch-callout:none] hover:border-blood-500 focus-visible:border-blood-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blood-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-night-900"
           >
             <div className="text-5xl" aria-hidden="true">
               🌙
             </div>
-            <p className="mt-3 font-semibold text-white">Chạm để xem vai trò của bạn</p>
+            <p className="mt-3 font-semibold text-white">Nhấn giữ để xem, thả ra để úp lại</p>
             <p className="text-sm text-mist/70">Không ai khác được nhìn thấy</p>
           </button>
+          {/*
+            * Úp thẻ phải úp cho CẢ trình đọc màn hình, không chỉ cho mắt.
+            *
+            * `backface-visibility:hidden` chỉ giấu pixel. Cây accessibility
+            * không biết gì về xoay 3D, nên khi chưa ai giữ thẻ, một người dùng
+            * screen reader vẫn nghe đọc trọn vai trò của mình - bí mật ấy rò ra
+            * theo đường âm thanh, ngay giữa bàn, đúng cái mà nhấn-giữ-để-nhìn
+            * sinh ra để chặn.
+            *
+            * `inert` gánh nốt phần bàn phím: mặt ngửa đang úp không được nằm
+            * trong vòng Tab. Cố ý KHÔNG dùng `hidden`/`display:none` - hai thứ
+            * đó rút mặt ngửa khỏi lưới và làm khung sụp lúc lật.
+            */}
           <div
+            aria-hidden={!revealed}
+            inert={!revealed}
             className={`col-start-1 row-start-1 [backface-visibility:hidden] [transform:rotateY(180deg)] ${
               revealed ? "" : "pointer-events-none"
             }`}

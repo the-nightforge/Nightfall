@@ -150,6 +150,82 @@ summary:focus-visible,
   }
 }
 
+/*
+ * Ô người chơi đang PHÁT TIẾNG trong kênh thoại.
+ *
+ * Ngôn ngữ hình phải tách hẳn khỏi hai thứ đã có trên cùng cái ô đó: viền đỏ
+ * đặc là "đang bị nhắm", quầng chàm mềm là "ô của tôi". Nên tiếng nói không
+ * được phép là một cái viền nào cả - nó là một quầng NGOÀI khung, xanh lá, và
+ * nó ĐỘNG. Ba thứ đó không đụng một pixel nào của viền, nên một ô vừa bị nhắm
+ * vừa có người nói vẫn đọc ra đủ cả hai.
+ *
+ * Xanh lá cũng không phải chọn tự do: cột Người chơi đã dùng đúng sắc đó cho
+ * cùng một trạng thái từ trước (xem RosterPanel), và hai chỗ nói cùng một
+ * chuyện thì phải nói bằng cùng một màu.
+ *
+ * Chu kỳ 1.6s chứ không phải 4.2s của nhịp thở: đây là dấu hiệu của một việc
+ * đang diễn ra ngay lúc này, không phải nền cho cả bàn. Nhưng nó vẫn mượn
+ * --breath-offset của từng người - ba người cùng nói mà quầng nhấp nháy đồng
+ * pha thì đọc ra như một hiệu ứng của cả lưới chứ không phải của từng ô.
+ */
+.seat-voice-halo {
+  box-shadow:
+    0 0 0 2px rgba(52, 211, 153, 0.34),
+    0 0 20px 3px rgba(16, 185, 129, 0.26);
+  animation: seat-voice-halo 1.6s ease-in-out infinite;
+  animation-delay: calc(var(--breath-offset, 0) * -1.6s);
+}
+
+@keyframes seat-voice-halo {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.015);
+  }
+}
+
+/*
+ * Chân dung phồng nhẹ theo cùng nhịp với quầng.
+ *
+ * Biên độ 3% - lớn hơn nhịp thở nền (2.2%) đúng một bậc để phân biệt được, và
+ * dừng ở đó: to hơn nữa là ảnh bắt đầu đội lên cái tên ngay bên dưới.
+ */
+.seat-voice-breathe {
+  animation: seat-voice-breathe 1.6s ease-in-out infinite;
+  animation-delay: calc(var(--breath-offset, 0) * -1.6s);
+}
+
+@keyframes seat-voice-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+}
+
+/* Chấm xanh nhấp nháy: dấu hiệu thứ hai, không phải màu, cho ai không phân
+ * biệt được xanh lá với nền tối. */
+.seat-voice-dot {
+  animation: seat-voice-dot 1.6s ease-in-out infinite;
+  animation-delay: calc(var(--breath-offset, 0) * -1.6s);
+}
+
+@keyframes seat-voice-dot {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 /* Chuyển pha là thông tin, không phải trang trí: mất hiệu ứng thì đổi ngay. */
 @media (prefers-reduced-motion: reduce) {
   .backdrop-layer {
@@ -160,6 +236,23 @@ summary:focus-visible,
    * Backdrop tự chặn từ đầu chứ không dựng rồi giấu - dựng rồi giấu thì
    * animationend không bao giờ chạy và phần tử nằm lại vĩnh viễn. */
   .avatar-breathe {
+    animation: none;
+  }
+
+  /*
+   * "Đang nói" thì GIỮ LẠI, chỉ đứng yên.
+   *
+   * Khác nhịp thở ở trên: cái kia không mang tin gì nên tắt là xong, còn cái
+   * này là thông tin thật - ai đang nói. Nên quầng và chấm vẫn nằm đó, chỉ
+   * chốt ở mức đục nhất để không phải nhìn một thứ nhấp nháy suốt cả pha.
+   */
+  .seat-voice-halo,
+  .seat-voice-dot {
+    animation: none;
+    opacity: 1;
+  }
+
+  .seat-voice-breathe {
     animation: none;
   }
 }
@@ -616,12 +709,31 @@ button.lobby-player-tile:active {
 }
 
 @media (min-width: 768px) {
+  .lobby-room-header { padding: 1.25rem 1.4rem; }
+  .lobby-player-board { padding: 1.35rem; }
+  .lobby-player-grid { gap: 0.85rem; }
+  .lobby-player-avatar, .lobby-empty-avatar { width: 4.5rem; height: 4.5rem; }
+}
+
+/*
+ * Tên phòng và cụm mã phòng đứng CẠNH nhau chỉ khi khối này đủ rộng cho cả hai.
+ *
+ * Cụm mã phòng + hai nút mời chiếm gọn 22rem không co được, nên dưới khoảng
+ * 44rem thì cột còn lại không đủ cho một dòng tiêu đề 36px: "Trước giờ trăng
+ * lên" gãy làm bốn dòng, mỗi dòng một chữ.
+ *
+ * Bề rộng đó KHÔNG đi cùng chiều với bề rộng màn hình, vì từ 1024px khối này
+ * chuyển vào cột trái của lưới phòng chờ (xem trang phòng): ở 1024 màn rộng
+ * hơn mà khối lại hẹp đi, còn 872px thì phải tới 1280px mới có. Nên khoảng
+ * 1024-1279 xếp chồng, hai đầu xếp ngang - đó là điều kiện thật, viết thẳng ra
+ * thay vì một mốc md duy nhất rồi sai ở giữa.
+ */
+@media (min-width: 768px) and (max-width: 1023.98px), (min-width: 1280px) {
   .lobby-room-header {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
     gap: 1.5rem;
-    padding: 1.25rem 1.4rem;
   }
 
   .lobby-room-header > .mt-5 {
@@ -630,9 +742,6 @@ button.lobby-player-tile:active {
   }
 
   .lobby-room-invite { margin-top: 0; }
-  .lobby-player-board { padding: 1.35rem; }
-  .lobby-player-grid { gap: 0.85rem; }
-  .lobby-player-avatar, .lobby-empty-avatar { width: 4.5rem; height: 4.5rem; }
 }
 
 @media (min-width: 1024px) {

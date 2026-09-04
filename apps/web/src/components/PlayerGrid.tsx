@@ -5,7 +5,9 @@ import type { RoomSnapshot } from "@masoi/shared";
 import { assignAvatars, tintFor } from "@/lib/avatar";
 import { voteFlightsFor } from "@/lib/vote-motion";
 import { usePlayerNotes } from "@/lib/player-notes";
+import { speakingSeatIds } from "@/lib/seat-voice";
 import { PlayerSeat } from "./PlayerSeat";
+import { useSpeakers } from "./VoiceProvider";
 import { VoteFlightLayer, type Point, type VoteFlightSpec } from "./VoteFlightLayer";
 
 /** Không biết ai bỏ thì lá phiếu rơi từ đây xuống, tính từ tâm ghế đích. */
@@ -57,6 +59,22 @@ export function PlayerGrid({
   const avatars = useMemo(
     () => assignAvatars(roster ? roster.split(",") : []),
     [roster],
+  );
+
+  /*
+   * Ai đang nói, lọc một lần cho cả lưới.
+   *
+   * Ở tầng này chứ không ở từng ô: `useSpeakers` đọc context và `speakingSeatIds`
+   * duyệt cả danh sách, làm việc đó mười lăm lần cho mười lăm ô là mười lăm lần
+   * duyệt thừa trên một component vốn đã render lại theo từng lá phiếu.
+   *
+   * Trả về `EMPTY` khi ở ngoài `VoiceProvider`, nên mọi lưới chưa nối voice -
+   * và mọi test mount thẳng lưới - vẫn chạy y như trước.
+   */
+  const speakers = useSpeakers();
+  const speakingIds = useMemo(
+    () => speakingSeatIds({ speakers, players: snapshot.players, phase: snapshot.phase }),
+    [speakers, snapshot.players, snapshot.phase],
   );
 
   const gridRef = useRef<HTMLDivElement>(null);
@@ -165,6 +183,7 @@ export function PlayerGrid({
               disabled={disabled}
               disabledReason={disabledReason}
               mark={notes[player.id]}
+              isSpeaking={speakingIds.has(player.id)}
             onSelect={onSelect ? () => onSelect(player.id) : undefined}
             seatRef={(el) => {
               if (el) seatEls.current.set(player.id, el);
