@@ -17,6 +17,7 @@ import { NOTE_META, usePlayerNotes } from "@/lib/player-notes";
 import { speakingSeatIds } from "@/lib/seat-voice";
 import { Avatar } from "./Avatar";
 import { AvatarPicker } from "./AvatarPicker";
+import { CharacterPortrait } from "./CharacterPortrait";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -162,10 +163,11 @@ export function RosterPanel({ snapshot, lobby }: Props) {
             >
               <div className="flex items-center gap-2.5">
                 <span className="relative shrink-0">
-                  <Avatar
+                  <CharacterPortrait
                     avatar={player.avatarUrl ? player.avatarUrl : avatars[player.id]}
                     tint={tintFor(player.id)}
                     alive={player.alive}
+                    speaking={speaking}
                     breathOffset={breathOffsetFor(player.id)}
                     /*
                      * Vòng vàng quanh ảnh của chủ phòng.

@@ -9,6 +9,7 @@ import type { AvatarId } from "@/lib/avatar-art";
 import { NOTE_META, type NoteMark } from "@/lib/player-notes";
 import { seatFrame, seatShowsSpeaking } from "@/lib/seat-voice";
 import { Avatar } from "./Avatar";
+import { CharacterPortrait } from "./CharacterPortrait";
 
 interface Props {
   player: PlayerView;
@@ -223,10 +224,11 @@ export function PlayerSeat({
       </AnimatePresence>
 
       <span className={`relative ${speaking ? "seat-voice-breathe" : ""}`}>
-        <Avatar
+        <CharacterPortrait
           avatar={player.avatarUrl ? player.avatarUrl : avatar}
           tint={tint}
           alive={player.alive}
+          speaking={speaking}
           breathOffset={breathOffsetFor(player.id)}
           className="h-16 w-16 sm:h-20 sm:w-20 [@media(min-height:1000px)]:sm:h-24 [@media(min-height:1000px)]:sm:w-24"
           isCustom={!!player.avatarUrl}

@@ -30,6 +30,7 @@ import {
 import { caseFileLetters } from "@/lib/last-letter";
 import { Avatar } from "./Avatar";
 import { CaseFileCard } from "./CaseFileCard";
+import { CharacterPortrait } from "./CharacterPortrait";
 import { CaseShareCard } from "./CaseShareCard";
 import { HunterShotTimeline } from "./HunterShotTimeline";
 import { LastLetterArchive } from "./LastLetterArchive";
@@ -262,7 +263,7 @@ export function GameOverView({ snapshot, isHost, onReset, onLeave }: Props) {
           <div className="mt-3 flex flex-wrap items-start justify-center gap-3">
             {winners.map((player) => (
               <div key={player.id} className="w-20">
-                <Avatar
+                <CharacterPortrait
                   avatar={player.avatarUrl ? player.avatarUrl : avatars[player.id]}
                   tint={tintFor(player.id)}
                   alive
@@ -654,7 +655,7 @@ function TeamPanel({
             className="flex items-center gap-2.5 rounded-lg border border-white/[0.04] bg-night-800/50 px-2 py-1.5"
           >
             <span className="relative shrink-0">
-              <Avatar
+              <CharacterPortrait
                 avatar={player.avatarUrl ? player.avatarUrl : avatars[player.id]}
                 tint={tintFor(player.id)}
                 alive={player.alive}
