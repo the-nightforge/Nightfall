@@ -217,8 +217,26 @@ export default function RoomPage() {
         * chờ chỉ có hai vùng nên dừng ở 1440 - quá mốc đó thì sân người chơi
         * chỉ dãn ra thành những ô cách nhau quá xa để đọc thành một đám đông.
         */}
+      {/*
+        * pt phải cộng `env(safe-area-inset-top)`, không được để trần `pt-4`.
+        *
+        * Layout khai `viewport-fit=cover` và `statusBarStyle:
+        * "black-translucent"`, nên khi cài lên màn hình chính iPhone thì web
+        * view trải HẾT lên tận mép trên - đồng hồ, sóng, pin của iOS nằm ĐÈ
+        * lên hàng đầu trang. Chụp lại trên máy thật: "06:50" chồng lên "Rời
+        * phòng", cụm pin che nút âm thanh. Đây là cái giá của black-translucent
+        * và nó chỉ trả đúng một lần, ở đây, bằng lề an toàn.
+        *
+        * Trên trình duyệt thường và trên desktop `env(safe-area-inset-top)` là
+        * 0, nên biểu thức rút về đúng 1rem của bản cũ - không có nhánh riêng
+        * nào cần giữ đồng bộ.
+        *
+        * Lề đi bằng class Tailwind chứ không phải inline style: `env()` trong
+        * thuộc tính style của React bị bỏ qua ở một số trình duyệt, còn trong
+        * CSS sinh ra từ class thì luôn được tính.
+        */}
       <main
-        className={`mx-auto w-full max-w-lg px-3 pb-28 pt-4 lg:flex lg:h-[100dvh] lg:flex-col lg:overflow-hidden lg:pb-6 ${
+        className={`mx-auto w-full max-w-lg px-3 pb-28 pt-[calc(1rem+env(safe-area-inset-top))] lg:flex lg:h-[100dvh] lg:flex-col lg:overflow-hidden lg:pb-6 ${
           isLobby
             ? "lobby-page md:max-w-3xl lg:max-w-[1440px] lg:px-6"
             : "md:max-w-3xl lg:max-w-[1600px] lg:px-4 xl:px-6"
