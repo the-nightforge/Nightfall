@@ -914,16 +914,33 @@ describe("Phiếu ẩn Tiếng Hú Bầy Sói đổi được bản án", () => 
   });
 
   it("bầy Sói bỏ phiếu Tha thì phiếu ẩn đứng về phía Tha", () => {
-    // Bị cáo ở đây vẫn bị treo (2 Treo có trọng số = 4 > 3 cử tri), và đó là
-    // đúng: một phiếu ẩn không lật được mọi bản án. Điều phải đúng là HƯỚNG -
-    // phiếu ẩn bám theo bầy Sói, nên khi bầy đòi tha thì nó không được tự ý
-    // rơi vào cột Treo.
+    // Phiếu ẩn bám theo bầy Sói, nên khi bầy đòi tha thì nó không được tự ý rơi
+    // vào cột Treo.
     const engine = trial(true);
     engine.submitFinalVote("w1", false);
     engine.submitFinalVote("v1", true);
     engine.submitFinalVote("v2", true);
     expect(engine.finalVoteTally().innocent).toBe(2);
     expect(engine.finalVoteTally().guilty).toBe(2);
+  });
+
+  it("phiếu ẩn hướng Tha cứu được bị cáo, không chỉ làm đẹp cột Tha", () => {
+    // Bảng phiếu này treo người khi không có sự kiện: 2 Treo trên 3 cử tri, và
+    // 2*2 = 4 > 3.
+    const without = trial(false);
+    without.submitFinalVote("w1", false);
+    without.submitFinalVote("v1", true);
+    without.submitFinalVote("v2", true);
+    expect(without.resolveFinalVote()?.playerId).toBe("accused");
+
+    // Cùng bảng phiếu, có Tiếng Hú và bầy Sói đòi tha: cử tri thứ 4 xuất hiện ở
+    // cột Tha, ngưỡng quá bán dâng lên và 2*2 = 4 không còn quá 4 -> tha.
+    const withHowl = trial(true);
+    withHowl.submitFinalVote("w1", false);
+    withHowl.submitFinalVote("v1", true);
+    withHowl.submitFinalVote("v2", true);
+    expect(withHowl.finalVoteTally().eligible).toBe(4);
+    expect(withHowl.resolveFinalVote()).toBeNull();
   });
 
   it("bầy Sói im lặng thì không có phiếu ẩn nào", () => {

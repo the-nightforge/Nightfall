@@ -432,7 +432,10 @@ describe("cán cân", () => {
 describe("thông báo cho trình đọc màn hình", () => {
   it("một câu cho cả bảng số, không phải một câu cho mỗi lá phiếu", () => {
     const view = trialStageCandidate(finalVote({ guiltyVotes: 3, innocentVotes: 1 }))!;
-    assert.equal(tallyAnnouncement(view), "Treo 3, Tha 1. Cần 4 phiếu Treo để kết án.");
+    assert.equal(
+      tallyAnnouncement(view),
+      "Treo 3, Tha 1. Cần 4 phiếu Treo để kết án, nếu mọi lá phiếu đều nặng như nhau.",
+    );
   });
 
   it("không rò rỉ gì ngoài những con số server đã gửi", () => {
@@ -450,6 +453,32 @@ describe("thông báo cho trình đọc màn hình", () => {
     // Cũng không được nói lá phiếu của chính người xem ra loa: vùng aria-live
     // đọc lên cho cả phòng nghe nếu ai đó đang chia sẻ màn hình hay dùng loa.
     assert.ok(!text.includes("Treo cổ"));
+  });
+
+  it("lời giải thích trọng số chỉ tới người mà server gửi cờ", () => {
+    const decided = trialStageCandidate(
+      snapshot({
+        phase: "ELIMINATION",
+        lastTrial: recap({ guilty: 3, innocent: 2, yourWeightDecided: true }),
+      }),
+    )!;
+    assert.equal(decided.yourWeightDecided, true);
+
+    // Cùng một bản án đó, nhìn từ một người xem bình thường.
+    const others = trialStageCandidate(
+      snapshot({ phase: "ELIMINATION", lastTrial: recap({ guilty: 3, innocent: 2 }) }),
+    )!;
+    assert.equal(others.yourWeightDecided, false);
+  });
+
+  it("server cũ không gửi cờ thì im lặng, không đoán", () => {
+    // Web và server deploy rời nhau: `undefined` ở đây nghĩa là "không biết", và
+    // một dòng chữ dựng lên từ chỗ không biết là một dòng chữ bịa.
+    const { yourWeightDecided: _omitted, ...legacy } = recap({ guilty: 3, innocent: 2 });
+    const view = trialStageCandidate(
+      snapshot({ phase: "ELIMINATION", lastTrial: legacy as TrialRecap }),
+    )!;
+    assert.equal(view.yourWeightDecided, false);
   });
 
   it("nhãn chặng nói đúng pha đang diễn", () => {
@@ -514,6 +543,9 @@ describe("không rò rỉ thông tin riêng tư", () => {
           "hasVoted",
           "myVote",
           "audience",
+          // Một cờ có/không, tính riêng cho người xem này và chỉ gửi cho người
+          // vốn đã biết mình mang trọng số ẩn. Không có id nào đi kèm nó.
+          "yourWeightDecided",
         ] as Array<keyof TrialStageView>
       ).sort(),
     );

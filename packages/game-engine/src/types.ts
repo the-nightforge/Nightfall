@@ -176,6 +176,17 @@ export interface TrialRecapState {
   innocent: number;
   abstain: number;
   lynched: boolean;
+  /**
+   * Cử tri mà TRỌNG SỐ ẩn của họ - không phải lá phiếu, mà phần nặng thêm của
+   * nó - đã tự mình lật bản án này.
+   *
+   * KHÔNG BAO GIỜ được gửi thẳng ra snapshot: một danh sách id ở đây là danh
+   * sách Thị Trưởng. `snapshotFor` bóc nó thành đúng một câu trả lời có/không
+   * cho riêng người đang xem.
+   *
+   * Không bắt buộc vì state cũ đang chạy dở không có trường này.
+   */
+  weightDecidedVoterIds?: string[];
 }
 
 /**

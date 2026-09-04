@@ -1623,6 +1623,56 @@ describe("Trọng số phiếu không rò ra view", () => {
     expect(e.resolveNomination(25_000, 30_000)).toEqual({ kind: "TRIAL", accusedId: "p3" });
   });
 
+  /** p3 ra toà với p1 là Thị Trưởng; trả về engine đang ở FINAL_VOTE. */
+  function mayorTrial() {
+    const e = withMayor(trialEngine());
+    e.beginFinalVote(20_000);
+    return e;
+  }
+
+  it("Thị Trưởng biết chính phiếu x2 của mình đã lật bản án", () => {
+    const e = mayorTrial();
+    // 3 Treo / 2 Tha trên 5 cử tri: bảng phiếu công khai chạm đúng ngưỡng 3.
+    e.submitFinalVote("p1", false);
+    e.submitFinalVote("p2", true);
+    e.submitFinalVote("p4", true);
+    e.submitFinalVote("p5", true);
+    e.submitFinalVote("p6", false);
+    expect(e.guiltyRequired(false)).toBe(3);
+    expect(e.finalVoteTally(false).guilty).toBe(3);
+
+    // Nhưng phiếu Tha của Thị Trưởng nặng gấp đôi: 3*2 không quá 6 -> tha.
+    expect(e.resolveFinalVote()).toBeNull();
+
+    expect(e.snapshotFor("p1").lastTrial?.yourWeightDecided).toBe(true);
+    expect(e.snapshotFor("p2").lastTrial?.yourWeightDecided).toBe(false);
+  });
+
+  it("danh sách ai có trọng số không rời khỏi server", () => {
+    const e = mayorTrial();
+    e.submitFinalVote("p1", false);
+    e.submitFinalVote("p2", true);
+    e.submitFinalVote("p4", true);
+    e.submitFinalVote("p5", true);
+    e.submitFinalVote("p6", false);
+    e.resolveFinalVote();
+
+    // Cờ có/không thì được; một danh sách id thì chính là danh sách Thị Trưởng.
+    for (const viewer of ["p1", "p2", "p4"]) {
+      const seen = JSON.stringify(e.snapshotFor(viewer).lastTrial);
+      expect(seen).not.toContain("weightDecidedVoterIds");
+    }
+  });
+
+  it("Thị Trưởng không nhận công khi bản án vốn đã ngã ngũ", () => {
+    const e = mayorTrial();
+    // 4 Treo / 1 Tha: bỏ phần nặng thêm của Thị Trưởng đi thì vẫn treo.
+    for (const id of ["p1", "p2", "p4", "p5"]) e.submitFinalVote(id, true);
+    e.submitFinalVote("p6", false);
+    expect(e.resolveFinalVote()?.playerId).toBe("p3");
+    expect(e.snapshotFor("p1").lastTrial?.yourWeightDecided).toBe(false);
+  });
+
   it("phiếu ẩn của Tiếng Hú Bầy Sói không hiện trong số đếm", () => {
     const e = votingEngine();
     e.state.howlBonusDay = e.state.round;

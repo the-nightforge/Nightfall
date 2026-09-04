@@ -151,39 +151,35 @@ export function RoomInvite({ code, size = "sm" }: { code: string; size?: "sm" | 
 
   return (
     /*
-     * Ở cỡ lg trên màn hẹp, cụm này chiếm trọn bề ngang và xếp thành hai hàng
-     * CÓ CHỦ Ý: mã phòng một hàng, hai nút chia đôi hàng dưới.
+     * `lg` khác `sm` ở CỠ chữ và vùng chạm, không ở bố cục - và chỉ khác TỪ
+     * breakpoint lg trở lên.
      *
-     * Để nó tự wrap thì ở màn 320 mã phòng và "Mời bạn bè" vừa lọt hàng trên,
-     * còn "Mã QR" rơi xuống một mình và dạt về mép phải - đọc ra như một nút bị
-     * bỏ quên chứ không như một hàng. Mã phòng cũng là thứ người ta đọc to lên
-     * cho bạn chép, nên nó xứng đáng cả một hàng.
-     *
-     * Từ sm trở lên mọi thứ về đúng bản cũ: một hàng, dạt phải, cạnh tiêu đề.
+     * Bản trước cho `lg` chiếm trọn bề ngang và xếp thành hai hàng dưới mốc sm,
+     * vì khi đó nó là một khối đứng riêng trong đầu trang phòng chờ. Giờ nó nằm
+     * trong thanh đầu trang cùng "Rời phòng" và nút âm thanh, nên hai hàng ở đó
+     * là hai hàng lấy khỏi sân người chơi. Cụm luôn dạt phải và vẫn tự xuống
+     * dòng khi hết chỗ, y như cỡ sm.
      */
-    <div
-      className={`flex flex-col gap-1.5 ${large ? "items-stretch sm:items-end" : "items-end"}`}
-    >
+    <div className="flex flex-col items-end gap-1.5">
       {/* flex-wrap: trên màn 390 thanh đầu trang còn có nút âm thanh và huy
         * hiệu mất kết nối. Không cho xuống dòng thì bốn thứ đó bóp mã phòng
         * lại tới mức không đọc được. */}
-      <div
-        className={`flex flex-wrap items-center gap-1.5 ${
-          large ? "justify-start sm:justify-end" : "justify-end"
-        }`}
-      >
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
         {/* Nhãn biến mất dưới sm: trên màn 390 thanh này còn phải chứa nút rời
           * phòng, ba nút mời và nút âm thanh. Ô mã phòng đã tự nói nó là gì
           * bằng phông monospace và giãn chữ, còn trình đọc màn hình thì đọc
           * `aria-label` của nút chứ không đọc nhãn này. */}
         <span className="hidden text-xs text-mist/80 sm:inline">Mã phòng:</span>
         <button
-          /* Dưới sm ở cỡ lg: chiếm trọn một hàng, chữ nhỏ hơn một nấc. Đây là
-           * thứ người ta đọc to lên cho bạn chép, nên nó không phải chen chỗ với
-           * hai cái nút. min-h-11 giữ nguyên ở mọi cỡ - vùng chạm 44px. */
+          /* Cỡ `lg` chỉ bung ra TỪ lg, vì nó chỉ có chỗ từ đó.
+           *
+           * Cụm này nằm trong thanh đầu trang cùng "Rời phòng" và nút âm thanh;
+           * ở 390px mà mã phòng đã 20px thì "Mã QR" bị đẩy xuống một hàng thứ
+           * hai và thanh đầu trang cao gấp đôi - hai lần chiều cao đó lấy thẳng
+           * từ sân người chơi. Dưới lg nó dùng đúng hình của cỡ sm. */
           className={`rounded-lg border border-night-600 bg-night-800 font-mono font-bold tracking-widest text-white transition hover:border-mist/40 hover:bg-night-700 active:bg-night-800 ${
             large
-              ? "min-h-11 w-full px-3 py-1.5 text-lg sm:w-auto sm:px-4 sm:text-xl"
+              ? "min-h-9 px-3 py-1 text-sm lg:min-h-11 lg:px-4 lg:py-1.5 lg:text-xl"
               : "min-h-9 px-3 py-1 text-sm"
           }`}
           onClick={() => void copy(code, "copied-code")}
@@ -195,25 +191,41 @@ export function RoomInvite({ code, size = "sm" }: { code: string; size?: "sm" | 
 
         <button
           className={`btn-secondary px-3 py-1 text-sm ${
-            large ? "min-h-11 flex-1 sm:flex-none" : "min-h-9"
+            large ? "min-h-9 lg:min-h-11" : "min-h-9"
           }`}
           onClick={() => void handleInvite()}
           disabled={!payload}
+          aria-label="Mời bạn bè"
         >
-          Mời bạn bè
+          {/*
+            * Nhãn ngắn dưới sm, và đó là điều kiện để thanh đầu trang ở lại
+            * MỘT hàng trên màn 390.
+            *
+            * Hàng đó phải chứa "Rời phòng" (116px), mã phòng, hai nút mời và
+            * nút âm thanh trong 366px. Với nhãn đầy đủ cụm mời cần 258px trong
+            * khi chỉ có 197 - nó xuống hàng, và thanh đầu trang cao gấp đôi
+            * ngay trên sân người chơi. `aria-label` ở nút giữ nguyên tên đầy
+            * đủ, nên trình đọc màn hình không nghe thấy sự khác biệt nào.
+            */}
+          <span className="sm:hidden">Mời</span>
+          <span className="hidden sm:inline">Mời bạn bè</span>
         </button>
 
         <button
           ref={qrButtonRef}
           className={`btn-secondary px-3 py-1 text-sm ${
-            large ? "min-h-11 flex-1 sm:flex-none" : "min-h-9"
+            large ? "min-h-9 lg:min-h-11" : "min-h-9"
           }`}
           onClick={() => setQrOpen(true)}
           disabled={!payload}
           aria-haspopup="dialog"
           aria-expanded={qrOpen}
+          aria-label="Mã QR"
         >
-          Mã QR
+          {/* Cùng lý do với nút bên cạnh: nhãn ngắn dưới sm, tên đầy đủ giữ ở
+            * `aria-label`. */}
+          <span className="sm:hidden">QR</span>
+          <span className="hidden sm:inline">Mã QR</span>
         </button>
       </div>
 
