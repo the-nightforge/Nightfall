@@ -6,6 +6,7 @@ import {
   isPersonalWinCondition,
   isRole,
   nicknameSchema,
+  type MatchChatEntry,
   type MatchHistoryEntry,
   type MatchHistoryPlayer,
 } from "@masoi/shared";
@@ -23,12 +24,30 @@ apiRouter.use(avatarRouter);
 const STARTED_AT = Date.now();
 
 interface GameResultRow {
+  /**
+   * Khoá của dòng lịch sử. OPTIONAL ở đây chứ không phải trong DB: hơn một bài
+   * test dựng row bằng tay để kiểm phép chuyển đổi thuần, và bắt chúng bịa ra
+   * một id chỉ để `toHistoryEntry` chạy được là bắt chúng nói về một thứ chúng
+   * không kiểm. Câu truy vấn thật luôn chọn cột này.
+   */
+  id?: string;
   roomCode: string;
   winner: string;
   round: number;
   durationSec: number;
   playerRoles: unknown;
   caseFile: unknown;
+  createdAt: Date;
+}
+
+interface MatchChatRow {
+  seq: number;
+  channel: string;
+  actorId: string;
+  actorName: string;
+  text: string;
+  round: number;
+  phase: string;
   createdAt: Date;
 }
 
@@ -72,6 +91,7 @@ export function toHistoryEntry(row: GameResultRow, viewerId: string): MatchHisto
   const me = players.find((p) => p.id === viewerId) ?? null;
 
   return {
+    id: row.id,
     roomCode: row.roomCode,
     /*
      * Đi qua đúng cái sàng mà `role` và `personalWin` đã đi qua, và vì cùng một
@@ -152,7 +172,7 @@ apiRouter.get("/players/me/matches", requirePlayer, async (req, res) => {
 
   try {
     const rows = await prisma.$queryRaw<GameResultRow[]>`
-      SELECT "roomCode", "winner", "round", "durationSec", "playerRoles", "caseFile", "createdAt"
+      SELECT "id", "roomCode", "winner", "round", "durationSec", "playerRoles", "caseFile", "createdAt"
       FROM "GameResult"
       WHERE "playerRoles" @> ${JSON.stringify([{ id: player.id }])}::jsonb
       ORDER BY "createdAt" DESC
@@ -163,6 +183,79 @@ apiRouter.get("/players/me/matches", requirePlayer, async (req, res) => {
   } catch (err) {
     console.error("[api] Đọc lịch sử ván thất bại:", err);
     res.status(500).json({ error: "Không thể đọc lịch sử lúc này" });
+  }
+});
+
+/**
+ * Log chat của MỘT ván đã kết thúc.
+ *
+ * Quyền đọc: đúng một câu hỏi - "id của người hỏi có nằm trong `playerRoles`
+ * của ván đó không". KHÔNG phân quyền thêm theo kênh, và đó là một quyết định
+ * chứ không phải một chỗ bỏ sót: ở GAME_OVER `visibleChatLog` đã mở toàn bộ
+ * log, kể cả hang Sói và kênh người chết, cho mọi người trong phòng. Giấu lại
+ * ở đây là nói dối về một thứ họ vừa đọc xong bằng mắt mười phút trước.
+ *
+ * Dùng `@>` trên jsonb chứ không tải `playerRoles` về rồi lọc trong JS, đúng
+ * cùng khuôn với endpoint lịch sử ngay trên - và ở đây nó còn là chốt bảo mật,
+ * nên nó phải là một điều kiện của chính câu SQL.
+ *
+ * Ván cũ ghi trước khi `id` được lưu vào `playerRoles` không khớp được với ai:
+ * chúng trả 404 chứ không rơi vào một nhánh "cho qua vì không biết".
+ */
+apiRouter.get("/players/me/matches/:matchId/chat", requirePlayer, async (req, res) => {
+  const player = (req as PlayerRequest).player!;
+  const matchId = req.params.matchId;
+
+  try {
+    const rows = await prisma.$queryRaw<MatchChatRow[]>`
+      SELECT m."seq", m."channel", m."actorId", m."actorName", m."text",
+             m."round", m."phase", m."createdAt"
+      FROM "MatchChatMessage" m
+      WHERE m."matchId" = ${matchId}
+        AND EXISTS (
+          SELECT 1 FROM "GameResult" g
+          WHERE g."id" = m."matchId"
+            AND g."playerRoles" @> ${JSON.stringify([{ id: player.id }])}::jsonb
+        )
+      ORDER BY m."seq" ASC
+    `;
+
+    if (rows.length === 0) {
+      /*
+       * Rỗng có thể là hai chuyện rất khác nhau: "ván đó không phải của bạn"
+       * và "ván đó không ai nói câu nào". Câu hỏi thứ hai này phân biệt chúng,
+       * để một ván im lặng trả về 200 với mảng rỗng thay vì một 404 sai.
+       *
+       * Nó KHÔNG mở thêm đường dò: người ngoài ván nhận đúng cùng một 404 dù
+       * `matchId` có thật hay không, vì chính câu này cũng đòi `playerRoles`
+       * chứa id của họ.
+       */
+      const visible = await prisma.$queryRaw<Array<{ one: number }>>`
+        SELECT 1 AS one FROM "GameResult"
+        WHERE "id" = ${matchId}
+          AND "playerRoles" @> ${JSON.stringify([{ id: player.id }])}::jsonb
+        LIMIT 1
+      `;
+      if (visible.length === 0) {
+        res.status(404).json({ error: "Không tìm thấy ván này" });
+        return;
+      }
+    }
+
+    const messages: MatchChatEntry[] = rows.map((row) => ({
+      seq: row.seq,
+      channel: row.channel,
+      actorId: row.actorId,
+      actorName: row.actorName,
+      text: row.text,
+      round: row.round,
+      phase: row.phase,
+      at: row.createdAt.getTime(),
+    }));
+    res.json({ messages });
+  } catch (err) {
+    console.error("[api] Đọc log chat của ván thất bại:", err);
+    res.status(500).json({ error: "Không thể đọc log chat lúc này" });
   }
 });
 

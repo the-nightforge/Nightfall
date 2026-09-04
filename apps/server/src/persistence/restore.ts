@@ -54,6 +54,9 @@ export function restoreRoomFromEnvelope(envelope: RoomEnvelopeV1): Room {
     // Cùng lý do: snapshot ghi trước add-on đọc lên thành một phòng chưa ai
     // viết thư, chứ không phải một phòng hỏng.
     lastLetters: data.lastLetters ?? createLastLetterState(),
+    // Snapshot ghi trước bảng chat đọc lên thành một ván chưa ghim câu nào.
+    // `seq` tiếp tục từ độ dài này, nên thứ tự sau khôi phục vẫn liền mạch.
+    matchChat: data.matchChat ?? [],
   };
 
   if (data.botSession) {

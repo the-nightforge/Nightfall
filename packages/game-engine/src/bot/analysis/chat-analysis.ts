@@ -4,8 +4,12 @@ import type { BotChatObservation, BotMemory, BotMemoryType, BotPlayerKnowledge }
 
 /**
  * Dạng "plain": hạ chữ thường, bỏ dấu câu, nhưng GIỮ NGUYÊN dấu tiếng Việt.
+ *
+ * `export` để công cụ đào alias ngoài luồng chơi (`npm run mine-aliases`) chuẩn
+ * hoá văn bản bằng ĐÚNG hàm mà bot dùng. Một bản sao ở đó sẽ trôi lệch, và khi
+ * nó trôi thì đề xuất alias sinh ra sẽ nói về một parser không tồn tại.
  */
-function plainForm(text: string): string {
+export function plainForm(text: string): string {
   return text
     .toLowerCase()
     .replace(/[^\p{Letter}\p{Number}\s]/gu, " ")
@@ -14,20 +18,28 @@ function plainForm(text: string): string {
 }
 
 /** Dấu câu là ranh giới mệnh đề duy nhất mà parser này tin. */
-const CLAUSE_SEPARATORS = /[.,;:!?\n]+/;
+export const CLAUSE_SEPARATORS = /[.,;:!?\n]+/;
 
 const COMBINING_MARKS = /[\u0300-\u036f]/g;
 
 /**
  * Dạng "ascii": bỏ dấu, để so khớp tên và để hiểu người gõ không dấu. `đ` không
  * phải dấu tổ hợp nên phải thay riêng.
+ *
+ * `export` cùng lý do với `plainForm`.
  */
-function asciiForm(text: string): string {
+export function asciiForm(text: string): string {
   return plainForm(text).normalize("NFD").replace(COMBINING_MARKS, "").replace(/đ/g, "d");
 }
 
-/** Cụm dài đứng trước để "dân làng" không bị khớp thành "dân". */
-const ROLE_PHRASES: Array<[string, Role]> = [
+/**
+ * Cụm dài đứng trước để "dân làng" không bị khớp thành "dân".
+ *
+ * `export` và `readonly`: đây là bảng mà công cụ đào alias so vào để biết một
+ * token vai đã được biết hay chưa. Nó chỉ được ĐỌC từ ngoài - thêm alias là một
+ * việc có người duyệt, không phải một việc script tự làm lúc chạy.
+ */
+export const ROLE_PHRASES: ReadonlyArray<readonly [string, Role]> = [
   ["kẻ nguyền rủa", "CURSED"],
   ["tiên tri tập sự", "APPRENTICE_SEER"],
   ["thiên thần hộ mệnh", "GUARDIAN_ANGEL"],
@@ -137,18 +149,29 @@ function parseDirectAddress(
 }
 
 /** Hai dạng của cùng một mệnh đề, dùng song song trong toàn bộ parser. */
-interface Clause {
+export interface Clause {
   plain: string;
   ascii: string;
 }
 
-function hasNegation(clause: Clause): boolean {
+/**
+ * `export` để công cụ đào alias loại đúng những mệnh đề mà parser cũng loại.
+ * Không dùng chung hàm này thì đề xuất sẽ đầy alias rút ra từ "tôi không phải
+ * sói" - tức những câu mà parser sẽ không bao giờ đọc tới.
+ */
+export function hasNegation(clause: Clause): boolean {
   return NEGATIONS.some(
     (word) => clause.plain.includes(word) || clause.ascii.includes(asciiForm(word)),
   );
 }
 
-function roleAtStart(segment: Clause): Role | null {
+/**
+ * Vai đứng ngay ĐẦU đoạn, hoặc `null`.
+ *
+ * `export` để công cụ đào alias hỏi đúng một câu: "token này parser hiện tại đã
+ * hiểu chưa". Trả `null` chính là định nghĩa của một alias còn thiếu.
+ */
+export function roleAtStart(segment: Clause): Role | null {
   for (const [phrase, role] of ROLE_PHRASES) {
     for (const [text, marker] of [
       [segment.plain, phrase],

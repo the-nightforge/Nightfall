@@ -16,6 +16,7 @@ import { cleanupRoomBotState } from "../game/bot-room-state";
 import { clearDiscussionSkipVotes } from "../game/discussion-skip";
 import { createLastLetterState, type LastLetterRoomState } from "../game/last-letter";
 import type { PendingStep } from "../game/pending-step";
+import type { ArchivedChatMessage } from "../game/match-chat";
 
 export interface RoomMember {
   playerId: string;
@@ -92,6 +93,19 @@ export interface Room {
    * cùng lúc, để đổi lấy đúng con số không.
    */
   lastLetters?: LastLetterRoomState;
+  /**
+   * Sổ chat ĐẦY ĐỦ của ván đang chạy, chờ ghi xuống DB một lần ở GAME_OVER.
+   *
+   * Tồn tại song song với `chatLog` chứ không thay nó, vì hai thứ này phục vụ
+   * hai việc đối nghịch nhau: `chatLog` đi kèm MỌI snapshot nên phải bị cắt còn
+   * 100 tin, còn sổ này phải giữ trọn ván mới có gì để đọc lại. Gộp chúng lại
+   * là hoặc đẩy cả ván lên dây mỗi lần sync, hoặc lưu vào DB một mẩu cụt.
+   *
+   * OPTIONAL vì đây là trường thêm sau - cùng lý do với `lastLetters` ngay
+   * trên: bắt buộc nó là bắt hàng chục fixture test và mọi snapshot đã ghi
+   * trước bản này phải sửa cùng lúc. Chỗ ghi tạo lười khi cần.
+   */
+  matchChat?: ArchivedChatMessage[];
 }
 
 const rooms = new Map<string, Room>();

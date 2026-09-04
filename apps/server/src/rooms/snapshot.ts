@@ -3,6 +3,7 @@ import { generateWarnings } from "@masoi/game-engine";
 import { getDiscussionSkipView } from "../game/discussion-skip";
 import { lastLetterViewFor } from "../game/last-letter";
 import type { Room } from "./store";
+import { archiveChatMessage } from "../game/match-chat";
 import { voiceViewFor } from "../voice/service";
 import { objectStorage } from "../storage";
 
@@ -129,6 +130,14 @@ export function dayRecipients(room: Room): string[] {
 export function pushChat(room: Room, message: ChatMessage): void {
   room.chatLog.push(message);
   if (room.chatLog.length > 100) room.chatLog.splice(0, room.chatLog.length - 100);
+  /*
+   * Ghim vào sổ của ván TRƯỚC khi `chatLog` bị cắt đầu ở lần đẩy thứ 101.
+   *
+   * Đây là lối vào DUY NHẤT của chat trong cả server - người thật, BOT, lời bào
+   * chữa và Tiếng Vọng Người Chết đều đi qua đây - nên gắn sổ ở đúng chỗ này là
+   * cách duy nhất không phải nhớ gắn lại ở mỗi nguồn mới.
+   */
+  archiveChatMessage(room, message);
 }
 
 /** Chỉ trả về lịch sử kênh chat mà người xem hiện tại được phép đọc. */
