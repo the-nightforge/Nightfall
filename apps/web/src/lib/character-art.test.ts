@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { AVATAR_IDS } from "./avatar-art";
+import { AVATAR_IDS, AVATAR_PATHS } from "./avatar-art";
 import {
   CHARACTER_SHEETS,
   PORTRAIT_FRAMES,
@@ -44,11 +44,16 @@ describe("manifest chân dung", () => {
     assert.equal(PORTRAIT_FRAME_COUNT, 4);
   });
 
-  it("mọi AvatarId đều có sheet", () => {
-    // Bắt lỗi "thêm nhân vật thứ 17, quên sinh sheet": nhân vật thiếu sheet sẽ
-    // im lặng hiện bóng đen giữa một bàn toàn mặt người.
+  it("mọi AvatarId đều có một khuôn mặt", () => {
+    // Bắt lỗi "thêm nhân vật thứ 21, quên cả sheet lẫn hình": ô đó sẽ im lặng
+    // hiện bóng đen giữa một bàn toàn mặt người.
+    //
+    // Sheet là TUỲ CHỌN, không bắt buộc: `portraitSource` rơi về `svg` khi
+    // thiếu sheet - đúng con đường mà người bật Save-Data vẫn đi mỗi ván. Bốn
+    // id thêm ngày 2026-09-04 (wizard/cultist/spy/bandit) đang đi đường đó vì
+    // pack art gốc chỉ có 12 khuôn mặt. Cái không được phép thiếu là khuôn mặt.
     for (const id of AVATAR_IDS) {
-      assert.ok(hasSheet(id), `${id} chưa có sheet`);
+      assert.ok(hasSheet(id) || AVATAR_PATHS[id], `${id} không có cả sheet lẫn hình SVG`);
     }
   });
 

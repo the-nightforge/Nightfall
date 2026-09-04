@@ -29,6 +29,7 @@ export const roomConfigSchema = z
     hunter: bool,
     cursed: bool,
     wolfCub: bool.optional(),
+    traitor: bool.optional(),
     apprenticeSeer: bool.optional(),
     detective: bool.optional(),
     guardianAngel: bool.optional(),
@@ -81,8 +82,21 @@ export function validateRoomConfig(config: RoomConfig, playerCount: number): str
     (config.serialKiller ? 1 : 0) +
     // Kẻ Báo Thù cũng vậy, và cũng chỉ một lá.
     (config.executioner ? 1 : 0);
+  /*
+   * Kẻ Phản Bội chiếm một GHẾ nhưng KHÔNG vào `wolfCount`, và cả hai vế đều cố ý.
+   *
+   * Ghế: nó là một lá trong bộ bài như mọi lá khác, nên nó phải nằm trong
+   * `totalRoles` để phép kiểm "phải còn chỗ cho Dân Làng" đếm đúng.
+   *
+   * KHÔNG vào `wolfCount`: con số đó gác luật "Sói phải ít hơn phe làng", và
+   * luật đó mô hình hoá SỨC SÁT THƯƠNG BAN ĐÊM - bao nhiêu người chết mỗi đêm.
+   * Kẻ Phản Bội không giết ai, nên đếm nó vào đây sẽ chặn những bộ bài hoàn
+   * toàn chơi được. Phép đếm thế cân bằng lúc KẾT THÚC ván thì lại tính nó, và
+   * đó là `checkWin` - hai câu hỏi khác nhau, hai phép đếm khác nhau.
+   */
+  const traitorSeats = config.traitor ? 1 : 0;
   const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0);
-  const totalRoles = wolfCount + specials;
+  const totalRoles = wolfCount + specials + traitorSeats;
   if (totalRoles > playerCount) {
     return "Tổng số vai trò đặc biệt vượt quá số người chơi";
   }

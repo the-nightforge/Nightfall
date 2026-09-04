@@ -61,6 +61,18 @@ export interface RoomConfig {
   hunter: boolean;
   cursed: boolean;
   wolfCub?: boolean;
+  /**
+   * Kẻ Phản Bội - thắng cùng phe Sói nhưng KHÔNG thuộc bầy.
+   *
+   * Optional và mặc định TẮT vì cùng lý do với mọi tuỳ chọn thêm sau: snapshot
+   * Redis ghi trước bản này không có trường đó, và bắt buộc nó sẽ làm mọi ván
+   * đang chạy trượt schema ngay lúc deploy.
+   *
+   * KHÔNG dùng chung cờ với `wolfCub`: hai lá cùng thắng với phe Sói nhưng Sói
+   * Con nằm TRONG bầy còn lá này thì không, và đó chính là khác biệt mà cả vai
+   * này tồn tại để tạo ra.
+   */
+  traitor?: boolean;
   apprenticeSeer?: boolean;
   detective?: boolean;
   guardianAngel?: boolean;
@@ -229,12 +241,12 @@ export const MIN_PLAYERS_TO_START = 8;
  * 1. Số ghế trong phòng - `PRESET_DECKS` phải có bộ bài cho mọi cỡ từ
  *    `MIN_PLAYERS_TO_START` tới đây, nếu không `generateWarnings` phát
  *    "Không có preset cho N người chơi" ở đúng những cỡ phòng vừa mở ra.
- * 2. Số ẢNH ĐẠI DIỆN khác nhau mà một phòng cần. `AVATAR_IDS` có 16 hình, nên
- *    từ người thứ 17 trở đi `assignAvatars` buộc phải cấp trùng hình - đường
- *    lui đó vốn đã có sẵn và có chú thích, và sắc nền riêng của từng người vẫn
- *    phân biệt được hai ô trùng hình. Muốn trả lại tính duy nhất tuyệt đối thì
- *    phải bổ sung 4 hình vào `avatar-art.ts` (nguồn game-icons.net, nhớ cập
- *    nhật cả bảng ghi công).
+ * 2. Số ẢNH ĐẠI DIỆN khác nhau mà một phòng cần. `AVATAR_IDS` đã lên 20 hình
+ *    cùng lần sửa này, nên `assignAvatars` vẫn cấp được cho mỗi người một hình
+ *    riêng. Nâng trần này lần nữa mà không thêm hình sẽ ĐI QUA test được -
+ *    `assignAvatars` có đường lui cấp trùng - nhưng hai ô trùng hình chỉ còn
+ *    phân biệt bằng sắc nền, và trong một game đoán người thì đó là một mất mát
+ *    thật.
  */
 export const MAX_PLAYERS_PER_ROOM = 20;
 

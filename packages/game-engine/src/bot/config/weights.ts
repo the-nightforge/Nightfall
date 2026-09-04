@@ -142,6 +142,24 @@ export interface PrivateInfoWeights {
  * ngược hẳn - cố tình bị lộ. Trộn chúng lại sẽ khiến việc hiệu chỉnh phe Sói
  * lặng lẽ kéo theo hành vi của Hề.
  */
+export interface TraitorWeights {
+  /**
+   * Nhân với `suspicion` của mục tiêu, rồi đổi DẤU.
+   *
+   * Kẻ Phản Bội không biết Sói là ai, nhưng nó chạy cùng bộ não với làng - nên
+   * người NÓ nghi nhất cũng là người làng sắp nghi nhất, tức con Sói có xác
+   * suất cao nhất bàn. Số hạng này giữ nó khỏi tự tay giúp làng treo trúng.
+   */
+  suspectShield: number;
+  /**
+   * Nhân với `trust` của mục tiêu.
+   *
+   * Người được tin nhất bàn gần như luôn là một vai chức năng đã lộ - nguồn
+   * xác nhận của làng, và đúng thứ bầy Sói cần dọn đi.
+   */
+  trustedTargetBonus: number;
+}
+
 export interface JesterWeights {
   /**
    * Nhân với `trust` của mục tiêu.
@@ -592,6 +610,7 @@ export interface BotWeights {
   readonly limits: MemoryLimits;
   readonly conversation: ConversationWeights;
   readonly claim: ClaimWeights;
+  readonly traitor: TraitorWeights;
   readonly jester: JesterWeights;
   readonly serialKiller: SerialKillerWeights;
   readonly executioner: ExecutionerWeights;
@@ -1027,6 +1046,13 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
    * đó chơi thụ động và KHÔNG rút một số ngẫu nhiên nào - tức mọi test tái lập
    * khoá theo v1/v2/v3 vẫn đúng từng bit. Bản bật thật là v7.
    */
+  // Tắt ở v1 vì cùng lý do với nhóm `jester`: v1 phải tái lập Phase 2 từng bit,
+  // và vai này chưa tồn tại ở đó.
+  traitor: Object.freeze({
+    suspectShield: 0,
+    trustedTargetBonus: 0,
+  }),
+
   jester: Object.freeze({
     contrarianTrustBonus: 0,
     bandwagonPenalty: 0,
@@ -1675,6 +1701,20 @@ export const BOT_WEIGHTS_V9: BotWeights = Object.freeze({
 export const BOT_WEIGHTS_V10: BotWeights = Object.freeze({
   ...BOT_WEIGHTS_V9,
   version: "10.0.0",
+
+  /**
+   * Kẻ Phản Bội - xem `roles/traitor.ts` cho lập luận của hai số hạng.
+   *
+   * 1.5 và 1.2, đọc trên thang belief THẬT (p90 ≈ 1.8), tức cùng bậc với
+   * `jester.contrarianTrustBonus` (2.0) và cố ý NHẸ HƠN nó. Lý do: Thằng Hề
+   * cần bị nhìn thấy, còn Kẻ Phản Bội cần KHÔNG bị nhìn thấy. Một thiên vị đủ
+   * mạnh để lật bảng điểm sẽ khiến nó bỏ phiếu lệch khỏi cả làng mỗi ngày, và
+   * hai ngày như vậy là đủ để bị đọc ra.
+   */
+  traitor: Object.freeze({
+    suspectShield: 1.5,
+    trustedTargetBonus: 1.2,
+  }),
 
   confidence: Object.freeze({
     ...BOT_WEIGHTS_V9.confidence,

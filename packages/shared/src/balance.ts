@@ -63,8 +63,67 @@ import type { BalanceWarningView } from "./snapshot";
 export const ROLE_POWER: Record<Role, number> = {
   WEREWOLF: 5,
   WOLF_CUB: 7,
+  /**
+   * 3.5, ĐÃ ĐO - thay cho con số 3 ước lượng lúc dựng vai.
+   *
+   * So cặp trên đúng bộ seed, speech BẬT, 600 ván mỗi ô, thay MỘT ghế Dân Làng
+   * bằng lá này:
+   *
+   *   n  | không có | có Phản Bội |   Δ
+   *   11 |   41.2   |    12.3     | -28.8
+   *   12 |   42.8   |    22.2     | -20.7
+   *   13 |   52.7   |    26.2     | -26.5
+   *   15 |   56.8   |    40.7     | -16.2
+   *   18 |   57.3   |    43.2     | -14.2
+   *   20 |   49.3   |    40.5     |  -8.8
+   *                        Δ TB   = -19.2
+   *
+   * Quy đổi: cùng bộ seed đó, thay một ghế Dân Làng bằng một con SÓI đáng -27
+   * điểm (11 người: 68.3 xuống 41.2). Kẻ Phản Bội vì thế nặng khoảng 0.7 con
+   * Sói, tức 0.7 x 4.5 = 3.15 điểm trên mức Dân Làng, tức 3.65. Làm tròn xuống
+   * 3.5 theo đúng quy ước của bảng này: đừng chép thẳng số đo.
+   *
+   * NẶNG HƠN dự tính lúc thiết kế (12-15 điểm), và lý do đáng ghi lại: nó
+   * không có hành động đêm nhưng nó ĐƯỢC ĐẾM vào thế cân bằng của `checkWin`,
+   * nên bầy Sói chạm ngưỡng thắng sớm hơn đúng một cái chết - trong khi không
+   * nguồn xác nhận nào của làng chỉ ra được nó. Không giết ai không có nghĩa là
+   * không nguy hiểm.
+   *
+   * Δ CHẠY THEO CỠ PHÒNG, từ -28.8 (11 người) tới -8.8 (20 người). Một ghế
+   * trong thế cân bằng đáng giá nhiều hơn ở bàn nhỏ. Bảng `ROLE_POWER` chỉ có
+   * MỘT con số cho mỗi vai nên nó không diễn tả được điều đó - đây là giới hạn
+   * của thang đo, và nó áp dụng cho mọi dòng khác trong bảng chứ không riêng
+   * dòng này.
+   */
+  TRAITOR: 3.5,
   SEER: 5,
-  APPRENTICE_SEER: 2,
+  /**
+   * 1, hạ từ 2. Đo lại 2026-09-04 bằng SO CẶP trên đúng bộ seed, speech BẬT,
+   * 600 ván mỗi ô - tức đúng cách `role-power.ts` đo, chỉ khác là có lời nói:
+   *
+   *   n  | không có | có Tập Sự |  Δ
+   *   10 |   48.5   |   47.8    | -0.7
+   *   12 |   43.2   |   42.7    | -0.5
+   *   13 |   47.8   |   47.2    | -0.7
+   *   14 |   50.7   |   47.7    | -3.0
+   *   15 |   53.8   |   55.7    | +1.8
+   *                       Δ TB  = -0.6
+   *
+   * Tức lá này đáng GẦN ĐÚNG một lá Dân Làng, không phải hơn 1.5 điểm như bảng
+   * cũ ghi. Nó không làm gì cho tới khi Tiên Tri chết, và ở bàn bot thì Tiên
+   * Tri thường sống tới cuối hoặc chết quá muộn để phần thừa kế kịp có giá.
+   *
+   * KHÔNG hạ thẳng xuống 0.5 dù số đo nói vậy, và lý do đúng bằng lý do đã
+   * dùng cho Thợ Săn với Thám Tử ngay trên: phần giá trị của vai này nằm ở chỗ
+   * làng CÒN một Tiên Tri dự phòng, mà bot không khai thác được sức ép tâm lý
+   * đó - người thật thì có. Một nấc, không phải cả quãng.
+   *
+   * Ghi lại một lần đọc SAI để lần sau không lặp: một lượt đo 200 ván KHÔNG
+   * ghép cặp từng cho ra Δ tới -8.5, và suýt nữa thì bảng này ghi vai đó là có
+   * hại. Cùng cấu hình, đo ghép cặp 600 ván, ra -0.7. Đo không ghép cặp ở dải
+   * này là đo nhiễu.
+   */
+  APPRENTICE_SEER: 1,
   DETECTIVE: 2,
   GUARD: 2.5,
   GUARDIAN_ANGEL: 1.5,
@@ -145,6 +204,48 @@ const BASE_TIMINGS: Pick<
   defenseSeconds: 25,
   finalVoteSeconds: 20,
 };
+
+/**
+ * SÁU VAI LÕI - có mặt trong MỌI preset, không có ngoại lệ.
+ *
+ * Đây là một ràng buộc SẢN PHẨM, không phải một kết luận từ số đo, và thứ tự
+ * đó quan trọng: khi cân bằng và danh sách này xung đột thì cân bằng phải tìm
+ * đường khác. Sáu lá này là hình dạng mà người chơi nhận ra một ván Ma Sói qua
+ * đó; một preset thiếu Phù Thuỷ đo ra 50% vẫn là một ván mà không ai cứu được
+ * ai, và đó là một trò chơi khác chứ không phải một trò chơi cân bằng hơn.
+ *
+ * `VILLAGER` nằm trong danh sách và nó KHÔNG thừa: `validateRoomConfig` đã đòi
+ * còn ít nhất một ghế trống, nhưng nó đòi vì lý do kỹ thuật (bộ chia bài cần
+ * chỗ lấp), còn ở đây là vì lý do trò chơi - phải có người thật sự không biết
+ * gì thì những lá biết mới có nghĩa.
+ *
+ * `WEREWOLF` nghĩa là Sói THƯỜNG, ít nhất một con: một bầy chỉ toàn Sói Con là
+ * một bầy chơi bằng luật khác.
+ *
+ * Lá được phép gỡ ra để chỉnh cân bằng là phần còn lại: Thám Tử, Thị Trưởng,
+ * Thiên Thần Hộ Mệnh, Linh Mục, Tiên Tri Tập Sự, Sói Con, Kẻ Nguyền Rủa.
+ */
+export const CORE_PRESET_ROLES: readonly Role[] = [
+  "SEER",
+  "GUARD",
+  "HUNTER",
+  "WITCH",
+  "WEREWOLF",
+  "VILLAGER",
+];
+
+/**
+ * Vai lõi nào còn THIẾU trong một bộ bài, ở cỡ phòng đó.
+ *
+ * Trả về mảng rỗng là đủ. Nhận `playerCount` vì `VILLAGER` không phải một cờ
+ * trong `RoomConfig` - nó là phần ghế còn lại, nên chỉ đếm được khi biết bàn có
+ * bao nhiêu người.
+ */
+export function missingCoreRoles(config: RoomConfig, playerCount: number): Role[] {
+  const roles = new Set<Role>(specialRoleList(config));
+  if (playerCount - specialRoleList(config).length > 0) roles.add("VILLAGER");
+  return CORE_PRESET_ROLES.filter((role) => !roles.has(role));
+}
 
 function preset(overrides: Partial<RoomConfig>): RoomConfig {
   return {
@@ -250,8 +351,8 @@ function preset(overrides: Partial<RoomConfig>): RoomConfig {
  * 8: WEREWOLF x2, SEER, WITCH, GUARD, HUNTER, DETECTIVE, VILLAGER
  * 9: WEREWOLF, WOLF_CUB, SEER, WITCH, GUARD, DETECTIVE, HUNTER, VILLAGER x2
  * 10: WEREWOLF, WOLF_CUB, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, HUNTER, VILLAGER x2
- * 11: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, VILLAGER x2
- * 12: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, VILLAGER x3
+ * 11: xem khối chú thích ngay trên `11: preset(...)` - đã đổi 2026-09-04
+ * 12: xem khối chú thích ngay trên `11: preset(...)` - đã đổi 2026-09-04
  * 13: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, VILLAGER x3
  * 14: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, PRIEST, VILLAGER x3
  * 15: WEREWOLF x3, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, PRIEST, VILLAGER x3
@@ -270,8 +371,45 @@ export const PRESET_DECKS: Record<number, RoomConfig> = {
     guard: true,
     hunter: true,
   }),
+  /*
+   * 11 và 12: HAI Sói cộng KẺ PHẢN BỘI - nấc thang mà bộ vai cũ không có.
+   *
+   * Hai cỡ phòng này lệch nhất bảng suốt lần hiệu chỉnh, và vấn đề là SỐ HỌC
+   * chứ không phải bộ bài: 2 Sói trên 11 người là 18%, 3 Sói là 27%, và không
+   * có giá trị nguyên nào ở giữa. Đo trên V10, speech bật, 600 ván mỗi ô:
+   *
+   *   n  | 3 sói | 2 sói | khoảng trống
+   *   11 | 41.2  | 68.3  |  27 điểm
+   *   12 | 42.8  | 69.5  |  27 điểm
+   *
+   * Vế làng KHÔNG bắc được cầu đó. Bỏ vai làng không-lõi khỏi nhánh 2 Sói dịch
+   * chưa tới 1 điểm (Thám Tử 61.8, Thị Trưởng 61.0, cả hai 61.5). Thêm vai làng
+   * vào nhánh 3 Sói cũng vậy, thậm chí âm (11 người + Thiên Thần: 35.0).
+   *
+   * `TRAITOR` được dựng ra ĐÚNG cho khoảng trống này, và nó rơi vào giữa:
+   *
+   *   n  | 3 sói | 2 sói + Phản Bội | 2 sói
+   *   11 | 41.2  |       43.5       | 68.3
+   *   12 | 42.8  |       47.7       | 69.5
+   *
+   * 12 người dừng ở đó: 47.7, gần 50 nhất mà cỡ phòng này từng chạm.
+   *
+   * 11 người cần thêm một nấc nữa vì bàn nhỏ hơn nên mỗi ghế nặng hơn. Thiên
+   * Thần Hộ Mệnh (không phải vai lõi, được phép thêm) đưa nó từ 39.3 lên 43.7 -
+   * hơn bộ cũ 5.2 điểm, tức khoảng 2.6 sai số chuẩn ở 600 ván. Tiên Tri Tập Sự
+   * cũng ra đúng 43.7; chọn Thiên Thần vì nó có việc để làm ngay từ đêm 1, còn
+   * Tập Sự đo ra gần bằng 0 (xem `ROLE_POWER`).
+   *
+   * 11 người vẫn là cỡ phòng lệch nhất bảng. Nó nằm trong dải 35-55 mà repo tự
+   * tuyên bố, nhưng không chạm được 45 - và cả bộ vai hiện có đã thử hết.
+   *
+   * 11: WEREWOLF x2, TRAITOR, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, VILLAGER x2
+   * 12: WEREWOLF x2, TRAITOR, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, VILLAGER x4
+   */
   11: preset({
-    werewolves: 3,
+    werewolves: 2,
+    traitor: true,
+    guardianAngel: true,
     seer: true,
     witch: true,
     guard: true,
@@ -280,7 +418,8 @@ export const PRESET_DECKS: Record<number, RoomConfig> = {
     mayor: true,
   }),
   12: preset({
-    werewolves: 3,
+    werewolves: 2,
+    traitor: true,
     seer: true,
     witch: true,
     guard: true,
@@ -311,6 +450,7 @@ export const PRESET_DECKS: Record<number, RoomConfig> = {
   }),
   15: preset({
     werewolves: 3,
+    cursed: true,
     seer: true,
     apprenticeSeer: true,
     witch: true,
@@ -409,8 +549,7 @@ export const PRESET_DECKS: Record<number, RoomConfig> = {
     priest: true,
   }),
   18: preset({
-    werewolves: 3,
-    cursed: true,
+    werewolves: 4,
     seer: true,
     apprenticeSeer: true,
     witch: true,
@@ -512,6 +651,8 @@ export function specialRoleList(config: RoomConfig): Role[] {
   const roles: Role[] = [];
   for (let i = 0; i < config.werewolves; i++) roles.push("WEREWOLF");
   if (config.wolfCub) roles.push("WOLF_CUB");
+  // Tối đa một Kẻ Phản Bội mỗi ván; boolean nên "tối đa 1" là tính chất của kiểu.
+  if (config.traitor) roles.push("TRAITOR");
   if (config.seer) roles.push("SEER");
   if (config.apprenticeSeer) roles.push("APPRENTICE_SEER");
   if (config.detective) roles.push("DETECTIVE");
