@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
 import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { nominationRecapFor } from "@/lib/defense-votes";
-import { Avatar } from "./Avatar";
 import { CharacterPortrait } from "./CharacterPortrait";
 import { DefenseVotePanel } from "./DefenseVotePanel";
 

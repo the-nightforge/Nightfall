@@ -14,7 +14,6 @@ import {
   type TrialStageView,
 } from "@/lib/live-trial";
 import { rendererState } from "@/lib/village-memory-playback";
-import { Avatar } from "./Avatar";
 import { CharacterPortrait } from "./CharacterPortrait";
 import { TrialStageCanvas } from "./TrialStageCanvas";
 import { useSpeakers } from "./VoiceProvider";

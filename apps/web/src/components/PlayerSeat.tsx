@@ -8,7 +8,6 @@ import { breathOffsetFor } from "@/lib/avatar";
 import type { AvatarId } from "@/lib/avatar-art";
 import { NOTE_META, type NoteMark } from "@/lib/player-notes";
 import { seatFrame, seatShowsSpeaking } from "@/lib/seat-voice";
-import { Avatar } from "./Avatar";
 import { CharacterPortrait } from "./CharacterPortrait";
 
 interface Props {

@@ -15,7 +15,6 @@ import { TEAM_TAG_CLASS } from "@/lib/team-tone";
 import { listItemMotion } from "@/lib/motion";
 import { NOTE_META, usePlayerNotes } from "@/lib/player-notes";
 import { speakingSeatIds } from "@/lib/seat-voice";
-import { Avatar } from "./Avatar";
 import { AvatarPicker } from "./AvatarPicker";
 import { CharacterPortrait } from "./CharacterPortrait";
 

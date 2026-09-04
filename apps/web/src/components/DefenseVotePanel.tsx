@@ -4,7 +4,6 @@ import { useId, useMemo, useState } from "react";
 import type { DayVoteRecap, RoomSnapshot } from "@masoi/shared";
 import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { summarizeDefenseVotes } from "@/lib/defense-votes";
-import { Avatar } from "./Avatar";
 import { CharacterPortrait } from "./CharacterPortrait";
 import { VoteHistoryPanel } from "./VoteHistoryPanel";
 

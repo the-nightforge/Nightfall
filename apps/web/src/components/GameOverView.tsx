@@ -28,7 +28,6 @@ import {
   type WinnerCopy,
 } from "@/lib/game-over-summary";
 import { caseFileLetters } from "@/lib/last-letter";
-import { Avatar } from "./Avatar";
 import { CaseFileCard } from "./CaseFileCard";
 import { CharacterPortrait } from "./CharacterPortrait";
 import { CaseShareCard } from "./CaseShareCard";

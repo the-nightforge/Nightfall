@@ -6,7 +6,6 @@ import { MAX_PLAYERS_PER_ROOM, MIN_PLAYERS_TO_START, type RoomSnapshot } from "@
 import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { listItemMotion } from "@/lib/motion";
 import { useModalFocus } from "@/lib/useModalFocus";
-import { Avatar } from "./Avatar";
 import { CharacterPortrait } from "./CharacterPortrait";
 
 interface Props {
