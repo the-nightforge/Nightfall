@@ -63,8 +63,10 @@ describe("balance", () => {
     // Đảo chiều để nó lại đo đúng thứ nó muốn đo: NHÉT Sói Con vào phải kéo cán
     // cân về phe Sói đủ mạnh để bị chặn.
     expect(generateWarnings({ ...PRESET_DECKS[15], wolfCub: true }, 15).blocking).toBe(true);
-    // Gỡ Kẻ Nguyền Rủa cũng làm làng khoẻ lên, không phải yếu đi.
-    expect(calculateBalanceScore({ ...PRESET_DECKS[15], cursed: false }, 15).score).toBeGreaterThan(50);
+    // Kẻ Nguyền Rủa cũng phải đảo chiều, và vì ĐÚNG lý do trên: preset 15 hết
+    // Kẻ Nguyền Rủa từ lần hiệu chỉnh sau đó, nên "gỡ nó ra" giờ chấm chính
+    // preset và luôn ra 50. NHÉT nó vào phải kéo cán cân về phe Sói.
+    expect(calculateBalanceScore({ ...PRESET_DECKS[15], cursed: true }, 15).score).toBeLessThan(50);
   });
   it("blocking when too many wolves", () => {
     const w = generateWarnings({ ...PRESET_DECKS[8], werewolves: 4 } as any, 8);
