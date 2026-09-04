@@ -477,7 +477,7 @@ export default function Home() {
                   )}
 
                   <p className="border-t border-white/[0.07] pt-4 text-xs leading-relaxed text-mist/75">
-                    Tối thiểu 6 người mỗi ván - thiếu thì thêm bot ngay trong phòng chờ.
+                    Tối thiểu 8 người mỗi ván - thiếu thì thêm bot ngay trong phòng chờ.
                   </p>
 
                   {/* Nhạt hơn hẳn CTA và không có nền: đây là việc người ta làm

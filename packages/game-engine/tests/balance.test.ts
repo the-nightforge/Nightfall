@@ -1,12 +1,42 @@
 import { describe, it, expect } from "vitest";
 import { calculateBalanceScore, generateWarnings } from "../src/balance/analyzer";
 import { PRESET_DECKS } from "../src/balance/presets";
+import type { RoomConfig } from "@masoi/shared";
 
 describe("balance", () => {
-  it("preset 6 balanced 45-55", () => {
-    const r = calculateBalanceScore(PRESET_DECKS[6], 6);
-    expect(r.score).toBeGreaterThanOrEqual(45);
-    expect(r.score).toBeLessThanOrEqual(55);
+  /**
+   * Mốc TUYỆT ĐỐI, thay cho `preset 6 balanced 45-55` đã gỡ.
+   *
+   * Test cũ khẳng định preset 6 chấm trong khoảng 45-55. Nó không bao giờ đỏ
+   * được: `calculateBalanceScore` chấm bộ bài bằng độ lệch so với preset cùng
+   * cỡ phòng, nên MỌI preset đều ra đúng 50 - test đó lặp lại "mọi preset tự
+   * chấm mình đúng 50" ngay dưới, bằng một con số yếu hơn. Chính lỗ hổng ấy để
+   * lọt bảng preset cũ: cả 9 cỡ phòng đều "Cân bằng" trong khi đo ra 7-47%.
+   *
+   * Cái đáng khoá là hai phép kiểm KHÔNG đọc `PRESET_DECKS`, vì chỉ chúng mới
+   * còn hiệu lực khi chính bảng preset sai.
+   */
+  it("mốc tuyệt đối im trên preset, và kêu trên bộ bài lệch", () => {
+    const absolute = (config: RoomConfig, count: number) =>
+      generateWarnings(config, count).warnings.filter((line) =>
+        /ca chết cho mỗi Sói|thấp hơn phe Sói/.test(line),
+      );
+
+    for (const [count, deck] of Object.entries(PRESET_DECKS)) {
+      expect(absolute(deck, Number(count))).toEqual([]);
+    }
+
+    // Đúng preset 12 người CŨ (3 Sói + Sói Con), đo ra 7.3% cho phe làng. Ngân
+    // sách sai lầm của làng khi đó là 1.00 ca chết cho mỗi Sói phải treo.
+    const old12: RoomConfig = {
+      ...PRESET_DECKS[12],
+      werewolves: 3,
+      wolfCub: true,
+    };
+    expect(absolute(old12, 12).join(" ")).toMatch(/ca chết cho mỗi Sói/);
+    // Cảnh báo THÔI, không chặn: đây là hàng rào chống bảng preset trôi lệch,
+    // không phải một luật mới cho bộ bài tuỳ chỉnh.
+    expect(generateWarnings({ ...PRESET_DECKS[15] }, 15).blocking).toBe(false);
   });
 
   /**
@@ -28,8 +58,11 @@ describe("balance", () => {
    * không lặng lẽ trả chúng về chỗ cũ.
    */
   it("Sói Con là lá nặng nhất, và Kẻ Nguyền Rủa là lá có hại cho làng", () => {
-    // Gỡ Sói Con khỏi preset 15 làm phe làng khoẻ hẳn lên -> phải bị chặn.
-    expect(generateWarnings({ ...PRESET_DECKS[15], wolfCub: false }, 15).blocking).toBe(true);
+    // Bản cũ THÊM vào bằng cách gỡ Sói Con khỏi preset 15. Từ 2026-09-04 preset
+    // 15 không còn Sói Con, nên phép thử đó đang chấm chính preset và luôn xanh.
+    // Đảo chiều để nó lại đo đúng thứ nó muốn đo: NHÉT Sói Con vào phải kéo cán
+    // cân về phe Sói đủ mạnh để bị chặn.
+    expect(generateWarnings({ ...PRESET_DECKS[15], wolfCub: true }, 15).blocking).toBe(true);
     // Gỡ Kẻ Nguyền Rủa cũng làm làng khoẻ lên, không phải yếu đi.
     expect(calculateBalanceScore({ ...PRESET_DECKS[15], cursed: false }, 15).score).toBeGreaterThan(50);
   });

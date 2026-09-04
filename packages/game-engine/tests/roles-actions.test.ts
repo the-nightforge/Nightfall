@@ -180,9 +180,42 @@ describe("Detective Role Actions", () => {
     // Missing secondary target
     expect(() => engine.submitNightAction("det", "DETECTIVE_CHECK", "v1", null)).toThrow();
   });
+
+  it("không thể tự đưa mình vào cặp - tự ghép biến Thám Tử thành Tiên Tri", () => {
+    const state = createTestState([
+      { id: "det", role: "DETECTIVE" },
+      { id: "v1", role: "VILLAGER" },
+      { id: "w1", role: "WEREWOLF" },
+    ]);
+    const engine = new GameEngine(state);
+
+    expect(() => engine.submitNightAction("det", "DETECTIVE_CHECK", "det", "v1")).toThrow(
+      /không thể tự đưa mình/i,
+    );
+    expect(() => engine.submitNightAction("det", "DETECTIVE_CHECK", "v1", "det")).toThrow(
+      /không thể tự đưa mình/i,
+    );
+    // Danh sách hợp lệ phải nói cùng một điều, nếu không client vẫn mời người
+    // chơi bấm vào một nước mà engine sẽ từ chối.
+    expect(engine.botKnowledgeFor("det").night?.legalTargets.DETECTIVE_CHECK).not.toContain("det");
+  });
 });
 
 describe("Guardian Angel Role Actions", () => {
+  it("không thể tự bảo vệ mình, giống Bảo Vệ", () => {
+    const state = createTestState([
+      { id: "ga", role: "GUARDIAN_ANGEL" },
+      { id: "v1", role: "VILLAGER" },
+      { id: "w1", role: "WEREWOLF" },
+    ]);
+    const engine = new GameEngine(state);
+
+    expect(() => engine.submitNightAction("ga", "GUARDIAN_PROTECT", "ga")).toThrow(
+      /không thể tự bảo vệ/i,
+    );
+    expect(engine.botKnowledgeFor("ga").night?.legalTargets.GUARDIAN_PROTECT).not.toContain("ga");
+  });
+
   it("protects player and consumes charge, prevents wolf kill", () => {
     const state = createTestState([
       { id: "ga", role: "GUARDIAN_ANGEL" },

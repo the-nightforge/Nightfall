@@ -101,6 +101,27 @@ export interface GroundTruth {
    * không có ngoại lệ nào.
    */
   shadowedSeerResults?: ReadonlySet<string>;
+  /**
+   * Những người đã hoá Sói từ Kẻ Nguyền Rủa.
+   *
+   * Cùng lớp với `shadowedSeerResults` ngay trên, nhưng vì một lý do khác: ở
+   * đó engine nói dối, còn ở đây SỰ THẬT DỊCH CHỖ. `resolveNight` ghi đè
+   * `player.role` thành `WEREWOLF` ngay tại chỗ khi Kẻ Nguyền Rủa bị cắn, mà
+   * `groundTruth()` thì đọc vai SỐNG. Một lượt soi ghi TRƯỚC cú cắn ấy - đúng
+   * vào lúc soi, và `st.night.seerResults` giữ nó tới hết ngày hôm sau - vì
+   * thế bị đem so với vai đã đổi và bị tố cáo oan.
+   *
+   * Tái hiện được ở preset 15 người (bộ duy nhất có Kẻ Nguyền Rủa cùng Tiên
+   * Tri Tập Sự): seed `sp15:60` và `sp15:115`, cả hai ở `DAY_DISCUSSION`.
+   *
+   * ponytail: miễn trừ theo NGƯỜI chứ không theo từng lượt soi, nên nó cũng
+   * tha luôn một lượt soi SAU khi đổi phe mà báo sai - mất đúng một người,
+   * chỉ trong bộ bài có Kẻ Nguyền Rủa. Đổi lại, tập này suy thẳng từ state của
+   * engine nên không có bản ghi chép tay nào để trôi lệch. Cần chặt hơn thì
+   * đóng dấu theo khoá `"${ownerId}:${targetId}"` ngay lúc đổi phe, y như
+   * `shadowedSeerResults`.
+   */
+  cursedTurnedIds?: ReadonlySet<string>;
 }
 
 export interface InvariantAuditor {
@@ -260,7 +281,9 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
         // kết quả bị đảo đều thành báo động giả kể từ vòng kế tiếp.
         const seerResultMayLie =
           truth.activeEventId === "WOLF_SHADOW" ||
-          (truth.shadowedSeerResults?.has(`${self}:${result.targetId}`) ?? false);
+          (truth.shadowedSeerResults?.has(`${self}:${result.targetId}`) ?? false) ||
+          // Sự thật đã dịch chỗ dưới chân kết quả này, xem `cursedTurnedIds`.
+          (truth.cursedTurnedIds?.has(result.targetId) ?? false);
         if (!seerResultMayLie && result.isWolf !== isWolfTeam(truth.roles[result.targetId])) {
           auditor.report("SEER_RESULT_SCOPE", {
             ...at,

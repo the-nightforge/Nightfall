@@ -504,6 +504,12 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       alive,
       activeEventId: engine.state.activeEvent?.id ?? null,
       shadowedSeerResults,
+      // Suy từ chính state của engine, không phải một bản ghi chép tay ở
+      // harness: `cursedTurned` là cờ mà `resolveNight` bật cùng lúc nó ghi đè
+      // vai, nên hai thứ không thể lệch nhau. Xem `GroundTruth.cursedTurnedIds`.
+      cursedTurnedIds: new Set(
+        engine.state.players.filter((player) => player.cursedTurned).map((player) => player.id),
+      ),
     };
   };
 

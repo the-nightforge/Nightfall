@@ -248,9 +248,11 @@ describe("Sát Nhân trong phòng chờ và trên thẻ vai", () => {
   it("bật Sát Nhân là rời khỏi preset chuẩn", () => {
     // `isPresetDeck` so từng khoá trong `CONFIG_KEY`; thiếu khoá mới ở đó là
     // một bộ bài có Sát Nhân vẫn được chấm là "preset chuẩn".
-    const preset = PRESET_DECKS[6];
-    assert.equal(isPresetDeck(preset, 6), true);
-    assert.equal(isPresetDeck({ ...preset, serialKiller: true }, 6), false);
+    // 8 chứ không phải 6: `MIN_PLAYERS_TO_START` lên 8 nên preset 6 và 7 đã bị
+    // gỡ, và `PRESET_DECKS[6]` giờ là `undefined`.
+    const preset = PRESET_DECKS[8];
+    assert.equal(isPresetDeck(preset, 8), true);
+    assert.equal(isPresetDeck({ ...preset, serialKiller: true }, 8), false);
   });
 
   it("có biểu tượng riêng, không dùng chung với vai nào khác", () => {

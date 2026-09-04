@@ -250,9 +250,9 @@ Village wins by eliminating every wolf. Wolves win once they equal or outnumber 
 |---|---|---|
 | Seer | Tiên Tri | Inspect one player's team each night |
 | Apprentice Seer | Tiên Tri Tập Sự | Powerless until the Seer dies, then inherits the inspection |
-| Detective | Thám Tử | Check whether two living players are on the same team |
-| Guard | Bảo Vệ | Shield one player from every night kill; cannot repeat the same target two nights running |
-| Guardian Angel | Thiên Thần Hộ Mệnh | Two shields per match against any night kill, no consecutive repeats |
+| Detective | Thám Tử | Check whether two **other** living players are on the same team — it cannot put itself in the pair |
+| Guard | Bảo Vệ | Shield one player from every night kill; never itself, and cannot repeat the same target two nights running |
+| Guardian Angel | Thiên Thần Hộ Mệnh | Two shields per match against any night kill; never itself, no consecutive repeats |
 | Priest | Linh Mục | One vial of holy water: kills a wolf, but backfires and kills the Priest if used on anyone who is not a wolf |
 | Witch | Phù Thủy | One heal and one poison, each usable once per match |
 | Hunter | Thợ Săn | On death, may shoot one living player — or nobody |
@@ -291,7 +291,9 @@ All three are **off by default and in no preset deck** — the host has to enabl
 
 </details>
 
-Rooms hold **6–15 players**. Villagers fill whatever seats the configured special roles leave over.
+Rooms hold **8–15 players**. Villagers fill whatever seats the configured special roles leave over.
+
+The minimum is 8 because of arithmetic, not taste. Wolves win at `wolves >= everyone else`, and night comes first, so a 6-player table gives the village exactly one wrong lynch before the game is over — and the first vote happens before anyone has learned anything. It is not fixable by deck: every 2-wolf deck at 6 players tops out around 32% for the village in self-play, because the table runs out of seats to put power roles in, while dropping to 1 wolf jumps to 60%. There is nothing in between.
 
 ### Win conditions
 

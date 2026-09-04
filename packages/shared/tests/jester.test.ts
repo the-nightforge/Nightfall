@@ -67,8 +67,11 @@ describe("Thằng Hề - cấu hình phòng", () => {
       witch: false,
       jester: true,
     };
-    expect(validateRoomConfig(config, 7)).toBeNull();
-    expect(validateRoomConfig({ ...config, werewolves: 4 }, 7)).toBe(
+    // 8 người, không phải 7: `MIN_PLAYERS_TO_START` lên 8 từ 2026-09-04, và
+    // dưới ngưỡng đó `validateRoomConfig` trả về lỗi số người TRƯỚC khi tới
+    // được phép đếm phe mà test này muốn khẳng định.
+    expect(validateRoomConfig(config, 8)).toBeNull();
+    expect(validateRoomConfig({ ...config, werewolves: 4 }, 8)).toBe(
       "Số Ma Sói phải ít hơn phe làng",
     );
   });
