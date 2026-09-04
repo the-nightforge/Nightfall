@@ -15,7 +15,7 @@ import { armStep, clearPendingStep, registerStepHandlers } from "./steps";
 import { writeGameResultOnce } from "./game-result";
 import { resetMatchChat } from "./match-chat";
 import { broadcastRoom, emitToPlayers } from "../rooms/broadcast";
-import { destroyVoiceRoom, syncVoicePermissions } from "../voice/service";
+import { syncVoicePermissions } from "../voice/service";
 import { buildSnapshot, dayRecipients, pushChat, resolveChat } from "../rooms/snapshot";
 import { botBrain, resetBotBudget } from "../bots";
 import { buildBotDecisionContext } from "../bots/context";
@@ -463,10 +463,19 @@ export function resetToLobby(room: Room): void {
   pendingEndFinalVote.delete(room.code);
   clearBotSession(room.code);
   resetBotBudget(room.code);
-  // Về lobby là xoá hẳn room voice: không ai được ngồi lại với quyền của ván
-  // cũ. CỐ Ý không làm điều này ở GAME_OVER - lúc lật bài xong là lúc đáng nói
-  // nhất cả ván, nên room vẫn sống tới khi phòng thật sự reset.
-  void destroyVoiceRoom(room.code, "về lại phòng chờ");
+  /*
+   * Room voice sống theo vòng đời PHÒNG GAME, không theo vòng đời một ván.
+   *
+   * Ở đây từng có `destroyVoiceRoom`, với lý do "không ai được ngồi lại với
+   * quyền của ván cũ". Lý do đó không đứng vững: `sync()` ngay dưới đây đồng bộ
+   * quyền theo pha MỚI, mà pha mới là LOBBY - nơi ai cũng được nói. Nó phá kênh
+   * thoại của cả bàn để tới đúng cái đích nó vốn đã ở.
+   *
+   * Cái giá thì có thật: `deleteRoom` ngắt mọi participant, nên bấm "Chơi lại"
+   * là cả bàn mất tiếng giữa câu và từng người phải tự bấm "Bật mic" lần nữa.
+   * Room chỉ bị xoá ở hai lối ra mà phòng game thật sự hết tồn tại: host tắt
+   * voice (`rooms/service.ts`) và phòng bị xoá (`rooms/store.ts`).
+   */
   sync(room);
 }
 

@@ -241,7 +241,7 @@ với **chuyển pha** và sai với **thay đổi tư cách người chơi**:
 | Host tắt voice | `rooms/service.ts::updateConfig()` | `deleteRoom` |
 | Phòng biến mất | `rooms/store.ts::removeRoom()` | `deleteRoom` |
 
-`resetToLobby` đã đi qua `sync()`, nhưng vẫn cần `deleteRoom` tường minh.
+`resetToLobby` đi qua `sync()` và **chỉ** cần thế — xem mục 8.6.
 
 **Vì sao rời phòng là ca tệ nhất:** `leave()` đánh dấu người rời là **đã chết**
 (`service.ts:142-147`) rồi **xoá họ khỏi `room.members`** (`service.ts:116`). Mà
@@ -272,14 +272,40 @@ sẽ giết voice ở tab thứ nhất, im lặng. UI phải nói rõ điều n�
 4. Chuyển pha → đồng bộ quyền toàn phòng, chỉ gọi cho người **thực sự đổi
    quyền** và **đã join voice**.
 5. Chết giữa ván đi chung đường bước 4.
-6. `resetToLobby` / `removeRoom` / host tắt voice → `deleteRoom`.
+6. `removeRoom` / host tắt voice → `deleteRoom`. `resetToLobby` thì **không** —
+   xem mục 8.6.
 
 **Không xoá room ở `GAME_OVER`.** Mục 4 cho tất cả nói ở `GAME_OVER`, và đó là
 chủ ý: lúc lật bài xong là lúc đáng nói nhất cả ván.
 
-**Sau `resetToLobby` không tự nối lại voice.** Room đã bị xoá, mọi người bị
-ngắt; muốn nói tiếp thì bấm lại nút. Tự nối lại sẽ phát tiếng mà người chơi
-không chủ động yêu cầu, và trên iOS còn có thể bị chặn.
+### 8.6 Room voice sống theo vòng đời PHÒNG GAME, không theo vòng đời một ván
+
+Sửa ngày 2026-09-05. Bản trước gọi `destroyVoiceRoom` trong `resetToLobby`, với
+lý do "không ai được ngồi lại với quyền của ván cũ", và kèm luật "sau reset
+không tự nối lại voice".
+
+Lý do đó không đứng vững. `resetToLobby` kết thúc bằng `sync()`, mà `sync()`
+đồng bộ quyền theo pha **mới**; pha mới là `LOBBY`, nơi `voiceCanPublish` trả
+`true` cho tất cả — đúng bằng thứ người chơi lấy lại được sau khi vào lại phòng
+LiveKit. Nghĩa là `deleteRoom` phá kênh thoại của cả bàn để tới đúng cái đích nó
+vốn đã ở.
+
+Cái giá thì có thật, và là một trong những chỗ khó chịu nhất của tính năng: bấm
+"Chơi lại" là cả bàn mất tiếng giữa câu, rồi từng người phải tự đi tìm nút bật
+mic trước ván mới.
+
+Luật hiện tại:
+
+- **Reset về lobby giữ nguyên room**, giữ nguyên tập `joined`, và đồng bộ quyền
+  sang trạng thái lobby qua `sync()`. Người chết ở ván vừa xong được trả lại
+  quyền nói ngay trong phòng chờ.
+- **Chỉ hai lối ra xoá room:** phòng game bị xoá (`rooms/store.ts::removeRoom`)
+  và host tắt voice (`rooms/service.ts::updateConfig`). Cả hai là lúc phòng game
+  thật sự hết tồn tại dưới dạng một nơi có tiếng nói.
+- **Rời phòng / bị đuổi vẫn chỉ `removeParticipant`** đúng người đó, không đụng
+  tới room.
+
+Khoá bằng `apps/server/tests/voice-teardown.test.ts`.
 
 ### 8.4 Thứ tự thu và cấp quyền
 
@@ -382,9 +408,13 @@ Xử lý, hai nửa và cần cả hai:
 |---|---|
 | Từ chối quyền mic / không có mic | Chế độ **chỉ nghe**. Không bao giờ chặn vào phòng hay bắt đầu ván |
 | LiveKit chết giữa ván | Ván chạy tiếp bình thường; text vẫn chạy. Voice không bao giờ nằm trên đường tới hạn |
-| Rớt mạng rồi vào lại | Bám `reconnectPlayer` sẵn có. Token ký lại, `voice:ready` lại, quyền tính từ pha hiện tại |
+| Rớt mạng rồi vào lại | Client TỰ xin token lại - xem mục 9.6. Token ký lại, `voice:ready` lại, quyền tính từ pha hiện tại |
+| App ra nền trên điện thoại | Hệ điều hành có thể ngắt hẳn WebRTC. Không hứa giữ tiếng lúc bị treo; hứa TỰ phục hồi khi app hoạt động lại (mục 9.6) |
 | Bị kick / rời phòng | `removeParticipant` ngay (mục 8.1) |
 | Host tắt voice | `deleteRoom`, mọi người rơi về text |
+| Reset về lobby (ván mới) | **Giữ nguyên** room và tập `joined`; chỉ đồng bộ quyền sang lobby — mục 8.6 |
+| `setMic(true)` hỏng | Thử **đúng một lần**, hạ ý định, báo lỗi ra dock. Nút mic chính là nút thử lại — mục 9.7 |
+| `setMic(false)` hỏng mà còn quyền phát | Rời hẳn phòng: không ai phát được từ một phòng mình không ở trong đó — mục 9.7 |
 | Hai người cùng phòng vật lý | Hú. `echoCancellation` bật sẵn nhưng không cứu được — cảnh báo trên UI |
 | Mở tab thứ hai | Tab cũ bị đá khỏi voice; UI phải nói rõ (mục 8.2) |
 | Gọi `voice:token` dồn dập | Dùng lại `allowAction`, cùng kiểu với `chat:send` |
@@ -393,6 +423,125 @@ Xử lý, hai nửa và cần cả hai:
 
 Voice làm lộ danh tính qua giọng nói. Đó là đặc tính của thể loại. Một dòng cảnh
 báo ở phòng chờ, hết.
+
+### 9.6 Tự nối lại, và bốn tín hiệu "app sống dậy"
+
+Thêm ngày 2026-09-05.
+
+Bản trước dừng ở `Disconnected`: `connection` về `idle` rồi nằm im chờ một cú
+bấm. Trên desktop hiếm khi thấy; trên điện thoại thì đó là hành vi mặc định, vì
+hệ điều hành không giữ WebRTC khi app nằm nền. Người chơi mở lại app và thấy nút
+"Bật mic" như thể họ chưa từng vào kênh thoại.
+
+Bốn tín hiệu, vì không tín hiệu nào một mình đủ:
+
+| Tín hiệu | Bắt được ca nào |
+|---|---|
+| `visibilitychange` → visible | đổi tab desktop, và phần lớn ca mở lại app |
+| `pageshow` | iOS khôi phục trang từ bfcache, lúc đó `visibilitychange` có thể không bắn |
+| `online` | đổi Wi-Fi sang 4G mà app chưa bao giờ ẩn đi |
+| socket `connect` | đường mạng thông trở lại theo quan sát của chính app |
+| `RoomEvent.Disconnected` **phục hồi được** | **app thức dậy TRƯỚC, LiveKit bỏ cuộc SAU** — xem dưới |
+
+**Đường thứ năm là ca thường gặp nhất trên điện thoại, và bản đầu đã bỏ sót nó.**
+Thứ tự đời thực không phải "rớt rồi mới mở lại app" mà ngược lại: người dùng mở
+app trước, bốn tín hiệu trên bắn ra khi phiên cũ *trên giấy tờ* vẫn `connected`
+nên bị cổng từ chối — đúng và cần thiết — rồi LiveKit mới cố khôi phục, thất
+bại, và bắn `Disconnected`. Tới đó thì không còn tín hiệu nào nữa: voice nằm im
+ở `idle` chờ một cú bấm mà giao diện thậm chí không nói là cần bấm.
+
+Vì đường thứ năm **không** đi kèm một sự kiện trình duyệt nào, ba điều kiện môi
+trường — trang đang hiện, có mạng, có socket — phải nằm trong chính cổng chứ
+không rải ở từng listener. Nếu không, chúng sẽ không được kiểm ở đâu cả. Rớt lúc
+app còn nằm nền hoặc còn mất mạng thì **chờ**, và `visibilitychange` / `online`
+kế tiếp mới là lúc xin token.
+
+Bốn tín hiệu ấy thường bắn cùng lúc cho **một** lần thức dậy. Mỗi cái tự xin một
+token nghĩa là bốn lần join cùng một danh tính, mà trùng danh tính thì chính
+LiveKit đá phiên cũ — bốn lần join là ba lần tự đá mình. Nên tất cả đi qua
+`voice-reconnect.ts::createReconnectGate` (thuần, có test riêng): một lượt đang
+bay thì chặn, và có thời gian nghỉ để một mạng chập chờn không thành vòng phát
+token.
+
+**Ai KHÔNG được tự nối lại:**
+
+- người **chưa từng** bấm tham gia voice (`joinedByUser` sai) — không ai bị kéo
+  vào kênh thoại sau lưng;
+- người **chủ động ngắt** — `leave_requested` xoá luôn `joinedByUser`;
+- người **bị đá vì trùng danh tính** — nếu không, hai tab sẽ tự nối lại rồi thay
+  nhau đá nhau vô tận. Duplicate phải chờ người dùng chọn "Dùng kênh thoại ở tab
+  này";
+- người bị host tắt voice dưới chân (`voice_disabled`).
+
+`RoomEvent.Reconnecting` / `Reconnected` là chuyện khác và nhẹ hơn: LiveKit tự vá
+đường truyền, track chưa bị gỡ. Chỉ cần nói thật trên giao diện ("Đang kết nối
+lại") và gửi lại `voice:ready` khi vá xong.
+
+
+#### Phân loại `DisconnectReason` — không phải mọi lần ngắt đều là sự cố
+
+Sửa ngày 2026-09-05. `voice-room.ts` từng truyền cho hook đúng **một boolean**:
+"có phải `DUPLICATE_IDENTITY` không". Câu hỏi ấy quá hẹp, và cái giá là một lỗi
+thật: `PARTICIPANT_REMOVED` (rời phòng, bị đuổi) và `ROOM_DELETED` (host tắt
+voice, phòng biến mất) rơi vào chung rổ với "rớt mạng", nên client **tự xin
+token vào lại đúng cái phòng vừa tống mình ra** — và lặp lại ở mỗi lần đổi tab.
+
+Câu hỏi đúng là **"lần ngắt này có chủ đích hay không"**. `voice-disconnect.ts`
+(thuần) trả lời bằng bốn nhóm:
+
+| Nhóm | `DisconnectReason` | Hook làm gì |
+|---|---|---|
+| `duplicate` | `DUPLICATE_IDENTITY` | `duplicate_session`; chờ người dùng chọn tab |
+| `participant_removed` | `PARTICIPANT_REMOVED` | `removed_from_voice`; **không** xin token |
+| `room_deleted` | `ROOM_DELETED` | `removed_from_voice`; **không** xin token |
+| `recoverable` | mọi lý do còn lại, kể cả `undefined` | `disconnected` + một lượt qua cổng |
+
+Ba nhóm đầu là **quyết định của server**: người này không còn thuộc về kênh
+thoại, và vào lại là đi ngược lại quyết định đó. Nhóm cuối là sự cố — mạng, tín
+hiệu, `SERVER_SHUTDOWN` — nơi người chơi vẫn thuộc về phòng.
+
+`removed_from_voice` xoá `joinedByUser`, tức **điều kiện đầu tiên của cổng**, nên
+không cần chặn thêm ở đâu nữa: bốn tín hiệu thức dậy sau đó đều tự im. Nó là một
+action riêng chứ không mượn `voice_disabled`, vì `voice_disabled` mang nghĩa
+"phòng này không còn tính năng voice" — sai với ca bị đuổi, nơi voice vẫn đang
+bật cho mọi người khác. Nó cũng đặt `duplicate: false`: người bị đuổi không được
+đọc "Đang dùng ở tab khác" rồi đi đóng nhầm một tab vô can.
+
+Hai chỗ khiến lỗi này lọt được, và cả hai đã bị đóng:
+
+1. lớp dịch nằm **trong** `voice-room.ts`, mà file đó luôn bị thay bằng bản giả
+   trong test hook — nên không test nào chạy qua enum thật. Giờ nó ở
+   `voice-disconnect.ts`, và `useVoice.test.ts` đẩy `DisconnectReason` thật qua
+   `classifyDisconnect` thật vào hook;
+2. bảng kỳ vọng trong `voice-disconnect.test.ts` liệt kê **đủ** mọi thành viên
+   của enum, nên SDK thêm một lý do mới là test đỏ và buộc phải quyết định — thay
+   vì lặng lẽ thành "cứ nối lại đi".
+
+### 9.7 Lỗi mic: một lần là một lần
+
+Thêm ngày 2026-09-05.
+
+`micIntent` (mục 13) được thiết kế để sống sót qua mọi thứ — đêm, rớt mạng, đổi
+tab. Chính tính chất ấy làm nó thành nhiên liệu hoàn hảo cho một vòng lặp:
+`setMic` hỏng → `micOpen` vẫn `false` → ý định vẫn `true` → vòng đối chiếu kế
+tiếp lại gọi `setMic` → lại hỏng. Trên máy thật đó là `getUserMedia` bị gọi
+không ngừng: hộp xin quyền nhấp nháy và console ngập lỗi.
+
+`micError` cắt vòng đó. Nó tồn tại để **chặn**, không phải để hiển thị cho đẹp:
+
+- **Mở hỏng** → hạ `micIntent`, ghi `micError`, `micOpen: false`. Hậu quả là im
+  lặng — khó chịu, không hại ai. Chính nút mic là nút thử lại, nên không cần
+  thêm một control nào.
+- **Đóng hỏng** → mic có thể **vẫn đang phát**. Tuyệt đối không ghi
+  `micOpen: false` cho đỡ khó xử: đó đúng là kiểu nói dối mà cả tính năng này
+  sinh ra để tránh. Ngoại lệ duy nhất là khi quyền publish đã bị thu — lúc đó
+  chính LiveKit đã gỡ track nên im lặng là chắc chắn.
+- **Đóng hỏng mà vẫn còn quyền phát** → **rời hẳn phòng**. Không ai phát được từ
+  một phòng mình không ở trong đó, và cổng nối lại đưa họ vào lại bằng một phiên
+  mới với mic tắt sẵn. Đây là lối fail-closed duy nhất còn lại.
+
+Chuyển pha **không** xoá `micError`: đêm xuống rồi sáng ra không phải là một lần
+thử lại. Chỉ một thao tác mới của người dùng, hoặc một phiên mới, mới xoá nó.
 
 ## 10. Contract `voice:token`
 
@@ -456,13 +605,33 @@ cộng bất biến 11.1. Thuần, không LiveKit, không socket.
 - phản hồi về **sai thứ tự** không để lại quyền sai (mục 8.5);
 - cache chỉ ghi sau khi thành công.
 
-**`voice-lifecycle.test.ts`** — năm điểm cắm mục 8.1: rời giữa ván →
-`removeParticipant` (ca mic ma); kick; host tắt voice → `deleteRoom`; reset →
-`deleteRoom`; `GAME_OVER` → **không** xoá.
+**`voice-lifecycle.test.ts`** — các điểm cắm mục 8.1: rời giữa ván →
+`removeParticipant` (ca mic ma); kick → `removeParticipant`; host tắt voice →
+`deleteRoom`, và đổi cấu hình khác mà voice vẫn bật thì **không** xoá.
+
+**`voice-store-teardown.test.ts`** — `removeRoom` → `deleteRoom`, đường mà các
+test trên không quan sát được.
+
+**`voice-teardown.test.ts`** — vòng đời room theo mục 8.6: **reset về lobby
+KHÔNG xoá room**, giữ nguyên tập `joined`, và đồng bộ quyền sang trạng thái
+lobby (người chết ở ván cũ được nói lại ngay ở phòng chờ); `GAME_OVER` cũng
+**không** xoá; hai lối ra còn lại thì vẫn xoá.
 
 **`voice-state.test.ts`** (web, `node:test`) — nhả nút trước khi promise mở mic
 xong; `pointercancel` / mất focus / tab ẩn; bị thu quyền giữa lúc đang giữ nút;
-mic **chỉ** mở sau sự kiện quyền từ LiveKit.
+mic **chỉ** mở sau sự kiện quyền từ LiveKit; ý định mic sống qua đêm và qua một
+lần rớt mạng; `mic_failed` hạ ý định (cắt vòng retry) mà không tuyên bố sai
+trạng thái ở hướng đóng.
+
+**`voice-reconnect.test.ts`** (web) — cổng nối lại: ba điều kiện trạng thái
+(`joinedByUser`, không duplicate, chưa nối) và ba điều kiện môi trường (trang
+hiện, có mạng, có socket); nhiều tín hiệu dồn chỉ sinh một lượt.
+
+**`useVoice.test.ts`** (web) — tầng nối React ↔ SDK ↔ socket, nơi cả ba lỗi
+production 2026-08-30 từng lọt: LiveKit rớt SAU khi app đã thức dậy vẫn tự nối
+lại đúng một lần; rớt lúc trang ẩn / mất mạng thì chờ tín hiệu kế tiếp;
+duplicate không tự nối lại; `setMic` hỏng chỉ thử đúng một lần; không tắt được
+mic mà còn quyền phát thì rời hẳn phòng.
 
 **Thủ công** — hai trình duyệt, LiveKit thật:
 1. người chết bấm mic thì không ai nghe thấy;
@@ -493,9 +662,33 @@ Phụ thuộc mới: `livekit-server-sdk` (server), `livekit-client` (web).
 
 - **Phòng chờ:** công tắc voice cho host, chỉ hiện khi server có key. Kèm cảnh
   báo giọng nói lộ danh tính.
-- **Cổng vào:** nút "Bật mic" bấm một lần.
-- **Trong ván:** push-to-talk giữ để nói; trạng thái *chỉ nghe* rõ ràng khi chết
-  hoặc từ chối mic; vòng sáng quanh ghế người đang nói.
+- **Cổng vào:** nút "Vào kênh thoại" bấm **một lần cho cả thời gian ở phòng** —
+  không phải một lần mỗi ván, cũng không phải một lần mỗi lần đổi tab.
+- **Dock voice (2026-09-05).** Mượn cấu trúc thanh voice của Discord vì nó giải
+  đúng bài toán ở đây: control quan trọng nhất phòng phải luôn trong tầm ngón
+  cái và nói được trạng thái của mình mà không cần đọc chữ. Chỉ mượn cấu trúc —
+  màu vẫn là bảng màu đêm của game, emerald "đang nói" là màu sẵn có ở lưới
+  người chơi.
+  - **Điện thoại:** lớp nổi cố định ở `bottom-4 right-4`, đối diện nút chat
+    (`bottom-4 left-4`), xếp dọc (chip trạng thái trên, hàng nút dưới) để hàng
+    nút đủ hẹp mà không chạm vào nút chat ở 320px. Lề an toàn bằng
+    `mb-[env(safe-area-inset-bottom)]`, không phải inline style.
+  - **Desktop:** nằm trong cột điều khiển bên phải.
+  - **Cùng một component, hai `variant`,** và cả hai đọc `VoiceProvider` —
+    không bản nào tự gọi `useVoice`. Hai kết nối cùng danh tính sẽ thay nhau đá
+    nhau; có test khoá đúng điều đó.
+  - Mic tắt là **đỏ + gạch chéo**, không chỉ đổi màu. `aria-label` nói TRẠNG
+    THÁI ("Mic đang tắt, chạm để bật"), không nói mỗi tên control.
+  - Chip trạng thái `aria-live="polite"`: "Đã kết nối" / "Đang kết nối lại" /
+    "Chỉ nghe" / "Mất kết nối thoại" / "Đang dùng ở tab khác".
+- **Trong ván:** giữ để nói hoặc chạm bật/tắt; trạng thái *chỉ nghe* rõ ràng khi
+  chết hoặc từ chối mic; vòng sáng quanh ghế người đang nói.
+- **Ý định mic ≠ mic đang phát.** Hai trạng thái tách hẳn (`voice-state.ts`).
+  Server thu quyền ban đêm thì mic tắt thật nhưng ý định của chế độ chạm bật/tắt
+  còn nguyên, và tự khôi phục khi LiveKit cấp quyền lại. Push-to-talk **không
+  bao giờ** tự phát lại: ở đó "ý định" chính là ngón tay đang giữ, mà người dùng
+  đã nhả từ lâu. Việc mở mic vẫn chỉ xảy ra sau khi **chính LiveKit** báo
+  `canPublish` — ý định chỉ là điều kiện cần.
 - **iOS:** một nút là **chưa đủ**. `Room.canPlaybackAudio` có thể chuyển từ true
   về false giữa phiên, nên phải nghe `RoomEvent.AudioPlaybackStatusChanged` và
   hiện lại nút gọi `room.startAudio()` trong handler click. Đồng thời bám vào cơ

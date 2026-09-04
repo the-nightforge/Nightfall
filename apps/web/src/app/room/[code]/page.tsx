@@ -410,13 +410,6 @@ export default function RoomPage() {
               * không có thêm gì để nói (chưa có hạn giờ, chưa có số vòng). */}
             {snapshot && snapshot.phase !== "LOBBY" && <PhaseBanner snapshot={snapshot} />}
 
-            {/* Voice là thao tác trực tiếp, không phải thông tin phụ: trên điện
-              * thoại nó phải ở ngay đầu cột nội dung chứ không theo cột phải đi
-              * mất. Trên desktop bản này ẩn đi, cái trong cột phải mới hiện. */}
-            <div className="lg:hidden">
-              <VoiceControl snapshot={snapshot} />
-            </div>
-
             {/*
               * Sân khấu phiên toà đứng NGOÀI `AnimatePresence`, và đó là điều
               * kiện để nó tồn tại được.
@@ -519,7 +512,7 @@ export default function RoomPage() {
               isLobby ? "order-3 lg:col-start-2 lg:row-start-2" : ""
             }`}
           >
-            <VoiceControl snapshot={snapshot} />
+            <VoiceControl snapshot={snapshot} variant="panel" />
             {/*
               * Khung chat lấy TRỌN phần còn lại của cột chứ không bị chặn ở một
               * con số đoán trước - ở mọi pha, phòng chờ nay cũng vậy.
@@ -573,6 +566,20 @@ export default function RoomPage() {
           )}
         </div>
       </main>
+
+      {/*
+        * Voice là thao tác trực tiếp, không phải thông tin phụ.
+        *
+        * Bản trước nhét nó vào ĐẦU cột nội dung trên điện thoại, nên nó trôi đi
+        * mất ngay khi người chơi cuộn xuống xem lưới bỏ phiếu - đúng lúc cần
+        * bấm mic nhất. Giờ nó nổi cố định ở góc phải dưới, đối diện nút chat
+        * (`bottom-4 left-4`), cùng một tầm ngón cái.
+        *
+        * Đứng cạnh `MobileChatDock` chứ không nằm trong lưới: cả hai đều là lớp
+        * `fixed` phủ lên trang, và để chúng cạnh nhau trong DOM là cách duy
+        * nhất còn đọc được thứ tự chồng lớp của chúng.
+        */}
+      <VoiceControl snapshot={snapshot} variant="dock" />
 
       <MobileChatDock
         messages={room.messages}
