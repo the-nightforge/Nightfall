@@ -61,9 +61,13 @@ Day la van de THAM MY, khong phai bug: moi ghe van co hinh, khong o nao trong,
 va `tintFor` van cho sac nen rieng nen hai o trung mat van phan biet duoc.
 Khong co gi xau di theo thoi gian.
 
-Them mot nhan vat = 5 buoc, xem `## Tai sinh` ben duoi. Luu y: **dung them id
-vao `AVATAR_IDS` khi chua co sheet** — `character-art.test.ts` khang dinh moi
-AvatarId deu co sheet, nen lam nua chung la suite do.
+Them mot nhan vat = 5 buoc, xem `## Tai sinh` ben duoi. Them id vao
+`AVATAR_IDS` khi CHUA co sheet thi khong lam do suite: `portraitSource` roi ve
+hinh SVG trong `avatar-art.ts` - dung duong ma nguoi bat Save-Data van di. Cai
+BAT BUOC la id do phai co path trong `AVATAR_PATHS`, va TypeScript ep san vi do
+la `Record<AvatarId, string>` day du. Doi lai: 4 id do hien la net SVG mot mau
+giua mot ban toan anh chan dung - de nhin ra, nen day la ly do thu hai de mua
+them mat, sau chuyen 4 cap dung chung.
 
 ## Quy uoc sheet (pilot)
 
