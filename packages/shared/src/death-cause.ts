@@ -41,3 +41,26 @@ export function deathCauseClause(cause: CaseDeathCause): string {
       return "gặp nạn";
   }
 }
+
+/**
+ * Cùng bảng vế trên, nhưng cho bản tin đọc GIỮA VÁN.
+ *
+ * Khác biệt duy nhất nằm ở hai cause của Linh Mục, và lý do là ở chỗ chúng
+ * không tả một cái chết mà XÁC NHẬN một lá bài: `priestResults` chỉ chính Linh
+ * Mục nhìn thấy, nên "bị Linh Mục thanh tẩy" đọc lên giữa ban ngày là cả phòng
+ * cùng lúc biết người vừa chết ĐÚNG là Sói và trong làng còn một Linh Mục sống.
+ * Không nguyên nhân nào khác trong bảng làm được chuyện đó: Bình Độc chỉ nói
+ * Phù Thuỷ đã ra tay, nhát cắn chỉ nói bầy Sói đã ra tay - cả hai đều là hành
+ * động, không phải danh tính.
+ *
+ * Gộp `priest` với `priest_backfire` vào MỘT vế chứ không phải làm mờ từng cái:
+ * để riêng thì hai vế khác nhau vẫn chỉ ra ai chết là Sói (mục tiêu ngã) và ai
+ * chết là Linh Mục (phản vệ). Cùng một câu thì không suy ngược được.
+ *
+ * Ở màn kết thúc thì gọi `deathCauseClause` như cũ - ván đã xong, không còn gì
+ * để giấu, và bản tường thuật cuối phải kể đúng chuyện đã xảy ra.
+ */
+export function midGameDeathCauseClause(cause: CaseDeathCause): string {
+  if (cause === "priest" || cause === "priest_backfire") return "chết trong một nghi lễ";
+  return deathCauseClause(cause);
+}

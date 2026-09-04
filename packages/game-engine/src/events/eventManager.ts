@@ -94,13 +94,13 @@ export const GAME_EVENTS: Record<GameEventId, GameEventDefinition> = {
   HOWL_OF_THE_PACK: {
     id: "HOWL_OF_THE_PACK",
     name: "Tiếng Hú Bầy Sói",
-    description: "Cộng 1 phiếu ẩn cho phe Sói vào vòng đề cử ngày kế tiếp.",
+    description: "Cộng 1 phiếu ẩn cho phe Sói ở cả đề cử lẫn phiên toà ngày kế tiếp.",
     targetPhase: "DAY",
     beneficiary: "wolves",
-    // 1 chứ không phải 3, và con số này giờ có người đọc (`balancedPool`).
-    // Phiếu ẩn chỉ cộng vào `voteTally`, tức là chỉ đổi được AI RA ĐỨNG TOÀ.
-    // Phiên toà sau đó vẫn đòi quá bán trên `finalVoteTally`, nơi không có
-    // phiếu ẩn nào. Một sự kiện không giết được ai thì không đáng 3 điểm.
+    // 1 chứ không phải 3: phiếu ẩn giờ đi vào cả `finalVoteTally` nên nó đổi
+    // được bản án, nhưng đúng MỘT phiếu và chỉ trong một ngày. Con số này có
+    // người đọc (`balancedPool`), nên nó phải là giá thật chứ không phải giá
+    // niêm yết.
     power: 1,
   },
   BLOOD_MOON: {

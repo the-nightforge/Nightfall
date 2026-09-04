@@ -3,7 +3,7 @@ import {
   RESULT_MS,
   ROLE_REVEAL_MS,
   ROLE_META,
-  deathCauseClause,
+  midGameDeathCauseClause,
   isWolfPack,
   outcomeName,
   specialRoleList,
@@ -507,6 +507,10 @@ export class GameEngine {
        * mật thật - và nó tách được nhát cắn của bầy Sói khỏi Bình Độc của Phù
        * Thuỷ hay nhát dao trong đêm.
        *
+       * `midGameDeathCauseClause` chứ không phải bảng vế đầy đủ: hai cause của
+       * Linh Mục xác nhận một lá bài chứ không tả một cái chết - xem chú thích
+       * ở chính hàm đó.
+       *
        * Trung lập thật chứ không phải nhãn dán: làng đọc được bàn cờ, nhưng bầy
        * Sói cũng biết cú cắn của mình có trúng không hay vừa bị một tay giết
        * khác cướp mất mục tiêu.
@@ -519,7 +523,7 @@ export class GameEngine {
         announcement = `Đêm ${lastNight.round}: không ai thiệt mạng.`;
       } else {
         const clauses = lastNight.deaths.map(
-          (death) => `${death.player.name} ${deathCauseClause(death.cause)}`,
+          (death) => `${death.player.name} ${midGameDeathCauseClause(death.cause)}`,
         );
         announcement = `Đêm ${lastNight.round}: ${clauses.join("; ")}.`;
       }
@@ -1378,8 +1382,7 @@ export class GameEngine {
       if (targetId === null) noElimination += weight;
       else players[targetId] = (players[targetId] ?? 0) + weight;
     }
-    // HOWL_OF_THE_PACK hidden +1 for wolves next day
-    if (weighted && this.state.howlBonusDay !== null && this.state.howlBonusDay === this.state.round) {
+    if (weighted && this.howlBonusActive()) {
       // find target most voted by wolves to add hidden vote
       const wolfIds = new Set(this.alivePlayers().filter((p) => isWolfPack(p.role)).map((p) => p.id));
       const wolfTally: Record<string, number> = {};
@@ -1538,6 +1541,11 @@ export class GameEngine {
    * từ `eligible`, nên một ngưỡng có trọng số là lời khai rằng phòng này có một
    * Thị Trưởng còn sống, ngay cả trước khi có ai bỏ phiếu.
    */
+  /** Ngày mà phiếu ẩn của Tiếng Hú Bầy Sói có hiệu lực. */
+  private howlBonusActive(): boolean {
+    return this.state.howlBonusDay !== null && this.state.howlBonusDay === this.state.round;
+  }
+
   finalVoteTally(weighted = true): { guilty: number; innocent: number; abstain: number; eligible: number } {
     const trial = this.mustTrial();
     const voters = this.finalVoters();
@@ -1554,6 +1562,37 @@ export class GameEngine {
       if (vote) guilty += weight;
       else innocent += weight;
     }
+
+    /*
+     * Phiếu ẩn của Tiếng Hú đi vào CẢ phiên toà, không chỉ vòng đề cử.
+     *
+     * Trước đây nó chỉ cộng vào `voteTally`, tức chỉ đổi được AI RA ĐỨNG TOÀ;
+     * bản án sau đó vẫn đòi quá bán trên bảng phiếu này, nơi không có phiếu ẩn
+     * nào. Một sự kiện mang nhãn "có lợi cho phe Sói" mà không đổi được kết quả
+     * nào là một điểm `power` khống - và độ nghiêng lại trừ điểm đó vào quota
+     * sự kiện đêm thật của bầy Sói.
+     *
+     * `eligible` KHÔNG cộng theo: ngưỡng kết án suy ra từ nó, nên nâng cả hai
+     * lên là triệt tiêu đúng cái lợi vừa cho.
+     *
+     * Hướng phiếu bám theo đa số của bầy, và bầy im lặng thì không có phiếu ẩn
+     * nào - cùng một luật với `voteTally`, vì cùng một lý do: một phiếu ẩn tự
+     * chọn hướng sẽ có ngày treo cổ chính đồng bọn.
+     */
+    if (weighted && this.howlBonusActive()) {
+      let wolfGuilty = 0;
+      let wolfInnocent = 0;
+      for (const voter of voters) {
+        if (!isWolfPack(voter.role)) continue;
+        const vote = trial.finalVotes[voter.id];
+        if (vote === undefined) continue;
+        if (vote) wolfGuilty += 1;
+        else wolfInnocent += 1;
+      }
+      if (wolfGuilty > wolfInnocent) guilty += 1;
+      else if (wolfInnocent > wolfGuilty) innocent += 1;
+    }
+
     return { guilty, innocent, abstain: totalWeight - votedWeight, eligible: totalWeight };
   }
 
