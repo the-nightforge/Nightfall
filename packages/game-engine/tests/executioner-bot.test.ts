@@ -378,6 +378,10 @@ describe("cổng tái lập: v1-v8 không đổi một bit nào", () => {
       if (key === "version" || key === "executioner") continue;
       expect(BOT_WEIGHTS_V9[key]).toBe(BOT_WEIGHTS_V8[key]);
     }
-    expect(DEFAULT_BOT_WEIGHTS).toBe(BOT_WEIGHTS_V9);
+    // Con trỏ `DEFAULT_BOT_WEIGHTS` KHÔNG còn được khẳng định ở đây. Nó đã trỏ
+    // qua v10 và sẽ còn đi tiếp, trong khi phép kiểm này nói về quan hệ v8-v9 -
+    // một quan hệ đóng băng vĩnh viễn. Trói hai thứ vào nhau làm mỗi lần nâng
+    // bản mặc định lại đánh đỏ một test không liên quan tới lần nâng đó.
+    // `bot-weights.test.ts` giữ phép kiểm con trỏ.
   });
 });

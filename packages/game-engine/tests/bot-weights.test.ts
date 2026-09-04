@@ -9,6 +9,8 @@ import {
   BOT_WEIGHTS_V6,
   BOT_WEIGHTS_V7,
   BOT_WEIGHTS_V8,
+  BOT_WEIGHTS_V9,
+  BOT_WEIGHTS_V10,
   DEFAULT_BOT_WEIGHTS,
   resolveWeights,
   validateWeights,
@@ -666,16 +668,17 @@ describe("v2 là cấu hình production", () => {
     return rates;
   }
 
-  it("mặc định trỏ tới v9", () => {
+  it("mặc định trỏ tới v10", () => {
     // Cùng cơ chế rollout mà docstring của `DEFAULT_BOT_WEIGHTS` mô tả: nâng
     // chính hằng số này lên bản mới để `session-registry.ts` (chỗ ván thật
     // dựng `BotRuntime`, không tự truyền `weights`) chạy bản mới mà không phải
     // sửa. v5 đưa ngưỡng của Phù Thuỷ và Thợ Săn về thang belief thật, v6 làm
     // nốt Linh Mục, v7 bật hành vi của Thằng Hề, v8 bật hành vi của Sát Nhân,
-    // v9 bật hành vi của Kẻ Báo Thù;
+    // v9 bật hành vi của Kẻ Báo Thù, v10 hạ `spareTrustMargin` về 0;
     // v2-v4 vẫn tồn tại nguyên vẹn làm mốc so sánh.
-    expect(DEFAULT_BOT_WEIGHTS.version).toBe("9.0.0");
-    expect(weightsPreset("9.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    expect(DEFAULT_BOT_WEIGHTS.version).toBe("10.0.0");
+    expect(weightsPreset("10.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    expect(weightsPreset("9.0.0")).toBe(BOT_WEIGHTS_V9);
     expect(weightsPreset("8.0.0")).toBe(BOT_WEIGHTS_V8);
     expect(weightsPreset("7.0.0")).toBe(BOT_WEIGHTS_V7);
     expect(weightsPreset("6.0.0")).toBe(BOT_WEIGHTS_V6);

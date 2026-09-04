@@ -1618,6 +1618,71 @@ export const BOT_WEIGHTS_V9: BotWeights = Object.freeze({
 });
 
 /**
+ * Cấu hình v10 - hạ ngưỡng tha bổng để phiên toà thôi là một vụ hành quyết.
+ *
+ * MỘT giá trị đổi: `spareTrustMargin` 3 -> 0.
+ *
+ * Vấn đề nó sửa, đo ở n=12 với 900 ván: bị cáo bị treo **100.0%** số lần, và
+ * 18% số phiên toà không có MỘT lá phiếu đề cử nào mang bằng chứng. Luật biểu
+ * quyết là `guilty = trust < suspicion + spareTrustMargin` (`trial-decision.ts`),
+ * mà thang suspicion thật có p50 = 0 và p90 = 1.8 - nên với ngưỡng 3, một bị
+ * cáo trung bình (suspicion ~ 0-2, trust 0) luôn thoả `0 < 3`. Tha chỉ xảy ra
+ * khi có kết quả soi ghim trust lên cao. "Treo, trừ khi có lý do tích cực để
+ * tin là vô tội" - chủ ý của bản gốc - đã trôi thành "treo tất, trừ người được
+ * Tiên Tri bảo lãnh".
+ *
+ * Hệ quả nặng nhất là LỜI BÀO CHỮA MẤT HẲN GIÁ TRỊ, và điều đó suy được bằng số
+ * học chứ không cần đo: lời khai lúc đang bị xử luôn là `underFire`, nên nó ăn
+ * `underFireFactor` 0.25 lên `claimantTrustWeight` 6, rồi qua `confidence` 0.5
+ * và quán tính của `updateBelief`:
+ *
+ *   delta_trust = 6 x 0.25 x 0.5 x (1 - inertia x 0.5),  inertia thuộc [0.35, 0.80]
+ *               = 0.45 ... 0.62
+ *
+ * Một lời bào chữa cấp tối đa 0.62 điểm tin tưởng, đứng trước một ngưỡng 3.0.
+ * Nó KHÔNG BAO GIỜ đổi được một lá phiếu, dù bị cáo nói gì.
+ *
+ * Số đo, `speech: true`, 300 ván mỗi ô (cột phải là v10):
+ *
+ *   n  | làng        | tỉ lệ treo    | treo trúng Sói | khai vai -> bị treo
+ *    8 | 48.3 -> 50.3 | 100.0 -> 71.0 | 44.2 -> 53.3  | 100.0 -> 61.9
+ *   10 | 67.0 -> 62.7 |  99.9 -> 76.7 | 45.2 -> 50.5  | 100.0 -> 64.6
+ *   11 | 36.3 -> 40.3 | 100.0 -> 78.4 | 45.0 -> 50.2  | 100.0 -> 66.7
+ *   12 | 71.7 -> 72.3 | 100.0 -> 79.4 | 37.4 -> 43.3  | 100.0 -> 66.2
+ *   13 | 51.0 -> 48.3 | 100.0 -> 83.9 | 40.6 -> 44.5  | 100.0 -> 72.8
+ *   15 | 55.0 -> 59.0 | 100.0 -> 84.6 | 37.2 -> 42.3  | 100.0 -> 70.9
+ *
+ * Ba điều không có ngoại lệ nào trong sáu cỡ phòng:
+ *
+ * 1. **Tỉ lệ thắng của phe làng KHÔNG đổi**: Δ +2.0, -4.3, +4.0, +0.6, -2.7,
+ *    +4.0 - trung bình +0.6, không có hướng. Đây là thứ làm bản này rẻ: nó
+ *    không phải một cuộc đánh đổi giữa cân bằng và trải nghiệm.
+ * 2. **Treo trúng Sói tăng ở mọi cỡ phòng**, +3.9 tới +9.1 điểm.
+ * 3. **Lời khai vai bắt đầu cứu được người**: chênh lệch giữa bị cáo có khai và
+ *    không khai đi từ 0 điểm (100% với 100%, ở mọi cỡ phòng) lên 20-28 điểm.
+ *    Mô hình uy tín lời khai của `claim-credibility.ts` vốn đã chạy đúng; ngưỡng
+ *    3 chỉ đang đặt cao hơn tầm với của nó.
+ *
+ * KHÔNG hạ tiếp xuống âm. Sweep tới -5 ở n=12 cho tỉ lệ treo 46.7% và làng tụt
+ * còn 67.3%: dưới một mức nào đó, làng không treo đủ để thắng nữa. 0 là chỗ tỉ
+ * lệ treo rời khỏi 100% mà tỉ lệ thắng chưa nhúc nhích.
+ *
+ * CẢNH BÁO khi đọc lại bảng trên: harness self-play KHÔNG chạy pha DEFENSE
+ * (`runSelfPlay` đi thẳng `resolveNomination` -> `beginFinalVote`), nên cột
+ * "khai vai" đếm lời khai BAN NGÀY chứ không phải lời tự bào chữa. Con số 20-28
+ * điểm vì thế là CẬN DƯỚI của hiệu ứng thật trong phòng người chơi.
+ */
+export const BOT_WEIGHTS_V10: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V9,
+  version: "10.0.0",
+
+  confidence: Object.freeze({
+    ...BOT_WEIGHTS_V9.confidence,
+    spareTrustMargin: 0,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
@@ -1627,8 +1692,9 @@ export const BOT_WEIGHTS_V9: BotWeights = Object.freeze({
  * lập tức chạy bản mới mà không phải sửa. v5.0.0 và v6.0.0 đưa ngưỡng của ba
  * vai có quyền năng dùng-một-lần (Phù Thuỷ, Thợ Săn, Linh Mục) về thang belief
  * thật; v7.0.0 bật hành vi của Thằng Hề; v8.0.0 bật hành vi của Sát Nhân;
- * v9.0.0 bật hành vi của Kẻ Báo Thù.
+ * v9.0.0 bật hành vi của Kẻ Báo Thù; v10.0.0 hạ `spareTrustMargin` về 0 để
+ * phiên toà thôi kết án 100% bị cáo và để lời khai vai có sức nặng.
  * v1-v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset đích
  * danh, không bao giờ dựa vào hằng số này.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V9;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V10;
