@@ -39,6 +39,8 @@ export * from "./bot/conversation/templates";
 export * from "./bot/config/weights";
 export * from "./bot/config/presets";
 export * from "./bot/trace/trace";
+export * from "./bot/trace/trace-jsonl";
+export * from "./bot/trace/trace-view";
 export * from "./bot/evaluation/selfplay";
 export * from "./bot/evaluation/invariants";
 export * from "./bot/evaluation/metrics";
