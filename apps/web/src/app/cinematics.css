@@ -592,6 +592,620 @@
   }
 }
 
+/* --- Cảnh kill: khuôn mặt thật của người vừa ngã xuống -------------------- */
+
+/*
+ * Hai cảnh, một khung xương.
+ *
+ * NIGHT_KILL và EXECUTION dùng chung bố cục (hàng chân dung giữa màn, chữ ở
+ * dưới) và chung mốc thời gian, chỉ khác phần hình nền và phần "chuyện gì vừa
+ * xảy ra". Chung khung xương nghĩa là sửa nhịp một chỗ là cả hai theo, và một
+ * cảnh không bao giờ lệch pha với cảnh kia.
+ *
+ * Toàn bộ 2200ms nằm ở đây dưới dạng keyframes chạy MỘT lần với forwards.
+ * Không JS, không rAF, không timer: lớp phủ tháo ra là mọi thứ biến mất cùng
+ * cây DOM, nên không có gì để rò rỉ. Ba nhịp, và mốc của chúng là hợp đồng mà
+ * mọi keyframe dưới đây phải bám theo:
+ *
+ *      0 -  500ms   DỰNG    - mặt còn nguyên màu, còn thở
+ *    500 - 1000ms   VA CHẠM - chuyện xảy ra, mặt tắt màu
+ *   1000 - 2200ms   LỘ DIỆN - chữ hiện, cảnh đứng lại ở khung hình cuối
+ */
+
+.cine-night-kill {
+  background:
+    radial-gradient(120% 80% at 50% 6%, rgba(96, 122, 178, 0.18), transparent 58%),
+    linear-gradient(180deg, #070c1c 0%, #0a0812 58%, #140609 100%);
+}
+
+.cine-execution {
+  background:
+    radial-gradient(110% 70% at 50% 22%, rgba(226, 116, 92, 0.16), transparent 60%),
+    linear-gradient(180deg, #16060b 0%, #0a0308 60%, #050206 100%);
+}
+
+.kill-scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1rem, 4vh, 1.75rem);
+  padding: 0 1.5rem;
+  /* Lớp phủ đã ăn click ở gốc để một cú chạm lạc không rơi trúng nút bên dưới;
+   * cảnh này không được cướp mất cú chạm đó. */
+  pointer-events: none;
+}
+
+/* Phần hình nền của cảnh, phủ toàn khung và nằm DƯỚI hàng chân dung. */
+.kill-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.kill-stage > * {
+  position: absolute;
+}
+
+/* --- Hàng chân dung ------------------------------------------------------ */
+
+.kill-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.625rem;
+  /*
+   * KHÔNG xuống dòng, và đó là một lời hứa chứ không phải một rủi ro.
+   *
+   * Hàng này có trần cứng: tối đa ba khuôn mặt cộng một chip đếm - xem
+   * MAX_KILL_PORTRAITS. Ở màn 390px, px-6 của cảnh chừa lại 342px, còn hàng
+   * rộng nhất có thể là 3x76 + 48 + 3x10 = 306px. Cho phép xuống dòng thì chip
+   * "+2" rơi xuống một dòng riêng và đọc ra như một nhóm thứ hai, chứ không
+   * còn là phần đuôi của cùng một danh sách.
+   */
+  flex-wrap: nowrap;
+}
+
+.kill-victim {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 76px;
+  /*
+   * Lệch nhịp theo vị trí: mỗi khuôn mặt vào sau khuôn trước 90ms.
+   *
+   * Ba người ngã trong cùng một khung hình đọc ra như MỘT hiệu ứng; ngã lệch
+   * nhau thì đọc ra là ba người. Người cuối cùng trễ 180ms - vẫn nằm gọn trong
+   * cửa sổ va chạm 500ms, nên thời lượng cảnh không nhúc nhích dù có bao nhiêu
+   * nạn nhân.
+   */
+  --kill-delay: calc(var(--kill-index, 0) * 90ms);
+}
+
+@media (min-width: 640px) {
+  .kill-victim {
+    width: 104px;
+  }
+}
+
+/*
+ * Trên màn rộng khuôn mặt phải lớn hẳn lên.
+ *
+ * 104px giữa một khung 1440px đọc ra như một cái huy hiệu chứ không phải một
+ * khoảnh khắc - và toàn bộ lý do tồn tại của cảnh này là khuôn mặt. Ba khung
+ * 132px cộng hai khe 12px vẫn chưa tới 420px, nên không có gì phải tranh chỗ.
+ */
+@media (min-width: 1024px) {
+  .kill-victim {
+    width: 132px;
+  }
+}
+
+/* Khung mặt: vào còn nguyên màu, tắt màu ở đúng nhịp va chạm, rồi đứng lại. */
+.kill-face {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.12),
+    0 10px 34px rgba(0, 0, 0, 0.6);
+  animation: kill-face-fall 2200ms cubic-bezier(0.22, 1, 0.36, 1) var(--kill-delay) both;
+}
+
+/*
+ * "both" chứ không phải "forwards": nhịp lệch nghĩa là khuôn mặt thứ ba có
+ * 180ms trước khi keyframe của nó bắt đầu, và không có nhánh backwards thì
+ * trong 180ms đó nó hiện ra ở trạng thái mặc định - tức là đã đứng sẵn ở đó
+ * trước cả khuôn mặt đầu tiên.
+ */
+@keyframes kill-face-fall {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.9);
+    filter: saturate(1) brightness(1);
+  }
+  /* Hết nhịp DỰNG: mặt đã vào trọn, còn sống, còn màu. */
+  22% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: saturate(1) brightness(1);
+  }
+  /* VA CHẠM - một cú giật ngắn, không phải một cú rung kéo dài. */
+  34% {
+    transform: translateY(0) translateX(-4px) scale(1.02);
+    filter: saturate(1) brightness(1.5);
+  }
+  38% {
+    transform: translateY(0) translateX(3px) scale(1);
+    filter: saturate(0.15) brightness(0.72);
+  }
+  /* LỘ DIỆN: nghiêng đi và tối lại, rồi đứng yên tới hết cảnh. */
+  55% {
+    transform: translateY(6px) rotate(-4deg) scale(0.97);
+    filter: saturate(0) brightness(0.6);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(6px) rotate(-4deg) scale(0.97);
+    filter: saturate(0) brightness(0.6);
+  }
+}
+
+/* Tên hiện SAU cú va chạm: mắt bắt khuôn mặt trước, rồi mới đọc xem đó là ai. */
+.kill-name {
+  /*
+   * Hai dòng, không phải một dòng cắt bằng dấu ba chấm.
+   *
+   * Tên tối đa 20 ký tự và khung chỉ rộng 76px, nên một dòng sẽ cắt gần hết
+   * mọi cái tên có họ đi kèm - "Nguyễn Ho...". Ở một trò chơi mà người chơi
+   * phải nhận ra nhau bằng tên, mất nửa cái tên là mất đúng thông tin mà cảnh
+   * này tồn tại để trao. Câu đầy đủ vẫn nằm ở killAnnouncement cho trình đọc
+   * màn hình.
+   */
+  max-width: 100%;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.9);
+  animation: kill-name-in 460ms ease-out calc(900ms + var(--kill-delay)) both;
+}
+
+@keyframes kill-name-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/*
+ * Chip đếm những người không lên hình.
+ *
+ * Đứng cùng hàng với các khuôn mặt nên nó đọc ra là "còn nữa" chứ không phải
+ * một huy hiệu trang trí. Vào cuối cùng, sau cả ba khuôn mặt.
+ */
+.kill-overflow {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.45);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.86);
+  /* Căn theo tâm khung mặt, không theo mép trên của cả hàng. */
+  margin-top: 14px;
+  animation: kill-name-in 460ms ease-out 1100ms both;
+}
+
+@media (min-width: 640px) {
+  .kill-row {
+    gap: 0.75rem;
+  }
+
+  .kill-overflow {
+    width: 64px;
+    height: 64px;
+    margin-top: 20px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .kill-overflow {
+    width: 76px;
+    height: 76px;
+    margin-top: 28px;
+    font-size: 1.0625rem;
+  }
+
+  .kill-name {
+    font-size: 0.9375rem;
+  }
+}
+
+/* --- Chữ ----------------------------------------------------------------- */
+
+.kill-caption {
+  position: relative;
+  /* 28rem là bề ngang đọc thoải mái ở 390px; trên màn rộng nó ép "3 người không
+   * qua khỏi đêm nay" xuống hai dòng mà không có lý do gì. */
+  max-width: 28rem;
+  text-align: center;
+}
+
+@media (min-width: 640px) {
+  .kill-caption {
+    max-width: 36rem;
+  }
+}
+
+.kill-eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
+  animation: kill-name-in 400ms ease-out 1150ms both;
+}
+
+.kill-title {
+  margin-top: 0.375rem;
+  font-size: clamp(1.5rem, 6vw, 2.25rem);
+  font-weight: 700;
+  line-height: 1.15;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.9);
+  animation: kill-title-in 620ms cubic-bezier(0.22, 1, 0.36, 1) 1200ms both;
+}
+
+.kill-night .kill-title {
+  color: #f4c9cf;
+}
+
+.kill-gallows .kill-title {
+  color: #f0b7a6;
+}
+
+@keyframes kill-title-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+/* --- Cảnh đêm: khe sáng, bóng người, nháy sáng --------------------------- */
+
+/* Một khe sáng dọc như cánh cửa hé mở. Đây là toàn bộ nhịp DỰNG. */
+.kill-slit {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  /*
+   * calc(.../-2) chứ KHÔNG phải min(-21vw, -160px).
+   *
+   * min() với hai số ÂM trả về số nhỏ hơn, tức là số âm sâu hơn - nên trên màn
+   * rộng, chiều rộng bị min() chặn ở 320px trong khi lề trái vẫn chạy theo vw,
+   * và cả khối lệch hẳn sang trái. Chia đôi đúng cái biểu thức đã dùng cho
+   * width thì hai vế không bao giờ trôi khỏi nhau.
+   */
+  width: min(42vw, 320px);
+  margin-left: calc(min(42vw, 320px) / -2);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(150, 178, 232, 0.14) 42%,
+    rgba(190, 212, 255, 0.2) 50%,
+    rgba(150, 178, 232, 0.14) 58%,
+    transparent
+  );
+  filter: blur(12px);
+  animation: kill-slit-open 2200ms cubic-bezier(0.3, 0, 0.2, 1) forwards;
+}
+
+@keyframes kill-slit-open {
+  0% {
+    opacity: 0;
+    transform: scaleX(0.2);
+  }
+  22% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+  /* Khe khép lại đúng lúc bóng người che ngang: ánh sáng bị chắn. */
+  38% {
+    opacity: 0.25;
+    transform: scaleX(0.55);
+  }
+  100% {
+    opacity: 0.12;
+    transform: scaleX(0.7);
+  }
+}
+
+/*
+ * Bóng người quét ngang MỘT lần rồi đi khỏi khung.
+ *
+ * Nó không dừng lại, không quay mặt, không chạm vào ai. Chuyển động kể chuyện;
+ * không có hành động nào được vẽ ra, vì vẽ ra là phải chọn một nguyên nhân.
+ * Xem ShadowFigure về việc vì sao hình dáng của nó rỗng đến vậy.
+ */
+.kill-attacker {
+  top: 50%;
+  left: 50%;
+  width: min(52vh, 300px);
+  height: min(69vh, 400px);
+  /* Cùng lý do với .kill-slit: chia đôi chính biểu thức của width/height. */
+  margin: calc(min(69vh, 400px) / -2) 0 0 calc(min(52vh, 300px) / -2);
+  animation: kill-shadow-pass 2200ms cubic-bezier(0.34, 0, 0.3, 1) forwards;
+}
+
+@keyframes kill-shadow-pass {
+  0% {
+    opacity: 0;
+    transform: translateX(-88%) scale(0.72);
+    filter: blur(14px);
+  }
+  /* Bắt đầu nhịp VA CHẠM: bóng đã tới mép hàng chân dung. */
+  23% {
+    opacity: 0.95;
+    transform: translateX(-34%) scale(0.94);
+    filter: blur(4px);
+  }
+  /* Che ngang - đây là khung hình duy nhất bóng phủ lên khuôn mặt. */
+  36% {
+    opacity: 1;
+    transform: translateX(0) scale(1.06);
+    filter: blur(0);
+  }
+  62% {
+    opacity: 0.5;
+    transform: translateX(48%) scale(1);
+    filter: blur(6px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(96%) scale(0.94);
+    filter: blur(16px);
+  }
+}
+
+/*
+ * Nháy sáng ở đúng khung va chạm.
+ *
+ * TRẮNG và rất mờ, không phải đỏ: một vệt đỏ loé lên là một vết thương, và một
+ * vết thương là một lời khẳng định về nguyên nhân. Cái này chỉ là một cú giật
+ * của ánh sáng - mắt bắt được nhịp mà không đọc ra chuyện gì.
+ */
+.kill-flash {
+  inset: 0;
+  background: radial-gradient(circle at 50% 46%, rgba(255, 255, 255, 0.5) 0%, transparent 52%);
+  animation: kill-flash-beat 2200ms ease-out forwards;
+}
+
+@keyframes kill-flash-beat {
+  0%,
+  30% {
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.22;
+  }
+  46% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* --- Cảnh treo: dây, ván bục, khán giả, đèn ------------------------------ */
+
+/*
+ * Dây và ván bục là PSEUDO-ELEMENT của hàng chân dung, không phải phần tử của
+ * nền cảnh.
+ *
+ * Bản đầu đặt cả hai vào `.kill-stage` theo phần trăm chiều cao màn - dây kết
+ * thúc ở 30%, ván nằm ở 64% - và trên màn 390x844 kết quả là một sợi dây đứt
+ * lơ lửng cách đầu người bị treo cả trăm pixel, còn tấm ván thì trôi xuống dưới
+ * chân. Vị trí của chân dung do flexbox quyết định và nó đổi theo chiều cao màn,
+ * theo số dòng của tiêu đề, theo cỡ chữ hệ thống. Không có con số phần trăm nào
+ * đúng được ở mọi màn.
+ *
+ * Neo vào chính `.kill-row` thì hai thứ đó luôn chạm đúng chỗ, và không còn một
+ * hằng số nào phải canh lại mỗi lần bố cục đổi.
+ */
+
+/* Dây thả xuống từ mép trên màn, kết thúc đúng ở đỉnh đầu người bị treo. */
+.kill-gallows .kill-row::before {
+  content: "";
+  position: absolute;
+  /* Từ mép trên của KHUNG NHÌN xuống tới mép trên của hàng: `bottom: 100%` là
+   * đáy dây đặt đúng vào đỉnh hàng, `top` âm sâu là dây chạy khuất lên trên. */
+  bottom: 100%;
+  top: -100vh;
+  left: 50%;
+  width: 3px;
+  margin-left: -1.5px;
+  background: linear-gradient(180deg, rgba(214, 178, 132, 0.1), rgba(214, 178, 132, 0.8));
+  transform-origin: 50% 100%;
+  animation: kill-rope-drop 2200ms cubic-bezier(0.3, 0, 0.2, 1) forwards;
+}
+
+@keyframes kill-rope-drop {
+  0% {
+    opacity: 0;
+    transform: scaleY(0);
+  }
+  22% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+  /* Căng ra một nhịp rồi thôi - một tiếng "khực", không phải một cú giật dài. */
+  34% {
+    transform: scaleY(1.04);
+  }
+  40% {
+    transform: scaleY(1);
+  }
+  100% {
+    opacity: 0.8;
+    transform: scaleY(1);
+  }
+}
+
+/*
+ * Ván bục trượt đi ngay dưới chân.
+ *
+ * Đây là TOÀN BỘ cú rơi. Không cần vẽ thêm gì: một đường ván biến mất dưới chân
+ * đã nói đủ, và mọi thứ vẽ thêm vào chỗ đó đều đi về phía máu me.
+ *
+ * Nó rơi xong từ giây thứ nhất, trong khi tên người bị treo mới hiện ở 900ms -
+ * nên hai thứ không bao giờ cùng có mặt trên màn, dù cùng chiếm một khoảng.
+ */
+.kill-gallows .kill-row::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: min(62vw, 300px);
+  margin: 8px 0 0 calc(min(62vw, 300px) / -2);
+  height: 7px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, transparent, rgba(168, 124, 84, 0.9) 16% 84%, transparent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75);
+  animation: kill-trapdoor-drop 2200ms ease-in forwards;
+}
+
+@keyframes kill-trapdoor-drop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  22% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+  }
+  /* Bản lề bật ra ở đúng nhịp va chạm. */
+  30% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+  }
+  40% {
+    opacity: 0.9;
+    transform: translateY(46px) rotate(9deg);
+  }
+  /*
+   * Biến mất HẲN ở 52%, không mờ dần tới hết cảnh.
+   *
+   * 52% của 2200ms là 1150ms - đúng lúc dòng chữ hiện ra. Bản trước để tấm ván
+   * mờ dần tới 100%, nên nó vẫn còn thấy được trong lúc trôi chéo ngang qua
+   * chính chỗ đặt tiêu đề. Cú rơi đã kể xong từ giây đầu; kéo nó dài thêm chỉ
+   * để nó tranh chỗ với phần chữ.
+   */
+  52%,
+  100% {
+    opacity: 0;
+    transform: translateY(150px) rotate(15deg);
+  }
+}
+
+/*
+ * Vòng khán giả.
+ *
+ * Một dãy đầu người đen, ẩn danh HẾT - kể cả người đang xem. Số lượng cố định
+ * và không liên quan gì tới phiếu: đếm được đám đông mà ra số phiếu Treo thì
+ * cảnh này đã lộ đúng thứ mà vòng phán quyết cố ý giấu.
+ *
+ * Tâm mỗi ellipse đặt dưới mép dưới một chút, nên chỉ phần vai và đỉnh đầu nhô
+ * lên - đúng cách một hàng người đứng chắn trước ống kính.
+ */
+.kill-crowd {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 26%;
+  background:
+    radial-gradient(38px 46px at 6% 104%, #06040c 0 97%, transparent 98%),
+    radial-gradient(34px 40px at 21% 108%, #06040c 0 97%, transparent 98%),
+    radial-gradient(40px 50px at 36% 102%, #06040c 0 97%, transparent 98%),
+    radial-gradient(34px 42px at 51% 109%, #06040c 0 97%, transparent 98%),
+    radial-gradient(40px 46px at 66% 103%, #06040c 0 97%, transparent 98%),
+    radial-gradient(34px 40px at 80% 108%, #06040c 0 97%, transparent 98%),
+    radial-gradient(38px 48px at 95% 102%, #06040c 0 97%, transparent 98%),
+    /*
+     * Lớp cuối là một quầng SÁNG mờ, không phải một lớp tối.
+     *
+     * Bản đầu phủ đen ở đây, và bảy cái đầu người vốn cũng đen thì biến mất
+     * hoàn toàn trên nền đã tối sẵn - đám đông chỉ còn là một vệt mờ. Một
+     * siluet cần thứ gì đó SÁNG hơn ở phía sau mới đọc ra được là siluet.
+     */
+    linear-gradient(180deg, transparent, rgba(148, 86, 64, 0.22) 56%, rgba(126, 70, 52, 0.3) 100%);
+  animation: kill-crowd-recoil 2200ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes kill-crowd-recoil {
+  0% {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  22% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  /* Cả làng lùi lại nửa bước ở nhịp va chạm. */
+  38% {
+    transform: translateY(9px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(3px);
+  }
+}
+
+/* Đèn khép về một quầng duy nhất sau khi bản án được thi hành. */
+.kill-spot {
+  inset: 0;
+  background: radial-gradient(circle at 50% 42%, rgba(255, 226, 196, 0.22) 0%, transparent 44%);
+  animation: kill-spot-narrow 2200ms cubic-bezier(0.5, 0, 0.2, 1) forwards;
+}
+
+@keyframes kill-spot-narrow {
+  0% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+  22% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(0.86);
+  }
+}
+
 /*
  * Chốt an toàn cuối cùng.
  *

@@ -48,7 +48,20 @@ một việc đang bỏ dở: hai cảnh đó chạy bằng bản dựng CSS tro
 nằm trong `nextClips`, nên không ai phải tải trước một file không tồn tại. Dựng
 clip cho chúng cần thêm hai cảnh vào `scripts/cinematic-scenes.mjs`.
 
-Danh sách này là bản chép tay của `CINEMATIC_CLIPS` trong
+## Hai cảnh KHÔNG có file, và không bao giờ có
+
+`NIGHT_KILL` (đêm có người chết) và `EXECUTION` (làng treo cổ) không nằm trong
+bảng trên, và đó không phải một thiếu sót đang chờ ai dựng nốt. Hai cảnh đó mang
+**khuôn mặt thật của nạn nhân đêm nay**, thứ mà không đoạn phim dựng sẵn nào kể
+được. Chúng dựng bằng chân dung người chơi cộng CSS - xem
+`src/components/KillScene.tsx` và mục "Cảnh kill" trong `src/app/cinematics.css`.
+
+Điều đó được khoá ở tầng dữ liệu chứ không phải bằng một lời dặn: `KIND_META`
+khai báo `clip: null` cho cả hai, nên chúng không lọt vào `CINEMATIC_CLIPS`,
+không lọt vào `nextClips`, và `CinematicOverlay` không dựng thẻ `<video>` cho
+chúng kể cả khi có ai thả một file trùng tên vào thư mục này.
+
+Danh sách trên là bản chép tay của `CINEMATIC_CLIPS` trong
 `src/lib/cinematic-transition.ts` - file đó mới là nguồn sự thật, và test
 `nextClips` giữ cho hai bên không trôi khỏi nhau.
 
