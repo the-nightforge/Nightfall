@@ -15,9 +15,11 @@ import {
   type NetworkHints,
 } from "@/lib/cinematic-settings";
 import { canUseWebgl, hasWebgl2, hasWebglScene } from "@/lib/cinematic-webgl";
+import { isKillKind, killSceneFor, type KillSceneView } from "@/lib/kill-cinematic";
 import { stageOwnsCinematic } from "@/lib/live-trial";
 import { useModalFocus } from "@/lib/useModalFocus";
 import { CinematicCanvas } from "./CinematicCanvas";
+import { KillScene } from "./KillScene";
 import { VillageSilhouette } from "./VillageSilhouette";
 import { WolfMark } from "./WolfMark";
 
@@ -58,6 +60,20 @@ const CLIP_BASE = "/cinematics";
 
 export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }) {
   const [playing, setPlaying] = useState<Cinematic | null>(null);
+  /*
+   * Cảnh kill được ĐÓNG BĂNG tại cạnh, không tính lại theo snapshot hiện tại.
+   *
+   * Bản đầu dựng nó ngay trong lúc render từ `snapshot`, và điều đó hỏng thật:
+   * `lastEliminated` chỉ có mặt ở ELIMINATION và CHECK_WIN. Một ván có Thợ Săn
+   * đi ELIMINATION -> CHECK_WIN -> HUNTER_SHOT trong chưa tới 2,2 giây, và ở
+   * snapshot HUNTER_SHOT trường đó đã là null - nên giữa chừng cảnh treo, khuôn
+   * mặt người vừa bị treo biến mất và lớp phủ nhảy về bản CSS chung.
+   *
+   * Đây cũng chính là nguyên tắc sẵn có của cả module: một cinematic mô tả một
+   * CẠNH, không mô tả trạng thái đang chạy. Dữ liệu của nó phải được chốt đúng
+   * lúc cạnh ấy xảy ra.
+   */
+  const [killView, setKillView] = useState<KillSceneView | null>(null);
   const [videoReady, setVideoReady] = useState(false);
   const previous = useRef<RoomSnapshot | null>(null);
   const played = useRef(new Set<string>());
@@ -119,6 +135,7 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
 
   const finish = useCallback(() => {
     setPlaying(null);
+    setKillView(null);
     setVideoReady(false);
   }, []);
 
@@ -150,6 +167,21 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
      */
     if (stageOwnsCinematic(next.kind)) return;
     if (modeRef.current === "none") return;
+    /*
+     * Không có nạn nhân nào thì KHÔNG phát.
+     *
+     * `phaseKind` chỉ chọn hai cảnh kill khi snapshot đã có người chết, nên
+     * nhánh này gần như không tới. "Gần như" không đủ: hai bản build lệch nhau
+     * có thể cho ra một cạnh kill với danh sách rỗng, và một khung chân dung
+     * không có ai trong đó tệ hơn hẳn việc bỏ lỡ một đoạn chuyển cảnh. Khoá vẫn
+     * tiêu (đã `played.add` ở trên) nên nó không quay lại ở snapshot sau.
+     *
+     * Nhánh này cũng là thứ bảo đảm điều mà TypeScript không tự nói được: một
+     * cảnh kind kill đang phát thì LUÔN có `killView` đi kèm.
+     */
+    const kill = isKillKind(next.kind) ? killSceneFor(next.kind, snapshot) : null;
+    if (isKillKind(next.kind) && !kill) return;
+    setKillView(kill);
     setVideoReady(false);
     setPlaying(next);
   }, [snapshot]);
@@ -227,11 +259,30 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
 
   if (!playing) return null;
 
+  /*
+   * Cảnh kill loại bỏ CẢ 3D lẫn video, không phải vì thứ tự ưu tiên mà vì hai
+   * đường kia không kể nổi nó: một clip dựng sẵn hay một scene Three.js đều
+   * không biết đêm nay ai chết. `KIND_META.clip === null` đã khoá điều đó ở
+   * tầng dữ liệu; ba chỗ dùng `kill` bên dưới khoá nó ở tầng dựng hình.
+   */
+  const kill = killView;
+
   // Thứ tự quyết định: 3D nếu cảnh này có bản 3D và máy dựng được; nếu không
   // thì clip; nếu không nữa thì chỉ còn cảnh CSS bên dưới. Một cảnh KHÔNG bao
   // giờ chạy cả canvas lẫn video - không có lý do gì tải hai bản của một cảnh.
-  const useWebgl = webgl && !webglBroken && hasWebglScene(playing.kind);
-  const useVideo = !useWebgl && mode === "video" && !brokenClips.has(playing.clip);
+  const useWebgl = !kill && webgl && !webglBroken && hasWebglScene(playing.kind);
+  /*
+   * `videoClip` gộp cả điều kiện lẫn tên file vào một giá trị.
+   *
+   * `playing.clip` là `string | null`, và null nghĩa là cảnh này không bao giờ
+   * đi qua đường video. Tách thành một `useVideo: boolean` riêng thì TypeScript
+   * không thu hẹp được `playing.clip` bên trong JSX, và mỗi chỗ dùng lại phải
+   * tự khẳng định non-null - đúng kiểu khẳng định sẽ sai vào lần sửa sau.
+   */
+  const videoClip =
+    !useWebgl && !kill && mode === "video" && playing.clip !== null && !brokenClips.has(playing.clip)
+      ? playing.clip
+      : null;
 
   // Sự kiện mang tên riêng nên nhãn họ tụt xuống làm dòng nhỏ phía trên; cạnh
   // pha thì hai thứ trùng nhau và in hai lần chỉ tổ thừa.
@@ -267,8 +318,19 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
          * cũng vậy. Giữ lại thẻ bọc vì class của nó mang nền gradient, thứ cảnh
          * 3D dùng làm nền.
          */}
-        {!useWebgl && <SceneArt kind={playing.kind} />}
+        {!useWebgl && !kill && <SceneArt kind={playing.kind} />}
       </div>
+
+      {/*
+       * Cảnh kill thay CẢ phần hình lẫn phần chữ.
+       *
+       * Không phải một lớp chồng thêm lên `SceneArt`: nó có bố cục riêng (hàng
+       * chân dung ở giữa, chữ ở dưới) và tự mang tiêu đề mà `aria-labelledby`
+       * bên trên đang trỏ vào. Khối caption chung ở cuối file vì thế cũng nghỉ -
+       * hai tiêu đề cùng một id là một cây DOM sai, và trình đọc màn hình sẽ
+       * đọc đúng một cái trong hai, không đoán được cái nào.
+       */}
+      {kill && <KillScene view={kill} titleId={`cine-title-${playing.key}`} />}
 
       {useWebgl && (
         <CinematicCanvas
@@ -281,7 +343,7 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
         />
       )}
 
-      {useVideo && (
+      {videoClip && (
         <video
           // key theo khoá lần phát: mỗi cảnh là một thẻ video mới, tháo ra là
           // trình duyệt trả luôn bộ đệm. Không bao giờ có hai clip cùng nằm bộ nhớ.
@@ -298,46 +360,48 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
           aria-hidden="true"
           onCanPlay={() => setVideoReady(true)}
           onError={() => {
-            brokenClips.add(playing.clip);
+            brokenClips.add(videoClip);
             setVideoReady(false);
           }}
         >
-          <source src={`${CLIP_BASE}/${playing.clip}.webm`} type="video/webm" />
-          <source src={`${CLIP_BASE}/${playing.clip}.mp4`} type="video/mp4" />
+          <source src={`${CLIP_BASE}/${videoClip}.webm`} type="video/webm" />
+          <source src={`${CLIP_BASE}/${videoClip}.mp4`} type="video/mp4" />
         </video>
       )}
 
       {/* max-w + px-6: ở 390px dòng phụ phải xuống dòng gọn giữa màn chứ không
         * chạy sát hai mép, và cả khối vẫn nằm trong vùng an toàn giữa khung -
         * đúng vùng mà clip object-cover không cắt mất. */}
-      <div className="pointer-events-none absolute inset-0 grid place-items-center px-6">
-        <div className="cine-caption max-w-md text-center">
-          {eyebrow && (
-            <p className="cine-eyebrow text-xs font-bold uppercase tracking-[0.2em] text-white/70">
-              {playing.icon && (
-                <span className="mr-1.5" aria-hidden="true">
-                  {playing.icon}
-                </span>
-              )}
-              {eyebrow}
-            </p>
-          )}
-          <p
-            id={`cine-title-${playing.key}`}
-            className="font-display text-3xl font-bold text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.9)] sm:text-4xl"
-          >
-            {playing.title}
-          </p>
-          {playing.detail && (
+      {!kill && (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center px-6">
+          <div className="cine-caption max-w-md text-center">
+            {eyebrow && (
+              <p className="cine-eyebrow text-xs font-bold uppercase tracking-[0.2em] text-white/70">
+                {playing.icon && (
+                  <span className="mr-1.5" aria-hidden="true">
+                    {playing.icon}
+                  </span>
+                )}
+                {eyebrow}
+              </p>
+            )}
             <p
-              id={`cine-detail-${playing.key}`}
-              className="cine-detail mt-2 text-sm leading-snug text-white/85 drop-shadow-[0_1px_10px_rgba(0,0,0,0.9)]"
+              id={`cine-title-${playing.key}`}
+              className="font-display text-3xl font-bold text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.9)] sm:text-4xl"
             >
-              {playing.detail}
+              {playing.title}
             </p>
-          )}
+            {playing.detail && (
+              <p
+                id={`cine-detail-${playing.key}`}
+                className="cine-detail mt-2 text-sm leading-snug text-white/85 drop-shadow-[0_1px_10px_rgba(0,0,0,0.9)]"
+              >
+                {playing.detail}
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       <button
         ref={skipRef}
@@ -462,5 +526,19 @@ function SceneArt({ kind }: { kind: CinematicKind }) {
           <span className="cine-bloom" />
         </>
       );
+    /*
+     * Hai cảnh kill KHÔNG có phần hình ở đây, và đó là một nhánh tường minh chứ
+     * không phải một chỗ bỏ trống.
+     *
+     * Chúng do `KillScene` dựng trọn vẹn - hình lẫn chữ - vì phần hình của
+     * chúng phụ thuộc vào việc đêm nay ai chết, thứ mà một hàm nhận đúng một
+     * `kind` không thể biết. Overlay đã không gọi tới đây cho hai kind ấy, và
+     * hai `case` này chỉ để cái switch còn nói được sự thật: bỏ chúng đi thì
+     * hàm âm thầm trả `undefined` cho hai giá trị hợp lệ, và người sửa sau sẽ
+     * đọc ra rằng đây là hai cảnh chưa ai dựng.
+     */
+    case "NIGHT_KILL":
+    case "EXECUTION":
+      return null;
   }
 }

@@ -537,3 +537,23 @@ describe("ai sở hữu cảnh chuyển pha", () => {
     }
   });
 });
+
+describe("stageOwnsCinematic: cảnh treo cổ thuộc về lớp phủ, không thuộc sân khấu", () => {
+  it("EXECUTION KHÔNG do sân khấu sở hữu", () => {
+    /*
+     * Cái chết của một người là khoảnh khắc của CẢ PHÒNG, và nó phải phủ kín
+     * màn hình bằng khuôn mặt thật của người vừa ngã xuống. Sân khấu vẫn giữ
+     * nhịp phán quyết của nó - bảng tỉ số và dòng "Phán quyết: Treo cổ" còn
+     * nguyên khi lớp phủ tan - nên không có thông tin nào mất đi.
+     *
+     * `VERDICT` thì ngược lại và vẫn thuộc sân khấu: đó là cạnh của một phiên
+     * toà KHÔNG có ai chết (được tha, hoà phiếu, "không treo ai").
+     */
+    assert.equal(stageOwnsCinematic("EXECUTION"), false);
+    assert.equal(stageOwnsCinematic("VERDICT"), true);
+  });
+
+  it("NIGHT_KILL cũng vậy - sân khấu không có mặt trong đêm", () => {
+    assert.equal(stageOwnsCinematic("NIGHT_KILL"), false);
+  });
+});

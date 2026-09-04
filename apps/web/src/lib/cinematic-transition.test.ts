@@ -436,3 +436,125 @@ describe("prefetchPlan khi máy dựng được cảnh 3D", () => {
     assert.deepEqual(prefetchPlan(base), prefetchPlan({ ...base, webgl: false }));
   });
 });
+
+describe("cinematicFor: mốc công bố có người chết", () => {
+  const deaths = [
+    { playerId: "p1", name: "An" },
+    { playerId: "p2", name: "Bình" },
+  ];
+
+  it("đêm có người chết thì thay DAWN bằng NIGHT_KILL", () => {
+    const played = cinematicFor(
+      snap({ phase: "NIGHT" }),
+      snap({ phase: "NIGHT_RESULT", lastNightDeaths: deaths }),
+    );
+    assert.equal(played?.kind, "NIGHT_KILL");
+  });
+
+  it("đêm bình yên vẫn là DAWN - không dựng khung chân dung rỗng", () => {
+    const played = cinematicFor(
+      snap({ phase: "NIGHT" }),
+      snap({ phase: "NIGHT_RESULT", lastNightDeaths: [] }),
+    );
+    assert.equal(played?.kind, "DAWN");
+  });
+
+  it("có người bị treo thì thay VERDICT bằng EXECUTION", () => {
+    const played = cinematicFor(
+      snap({ phase: "FINAL_VOTE" }),
+      snap({ phase: "ELIMINATION", lastEliminated: { playerId: "p9", name: "Bị Cáo" } }),
+    );
+    assert.equal(played?.kind, "EXECUTION");
+  });
+
+  it("được tha vẫn là VERDICT, tức vẫn thuộc sân khấu phiên toà", () => {
+    const played = cinematicFor(
+      snap({ phase: "FINAL_VOTE" }),
+      snap({ phase: "ELIMINATION", lastEliminated: null }),
+    );
+    assert.equal(played?.kind, "VERDICT");
+  });
+
+  it("một cạnh cho ĐÚNG một cảnh: không bao giờ có DAWN đi kèm NIGHT_KILL", () => {
+    // Hai kind loại trừ nhau ngay tại chỗ chọn, nên không có đường nào để hai
+    // lớp phủ nối đuôi nhau. Test này khoá đúng tính chất đó.
+    for (const list of [[], deaths]) {
+      const played = cinematicFor(
+        snap({ phase: "NIGHT" }),
+        snap({ phase: "NIGHT_RESULT", lastNightDeaths: list }),
+      );
+      assert.ok(played !== null);
+      assert.equal(played.kind === "DAWN" || played.kind === "NIGHT_KILL", true);
+    }
+  });
+
+  it("số nạn nhân KHÔNG kéo dài cảnh - trần che giao diện là một hằng số", () => {
+    const one = cinematicFor(
+      snap({ phase: "NIGHT" }),
+      snap({ phase: "NIGHT_RESULT", lastNightDeaths: deaths.slice(0, 1) }),
+    );
+    const many = cinematicFor(
+      snap({ phase: "NIGHT" }),
+      snap({
+        phase: "NIGHT_RESULT",
+        lastNightDeaths: Array.from({ length: 8 }, (_, i) => ({
+          playerId: `p${i}`,
+          name: `N${i}`,
+        })),
+      }),
+    );
+    assert.equal(one?.durationMs, many?.durationMs);
+    assert.ok((many?.durationMs ?? 0) <= 2500, String(many?.durationMs));
+  });
+
+  it("resync giữa pha công bố không phát lại: cùng cạnh, cùng khoá", () => {
+    const before = snap({ phase: "NIGHT_RESULT", round: 3, lastNightDeaths: deaths });
+    const after = snap({ phase: "NIGHT_RESULT", round: 3, lastNightDeaths: deaths, hasVoted: true });
+    assert.equal(cinematicFor(before, after), null);
+  });
+
+  it("vào phòng giữa pha công bố cũng không phát: không có cạnh nào", () => {
+    assert.equal(
+      cinematicFor(null, snap({ phase: "NIGHT_RESULT", lastNightDeaths: deaths })),
+      null,
+    );
+  });
+
+  it("sự kiện nổ đúng mốc công bố vẫn được ưu tiên, đúng luật cũ", () => {
+    const played = cinematicFor(
+      snap({ phase: "NIGHT", activeEvent: null }),
+      snap({
+        phase: "NIGHT_RESULT",
+        lastNightDeaths: deaths,
+        activeEvent: event("MORNING_REPORT", 2, { targetPhase: "DAY" }),
+      }),
+    );
+    assert.equal(played?.kind, "VILLAGE_BOON");
+  });
+});
+
+describe("cảnh chân dung không bao giờ đi qua đường video", () => {
+  it("NIGHT_KILL và EXECUTION không khai báo clip nào", () => {
+    // Một clip dựng sẵn không thể mang khuôn mặt của nạn nhân đêm nay, nên hai
+    // cảnh này KHÔNG được có file - kể cả khi ai đó thả một file trùng tên vào
+    // /public/cinematics.
+    for (const [prev, next, kind] of [
+      [snap({ phase: "NIGHT" }), snap({ phase: "NIGHT_RESULT", lastNightDeaths: [{ playerId: "p1", name: "An" }] }), "NIGHT_KILL"],
+      [snap({ phase: "FINAL_VOTE" }), snap({ phase: "ELIMINATION", lastEliminated: { playerId: "p1", name: "An" } }), "EXECUTION"],
+    ] as const) {
+      const played = cinematicFor(prev, next);
+      assert.equal(played?.kind, kind);
+      assert.equal(played?.clip, null, kind);
+    }
+  });
+
+  it("không nằm trong danh sách clip, nên không ai nạp trước một file không tồn tại", () => {
+    assert.equal(CINEMATIC_CLIPS.includes("night-kill"), false);
+    assert.equal(CINEMATIC_CLIPS.includes("execution"), false);
+    for (const phase of PHASES as readonly Phase[]) {
+      for (const clip of nextClips(phase)) {
+        assert.ok(CINEMATIC_CLIPS.includes(clip), `${phase} -> ${clip}`);
+      }
+    }
+  });
+});
