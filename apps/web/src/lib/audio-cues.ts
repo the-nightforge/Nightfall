@@ -1,6 +1,6 @@
 "use client";
 
-import { roleTeam, type RoomSnapshot } from "@masoi/shared";
+import { roleWonOutcome, type RoomSnapshot } from "@masoi/shared";
 
 export type Cue = "howl" | "turn" | "death" | "ballot" | "win" | "lose";
 
@@ -40,7 +40,18 @@ export function cuesFor(prev: RoomSnapshot | null, next: RoomSnapshot): Cue[] {
     // đúng lúc người chơi vừa thắng - và tiếng là thứ họ nghe trước cả khi kịp
     // đọc dòng chữ nào.
     const personalWin = (next.personalWins ?? []).some((win) => win.playerId === next.you?.id);
-    cues.push(personalWin || roleTeam(role) === next.winner ? "win" : "lose");
+    /*
+     * `roleWonOutcome`, KHÔNG phải `roleTeam(role) === next.winner`.
+     *
+     * Phép so cũ trả `false` cho chính Sát Nhân vừa thắng cả ván - phe của vai
+     * đó là `neutral`, không phải `serial_killer` - nên nó sẽ phát tiếng THUA
+     * vào đúng giây người chơi vừa thắng.
+     *
+     * Ván HOÀ phát tiếng thua cho mọi người, trừ ai có thắng lợi cá nhân. Đó là
+     * lựa chọn có chủ đích: hoà nghĩa là không ai đạt được mục tiêu, và một
+     * tiếng khải hoàn ở đó nói sai chuyện vừa xảy ra.
+     */
+    cues.push(personalWin || roleWonOutcome(role, next.winner) ? "win" : "lose");
   }
 
   return cues;

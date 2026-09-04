@@ -27,6 +27,16 @@ export interface EnginePlayer {
    * constructor của GameEngine chuẩn hoá về false khi nạp lại.
    */
   cursedTurned?: boolean;
+  /**
+   * Kẻ Báo Thù đã mất mục tiêu và hoá Thằng Hề. Khi đó `role` đã được ghi đè
+   * thành JESTER - cờ này chỉ giữ lại gốc báo thù để hiển thị cuối ván và để
+   * chặn lần chuyển vai thứ hai.
+   *
+   * Cùng hình dạng và cùng lý do với `cursedTurned` ngay trên, kể cả việc
+   * không bắt buộc: state lưu từ trước khi có vai này không có trường đó, và
+   * constructor của GameEngine chuẩn hoá về false khi nạp lại.
+   */
+  executionerTurned?: boolean;
 }
 
 export interface NightState {
@@ -77,12 +87,39 @@ export interface NightState {
   detectiveTargets: { target1: string; target2: string } | null;
   detectiveResults: Record<string, { target1Id: string; target2Id: string; sameTeam: boolean }>;
   priestResults: Record<string, { targetId: string; isWolf: boolean }>;
+  /**
+   * Mục tiêu Sát Nhân đã chốt cho đêm nay; `null` là chưa chọn hoặc đã bỏ qua.
+   *
+   * Trạng thái RIÊNG, không dùng chung `wolfVotes` hay `killTarget`: Sát Nhân
+   * không bầu với ai và không đi cùng nhịp khoá phiếu của bầy Sói. Dùng chung
+   * một ô sẽ khiến `lockWolves` kiểm phiếu của nó, `witchPending` báo cho Phù
+   * Thuỷ nạn nhân của nó, và cả hai đều là luật sai.
+   *
+   * Optional vì snapshot ghi trước bản này không có trường đó; constructor của
+   * GameEngine chuẩn hoá về `null` khi nạp lại.
+   */
+  serialKillerTarget?: string | null;
+  /**
+   * Sát Nhân đã chủ động bỏ qua đêm nay.
+   *
+   * Cần một cờ riêng vì `serialKillerTarget === null` mang HAI nghĩa: chưa
+   * quyết, và quyết là không giết ai - đúng cặp trạng thái mà `priestSkipped`
+   * tồn tại để phân biệt.
+   */
+  serialKillerSkipped?: boolean;
 }
 
 export interface DeathInfo {
   playerId: string;
   name: string;
-  cause: "wolf" | "poison" | "priest" | "priest_backfire";
+  /**
+   * `serial_killer` là một nguồn RIÊNG, không phải một biến thể của `wolf`.
+   *
+   * Ba chỗ đọc nguyên nhân theo đúng chữ này và cả ba sẽ sai nếu gộp: Trăng Máu
+   * chỉ nạp lại khi bầy Sói không giết được ai, hoá Sói chỉ kích hoạt bằng một
+   * nhát cắn hợp lệ, và bản tường thuật kể hai cái chết bằng hai câu khác nhau.
+   */
+  cause: "wolf" | "poison" | "priest" | "priest_backfire" | "serial_killer";
 }
 
 export interface PublicDeath {
@@ -205,6 +242,26 @@ export interface GameState {
    * hoá về mảng rỗng khi nạp lại.
    */
   personalWins?: PersonalWin[];
+  /**
+   * Mục tiêu của Kẻ Báo Thù: `executionerId` -> `targetId`.
+   *
+   * Bốc ĐÚNG MỘT LẦN lúc chia bài (`GameEngine.create`) và không bao giờ bốc
+   * lại - đó là điều làm cho một lần reconnect hay một lần khôi phục sau
+   * restart không đổi được nhiệm vụ của ai. Mục tiêu cũng KHÔNG bị gỡ khi
+   * người đó đổi vai hay chết: nó là danh tính một con người, không phải một
+   * lá bài, nên một Kẻ Nguyền Rủa hoá Sói vẫn là mục tiêu cũ.
+   *
+   * BÍ MẬT. Chỉ đi ra ngoài qua `snapshotFor` của chính chủ nhân nó và qua
+   * `botKnowledgeFor` của chính con BOT đó - không có đường thứ ba.
+   *
+   * Một `Record` chứ không phải một cặp id phẳng, dù bộ bài chỉ cho tối đa một
+   * lá: "tối đa một" là tính chất của cấu hình hôm nay, và một trường phẳng
+   * biến nó thành một giả định nằm rải khắp engine.
+   *
+   * Optional vì state lưu trước bản này không có trường đó; constructor chuẩn
+   * hoá về object rỗng khi nạp lại.
+   */
+  executionerTargets?: Record<string, string>;
 }
 
 export class GameError extends Error {

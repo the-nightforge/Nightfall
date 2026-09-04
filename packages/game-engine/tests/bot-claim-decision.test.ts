@@ -39,6 +39,7 @@ function contextFor(
       legalVoteChoices: [],
       lastNightDeaths: [],
       activeEventId: null,
+      neutralRolesInPlay: [],
       dayOfTruthClaims: {},
       ...overrides,
     },

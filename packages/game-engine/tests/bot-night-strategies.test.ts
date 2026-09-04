@@ -27,6 +27,7 @@ function emptyTargets(): NightKnowledge["legalTargets"] {
     DETECTIVE_CHECK: [],
     GUARDIAN_PROTECT: [],
     HOLY_WATER: [],
+    SERIAL_KILL: [],
   };
 }
 
@@ -37,6 +38,7 @@ function context(
   return {
     knowledge: {
       dayOfTruthClaims: {},
+      neutralRolesInPlay: [],
       activeEventId: null,
       botId: "me",
       round: 2,

@@ -1,7 +1,22 @@
 import { m } from "motion/react";
-import { momentLabel, roundsLabel, type CaseFile } from "@masoi/shared";
+import { momentLabel, roundsLabel, type CaseFile, type MatchOutcome } from "@masoi/shared";
 import { deathCauseClause } from "@/lib/death-cause";
 import { listItemMotion } from "@/lib/motion";
+
+/**
+ * Sắc chữ theo KẾT CỤC, bốn nhánh.
+ *
+ * Một biểu thức `winner === "wolves" ? do : luc` chỉ đúng chừng nào chỉ có hai
+ * kết cục; với bốn thì nó tô sắc của phe Dân Làng lên cả ván Sát Nhân thắng lẫn
+ * ván hoà. Bảng dùng chung một quy ước với `GameOverView`: hổ phách cho trung
+ * lập, xám tro cho hoà.
+ */
+const OUTCOME_ACCENT: Record<MatchOutcome, string> = {
+  wolves: "text-blood-400",
+  village: "text-emerald-300",
+  serial_killer: "text-amber-300",
+  draw: "text-mist-bright",
+};
 
 /**
  * Hồ sơ vụ án của một ván đã kết thúc.
@@ -11,8 +26,7 @@ import { listItemMotion } from "@/lib/motion";
  * khi hàm đó trả về khác `null`.
  */
 export function CaseFileCard({ file }: { file: CaseFile }) {
-  const wolvesWin = file.winner === "wolves";
-  const accent = wolvesWin ? "text-blood-400" : "text-emerald-300";
+  const accent = OUTCOME_ACCENT[file.winner];
 
   return (
     <section className="card space-y-4" aria-labelledby="case-file-heading">

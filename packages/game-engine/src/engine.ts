@@ -3,8 +3,12 @@ import {
   RESULT_MS,
   ROLE_REVEAL_MS,
   ROLE_META,
+  outcomeName,
+  specialRoleList,
   roleTeam,
+  sameFaction,
   type DayVoteRecap,
+  type ExecutionerView,
   type GameEventView,
   type GamePhase,
   type HunterShotRecap,
@@ -75,6 +79,9 @@ export interface NightInfoView {
   detectiveResult?: DetectiveResultView | null;
   priestHolyWaterUsed?: boolean;
   priestResult?: PriestResultView | null;
+  /** Chỉ Sát Nhân thấy; xem `NightActionView.serialKillerTarget`. */
+  serialKillerTarget?: string | null;
+  serialKillerSkipped?: boolean;
   healUsed: boolean;
   poisonUsed: boolean;
   wolfCubRageTonight?: boolean;
@@ -91,6 +98,7 @@ export interface PlayerGameView {
     role: Role | undefined;
     alive: boolean;
     cursedTurned: boolean;
+    executionerTurned: boolean;
   } | null;
   players: {
     id: string;
@@ -100,6 +108,8 @@ export interface PlayerGameView {
     role?: Role;
     /** Chỉ kèm theo khi role được lộ hoàn toàn; xem PlayerView.cursedTurned. */
     cursedTurned?: boolean;
+    /** Cùng luật lộ với `cursedTurned`; xem PlayerView.executionerTurned. */
+    executionerTurned?: boolean;
     voteCount: number;
   }[];
   nightInfo: NightInfoView | null;
@@ -129,10 +139,67 @@ export interface PlayerGameView {
   deadCanSpeak: { canAct: boolean } | null;
   /** Thắng lợi cá nhân, đã lọc theo quyền của người xem. Xem `personalWinsFor`. */
   personalWins: PersonalWin[];
+  /** Nhiệm vụ của Kẻ Báo Thù, `null` với mọi người khác. Xem `executionerViewFor`. */
+  executioner: ExecutionerView | null;
 }
 
 const recapPlayer = (player: EnginePlayer | undefined): RecapPlayer | null =>
   player ? { id: player.id, name: player.name } : null;
+
+/**
+ * Vai TRUNG LẬP có thể có mặt trong ván này.
+ *
+ * Suy từ bộ bài, cộng thêm MỘT trường hợp mà bộ bài không nói ra: một ván có Kẻ
+ * Báo Thù có thể sinh ra một Thằng Hề giữa chừng, kể cả khi `config.jester` là
+ * `false`. `config.jester` nói về LÚC CHIA BÀI; nó không phải một lời hứa rằng
+ * vai đó sẽ không bao giờ xuất hiện.
+ *
+ * Vẫn là thông tin CÔNG KHAI: cấu hình phòng đi xuống mọi client trong
+ * `RoomSnapshot.config`, và luật hoá Hề nằm ngay trên thẻ vai. Danh sách này
+ * nói vai nào CÓ THỂ có mặt, không nói ai đang cầm lá nào - nên thêm `JESTER`
+ * vào đây không tiết lộ rằng chuyện đó ĐÃ xảy ra.
+ */
+function neutralRolesFor(config: RoomConfig): Role[] {
+  const roles = specialRoleList(config).filter((role) => roleTeam(role) === "neutral");
+  if (config.executioner && !roles.includes("JESTER")) roles.push("JESTER");
+  return roles;
+}
+
+/**
+ * Bốc mục tiêu cho mọi Kẻ Báo Thù trong bộ bài vừa chia.
+ *
+ * Bốn tính chất, và cả bốn đều là luật chứ không phải chi tiết cài đặt:
+ *
+ * 1. **Chỉ rút `rng` khi thật sự CÓ một Kẻ Báo Thù.** Vòng lặp không chạy lần
+ *    nào với một bộ bài không bật vai này, nên dòng số ngẫu nhiên sau
+ *    `assignRoles` giữ nguyên từng bit - mọi ván tái lập theo seed đã ghi
+ *    trước bản này vẫn chia ra đúng bộ bài cũ.
+ * 2. **Ứng viên là PHE DÂN, không phải "không phải Sói".** Vai trung lập bị
+ *    loại theo đúng nghĩa đen của luật, và chính Kẻ Báo Thù tự loại mình vì nó
+ *    mang nhãn `neutral` - không cần một phép loại trừ riêng nào để nhớ.
+ * 3. **Thứ tự ứng viên bám theo `players`**, tức thứ tự chỗ ngồi, chứ không
+ *    theo một bảng nào được sắp lại. Cùng seed cho cùng mục tiêu.
+ * 4. **Ném khi không có ứng viên nào.** Một ván bắt đầu với một Kẻ Báo Thù
+ *    không có nhiệm vụ là một ván mà một người chơi không có cách nào để
+ *    thắng, và im lặng cấp cho họ một mục tiêu bừa thì còn tệ hơn.
+ */
+function drawExecutionerTargets(
+  players: ReadonlyArray<{ id: string; role: Role }>,
+  rng: () => number,
+): Record<string, string> {
+  const targets: Record<string, string> = {};
+  const candidates = players.filter((player) => roleTeam(player.role) === "village");
+  for (const player of players) {
+    if (player.role !== "EXECUTIONER") continue;
+    if (candidates.length === 0) {
+      throw new GameError(
+        "Không thể bắt đầu: bộ bài có Kẻ Báo Thù nhưng không còn ai thuộc phe Dân Làng để làm mục tiêu",
+      );
+    }
+    targets[player.id] = candidates[Math.floor(rng() * candidates.length)].id;
+  }
+  return targets;
+}
 
 function emptyNight(wolfCubRageTonight = false): GameState["night"] {
   return {
@@ -152,6 +219,8 @@ function emptyNight(wolfCubRageTonight = false): GameState["night"] {
     detectiveTargets: null,
     detectiveResults: {},
     priestResults: {},
+    serialKillerTarget: null,
+    serialKillerSkipped: false,
   };
 }
 
@@ -184,6 +253,11 @@ export class GameEngine {
     this.state.night.detectiveTargets ??= null;
     this.state.night.detectiveResults ??= {};
     this.state.night.priestResults ??= {};
+    // State lưu trước khi có Sát Nhân không có ba trường dưới. Mặc định an toàn
+    // là "role tắt, đêm nay chưa ra tay": không ván cũ nào bỗng dưng mọc thêm
+    // một nhát dao.
+    this.state.night.serialKillerTarget ??= null;
+    this.state.night.serialKillerSkipped ??= false;
     this.state.guardianAngelPrevious ??= null;
     this.state.guardianAngelCharges ??= {};
     this.state.priestHolyWaterUsed ??= {};
@@ -203,12 +277,26 @@ export class GameEngine {
     // mọc thêm một thành tích.
     this.state.personalWins ??= [];
     this.state.config.jester ??= false;
+    this.state.config.serialKiller ??= false;
+    /*
+     * State lưu trước khi có Kẻ Báo Thù không có hai trường dưới. Mặc định an
+     * toàn là "role tắt, không ai có nhiệm vụ": một ván cũ không bỗng dưng mọc
+     * thêm một mục tiêu, và `settleExecutioner` không tìm thấy gì để làm.
+     *
+     * Cố ý KHÔNG bốc mục tiêu ở đây. Constructor chạy MỖI LẦN state được nạp
+     * lại - reconnect, khôi phục sau restart, mỗi lần đọc từ Redis - nên một
+     * lời bốc đặt ở đây sẽ đổi nhiệm vụ của người chơi sau mỗi lần mất mạng.
+     * Chỗ bốc duy nhất là `create`.
+     */
+    this.state.config.executioner ??= false;
+    this.state.executionerTargets ??= {};
     // State lưu trước khi có Kẻ Nguyền Rủa không có hai trường dưới đây. Mặc
     // định an toàn là "role tắt, chưa ai bị nguyền": không ván cũ nào bỗng dưng
     // mọc thêm một người đã đổi phe.
     this.state.config.cursed ??= false;
     for (const player of this.state.players) {
       player.cursedTurned ??= false;
+      player.executionerTurned ??= false;
       if (player.role === "GUARDIAN_ANGEL" && this.state.guardianAngelCharges[player.id] === undefined) {
         this.state.guardianAngelCharges[player.id] = 2;
       }
@@ -233,6 +321,20 @@ export class GameEngine {
     rng: () => number = Math.random,
   ): GameEngine {
     const roles = assignRoles(players, config, rng);
+    /*
+     * Bốc mục tiêu NGAY SAU khi chia bài, và trước khi dựng state.
+     *
+     * Đứng ở đây vì hai lý do. Thứ nhất, một bộ bài không có mục tiêu hợp lệ
+     * phải làm cả lời gọi này NÉM, chứ không được trả về một engine đã dựng
+     * xong mà thiếu nhiệm vụ - `startGame` bên server dựa vào đúng điều đó để
+     * không bỏ phòng lại ở trạng thái bắt đầu dở dang. Thứ hai, đây là chỗ duy
+     * nhất `rng` còn ở đúng vị trí sau `assignRoles`, nên "cùng seed cho cùng
+     * ván" phủ luôn cả mục tiêu.
+     */
+    const executionerTargets = drawExecutionerTargets(
+      players.map((p) => ({ id: p.id, role: roles[p.id] })),
+      rng,
+    );
     const guardianAngelCharges: Record<string, number> = {};
     for (const p of players) {
       if (roles[p.id] === "GUARDIAN_ANGEL") {
@@ -249,6 +351,7 @@ export class GameEngine {
         role: roles[p.id],
         alive: true,
         cursedTurned: false,
+        executionerTurned: false,
       })),
       config,
       winner: null,
@@ -284,6 +387,8 @@ export class GameEngine {
       // Ván mới, sổ thành tích trắng. Không đọc lại từ đâu cả: một thắng lợi cá
       // nhân thuộc về ĐÚNG một ván.
       personalWins: [],
+      // Cùng lý do: nhiệm vụ thuộc về ĐÚNG một ván, và ván mới bốc lại từ đầu.
+      executionerTargets,
     };
     return new GameEngine(state);
   }
@@ -441,7 +546,8 @@ export class GameEngine {
       | "SKIP"
       | "DETECTIVE_CHECK"
       | "GUARDIAN_PROTECT"
-      | "HOLY_WATER",
+      | "HOLY_WATER"
+      | "SERIAL_KILL",
     targetId: string | null,
     secondaryTargetId?: string | null,
     rng: () => number = Math.random,
@@ -486,6 +592,29 @@ export class GameEngine {
           if (targetId === secondaryTargetId) throw new GameError("Không thể cắn cùng một người 2 lần");
           st.night.wolfSecondaryTarget = secondaryTargetId;
         }
+        break;
+      }
+      /*
+       * Sát Nhân ra tay MỘT MÌNH.
+       *
+       * Không đi qua `wolfVotes`, không bị `wolvesLocked` chặn, và không kiểm
+       * phiếu với ai: nó là một người, không phải một bầy. Vì thế nó cũng đổi ý
+       * được tới lúc đêm khép lại - đúng như bầy Sói trước khi khoá phiếu, và
+       * đúng như Linh Mục với bình Nước thánh.
+       *
+       * Ngoại lệ duy nhất là BỎ QUA: một khi đã chốt "đêm nay không giết ai"
+       * thì không rút lại được, cùng luật và cùng lý do với `priestSkipped` -
+       * một quyết định bỏ lượt phải là một quyết định, không phải một khoảng
+       * trống để lấp lại sau.
+       */
+      case "SERIAL_KILL": {
+        if (p.role !== "SERIAL_KILLER") throw new GameError("Chỉ Sát Nhân mới được ra tay");
+        if (!targetId || !target) throw new GameError("Hãy chọn một người để giết");
+        if (targetId === playerId) throw new GameError("Sát Nhân không thể tự giết mình");
+        if (st.night.serialKillerSkipped) {
+          throw new GameError("Sát Nhân đã bỏ qua đêm nay");
+        }
+        st.night.serialKillerTarget = targetId;
         break;
       }
       case "SEE": {
@@ -631,7 +760,15 @@ export class GameEngine {
         if (!t1 || !t1.alive || !t2 || !t2.alive) {
           throw new GameError("Cả 2 mục tiêu phải còn sống");
         }
-        const sameTeam = roleTeam(t1.role) === roleTeam(t2.role);
+        /*
+         * `sameFaction`, KHÔNG phải `roleTeam(a) === roleTeam(b)`.
+         *
+         * Hai vai trung lập cùng mang nhãn `neutral` nhưng không đứng cùng ai,
+         * kể cả nhau: Sát Nhân đi tìm cái chết của cả bàn, Thằng Hề thì không.
+         * Trả "cùng phe" cho cặp đó là đưa cho Thám Tử một kết luận sai về đúng
+         * hai lá bài nguy hiểm nhất ván.
+         */
+        const sameTeam = sameFaction(t1.role, t2.role);
         st.night.detectiveTargets = { target1: targetId, target2: secondaryTargetId };
         st.night.detectiveResults[playerId] = {
           target1Id: targetId,
@@ -682,8 +819,14 @@ export class GameEngine {
           if (st.night.priestSkipped) throw new GameError("Linh Mục đã bỏ qua đêm nay");
           st.night.priestTarget = null;
           st.night.priestSkipped = true;
+        } else if (p.role === "SERIAL_KILLER") {
+          if (st.night.serialKillerSkipped) throw new GameError("Sát Nhân đã bỏ qua đêm nay");
+          // Dọn mục tiêu đã chọn trước đó, cùng lý do với Phù Thuỷ ở trên: bỏ
+          // qua mà vẫn để nguyên lựa chọn cũ thì `resolveNight` vẫn ra tay.
+          st.night.serialKillerTarget = null;
+          st.night.serialKillerSkipped = true;
         } else {
-          throw new GameError("Chỉ Phù Thủy, Ma Sói hoặc Linh Mục mới được bỏ qua hành động");
+          throw new GameError("Chỉ Phù Thủy, Ma Sói, Linh Mục hoặc Sát Nhân mới được bỏ qua hành động");
         }
         break;
       }
@@ -915,6 +1058,63 @@ export class GameEngine {
       }
     }
 
+    /*
+     * Nhát dao của Sát Nhân.
+     *
+     * Đứng SAU vòng cắn của bầy Sói và TRƯỚC `st.healUsed = true` - vị trí là
+     * một phần của luật, không phải một chi tiết sắp xếp:
+     *
+     *  - Sau vòng cắn, để `healApplied` đã biết bình cứu có đổ vào nạn nhân đêm
+     *    nay hay không. Cứu thành công một người thì đêm đó người đó miễn CẢ
+     *    hai đòn, đúng như đã chốt.
+     *  - Trước `if (healApplied) st.healUsed = true;` ở dưới, vì `st.healUsed`
+     *    chưa được đặt nên biểu thức kiểm tra ở đây đọc ra cùng một câu trả lời
+     *    với vòng cắn, và khối này còn KỊP ghi vào `healApplied`. Đảo hai khối
+     *    là bình cứu lặng lẽ mất tác dụng với riêng nhát dao.
+     *
+     * KHÔNG tra xem Sát Nhân còn sống hay không. `submitNightAction` đã đòi nó
+     * còn sống lúc bấm, và `emptyNight` xoá ô này mỗi đêm - nên một mục tiêu
+     * nằm đây luôn là đòn của một người còn sống lúc đêm bắt đầu được xử. Đó
+     * chính là điều phải giữ: kẻ đâm có ngã xuống trong cùng đêm (một nhát cắn,
+     * một bình độc, một phát Nước thánh, hay Tử Thủ đến hạn ở ngay đầu hàm này)
+     * thì nhát dao vẫn tới nơi.
+     *
+     * Tử Thủ KHÔNG hoãn nhát dao: sự kiện đó viết cho nạn nhân của bầy Sói và
+     * chỉ giữ được một người mỗi lần, nên nới nó ra cho cả nguồn thứ hai là đổi
+     * luật của một sự kiện đang chạy.
+     */
+    if (st.night.serialKillerTarget) {
+      const victim = this.player(st.night.serialKillerTarget);
+      if (victim && victim.alive) {
+        const isGuarded = guardedIds.has(victim.id);
+        const isHealed =
+          victim.id === st.night.killTarget && st.night.healTonight && !st.healUsed;
+        /*
+         * Bình cứu chặn được nhát dao thì bình cứu ĐÃ DÙNG, y như khi nó chặn
+         * một cú cắn. Không thể để dòng này cho riêng vòng cắn lo: trong một
+         * Đêm Bình Yên vòng cắn không chạy một lần nào, nên mục tiêu chính của
+         * bầy Sói còn sống nhờ đúng bình cứu ấy mà `healApplied` vẫn là `false`
+         * - Phù Thuỷ được cứu MIỄN PHÍ một mạng và recap báo là chưa dùng bình.
+         *
+         * Đặt TRƯỚC `isGuarded`, cùng thứ tự với vòng cắn: bình đã đổ vào một
+         * người thật sự bị nhắm thì nó mất, kể cả khi một tấm khiên cũng đang
+         * đỡ đúng người đó. Hai nguồn đòn phải trả lời câu này giống hệt nhau.
+         */
+        if (isHealed) healApplied = true;
+        if (!isGuarded && !isHealed) {
+          /*
+           * Kẻ Nguyền Rủa chết THẬT ở đây, không hoá Sói.
+           *
+           * Không cần một nhánh riêng để chặn: cơ chế hoá Sói đọc `cursedBitten`
+           * (chỉ do vòng cắn đặt) và chỉ chạy khi người đó CÒN SỐNG sau khi mọi
+           * cái chết đã áp. Một nhát dao trúng đúng người vừa bị cắn vì thế tự
+           * huỷ lần chuyển phe - đúng luật "chỉ đòn Sói hợp lệ mới hoá Sói".
+           */
+          addDeath({ playerId: victim.id, name: victim.name, cause: "serial_killer" });
+        }
+      }
+    }
+
     // Bình cứu chỉ mất khi có nạn nhân thật để cứu
     if (healApplied) st.healUsed = true;
 
@@ -1040,6 +1240,11 @@ export class GameEngine {
       })(),
       wolfSecondaryTarget: recapPlayer(
         secondaryTargetToProcess ? this.player(secondaryTargetToProcess) : undefined,
+      ),
+      // Ô RIÊNG cạnh `wolfTarget`, không ghi đè nó: một đêm mà cả hai cùng ra
+      // tay phải kể lại được thành hai đòn, kể cả khi chúng nhắm cùng một người.
+      serialKillerTarget: recapPlayer(
+        st.night.serialKillerTarget ? this.player(st.night.serialKillerTarget) : undefined,
       ),
     };
     st.nightHistory.push(recap);
@@ -1529,6 +1734,103 @@ export class GameEngine {
     if (accused.role === "JESTER") {
       this.recordPersonalWin(accused, "JESTER_LYNCHED");
     }
+    this.recordExecutionerWinsForLynch(accused);
+  }
+
+  /**
+   * Kẻ Báo Thù nào vừa thấy mục tiêu của mình lên giá treo.
+   *
+   * Tách khỏi `switch` theo vai của người bị treo ở trên vì nó trả lời một câu
+   * hỏi KHÁC HẲN: bảng kia hỏi "người vừa chết có thắng gì không", còn chỗ này
+   * hỏi "cái chết vừa rồi có hoàn thành nhiệm vụ của một NGƯỜI KHÁC không".
+   * Nhét nó vào cùng một `switch` là buộc bảng đó phải biết về những người
+   * không có mặt trên giá treo.
+   *
+   * Ba điều kiện, và cả ba đều bắt buộc:
+   *  - vai HIỆN TẠI vẫn là `EXECUTIONER` (một người đã hoá Hề chơi luật của Hề);
+   *  - `alive` - "còn sống tại thời điểm mục tiêu bị xử tử". `resolveFinalVote`
+   *    mới chỉ hạ đúng bị cáo khi gọi tới đây, và phát bắn của Thợ Săn thì còn
+   *    chưa xảy ra, nên đây đúng là thời điểm phải đo;
+   *  - mục tiêu chính là người vừa bị treo.
+   *
+   * KHÔNG hỏi ai đã đề cử hay ai bỏ phiếu Treo: luật là "mục tiêu bị treo",
+   * không phải "mục tiêu bị chính mình treo".
+   */
+  private recordExecutionerWinsForLynch(accused: EnginePlayer): void {
+    const targets = this.executionerTargets();
+    for (const player of this.state.players) {
+      if (player.role !== "EXECUTIONER") continue;
+      if (!player.alive) continue;
+      if (targets[player.id] !== accused.id) continue;
+      this.recordPersonalWin(player, "EXECUTIONER_TARGET_LYNCHED");
+    }
+  }
+
+  /** Bảng nhiệm vụ của ván, luôn là một object (state cũ có thể thiếu trường). */
+  executionerTargets(): Record<string, string> {
+    return (this.state.executionerTargets ??= {});
+  }
+
+  /**
+   * Kẻ Báo Thù mất mục tiêu thì hoá Thằng Hề.
+   *
+   * GỌI Ở ĐÂU: ngay trước mỗi lần chốt kết quả ván, tức sau khi cả đợt chết
+   * lẫn chuỗi phản ứng Thợ Săn đi kèm đã xử xong. Hôm nay có đúng hai chỗ như
+   * vậy - `checkWinOrContinue` bên server và `finished()` của harness self-play
+   * - và cả hai gọi hàm này rồi mới gọi `checkWin`.
+   *
+   * VÌ SAO KHÔNG nằm trong `checkWin`: hàm đó là một câu HỎI, không phải một
+   * bước của ván. Nó được gọi để dò trạng thái ở hàng chục chỗ (test, view,
+   * điều kiện rẽ nhánh), và một phép ghi đè vai nấp trong một hàm đọc là thứ
+   * sẽ đổi ván đấu vào lúc không ai ngờ tới.
+   *
+   * Vì sao đứng SAU chuỗi Thợ Săn: một phát bắn đang treo có thể hạ chính Kẻ
+   * Báo Thù, và khi đó nó chết CÙNG đợt với mục tiêu - không được đổi vai. Đó
+   * cũng là lý do điều kiện dưới đây đo `alive` chứ không nhớ ai còn sống lúc
+   * đợt chết bắt đầu.
+   *
+   * TỰ CHẶN LẶP, không cần cờ phụ:
+   *  - đã thắng rồi thì không đổi vai (nhiệm vụ đã xong, và mục tiêu của một
+   *    người vừa thắng thì đương nhiên đã chết - không có dòng này, một cú
+   *    treo trúng đích sẽ biến kẻ vừa thắng thành Thằng Hề ngay sau đó);
+   *  - đổi vai xong thì `role` không còn là `EXECUTIONER`, nên lần gọi thứ hai
+   *    không tìm thấy gì. Một pha chạy lại sau khôi phục vì thế vô hại.
+   *
+   * Người đã CHẾT không đổi vai và không được cấp gì cả: `alive` là điều kiện
+   * đầu tiên, và nó cũng chính là điều làm cho một Kẻ Báo Thù đã chết không
+   * thắng vì một cú treo xảy ra sau đó.
+   */
+  settleExecutioner(): void {
+    const targets = this.executionerTargets();
+    const won = new Set(this.personalWins().map((win) => win.playerId));
+    for (const player of this.state.players) {
+      if (player.role !== "EXECUTIONER") continue;
+      if (!player.alive) continue;
+      if (won.has(player.id)) continue;
+      const target = this.player(targets[player.id]);
+      // Chưa có mục tiêu (state cũ) hoặc mục tiêu còn sống: chưa có gì xảy ra.
+      if (!target || target.alive) continue;
+      /*
+       * Đổi hẳn `role`, đúng cách Kẻ Nguyền Rủa hoá Sói: từ giây này mọi phép
+       * kiểm tra vai (luật thắng cá nhân khi bị treo, chiến thuật BOT, thẻ vai
+       * trên màn hình) tự đọc ra luật của Thằng Hề mà không chỗ nào phải hỏi
+       * "người này vốn là gì".
+       *
+       * KHÔNG trao thắng lợi nào ở đây: chuyển vai là một cơ hội thứ hai, không
+       * phải một phần thưởng. Từ giờ nó chỉ thắng khi CHÍNH NÓ bị treo.
+       *
+       * KHÔNG cấp mục tiêu mới, và cũng không xoá mục tiêu cũ: bảng nhiệm vụ là
+       * bản ghi của những gì đã xảy ra, và `executionerTurned` mới là thứ nói
+       * ván đã sang trang.
+       */
+      player.role = "JESTER";
+      player.executionerTurned = true;
+      /*
+       * KHÔNG ghi log. `state.log` đi thẳng vào snapshot công khai, và một dòng
+       * "ai đó vừa hoá Thằng Hề" vừa lộ vai vừa chỉ đích danh mục tiêu vừa
+       * chết. Cùng lý do với `recordPersonalWin`.
+       */
+    }
   }
 
   /**
@@ -1546,12 +1848,71 @@ export class GameEngine {
     return visible.map((win) => ({ ...win }));
   }
 
+  /**
+   * Nhiệm vụ của Kẻ Báo Thù, tính cho MỘT người xem.
+   *
+   * Trả `null` cho tất cả những ai không phải chủ nhân của một nhiệm vụ - và
+   * đó là toàn bộ cổng bảo mật của tính năng này. Không có nhánh nào mở nó ra
+   * ở `GAME_OVER`, khác hẳn `personalWinsFor` ngay trên: sổ thắng là thành
+   * tích và đáng được công bố, còn mục tiêu là một thứ chỉ có nghĩa với đúng
+   * một người. Phần tổng kết sau ván đã có `personalWins` và cờ
+   * `executionerTurned` nói đủ.
+   *
+   * Nhận cả người xem ĐÃ CHẾT và người đã hoá Thằng Hề: một người chết vẫn có
+   * quyền đọc lại nhiệm vụ của chính mình, và một người vừa đổi vai cần đúng
+   * màn hình đó để biết vì sao thẻ vai vừa đổi.
+   */
+  private executionerViewFor(viewer: EnginePlayer | undefined): ExecutionerView | null {
+    if (!viewer) return null;
+    const targetId = this.executionerTargets()[viewer.id];
+    if (targetId === undefined) return null;
+    const target = this.player(targetId);
+    return {
+      target: target ? { id: target.id, name: target.name, alive: target.alive } : null,
+      won: this.personalWins().some(
+        (win) => win.playerId === viewer.id && win.condition === "EXECUTIONER_TARGET_LYNCHED",
+      ),
+      turnedJester: viewer.executionerTurned === true,
+    };
+  }
+
   // ---- Điều kiện thắng ----
 
+  /**
+   * Kết cục của ván, hoặc `null` khi ván còn chạy.
+   *
+   * Gọi SAU khi mọi cái chết và mọi phản ứng Thợ Săn đã xử xong - dòng đầu tiên
+   * gác đúng điều đó, vì một phát bắn đang treo có thể hạ nốt con Sói cuối hoặc
+   * hạ chính Sát Nhân.
+   *
+   * Thứ tự năm nhánh dưới đây LÀ luật, không phải một cách viết cho gọn:
+   *
+   *  a. Không còn ai sống: hoà. Đứng đầu vì mọi nhánh sau đều nói về một người
+   *     còn sống nào đó, và với bàn trống thì vế "hết Sói" cũng đúng - tức là
+   *     làng sẽ "thắng" một ván mà không còn người làng nào.
+   *  b. Chỉ còn Sát Nhân: nó thắng, và đây là một kết cục CHUNG kết thúc ván -
+   *     khác hẳn thắng lợi cá nhân của Thằng Hề, thứ được ghi vào sổ riêng rồi
+   *     để ván chạy tiếp.
+   *  c. Sát Nhân còn sống mà chưa một mình: ván TIẾP TỤC, bất kể bầy Sói còn
+   *     hay hết và bất kể quân số nghiêng về đâu. Hết Sói chưa đủ để làng thắng
+   *     khi vẫn còn một kẻ giết người đi lại trong làng, và bầy Sói cũng chưa
+   *     nắm được làng khi có một bên thứ ba giết cả hai phía mỗi đêm. Một Sói
+   *     cuối cùng đứng trước một Sát Nhân vì thế là một ván còn đang chơi.
+   *  d. Không còn Sát Nhân: quay lại đúng hai dòng luật cũ, từng bit.
+   */
   checkWin(): Winner {
     const st = this.state;
     if (st.hunterReaction && !st.hunterReaction.resolved) return null;
-    const wolvesAlive = this.aliveWolves().length;
+
+    const alive = this.alivePlayers();
+    if (alive.length === 0) return "draw";
+
+    const killersAlive = alive.filter((p) => p.role === "SERIAL_KILLER").length;
+    if (killersAlive > 0) {
+      return killersAlive === alive.length ? "serial_killer" : null;
+    }
+
+    const wolvesAlive = alive.filter((p) => roleTeam(p.role) === "wolves").length;
     /*
      * "Không phải Sói", không phải "phe làng".
      *
@@ -1561,7 +1922,7 @@ export class GameEngine {
      * vẫn còn sống - thắng lợi của nó là một sổ riêng, không phải một phe thứ
      * ba tranh phần thắng chung.
      */
-    const othersAlive = this.alivePlayers().length - wolvesAlive;
+    const othersAlive = alive.length - wolvesAlive;
     if (wolvesAlive === 0) return "village";
     if (wolvesAlive >= othersAlive) return "wolves";
     return null;
@@ -1572,7 +1933,12 @@ export class GameEngine {
     this.state.phase = "GAME_OVER";
     // Không đặt hạn chót: ván chỉ về lobby khi chủ phòng bấm reset, không tự động.
     this.state.phaseEndsAt = null;
-    this.state.log.push(winner === "wolves" ? "Phe Ma Sói chiến thắng!" : "Phe Dân Làng chiến thắng!");
+    // Bảng nhãn dùng chung với web và hồ sơ vụ án: bốn kết cục, một chỗ gọi tên.
+    // Một biểu thức ba ngôi ở đây sẽ ghi "Phe Dân Làng chiến thắng" vào log của
+    // đúng những ván mà Dân Làng vừa chết sạch.
+    this.state.log.push(`${outcomeName(winner) ?? "Không ai còn sống, ván đấu hoà"}${
+      winner === "draw" ? "!" : " chiến thắng!"
+    }`);
     // Thành tích cá nhân được nói ra ĐÚNG LÚC NÀY: `GAME_OVER` là lúc mọi vai
     // đã công khai, nên dòng log này không lộ thêm gì. Nó cũng là lý do dòng
     // đó không được viết ngay lúc ghi nhận, xem `recordPersonalWin`.
@@ -1614,6 +1980,8 @@ export class GameEngine {
       acted = st.night.detectiveResults[viewer.id] !== undefined;
     } else if (viewer.role === "PRIEST") {
       acted = st.night.priestTarget !== null || st.night.priestSkipped;
+    } else if (viewer.role === "SERIAL_KILLER") {
+      acted = st.night.serialKillerTarget !== null || st.night.serialKillerSkipped === true;
     } else if (isWitch) {
       acted = st.night.witchSkipped || st.night.healTonight || st.night.poisonTarget !== null;
     }
@@ -1644,6 +2012,12 @@ export class GameEngine {
       priestHolyWaterUsed:
         viewer.role === "PRIEST" ? st.priestHolyWaterUsed[viewer.id] ?? false : undefined,
       priestResult,
+      // CHỈ cho chính Sát Nhân. Mọi vai khác nhận `undefined`, kể cả người đang
+      // bị nhắm - biết đêm nay ai bị chọn đã là một rò rỉ, dù không kèm vai.
+      serialKillerTarget:
+        viewer.role === "SERIAL_KILLER" ? st.night.serialKillerTarget ?? null : undefined,
+      serialKillerSkipped:
+        viewer.role === "SERIAL_KILLER" ? st.night.serialKillerSkipped === true : undefined,
       healUsed: st.healUsed,
       poisonUsed: st.poisonUsed,
       wolfCubRageTonight: roleTeam(viewer.role) === "wolves" ? st.night.wolfCubRageTonight : undefined,
@@ -1709,6 +2083,9 @@ export class GameEngine {
       // Đồng bọn Sói chỉ được biết đây là một con Sói, không được biết nó vốn
       // là Kẻ Nguyền Rủa: gốc nguyền rủa chỉ lộ cùng lúc với toàn bộ vai trò.
       cursedTurned: revealAll ? p.cursedTurned === true : undefined,
+      // Cùng cổng `revealAll` với dòng trên: trước lúc lật bài, việc một người
+      // vừa đổi vai là bí mật của riêng họ.
+      executionerTurned: revealAll ? p.executionerTurned === true : undefined,
       voteCount: showVoteCounts ? tally.players[p.id] ?? 0 : 0,
     }));
 
@@ -1776,6 +2153,7 @@ export class GameEngine {
             role: viewer.role,
             alive: viewer.alive,
             cursedTurned: viewer.cursedTurned === true,
+            executionerTurned: viewer.executionerTurned === true,
           }
         : null,
       players: playersView,
@@ -1855,6 +2233,7 @@ export class GameEngine {
         : null,
       deadCanSpeak: this.deadCanSpeakViewFor(viewerId),
       personalWins: this.personalWinsFor(viewerId),
+      executioner: this.executionerViewFor(viewer),
     };
   }
 
@@ -1918,6 +2297,13 @@ export class GameEngine {
       knownRoles,
       revealRoleOnDeath: st.config.revealRoleOnDeath === true,
       seerResult,
+      // Suy từ CHÍNH bộ bài mà `assignRoles` chia, không phải một danh sách
+      // chép tay: bật thêm một vai trung lập sau này là nó tự vào đây.
+      neutralRolesInPlay: neutralRolesFor(st.config),
+      // Nhiệm vụ RIÊNG của chính con BOT này, không bao giờ của ai khác - cùng
+      // cổng với `executionerViewFor` dành cho người thật, và cùng một bảng
+      // nguồn. Một BOT khác đọc `undefined` ở đây, kể cả BOT ngồi cạnh.
+      executionerTargetId: this.executionerTargets()[botId] ?? null,
       night: this.botNightKnowledgeFor(viewer),
       // Danh tính bị cáo là công khai ở hai pha này - cả phòng đang nhìn vào
       // đúng người đó. Thứ KHÔNG công khai là ai đã bỏ phiếu Treo hay Tha, và
@@ -1978,6 +2364,7 @@ export class GameEngine {
       DETECTIVE_CHECK: [],
       GUARDIAN_PROTECT: [],
       HOLY_WATER: [],
+      SERIAL_KILL: [],
     } as Record<NightActionKind, string[]>;
 
     // Tiên Tri Tập Sự soi y hệt Tiên Tri, nhưng chỉ SAU khi thức tỉnh.
@@ -2029,6 +2416,18 @@ export class GameEngine {
         if (targets.length > 0) {
           legalActions.push("HOLY_WATER");
           legalTargets.HOLY_WATER = targets;
+        }
+        legalActions.push("SKIP");
+      }
+    } else if (viewer.role === "SERIAL_KILLER") {
+      // Một mình, mỗi đêm, và không bị nhịp khoá phiếu của bầy Sói chi phối -
+      // nên nhánh này không hỏi `wolvesLocked` như Phù Thuỷ. Bỏ qua rồi thì
+      // engine từ chối mọi thứ, kể cả một SKIP thứ hai, nên không chào gì nữa.
+      if (st.night.serialKillerSkipped !== true) {
+        const prey = alive.filter((player) => player.id !== viewer.id).map((player) => player.id);
+        if (prey.length > 0) {
+          legalActions.push("SERIAL_KILL");
+          legalTargets.SERIAL_KILL = prey;
         }
         legalActions.push("SKIP");
       }
@@ -2158,6 +2557,9 @@ export class GameEngine {
     // Bình Nước thánh bị trừ ngay lúc submit, skip cũng tính là đã hành động.
     if (viewer.role === "PRIEST")
       return !st.priestHolyWaterUsed[viewer.id] && st.night.priestTarget === null && !st.night.priestSkipped;
+    if (viewer.role === "SERIAL_KILLER") {
+      return st.night.serialKillerTarget === null && st.night.serialKillerSkipped !== true;
+    }
     if (viewer.role === "WITCH") {
       // Chưa khoá phiếu Sói thì chưa tới lượt, nên `canAct` phải là false dù
       // cô ta chưa dùng bình nào.

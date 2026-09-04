@@ -14,6 +14,8 @@ export const ROLES = [
   "CURSED",
   "VILLAGER",
   "JESTER",
+  "SERIAL_KILLER",
+  "EXECUTIONER",
 ] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -37,8 +39,9 @@ export function isRole(value: unknown): value is Role {
  * đúng một điều: vai này không đứng cùng Dân cũng không đứng cùng Sói, nên mọi
  * phép kiểm tra đồng đội (soi, so phe, chat của bầy Sói, bảng tổng kết) phải
  * trả lời "khác phe" với cả hai bên. Điều kiện thắng của một vai trung lập là
- * chuyện RIÊNG của vai đó - hôm nay chỉ có Thằng Hề, và luật thắng của nó nằm
- * ở `personalWins` trong engine chứ không ở đây.
+ * chuyện RIÊNG của vai đó, và hai vai trung lập KHÔNG chia nhau luật nào:
+ * Thằng Hề thắng bằng `personalWins` mà không kết thúc ván, còn Sát Nhân thắng
+ * bằng `Winner`. Xem `sameFaction` cho hệ quả quan trọng nhất của điều đó.
  */
 export type Team = "wolves" | "village" | "neutral";
 
@@ -104,21 +107,29 @@ export const ROLE_META: Record<Role, RoleMeta> = {
   GUARD: {
     id: "GUARD",
     name: "Bảo Vệ",
-    description: "Mỗi đêm bảo vệ một người, không thể bảo vệ cùng một người hai đêm liền.",
+    // "Đòn giết ban đêm", không phải "đòn cắn của Sói": khiên chặn cả nhát dao
+    // của Sát Nhân. Nó KHÔNG chặn độc, phản vệ Nước thánh hay đạn Thợ Săn.
+    description:
+      "Mỗi đêm bảo vệ một người khỏi mọi đòn giết ban đêm, không thể bảo vệ cùng một người hai đêm liền.",
     team: "village",
     nightOrder: 0,
   },
   GUARDIAN_ANGEL: {
     id: "GUARDIAN_ANGEL",
     name: "Thiên Thần Hộ Mệnh",
-    description: "Tối đa 2 lần cả ván, chọn 1 người để bảo vệ khỏi đòn cắn của Sói (không lặp 2 đêm liền).",
+    // Cùng lý do với Bảo Vệ ngay trên: khiên chặn cả nhát dao của Sát Nhân.
+    description:
+      "Tối đa 2 lần cả ván, chọn 1 người để bảo vệ khỏi đòn giết ban đêm (không lặp 2 đêm liền).",
     team: "village",
     nightOrder: 0.5,
   },
   PRIEST: {
     id: "PRIEST",
     name: "Linh Mục",
-    description: "Có 1 bình Nước thánh cả ván: Ném vào Sói thì Sói chết, ném vào Dân thì Linh mục chết do phản vệ.",
+    // "Không phải Sói", không phải "Dân": ném vào một vai TRUNG LẬP cũng phản
+    // vệ, và câu cũ khiến người chơi tưởng mình đang đánh cược với đúng hai phe.
+    description:
+      "Có 1 bình Nước thánh cả ván: Ném vào Sói thì Sói chết, ném vào người không phải Sói thì Linh mục chết do phản vệ.",
     team: "village",
     nightOrder: 2.5,
   },
@@ -156,6 +167,39 @@ export const ROLE_META: Record<Role, RoleMeta> = {
     description: "Không có kỹ năng đặc biệt, thảo luận và bỏ phiếu vào ban ngày.",
     team: "village",
   },
+  SERIAL_KILLER: {
+    id: "SERIAL_KILLER",
+    name: "Sát Nhân",
+    description: "Mỗi đêm chọn giết một người. Bạn thắng khi trở thành người sống sót cuối cùng.",
+    // Trung lập, và chiến đấu MỘT MÌNH: không chung đội với Hề, Dân hay Sói.
+    team: "neutral",
+    /*
+     * 2.2 - sau bầy Sói (2), trước Linh Mục (2.5) và Phù Thuỷ (3).
+     *
+     * Con số chỉ xếp thứ tự HIỂN THỊ và trả lời `hasNightAction`; nó KHÔNG
+     * quyết định ai ra tay trước, vì `resolveNight` gom mọi đòn đã khoá rồi
+     * mới áp cái chết một lượt. Đặt sau Sói để bảng hướng dẫn đọc đúng nhịp
+     * của một đêm: bầy đi trước, kẻ đi một mình đi sau.
+     */
+    nightOrder: 2.2,
+  },
+  EXECUTIONER: {
+    id: "EXECUTIONER",
+    name: "Kẻ Báo Thù",
+    description:
+      "Ban đêm không có hành động. Bạn có một mục tiêu bí mật thuộc phe Dân và chỉ thắng khi người đó bị treo cổ.",
+    /*
+     * Trung lập, và ĐỘC LẬP với tất cả - kể cả hai vai trung lập kia. Nó không
+     * đi cùng làng dù mục tiêu của nó nằm trong làng: thứ nó cần là một bản án
+     * treo cổ dành cho một người vô tội, đúng thứ làng tồn tại để tránh.
+     */
+    team: "neutral",
+    /*
+     * KHÔNG có `nightOrder`, cùng lý do với Thằng Hề: nó không thức dậy, không
+     * gây sát thương và không có miễn nhiễm nào. `hasNightAction` suy ra từ
+     * đúng trường này nên không chỗ nào phải liệt kê tên vai lần thứ hai.
+     */
+  },
   JESTER: {
     id: "JESTER",
     name: "Thằng Hề",
@@ -169,6 +213,34 @@ export const ROLE_META: Record<Role, RoleMeta> = {
 
 export function roleTeam(role: Role): Team {
   return ROLE_META[role].team;
+}
+
+/**
+ * Hai vai này có đứng CÙNG MỘT PHÍA không.
+ *
+ * KHÔNG phải `roleTeam(a) === roleTeam(b)`, và đó là toàn bộ lý do hàm này tồn
+ * tại. `neutral` là một cái NHÃN nói "không thuộc Dân, không thuộc Sói", không
+ * phải một phe có thật: Thằng Hề đi tìm giá treo, Sát Nhân đi tìm cái chết của
+ * tất cả mọi người, và Kẻ Báo Thù chỉ đi tìm bản án của đúng một người. Trả lời
+ * "cùng phe" cho hai lá bất kỳ trong số đó là đưa cho Thám Tử một kết luận sai
+ * về đúng những lá nguy hiểm nhất bàn.
+ *
+ * Một vai TRUNG LẬP không đứng cùng ai, kể cả người cầm CÙNG MỘT lá với nó -
+ * và đó là lý do nhánh cuối trả `false` chứ không còn là `a === b`. Bản cũ đúng
+ * chừng nào mỗi vai trung lập tối đa một lá mỗi ván; từ khi Kẻ Báo Thù có thể
+ * hoá Thằng Hề giữa ván, một bàn có thể có HAI Thằng Hề - hai người thắng bằng
+ * hai cái chết khác nhau, không thắng cùng nhau, và không được Thám Tử báo về
+ * là đồng đội chỉ vì trùng tên vai.
+ *
+ * Mọi chỗ gọi đều so hai NGƯỜI khác nhau, nên không có ca "so một người với
+ * chính họ" để mà trả lời.
+ */
+export function sameFaction(a: Role, b: Role): boolean {
+  const teamA = ROLE_META[a].team;
+  const teamB = ROLE_META[b].team;
+  if (teamA !== teamB) return false;
+  if (teamA === "neutral") return false;
+  return true;
 }
 
 /**

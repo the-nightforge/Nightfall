@@ -290,6 +290,7 @@ function dayOfTruthContext(round: number): BotDecisionContext {
     knowledge: {
       dayOfTruthClaims: { p1: "SEER" },
       activeEventId: null,
+      neutralRolesInPlay: [],
       botId: "me",
       round,
       phase: "DAY_DISCUSSION",

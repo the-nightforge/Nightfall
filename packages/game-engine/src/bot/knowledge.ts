@@ -92,6 +92,10 @@ export interface BotKnowledgeInput {
   /** Luật phòng, công khai với cả bàn. Xem `BotKnowledgeView.revealRoleOnDeath`. */
   revealRoleOnDeath: boolean;
   seerResult: BotKnowledgeView["seerResult"];
+  /** Suy từ chính cấu hình phòng; xem `BotKnowledgeView.neutralRolesInPlay`. */
+  neutralRolesInPlay: BotKnowledgeView["neutralRolesInPlay"];
+  /** Đã lọc ở engine theo đúng chủ nhân; xem `BotKnowledgeView.executionerTargetId`. */
+  executionerTargetId: string | null;
   /** Engine đã quyết định vai này có được thấy gì; ở đây chỉ sao chép. */
   night: NightKnowledge | null;
   trialAccusedId: string | null;
@@ -123,6 +127,8 @@ export function buildBotKnowledgeView(input: BotKnowledgeInput): BotKnowledgeVie
     knownRoles: { ...input.knownRoles },
     revealRoleOnDeath: input.revealRoleOnDeath,
     seerResult: input.seerResult ? { ...input.seerResult } : null,
+    neutralRolesInPlay: [...input.neutralRolesInPlay],
+    executionerTargetId: input.executionerTargetId,
     night: input.night ? copyNightKnowledge(input.night) : null,
     trialAccusedId: input.trialAccusedId,
     canFinalVote: input.canFinalVote,

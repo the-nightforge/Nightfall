@@ -22,6 +22,7 @@ function context(over: Partial<BotKnowledgeView> = {}): BotDecisionContext {
   return {
     knowledge: {
       dayOfTruthClaims: {},
+      neutralRolesInPlay: [],
       activeEventId: null,
       botId: "me",
       round: 2,
@@ -219,6 +220,7 @@ describe("BotRuntime · phương thức mới", () => {
             DETECTIVE_CHECK: [],
             GUARDIAN_PROTECT: [],
             HOLY_WATER: [],
+            SERIAL_KILL: [],
           },
           wolfTarget: null,
           guardPrevious: null,

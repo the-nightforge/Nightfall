@@ -16,13 +16,18 @@ export function nameOf(players: Map<string, CaseFilePlayer>, id: string): string
 }
 
 /**
- * Nhãn vai để kể lại. Kẻ Nguyền Rủa đã hoá Sói phải kể được cả hai đầu câu
+ * Nhãn vai để kể lại. Một người đã ĐỔI VAI giữa ván phải kể được cả hai đầu câu
  * chuyện: nó vốn là gì và nó đã thành gì.
+ *
+ * Hai phép đổi vai của engine (Kẻ Nguyền Rủa hoá Sói, Kẻ Báo Thù hoá Thằng Hề)
+ * đi qua CÙNG một nhánh vì chúng cùng một hình dạng: `originRole` khác `role`.
+ * Viết theo hình dạng chứ không liệt kê tên vai, nên phép đổi vai thứ ba - nếu
+ * có - không cần sửa hàm này.
  */
 export function roleLabelOf(player: CaseFilePlayer | undefined): string {
   if (!player) return "chưa rõ vai";
-  if (player.originRole === "CURSED" && player.role !== "CURSED") {
-    return `${ROLE_META.CURSED.name} (đã hoá ${ROLE_META[player.role].name})`;
+  if (player.originRole !== player.role) {
+    return `${ROLE_META[player.originRole].name} (đã hoá ${ROLE_META[player.role].name})`;
   }
   return ROLE_META[player.role].name;
 }

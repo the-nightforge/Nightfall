@@ -23,7 +23,9 @@
       "discussionSeconds": 60,
       "voteSeconds": 30,
       "defenseSeconds": 20,
-      "finalVoteSeconds": 20
+      "finalVoteSeconds": 20,
+      "jester": false,
+      "serialKiller": false
     }
   },
   "metrics": {
@@ -38,6 +40,16 @@
       "wolves": {
         "value": 0.3333333333333333,
         "numerator": 4,
+        "denominator": 12
+      },
+      "serial_killer": {
+        "value": 0,
+        "numerator": 0,
+        "denominator": 12
+      },
+      "draw": {
+        "value": 0,
+        "numerator": 0,
         "denominator": 12
       }
     },

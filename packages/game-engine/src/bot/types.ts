@@ -308,7 +308,8 @@ export type NightActionKind =
   | "SKIP"
   | "DETECTIVE_CHECK"
   | "GUARDIAN_PROTECT"
-  | "HOLY_WATER";
+  | "HOLY_WATER"
+  | "SERIAL_KILL";
 
 /**
  * Thông tin ban đêm của ĐÚNG một vai.
@@ -399,6 +400,38 @@ export interface BotKnowledgeView {
    * vì `isWolf === false` chỉ nói được "không phải Sói".
    */
   seerResult: { targetId: string; targetName: string; isWolf: boolean; team: Team } | null;
+  /**
+   * Vai TRUNG LẬP có trong bộ bài của ván này.
+   *
+   * CÔNG KHAI, không phải một rò rỉ: cấu hình phòng đi xuống mọi client trong
+   * `RoomSnapshot.config`, và cả phòng đọc được bộ bài ở sảnh chờ trước khi ván
+   * bắt đầu. Nó nói vai nào CÓ THỂ có mặt, không nói ai đang cầm lá nào.
+   *
+   * Cần thiết vì `neutral` một mình không còn đủ để kết luận: cùng một nhãn ấy,
+   * ván có Thằng Hề nghĩa là "vô hại với làng" còn ván có Sát Nhân nghĩa là
+   * "ứng viên số một cho kẻ đang giết người mỗi đêm". Không có trường này, lõi
+   * chỉ có một câu trả lời cho hai câu hỏi khác nhau - và nó sẽ chọn câu trả
+   * lời nguy hiểm hơn.
+   */
+  neutralRolesInPlay: Role[];
+  /**
+   * Mục tiêu của CHÍNH bot này, khi nó là Kẻ Báo Thù. `null` với mọi vai khác.
+   *
+   * Đây là thông tin RIÊNG đúng nghĩa - engine cấp nó, không suy ra được từ
+   * bất cứ thứ gì công khai - nên nó đi thẳng vào view như `seerResult`, và
+   * cũng như `seerResult` thì nó chỉ nói về một người.
+   *
+   * Nó nói người kia là MỤC TIÊU NHIỆM VỤ, và KHÔNG nói gì về vai của họ. Lõi
+   * tuyệt đối không được biến nó thành bằng chứng "người này là Sói": mục tiêu
+   * luôn thuộc phe Dân, nên một suy luận như vậy vừa sai vừa tự đầu độc lớp sự
+   * thật mà mọi quyết định khác dựa vào. Nó chỉ được phép nghiêng LÁ PHIẾU.
+   *
+   * Cờ này vẫn khác `null` sau khi bot đã hoá Thằng Hề. Chiến thuật đọc `role`
+   * (đã là `JESTER`) để rẽ nhánh, không đọc trường này - xem `roles/registry`.
+   *
+   * Optional vì `BotKnowledgeView` được dựng lại từ record self-play cũ.
+   */
+  executionerTargetId?: string | null;
   /** `null` ngoài pha đêm, khi bot đã chết, hoặc khi vai không hành động đêm. */
   night: NightKnowledge | null;
   /**

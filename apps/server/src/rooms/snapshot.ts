@@ -208,6 +208,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
           role: gameView?.you?.role,
           alive: gameView?.you?.alive ?? true,
           cursedTurned: gameView?.you?.cursedTurned,
+          executionerTurned: gameView?.you?.executionerTurned,
         }
       : null,
     players: (() => {
@@ -222,6 +223,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
             avatarUrl: safeAvatarUrl((member as any)?.avatarUrl),
             role: p.role,
             cursedTurned: p.cursedTurned,
+            executionerTurned: p.executionerTurned,
             voteCount: p.voteCount,
             ready: member?.ready,
             connected: member?.connected,
@@ -259,6 +261,10 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
     // chỉ còn đúng mục của chính họ. Không có tầng lọc nào ở đây, và cũng không
     // được có - một tầng thứ hai là một chỗ nữa để hai luật trôi lệch.
     personalWins: gameView?.personalWins ?? [],
+    // Đã lọc theo người xem ở engine (`executionerViewFor`): `null` với tất cả
+    // trừ đúng chủ nhân của nhiệm vụ. Không có tầng lọc nào ở đây, cùng lý do
+    // với `personalWins` ngay trên.
+    executioner: gameView?.executioner ?? null,
     chatLog: visibleChatLog(room, viewerId),
     log: gameView?.log ?? [],
     dayOfTruthClaims: gameView?.dayOfTruthClaims ?? {},

@@ -8,6 +8,7 @@ import {
   BOT_WEIGHTS_V5,
   BOT_WEIGHTS_V6,
   BOT_WEIGHTS_V7,
+  BOT_WEIGHTS_V8,
   DEFAULT_BOT_WEIGHTS,
   resolveWeights,
   validateWeights,
@@ -54,6 +55,7 @@ function emptyNight(over: Partial<NightKnowledge> = {}): NightKnowledge {
       DETECTIVE_CHECK: [],
       GUARDIAN_PROTECT: [],
       HOLY_WATER: [],
+      SERIAL_KILL: [],
     },
     wolfTarget: null,
     guardPrevious: null,
@@ -67,6 +69,7 @@ function emptyNight(over: Partial<NightKnowledge> = {}): NightKnowledge {
 function knowledge(over: Partial<BotKnowledgeView> = {}): BotKnowledgeView {
   return {
     dayOfTruthClaims: {},
+    neutralRolesInPlay: [],
     activeEventId: null,
     botId: "me",
     round: 2,
@@ -663,15 +666,18 @@ describe("v2 là cấu hình production", () => {
     return rates;
   }
 
-  it("mặc định trỏ tới v7", () => {
+  it("mặc định trỏ tới v9", () => {
     // Cùng cơ chế rollout mà docstring của `DEFAULT_BOT_WEIGHTS` mô tả: nâng
     // chính hằng số này lên bản mới để `session-registry.ts` (chỗ ván thật
     // dựng `BotRuntime`, không tự truyền `weights`) chạy bản mới mà không phải
     // sửa. v5 đưa ngưỡng của Phù Thuỷ và Thợ Săn về thang belief thật, v6 làm
-    // nốt Linh Mục, v7 bật hành vi của Thằng Hề; v2-v4 vẫn tồn tại nguyên vẹn
-    // làm mốc so sánh.
-    expect(DEFAULT_BOT_WEIGHTS.version).toBe("7.0.0");
-    expect(weightsPreset("7.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    // nốt Linh Mục, v7 bật hành vi của Thằng Hề, v8 bật hành vi của Sát Nhân,
+    // v9 bật hành vi của Kẻ Báo Thù;
+    // v2-v4 vẫn tồn tại nguyên vẹn làm mốc so sánh.
+    expect(DEFAULT_BOT_WEIGHTS.version).toBe("9.0.0");
+    expect(weightsPreset("9.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    expect(weightsPreset("8.0.0")).toBe(BOT_WEIGHTS_V8);
+    expect(weightsPreset("7.0.0")).toBe(BOT_WEIGHTS_V7);
     expect(weightsPreset("6.0.0")).toBe(BOT_WEIGHTS_V6);
     expect(weightsPreset("5.0.0")).toBe(BOT_WEIGHTS_V5);
     expect(weightsPreset("4.0.0")).toBe(BOT_WEIGHTS_V4);
@@ -896,6 +902,49 @@ describe("nhóm trọng số claim", () => {
       if (key === "version" || key === "jester") continue;
       expect(BOT_WEIGHTS_V7[key]).toBe(BOT_WEIGHTS_V6[key]);
     }
+  });
+
+  it("v8 khác v7 ĐÚNG ở nhóm serialKiller và version", () => {
+    for (const key of Object.keys(BOT_WEIGHTS_V7) as Array<keyof typeof BOT_WEIGHTS_V7>) {
+      if (key === "version" || key === "serialKiller") continue;
+      expect(BOT_WEIGHTS_V8[key]).toBe(BOT_WEIGHTS_V7[key]);
+    }
+  });
+
+  it("v1-v7 giữ hành vi Sát Nhân TẮT hoàn toàn", () => {
+    // Cùng điều kiện và cùng lý do với nhóm `jester` ngay dưới: dưới các cấu
+    // hình đó, một con BOT Sát Nhân chốt bằng một luật tất định và không rút
+    // một số ngẫu nhiên nào, nên mọi ván tái lập khoá theo chúng vẫn đúng từng
+    // bit. Quét cả nhóm chứ không chỉ cổng `nightThreatWeight`.
+    for (const preset of [
+      BOT_WEIGHTS_V1,
+      BOT_WEIGHTS_V2,
+      BOT_WEIGHTS_V3,
+      BOT_WEIGHTS_V4,
+      BOT_WEIGHTS_V5,
+      BOT_WEIGHTS_V6,
+      BOT_WEIGHTS_V7,
+    ]) {
+      for (const value of Object.values(preset.serialKiller)) {
+        expect(value).toBe(0);
+      }
+    }
+  });
+
+  it("v8 đảo NGƯỢC dấu số hạng đám đông so với Thằng Hề", () => {
+    /*
+     * Quan hệ này là toàn bộ chỗ khác nhau giữa hai vai trung lập, và nó dễ bị
+     * phá vỡ âm thầm: Hề TRỪ điểm người đang dẫn phiếu (đứng lạc lõng để bị
+     * treo), Sát Nhân CỘNG (hùa theo để không bị treo). Hai con số cùng dấu ở
+     * đây nghĩa là một trong hai vai đang chơi ván của vai kia.
+     */
+    expect(BOT_WEIGHTS_V8.jester.bandwagonPenalty).toBeGreaterThan(0);
+    expect(BOT_WEIGHTS_V8.serialKiller.bandwagonBonus).toBeGreaterThan(0);
+    // Và Sát Nhân hùa theo NHẸ hơn mức Hề chống lại: một kẻ luôn bấm theo số
+    // đông bất kể lý lẽ cũng là một kẻ dễ đọc.
+    expect(BOT_WEIGHTS_V8.serialKiller.bandwagonBonus).toBeLessThan(
+      BOT_WEIGHTS_V8.jester.bandwagonPenalty,
+    );
   });
 
   it("v1-v6 giữ hành vi Thằng Hề TẮT hoàn toàn", () => {

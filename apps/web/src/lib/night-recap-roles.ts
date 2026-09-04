@@ -21,6 +21,7 @@ export interface RecapRoles {
   detective: boolean;
   witch: boolean;
   priest: boolean;
+  serialKiller: boolean;
 }
 
 /**
@@ -49,6 +50,9 @@ export function rolesInRecap(nights: NightRecap[], config?: RoomConfig): RecapRo
       (night) => night.witch.usedHeal || night.witch.poisonTarget != null,
     ),
     priest: inPlay(config?.priest, (night) => night.priest != null),
+    // Cùng quy tắc với mọi vai khác: kể về một vai khi ván CÓ vai đó. Vế lịch
+    // sử là lưới an toàn cho trường hợp server cũ gửi hành động mà thiếu cờ.
+    serialKiller: inPlay(config?.serialKiller, (night) => night.serialKillerTarget != null),
   };
 }
 

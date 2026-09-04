@@ -56,6 +56,22 @@ export function decideRoleClaim(
     return { role: "SEER", reason: "Thằng Hề khai láo một vai chức năng để bị phản bác và bị treo" };
   }
 
+  /*
+   * Sát Nhân nấp sau Dân Làng, ngược hẳn Thằng Hề ngay trên.
+   *
+   * Cùng một lý lẽ nền của hàm này, đọc theo đúng chiều của nó: khai một vai
+   * chức năng là tự chỉ vào mình, và Sát Nhân là vai duy nhất trên bàn KHÔNG
+   * được để ai chỉ vào mình - nó phải sống tới người cuối cùng. Nó cũng không
+   * có kết quả nào để đem ra đổi lấy sự chú ý đó.
+   *
+   * Nhánh tường minh dù kết quả trùng với đường mặc định ở cuối hàm: lý do khác
+   * hẳn ("giấu vai chức năng khỏi bầy Sói" là lo lắng của phe làng), và một lý
+   * do đúng là thứ người sửa sau đọc trước khi đổi luật.
+   */
+  if (role === "SERIAL_KILLER") {
+    return { role: COVER, reason: "Sát Nhân phải sống tới cuối, nên nó nấp sau lá bài nhạt nhất bàn" };
+  }
+
   const canSee = role === "SEER" || role === "APPRENTICE_SEER";
   const foundWolf = state.knownInformation.seerResults.some(
     (memory) => memory.data.isWolf === true,
@@ -359,7 +375,19 @@ export function decideChatClaim(
         reason: "sắp bị treo nên lôi vai thật ra làm lá bài cuối",
       };
     }
-    if (isWolf) {
+    /*
+     * Sát Nhân bị dồn thì NÓI DỐI y như một con Sói, và vì đúng một lý do: cả
+     * hai đều đang mất mạng nếu phiên toà này thành bản án.
+     *
+     * Đây là chỗ nó ĐỐI XỨNG với Thằng Hề ngay trên. Hề im vì sống là thua; Sát
+     * Nhân lôi lá bài cuối ra vì sống là toàn bộ ván của nó. Gộp hai vai trung
+     * lập vào một nhánh - dù chúng cùng mang nhãn `neutral` - sẽ làm hỏng đúng
+     * một trong hai.
+     *
+     * Không rút số ngẫu nhiên, đúng như nhánh Sói: một người sắp bị treo không
+     * cân nhắc xem có nên tự cứu hay không.
+     */
+    if (isWolf || role === "SERIAL_KILLER") {
       const taken = alreadyClaimed(state);
       const cover = BLUFF_COVERS.find((candidate) => !taken.has(candidate));
       if (cover) {

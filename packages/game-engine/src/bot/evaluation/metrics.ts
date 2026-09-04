@@ -1,15 +1,25 @@
-import { roleTeam, type Role, type Team, type Winner } from "@masoi/shared";
+import { roleTeam, roleWonOutcome, type Role, type Team, type Winner } from "@masoi/shared";
 
 /**
- * Phe có thể THẮNG chung một ván.
+ * Mọi KẾT CỤC một ván có thể dừng ở.
  *
- * Hẹp hơn `Team` một cách có chủ đích, và đó là chỗ khác nhau giữa hai khái
- * niệm: `Team` trả lời "vai này đứng cùng ai", còn tập này trả lời "ai có thể
- * là `winner` của ván". Một vai trung lập có `Team` riêng nhưng không bao giờ
- * là `winner` - thắng lợi của nó là một sổ cá nhân, nên gắn cho nó một ô win
- * rate ở đây chỉ tạo ra một con số luôn bằng 0 mà không ai đọc được nghĩa.
+ * Bốn ô, và hai trong số đó không phải một phe: `serial_killer` là một người
+ * thắng một mình, `draw` là không ai thắng. Chúng nằm ở đây - chứ không bị gộp
+ * vào ô của Dân hay Sói - vì đó đúng là câu hỏi cần trả lời khi đọc bảng cân
+ * bằng: bốn con số phải cộng lại bằng số ván đã kết thúc, và một ván Sát Nhân
+ * thắng không được làm đẹp tỉ lệ của bên nào cả.
  */
-type WinningTeam = Exclude<Winner, null>;
+type GameOutcome = Exclude<Winner, null>;
+
+/**
+ * Phe có ĐỘ CHÍNH XÁC PHIẾU để đo, hẹp hơn `GameOutcome` một cách có chủ đích.
+ *
+ * "Bỏ phiếu đúng" chỉ có nghĩa với hai phe có mục tiêu chung: với phe làng là
+ * trúng một con Sói, với phe Sói là né đồng bọn. Người trung lập vẫn bỏ phiếu,
+ * nhưng "đúng" với họ là một câu hỏi khác hẳn - và gộp họ vào đây làm bẩn đúng
+ * chỉ số đang đo phe làng.
+ */
+type VotingTeam = "village" | "wolves";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { normalizeSpeechText, openingOf } from "../conversation/fingerprint";
 import type { SelfPlayEvent, SelfPlayGame } from "./selfplay";
@@ -47,7 +57,7 @@ function mean(values: readonly number[]): number | null {
 export interface SelfPlayMetrics {
   games: number;
   finished: number;
-  winRate: Record<WinningTeam, Ratio>;
+  winRate: Record<GameOutcome, Ratio>;
   averageRounds: number | null;
   /** Phiếu chốt của một người phe làng nhắm trúng một con Sói thật. */
   villageVoteAccuracy: Ratio;
@@ -195,14 +205,14 @@ export interface RoleMetrics {
 }
 
 export interface TeamMetrics {
-  team: WinningTeam;
+  team: VotingTeam;
   wins: Ratio;
   voteAccuracy: Ratio;
 }
 
 export interface SelfPlayMetricsBundle {
   overall: SelfPlayMetrics;
-  byTeam: Record<WinningTeam, TeamMetrics>;
+  byTeam: Record<VotingTeam, TeamMetrics>;
   byRole: RoleMetrics[];
 }
 
@@ -271,6 +281,8 @@ export function collectMetrics(
 
   let finished = 0;
   let villageWins = 0;
+  let killerWins = 0;
+  let draws = 0;
   let wolfWins = 0;
   const roundCounts: number[] = [];
 
@@ -330,8 +342,8 @@ export function collectMetrics(
   // Chỉ hai phe có thể thắng, nên chỉ hai phe có độ chính xác phiếu để so.
   // Người chơi trung lập vẫn bỏ phiếu, nhưng "đúng" với họ không có nghĩa là
   // "trúng Sói" - gộp họ vào đây sẽ làm bẩn đúng chỉ số đang đo phe làng.
-  const teamVoteCorrect: Record<WinningTeam, number> = { village: 0, wolves: 0 };
-  const teamVoteTotal: Record<WinningTeam, number> = { village: 0, wolves: 0 };
+  const teamVoteCorrect: Record<VotingTeam, number> = { village: 0, wolves: 0 };
+  const teamVoteTotal: Record<VotingTeam, number> = { village: 0, wolves: 0 };
 
   for (const game of games) {
     const teamOf = (playerId: string): Team | undefined => {
@@ -341,8 +353,13 @@ export function collectMetrics(
 
     if (game.winner !== null) {
       finished += 1;
+      // Bốn ô rời nhau: một ván đi vào ĐÚNG một ô, nên tổng bốn tử số luôn bằng
+      // `finished`. Trộn Sát Nhân hay hoà vào ô của Dân/Sói sẽ làm cả bảng cân
+      // bằng nói dối về đúng bộ bài mà nó được dựng ra để chấm.
       if (game.winner === "village") villageWins += 1;
       if (game.winner === "wolves") wolfWins += 1;
+      if (game.winner === "serial_killer") killerWins += 1;
+      if (game.winner === "draw") draws += 1;
       roundCounts.push(game.rounds);
     }
 
@@ -390,7 +407,16 @@ export function collectMetrics(
        * Chỉ `roleWins` đọc thắng cá nhân. `winRate` ở trên KHÔNG, và không
        * được: nó trả lời "phe nào về nhất", một câu hỏi khác hẳn.
        */
-      const wonByTeam = game.winner !== null && roleTeam(role) === game.winner;
+      /*
+       * `roleWonOutcome`, KHÔNG phải `roleTeam(role) === game.winner`.
+       *
+       * Phép so cũ đúng chừng nào mọi kết cục cũng là một `Team`. Với
+       * `serial_killer` nó trả `false` cho chính kẻ vừa thắng (phe của vai đó
+       * là `neutral`), và với `draw` thì nó cũng trả `false` cho mọi vai - vế
+       * thứ hai là đúng và phải giữ, vế thứ nhất là một tỉ lệ thắng luôn bằng 0
+       * cho vai duy nhất tự thắng được cả ván.
+       */
+      const wonByTeam = game.winner !== null && roleWonOutcome(role, game.winner);
       if (wonByTeam || personalWinRoles.has(role)) {
         roleWins.set(role, (roleWins.get(role) ?? 0) + 1);
       }
@@ -668,6 +694,8 @@ export function collectMetrics(
     winRate: {
       village: ratio(villageWins, finished),
       wolves: ratio(wolfWins, finished),
+      serial_killer: ratio(killerWins, finished),
+      draw: ratio(draws, finished),
     },
     averageRounds: mean(roundCounts),
     villageVoteAccuracy: ratio(villageCorrect, villageVotes),
@@ -723,7 +751,7 @@ export function collectMetrics(
     claimAccuracy: ratio(seerClaimsAccurate, seerClaimsBelieved),
   };
 
-  const byTeam: Record<WinningTeam, TeamMetrics> = {
+  const byTeam: Record<VotingTeam, TeamMetrics> = {
     village: {
       team: "village",
       wins: overall.winRate.village,

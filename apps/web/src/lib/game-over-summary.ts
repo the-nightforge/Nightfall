@@ -2,8 +2,13 @@ import {
   PERSONAL_WIN_LABELS,
   ROLE_META,
   TEAM_LABELS,
+  outcomeHeadline,
+  outcomeName,
+  outcomeTeam,
+  roleWonOutcome,
   type CaseFile,
   type CaseHighlight,
+  type MatchOutcome,
   type PersonalWin,
   type RoomSnapshot,
   type Team,
@@ -25,16 +30,51 @@ import { roleLabel } from "./cursed";
  */
 
 export interface WinnerCopy {
-  team: Team;
-  /** "Ma Sói" / "Dân Làng" - dùng để ghép câu, không kèm chữ "Phe". */
-  teamName: string;
+  /**
+   * Sắc dùng cho cả màn. `"draw"` KHÔNG phải một phe - nó là trạng thái "không
+   * ai thắng", và cho nó mượn sắc của một phe nào đó là nói dối bằng màu.
+   */
+  tone: Team | "draw";
+  /**
+   * Phe của bên thắng; `null` khi hoà. Sát Nhân trả về `"neutral"` vì đó là
+   * nhãn phe của vai đó - nhưng TÊN thì là tên vai, xem `name` ngay dưới.
+   */
+  team: Team | null;
+  /**
+   * "Phe Ma Sói" / "Phe Dân Làng" / "Sát Nhân" - đã gồm sẵn chữ "Phe" khi có,
+   * vì Sát Nhân thắng MỘT MÌNH và "Phe Sát Nhân" là một phe không tồn tại.
+   * `null` khi hoà.
+   */
+  name: string | null;
+  /**
+   * "Ma Sói" / "Dân Làng" / "Trung lập" - nhãn PHE trơn, không kèm chữ "Phe".
+   * `null` khi hoà. Giữ lại vì các chỗ ghép câu theo phe vẫn cần nó.
+   */
+  teamName: string | null;
   /** Câu tiêu đề đầy đủ của màn kết thúc. */
   headline: string;
 }
 
-export function winnerCopy(winner: Exclude<Winner, null>): WinnerCopy {
-  const teamName = TEAM_LABELS[winner];
-  return { team: winner, teamName, headline: `Phe ${teamName} chiến thắng` };
+/**
+ * Câu chữ cho MỘT kết cục.
+ *
+ * Bốn nhánh, không phải hai. Bản cũ nhận đúng `"wolves" | "village"` và tra
+ * thẳng `TEAM_LABELS[winner]`; với kết cục thứ ba thì phép tra đó ra
+ * `undefined` và tiêu đề màn kết thúc thành "Phe undefined chiến thắng".
+ *
+ * Câu chữ lấy từ `@masoi/shared` chứ không viết lại ở đây: hồ sơ vụ án, thẻ
+ * chia sẻ và log của engine cũng gọi tên cùng bốn kết cục ấy, và bốn bảng nhãn
+ * song song là bốn bảng sẽ trôi khỏi nhau.
+ */
+export function winnerCopy(winner: MatchOutcome): WinnerCopy {
+  const team = outcomeTeam(winner);
+  return {
+    tone: team ?? "draw",
+    team,
+    name: outcomeName(winner),
+    teamName: team === null ? null : TEAM_LABELS[team],
+    headline: outcomeHeadline(winner),
+  };
 }
 
 /**
@@ -45,6 +85,32 @@ export function winnerCopy(winner: Exclude<Winner, null>): WinnerCopy {
  */
 export function personalWinLabel(win: PersonalWin): string {
   return `Thắng cá nhân: ${PERSONAL_WIN_LABELS[win.condition]}`;
+}
+
+/**
+ * Câu chú thích của một ván HOÀ.
+ *
+ * Hoà là kết cục duy nhất mà màn kết thúc phải nói hai điều cùng lúc, và bản cũ
+ * chỉ nói được một: "không ai đạt được mục tiêu của mình" là câu đúng cho một
+ * bàn chết sạch, nhưng nó PHỦ NHẬN thẳng khối "Thắng cá nhân" hiện ngay bên
+ * dưới nó. Một Thằng Hề bị treo ở vòng hai rồi cả bàn chết theo vẫn thắng - và
+ * engine đã ghi điều đó vào `personalWins` từ lúc búa gõ, trước cả khi ván có
+ * kết cục. Hai khối cạnh nhau nói ngược nhau thì người chơi tin khối nào?
+ *
+ * Vì thế câu chữ rẽ theo đúng dữ liệu đang hiển thị chứ không theo kết cục
+ * chung: vế "không ai thắng" chỉ được nói khi sổ thắng cá nhân THẬT SỰ rỗng.
+ *
+ * Nhận `personalWins` chứ không nhận cả `snapshot`: đây là một phép chọn câu
+ * chữ, và buộc nó phụ thuộc vào toàn bộ snapshot chỉ làm nó khó gọi từ test hơn
+ * mà không đọc thêm được gì.
+ */
+export function drawNote(personalWins: ReadonlyArray<PersonalWin>): string {
+  if (personalWins.length === 0) {
+    return "Không còn ai sống sót. Không phe nào và không ai đạt được mục tiêu của mình.";
+  }
+  return personalWins.length === 1
+    ? "Không còn ai sống sót, nên không phe nào thắng - nhưng một người vẫn đạt được mục tiêu riêng của mình."
+    : "Không còn ai sống sót, nên không phe nào thắng - nhưng vẫn có người đạt được mục tiêu riêng của mình.";
 }
 
 export interface PersonalOutcome {
@@ -94,7 +160,16 @@ export function personalOutcome(snapshot: RoomSnapshot): PersonalOutcome | null 
    * người vừa đạt được đúng điều họ chơi cả ván để đạt.
    */
   const personalWin = (snapshot.personalWins ?? []).find((win) => win.playerId === you.id) ?? null;
-  const won = personalWin !== null || team === snapshot.winner;
+  /*
+   * `roleWonOutcome`, KHÔNG phải `team === snapshot.winner`.
+   *
+   * Phép so cũ đúng chừng nào mọi kết cục cũng là một `Team`. Với
+   * `serial_killer` nó trả `false` cho chính người vừa thắng cả ván - phe của
+   * vai đó là `neutral`, không phải `serial_killer`. Với `draw` nó cũng trả
+   * `false`, và vế đó thì đúng: hoà không được ghi thành thắng theo phe cho
+   * bất kỳ ai.
+   */
+  const won = personalWin !== null || roleWonOutcome(you.role, snapshot.winner);
   return {
     won,
     team,
@@ -102,7 +177,22 @@ export function personalOutcome(snapshot: RoomSnapshot): PersonalOutcome | null 
     roleName: roleLabel(you),
     alive: you.alive,
     personalWin,
-    verdict: won ? "Bạn thắng" : "Bạn thua",
+    /*
+     * "Bạn thua" là câu SAI cho một ván hoà: hoà không phải một ván có kẻ thắng
+     * người thua. Người vừa đạt thắng lợi CÁ NHÂN trong một ván hoà vẫn đọc
+     * "Bạn thắng" - thành tích của Thằng Hề được giữ bất kể kết cục chung.
+     *
+     * Nhánh hoà nói về VÁN, không về cả bàn. Bản cũ ghi "Không ai thắng", và
+     * câu đó vượt quá điều nó được phép biết: nó tuyên bố hộ mọi người khác
+     * trong khi `personalWins` có thể đang chứa một Thằng Hề bị treo - người
+     * mà chính màn hình này liệt kê trong khối "Thắng cá nhân" ngay bên dưới,
+     * và `drawNote` cũng vừa nhắc tới. Ba khối cạnh nhau thì không được có một
+     * khối cãi hai khối kia.
+     *
+     * "Ván đấu hoà" nói đúng phạm vi mà `personalOutcome` nắm được: kết cục
+     * CHUNG là hoà, còn ai đạt được gì thì đã có sổ riêng trả lời.
+     */
+    verdict: won ? "Bạn thắng" : snapshot.winner === "draw" ? "Ván đấu hoà" : "Bạn thua",
     statusLabel: you.alive ? "Sống sót" : "Đã bị loại",
   };
 }

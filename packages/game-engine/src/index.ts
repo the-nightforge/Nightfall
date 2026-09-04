@@ -24,6 +24,8 @@ export * from "./bot/decision/ghost-decision";
 export * from "./bot/decision/last-letter-decision";
 export * from "./bot/roles/strategy";
 export * from "./bot/roles/jester";
+export * from "./bot/roles/serial-killer";
+export * from "./bot/roles/executioner";
 export * from "./bot/roles/registry";
 export * from "./bot/BotRuntime";
 export * from "./bot/personality/personality";

@@ -35,6 +35,8 @@ export const roomConfigSchema = z
     priest: bool.optional(),
     mayor: bool.optional(),
     jester: bool.optional(),
+    serialKiller: bool.optional(),
+    executioner: bool.optional(),
     mode: roomModeSchema.optional(),
     voice: bool.optional(),
     lastLetter: bool.optional(),
@@ -72,7 +74,13 @@ export function validateRoomConfig(config: RoomConfig, playerCount: number): str
     (config.mayor ? 1 : 0) +
     // Thằng Hề chiếm một ghế như mọi vai đặc biệt khác, dù nó không thuộc phe
     // làng: chỗ này đếm GHẾ ĐÃ BỊ LẤY, không đếm sức mạnh của phe nào.
-    (config.jester ? 1 : 0);
+    (config.jester ? 1 : 0) +
+    // Sát Nhân cũng vậy, và cũng chỉ một lá: cấu hình là boolean nên "tối đa 1"
+    // là tính chất của kiểu dữ liệu, không phải một phép kiểm tra ai đó phải
+    // nhớ viết.
+    (config.serialKiller ? 1 : 0) +
+    // Kẻ Báo Thù cũng vậy, và cũng chỉ một lá.
+    (config.executioner ? 1 : 0);
   const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0);
   const totalRoles = wolfCount + specials;
   if (totalRoles > playerCount) {
@@ -81,12 +89,27 @@ export function validateRoomConfig(config: RoomConfig, playerCount: number): str
   if (totalRoles === playerCount) {
     return "Phải còn chỗ cho Dân Làng";
   }
-  // `playerCount - wolfCount` là "số người KHÔNG phải Sói", nên Thằng Hề được
-  // tính vào đó - đúng bằng cách `checkWin` đếm thế cân bằng của bầy Sói. Hai
-  // phép đếm khác nhau ở đây sẽ cho phép mở một ván mà Sói đã thắng từ đêm đầu.
+  // `playerCount - wolfCount` là "số người KHÔNG phải Sói", nên cả hai vai trung
+  // lập đều được tính vào đó - đúng bằng cách `checkWin` đếm thế cân bằng của
+  // bầy Sói. Hai phép đếm khác nhau ở đây sẽ cho phép mở một ván mà Sói đã
+  // thắng từ đêm đầu.
   if (wolfCount >= playerCount - wolfCount) {
     return "Số Ma Sói phải ít hơn phe làng";
   }
+  /*
+   * KHÔNG có phép kiểm tra riêng nào cho "Kẻ Báo Thù phải có mục tiêu", và đó
+   * là một kết luận chứ không phải một chỗ bỏ sót.
+   *
+   * Vai đó cần ít nhất một người PHE DÂN trên bàn. Hai dòng luật ngay trên đã
+   * bảo đảm điều đó mạnh hơn mọi phép đếm thêm: `totalRoles === playerCount` bị
+   * từ chối, nên luôn còn ít nhất một ghế được Dân Làng lấp - và Dân Làng thì
+   * thuộc phe Dân. Thêm một `if` ở đây là thêm một nhánh không có đầu vào nào
+   * chạm tới được, tức một nhánh không ai kiểm chứng được là còn đúng.
+   *
+   * Hàng rào thật nằm ở `GameEngine.create`, chỗ bốc mục tiêu: nó ném khi
+   * không có ứng viên nào. Đó là nơi đúng, vì nó gác cả những lối vào KHÔNG đi
+   * qua hàm này - harness self-play và test dựng cấu hình thẳng bằng code.
+   */
   return null;
 }
 
@@ -110,6 +133,10 @@ export const nightActionTypeSchema = z.enum([
   "DETECTIVE_CHECK",
   "GUARDIAN_PROTECT",
   "HOLY_WATER",
+  // Hành động RIÊNG của Sát Nhân, không dùng chung "KILL" với bầy Sói: một mã
+  // duy nhất cho hai kỹ năng sẽ buộc engine phân giải theo vai người gửi, và
+  // đó đúng là chỗ để một phiếu cắn của Sói đi nhầm vào ô của Sát Nhân.
+  "SERIAL_KILL",
 ]);
 export const gameActionPayload = z
   .object({

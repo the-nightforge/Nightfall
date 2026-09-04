@@ -300,6 +300,15 @@ describe("bot knowledge security boundary", () => {
         "publicVoteHistory",
         "round",
         "seerResult",
+        // Vai TRUNG LẬP có trong bộ bài. Công khai y như `activeEventId`: cấu
+        // hình phòng đi xuống mọi client trong `RoomSnapshot.config`. Nó nói
+        // vai nào CÓ THỂ có mặt, không nói ai đang cầm lá nào.
+        "neutralRolesInPlay",
+        // Mục tiêu của CHÍNH bot này khi nó là Kẻ Báo Thù, và `null` với mọi
+        // vai khác - đúng như `seerResult` ngay trên: engine lọc theo chủ sở
+        // hữu, nên trường có mặt mà giá trị thì không. Với một Dân Làng (đúng
+        // fixture này) nó luôn `null`, nên FORBIDDEN_KEYS vẫn không bị vi phạm.
+        "executionerTargetId",
         "selfRole",
       ].sort(),
     );

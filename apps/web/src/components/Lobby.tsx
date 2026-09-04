@@ -3,16 +3,30 @@
 import { useState } from "react";
 import {
   MAX_PLAYERS_PER_ROOM,
+  ROLE_META,
   validateRoomConfig,
+  type Role,
   type RoomConfig,
   type RoomSnapshot,
 } from "@masoi/shared";
 import type { Identity } from "@/lib/identity";
 import { generateWarnings, PRESET_DECKS } from "@/lib/balance";
 import { balanceCopy } from "@/lib/balance-copy";
-import { deckCounts, deckStage, isPresetDeck, startBlock, type StartBlock } from "@/lib/lobby-summary";
+import {
+  CONFIG_KEY,
+  NEUTRAL_ROLES,
+  VILLAGE_ROLES,
+  WOLF_SPECIAL_ROLES,
+  deckCounts,
+  deckStage,
+  isPresetDeck,
+  startBlock,
+  type StartBlock,
+} from "@/lib/lobby-summary";
 import { lastLetterToggle } from "@/lib/last-letter";
+import { ROLE_ICON_PATHS } from "@/lib/role-art";
 import { BalanceMeter } from "./BalanceMeter";
+import { LobbyActivity } from "./LobbyActivity";
 import { RoleDeckPanel } from "./RoleDeckPanel";
 
 interface Props {
@@ -72,6 +86,14 @@ export function Lobby({
   const onPreset = isPresetDeck(config, count);
   const presetForCount = PRESET_DECKS[count];
   const stage = deckStage(count);
+  const activeRoles: Role[] = [
+    "WEREWOLF",
+    ...WOLF_SPECIAL_ROLES.filter((role) => config[CONFIG_KEY[role]]),
+    ...VILLAGE_ROLES.filter((role) => config[CONFIG_KEY[role]]),
+    ...NEUTRAL_ROLES.filter((role) => config[CONFIG_KEY[role]]),
+    ...(stage.rated && counts.villagers > 0 ? (["VILLAGER"] as Role[]) : []),
+  ];
+  const visibleRoles = activeRoles.slice(0, 5);
 
   // Cùng bộ đầu vào và cùng thứ tự ưu tiên mà `RoomService.start` dùng -
   // startBlock chỉ gói lại chứ không đổi luật nào.
@@ -85,173 +107,132 @@ export function Lobby({
   });
 
   return (
-    <div className="space-y-3 lg:space-y-4">
-      <section className="card space-y-4 p-4 lg:p-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <h2 className="font-display text-xl font-bold text-white lg:text-2xl">Thiết lập trận</h2>
-          <span className="text-sm text-mist-strong/85">{stage.summary}</span>
-        </div>
-
-        {/*
-          * Hai chip đầu đếm thẳng từ cấu hình nên lúc nào cũng đúng. Hai chip
-          * còn lại thì KHÔNG: nhãn preset khẳng định bộ bài hợp lệ cho số người
-          * hiện tại, còn "Dân Làng" là phần còn lại sau khi trừ bài khỏi người -
-          * ở phòng 1 người nó ra "0 Dân Làng", một con số đúng về số học và vô
-          * nghĩa về trò chơi.
-          */}
-        <div className="flex flex-wrap items-center gap-2">
-          {stage.rated ? (
-            <span
-              className={`rounded-full border px-3 py-1.5 text-xs font-bold ${
-                onPreset
-                  ? "border-emerald-500/45 bg-emerald-900/30 text-emerald-200"
-                  : "border-amber-500/45 bg-amber-900/25 text-amber-200"
-              }`}
-            >
-              {onPreset ? `Preset chuẩn ${count} người` : "Bộ bài tuỳ chỉnh"}
-            </span>
-          ) : (
-            <span className="rounded-full border border-night-600 bg-night-800/70 px-3 py-1.5 text-xs font-bold text-mist">
-              Vai trò đang bật
-            </span>
-          )}
-          <Chip tone="wolves">{counts.wolves} Ma Sói</Chip>
-          <Chip tone="village">{counts.specials} chức năng</Chip>
-          {stage.rated && <Chip tone="plain">{counts.villagers} Dân Làng</Chip>}
-        </div>
-
-        <ModeToggle
-          mode={mode}
-          isHost={isHost}
-          onChange={(next) => onUpdateConfig({ ...config, mode: next })}
-        />
-
-        {/*
-          * Dưới mốc bắt đầu KHÔNG chấm cân bằng.
-          *
-          * `calculateBalanceScore` vẫn trả về một con số cho bàn 1 người, và
-          * `PRESET_DECKS` phủ đúng 8..15 nên nó luôn kèm "Không có preset". Kết
-          * quả ở bản cũ: phòng 1 người hiện một thanh cân bằng 58 điểm, một
-          * cảnh báo đội hình nghiêng, và một câu bảo "Bạn vẫn chơi được" - ngay
-          * dưới dòng header nói còn thiếu 5 người. Chấm điểm một bàn chưa tồn
-          * tại thì mọi câu chữ sinh ra từ nó đều mâu thuẫn với phần còn lại.
-          */}
-        {stage.rated ? (
-          <BalanceMeter score={balance.score} />
-        ) : (
-          <p
-            data-testid="balance-pending"
-            className="rounded-xl border border-night-600/60 bg-night-900/50 px-3.5 py-3 text-[13px] leading-relaxed text-mist-strong"
-          >
-            {stage.pending}
-          </p>
-        )}
-
-        {stage.rated && copy.advice.length > 0 && (
-          <div
-            data-testid="balance-warning"
-            className={`rounded-xl border px-3.5 py-3 ${
-              copy.blocksStart
-                ? "border-blood-500/45 bg-blood-600/15"
-                : "border-amber-500/35 bg-amber-500/10"
-            }`}
-          >
-            <p
-              className={`text-sm font-bold ${copy.blocksStart ? "text-blood-400" : "text-amber-200"}`}
-            >
-              {copy.headline}
-            </p>
-            {/*
-              * Lời khuyên là câu người chơi ĐỌC, bản kỹ thuật là câu họ tra khi
-              * cần. Bản cũ in thẳng "BalanceScore 58 ngoài ngưỡng 45-55" ở đúng
-              * chỗ này: nó nói đúng chuyện gì đang xảy ra mà không nói được phải
-              * làm gì, và nó là dòng chữ đầu tiên của thẻ cảnh báo.
-              */}
-            <ul className="mt-1.5 list-disc space-y-1 pl-5 text-[13px] leading-relaxed text-mist/90">
-              {copy.advice.map((line, index) => (
-                <li key={index}>{line}</li>
-              ))}
-            </ul>
-            {isHost && presetForCount && (
-              <button
-                type="button"
-                onClick={() => onUpdateConfig(presetForCount)}
-                className="btn-secondary mt-3 w-full text-sm"
-                data-testid="apply-preset"
-              >
-                Áp dụng preset chuẩn cho {count} người
-              </button>
-            )}
-            <TechnicalDetail lines={copy.technical} score={balance.score} />
+    <div className="space-y-3">
+      <section className="lobby-command-panel">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="lobby-kicker">Đội hình đêm nay</p>
+            <h2 className="font-display text-xl font-semibold text-white">Vai trò</h2>
           </div>
-        )}
+          <span className={`lobby-mode-pill ${mode === "ranked" ? "is-ranked" : "is-chaos"}`}>
+            {mode === "ranked" ? "Ranked" : "Chaos"}
+          </span>
+        </div>
 
-        <div className="border-t border-white/[0.08] pt-4">
+        <div className="mt-4 flex flex-wrap gap-2">
+          {visibleRoles.map((role) => {
+            const amount =
+              role === "WEREWOLF"
+                ? config.werewolves
+                : role === "VILLAGER"
+                  ? counts.villagers
+                  : 1;
+            return (
+              <span key={role} className="lobby-role-chip">
+                <svg viewBox="0 0 512 512" aria-hidden="true"><path d={ROLE_ICON_PATHS[role]} /></svg>
+                <span>{amount}</span>
+                <span className="truncate">{ROLE_META[role].name}</span>
+              </span>
+            );
+          })}
+          {activeRoles.length > visibleRoles.length && (
+            <span className="lobby-role-chip text-mist/75">+{activeRoles.length - visibleRoles.length}</span>
+          )}
+        </div>
+
+        <p className="mt-3 text-[13px] leading-relaxed text-mist/70">
+          {stage.rated
+            ? `${onPreset ? "Đội hình chuẩn" : "Đội hình tuỳ chỉnh"} cho ${count} người.`
+            : stage.summary}
+        </p>
+
+        <div className="mt-4 border-t border-white/[0.08] pt-4">
+          <LobbyActivity snapshot={snapshot} />
+        </div>
+
+        <div className="lobby-primary-action mt-4">
           {isHost ? (
-            /*
-             * CTA và "Thêm bot" nằm CÙNG một hàng từ sm trở lên, và CTA chiếm
-             * phần lớn chiều ngang. Bản cũ xếp chúng thành hai nút toàn chiều
-             * rộng chồng lên nhau, cùng bề ngang và cùng chiều cao: mắt đọc ra
-             * hai hành động ngang hàng, trong khi "Thêm bot" chỉ là thứ dùng để
-             * tự test một mình.
-             */
-            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-stretch">
-              <button
-                className="btn-cta w-full sm:flex-[3]"
-                onClick={onStart}
-                disabled={block !== null}
-              >
-                Bắt đầu trận đấu
-              </button>
-              <button
-                className="btn-secondary w-full sm:flex-1"
-                onClick={onAddBot}
-                disabled={count >= MAX_PLAYERS_PER_ROOM}
-              >
-                + Thêm bot
-              </button>
-            </div>
+            <button className="btn-cta w-full" onClick={onStart} disabled={block !== null}>
+              <span aria-hidden="true">◐</span>
+              Bắt đầu trò chơi
+            </button>
           ) : (
-            <button className="btn-cta w-full" onClick={() => onReady(!myReady)}>
-              {myReady ? "Huỷ sẵn sàng" : "Tôi đã sẵn sàng!"}
+            <button
+              className={`btn-cta w-full ${myReady ? "is-ready" : ""}`}
+              onClick={() => onReady(!myReady)}
+              aria-pressed={myReady}
+            >
+              <span aria-hidden="true">{myReady ? "✓" : "○"}</span>
+              {myReady ? "Đã sẵn sàng" : "Sẵn sàng"}
             </button>
           )}
-
           <BlockReason block={block} isHost={isHost} />
-
-          {isHost && count < MAX_PLAYERS_PER_ROOM && (
-            <p className="mt-2 text-center text-[13px] leading-relaxed text-mist-strong/85">
-              Bot dùng để chơi thử một mình — người thật vẫn vào được cho tới khi đủ{" "}
-              {MAX_PLAYERS_PER_ROOM} người.
-            </p>
-          )}
         </div>
+        {isHost && count < MAX_PLAYERS_PER_ROOM && (
+          <button
+            type="button"
+            className="btn-tertiary lobby-add-bot mx-auto mt-2 flex min-h-11"
+            onClick={onAddBot}
+            disabled={count >= MAX_PLAYERS_PER_ROOM}
+          >
+            + Thêm bot để chơi thử
+          </button>
+        )}
       </section>
 
-      {/*
-        * Khu Add-on đứng NGOÀI mục "Cài đặt nâng cao".
-        *
-        * Mục kia chỉ hiện với chủ phòng, còn add-on thì đổi LUẬT của ván mà cả
-        * bàn sắp chơi. Giấu nó với khách nghĩa là để họ phát hiện ra giữa ván,
-        * lúc một lá thư mở ra và không ai biết nó từ đâu tới. Khách thấy đủ
-        * trạng thái, chỉ không gạt được.
-        */}
       <Disclosure
-        summary="Add-on"
-        hint={isHost ? "Luật thêm cho ván này" : "Luật thêm chủ phòng đã bật"}
+        summary={isHost ? "Thiết lập ván" : "Luật của phòng"}
+        hint="Chế độ, cân bằng và add-on"
       >
-        <AddonConfig snapshot={snapshot} identity={identity} onSave={onUpdateConfig} />
+        <div className="space-y-4">
+          <ModeToggle
+            mode={mode}
+            isHost={isHost}
+            onChange={(next) => onUpdateConfig({ ...config, mode: next })}
+          />
+          {stage.rated ? (
+            <BalanceMeter score={balance.score} />
+          ) : (
+            <p data-testid="balance-pending" className="text-[13px] leading-relaxed text-mist-strong">
+              {stage.pending}
+            </p>
+          )}
+          {stage.rated && copy.advice.length > 0 && (
+            <div
+              data-testid="balance-warning"
+              className={`rounded-xl px-3.5 py-3 ${
+                copy.blocksStart ? "bg-blood-600/15" : "bg-amber-500/10"
+              }`}
+            >
+              <p className={`text-sm font-bold ${copy.blocksStart ? "text-blood-400" : "text-amber-200"}`}>
+                {copy.headline}
+              </p>
+              <ul className="mt-1.5 list-disc space-y-1 pl-5 text-[13px] leading-relaxed text-mist/90">
+                {copy.advice.map((line, index) => <li key={index}>{line}</li>)}
+              </ul>
+              {isHost && presetForCount && (
+                <button type="button" onClick={() => onUpdateConfig(presetForCount)} className="btn-secondary mt-3 w-full text-sm" data-testid="apply-preset">
+                  Áp dụng đội hình chuẩn
+                </button>
+              )}
+              <TechnicalDetail lines={copy.technical} score={balance.score} />
+            </div>
+          )}
+          <div className="border-t border-white/[0.08] pt-4">
+            <AddonConfig snapshot={snapshot} identity={identity} onSave={onUpdateConfig} />
+          </div>
+        </div>
       </Disclosure>
 
       <Disclosure
-        summary="Tuỳ chỉnh vai trò"
-        hint={isHost ? "Bật/tắt từng vai, đổi số Ma Sói" : "Xem bộ bài chủ phòng đã chọn"}
+        summary={isHost ? "Chỉnh sửa vai trò" : "Xem toàn bộ vai trò"}
+        hint={isHost ? "Bật, tắt hoặc đổi số Ma Sói" : "Đội hình do chủ phòng chọn"}
       >
         <RoleDeckPanel snapshot={snapshot} isHost={isHost} onUpdateConfig={onUpdateConfig} />
       </Disclosure>
 
       {isHost && (
-        <Disclosure summary="Cài đặt nâng cao" hint="Thời gian từng pha, trò chuyện bằng giọng nói">
+        <Disclosure summary="Cài đặt nâng cao" hint="Thời gian và trò chuyện giọng nói">
           <div className="space-y-4">
             {snapshot.voice?.available && <VoiceConfig config={config} onSave={onUpdateConfig} />}
             <TimingConfig config={config} onSave={onUpdateConfig} />
@@ -259,23 +240,6 @@ export function Lobby({
         </Disclosure>
       )}
     </div>
-  );
-}
-
-function Chip({
-  tone,
-  children,
-}: {
-  tone: "wolves" | "village" | "plain";
-  children: React.ReactNode;
-}) {
-  const cls = {
-    wolves: "border-blood-500/45 bg-blood-600/20 text-blood-400",
-    village: "border-emerald-500/35 bg-emerald-900/25 text-emerald-200",
-    plain: "border-night-600 bg-night-800/70 text-mist",
-  }[tone];
-  return (
-    <span className={`rounded-full border px-3 py-1.5 text-xs font-bold ${cls}`}>{children}</span>
   );
 }
 
@@ -323,11 +287,11 @@ function Disclosure({
   children: React.ReactNode;
 }) {
   return (
-    <details className="card group p-4 lg:p-5">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg transition hover:text-white">
+    <details className="lobby-disclosure group">
+      <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-3 transition hover:bg-white/[0.04] hover:text-white">
         <span>
-          <span className="font-display text-lg font-semibold text-white">{summary}</span>
-          <span className="block text-sm text-mist-strong/85">{hint}</span>
+          <span className="text-[15px] font-bold text-white">{summary}</span>
+          <span className="mt-0.5 block text-[13px] text-mist/70">{hint}</span>
         </span>
         <span
           aria-hidden="true"
@@ -336,7 +300,7 @@ function Disclosure({
           ▾
         </span>
       </summary>
-      <div className="mt-4">{children}</div>
+      <div className="border-t border-white/[0.08] px-4 py-4">{children}</div>
     </details>
   );
 }
@@ -400,7 +364,7 @@ function ModeToggle({
   const options = [
     {
       id: "ranked" as const,
-      label: "🛡️ Ranked",
+      label: "Ranked",
       hint: "Sự kiện hiếm",
       title: "Sự kiện chỉ kích hoạt khi một phe bị lấn lướt mạnh",
       // Viền đặc + nền đậm + chữ sáng: ở bản cũ ô được chọn chỉ khác ô kia ở
@@ -410,7 +374,7 @@ function ModeToggle({
     },
     {
       id: "chaos" as const,
-      label: "🌀 Chaos",
+      label: "Chaos",
       hint: "Sự kiện mỗi vòng",
       title: "Sự kiện bất ngờ ngẫu nhiên kích hoạt mỗi vòng",
       on: "border-purple-400/70 bg-purple-500/25 text-purple-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]",
@@ -473,7 +437,7 @@ function AddonConfig({
           letter.canToggle ? "cursor-pointer" : "cursor-default"
         }`}
       >
-        <span className="font-semibold text-white">✉️ Phong thư sau cùng</span>
+        <span className="font-semibold text-white">Phong thư sau cùng</span>
         <input
           type="checkbox"
           className="h-5 w-5 accent-blood-500 disabled:opacity-50"
@@ -512,7 +476,7 @@ function VoiceConfig({
   return (
     <div className="flex flex-col gap-2 border-b border-white/[0.08] pb-4">
       <label className="flex cursor-pointer items-center justify-between gap-3">
-        <span className="font-semibold text-white">🎙️ Trò chuyện bằng giọng nói</span>
+        <span className="font-semibold text-white">Trò chuyện bằng giọng nói</span>
         <input
           type="checkbox"
           className="h-5 w-5 accent-blood-500"

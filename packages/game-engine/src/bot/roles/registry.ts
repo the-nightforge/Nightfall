@@ -1,11 +1,13 @@
 import type { Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { detectiveStrategy } from "./detective";
+import { executionerStrategy } from "./executioner";
 import { guardStrategy } from "./guard";
 import { guardianAngelStrategy } from "./guardian-angel";
 import { jesterStrategy } from "./jester";
 import { priestStrategy } from "./priest";
 import { seerStrategy } from "./seer";
+import { serialKillerStrategy } from "./serial-killer";
 import { passiveStrategy, type BotRoleStrategy } from "./strategy";
 import { werewolfStrategy } from "./werewolf";
 import { witchStrategy } from "./witch";
@@ -42,6 +44,22 @@ const REGISTRY: Partial<Record<Role, (role: Role, weights: BotWeights) => BotRol
   // và một con Hề chơi như Dân Làng thì không bao giờ đạt được điều kiện thắng
   // của chính nó. Xem `roles/jester.ts`.
   JESTER: jesterStrategy,
+  // Sát Nhân có hành động đêm THẬT, nên nó bắt buộc phải có entry ở đây: rơi
+  // về `passiveStrategy` thì lượt đêm của cả vai này mất trắng mọi ván - engine
+  // vẫn chào một `SERIAL_KILL` hợp lệ, và không ai nhận.
+  SERIAL_KILLER: serialKillerStrategy,
+  /*
+   * Kẻ Báo Thù cũng KHÔNG rơi về `passiveStrategy`, cùng lý do với Thằng Hề:
+   * nó không có hành động đêm, nhưng chiến thuật nền là chiến thuật của một
+   * người không có nhiệm vụ - và cả ván của vai này nằm trong việc lái một lá
+   * phiếu về đúng một cái tên.
+   *
+   * KHÔNG có entry cho vai này SAU khi nó hoá Thằng Hề, và đó là cơ chế đổi
+   * chiến thuật: `strategyFor` tra theo vai HIỆN TẠI, nên một Kẻ Báo Thù đã
+   * chuyển vai tự nhận `jesterStrategy` ở ngay lời gọi kế tiếp. Không có cờ
+   * nào để quên xoá, và không có quyết định đang chờ nào còn đọc bảng cũ.
+   */
+  EXECUTIONER: executionerStrategy,
 };
 
 export function strategyFor(

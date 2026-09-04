@@ -28,6 +28,8 @@ export type CaseHighlightType =
   | "LATE_VOTE_SWING"
   | "SEER_FOUND_WOLF"
   | "LONE_SURVIVOR"
+  /** Sát Nhân ra tay trong đêm. Đứng riêng vì nguồn cái chết khác hẳn nhát cắn. */
+  | "SERIAL_KILLER_STRIKE"
   /** Đường lui khi ván không có điểm ngoặt nào đủ rõ. Không bao giờ đi kèm loại khác. */
   | "QUIET_MATCH";
 
@@ -38,7 +40,8 @@ export type CaseDeathCause =
   | "priest"
   | "priest_backfire"
   | "lynch"
-  | "hunter";
+  | "hunter"
+  | "serial_killer";
 
 /**
  * Số liệu thô đã chứng minh một điểm ngoặt.
@@ -61,6 +64,7 @@ export type CaseEvidence =
   | { kind: "seer-check"; seerId: string; targetId: string }
   | { kind: "vote-swing"; voterId: string; accusedId: string; castAt: number; windowEndsAt: number }
   | { kind: "lone-survivor"; playerId: string; team: Team }
+  | { kind: "serial-killer-strike"; killerId: string; victimId: string }
   | { kind: "quiet-match"; rounds: number };
 
 export interface CaseFilePlayer {
@@ -137,6 +141,13 @@ export interface CaseFile {
   version: 1;
   /** Mã hồ sơ ổn định, sinh từ dữ liệu ván. Không phải mã phòng. */
   caseId: string;
+  /**
+   * Kết cục của ván, cả BỐN giá trị.
+   *
+   * Gồm cả `draw`: một ván hoà vẫn là một ván có diễn biến, và một hồ sơ trống
+   * cho đúng những ván kịch tính nhất là câu trả lời sai. Chỗ đọc phải dùng
+   * `outcomeName`/`outcomeTeam` chứ không so thẳng với một `Team`.
+   */
   winner: Exclude<Winner, null>;
   rounds: number;
   cast: CaseFilePlayer[];

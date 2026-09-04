@@ -75,7 +75,9 @@ describe("Thằng Hề trong ván self-play trọn vẹn", () => {
     // `rejected` gộp cả lượt BOT chủ động bỏ, nhưng Hề không có lượt đêm nào để
     // mà bỏ - nên con số này phải giống hệt bộ bài không có Hề.
     expect(withJester.rejected).toBe(runBatch({ ...DECK, jester: false }).rejected);
-  });
+    // 30s như bài đo ở dưới: dòng này chạy THÊM một lượt 30 ván nữa, và trần 5s
+    // mặc định không đủ từ khi bộ bài có thêm vai.
+  }, 30_000);
 
   it("chiến thuật thật sự đưa được Hề lên giá treo", () => {
     /*

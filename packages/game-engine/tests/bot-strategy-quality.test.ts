@@ -112,6 +112,7 @@ function night(over: Partial<NightKnowledge> = {}): NightKnowledge {
       DETECTIVE_CHECK: [],
       GUARDIAN_PROTECT: [],
       HOLY_WATER: [],
+      SERIAL_KILL: [],
     },
     wolfTarget: null,
     guardPrevious: null,
@@ -126,6 +127,7 @@ function context(over: Partial<BotKnowledgeView> = {}): BotDecisionContext {
   return {
     knowledge: {
       dayOfTruthClaims: {},
+      neutralRolesInPlay: [],
       activeEventId: null,
       botId: "me",
       round: 2,

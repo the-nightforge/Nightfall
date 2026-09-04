@@ -22,6 +22,7 @@ function knowledge(over: Partial<BotKnowledgeView> = {}): BotKnowledgeView {
   return {
     dayOfTruthClaims: {},
     activeEventId: null,
+    neutralRolesInPlay: [],
     botId: "me",
     round: 1,
     phase: "DAY_DISCUSSION",

@@ -22,6 +22,7 @@ function context(chat: BotChatObservation[], round = 1): BotDecisionContext {
     knowledge: {
       dayOfTruthClaims: {},
       activeEventId: null,
+      neutralRolesInPlay: [],
       botId: "me",
       round,
       phase: "DAY_DISCUSSION",

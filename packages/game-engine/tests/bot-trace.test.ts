@@ -28,6 +28,7 @@ function emptyNight(over: Partial<NightKnowledge> = {}): NightKnowledge {
       DETECTIVE_CHECK: [],
       GUARDIAN_PROTECT: [],
       HOLY_WATER: [],
+      SERIAL_KILL: [],
     },
     wolfTarget: null,
     guardPrevious: null,
@@ -41,6 +42,7 @@ function emptyNight(over: Partial<NightKnowledge> = {}): NightKnowledge {
 function knowledge(over: Partial<BotKnowledgeView> = {}): BotKnowledgeView {
   return {
     dayOfTruthClaims: {},
+    neutralRolesInPlay: [],
     activeEventId: null,
     botId: "me",
     round: 2,

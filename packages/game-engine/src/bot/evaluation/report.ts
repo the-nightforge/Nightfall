@@ -190,6 +190,11 @@ export function formatReportText(report: SelfPlayReport): string {
     "── Cân bằng ──",
     `  Dân thắng            ${pct(m.winRate.village)}`,
     `  Sói thắng            ${pct(m.winRate.wolves)}`,
+    // Hai dòng này luôn in, kể cả khi bằng 0: "0.0% (0/150)" nói rằng bộ bài
+    // không có Sát Nhân, còn một dòng vắng mặt thì không nói gì cả - và người
+    // đọc sẽ cộng ba con số đầu rồi tưởng chúng phải bằng 100%.
+    `  Sát Nhân thắng       ${pct(m.winRate.serial_killer)}`,
+    `  Hoà                  ${pct(m.winRate.draw)}`,
     `  Số vòng trung bình   ${m.averageRounds === null ? "n/a" : m.averageRounds.toFixed(2)}`,
     `  Chạm trần vòng       ${pct(m.roundLimitRate)}`,
     "",

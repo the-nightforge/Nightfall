@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { CHAT_CHANNELS, PERSONAL_WIN_CONDITIONS, PHASES, ROLES, roomConfigSchema } from "@masoi/shared";
+import {
+  CHAT_CHANNELS,
+  PERSONAL_WIN_CONDITIONS,
+  PHASES,
+  ROLES,
+  WINNERS,
+  roomConfigSchema,
+} from "@masoi/shared";
 import type {
   ChatMessage,
   DayVoteRecap,
@@ -62,11 +69,12 @@ const gamePhaseSchema = oneOf<GamePhase>(PHASES.filter((phase) => phase !== "LOB
 const roleSchema = oneOf<Role>(ROLES);
 const teamSchema = oneOf<Team>(["wolves", "village", "neutral"]);
 const personalWinConditionSchema = oneOf<PersonalWin["condition"]>(PERSONAL_WIN_CONDITIONS);
-const winnerSchema = z.union([
-  z.literal("wolves"),
-  z.literal("village"),
-  z.null(),
-]) as z.ZodType<Winner>;
+/**
+ * Suy từ `WINNERS` chứ không chép tay bốn literal: một kết cục mới thêm vào
+ * shared mà quên ở đây sẽ làm mọi ván đang chạy trượt schema rồi bị cách ly,
+ * và nó chỉ lộ ra lúc một ván THẬT kết thúc đúng kiểu đó.
+ */
+const winnerSchema = z.union([oneOf<Exclude<Winner, null>>(WINNERS), z.null()]) as z.ZodType<Winner>;
 
 /**
  * `null` là một lá phiếu THẬT ("không treo ai"), khác hẳn key vắng mặt ("chưa
@@ -82,6 +90,10 @@ const enginePlayerSchema = z.object({
   alive: z.boolean(),
   isBot: z.boolean(),
   cursedTurned: z.boolean().optional(),
+  // OPTIONAL vì cùng lý do với `cursedTurned` ngay trên: bắt buộc một trường
+  // thêm sau là làm mọi snapshot đã ghi trước bản này trượt schema rồi rơi vào
+  // `quarantine`. Constructor của engine chuẩn hoá về `false`.
+  executionerTurned: z.boolean().optional(),
 });
 
 const nightStateSchema = z.object({
@@ -123,6 +135,12 @@ const nightStateSchema = z.object({
     }),
   ),
   priestResults: z.record(z.string(), z.object({ targetId: z.string(), isWolf: z.boolean() })),
+  // OPTIONAL vì đây là hai trường thêm sau. Bắt buộc chúng là mọi snapshot đã
+  // ghi trước bản này trượt schema rồi rơi vào `quarantine` - tức giết sạch các
+  // ván đang chạy ngay lúc deploy. Constructor của engine chuẩn hoá về
+  // `null`/`false`, đúng trạng thái mà một ván không có Sát Nhân đang ở.
+  serialKillerTarget: z.string().nullable().optional(),
+  serialKillerSkipped: z.boolean().optional(),
 });
 
 const publicDeathSchema = z.object({ playerId: z.string(), name: z.string() });
@@ -190,6 +208,21 @@ export const gameStateSchema = z.object({
    * rồi rơi vào `quarantine` - tức giết sạch các ván đang chạy ngay lúc deploy.
    * Constructor của engine chuẩn hoá về mảng rỗng.
    */
+  /**
+   * Nhiệm vụ của Kẻ Báo Thù: `executionerId` -> `targetId`.
+   *
+   * STRICT chứ không phải `objectOf`, cùng thang đo với `personalWins` ngay
+   * dưới: đây là dữ liệu MANG QUYẾT ĐỊNH - nó là điều kiện thắng của một người
+   * chơi, và một giá trị méo ở đây sẽ lặng lẽ khiến họ không bao giờ thắng
+   * được, hoặc hoá Thằng Hề vào sai lúc.
+   *
+   * OPTIONAL vì cùng lý do với `personalWins`: bắt buộc một trường thêm sau là
+   * giết sạch các ván đang chạy ngay lúc deploy. Constructor của engine chuẩn
+   * hoá về object rỗng, tức "ván này không có ai mang nhiệm vụ" - đúng sự thật
+   * của một ván ghi trước bản này. Và quan trọng: nó KHÔNG bốc lại mục tiêu,
+   * nên một lần khôi phục không đổi nhiệm vụ của ai.
+   */
+  executionerTargets: z.record(z.string(), z.string()).optional(),
   personalWins: z
     .array(
       z.object({
@@ -252,7 +285,14 @@ export const botBrainStateSchema = z.object({
         "SKIP",
         "DETECTIVE_CHECK",
         "GUARDIAN_PROTECT",
+        // "HOLY_WATER" bị bỏ sót từ đầu: `NightActionKind` gọi lượt của Linh
+        // Mục như thế, còn danh sách này giữ một cái tên chưa từng tồn tại
+        // ("PRIEST_BLESS"). Hậu quả là một phòng có Linh Mục BOT đã ném Nước
+        // thánh sẽ trượt schema lúc khôi phục. Giữ tên cũ để snapshot đã ghi
+        // vẫn đọc được, và thêm tên thật cạnh nó.
         "PRIEST_BLESS",
+        "HOLY_WATER",
+        "SERIAL_KILL",
       ]),
       targetId: z.string().nullable(),
     }),

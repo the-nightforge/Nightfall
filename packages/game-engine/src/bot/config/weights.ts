@@ -110,6 +110,27 @@ export interface PrivateInfoWeights {
    * không đủ để nó đứng ra bảo lãnh cho một kẻ không chơi cho làng.
    */
   neutralClearTrust: number;
+  /**
+   * Nghi ngờ ghim vào một mục tiêu soi ra TRUNG LẬP, khi bộ bài của ván CÓ Sát
+   * Nhân.
+   *
+   * Cùng một kết quả soi, hai kết luận trái ngược - và đó là đúng, vì câu hỏi
+   * đã đổi. Trong một ván chỉ có Thằng Hề, "trung lập" nghĩa là "vô hại với
+   * làng, đừng phí một ngày treo nó". Trong một ván có Sát Nhân, đúng cái nhãn
+   * ấy là ứng viên số một cho kẻ đang giết người mỗi đêm - và một Tiên Tri đọc
+   * ra "trung lập" rồi tuyên bố người đó an toàn là đang bảo lãnh cho hung thủ.
+   *
+   * Vì thế nhánh này KHÔNG cộng tin tưởng: nó ghim tin tưởng về 0 và ghim nghi
+   * ngờ lên mốc này. Giá trị TUYỆT ĐỐI chứ không phải mức cộng thêm, cùng lý do
+   * idempotent với `neutralClearTrust`.
+   *
+   * 55 trên thang 100: trên hẳn ngưỡng đề cử (`aggression.thresholdBase` sau
+   * hiệu chỉnh v2 nằm quanh 6 trên thang belief THẬT, và một điểm ghim ở đây
+   * vượt xa nó), nhưng vẫn dưới `MAX_BELIEF_SCORE` - một kết quả trung lập nói
+   * "có thể là hung thủ", không nói "chính là hung thủ". Đúng một trong hai vai
+   * trung lập giết người, và Tiên Tri không phân biệt được hai vai đó.
+   */
+  neutralKillerSuspicion: number;
   knownAlly: number;
 }
 
@@ -144,6 +165,108 @@ export interface JesterWeights {
   bluffChance: number;
   /** Vòng sớm nhất Hề khai láo chủ động. */
   bluffFromRound: number;
+}
+
+/**
+ * Sát Nhân: một chiến thuật SINH TỒN, ngược hẳn Thằng Hề.
+ *
+ * Hề đi tìm sự chú ý; Sát Nhân đi tìm sự vô hình. Nó thắng bằng cách còn lại
+ * một mình, nên mọi tham số ở đây phục vụ đúng hai việc: giết đúng người vào
+ * ban đêm, và không bị treo vào ban ngày.
+ *
+ * `nightThreatWeight === 0` TẮT toàn bộ nhóm và là cổng DUY NHẤT, đúng thói
+ * quen của `claim.accusationWeight` và nhóm `jester`.
+ */
+export interface SerialKillerWeights {
+  /**
+   * Nhân với mức "nguy hiểm" của mục tiêu đêm.
+   *
+   * `0` TẮT cả nhóm: BOT Sát Nhân rơi về nước đi mặc định (đâm người bị nghi
+   * ít nhất trong danh sách hợp lệ, phá hoà bằng id) và KHÔNG rút số ngẫu
+   * nhiên nào.
+   */
+  nightThreatWeight: number;
+  /**
+   * Cộng vào điểm của người đang bị làng NGHI NHẤT.
+   *
+   * Âm là đúng, và đây là lõi chiến thuật đêm: người cả làng đang nghi sẽ bị
+   * chính làng treo vào ngày mai, nên đâm họ là tiêu một đêm để làm hộ việc
+   * người khác sắp làm miễn phí.
+   */
+  nightSuspicionDiscount: number;
+  /**
+   * Cộng vào điểm của người đang được làng TIN NHẤT.
+   *
+   * Người được tin là người lái được cuộc bỏ phiếu, và cũng là người khó bị
+   * treo nhất - tức là kẻ mà Sát Nhân phải tự tay xử lý.
+   */
+  nightTrustWeight: number;
+  /**
+   * Cộng vào điểm của người đang công kích chính Sát Nhân.
+   *
+   * Đây là vế "tự vệ": ai đang kéo bàn về phía mình thì đêm nay là đêm cuối
+   * của họ.
+   */
+  nightHostilityWeight: number;
+  /**
+   * Xác suất bỏ lượt đêm khi không ai đủ đáng giết, trước khi nhân tính cách.
+   *
+   * Không phải sự nhút nhát: một đêm bình yên giữa chuỗi đêm đẫm máu làm cả
+   * làng tin rằng chỉ có một nguồn giết người trên bàn.
+   */
+  quietNightChance: number;
+  /** Vòng sớm nhất Sát Nhân dám bỏ một đêm; trước đó luôn ra tay. */
+  quietNightFromRound: number;
+  /**
+   * Trừ vào điểm bỏ phiếu ban ngày của người đang dẫn phiếu - tức là một phần
+   * thưởng cho việc HÙA THEO.
+   *
+   * Ngược dấu với `jester.bandwagonPenalty`, và đó là toàn bộ chỗ khác nhau
+   * giữa hai vai trung lập: đứng lạc lõng là cách Hề leo lên giá treo, và cũng
+   * đúng là cách Sát Nhân bị treo theo.
+   */
+  bandwagonBonus: number;
+  /** Trừ vào điểm của người mà Sát Nhân đã tự tay giết hụt/giết trượt. Xem `roles/serial-killer.ts`. */
+  avoidOwnVictimWeight: number;
+}
+
+/**
+ * Kẻ Báo Thù: một chiến thuật DỒN PHIẾU, không phải một chiến thuật đêm.
+ *
+ * Nó không có lượt đêm nào và không có bằng chứng nào - thứ duy nhất nó có là
+ * một cái tên mà engine đưa cho, và một ngày để thuyết phục cả làng treo cái
+ * tên đó. Vì vậy cả nhóm này chỉ nghiêng đúng một thứ: bảng điểm bỏ phiếu.
+ *
+ * `targetPush === 0` TẮT toàn bộ nhóm và là cổng DUY NHẤT, đúng thói quen của
+ * nhóm `jester` và nhóm `serialKiller`.
+ */
+export interface ExecutionerWeights {
+  /**
+   * Cộng vào điểm bỏ phiếu của MỤC TIÊU.
+   *
+   * `0` TẮT cả nhóm: BOT Kẻ Báo Thù bỏ phiếu y hệt một Dân Làng và KHÔNG rút
+   * số ngẫu nhiên nào, nên mọi ván tái lập theo cấu hình cũ vẫn đúng từng bit.
+   */
+  targetPush: number;
+  /**
+   * Trừ vào điểm của MỌI người khác.
+   *
+   * Cần vế thứ hai này vì `targetPush` một mình chỉ nâng mục tiêu lên; khi cả
+   * làng đang dồn vào một người khác thì con số đó vẫn thua. Nhỏ hơn hẳn
+   * `targetPush`: nó chỉ để kéo bàn về phía mục tiêu, không được biến BOT
+   * thành kẻ phản đối mọi phiên toà - một người bênh tất cả trừ một người là
+   * một người dễ đọc.
+   */
+  othersDamping: number;
+  /**
+   * Trừ vào điểm của mục tiêu khi mục tiêu đang được cả làng TIN.
+   *
+   * Không phải sự nhút nhát mà là nhịp: chỉ vào người cả làng vừa dựa vào, và
+   * không có gì trong tay, là cách nhanh nhất để chính mình lên giá treo thay
+   * họ. Nhân với `trust` của mục tiêu nên nó tự nhạt đi khi uy tín người đó
+   * lung lay.
+   */
+  protectedTargetPenalty: number;
 }
 
 export interface SuspicionWeights {
@@ -470,6 +593,8 @@ export interface BotWeights {
   readonly conversation: ConversationWeights;
   readonly claim: ClaimWeights;
   readonly jester: JesterWeights;
+  readonly serialKiller: SerialKillerWeights;
+  readonly executioner: ExecutionerWeights;
 }
 
 /** Cho phép ghi đè từng nhánh mà không phải khai lại cả cây. */
@@ -529,6 +654,8 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   ["claim", "wolfBluffChance"],
   // Cùng lý do: so THẲNG với `rng()` trong `decideChatClaim`.
   ["jester", "bluffChance"],
+  // Cùng lý do: so THẲNG với `rng()` trong `roles/serial-killer.ts`.
+  ["serialKiller", "quietNightChance"],
 ];
 
 /** Nhóm mà mọi kiểm tra sâu bên dưới giả định là có mặt. */
@@ -553,6 +680,8 @@ const REQUIRED_GROUPS: ReadonlyArray<keyof BotWeights> = [
   "conversation",
   "claim",
   "jester",
+  "serialKiller",
+  "executioner",
 ];
 
 function isFiniteNumber(value: unknown): value is number {
@@ -721,6 +850,7 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     seerClear: -120,
     neutralClear: -40,
     neutralClearTrust: 30,
+    neutralKillerSuspicion: 55,
     knownAlly: -80,
   }),
 
@@ -903,6 +1033,39 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     crowdSuspicionDamping: 0,
     bluffChance: 0,
     bluffFromRound: 0,
+  }),
+
+  /**
+   * TẮT toàn bộ ở v1, cùng lý do và cùng cách với hai nhóm ngay trên.
+   *
+   * v1-v7 là những mốc so sánh đã đo xong, và Sát Nhân chưa tồn tại khi chúng
+   * được đo. Với nhóm này bằng 0, một BOT Sát Nhân chạy dưới các cấu hình đó
+   * đâm theo một luật tất định KHÔNG rút số ngẫu nhiên nào - nên mọi test tái
+   * lập khoá theo v1/v2/v3 vẫn đúng từng bit. Bản bật thật là v8.
+   */
+  serialKiller: Object.freeze({
+    nightThreatWeight: 0,
+    nightSuspicionDiscount: 0,
+    nightTrustWeight: 0,
+    nightHostilityWeight: 0,
+    quietNightChance: 0,
+    quietNightFromRound: 0,
+    bandwagonBonus: 0,
+    avoidOwnVictimWeight: 0,
+  }),
+
+  /**
+   * TẮT toàn bộ ở v1, cùng lý do và cùng cách với ba nhóm ngay trên.
+   *
+   * v1-v8 là những mốc so sánh đã đo xong, và Kẻ Báo Thù chưa tồn tại khi
+   * chúng được đo. Với nhóm này bằng 0, một BOT Kẻ Báo Thù chạy dưới các cấu
+   * hình đó bỏ phiếu y hệt một Dân Làng và KHÔNG rút số ngẫu nhiên nào - nên
+   * mọi test tái lập khoá theo v1/v2/v3 vẫn đúng từng bit. Bản bật thật là v9.
+   */
+  executioner: Object.freeze({
+    targetPush: 0,
+    othersDamping: 0,
+    protectedTargetPenalty: 0,
   }),
 }) as BotWeights;
 
@@ -1312,6 +1475,148 @@ export const BOT_WEIGHTS_V7: BotWeights = Object.freeze({
   }),
 });
 
+
+/**
+ * v8 — Sát Nhân, vai TRUNG LẬP thứ hai và là bên thứ ba đầu tiên tranh phần
+ * thắng CHUNG của ván.
+ *
+ * Nhóm `serialKiller` là nhóm DUY NHẤT đổi, và nó chỉ có tác dụng khi trên bàn
+ * thật sự có một Sát Nhân. Không preset bộ bài nào chứa vai này, nên mọi số
+ * liệu self-play của v1-v7 vẫn so sánh được trực tiếp với v8.
+ *
+ * Các con số đặt theo THANG đã biết (suspicion/trust thật có p90 ≈ 1.8,
+ * p99 ≈ 8.6) và theo quan hệ với nhóm `roleThresholds` của Sói, chứ KHÔNG qua
+ * một batch quét tham số như v2/v5/v6. Nói thẳng điều đó ra để người hiệu
+ * chỉnh sau biết chỗ nào còn dư địa.
+ *
+ * Ba số hạng của bảng điểm đêm cố ý ĐỐI XỨNG với `threatScore` của bầy Sói
+ * (`roles/werewolf.ts`): cùng đọc trust, hostility và suspicion, cùng trừ đi
+ * mức nghi ngờ của làng. Hai vai có cùng một bài toán "ai nguy hiểm với tôi",
+ * và giải nó bằng hai công thức khác nhau là tự chuốc lấy hai chỗ để trôi lệch.
+ * Chỗ Sát Nhân KHÁC bầy Sói nằm ở mẫu số: nó không có đồng bọn để bảo vệ, nên
+ * mọi người còn sống đều là mục tiêu hợp lệ - kể cả Sói.
+ */
+export const BOT_WEIGHTS_V8: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V7,
+  version: "8.0.0",
+
+  serialKiller: Object.freeze({
+    /**
+     * 1.0 - hệ số nhân của cả bảng điểm đêm, và cũng là CỔNG bật/tắt nhóm.
+     *
+     * Để ở 1 vì ba trọng số dưới đã nằm sẵn trên thang belief thật; nhân thêm
+     * chỉ làm mờ quan hệ giữa chúng.
+     */
+    nightThreatWeight: 1,
+    /**
+     * 1.5 - lớn hơn hẳn `wolfSuspicionDiscount` của bầy Sói (xem
+     * `roleThresholds`), và có lý do.
+     *
+     * Bầy Sói bỏ qua người bị nghi vì làng sẽ treo họ hộ. Sát Nhân có ĐÚNG lý
+     * do đó CỘNG THÊM một lý do nữa: mỗi cái chết ban ngày là một người bớt đi
+     * mà nó không phải trả giá bằng một đêm, và bàn càng nhỏ thì nó càng gần
+     * đích. Vì vậy nó tránh mục tiêu "đang bị nghi" mạnh tay hơn.
+     */
+    nightSuspicionDiscount: 1.5,
+    /**
+     * 2.0 - số hạng nặng nhất, cùng mốc với `jester.contrarianTrustBonus`.
+     *
+     * Người được làng tin là người duy nhất làng sẽ KHÔNG treo, nên họ là
+     * người duy nhất Sát Nhân buộc phải tự tay xử lý. Đây cũng là chỗ chiến
+     * thuật "giảm sức mạnh bên đang dẫn trước" thật sự nằm: bên đang dẫn là
+     * bên có người được tin nhất trên bàn, và Sát Nhân đọc điều đó từ hành vi
+     * công khai chứ không từ một bảng vai mà nó không có.
+     */
+    nightTrustWeight: 2,
+    /**
+     * 1.2 - nhẹ hơn trust một chút.
+     *
+     * Bị công kích là một tín hiệu THẬT nhưng ồn: một lời tố lẻ ở vòng 2 không
+     * đáng bằng cả làng dựa vào ai đó ở vòng 4. Nó chỉ được phá hoà, không được
+     * tự mình chọn nạn nhân.
+     */
+    nightHostilityWeight: 1.2,
+    /**
+     * 0.25 trước khi nhân `riskTolerance` - thấp có chủ đích.
+     *
+     * Một đêm bình yên là một đòn đánh lừa đắt: nó tiêu mất đúng cái tài nguyên
+     * mà vai này chỉ có mỗi đêm một lần. Ở mức này nó xảy ra vài lần trong một
+     * batch chứ không thành thói quen, đủ để làng không đọc được nhịp.
+     */
+    quietNightChance: 0.25,
+    /**
+     * Vòng 3. Hai đêm đầu luôn ra tay: bàn còn đông nên một đêm bỏ trống gần
+     * như không đổi được gì, trong khi hai mạng đầu là hai bước thật về đích.
+     */
+    quietNightFromRound: 3,
+    /**
+     * 3 - trên p90 của thang suspicion, dưới p99.
+     *
+     * Đủ để kéo Sát Nhân về phía đám đông trong phần lớn trường hợp, nhưng
+     * KHÔNG đủ để nuốt một nghi ngờ đã có bằng chứng cứng: một kẻ luôn bấm theo
+     * số đông bất kể lý lẽ cũng là một kẻ dễ đọc. Ngược dấu và nhẹ hơn
+     * `jester.bandwagonPenalty` (8), đúng như hai vai chơi ngược nhau.
+     */
+    bandwagonBonus: 3,
+    /**
+     * 4 - trừ vào chính nạn nhân đêm qua của mình.
+     *
+     * Trường hợp này chỉ xảy ra khi nhát dao bị chặn (khiên, bình cứu), tức là
+     * người đó SỐNG và Sát Nhân là người duy nhất trên bàn biết vì sao. Chỉ tay
+     * vào họ ngay hôm sau là tự khai ra rằng mình biết một chuyện không ai
+     * biết - đúng loại sơ hở mà mô hình uy tín của làng sinh ra để bắt.
+     */
+    avoidOwnVictimWeight: 4,
+  }),
+});
+
+/**
+ * v9 - Kẻ Báo Thù, vai TRUNG LẬP thứ ba.
+ *
+ * Nhóm `executioner` là nhóm DUY NHẤT đổi, và nó chỉ có tác dụng khi trên bàn
+ * thật sự có một Kẻ Báo Thù. Không preset bộ bài nào chứa vai này, nên mọi số
+ * liệu self-play của v1-v8 vẫn so sánh được trực tiếp với v9.
+ *
+ * Cùng cách đặt số với v8 và cùng lời cảnh báo: các con số đặt theo THANG đã
+ * biết (suspicion/trust thật có p90 ≈ 1.8, p99 ≈ 8.6) và theo quan hệ với hai
+ * nhóm trung lập kia, chứ KHÔNG qua một batch quét tham số. Nói thẳng điều đó
+ * ra để người hiệu chỉnh sau biết chỗ nào còn dư địa.
+ */
+export const BOT_WEIGHTS_V9: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V8,
+  version: "9.0.0",
+
+  executioner: Object.freeze({
+    /**
+     * 6 - nặng, và nặng có chủ đích.
+     *
+     * Đây là ĐÒN BẨY DUY NHẤT của cả vai: không lượt đêm, không thông tin, chỉ
+     * một lá phiếu và một ngày để lái nó. Con số nằm giữa p90 (1.8) và p99
+     * (8.6) của thang suspicion - đủ để mục tiêu leo lên đầu bảng khi bàn chưa
+     * có ai nổi bật, nhưng KHÔNG đủ để nuốt một kết quả soi đã ghim 100. Một
+     * Kẻ Báo Thù bỏ qua cả một con Sói đã lộ mặt để chỉ vào mục tiêu của mình
+     * là một Kẻ Báo Thù bị đọc vị trong đúng một vòng.
+     */
+    targetPush: 6,
+    /**
+     * 1.5 - nhỏ hơn `targetPush` bốn lần.
+     *
+     * Nó chỉ nghiêng bàn về phía mục tiêu khi hai ứng viên đang ngang nhau; nó
+     * không được biến BOT thành người bênh vực mọi bị cáo.
+     */
+    othersDamping: 1.5,
+    /**
+     * 1.0 - nhân với `trust` của chính mục tiêu.
+     *
+     * Ở mức này, một mục tiêu đã được Tiên Tri soi sạch (trust ghim 100) kéo
+     * `targetPush` xuống âm sâu, tức BOT tạm buông - đúng nước đi đúng, vì chỉ
+     * vào người vừa được bảo lãnh công khai là tự nộp mình. Với một mục tiêu
+     * chưa ai để ý (trust ≈ 0) thì số hạng này gần như không tồn tại.
+     */
+    protectedTargetPenalty: 1,
+  }),
+});
+
 /**
  * Cấu hình đang dùng cho production.
  *
@@ -1321,8 +1626,9 @@ export const BOT_WEIGHTS_V7: BotWeights = Object.freeze({
  * truyền `weights` (bao gồm `session-registry.ts`, chỗ ván thật dựng runtime)
  * lập tức chạy bản mới mà không phải sửa. v5.0.0 và v6.0.0 đưa ngưỡng của ba
  * vai có quyền năng dùng-một-lần (Phù Thuỷ, Thợ Săn, Linh Mục) về thang belief
- * thật; v7.0.0 bật hành vi của Thằng Hề. v1-v4 không bị ảnh hưởng - test
- * tái lập của chúng luôn truyền preset đích danh, không bao giờ dựa vào hằng
- * số này.
+ * thật; v7.0.0 bật hành vi của Thằng Hề; v8.0.0 bật hành vi của Sát Nhân;
+ * v9.0.0 bật hành vi của Kẻ Báo Thù.
+ * v1-v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset đích
+ * danh, không bao giờ dựa vào hằng số này.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V7;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V9;

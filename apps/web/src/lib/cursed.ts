@@ -3,15 +3,23 @@ import { ROLE_META, type NightRecap, type Role, type RoomSnapshot } from "@masoi
 interface RoleHolder {
   role?: Role;
   cursedTurned?: boolean;
+  executionerTurned?: boolean;
 }
 
 /**
- * Tên vai để hiển thị. Kẻ Nguyền Rủa đã hoá Sói có role là WEREWOLF trong
- * snapshot, nên chỉ cờ cursedTurned mới kể lại được họ vốn là ai - và cờ đó chỉ
- * có mặt khi server đã cho phép lộ toàn bộ vai trò.
+ * Tên vai để hiển thị.
+ *
+ * Hai phép đổi vai của engine đều xoá dấu vết trong `role`: Kẻ Nguyền Rủa đã
+ * hoá Sói mang `role: "WEREWOLF"`, còn Kẻ Báo Thù đã mất mục tiêu mang
+ * `role: "JESTER"`. Chỉ hai cờ dưới đây kể lại được họ vốn là ai - và cả hai
+ * chỉ có mặt khi server đã cho phép lộ toàn bộ vai trò (hoặc trong snapshot
+ * `you` của chính người đó).
  */
 export function roleLabel(player: RoleHolder): string {
   if (player.cursedTurned) return `${ROLE_META.CURSED.name} (đã hoá Ma Sói)`;
+  if (player.executionerTurned) {
+    return `${ROLE_META.EXECUTIONER.name} (đã hoá ${ROLE_META.JESTER.name})`;
+  }
   if (!player.role) return "Chưa rõ";
   return ROLE_META[player.role].name;
 }

@@ -37,4 +37,22 @@ describe("roleGoal", () => {
   it("Kẻ Nguyền Rủa khởi đầu ở phe làng nên đọc mục tiêu của làng", () => {
     assert.equal(roleGoal("CURSED"), roleGoal("VILLAGER"));
   });
+
+  it("cả hai phe đều phải nhắc tới Sát Nhân - `checkWin` xét vai đó TRƯỚC", () => {
+    /*
+     * Còn một Sát Nhân sống thì `checkWin` trả `null`, kể cả khi con Sói cuối
+     * vừa ngã (làng lẽ ra đã thắng) hoặc bầy Sói đã hoà quân số (Sói lẽ ra đã
+     * thắng). Một thẻ vai bỏ vế đó ra là dạy hai phe chơi theo một luật thắng
+     * mà engine không hề chạy.
+     */
+    assert.match(roleGoal("VILLAGER"), /Sát Nhân/);
+    assert.match(roleGoal("WEREWOLF"), /Sát Nhân/);
+  });
+
+  it("Thằng Hề KHÔNG phải điều kiện thắng của phe nào", () => {
+    // Sổ của Hề là `personalWins`, không phải một vế trong `checkWin`: làng
+    // thắng được với một Thằng Hề còn sống nguyên trên bàn.
+    assert.doesNotMatch(roleGoal("VILLAGER"), /Hề/);
+    assert.doesNotMatch(roleGoal("WEREWOLF"), /Hề/);
+  });
 });

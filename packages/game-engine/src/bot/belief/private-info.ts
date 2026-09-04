@@ -112,45 +112,91 @@ export function applyPrivateInformation(
        * lúc nó bắt đầu phá. `neutralClear` vì thế nhẹ hơn `seerClear`.
        */
       const neutral = result.team === "neutral";
-      applyTrustEvidence(
-        state,
-        evidenceFor(
-          {
-            id: `seer-clear:${result.targetId}`,
-            kind: "SEER_RESULT_CLEAR",
-            sourceId,
-            actorId: result.targetId,
-            weight: neutral ? weights.privateInfo.neutralClear : weights.privateInfo.seerClear,
-            summary: neutral
-              ? `soi ra ${result.targetName} thuộc phe trung lập`
-              : `soi ra ${result.targetName} không phải Sói`,
-          },
-          round,
-        ),
-        weights,
-      );
       /*
-       * GHIM cả hai nhánh, chỉ khác MỐC.
+       * Cùng một kết quả soi, HAI kết luận trái ngược - vì câu hỏi đã đổi.
        *
-       * `pinScore` không phải một chi tiết trang trí: nó là thứ làm cho việc áp
-       * lại cùng một kết quả trở nên idempotent, và `observe()` thì chạy nhiều
-       * lần mỗi vòng. Bản đầu của nhánh trung lập chỉ bỏ lời gọi ghim đi - với
-       * ý đúng là "đừng lên trần" - nhưng hệ quả là `applyTrustEvidence` cộng
-       * dồn mỗi lần gọi: cùng một lượt soi cho ra 29.88 → 59.76 → 89.64 → 100
-       * chỉ vì scheduler gọi bốn lần, trong khi danh sách bằng chứng vẫn đúng
-       * một mục.
+       * Trong một ván chỉ có Thằng Hề, "trung lập" nghĩa là "không phải Sói và
+       * không giết ai": treo nó là phí một ngày, nên nhánh dưới xoá nghi ngờ.
+       * Trong một ván CÓ Sát Nhân thì đúng cái nhãn ấy là ứng viên số một cho
+       * kẻ đang giết người mỗi đêm, và một Tiên Tri đem uy tín ra bảo lãnh cho
+       * nó là đang bảo lãnh cho hung thủ.
        *
-       * Mốc thấp hơn trần giữ nguyên điều cần giữ: "không phải Sói" KHÁC
-       * "đồng đội thuộc phe Dân".
+       * Điều kiện đọc từ BỘ BÀI, thứ cả phòng nhìn thấy ở sảnh chờ - không phải
+       * từ một suy luận nào về người bị soi. Tiên Tri KHÔNG phân biệt được hai
+       * vai trung lập, và mã dưới đây cũng không: nó chỉ nói "trong ván này,
+       * một kẻ trung lập là một mối nguy".
        */
-      pinScore(
-        state.trust,
-        result.targetId,
-        neutral ? weights.privateInfo.neutralClearTrust : MAX_BELIEF_SCORE,
-        round,
-      );
-      // Đã biết chắc không phải Sói thì mọi nghi ngờ tích trước đó là rác.
-      pinScore(state.suspicion, result.targetId, 0, round);
+      const neutralIsLethal =
+        neutral && knowledge.neutralRolesInPlay.includes("SERIAL_KILLER");
+
+      if (neutralIsLethal) {
+        applyEvidence(
+          state,
+          evidenceFor(
+            {
+              id: `seer-neutral-threat:${result.targetId}`,
+              kind: "SEER_RESULT_CLEAR",
+              sourceId,
+              actorId: result.targetId,
+              weight: weights.privateInfo.neutralKillerSuspicion,
+              summary: `soi ra ${result.targetName} thuộc phe trung lập - ván này có Sát Nhân`,
+            },
+            round,
+          ),
+          weights,
+        );
+        // Ghim cả hai đầu, đúng mốc: không tin tưởng, và một mức nghi ngờ đủ
+        // cao để BOT dám đề cử nhưng chưa phải là chắc chắn.
+        pinScore(state.trust, result.targetId, 0, round);
+        pinScore(
+          state.suspicion,
+          result.targetId,
+          weights.privateInfo.neutralKillerSuspicion,
+          round,
+        );
+      } else {
+        applyTrustEvidence(
+          state,
+          evidenceFor(
+            {
+              id: `seer-clear:${result.targetId}`,
+              kind: "SEER_RESULT_CLEAR",
+              sourceId,
+              actorId: result.targetId,
+              weight: neutral
+                ? weights.privateInfo.neutralClear
+                : weights.privateInfo.seerClear,
+              summary: neutral
+                ? `soi ra ${result.targetName} thuộc phe trung lập`
+                : `soi ra ${result.targetName} không phải Sói`,
+            },
+            round,
+          ),
+          weights,
+        );
+        /*
+         * GHIM cả hai nhánh, chỉ khác MỐC.
+         *
+         * `pinScore` không phải một chi tiết trang trí: nó là thứ làm cho việc áp
+         * lại cùng một kết quả trở nên idempotent, và `observe()` thì chạy nhiều
+         * lần mỗi vòng. Bản đầu của nhánh trung lập chỉ bỏ lời gọi ghim đi - với
+         * ý đúng là "đừng lên trần" - nhưng hệ quả là `applyTrustEvidence` cộng
+         * dồn mỗi lần gọi: cùng một lượt soi cho ra 29.88 → 59.76 → 89.64 → 100
+         * chỉ vì scheduler gọi bốn lần, trong khi danh sách bằng chứng vẫn đúng
+         * một mục.
+         *
+         * Mốc thấp hơn trần giữ nguyên điều cần giữ: "không phải Sói" KHÁC
+         * "đồng đội thuộc phe Dân".
+         */
+        pinScore(
+          state.trust,
+          result.targetId,
+          neutral ? weights.privateInfo.neutralClearTrust : MAX_BELIEF_SCORE,
+          round,
+        );
+        // Đã biết chắc không phải Sói thì mọi nghi ngờ tích trước đó là rác.
+        pinScore(state.suspicion, result.targetId, 0, round);
+      }
     }
   }
 

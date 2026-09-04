@@ -2,7 +2,7 @@
 
 # 🐺 Ma Sói Online
 
-**A real-time multiplayer Werewolf (Mafia) game — 14 roles, 15 dynamic events, voice chat, and AI bots that actually reason.**
+**A real-time multiplayer Werewolf (Mafia) game — 15 roles, 15 dynamic events, voice chat, and AI bots that actually reason.**
 
 [![CI](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-3429%20passing-brightgreen)](#testing)
@@ -51,7 +51,7 @@ The interesting parts are not the CRUD. They are:
 
 |  | Feature |
 |---|---|
-| 🎭 | **14 roles** across three teams — village, wolves, and a neutral who wins alone |
+| 🎭 | **15 roles** across village, wolves, and three neutrals who each win alone |
 | 🎲 | **15 dynamic events** that reshape a round in chaos rooms (Curfew, Blood Moon, Day of Truth, …) |
 | ⚖️ | **Balance analyzer** that scores a deck against per-player-count presets and blocks unfair ranked configs |
 | 🗳️ | **Two-stage voting** — nomination, defense speech, then a final Hang/Spare trial |
@@ -231,7 +231,7 @@ Each stage has its own cooldown after a `429`, so exhausting one provider's quot
 
 ### Roles
 
-Village wins by eliminating every wolf. Wolves win once they equal or outnumber everyone else. A neutral role wins on its own condition without ending the match — see the Jester below.
+Village wins by eliminating every wolf. Wolves win once they equal or outnumber everyone else. A neutral role wins on its own condition — for two of the three, without ending the match. See the Neutral section below.
 
 <details open>
 <summary><b>Wolf team</b></summary>
@@ -251,9 +251,9 @@ Village wins by eliminating every wolf. Wolves win once they equal or outnumber 
 | Seer | Tiên Tri | Inspect one player's team each night |
 | Apprentice Seer | Tiên Tri Tập Sự | Powerless until the Seer dies, then inherits the inspection |
 | Detective | Thám Tử | Check whether two **other** living players are on the same team — it cannot put itself in the pair |
-| Guard | Bảo Vệ | Protect one player; never itself, and cannot repeat the same target two nights running |
-| Guardian Angel | Thiên Thần Hộ Mệnh | Two shields per match; never itself, no consecutive repeats |
-| Priest | Linh Mục | One vial of holy water: kills a wolf, but backfires and kills the Priest if used on a villager |
+| Guard | Bảo Vệ | Shield one player from every night kill; never itself, and cannot repeat the same target two nights running |
+| Guardian Angel | Thiên Thần Hộ Mệnh | Two shields per match against any night kill; never itself, no consecutive repeats |
+| Priest | Linh Mục | One vial of holy water: kills a wolf, but backfires and kills the Priest if used on anyone who is not a wolf |
 | Witch | Phù Thủy | One heal and one poison, each usable once per match |
 | Hunter | Thợ Săn | On death, may shoot one living player — or nobody |
 | Mayor | Thị Trưởng | Daytime votes count double |
@@ -268,18 +268,49 @@ Village wins by eliminating every wolf. Wolves win once they equal or outnumber 
 | Role | Vietnamese | Ability |
 |---|---|---|
 | Jester | Thằng Hề | No night action. Wins **alone** by getting itself lynched during the day |
+| Serial Killer | Sát Nhân | Kills one player each night. Wins **alone** by being the last one standing |
+| Executioner | Kẻ Báo Thù | No night action. Wins **alone** if its secret village target is lynched while it is still alive |
 
-The Jester is neither villager nor wolf. It wins only by dying to a **lynch verdict** — dying to wolves, poison, holy water or the Hunter does not count, and surviving to the end is a loss. Its win is recorded as a *personal* win: the match keeps going and the winning **team** is still decided by the usual rule. A living Jester counts toward the non-wolf side when the wolves check for parity, and the village still wins once the last wolf is gone.
+`neutral` is a **label, not a faction.** It says only "neither village nor wolves" — the three neutral roles share no win condition and are not on each other's side. `sameFaction()` encodes that: the Detective comparing any two neutrals reads **different**, even though `roleTeam()` returns `"neutral"` for all three. That holds for two players who hold the *same* neutral role too — which is reachable, because an Executioner can turn into a second Jester mid-match.
 
-The Seer reading a Jester sees **"Phe trung lập"** — neutral team, not the specific role. The Detective reads it as a different team from both village and wolves. Holy water thrown at it backfires and kills the Priest, exactly as it would on any non-wolf.
+**Jester.** Wins only by dying to a **lynch verdict** — dying to wolves, a knife, poison, holy water or the Hunter does not count, and surviving to the end is a loss. Its win is a *personal* win: the match keeps going and the overall winner is still decided by the usual rule, and the achievement survives whatever that turns out to be — including a draw.
 
-It is **off by default and in no preset deck** — the host has to enable it in a custom deck, and only one may be in play.
+**Serial Killer.** Strikes alone every night with its own action and its own night state; it never shares the pack's bite or its target. It has no immunity, learns nobody's role, and never sees wolf chat. It may target wolves — it has no allies. Unlike the Jester's, its win is an **overall** outcome that ends the match.
+
+**Executioner.** After the deal, the server draws one **village-team** player as its secret target — never itself, never a wolf, never another neutral — using the injected RNG, so the same seed gives the same target. Only the Executioner learns who it is, and it learns the *identity*, not the role. The target is fixed for the whole match: if that player later becomes a wolf (a bitten Cursed), they are still the target.
+
+It wins the moment its target actually dies to a **lynch verdict**, provided the Executioner is alive at that moment. It does not have to nominate or vote guilty itself. Like the Jester's, the win is a *personal* win recorded under its own condition (`EXECUTIONER_TARGET_LYNCHED`): the match keeps going, there is no "executioner" overall outcome, and the achievement survives the Executioner's own later death and a draw alike.
+
+If the target dies to **anything else** first — a bite, poison, holy water, a Hunter's shot — an Executioner who is still alive and has not already won **turns into a Jester**, and from then on wins only by being lynched itself. Turning grants no win of its own, and no new target is issued. The turn is settled after the whole death batch *and* its Hunter chain resolve, immediately before the match result is checked: if the target and the Executioner fall together, there is no turn, and a Hunter's bullet that lands on the Executioner in the same batch keeps it an Executioner. A win already recorded is never revoked — a lynched Hunter who was the target gets the Executioner its win *before* firing back.
+
+That means a table can hold **two Jesters** at once, one dealt and one turned, and they are still independent: neither wins with the other, and the Detective reads them as different sides. It also means a Jester can appear in a match whose deck had `jester` off.
+
+The Seer reading any neutral role sees **"Phe trung lập"** — neutral team, not the specific role, so it cannot tell the harmless ones from the killer. Holy water thrown at either backfires and kills the Priest, exactly as it would on any non-wolf. A Serial Killer's knife on the Cursed **kills** them: only a valid wolf bite triggers the turn.
+
+All three are **off by default and in no preset deck** — the host has to enable them in a custom deck, and at most one of each may be in play.
 
 </details>
 
 Rooms hold **8–15 players**. Villagers fill whatever seats the configured special roles leave over.
 
 The minimum is 8 because of arithmetic, not taste. Wolves win at `wolves >= everyone else`, and night comes first, so a 6-player table gives the village exactly one wrong lynch before the game is over — and the first vote happens before anyone has learned anything. It is not fixable by deck: every 2-wolf deck at 6 players tops out around 32% for the village in self-play, because the table runs out of seats to put power roles in, while dropping to 1 wolf jumps to 60%. There is nothing in between.
+
+### Win conditions
+
+Evaluated **after** every death and every Hunter reaction has been resolved, in this order:
+
+1. **Nobody alive** → `draw`. It is first because every rule below talks about somebody who is still alive — with an empty table, "no wolves left" is also true, and the village would "win" a match with no villagers in it.
+2. **Only the Serial Killer alive** → `serial_killer`.
+3. **A Serial Killer alive but not alone** → the match **continues**, whatever the wolf count is. Running out of wolves is not enough for the village while a killer still walks the village, and the wolves do not hold the village while a third party kills both sides every night. One last wolf facing one Serial Killer is a match still in play.
+4. **No Serial Killer** → the original two lines, bit for bit: no wolves left is a village win, wolves at parity with everyone else is a wolf win.
+
+The Executioner adds **no branch here at all.** It has no kill, so it counts toward "everyone else" exactly like a Jester: its presence never blocks a village win, and it never holds the village against the pack on its own. What it does add is one step *before* this check — `settleExecutioner()`, the Jester turn — which runs at both places a match result is decided (`checkWinOrContinue` on the server, `finished()` in the self-play harness) and is idempotent, so a phase replayed after a restart never turns anyone twice.
+
+`Winner` therefore has four values plus `null` (match still running). Two of them are not a team: `serial_killer` is one person winning alone, and `draw` is nobody winning — a draw is never recorded as a team win for anyone. Anything reading that field must handle all four, which is why `outcomeName`/`outcomeTeam`/`roleWonOutcome` live in `@masoi/shared` instead of a ternary at each call site.
+
+The balance score deliberately does **not** measure the Serial Killer: it scores a two-sided deck, and a third party that kills every night appears on neither side of that subtraction. Enabling it therefore raises an explicit warning rather than letting a 40–60 score vouch for the deck.
+
+The Executioner is unmeasured too, and raises its **own** warning for a different reason. The part the scale does catch is one lost villager seat (`villagePower` drops by 0.5). The part it misses is larger: a player campaigning all match to hang one specific innocent is a directed pressure on the village that a sum-of-role-powers subtraction has no column for. No self-play batch has measured this role, and the warning says so rather than letting a score stand in for a number nobody has.
 
 ### Phase flow
 

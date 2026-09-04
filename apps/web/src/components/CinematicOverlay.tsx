@@ -414,6 +414,26 @@ function SceneArt({ kind }: { kind: CinematicKind }) {
           <span className="cine-claws" />
         </>
       );
+    /*
+     * Hai cảnh dưới đây chỉ có bản CSS - chưa dựng clip. Chúng tái dùng đúng
+     * những lớp đã có trong `cinematics.css`, nên không thêm một dòng CSS nào
+     * và cũng không thêm một byte tải về nào.
+     */
+    case "KILLER_WIN":
+      return (
+        <>
+          <span className="cine-burst" />
+          <span className="cine-claws" />
+          <span className="cine-iris" />
+        </>
+      );
+    case "DRAW":
+      return (
+        <>
+          <span className="cine-iris" />
+          <VillageSilhouette className="cine-village fill-black/90" />
+        </>
+      );
     case "WOLF_THREAT":
       return (
         <>

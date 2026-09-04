@@ -48,6 +48,7 @@ function knowledge(overrides: Partial<BotKnowledgeView> = {}): BotKnowledgeView 
     legalVoteChoices: [],
     lastNightDeaths: [],
     activeEventId: null,
+    neutralRolesInPlay: [],
     dayOfTruthClaims: {},
     ...overrides,
   };
