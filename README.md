@@ -2,10 +2,10 @@
 
 # 🐺 Ma Sói Online
 
-**A real-time multiplayer Werewolf (Mafia) game — 15 roles, 15 dynamic events, voice chat, and AI bots that actually reason.**
+**A real-time multiplayer Werewolf (Mafia) game — 20 roles, 17 dynamic events, voice chat, and AI bots that actually reason.**
 
 [![CI](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-3429%20passing-brightgreen)](#testing)
+[![Tests](https://img.shields.io/badge/tests-4739%20passing-brightgreen)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
@@ -51,25 +51,27 @@ The interesting parts are not the CRUD. They are:
 
 |  | Feature |
 |---|---|
-| 🎭 | **15 roles** across village, wolves, and three neutrals who each win alone |
-| 🎲 | **15 dynamic events** that reshape a round in chaos rooms (Curfew, Blood Moon, Day of Truth, …) |
+| 🎭 | **20 roles** across village, wolves, and three neutrals who each win alone |
+| 🎲 | **17 dynamic events** that reshape a round in chaos rooms (Curfew, Blood Moon, Secret Ballot, …) |
 | ⚖️ | **Balance analyzer** that scores a deck against per-player-count presets and blocks unfair ranked configs |
 | 🗳️ | **Two-stage voting** — nomination, defense speech, then a final Hang/Spare trial |
 | 🤖 | **AI bots** with deterministic decision-making and LLM-phrased speech, including role claims and counter-claims |
 | 🎙️ | **Daytime voice chat** via LiveKit, with server-enforced speaking rights |
-| 📱 | **Mobile-first UI** with cinematic phase transitions |
+| 📱 | **Mobile-first UI** with WebGL cinematics — a nightfall phase transition, a 3D trial stage and a 3D village recap at game over, each falling back to the flat UI where WebGL is unavailable |
 | 🔁 | **Reconnect support** — refresh or drop out and rejoin the same match; a seat abandoned past the grace window is played by the bot brain until its owner returns |
 | 📜 | **Full night recap** at game over: every role action, every death, and why |
 | 💬 | **Full chat reveal** at game over — the wolves' den and the dead's channel open up once roles are public |
 | 🗂️ | **Case file** at game over: 3-5 turning points picked from authoritative match data, with a shareable 9:16 card |
 | 🕘 | **Match history** on the home page: your recent games, your role in each, the final roster, and the turning points that decided them |
+| 📥 | **Installable PWA** — add to home screen, and a cached offline page instead of the browser's error screen when a navigation fails |
+| ✉️ | **Last letter** (optional add-on): write a sealed note of at most 100 characters during the day; it opens only when its writer dies |
 
 ## Architecture
 
 ```
 ma-soi-online/
 ├── apps/
-│   ├── web/               # Next.js 16 · React 19 · Tailwind (App Router)
+│   ├── web/               # Next.js 16 · React 19 · Tailwind · three.js (App Router)
 │   └── server/            # Express · Socket.IO · Prisma · Redis
 ├── packages/
 │   ├── game-engine/       # Pure rules + bot brain. No IO. Vitest.
@@ -121,14 +123,14 @@ npm run dev:server   # http://localhost:4100
 npm run dev:web      # http://localhost:3000
 ```
 
-Open <http://localhost:3000>, enter a nickname, click **Tạo phòng mới** (*Create room*), press **+ Thêm bot** (*Add bot*) until you have 6 players, then **Bắt đầu trận đấu** (*Start match*).
+Open <http://localhost:3000>, enter a nickname, click **Tạo phòng mới** (*Create room*), press **+ Thêm bot** (*Add bot*) until you have 8 players, then **Bắt đầu trận đấu** (*Start match*).
 
 > [!TIP]
 > On a clean clone, run `npm run build:deps` before invoking a single workspace directly (e.g. `npm test --workspace @masoi/server`). `@masoi/shared` and `@masoi/game-engine` resolve `main`/`types` to `dist/`, which is gitignored — without it you get a wall of `has no exported member` errors that look like broken code but are just a missing build. The root `npm test` and `npm run lint` handle this for you.
 
 ## Configuration
 
-All server configuration is environment-driven. See [`.env.example`](.env.example) for the full annotated list.
+All server configuration is environment-driven. [`.env.example`](.env.example) annotates the variables you normally set; [`apps/server/src/config.ts`](apps/server/src/config.ts) is the authoritative list — the OpenAI-compatible and OpenAI bot stages below, for instance, are read there but deliberately left out of the example file.
 
 ### Core
 
@@ -240,6 +242,7 @@ Village wins by eliminating every wolf. Wolves win once they equal or outnumber 
 |---|---|---|
 | Werewolf | Ma Sói | Collectively choose one victim each night |
 | Wolf Cub | Sói Con | Wakes with the pack. When it dies, the pack bites **two** targets the following night |
+| Traitor | Kẻ Phản Bội | Wins **with** the wolves without being in the pack: no night action, no wolf chat, does not know the wolves and they do not know it, and the Seer reads it as **not a wolf**. When the last pack wolf dies, it becomes a Werewolf |
 
 </details>
 
@@ -250,6 +253,7 @@ Village wins by eliminating every wolf. Wolves win once they equal or outnumber 
 |---|---|---|
 | Seer | Tiên Tri | Inspect one player's team each night |
 | Apprentice Seer | Tiên Tri Tập Sự | Powerless until the Seer dies, then inherits the inspection |
+| Medium | Bà Đồng | Inspect one **dead** player's true role each night |
 | Detective | Thám Tử | Check whether two **other** living players are on the same team — it cannot put itself in the pair |
 | Guard | Bảo Vệ | Shield one player from every night kill; never itself, and cannot repeat the same target two nights running |
 | Guardian Angel | Thiên Thần Hộ Mệnh | Two shields per match against any night kill; never itself, no consecutive repeats |
@@ -258,7 +262,11 @@ Village wins by eliminating every wolf. Wolves win once they equal or outnumber 
 | Hunter | Thợ Săn | On death, may shoot one living player — or nobody |
 | Mayor | Thị Trưởng | Daytime votes count double |
 | Cursed | Kẻ Nguyền Rủa | No night action. Surviving a first wolf bite turns them **into a wolf** |
+| Elder | Trưởng Lão | Survives the pack's first bite. But if the *village* kills it — a lynch, the Witch's poison, the Hunter's bullet — every village special ability stops working for the rest of the match |
+| Doppelganger | Kẻ Song Trùng | Becomes the exact role of the **first player to die**, wolf roles included |
 | Villager | Dân Làng | No ability — discussion and voting only |
+
+Four cards **overwrite their own `role` mid-match** instead of carrying a special-case team: the Cursed on a survived bite, the Traitor when the pack runs out, the Doppelganger on the first death, and the Executioner when it loses its target. Every question about team, night order and chat then reads the *new* role with no extra branch — and each settle function is idempotent, so a phase replayed after a restart never turns anyone twice. A Doppelganger copying an Executioner becomes a **Jester**, not a second Executioner: a copy holds no entry in the target table, which is exactly the state a target-less Executioner is already defined to be in.
 
 </details>
 
@@ -291,7 +299,9 @@ All three are **off by default and in no preset deck** — the host has to enabl
 
 </details>
 
-Rooms hold **8–15 players**. Villagers fill whatever seats the configured special roles leave over.
+Rooms hold **8–20 players**. Villagers fill whatever seats the configured special roles leave over.
+
+The ceiling of 20 guards two different things, and only one of them follows the number: `PRESET_DECKS` must carry a deck for every size from 8 up to it, and `AVATAR_IDS` must hold that many distinct pictures. Raising it again without drawing more avatars would pass the tests — `assignAvatars` falls back to reuse — but two seats sharing a face in a deduction game is a real loss.
 
 The minimum is 8 because of arithmetic, not taste. Wolves win at `wolves >= everyone else`, and night comes first, so a 6-player table gives the village exactly one wrong lynch before the game is over — and the first vote happens before anyone has learned anything. It is not fixable by deck: every 2-wolf deck at 6 players tops out around 32% for the village in self-play, because the table runs out of seats to put power roles in, while dropping to 1 wolf jumps to 60%. There is nothing in between.
 
@@ -335,9 +345,9 @@ Countdowns are driven by `phaseEndsAt`, an epoch timestamp issued by the server.
 
 **Chaos rooms only.** Ranked rooms — the default — run with no events at all, by design.
 
-15 events can fire to reshape a round, each with a beneficiary and a power rating the balance analyzer accounts for:
+17 events can fire to reshape a round, each with a beneficiary and a power rating the balance analyzer accounts for:
 
-`CURFEW` · `SILENT_NIGHT` · `AMNESTY_DAY` · `CLEARING_MIST` · `PEACEFUL_NIGHT` · `JUDGMENT_DAY` · `LAST_STAND` · `DAY_OF_TRUTH` · `MOONLESS_NIGHT` · `BLOODY_HUNT` · `HOWL_OF_THE_PACK` · `BLOOD_MOON` · `WOLF_SHADOW` · `MORNING_REPORT` · `DEAD_CAN_SPEAK`
+`CURFEW` · `SILENT_NIGHT` · `AMNESTY_DAY` · `CLEARING_MIST` · `PEACEFUL_NIGHT` · `JUDGMENT_DAY` · `LAST_STAND` · `DAY_OF_TRUTH` · `MOONLESS_NIGHT` · `BLOODY_HUNT` · `HOWL_OF_THE_PACK` · `BLOOD_MOON` · `WOLF_SHADOW` · `MORNING_REPORT` · `DEAD_CAN_SPEAK` · `SECRET_BALLOT` · `VIGILANT_NIGHT`
 
 ## Voice chat
 
@@ -348,11 +358,12 @@ Disabled by default. The host toggles it in the lobby, and the toggle only appea
 | Phase | Who may speak |
 |---|---|
 | `LOBBY`, `GAME_OVER` | Everyone |
-| `DAY_DISCUSSION`, `VOTING`, `FINAL_VOTE`, `NIGHT_RESULT`, `ELIMINATION` | The living |
-| `DEFENSE` | The defendant only |
+| `DAY_DISCUSSION`, `VOTING`, `DEFENSE`, `FINAL_VOTE`, `NIGHT_RESULT`, `ELIMINATION` | The living |
 | `NIGHT`, `ROLE_REVEAL`, `HUNTER_SHOT` | Nobody |
 
 The dead can always **listen**, but cannot speak until `GAME_OVER`.
+
+`DEFENSE` used to be the defendant's exclusive turn. It now opens to every living player: the table can answer a defence on the spot, at the price of the defendant no longer getting an uninterrupted minute. That is a deliberate trade, not an oversight — `apps/server/tests/voice-permission.test.ts` is the invariant test that keeps this table and `resolveChat` from drifting apart.
 
 Each player picks their own mic mode (stored in `localStorage` — it is an input preference, not a room rule): `ptt` (hold to talk, the default) or `toggle` (tap on, tap off, far friendlier on phones). Push-to-talk is the default deliberately: in a game where one careless sentence loses the match, "you must actively hold it" is the safer default.
 
@@ -377,7 +388,7 @@ Bots can claim roles in chat (a Seer announcing a wolf hit, a wolf claiming fals
 
 - A Guard genuinely covering a real Seer reads identically to a bluff. Deliberately unpatched — patching it would require leaking who was protected.
 - The claim parser misses phrasings real players actually type (regional slang, abbreviations).
-- Within a wolf pack, the same seat always steps up to bluff.
+- The pack's bluffing seat rotates by round — a pure hash of pack key and round, spending nothing from the RNG stream — so the table can no longer learn the liar's face after two rounds. But the rotation is positional, not a judgement of who is best placed to be believed.
 - Because the game never reveals dead players' roles, the village has no anchor to confirm a claim against.
 - **The final gate — a human reading a full match and judging conversation quality — has not been run.** Every number currently available measures statistical behaviour through self-play, not perceived quality.
 
@@ -424,6 +435,7 @@ Operational details — keys, TTLs, log lines, deploy checklist, when to bump
 |---|---|---|---|---|
 | `POST` | `/api/players` | `{ nickname }` | `{ playerId, token, nickname }` | Guest registration. The client keeps the token; the server stores only its SHA-256. Rate-limited per IP. |
 | `GET` | `/api/players/me/matches` | — | `{ matches: MatchHistoryEntry[] }` | The caller's 20 most recent finished matches, each with its stored case file when one exists. Requires `Authorization: Bearer <token>`; answers `401` without a valid one. Matched by player id inside the stored roster, so games recorded before ids were stored do not appear. |
+| `GET` | `/api/players/me/matches/:matchId/chat` | — | `{ messages: MatchChatEntry[] }` | The full stored transcript of one finished match, every channel included. Bearer auth, and the authorisation is a condition of the SQL itself: the caller's id must appear in that match's stored roster, otherwise `404` — the same `404` whether the match exists or not. No further per-channel filtering, because `GAME_OVER` already opened the whole log to everyone in the room. |
 | `PUT` | `/api/players/me/avatar` | `multipart/form-data`, field `file` | `{ avatarUrl }` | Bearer auth. ≤ 5 MB. Format is decided by magic bytes (JPEG/PNG/WebP), never by the client-declared MIME type. The server auto-rotates by EXIF, crops to a centred square, resizes to 256×256 and encodes WebP under 200 KB. `503` when object storage is not configured. |
 | `DELETE` | `/api/players/me/avatar` | — | `204` | Bearer auth. Clears the avatar and deletes the stored object. Succeeds even when object storage is not configured — the database is the source of truth for "has an avatar". |
 | `GET` | `/api/health` | — | `{ ok, db, redis, version, startedAt }` | `503` when PostgreSQL is down. Redis trouble reports `redis: false` but still returns `200`, since in-memory rooms remain playable. |
@@ -447,20 +459,23 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `room:update-config` | `{ config }` | Host, outside a match |
 | `room:add-bot` | `{}` | Host, outside a match |
 | `room:update-avatar` | `{ avatarUrl: null }` | Member; removal only. Uploads go through `PUT /api/players/me/avatar` — sending image data over Socket.IO is what bloated every room snapshot. Kept so older cached clients can still remove an avatar. |
-| `room:start` | `{}` | Host; ≥ 6 players, valid config, all humans ready |
+| `room:start` | `{}` | Host; ≥ 8 players, valid config, all humans ready |
 | `room:reset` | `{}` | Host after `GAME_OVER` → back to lobby |
 | `game:action` | `{ type, targetId?, targetId1?, targetId2? }` | Correct role, alive, during `NIGHT` |
 | `game:vote` | `{ targetId }` | Alive, during `VOTING`. `null` means *nobody* — a deliberate choice, not a blank |
 | `game:final-vote` | `{ guilty }` | Alive, not the defendant, during `FINAL_VOTE` |
 | `game:hunter-shot` | `{ targetId }` | The Hunter, during `HUNTER_SHOT` |
-| `game:skip-discussion` | `{}` | Alive, during `DAY_DISCUSSION`; unanimous consent ends the phase |
+| `game:skip-discussion` | `{ skip }` | Alive, during `DAY_DISCUSSION`; unanimous consent ends the phase |
 | `game:day-of-truth-claim` | `{ role }` | During the `DAY_OF_TRUTH` event |
 | `game:dead-message` | `{ text }` | The chosen ghost, during `DEAD_CAN_SPEAK` |
+| `game:last-letter-set` | `{ text }` | Alive, add-on enabled, during `DAY_DISCUSSION`. `null` clears the draft. A draft travels back only inside its own author's snapshot |
 | `chat:send` | `{ text }` | Channel chosen server-side from phase and alive state |
 | `voice:token` | `{}` | Human member, voice enabled, LiveKit configured |
 | `voice:ready` | `{}` | Signals the LiveKit room was joined, so the server can grant phase-appropriate rights |
 
-`game:action` types: `KILL` · `SEE` · `GUARD` · `HEAL` · `POISON` · `SKIP` · `DETECTIVE_CHECK` · `GUARDIAN_PROTECT` · `HOLY_WATER`
+`game:action` types: `KILL` · `SEE` · `GUARD` · `HEAL` · `POISON` · `SKIP` · `DETECTIVE_CHECK` · `GUARDIAN_PROTECT` · `HOLY_WATER` · `SERIAL_KILL`
+
+`SERIAL_KILL` is deliberately **not** `KILL`: one code for two abilities would force the resolver to disambiguate by the sender's role, and that is precisely the seam through which a wolf's bite could land in the Serial Killer's slot.
 
 </details>
 
@@ -492,6 +507,8 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `npm run selfplay` | Run bot self-play batches and print a report. Add `--traces <dir>` to dump per-decision JSONL for the first few games |
 | `npm run trace-view` | Read a self-play trace file as a per-bot timeline — what moved each belief, which scoring terms decided each vote, why a bot spoke. See [`docs/bot-tuning-workflow.md`](docs/bot-tuning-workflow.md) |
 | `npm run role-power` | Measure each role's marginal win-rate contribution by paired self-play, to recalibrate `ROLE_POWER` |
+| `npm run reveal-ab` | Paired self-play that flips one flag only — `revealRoleOnDeath` — to separate "the bots reason poorly" from "the hidden-role rule itself tilts the match" |
+| `npm run mine-aliases` | Read stored match chat and propose role aliases the claim parser does not understand yet. It writes a proposal for a human to approve; it never edits `ROLE_PHRASES` itself |
 | `npm run bot:probe` | One real LLM call against a fake match, to validate keys and prompts |
 | `npm run voice:probe` | One real LiveKit round trip, to validate credentials and token grants |
 | `npm run test:e2e` | Socket.IO smoke test; needs a running local server. Not yet a release gate |
@@ -501,15 +518,18 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 
 | Package | Runner | Tests |
 |---|---|---|
-| `@masoi/shared` | Vitest | **97** |
-| `@masoi/game-engine` | Vitest | **1534** |
-| `@masoi/server` | Vitest | **861** |
-| `@masoi/web` | `node:test` | **937** |
-| | | **3429 total** |
+| `@masoi/shared` | Vitest | **158** |
+| `@masoi/game-engine` | Vitest | **2228** |
+| `@masoi/server` | Vitest | **973** |
+| `@masoi/web` | `node:test` | **1380** |
+| | | **4739 total** |
 
 Every package typechecks its tests as well as its sources — `npm run lint` runs `tsc` over both. This matters more than it sounds: the server's tests were unchecked until recently, and in that gap more than forty fixtures drifted away from the types they claimed to build, several of them still setting engine fields that had been renamed away.
 
 The engine suite includes seeded self-play runs that assert invariants across hundreds of full matches — no illegal move is ever accepted, no bot ever learns a role it should not know, and the same seed reproduces a match bit-for-bit.
+
+> [!NOTE]
+> The server image runs Node 20.19 (`Dockerfile.server`), but the **web** suite needs **Node 24** to pass in full. It leans on `node:test` module mocking, which is still experimental and behaves differently per major: 20.19 ignores the `exports` option silently, and 22.x fails to mock local modules loaded through a dynamic `import()`. CI therefore pins 24.x. If you want the two to match again, raise `Dockerfile.server` — do not lower CI.
 
 ```bash
 npm test                                  # everything
@@ -547,7 +567,7 @@ Container start runs `prisma migrate deploy` before opening the port. Note the r
 
 </details>
 
-CI runs build → test → lint on every push and pull request, and deploys previews to Vercel. Render Free instances sleep when idle, so the first request after a quiet period is slow. If the backend restarts mid-match, rooms are returned to the lobby safely rather than resuming half-finished timers.
+CI runs build → test → lint on every push and pull request, and deploys previews to Vercel. Render Free instances sleep when idle, so the first request after a quiet period is slow. A backend restart no longer drops the match: the room is rebuilt from its Redis snapshot and resumed — see [Crash recovery](#crash-recovery).
 
 ## Security model
 
@@ -570,7 +590,7 @@ Stated plainly, because knowing where the edges are is more useful than pretendi
 - **Recovery is best-effort on the Redis side.** If Redis is down *at the moment* the process dies, the match is lost. That is a deliberate trade: a slow Redis must never stall a live table.
 - **Rooms wake up lazily**, when someone reconnects. A match left with only bots stays frozen until a human returns or the 6-hour TTL expires.
 - **LLM speech is not replayed.** After a restore, bots say new sentences; only their *decisions* are deterministic.
-- **No chat persistence.** Match history records the result, the final roster and the case file, not the conversation. The end-of-match reveal reads the room's in-memory log, which is capped at the last 100 messages across all channels, so a long and talkative game reveals its final stretch rather than the whole thing.
+- **The end-of-match reveal is capped, and the stored transcript has no reader yet.** The reveal reads the room's in-memory log, which holds only the last 100 messages across all channels, so a long and talkative game reveals its final stretch rather than the whole thing. The *full* transcript (up to 2000 messages) is written to the database at `GAME_OVER` and served by `GET /api/players/me/matches/:matchId/chat` — but no screen in the web app reads it today; its only consumer is `npm run mine-aliases`.
 - **Case files only exist from the match that introduced them onward.** Games finished before the column was added show their roster but no turning points; the ingredients live only in the room's memory, so they cannot be reconstructed after the fact.
 - **Voice is daytime-only** and audio-only — no video.
 - **Rate limiting is in-memory**, so it is per-process and resets on deploy.
