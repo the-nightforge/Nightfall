@@ -58,7 +58,18 @@ export interface BotDecisionTrace {
   round: number;
   phase: Phase;
   decision: TraceDecisionKind;
-  chosen: { targetId: string | null; label: string };
+  /**
+   * `reason` là `BotSpeechIntention.reason`, thứ được ghi rõ trong `types.ts` là
+   * "giải thích nội bộ, cho trace và log" - và cho tới trước công cụ này nó
+   * chưa từng tới được một trace nào. Không có nó, một `SPEECH` thành công chỉ
+   * nói được bot đã nói GÌ; lý do nó mở miệng thì chỉ hiện ra khi nó im lặng
+   * (qua `fallbackReason`), tức đúng nửa câu trả lời sai.
+   *
+   * Nằm trong ranh giới 2: `reason` là lý lẽ của CHÍNH bot đó, rút từ knowledge
+   * view của chính nó. Nó có thể nhắc tới vai thật của người nói, y như
+   * `knowledgeSnapshot.knownRoles` đã làm.
+   */
+  chosen: { targetId: string | null; label: string; reason?: string };
   candidates: TraceCandidate[];
   /** Belief lúc bắt đầu lần `observe` gần nhất. */
   beliefBefore: BeliefSnapshot;

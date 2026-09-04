@@ -32,6 +32,16 @@ export interface SelfPlayBatchInput {
   speech?: boolean;
   /** Chạy lại mọi ván lần thứ hai để bắt `REPLAY_DIVERGENCE`. Tốn gấp đôi. */
   verifyReplay?: boolean;
+  /**
+   * Thu trace cho `n` ván ĐẦU TIÊN của batch. Mặc định 0, tức tắt hoàn toàn.
+   *
+   * Có trần vì trace là thứ duy nhất trong batch lớn theo số quyết định chứ
+   * không theo số ván: 1000 ván × 8 bot × ~15 quyết định là hàng trăm nghìn
+   * object nằm trong RAM tới cuối batch, cho một người rốt cuộc chỉ đọc vài
+   * ván. Lấy `n` ván ĐẦU chứ không lấy mẫu rải rác để tập trace luôn tái lập
+   * được: cùng `seedBase` cho cùng những ván đó.
+   */
+  traceGames?: number;
 }
 
 export interface ReportTiming {
@@ -69,6 +79,7 @@ export function seedFor(seedBase: string, index: number): string {
 
 /** Chạy cả batch. Tách khỏi `buildReport` để CLI đo được thời gian quanh nó. */
 export function runBatch(input: SelfPlayBatchInput): SelfPlayGame[] {
+  const traceGames = input.traceGames ?? 0;
   const games: SelfPlayGame[] = [];
   for (let i = 0; i < input.games; i += 1) {
     const game = runSelfPlay({
@@ -79,6 +90,10 @@ export function runBatch(input: SelfPlayBatchInput): SelfPlayGame[] {
       maxRounds: input.maxRounds,
       events: input.events,
       speech: input.speech,
+      // `false` chứ không phải `undefined` cho phần đuôi batch: `runSelfPlay`
+      // đọc trường này bằng một phép kiểm chân trị, nên cả hai đều tắt - nhưng
+      // viết thẳng ra thì trần trace là một luật đọc được ở đây.
+      trace: i < traceGames,
     });
 
     if (input.verifyReplay) {
@@ -90,6 +105,9 @@ export function runBatch(input: SelfPlayBatchInput): SelfPlayGame[] {
         maxRounds: input.maxRounds,
         events: input.events,
         speech: input.speech,
+        // Lần chạy đối chứng KHÔNG thu trace: nó chỉ tồn tại để so chuỗi sự
+        // kiện, và thu trace ở đây là trả gấp đôi bộ nhớ cho một bản sao không
+        // ai đọc.
       });
       if (JSON.stringify(again.events) !== JSON.stringify(game.events)) {
         game.violations.push({

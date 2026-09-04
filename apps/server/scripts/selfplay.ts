@@ -1,15 +1,18 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import {
   BOT_WEIGHTS_PRESETS,
   DEFAULT_BOT_WEIGHTS,
   buildReport,
   formatReportText,
   runBatch,
+  serializeTraces,
+  traceFileName,
   weightsPreset,
   type BotWeights,
   type SelfPlayBatchInput,
+  type SelfPlayGame,
 } from "@masoi/game-engine";
 import { PRESET_DECKS, type RoomConfig } from "@masoi/shared";
 
@@ -37,7 +40,20 @@ interface Options {
   quiet: boolean;
   /** Dùng bộ bài chuẩn của số người đó thay cho bộ bài mặc định của runner. */
   preset: boolean;
+  /** Thư mục nhận JSONL trace. `null` là TẮT, và tắt là mặc định. */
+  traces: string | null;
+  /** Trần số ván được ghi trace. Chỉ có nghĩa khi `traces` khác `null`. */
+  traceGames: number;
 }
+
+/**
+ * Trần mặc định cho số ván ghi trace.
+ *
+ * Năm ván là số ván một người thật sự mở ra đọc trong một buổi tuning. Đặt trần
+ * ở đây chứ không để người dùng tự nhớ, vì thứ đang được chặn không phải sự bất
+ * tiện mà là một batch 1000 ván ghi ra vài GB JSONL trước khi ai kịp thấy.
+ */
+const DEFAULT_TRACE_GAMES = 5;
 
 function usage(): string {
   const presets = Object.keys(BOT_WEIGHTS_PRESETS).sort().join(", ");
@@ -54,7 +70,11 @@ function usage(): string {
     "  --no-speech         Tắt lời nói giữa các BOT",
     "  --verify-replay     Chạy lại mỗi ván để bắt REPLAY_DIVERGENCE (chậm gấp đôi)",
     "  --out <đường dẫn>   Ghi JSON ra file",
+    "  --traces <thư mục>  Ghi trace quyết định ra JSONL, mỗi ván một file (mặc định: tắt)",
+    `  --trace-games <số>  Số ván đầu được ghi trace (mặc định: ${DEFAULT_TRACE_GAMES})`,
     "  --quiet             Chỉ in JSON, không in bản tóm tắt",
+    "",
+    "Đọc trace:  npm run trace-view -- <file.jsonl> [--bot <id>]",
   ].join("\n");
 }
 
@@ -71,6 +91,8 @@ function parseArgs(argv: readonly string[]): Options {
     out: null,
     quiet: false,
     preset: false,
+    traces: null,
+    traceGames: DEFAULT_TRACE_GAMES,
   };
 
   const number = (raw: string | undefined, flag: string): number => {
@@ -116,6 +138,12 @@ function parseArgs(argv: readonly string[]): Options {
       case "--out":
         options.out = argv[++i] ?? null;
         break;
+      case "--traces":
+        options.traces = argv[++i] ?? null;
+        break;
+      case "--trace-games":
+        options.traceGames = number(argv[++i], flag);
+        break;
       case "--quiet":
         options.quiet = true;
         break;
@@ -139,6 +167,31 @@ function presetDeck(playerCount: number): RoomConfig {
     throw new Error(`--preset không có bộ bài chuẩn cho ${playerCount} người (có: ${known})`);
   }
   return deck;
+}
+
+/**
+ * Ghi trace của những ván CÓ trace ra JSONL, mỗi ván một file.
+ *
+ * Một file mỗi ván chứ không một file cho cả batch: đơn vị mà người đọc mở ra
+ * là một VÁN ("sao ván này bot treo nhầm An"), và tên file mang seed nên từ một
+ * file trace luôn chạy lại được đúng ván đã sinh ra nó.
+ *
+ * Trả về đường dẫn đã ghi, để lời báo cuối chỉ được đúng chỗ cần mở.
+ */
+function writeTraces(directory: string, games: readonly SelfPlayGame[]): string[] {
+  const root = resolve(directory);
+  mkdirSync(root, { recursive: true });
+
+  const written: string[] = [];
+  for (const game of games) {
+    // Ván ngoài trần trace có mảng rỗng. Ghi ra một file trống chỉ tạo ra thứ
+    // để người ta mở nhầm rồi tưởng bot không quyết định gì.
+    if (game.traces.length === 0) continue;
+    const target = join(root, traceFileName(game.record.seed));
+    writeFileSync(target, serializeTraces(game.traces), "utf8");
+    written.push(target);
+  }
+  return written;
 }
 
 /** Commit hiện tại, hoặc `null`. Không bao giờ làm hỏng cả lần chạy. */
@@ -166,6 +219,11 @@ function main(): void {
     // theo số người, nên một batch 15 người mặc định KHÔNG đo bộ bài mà ván 15
     // người thật sự chia. `--preset` là cách hỏi đúng câu hỏi đó.
     config: options.preset ? presetDeck(options.players) : undefined,
+    // Không `--traces` thì 0, và 0 nghĩa là `runSelfPlay` không dựng collector,
+    // không bọc RNG, không cấp phát một object trace nào. Buộc trần vào sự có
+    // mặt của thư mục ĐÍCH chứ không vào `--trace-games`, để không có cách nào
+    // trả giá bộ nhớ cho một tập trace rồi vứt đi vì quên chỗ ghi.
+    traceGames: options.traces === null ? 0 : Math.min(options.traceGames, options.games),
   };
 
   const startedAt = performance.now();
@@ -186,6 +244,19 @@ function main(): void {
     if (!options.quiet) process.stdout.write(`\nĐã ghi ${target}\n`);
   } else if (options.quiet) {
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  }
+
+  if (options.traces !== null) {
+    const files = writeTraces(options.traces, games);
+    if (!options.quiet) {
+      const total = games.reduce((sum, game) => sum + game.traces.length, 0);
+      process.stdout.write(
+        `\nĐã ghi trace ${files.length} ván (${total} quyết định) vào ${resolve(options.traces)}\n`,
+      );
+      // In lệnh đọc kèm một file có thật: một đường dẫn không có lệnh đi cùng
+      // là một thư mục người ta ghi ra rồi không bao giờ mở.
+      if (files[0]) process.stdout.write(`Đọc:  npm run trace-view -- ${files[0]}\n`);
+    }
   }
 
   // Mã thoát khác 0 khi có vi phạm: một batch hỏng phải làm đỏ CI, không phải

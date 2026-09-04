@@ -489,7 +489,8 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `npm run lint` | Typecheck every workspace |
 | `npm run db:migrate` | `prisma migrate deploy` |
 | `npm run db:generate` | `prisma generate` |
-| `npm run selfplay` | Run bot self-play batches and print a report |
+| `npm run selfplay` | Run bot self-play batches and print a report. Add `--traces <dir>` to dump per-decision JSONL for the first few games |
+| `npm run trace-view` | Read a self-play trace file as a per-bot timeline — what moved each belief, which scoring terms decided each vote, why a bot spoke. See [`docs/bot-tuning-workflow.md`](docs/bot-tuning-workflow.md) |
 | `npm run role-power` | Measure each role's marginal win-rate contribution by paired self-play, to recalibrate `ROLE_POWER` |
 | `npm run bot:probe` | One real LLM call against a fake match, to validate keys and prompts |
 | `npm run voice:probe` | One real LiveKit round trip, to validate credentials and token grants |
