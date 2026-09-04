@@ -44,10 +44,53 @@ model GameResult {
   /// dayVoteHistory, hunterShots) chỉ sống trong RAM của ván, không có trong DB.
   caseFile    Json?
   durationSec Int
+  /// Chat của ván, ghi cùng transaction với chính dòng này. Rỗng với ván lưu
+  /// trước khi có bảng đó, và với ván không ai nói câu nào.
+  chat        MatchChatMessage[]
   createdAt   DateTime @default(now())
 
   /// Khai ở đây để Prisma biết index này thuộc về schema.
   /// Thiếu nó thì `prisma migrate dev` coi index do migration tạo ra là drift
   /// và sinh ngay một migration xoá nó đi.
   @@index([playerRoles(ops: JsonbPathOps)], type: Gin)
+}
+
+/// Toàn bộ chat của MỘT ván, ghi đúng một lần lúc ván kết thúc.
+///
+/// KHÔNG ghi từng tin một lúc người ta gõ: bàn chơi là đường nóng, và một lần
+/// INSERT chậm ở đó là cả phòng đứng hình giữa pha thảo luận. Log sống trong RAM
+/// của phòng (`room.matchChat`) suốt ván rồi đi xuống DB cùng `GameResult`, trong
+/// đúng một transaction - cùng cái trade-off "Redis chậm không được làm treo bàn
+/// đang chạy" mà phần persistence đã chọn từ đầu.
+///
+/// Quan hệ tới `GameResult` chứ không mang `gameId` trần: ván nào không ghi nổi
+/// kết quả thì cũng không có chỗ để treo chat, và `onDelete: Cascade` giữ cho
+/// bảng này không mọc ra những dòng mồ côi.
+model MatchChatMessage {
+  id        String     @id @default(cuid())
+  matchId   String
+  match     GameResult @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  /// Thứ tự trong ván, đánh từ 0 lúc lưu vào RAM.
+  ///
+  /// Đây mới là nguồn sự thật của THỨ TỰ, không phải `createdAt`: nhiều BOT nói
+  /// trong cùng một mili giây là chuyện thường, và sắp theo mốc thời gian sẽ
+  /// trả về một thứ tự khác nhau mỗi lần đọc.
+  seq       Int
+  /// `lobby` | `day` | `wolves` | `dead` - đúng cái `ChatMessage.channel` đang có.
+  channel   String
+  /// Người nói. Có thể là hằng số tác giả ẩn danh (Tiếng Vọng Người Chết) chứ
+  /// không nhất thiết là một `Player.id`, nên CỐ Ý không có khoá ngoại.
+  actorId   String
+  actorName String
+  text      String     @db.Text
+  round     Int
+  /// Pha lúc nói, dạng chuỗi. Không phải enum: một pha mới trong bản sau không
+  /// được phép làm hỏng việc ghi lịch sử của bản hiện tại.
+  phase     String
+  /// Mốc gõ THẬT của tin nhắn, không phải mốc ghi DB.
+  createdAt DateTime
+
+  /// Vừa chặn ghi trùng một `seq` trong cùng ván, vừa là index cho câu đọc
+  /// "lấy cả ván, sắp theo thứ tự".
+  @@unique([matchId, seq])
 }

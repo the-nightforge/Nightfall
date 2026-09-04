@@ -1,3 +1,4 @@
+import { fnv1a32 } from "./hash";
 import type { BotRng } from "./types";
 
 /**
@@ -6,17 +7,6 @@ import type { BotRng } from "./types";
  * không còn là dòng số gốc, và không có test nào ngoài đây bắt được.
  */
 const STEP = 0x6d2b79f5;
-
-function fnv1a32(seed: string): number {
-  let hash = 0x811c9dc5;
-
-  for (let index = 0; index < seed.length; index += 1) {
-    hash ^= seed.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-
-  return hash >>> 0;
-}
 
 /**
  * Dòng số đã gieo hạt, có kèm vị trí hiện tại.
