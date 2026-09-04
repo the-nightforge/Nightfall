@@ -1,13 +1,26 @@
 """Build 16 portrait sheets (1024x256 WebP) tu pack Studio Nik sample.
 
-Vao:  C:\\Users\\Admin\\Downloads\\12-fantasy-character-portraits-free-sample\\<Ten>\\256_original_*.png
-Ra:   C:\\Users\\Admin\\ma-soi-online\\apps\\web\\public\\characters\\<avatarId>.webp
+Vao:  <thu-muc-pack>/<Ten>/256_original_*.png  - truyen vao qua dong lenh
+Ra:   apps/web/public/characters/<avatarId>.webp
+
+Cach chay:
+
+    python tools/build-character-sheets.py <thu-muc-pack>
+
+Thu muc pack la thu muc giai nen cua "12 Fantasy Character Portraits -
+Free Sample" (Studio Nik), tuc thu muc chua Caius/, Eldrin/, ... Duong
+dan nay KHONG viet cung trong file: no nam o may nguoi tai pack ve, va
+viet cung thi may khac khong chay lai duoc.
+
+Thu muc ra thi nguoc lai - suy tu vi tri chinh file nay, nen script chay
+dung du goi tu dau. Muon ghi ra cho khac thi dung --out.
 
 Moi sheet 4 frame 256px: [idle, blink~idle, talk~idle, dead pale].
 Pack goc khong co bien the bieu cam nen frame 1-2 tam dung idle;
 frame dead lam tai bang script. Trang thai "dang noi" do quang
 seat-voice-halo san co dam nhan.
 """
+import argparse
 import sys
 from collections import deque
 from pathlib import Path
@@ -15,8 +28,9 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
-SRC = Path(r"C:\Users\Admin\Downloads\12-fantasy-character-portraits-free-sample")
-DST = Path(r"C:\Users\Admin\ma-soi-online\apps\web\public\characters")
+# tools/build-character-sheets.py -> len mot cap la goc repo
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_DST = REPO_ROOT / "apps" / "web" / "public" / "characters"
 
 # avatarId -> (file goc, lat ngang, crop chat)
 # crop chat = cat 30px moi vien roi phong lai 256 (phan biet cap dung chung mat)
@@ -103,12 +117,55 @@ def pale_frame(im: Image.Image) -> Image.Image:
     return out
 
 
-def main() -> int:
-    DST.mkdir(parents=True, exist_ok=True)
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Dung 16 sprite sheet chan dung tu pack Studio Nik.",
+    )
+    parser.add_argument(
+        "pack",
+        type=Path,
+        help="Thu muc giai nen cua pack, tuc thu muc chua Caius/, Eldrin/, ...",
+    )
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=DEFAULT_DST,
+        help=f"Thu muc ghi sheet ra (mac dinh: {DEFAULT_DST})",
+    )
+    return parser.parse_args(argv)
+
+
+def check_pack(src: Path) -> list[str]:
+    """Bao TRUOC nhung gi thieu, thay vi vo truy vet o file dau tien khong co.
+
+    Thieu mot anh giua chung thi 15 sheet da ghi de len ban cu roi - kiem
+    truoc mot luot re hon nhieu so voi doi mot nua ket qua.
+    """
+    if not src.is_dir():
+        return [f"khong thay thu muc pack: {src}"]
+    return [f"thieu {rel}" for rel in FILES.values() if not (src / rel).is_file()]
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    src_root, dst = args.pack, args.out
+
+    missing = check_pack(src_root)
+    if missing:
+        for line in missing:
+            print(f"LOI: {line}", file=sys.stderr)
+        print(
+            "\nTruyen vao thu muc giai nen cua pack Studio Nik "
+            "(thu muc chua Caius/, Eldrin/, ...).",
+            file=sys.stderr,
+        )
+        return 2
+
+    dst.mkdir(parents=True, exist_ok=True)
     total = 0
     bad = []
     for avatar, (src, flip, tight) in MAP.items():
-        im = Image.open(SRC / FILES[src])
+        im = Image.open(src_root / FILES[src])
         if tight:
             im = im.crop((30, 30, 226, 226)).resize((256, 256), Image.LANCZOS)
         if flip:
@@ -118,7 +175,7 @@ def main() -> int:
         sheet = Image.new("RGBA", (1024, 256), (0, 0, 0, 0))
         for i, fr in enumerate((im, im, im, dead)):
             sheet.paste(fr, (i * 256, 0), fr)
-        out = DST / f"{avatar}.webp"
+        out = dst / f"{avatar}.webp"
         sheet.save(out, "WEBP", quality=80, method=6)
         kb = out.stat().st_size / 1024
         total += kb
