@@ -39,6 +39,7 @@ import { CinematicOverlay } from "@/components/CinematicOverlay";
 import { LastLetterReveal } from "@/components/LastLetterReveal";
 import { RoomInvite } from "@/components/RoomInvite";
 import { LobbyHeader } from "@/components/LobbyHeader";
+import { LobbyPlayerGrid } from "@/components/LobbyPlayerGrid";
 
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
@@ -219,7 +220,7 @@ export default function RoomPage() {
       <main
         className={`mx-auto w-full max-w-lg px-3 pb-28 pt-4 lg:pb-6 ${
           isLobby
-            ? "md:max-w-2xl lg:max-w-[1440px] lg:px-6"
+            ? "lobby-page md:max-w-3xl lg:max-w-[1320px] lg:px-6 lg:pb-12"
             : "md:max-w-3xl lg:flex lg:h-[100dvh] lg:max-w-[1600px] lg:flex-col lg:overflow-hidden lg:px-4 xl:px-6"
         }`}
       >
@@ -330,7 +331,7 @@ export default function RoomPage() {
         <div
           className={`mt-3 grid gap-3 ${
             isLobby
-              ? "lg:grid-cols-[18rem_minmax(0,1fr)_21rem] lg:items-start lg:gap-5 xl:grid-cols-[19rem_minmax(0,1fr)_22rem]"
+              ? "lg:grid-cols-[minmax(0,1.65fr)_minmax(20rem,0.72fr)] lg:items-start lg:gap-5"
               : "lg:my-auto lg:max-h-[68rem] lg:min-h-0 lg:flex-1 lg:grid-cols-[14rem_minmax(0,1fr)_17.5rem] xl:grid-cols-[15rem_minmax(0,1fr)_23rem] xl:gap-4"
           }`}
         >
@@ -342,22 +343,20 @@ export default function RoomPage() {
             */}
           <aside
             className={`${
-              isLobby ? "order-1 lg:sticky lg:top-4" : "order-2 lg:min-h-0"
+              isLobby
+                ? "order-1 lg:col-start-1 lg:row-span-2 lg:row-start-1"
+                : "order-2 lg:min-h-0"
             } lg:order-none`}
           >
-            {snapshot && (
-              <RosterPanel
+            {snapshot && snapshot.phase === "LOBBY" ? (
+              <LobbyPlayerGrid
                 snapshot={snapshot}
-                lobby={
-                  snapshot.phase === "LOBBY"
-                    ? {
-                        isHost,
-                        onKick: (targetId) => room.emit("room:kick", { targetId }),
-                      }
-                    : undefined
-                }
+                isHost={isHost}
+                onKick={(targetId) => room.emit("room:kick", { targetId })}
               />
-            )}
+            ) : snapshot ? (
+              <RosterPanel snapshot={snapshot} />
+            ) : null}
           </aside>
 
           {/*
@@ -372,7 +371,7 @@ export default function RoomPage() {
           <div
             className={`${
               isLobby
-                ? "order-2"
+                ? "order-2 lg:col-start-2 lg:row-start-1"
                 : "lobby-roster-scroll order-1 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-1"
             } flex min-w-0 flex-col gap-3 lg:order-none`}
           >
@@ -480,7 +479,7 @@ export default function RoomPage() {
             */}
           <div
             className={`hidden lg:order-none lg:flex lg:min-h-0 lg:flex-col lg:gap-3 ${
-              isLobby ? "lg:sticky lg:top-4 lg:h-[calc(100dvh-2rem)]" : ""
+              isLobby ? "lg:col-start-2 lg:row-start-2" : ""
             }`}
           >
             <VoiceControl snapshot={snapshot} />
@@ -494,7 +493,7 @@ export default function RoomPage() {
               */}
             <div
               className={`min-h-0 flex-1 ${
-                isLobby ? "lg:max-h-[420px] lg:min-h-[240px]" : "lg:min-h-[320px]"
+                isLobby ? "lg:h-[320px]" : "lg:min-h-[320px]"
               }`}
             >
               <ChatBox
