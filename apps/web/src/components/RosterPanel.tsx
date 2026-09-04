@@ -14,6 +14,7 @@ import { roleLabel } from "@/lib/cursed";
 import { TEAM_TAG_CLASS } from "@/lib/team-tone";
 import { listItemMotion } from "@/lib/motion";
 import { NOTE_META, usePlayerNotes } from "@/lib/player-notes";
+import { speakingSeatIds } from "@/lib/seat-voice";
 import { Avatar } from "./Avatar";
 import { AvatarPicker } from "./AvatarPicker";
 
@@ -41,7 +42,28 @@ interface Props {
  * vừa chọn" - và nó cũng đẩy phần cuộn của danh sách 15 người xuống dưới.
  */
 export function RosterPanel({ snapshot, lobby }: Props) {
+  /*
+   * Ai đang nói, lọc qua ĐÚNG luật server rồi mới vẽ.
+   *
+   * Bản trước hỏi thẳng `speakers.has(player.id)`. LiveKit báo về theo mức âm
+   * thanh chứ không theo luật ván, nên cái đó sáng cho bất kỳ ai còn ngồi trong
+   * room và còn phát ra tiếng - kể cả một người vừa chết mà SDK chưa kịp thu
+   * quyền, và kể cả giữa đêm. Ở một cột mà việc duy nhất là tra "ai còn sống",
+   * một hàng người chết sáng lên vì họ đang nói là thông tin sai đúng chỗ đắt
+   * nhất.
+   *
+   * `speakingSeatIds` lọc bằng `voiceCanPublish` - cùng hàm server dùng để cấp
+   * quyền, và cùng hàm `PlayerGrid` đang dùng. Một luật, hai chỗ vẽ, không có
+   * bản sao nào để trôi khỏi nhau.
+   *
+   * Memo một lần cho cả cột chứ không hỏi lại ở từng hàng: hàm duyệt cả danh
+   * sách, gọi nó mười lăm lần cho mười lăm hàng là mười lăm lần duyệt thừa.
+   */
   const speakers = useSpeakers();
+  const speakingIds = useMemo(
+    () => speakingSeatIds({ speakers, players: snapshot.players, phase: snapshot.phase }),
+    [speakers, snapshot.players, snapshot.phase],
+  );
   const meId = snapshot.you?.id ?? null;
   const roster = snapshot.players.map((p) => p.id).join(",");
   const avatars = useMemo(() => assignAvatars(roster ? roster.split(",") : []), [roster]);
@@ -125,8 +147,7 @@ export function RosterPanel({ snapshot, lobby }: Props) {
            * đó phần lớn các hàng bot rút từ hai dòng xuống còn một.
            */
           const hasTags = isRoomHost || !!player.role || offline || claimed || isPending;
-          // Identity của LiveKit chính là playerId nên đối chiếu thẳng.
-          const speaking = speakers.has(player.id);
+          const speaking = speakingIds.has(player.id);
           return (
             <m.li
               key={player.id}
@@ -225,6 +246,20 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                   </span>
                   {/* Trình đọc màn hình không "thấy" được gạch ngang. */}
                   {!player.alive && <span className="sr-only">(đã chết)</span>}
+                  {/*
+                    * "Đang nói" cũng phải đọc ra được: nền emerald cộng vòng
+                    * sáng là dấu hiệu bằng MÀU, và màu thì không tới được trình
+                    * đọc màn hình.
+                    *
+                    * `sr-only` ngay sau cái tên chứ không phải `aria-live`, và
+                    * cũng không phải `aria-label` trên cả hàng. Hàng này còn
+                    * mang huy hiệu phiếu, nhãn vai, nút ghi chú - một
+                    * `aria-label` ở thẻ cha sẽ nuốt sạch chúng. Còn `aria-live`
+                    * thì đọc lại cái tên vài lần mỗi giây, vì LiveKit bắn
+                    * `ActiveSpeakersChanged` theo mức âm thanh. Cùng cách
+                    * `PlayerSeat` xử lý.
+                    */}
+                  {speaking && <span className="sr-only">— đang nói</span>}
                   {isMe && (
                     <span className="shrink-0 rounded bg-indigo-500/25 px-1 py-px text-xs font-bold leading-tight text-indigo-100 ring-1 ring-indigo-400/40">
                       Bạn

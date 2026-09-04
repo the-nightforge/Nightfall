@@ -7,6 +7,7 @@ import { TEAM_TAG_CLASS } from "@/lib/team-tone";
 import { breathOffsetFor } from "@/lib/avatar";
 import type { AvatarId } from "@/lib/avatar-art";
 import { NOTE_META, type NoteMark } from "@/lib/player-notes";
+import { seatFrame, seatShowsSpeaking } from "@/lib/seat-voice";
 import { Avatar } from "./Avatar";
 
 interface Props {
@@ -32,6 +33,14 @@ interface Props {
   seatRef?: (el: HTMLButtonElement | null) => void;
   /** Dấu ghi chú riêng của người xem, nếu họ đã đặt một dấu lên ô này. */
   mark?: NoteMark;
+  /**
+   * Người này đang PHÁT TIẾNG trong kênh thoại, theo LiveKit.
+   *
+   * Mặc định false để mọi lưới chưa nối voice - và mọi test - giữ nguyên hình
+   * dạng cũ. Ô tự lọc lại một lần nữa qua `seatShowsSpeaking`: ô chết hay ô
+   * đang tắt thì không sáng, dù cha có truyền gì.
+   */
+  isSpeaking?: boolean;
 }
 
 /**
@@ -54,32 +63,20 @@ export function PlayerSeat({
   onSelect,
   seatRef,
   mark,
+  isSpeaking = false,
 }: Props) {
   const dead = !player.alive;
   const votes = player.voteCount ?? 0;
+  const speaking = seatShowsSpeaking({ isSpeaking, dead, disabled });
 
   /*
-   * "Ô của tôi" và "ô tôi đang chọn" phải trông KHÁC HẲN nhau.
+   * Bảng màu viền và thứ tự ưu tiên của nó nằm trong `seatFrame`.
    *
-   * Bản trước dùng chung một ngôn ngữ cho cả hai - viền đặc cộng một vòng
-   * `ring` - chỉ khác màu chàm với đỏ. Trên nền tối, ở đuôi mắt, hai cái đó
-   * đọc ra như nhau, và ô "Bạn" bị hiểu thành ứng viên đang bị nhắm.
-   *
-   * Nên tách hẳn hai NGÔN NGỮ hình:
-   *   - đang chọn / đã bỏ phiếu -> viền đặc + vòng cứng + dấu tích ở góc
-   *   - chính mình              -> quầng sáng mềm, không viền cứng, không vòng
-   *
-   * Ô không chọn được (chính mình khi luật cấm tự bầu, người đã chết) thì viền
-   * ĐỨT NÉT: một dấu hiệu không phải màu, đọc ngay ra là "ô này không phải mục
-   * tiêu bấm được".
+   * Trạng thái nói cố ý KHÔNG được truyền vào: nó vẽ bằng quầng NGOÀI khung
+   * (xem `.seat-voice-halo`) nên không bao giờ chen vào bảng màu ấy - ô đang
+   * bị nhắm vẫn đỏ kể cả khi người đó đang nói.
    */
-  const frame = selected
-    ? "border-blood-500 bg-blood-600/25 ring-2 ring-blood-500"
-    : dead
-      ? "border-night-600/60 bg-night-950/70"
-      : isMe
-        ? "border-indigo-400/60 bg-indigo-500/[0.07] shadow-[0_0_22px_-8px_rgba(129,140,248,0.9)]"
-        : "border-night-600/70 bg-night-800/40";
+  const frame = seatFrame({ selected, dead, isMe });
 
   return (
     <m.button
@@ -88,6 +85,15 @@ export function PlayerSeat({
       disabled={disabled}
       onClick={onSelect}
       aria-pressed={onSelect ? selected : undefined}
+      /*
+       * Trạng thái nói vào thẳng TÊN của nút, không vào một vùng aria-live.
+       *
+       * LiveKit bắn `ActiveSpeakersChanged` theo mức âm thanh, tức vài lần mỗi
+       * giây trong lúc một người đang nói. Một live-region ở đây sẽ đọc lại cái
+       * tên đó liên tục và nuốt mất mọi thông báo thật của ván. Tên nút thì chỉ
+       * được đọc khi người dùng chạm tới ô, và lúc đó nó nói đúng cái đang có.
+       */
+      aria-label={speaking ? `${player.name} — đang nói` : undefined}
       initial={false}
       animate={{ rotate: dead ? -6 : 0, y: dead ? 5 : 0, scale: dead ? 0.97 : 1 }}
       whileTap={disabled ? undefined : { scale: 0.96 }}
@@ -98,6 +104,12 @@ export function PlayerSeat({
        * người chơi vẫn cần đọc y như mọi ô khác.
        */
       title={disabledReason ?? undefined}
+      /*
+       * Lệch pha nhấp nháy của riêng người này, dùng lại đúng con số đã tính
+       * cho nhịp thở. Ba người cùng nói mà quầng sáng đồng pha thì đọc ra như
+       * một hiệu ứng của cả lưới chứ không phải của từng ô.
+       */
+      style={{ "--breath-offset": breathOffsetFor(player.id) } as React.CSSProperties}
       /*
        * min-height thay cho aspect-square.
        *
@@ -125,6 +137,29 @@ export function PlayerSeat({
               : "cursor-default"
         }`}
     >
+      {/*
+        * Quầng thoại nằm NGOÀI khung ô (-inset-1) và không nhận chuột.
+        *
+        * Ngoài khung vì trong khung đã chật: viền là "đang bị nhắm", nền là
+        * "của tôi", và bốn góc đã có chủ. Ngoài khung thì nó cộng thêm chứ
+        * không thay thế gì cả.
+        */}
+      {speaking && (
+        <span
+          aria-hidden="true"
+          className="seat-voice-halo pointer-events-none absolute -inset-1 rounded-2xl"
+        />
+      )}
+
+      {/* Chấm xanh ở góc DƯỚI PHẢI - góc duy nhất còn trống: trên trái là dấu
+        * tích chọn, trên phải là huy hiệu phiếu, dưới trái là ghi chú riêng. */}
+      {speaking && (
+        <span
+          aria-hidden="true"
+          className="seat-voice-dot pointer-events-none absolute bottom-1 right-1 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-1 ring-emerald-200/40"
+        />
+      )}
+
       {/*
         * Dấu tích ở góc TRÁI: góc phải là huy hiệu số phiếu, và hai thứ chồng
         * lên nhau thì cái nào cũng đọc không ra. Nó cố ý lặp lại điều mà viền
@@ -187,7 +222,7 @@ export function PlayerSeat({
         )}
       </AnimatePresence>
 
-      <span className="relative">
+      <span className={`relative ${speaking ? "seat-voice-breathe" : ""}`}>
         <Avatar
           avatar={player.avatarUrl ? player.avatarUrl : avatar}
           tint={tint}

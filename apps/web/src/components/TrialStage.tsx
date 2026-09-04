@@ -272,13 +272,35 @@ export function TrialStage({ view, beats, beatsId, onBeatsConsumed, snapshot }: 
         </p>
 
         <div className="flex items-center gap-3">
-          <Avatar
-            avatar={avatars[view.accusedId]}
-            tint={tintFor(view.accusedId)}
-            alive
-            breathOffset={breathOffsetFor(view.accusedId)}
-            className="h-10 w-10 shrink-0 ring-2 ring-amber-500/50 sm:h-12 sm:w-12"
-          />
+          {/*
+            * Quầng thoại quanh ảnh bị cáo, cùng một ngôn ngữ hình với ô người
+            * chơi trong lưới: xanh lá, nằm NGOÀI vòng amber sẵn có, không đổi
+            * vòng đó. Vòng amber nói "đây là bị cáo" - một chuyện đúng suốt cả
+            * phiên toà - còn quầng xanh nói "người này đang nói ngay lúc này".
+            *
+            * Dòng chữ ngay bên dưới (`SpeakStatus`) vẫn là chỗ đọc ra được
+            * bằng chữ; quầng chỉ để mắt bắt được mà không phải đọc.
+            */}
+          <span
+            className={`relative shrink-0 ${speaking ? "seat-voice-breathe" : ""}`}
+            style={
+              { "--breath-offset": breathOffsetFor(view.accusedId) } as React.CSSProperties
+            }
+          >
+            {speaking && (
+              <span
+                aria-hidden="true"
+                className="seat-voice-halo pointer-events-none absolute -inset-1 rounded-full"
+              />
+            )}
+            <Avatar
+              avatar={avatars[view.accusedId]}
+              tint={tintFor(view.accusedId)}
+              alive
+              breathOffset={breathOffsetFor(view.accusedId)}
+              className="h-10 w-10 ring-2 ring-amber-500/50 sm:h-12 sm:w-12"
+            />
+          </span>
           {/* min-w-0 + break-words: một cái tên 20 ký tự không dấu cách phải
             * xuống dòng chứ không đẩy toang thẻ ở cột giữa. */}
           <h3 className="min-w-0 break-words font-display text-xl font-bold leading-tight text-white sm:text-2xl">
