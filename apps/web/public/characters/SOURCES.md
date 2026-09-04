@@ -44,6 +44,29 @@ Cap `*` yeu nhat la turban/beard chung Eldrin — uu tien thay bang pack 2.
 
 ## Tai sinh
 
-Script: `C:\Users\Admin\AppData\Local\Temp\opencode\build_sheets.py`
+Script: `tools/build-character-sheets.py`
 (chay `python build_sheets.py`, khong tham so).
 Doi nguon art thi cap nhat bang nay + `AVATAR-CREDITS.md`, khong sua code.
+
+## Đã đo, không phải phỏng đoán
+
+**Frame 1 và 2 KHÔNG khác frame 0.** Đo trên `hood`, `farmer`, `viking`: lệch
+trung bình 0.7–1.5 trên 255, max 21–33 — đúng bằng nhiễu nén WebP. Frame 3 thì
+khác thật: lệch trung bình 4.9–8.4, max 68–74.
+
+Vì vậy mọi sheet khai báo `variants: false` trong
+`apps/web/src/lib/character-art.ts`, và CSS không chạy animation cho chúng.
+Ngày nào có sheet biến thể thật, đổi cờ đó thành `true` ở đúng dòng của nhân
+vật đó — nháy mắt và mấp máy tự sống dậy, không đụng code.
+
+**Bốn khuôn mặt dùng chung.** `mustache` và `miner` cùng là Caius; `beard` và
+`turban` cùng là Eldrin; `pilgrim` và `cook` cùng là Indira; `sombrero` và
+`jester` cùng là Soleil. `assignAvatars` không cho trùng AvatarId nhưng KHÔNG
+biết bốn cặp này, nên một phòng 15 ghế gần như chắc chắn xếp một cặp cạnh nhau
+— hai khuôn mặt gần giống, một cái bị lật. Đây là lý do ưu tiên số một để thay
+pack, quan trọng hơn cả chuyện biến thể biểu cảm: chân dung tồn tại để phân biệt
+người này với người kia.
+
+**Kích thước là hợp đồng.** 1024×256, 4 frame vuông. `character-art.test.ts`
+đọc header WebP và chặn file sai tỉ lệ — CSS trượt theo phần trăm nên một sheet
+3 frame sẽ ghép nửa mặt người này với nửa mặt người kia.
