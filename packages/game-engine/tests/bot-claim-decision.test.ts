@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BOT_WEIGHTS_V4 } from "../src/bot/config/weights";
-import { decideChatClaim } from "../src/bot/decision/claim-decision";
+import { decideChatClaim, wolfBluffSeat } from "../src/bot/decision/claim-decision";
 import { createBotBrainState } from "../src/bot/memory/memory-store";
 import { createBotPersonality } from "../src/bot/personality/personality";
 import { createSeededRng } from "../src/bot/rng";
@@ -175,10 +175,10 @@ describe("decideChatClaim", () => {
     expect(draws).toBe(0);
   });
 
-  it("chỉ con Sói playerId nhỏ nhất được khai láo, và chỉ từ vòng 2", () => {
+  it("mỗi vòng chỉ ĐÚNG một ghế trong bầy được khai láo, và chỉ từ vòng 2", () => {
     const wolves = { p2: "WEREWOLF" as const, p3: "WEREWOLF" as const };
     const early = decideChatClaim(
-      contextFor("p2", "WEREWOLF", { round: 1, knownRoles: { p2: "WEREWOLF", p3: "WEREWOLF" } }),
+      contextFor("p2", "WEREWOLF", { round: 1, knownRoles: wolves }),
       stateFor("p2"),
       createSeededRng("a"),
       null,
@@ -186,14 +186,85 @@ describe("decideChatClaim", () => {
     );
     expect(early).toBeNull();
 
+    // Ghế của vòng 2 do `wolfBluffSeat` chốt; con còn lại im, không phải vì id
+    // của nó lớn hơn mà vì hôm nay không tới lượt nó.
+    const chosen = wolfBluffSeat(["p2", "p3"], ["p2", "p3"], 2);
+    const other = chosen === "p2" ? "p3" : "p2";
     const notChosen = decideChatClaim(
-      contextFor("p3", "WEREWOLF", { knownRoles: wolves }),
-      stateFor("p3"),
-      createSeededRng("a"),
+      contextFor(other, "WEREWOLF", { knownRoles: wolves }),
+      stateFor(other),
+      () => 0,
       null,
       BOT_WEIGHTS_V4,
     );
     expect(notChosen).toBeNull();
+  });
+
+  it("ghế bluff xoay theo vòng: không ghế nào ôm quá 6/10 vòng, và nó đổi người", () => {
+    const pack = ["p2", "p3", "p4"];
+    const seats = Array.from({ length: 10 }, (_, index) =>
+      wolfBluffSeat(pack, pack, index + 1),
+    );
+
+    const counts = new Map<string | null, number>();
+    for (const seat of seats) counts.set(seat, (counts.get(seat) ?? 0) + 1);
+    for (const [seat, times] of counts) {
+      expect(times, `ghế ${seat} bluff ${times}/10 vòng`).toBeLessThanOrEqual(6);
+    }
+    // Cả ba con đều tới lượt, và chuỗi thật sự đổi người chứ không chỉ đổi
+    // đúng một nhịp rồi đứng yên.
+    expect(new Set(seats).size).toBe(3);
+    expect(seats.some((seat, index) => index > 0 && seat !== seats[index - 1])).toBe(true);
+  });
+
+  it("cùng bầy, cùng vòng thì ra cùng ghế - chạy lại theo seed không vỡ", () => {
+    const pack = ["p2", "p3", "p4"];
+    const first = Array.from({ length: 10 }, (_, i) => wolfBluffSeat(pack, pack, i + 1));
+    const second = Array.from({ length: 10 }, (_, i) => wolfBluffSeat(pack, pack, i + 1));
+    expect(second).toEqual(first);
+    // Thứ tự truyền vào không được đổi đáp án: mọi con Sói tự tính, và chúng
+    // không cùng một thứ tự duyệt `knownRoles`.
+    const shuffled = Array.from({ length: 10 }, (_, i) =>
+      wolfBluffSeat(["p4", "p2", "p3"], ["p3", "p4", "p2"], i + 1),
+    );
+    expect(shuffled).toEqual(first);
+  });
+
+  it("bầy khác nhau thì lịch xoay khác nhau, và ghế chết bị loại khỏi lượt", () => {
+    const wide = Array.from({ length: 10 }, (_, i) =>
+      wolfBluffSeat(["p2", "p3", "p4"], ["p2", "p3", "p4"], i + 1),
+    );
+    const narrow = Array.from({ length: 10 }, (_, i) =>
+      wolfBluffSeat(["p1", "p2", "p3"], ["p1", "p2", "p3"], i + 1),
+    );
+    expect(narrow).not.toEqual(wide);
+
+    // Khoá vẫn là cả bầy (p4 đã chết vẫn nằm trong `roster`), nên p4 không bao
+    // giờ được chọn nhưng lịch của hai con còn lại không bị gieo lại từ đầu.
+    const afterDeath = Array.from({ length: 10 }, (_, i) =>
+      wolfBluffSeat(["p2", "p3"], ["p2", "p3", "p4"], i + 1),
+    );
+    expect(afterDeath).not.toContain("p4");
+    expect(new Set(afterDeath).size).toBe(2);
+  });
+
+  it("con Sói đã công khai nhận vai bị loại khỏi lượt xoay, bầy không im tới cuối ván", () => {
+    const wolves = { p2: "WEREWOLF" as const, p3: "WEREWOLF" as const };
+    // Vòng nào cũng có đúng một ghế được chọn trong số CHƯA khai. Ở đây p2 đã
+    // khai rồi, nên mọi vòng đều phải rơi vào p3.
+    const state = stateFor("p3");
+    state.claims.push(roleClaimMemory("p2", "GUARD", 2));
+
+    const claim = decideChatClaim(
+      contextFor("p3", "WEREWOLF", { round: 3, knownRoles: wolves }),
+      state,
+      () => 0,
+      "p1",
+      BOT_WEIGHTS_V4,
+    );
+    expect(claim?.kind).toBe("PROACTIVE");
+    expect(claim?.role).toBe("SEER");
+    expect(claim?.accusedId).toBe("p1");
   });
 
   it("Sói khai láo thì chỉ đích danh đúng người nó định treo, do caller truyền vào chứ không tự đọc state", () => {

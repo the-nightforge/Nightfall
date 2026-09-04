@@ -603,6 +603,16 @@ export interface MatchHistoryPlayer {
 }
 
 export interface MatchHistoryEntry {
+  /**
+   * Khoá của ván trong lịch sử. Là thứ DUY NHẤT để hỏi tiếp về ván đó - hôm nay
+   * là log chat, `GET /players/me/matches/:id/chat`.
+   *
+   * OPTIONAL vì cùng lý do với `myPersonalWin` bên dưới: web và server deploy
+   * RỜI NHAU, nên một client mới nói chuyện với server cũ nhận payload không có
+   * trường này. Chỗ dùng phải kiểm trước khi gọi tiếp, chứ không được ghép một
+   * URL có chữ `undefined` trong đó.
+   */
+  id?: string;
   roomCode: string;
   winner: Winner | "unknown";
   rounds: number;
@@ -639,4 +649,26 @@ export interface MatchHistoryEntry {
    * là tự chuốc lấy lỗi lúc chạy. Phía dùng phải tự kiểm rồi mới ép kiểu.
    */
   caseFile: unknown;
+}
+
+/**
+ * Một dòng chat đọc lại từ một ván đã kết thúc.
+ *
+ * Ván đã xong nên không còn kênh nào phải giấu: hang Sói và kênh người chết đều
+ * trả về nguyên vẹn, đúng như `visibleChatLog` đã mở toàn bộ log ở GAME_OVER.
+ * Phần gác cửa duy nhất là "người hỏi có mặt trong ván đó không".
+ */
+export interface MatchChatEntry {
+  /** Thứ tự trong ván, đánh từ 0. Đã sắp sẵn khi trả về. */
+  seq: number;
+  /** `lobby` | `day` | `wolves` | `dead`. Để lỏng ở string: ván cũ do một bản
+   * server nào đó ghi ra, và một kênh lạ không được làm hỏng cả trang. */
+  channel: string;
+  actorId: string;
+  actorName: string;
+  text: string;
+  round: number;
+  phase: string;
+  /** epoch ms, mốc gõ thật. */
+  at: number;
 }

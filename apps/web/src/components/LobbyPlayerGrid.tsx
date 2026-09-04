@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { MAX_PLAYERS_PER_ROOM, MIN_PLAYERS_TO_START, type RoomSnapshot } from "@masoi/shared";
-import { assignAvatars, tintFor } from "@/lib/avatar";
+import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { listItemMotion } from "@/lib/motion";
 import { useModalFocus } from "@/lib/useModalFocus";
-import { Avatar } from "./Avatar";
+import { CharacterPortrait } from "./CharacterPortrait";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -68,10 +68,11 @@ export function LobbyPlayerGrid({ snapshot, isHost, onKick }: Props) {
           const tile = (
             <>
               <span className="relative mx-auto block w-fit">
-                <Avatar
+                <CharacterPortrait
                   avatar={player.avatarUrl ? player.avatarUrl : avatars[player.id]}
                   tint={tintFor(player.id)}
                   alive={player.alive}
+                  breathOffset={breathOffsetFor(player.id)}
                   className={`lobby-player-avatar ${
                     isRoomHost ? "lobby-player-avatar-host" : ""
                   } ${offline ? "grayscale" : ""}`}
@@ -177,10 +178,11 @@ export function LobbyPlayerGrid({ snapshot, isHost, onKick }: Props) {
           >
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20 sm:hidden" />
             <div className="flex items-center gap-3">
-              <Avatar
+              <CharacterPortrait
                 avatar={selected.avatarUrl ? selected.avatarUrl : avatars[selected.id]}
                 tint={tintFor(selected.id)}
                 alive={selected.alive}
+                breathOffset={breathOffsetFor(selected.id)}
                 className="h-12 w-12"
                 isCustom={!!selected.avatarUrl}
               />

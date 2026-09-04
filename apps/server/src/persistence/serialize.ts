@@ -52,6 +52,9 @@ export function serializeRoom(room: Room, opSeq: number): RoomEnvelopeV1 {
       // xoá lượt duy nhất của cả ván; bỏ dãy id đi thì mọi lá thư đã mở sẽ mở
       // lại lần nữa ngay khi process mới chạy hàm mở đầu tiên.
       lastLetters: lastLetterStateOf(room),
+      // Sổ chat của ván. Mất nó qua một lần restart là ván đó chỉ lưu được
+      // phần nói SAU khi process mới lên - tức đúng đoạn ít người đọc nhất.
+      matchChat: room.matchChat,
     },
   };
 }

@@ -13,6 +13,7 @@ import { Backdrop } from "@/components/Backdrop";
 import { BrandMark, VillageScene } from "@/components/HomeHero";
 import { JoinCodeFromQuery } from "@/components/JoinCodeFromQuery";
 import { MatchHistoryPanel } from "@/components/MatchHistoryPanel";
+import { AssetCredits } from "@/components/AssetCredits";
 
 /** Hành động đang chạy, hoặc null khi rảnh. */
 type Pending = "create" | "join" | null;
@@ -535,6 +536,7 @@ export default function Home() {
           </ul>
         </div>
       </main>
+      <AssetCredits />
     </>
   );
 }

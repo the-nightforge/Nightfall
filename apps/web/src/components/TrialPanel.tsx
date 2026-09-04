@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
 import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { nominationRecapFor } from "@/lib/defense-votes";
-import { Avatar } from "./Avatar";
+import { CharacterPortrait } from "./CharacterPortrait";
 import { DefenseVotePanel } from "./DefenseVotePanel";
 
 interface Props {
@@ -78,7 +78,7 @@ export function TrialPanel({ snapshot, onFinalVote, liveStage = false }: Props) 
           {isDefense ? "Đang biện hộ" : "Bỏ phiếu xác nhận"}
         </p>
         <div className="mt-3 flex flex-col items-center gap-2">
-          <Avatar
+          <CharacterPortrait
             avatar={avatars[trial.accusedId]}
             tint={tintFor(trial.accusedId)}
             alive

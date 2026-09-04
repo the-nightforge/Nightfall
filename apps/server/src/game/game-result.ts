@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../db";
 import { buildSnapshot } from "../rooms/snapshot";
 import type { Room } from "../rooms/store";
+import { MAX_ARCHIVED_MESSAGES } from "./match-chat";
 
 /**
  * Hồ sơ vụ án để lưu kèm kết quả ván.
@@ -29,6 +30,33 @@ function caseFileForHistory(room: Room): CaseFile | null {
     // Hồ sơ là phần thêm nếm. Hỏng nó không được làm mất luôn kết quả ván.
     return null;
   }
+}
+
+/**
+ * Sổ chat của ván, dựng thành payload nested-create của Prisma.
+ *
+ * Cắt theo `MAX_ARCHIVED_MESSAGES` một lần nữa ở đây là CỐ Ý dư thừa: sổ trong
+ * RAM đã tự dừng ở trần đó, nhưng sổ đọc lên từ một envelope cũ thì không đi
+ * qua đường ghi nào của process này, và một dòng INSERT dài vô hạn là thứ duy
+ * nhất trong hàm này có thể làm hỏng cả việc lưu kết quả.
+ *
+ * Sắp theo `seq` chứ không theo `at`: nhiều BOT nói trong cùng một mili giây là
+ * chuyện thường, và mốc thời gian không phân biệt nổi chúng.
+ */
+function matchChatForHistory(room: Room): Prisma.MatchChatMessageCreateWithoutMatchInput[] {
+  return [...(room.matchChat ?? [])]
+    .sort((a, b) => a.seq - b.seq)
+    .slice(0, MAX_ARCHIVED_MESSAGES)
+    .map((message) => ({
+      seq: message.seq,
+      channel: message.channel,
+      actorId: message.actorId,
+      actorName: message.actorName,
+      text: message.text,
+      round: message.round,
+      phase: message.phase,
+      createdAt: new Date(message.at),
+    }));
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -96,6 +124,16 @@ export async function writeGameResultOnce(room: Room): Promise<void> {
         // trong `rooms/store.ts`. Rơi về `createdAt` cho phòng đọc lên từ ảnh
         // chụp ghi trước khi có trường này - một con số hơi rộng vẫn tốt hơn NaN.
         durationSec: Math.round((Date.now() - (room.startedAt ?? room.createdAt)) / 1000),
+        /*
+         * Chat đi xuống CÙNG một lệnh với kết quả, nên Prisma gói cả hai vào
+         * một transaction: hoặc có cả kết quả lẫn log, hoặc không có gì. Đây
+         * cũng là lý do không ghi từng tin lúc người ta gõ - bàn đang chơi là
+         * đường nóng, và một INSERT chậm ở đó làm cả phòng đứng hình.
+         *
+         * Ván không ai nói câu nào cho ra mảng rỗng, và Prisma bỏ qua nó chứ
+         * không sinh lệnh thừa.
+         */
+        chat: { create: matchChatForHistory(room) },
       },
     });
     room.resultWritten = true;

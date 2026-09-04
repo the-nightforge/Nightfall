@@ -1,5 +1,6 @@
 import { isPowerRole, roleTeam, type Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import { fnv1a32 } from "../hash";
 import type { BotBrainState, BotDecisionContext, BotMemory, BotRng } from "../types";
 
 /**
@@ -175,6 +176,35 @@ function alreadyClaimed(state: BotBrainState): Set<Role> {
 }
 
 /**
+ * Ghế đứng ra khai láo ở vòng này, hoặc `null` khi bầy không còn ai đủ điều kiện.
+ *
+ * Trước đây luật là "con còn sống có id nhỏ nhất", và nó hỏng theo hai đường
+ * cùng lúc: cả ván chỉ đúng một ghế mở miệng - bàn học được mặt kẻ nói dối sau
+ * hai vòng - và khi ghế đó đã khai một lần rồi thì `state.myClaim` chặn nó lại,
+ * nên bầy im hẳn tới cuối ván dù còn ba con chưa nói gì.
+ *
+ * Xoay theo vòng chữa cả hai. Vẫn là luật CỤC BỘ: hàm thuần, mọi con Sói tự
+ * tính ra cùng đáp án từ dữ liệu cả bầy cùng thấy, không cần một kênh đồng bộ
+ * nào. Và nó KHÔNG rút số ngẫu nhiên - đó là điều kiện để việc khôi phục theo
+ * con trỏ RNG và việc chạy lại self-play theo seed không vỡ.
+ *
+ * `roster` (cả bầy, kể cả đã chết) là hạt, `seats` (còn sống và đủ điều kiện)
+ * là thứ được chia dư. Tách hai vai trò này ra là có chủ đích: trộn danh sách
+ * còn sống vào hạt sẽ làm ghế bluff nhảy lại mỗi lần một con Sói chết, tức
+ * xoay theo TANG TÓC chứ không theo vòng.
+ */
+export function wolfBluffSeat(
+  seats: readonly string[],
+  roster: readonly string[],
+  round: number,
+): string | null {
+  if (seats.length === 0) return null;
+  const ordered = [...seats].sort();
+  const key = [...roster].sort().join(",");
+  return ordered[fnv1a32(`wolf-bluff|${key}|${round}`) % ordered.length] ?? null;
+}
+
+/**
  * Lời khai tự phát trong khung chat.
  *
  * Tách khỏi `decideRoleClaim` (Ngày Sự Thật) vì hai câu hỏi khác nhau: sự kiện
@@ -326,13 +356,20 @@ export function decideChatClaim(
 
   // ---- PROACTIVE: Sói khai láo ----
   if (isWolf && knowledge.round >= weights.claim.wolfBluffFromRound) {
-    // Ai trong bầy đứng ra nói dối: con còn sống có id nhỏ nhất. Luật CỤC BỘ -
-    // mọi con tự tính ra cùng đáp án mà không cần một kênh đồng bộ nào.
-    const pack = Object.entries(knowledge.knownRoles)
-      .filter(([id, known]) => alivePlayers.has(id) && roleTeam(known) === "wolves")
-      .map(([id]) => id)
-      .sort();
-    if (pack[0] === me) {
+    // Cả bầy, kể cả đã chết: đây là KHOÁ CỦA VÁN, không phải danh sách ứng viên.
+    // `knownRoles` của một con Sói còn sống chứa đúng toàn bộ bầy suốt ván (xem
+    // `Engine.botKnowledgeFor`), nên mọi con tính ra cùng một khoá, và khoá đó
+    // không đổi khi một đồng bọn chết - ghế bluff xoay theo VÒNG chứ không giật
+    // một nhịp mỗi lần bầy mất người.
+    const roster = Object.entries(knowledge.knownRoles)
+      .filter(([, known]) => roleTeam(known) === "wolves")
+      .map(([id]) => id);
+    // Đủ điều kiện = còn sống và CHƯA công khai nhận vai nào. Một con đã khai
+    // rồi thì thoát ở `state.myClaim` phía trên và không bao giờ khai lần hai;
+    // để nó trong danh sách nghĩa là mất trắng lượt bluff của cả vòng đó.
+    const spoken = new Set(state.claims.map((memory) => memory.actorId));
+    const pack = roster.filter((id) => alivePlayers.has(id) && !spoken.has(id));
+    if (wolfBluffSeat(pack, roster, knowledge.round) === me) {
       const dare =
         weights.claim.wolfBluffChance *
         state.personality.deceptionSkill *

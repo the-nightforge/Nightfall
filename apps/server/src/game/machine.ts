@@ -13,6 +13,7 @@ import type { Room } from "../rooms/store";
 import { clearRoomTimers, persistRoom, setRoomTimer } from "../rooms/store";
 import { armStep, clearPendingStep, registerStepHandlers } from "./steps";
 import { writeGameResultOnce } from "./game-result";
+import { resetMatchChat } from "./match-chat";
 import { broadcastRoom, emitToPlayers } from "../rooms/broadcast";
 import { destroyVoiceRoom, syncVoicePermissions } from "../voice/service";
 import { buildSnapshot, dayRecipients, pushChat, resolveChat } from "../rooms/snapshot";
@@ -162,6 +163,10 @@ export function startGame(room: Room): void {
   );
 
   room.chatLog = [];
+  // Sổ chat của ván cũ đã đi xuống DB ở GAME_OVER của nó. Không xoá ở đây thì
+  // ván thứ hai trong cùng phòng lưu kèm trọn ván trước, và `seq` sẽ nói dối về
+  // thứ tự của chính nó.
+  resetMatchChat(room);
   clearDiscussionSkipVotes(room.code);
   // Ván mới, sổ thư trắng: một lá thư của ván trước mở ra giữa ván này sẽ nói
   // về những người đã đổi vai.

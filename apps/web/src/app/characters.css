@@ -1,0 +1,148 @@
+/*
+ * Chân dung nhân vật: một sprite sheet bốn frame nằm ngang, hoán frame bằng
+ * cách trượt ảnh trong một khung tràn-ẩn.
+ *
+ * Vì sao trượt ảnh chứ không đổi `background-position`: cần `onError` của thẻ
+ * <img> để rơi về SVG khi file hỏng, mà `background-image` không báo lỗi gì cả.
+ *
+ * Không có vòng requestAnimationFrame nào ở đây. Mười lăm ô cùng nháy mắt bằng
+ * JS là mười lăm lần setState mỗi vài trăm ms; bằng CSS thì trình duyệt lo.
+ */
+
+.character-portrait {
+  /*
+   * `display` BẮT BUỘC phải có, đừng xoá.
+   *
+   * Khung là một `<span>`, mà span mặc định là `display: inline` - và
+   * `width`/`height` KHÔNG áp dụng cho hộp inline. Mọi nơi gọi đều đặt cỡ bằng
+   * class (`lobby-player-avatar` là 4rem, các chỗ khác là `h-16 w-16`...), nên
+   * thiếu dòng này thì cỡ bị bỏ qua sạch và cả khung co lại còn đúng bề dày
+   * viền: đo được 2x19px thay vì 66x66.
+   *
+   * Đã từng xảy ra thật. Bản đầu đặt `grid place-items-center` ngay trên
+   * className của component; lúc sửa lỗi chọn frame thì cả cụm đó bị gỡ đi vì
+   * `place-items-center` làm lệch ảnh, nhưng `grid` - thứ đang gánh `display` -
+   * bị gỡ theo. Chân dung biến mất khỏi toàn bộ ứng dụng mà không một test nào
+   * đỏ, vì happy-dom không có layout engine.
+   *
+   * `grid` chứ không phải `block` là để giữ nguyên hành vi hộp mà các nơi gọi
+   * vốn được thiết kế quanh nó (`Avatar` cũng là `grid`). Ảnh bên trong nằm
+   * `position: absolute` nên không có item nào trong luồng để grid sắp xếp.
+   */
+  display: grid;
+  position: relative;
+  overflow: hidden;
+}
+
+.character-portrait__sheet {
+  /* Bốn frame nằm ngang nên ảnh rộng gấp bốn khung. */
+  width: 400%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+  /*
+   * NEO TRÁI bằng `position: absolute`, KHÔNG được center bằng grid/flex.
+   *
+   * `.character-portrait` (khung cha) từng dùng `grid place-items-center` để
+   * đặt ảnh này vào giữa. Ảnh rộng gấp 4 lần khung, và grid center một item to
+   * hơn container thì đẩy nó lệch -150% bề ngang container - `translateX(0)`
+   * khi đó không còn rơi đúng frame 0 nữa. Đo được trên khung 64px: `is-alive`
+   * (mặc định của mọi người chơi còn sống) lộ ra đúng đường nối giữa frame 1 và
+   * frame 2, còn `is-dead` trôi hẳn ra ngoài mép phải ảnh - một vòng tròn rỗng.
+   * Neo trái bằng absolute thì toạ độ 0% của ảnh luôn khớp mép trái khung, và
+   * bốn mốc `translateX` (0, -25%, -50%, -75%) mới đúng nghĩa bốn frame liên
+   * tiếp. `inset: 0 auto 0 0` khoá cạnh trên/dưới/trái, để `auto` ở phải cho
+   * `width: 400%` tự quyết bề ngang.
+   */
+  position: absolute;
+  inset: 0 auto 0 0;
+}
+
+/*
+ * Animation CHỈ chạy khi sheet có biến thể thật.
+ *
+ * Bộ art hiện tại là pack chân dung tĩnh: frame `blink` và `talk` là bản sao
+ * của `idle`, lệch nhau đúng bằng nhiễu nén. Cho mười lăm ô chạy animation
+ * vĩnh viễn để đổi sang một bức ảnh y hệt là đốt pin đổi lấy con số không -
+ * nên `has-variants` là cửa, và `character-art.ts` là nơi mở nó.
+ *
+ * Trạng thái "đang nói" KHÔNG mất đi khi cửa đóng: nó vẫn được vẽ bằng quầng
+ * ngoài khung (`.seat-voice-halo`), chỗ nó vốn thuộc về từ trước.
+ */
+
+/* Mặt bình thường: frame 0, thỉnh thoảng chớp sang frame 1. */
+.character-portrait.has-variants.is-alive .character-portrait__sheet {
+  animation: character-blink 5.4s steps(1, end) infinite;
+  /*
+   * Lệch pha riêng của từng người, dùng lại đúng con số đã tính cho nhịp thở.
+   * Mười lăm khuôn mặt nháy mắt đồng pha đọc ra như cả lưới vừa giật một cái,
+   * chứ không phải như mười lăm người đang ngồi.
+   */
+  animation-delay: calc(var(--breath-offset, 0) * -5.4s);
+  /*
+   * `will-change` chỉ đứng ở ĐÚNG hai luật có animation thật (đây và
+   * `is-talking` bên dưới) - không đặt ở `.character-portrait__sheet` gốc.
+   * Bộ art hiện tại là pack tĩnh nên phần lớn ô không hề mang `has-variants`;
+   * đặt `will-change` ở luật gốc thì mười lăm ảnh trong phòng bị đẩy lên
+   * compositor layer vĩnh viễn dù chẳng ô nào chạy animation - đúng cái giá
+   * pin mà cửa `has-variants` sinh ra để chặn.
+   */
+  will-change: transform;
+}
+
+/* Đang nói: đảo qua lại frame 0 và frame 2. */
+.character-portrait.has-variants.is-talking .character-portrait__sheet {
+  animation: character-talk 0.28s steps(1, end) infinite;
+  will-change: transform;
+}
+
+/* Đã chết: frame 3, đứng yên. */
+.character-portrait.is-dead .character-portrait__sheet {
+  animation: none;
+  transform: translateX(-75%);
+}
+
+@keyframes character-blink {
+  /* Mắt mở gần trọn chu kỳ; cái chớp chỉ chiếm ~4%, tức khoảng 216ms. */
+  0%,
+  92% {
+    transform: translateX(0);
+  }
+  96% {
+    transform: translateX(-25%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes character-talk {
+  0% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /*
+   * Cùng luật đã chốt ở globals.css: cái không mang tin thì tắt, cái MANG TIN
+   * thì ở lại và chốt đứng yên.
+   *
+   * Nháy mắt không mang tin gì - tắt hẳn, về frame 0.
+   * "Đang nói" là thông tin thật - ai đang lên tiếng - nên giữ nguyên, chốt ở
+   * frame miệng MỞ. Người bật thiết lập này vẫn nhìn lưới là biết ai đang nói.
+   */
+  .character-portrait.has-variants.is-alive .character-portrait__sheet {
+    animation: none;
+    transform: translateX(0);
+    will-change: auto;
+  }
+
+  .character-portrait.has-variants.is-talking .character-portrait__sheet {
+    animation: none;
+    transform: translateX(-50%);
+    will-change: auto;
+  }
+}

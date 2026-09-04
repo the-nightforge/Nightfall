@@ -31,6 +31,7 @@ import type {
   SocialEdge,
 } from "@masoi/game-engine";
 import type { LastLetterRoomState } from "../game/last-letter";
+import type { ArchivedChatMessage } from "../game/match-chat";
 import type { PendingStep } from "../game/pending-step";
 import type { PersistedBotSession } from "../bots/session-registry";
 import type { PersistedDiscussionRun } from "../game/discussion-scheduler";
@@ -337,6 +338,23 @@ const chatMessageSchema = z.object({
   at: z.number(),
 });
 
+/**
+ * Một dòng trong sổ chat của ván. `channel` để LỎNG ở `z.string()` chứ không
+ * ràng vào `CHAT_CHANNELS` như `chatMessageSchema` ngay trên: sổ này chỉ để đọc
+ * lại về sau, và một kênh mới thêm ở bản sau không được phép làm cả phòng đang
+ * chạy trượt schema rồi bị cách ly.
+ */
+const archivedChatMessageSchema = z.object({
+  seq: z.number().int().min(0),
+  channel: z.string(),
+  actorId: z.string(),
+  actorName: z.string(),
+  text: z.string(),
+  round: z.number().int().min(0),
+  phase: z.string(),
+  at: z.number(),
+});
+
 const pendingStepSchema = z.object({
   name: oneOf<PendingStep["name"]>([
     "beginNight",
@@ -423,6 +441,10 @@ const persistedRoomSchema = z.object({
   // bản này đọc lên thành một phòng chưa ai viết thư - đúng trạng thái mà nó
   // thật sự đang ở.
   lastLetters: lastLetterStateSchema.optional(),
+  // OPTIONAL vì cùng lý do với ba trường ngay trên. Ván đang chạy lúc deploy
+  // bản này đọc lên với sổ chat rỗng: nó mất phần đã nói TRƯỚC lần restart đó,
+  // chứ không phải hỏng cả phòng.
+  matchChat: z.array(archivedChatMessageSchema).optional(),
 });
 
 export const roomEnvelopeSchema = z.object({
@@ -458,6 +480,8 @@ const _memberForward: Assignable<RoomMember, z.infer<typeof memberSchema>> = tru
 const _memberBackward: Assignable<z.infer<typeof memberSchema>, RoomMember> = true;
 const _lettersForward: Assignable<LastLetterRoomState, z.infer<typeof lastLetterStateSchema>> = true;
 const _lettersBackward: Assignable<z.infer<typeof lastLetterStateSchema>, LastLetterRoomState> = true;
+const _chatForward: Assignable<ArchivedChatMessage, z.infer<typeof archivedChatMessageSchema>> = true;
+const _chatBackward: Assignable<z.infer<typeof archivedChatMessageSchema>, ArchivedChatMessage> = true;
 
 void _stateForward;
 void _stateBackward;
@@ -473,3 +497,5 @@ void _memberForward;
 void _memberBackward;
 void _lettersForward;
 void _lettersBackward;
+void _chatForward;
+void _chatBackward;

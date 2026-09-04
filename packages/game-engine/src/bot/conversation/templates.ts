@@ -1,4 +1,5 @@
 import { ROLE_META } from "@masoi/shared";
+import { fnv1a32 } from "../hash";
 import {
   BOT_SPEECH_TONES,
   type BotSpeechIntention,
@@ -605,15 +606,6 @@ export interface SpeechTemplateRequest {
   seq: number;
   /** Vân tay của những câu vừa nói, để không chọn lại. */
   avoidFingerprints?: readonly string[];
-}
-
-function fnv1a32(value: string): number {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
 }
 
 /** Giọng gần nhất có mẫu; `NEUTRAL` luôn tồn tại nên vòng lặp luôn dừng. */
