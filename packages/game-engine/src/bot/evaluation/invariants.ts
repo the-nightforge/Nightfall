@@ -102,7 +102,8 @@ export interface GroundTruth {
    */
   shadowedSeerResults?: ReadonlySet<string>;
   /**
-   * Những người đã hoá Sói từ Kẻ Nguyền Rủa.
+   * Những người đã bị GHI ĐÈ vai giữa ván: Kẻ Nguyền Rủa hoá Sói, Kẻ Phản Bội
+   * thăng cấp khi bầy sạch, Kẻ Song Trùng hoá theo người chết đầu tiên.
    *
    * Cùng lớp với `shadowedSeerResults` ngay trên, nhưng vì một lý do khác: ở
    * đó engine nói dối, còn ở đây SỰ THẬT DỊCH CHỖ. `resolveNight` ghi đè
@@ -113,6 +114,17 @@ export interface GroundTruth {
    *
    * Tái hiện được ở preset 15 người (bộ duy nhất có Kẻ Nguyền Rủa cùng Tiên
    * Tri Tập Sự): seed `sp15:60` và `sp15:115`, cả hai ở `DAY_DISCUSSION`.
+   * Kẻ Phản Bội đi đúng đường đó: `fam1-n11:56` và `fam2-n11:57`, preset 11,
+   * cũng `DAY_DISCUSSION`. `seerReadsAsWolf` chỉ chữa được vế TRƯỚC khi đổi -
+   * soi ra "không phải Sói" là đúng lúc soi - còn sau `settleTraitor` thì vai đã
+   * là `WEREWOLF` và chính kết quả đúng ấy bị đem ra tố cáo.
+   *
+   * Kẻ Song Trùng CHƯA từng kêu ở đây nhưng đứng cùng chỗ: nó hoá theo vai của
+   * người chết đầu tiên, và vai đó có thể là một con Sói.
+   *
+   * Kẻ Báo Thù KHÔNG có trong tập này: nó chỉ hoá được thành Thằng Hề, và cả
+   * hai đều trung lập nên phép soi đọc ra y hệt trước và sau. Thêm nó vào chỉ
+   * làm bất biến yếu đi mà không tha oan cho ai.
    *
    * ponytail: miễn trừ theo NGƯỜI chứ không theo từng lượt soi, nên nó cũng
    * tha luôn một lượt soi SAU khi đổi phe mà báo sai - mất đúng một người,
@@ -121,7 +133,7 @@ export interface GroundTruth {
    * đóng dấu theo khoá `"${ownerId}:${targetId}"` ngay lúc đổi phe, y như
    * `shadowedSeerResults`.
    */
-  cursedTurnedIds?: ReadonlySet<string>;
+  roleChangedIds?: ReadonlySet<string>;
 }
 
 export interface InvariantAuditor {
@@ -156,6 +168,23 @@ function isProbability(value: number): boolean {
 
 function isWolfTeam(role: Role | undefined): boolean {
   return role !== undefined && roleTeam(role) === "wolves";
+}
+
+/**
+ * Phe mà TIÊN TRI đọc ra, không phải phe thật.
+ *
+ * Kẻ Phản Bội thắng cùng bầy Sói (`roleTeam` trả `wolves`) nhưng soi ra là phe
+ * làng - đó là cả lá bài, và engine chốt điều đó ở `seenTeam` trong
+ * `submitNightAction`. Đối chiếu kết quả soi với `roleTeam` vì thế báo động giả
+ * mỗi lần Tiên Tri soi trúng Kẻ Phản Bội.
+ *
+ * Đây là một KỲ VỌNG, không phải một miễn trừ: khác Bóng Sói (nơi cả hai giá
+ * trị đều hợp lệ nên không còn gì để đối chiếu), ở đây chỉ có đúng một câu trả
+ * lời đúng, và bất biến vẫn phải bắt được nếu engine trả sai.
+ */
+function seerReadsAsWolf(role: Role | undefined): boolean {
+  if (role === "TRAITOR") return false;
+  return isWolfTeam(role);
 }
 
 export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor {
@@ -282,9 +311,9 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
         const seerResultMayLie =
           truth.activeEventId === "WOLF_SHADOW" ||
           (truth.shadowedSeerResults?.has(`${self}:${result.targetId}`) ?? false) ||
-          // Sự thật đã dịch chỗ dưới chân kết quả này, xem `cursedTurnedIds`.
-          (truth.cursedTurnedIds?.has(result.targetId) ?? false);
-        if (!seerResultMayLie && result.isWolf !== isWolfTeam(truth.roles[result.targetId])) {
+          // Sự thật đã dịch chỗ dưới chân kết quả này, xem `roleChangedIds`.
+          (truth.roleChangedIds?.has(result.targetId) ?? false);
+        if (!seerResultMayLie && result.isWolf !== seerReadsAsWolf(truth.roles[result.targetId])) {
           auditor.report("SEER_RESULT_SCOPE", {
             ...at,
             expected: `kết quả soi ${result.targetId} phải khớp sự thật`,
@@ -341,13 +370,21 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
           actual: `${choice.targetId} đã chết nhưng vẫn bầu được`,
         });
       }
-      for (const targets of Object.values(knowledge.night?.legalTargets ?? {})) {
+      for (const [action, targets] of Object.entries(knowledge.night?.legalTargets ?? {})) {
+        /*
+         * Bà Đồng gọi hồn NGƯỜI ĐÃ CHẾT, nên với đúng mã này bất biến bị LẬT
+         * chứ không bị gỡ - cùng tinh thần với `seerReadsAsWolf`: một mục tiêu
+         * còn sống trong danh sách gọi hồn cũng là một lỗi, và phải kêu.
+         */
+        const mustBeAlive = action !== "MEDIUM_CHECK";
         for (const targetId of targets) {
-          if (truth.alive[targetId]) continue;
+          if (Boolean(truth.alive[targetId]) === mustBeAlive) continue;
           auditor.report("DEAD_TARGET", {
             ...at,
-            expected: "mục tiêu đêm hợp lệ phải còn sống",
-            actual: `${targetId} đã chết`,
+            expected: mustBeAlive
+              ? "mục tiêu đêm hợp lệ phải còn sống"
+              : "mục tiêu gọi hồn phải là người đã chết",
+            actual: `${targetId} ${mustBeAlive ? "đã chết" : "còn sống"}`,
           });
         }
       }
@@ -407,13 +444,16 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
         });
       }
 
+      // Lật cho Bà Đồng, xem khối cùng tên ở `checkTurn`. `MEDIUM_CHECK` không
+      // bao giờ có mục tiêu thứ hai, nên lật cả hai ô là vô hại.
+      const targetMustBeAlive = intention.action !== "MEDIUM_CHECK";
       for (const targetId of [intention.targetId, intention.secondaryTargetId]) {
         if (!targetId) continue;
-        if (!truth.alive[targetId]) {
+        if (Boolean(truth.alive[targetId]) !== targetMustBeAlive) {
           auditor.report("DEAD_TARGET", {
             ...at,
-            expected: `mục tiêu của ${intention.action} phải còn sống`,
-            actual: `${targetId} đã chết`,
+            expected: `mục tiêu của ${intention.action} phải ${targetMustBeAlive ? "còn sống" : "đã chết"}`,
+            actual: `${targetId} ${targetMustBeAlive ? "đã chết" : "còn sống"}`,
           });
         }
       }

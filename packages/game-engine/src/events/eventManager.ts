@@ -275,8 +275,9 @@ export function selectEvent(
       // Bảo Vệ không tự che và không che lại người đêm trước, nên cần đủ HAI
       // người khác ngoài hai điều kiện đó - dưới mức ấy mục tiêu thứ hai chắc
       // chắn trùng mục tiêu chính và engine ném đúng vào cú trùng.
+      const guardedBefore = [state.guardPrevious, state.guardSecondPrevious];
       const reachable = state.players.filter(
-        (p) => p.alive && p.role !== "GUARD" && p.id !== state.guardPrevious,
+        (p) => p.alive && p.role !== "GUARD" && !guardedBefore.includes(p.id),
       );
       if (reachable.length < 2) return false;
     }

@@ -39,10 +39,18 @@ function sleep(ms: number): Promise<void> {
 
 function startServer(): Promise<ChildProcess> {
   return new Promise((resolve, reject) => {
-    const child = spawn("npx", ["tsx", "src/index.ts"], {
+    /*
+     * Gọi THẲNG node, không qua `npx` và không qua shell.
+     *
+     * Với `shell: true` trên Windows, `child.pid` là cái shell còn server thật
+     * là cháu của nó: `kill("SIGKILL")` giết đúng cái vỏ và để server sống
+     * tiếp, ôm nguyên cổng. Lần khởi động thứ hai vì thế chết vì EADDRINUSE -
+     * nhưng cái hỏng nặng hơn là cú SIGKILL mà cả kịch bản này dựng lên để mô
+     * phỏng một cú crash chưa từng chạm tới tiến trình cần crash.
+     */
+    const child = spawn(process.execPath, ["--import", "tsx", "src/index.ts"], {
       cwd: SERVER_DIR,
       env: { ...process.env, PORT: String(PORT) },
-      shell: process.platform === "win32",
     });
 
     const timer = setTimeout(() => reject(new Error("Server không khởi động kịp")), 60_000);

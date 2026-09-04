@@ -23,7 +23,9 @@ export type NightActionType =
   | "DETECTIVE_CHECK"
   | "GUARDIAN_PROTECT"
   | "HOLY_WATER"
-  | "SERIAL_KILL";
+  | "SERIAL_KILL"
+  // Bà Đồng, và là mã DUY NHẤT nhắm vào người đã chết.
+  | "MEDIUM_CHECK";
 
 export interface NightDecision {
   action: NightActionType;

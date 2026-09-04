@@ -167,6 +167,77 @@ export const ROLE_POWER: Record<Role, number> = {
   GUARDIAN_ANGEL: 1.5,
   PRIEST: 1.5,
   WITCH: 3,
+  /**
+   * 1.5 - ĐÃ ĐO gián tiếp, giữ nguyên con số ước lượng ban đầu.
+   *
+   * Đo 2026-09-04 cùng lượt với Bà Đồng: preset 17 là ô sạch nhất của cả bài đo
+   * vì nó đổi ĐÚNG hai ghế Dân Làng lấy đúng hai lá này và không đụng gì khác.
+   * 450 ván (3 seed family x 150), `--preset`, speech bật:
+   *
+   *   n=17: 52.8 -> 59.1  (Δ +6.3, sd giữa các family 1.6, tức 7.0 sai số chuẩn)
+   *
+   * Quy đổi theo thang mà dòng `TRAITOR` đã dựng - ở cỡ phòng này một đơn vị
+   * `power` đáng khoảng 3 điểm tỉ lệ thắng - thì hai lá cộng lại đáng 3.1 đơn vị
+   * trên nền hai Dân Làng, tức ~1.55 mỗi lá. Làm tròn về 1.5 theo đúng quy ước
+   * của bảng này: đừng chép thẳng số đo.
+   *
+   * Bài đo KHÔNG tách được hai lá ra khỏi nhau - chúng luôn đi cùng nhau trong
+   * mọi preset - nên 1.5 là con số cho MỘT CẶP chia đôi, không phải cho từng lá
+   * đo riêng. Vế trừ của Trưởng Lão (làng treo nhầm là mất sạch kỹ năng) vì thế
+   * vẫn chưa được đo tách bạch.
+   *
+   *
+   * Hai vế của lá này kéo ngược nhau: tấm đệm cộng cho làng, cái bẫy trừ ngược.
+   * Số đo trên là HỢP LỰC của cả hai, và nó dương - tức ở bàn bot, tấm đệm nặng
+   * hơn cái bẫy. Đừng đọc điều đó thành "cái bẫy không đáng kể": bot treo cổ
+   * theo nghi ngờ tích luỹ, còn người thật treo theo tranh luận, nên tần suất
+   * treo nhầm Trưởng Lão ở bàn người có thể khác hẳn.
+   */
+  ELDER: 1.5,
+  /**
+   * 1.5 - ĐÃ ĐO gián tiếp, cùng lượt và cùng ô với Trưởng Lão; xem chú thích ở
+   * dòng đó cho số liệu và cho giới hạn "không tách được hai lá ra khỏi nhau".
+   *
+   * Neo theo Thám Tử (2) và Thiên Thần (1.5): nó là một nguồn XÁC NHẬN chắc
+   * chắn - vai đọc ra là vai thật, không như Tiên Tri chỉ đọc ra phe - nhưng
+   * chỉ soi được người ĐÃ CHẾT, tức nó không cứu được ai và không chỉ ra được
+   * mối nguy nào đang còn sống. Đêm 1 nó thường không có mục tiêu nào.
+   *
+   * Giá trị thật của nó là kiểm chứng lời khai ngược: một người đã chết từng
+   * claim Tiên Tri thì Bà Đồng nói được người đó nói thật hay không.
+   */
+  MEDIUM: 1.5,
+  /**
+   * 1.5 - hạ từ 2, nhưng ĐO CHƯA XONG và đây vẫn là con số kém chắc nhất bảng.
+   *
+   * Hai preset chứa lá này (19 và 20) đúng là hai ô có phương sai lớn nhất cả
+   * bài đo, nên nó là lá được đo tệ nhất:
+   *
+   *   n  | cũ   | mới  |   Δ   | sd giữa family | Δ/SE
+   *   19 | 50.8 | 58.2 | +7.4  |      3.0       | 4.3
+   *   20 | 52.0 | 57.1 | +5.1  |      7.9       | 1.1   <- không kết luận được
+   *
+   * n=20 trải 50.7-66.0 giữa ba family, đúng cảnh báo đã ghi ở khối 16-20: ván
+   * dài 7-9 vòng nên một cú treo trúng hay trượt sớm còn cả ván để nhân lên.
+   *
+   * n=19 thì tách được: nó đổi ba ghế Dân Làng lấy Trưởng Lão + Bà Đồng + lá
+   * này. Trừ đi 3.0 đơn vị mà cặp kia đã chiếm, phần còn lại cho lá này rơi vào
+   * khoảng 1.0 - thấp hơn hẳn con số 2 đoán lúc thiết kế. Lấy 1.5 chứ không lấy
+   * 1.0 vì cùng lý do đã dùng cho Thợ Săn và Thám Tử: phần giá trị nằm ở đuôi
+   * phân phối thì một phép đo trung bình luôn báo thiếu.
+   *
+   * Sức mạnh của lá này KHÔNG phải của chính nó mà là của lá nó sao chép, nên
+   * một con số duy nhất mô tả nó còn tệ hơn mô tả những dòng khác. Cái chết đầu
+   * ván ở bàn bot thường là một vai chức năng phe làng bị Sói cắn, nên kỳ vọng
+   * nằm quanh mức Thám Tử/Bảo Vệ - nhưng đuôi phân phối rất dài: sao chép trúng
+   * Dân Làng thì nó đáng 0.5, còn treo nhầm một con Sói ngày 1 thì nó ĐỔI PHE
+   * và bảng này không có ô nào diễn tả được điều đó.
+   *
+   * `BalanceScore` vì thế chấm bộ bài có lá này kém chính xác hơn bình thường.
+   * Muốn chốt con số này thì phải chạy NHIỀU seed family hơn, không phải nhiều
+   * ván hơn trên cùng một family.
+   */
+  DOPPELGANGER: 1.5,
   HUNTER: 2,
   MAYOR: 1.5,
   // Âm là có chủ ý, xem chú thích trên: bảng đo "đóng góp cho phe đang giữ lá
@@ -305,6 +376,9 @@ function preset(overrides: Partial<RoomConfig>): RoomConfig {
     guardianAngel: false,
     priest: false,
     mayor: false,
+    elder: false,
+    medium: false,
+    doppelganger: false,
     mode: "ranked",
     ...BASE_TIMINGS,
     ...overrides,
@@ -560,6 +634,34 @@ export const PRESET_DECKS: Record<number, RoomConfig> = {
    * 19: WEREWOLF x4, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, PRIEST, VILLAGER x6
    * 20: như trên, VILLAGER x7
    */
+  /*
+   * ĐO LẠI 2026-09-04 sau khi 17-20 nhận Trưởng Lão, Bà Đồng, Kẻ Song Trùng.
+   *
+   * Bảng ngay trên đo bộ bài CŨ. Ba lá mới thêm vào để bàn lớn bớt dân thường -
+   * n=20 từ 7 dân xuống 3 - và cả ba đều là vai phe làng, nên vế làng nặng lên
+   * đúng như số học dự đoán. 450 ván mỗi ô (3 seed family x 150), `--preset`,
+   * speech bật, cùng bộ trọng số mặc định:
+   *
+   *   n  | cũ   | mới  |   Δ   | sd giữa family | Δ/SE | kết luận
+   *   17 | 52.8 | 59.1 | +6.3  |      1.6       | 7.0  | chắc
+   *   18 | 58.0 | 61.5 | +3.5  |      2.4       | 2.6  | khá chắc
+   *   19 | 50.8 | 58.2 | +7.4  |      3.0       | 4.3  | chắc
+   *   20 | 52.0 | 57.1 | +5.1  |      7.9       | 1.1  | KHÔNG kết luận được
+   *
+   * CẢ BỐN GIỜ NẰM TRÊN DẢI 35-55 mà repo tự tuyên bố, 57-61. Đó là một khoản
+   * nợ đã biết chứ không phải một kết quả: bài này đổi bộ bài cho mục tiêu SỐ
+   * GHẾ ("dân thường không vượt quá ghế phe Sói"), và cái giá của nó là cán cân
+   * dịch khoảng +5 điểm về phía làng.
+   *
+   * Lá điều chỉnh sẵn có là Kẻ Nguyền Rủa: nó đáng -7.4 tới -9.9 điểm (số đo cũ,
+   * xem khối trên), tức vừa đúng cỡ cần bù. 17 và 20 đã có nó; thả nó vào 18 và
+   * 19 là phép thử hiển nhiên tiếp theo, và cũng làm hai cỡ đó bớt thêm một dân
+   * thường. CHƯA LÀM vì chưa đo, và một lần thả không đo là đổi hai thứ cùng lúc.
+   *
+   * n=20 vẫn là ô tệ nhất bảng để kết luận bất cứ điều gì: ba family ra 50.7 /
+   * 54.7 / 66.0, trải 15 điểm. Cảnh báo ở khối trên vẫn nguyên giá trị - muốn
+   * kết luận ở dải này thì chạy thêm SEED FAMILY, không phải thêm ván.
+   */
   16: preset({
     werewolves: 3,
     cursed: true,
@@ -585,6 +687,8 @@ export const PRESET_DECKS: Record<number, RoomConfig> = {
     mayor: true,
     guardianAngel: true,
     priest: true,
+    elder: true,
+    medium: true,
   }),
   18: preset({
     werewolves: 4,
@@ -597,9 +701,12 @@ export const PRESET_DECKS: Record<number, RoomConfig> = {
     mayor: true,
     guardianAngel: true,
     priest: true,
+    elder: true,
+    medium: true,
   }),
   19: preset({
     werewolves: 4,
+    doppelganger: true,
     seer: true,
     apprenticeSeer: true,
     witch: true,
@@ -609,9 +716,13 @@ export const PRESET_DECKS: Record<number, RoomConfig> = {
     mayor: true,
     guardianAngel: true,
     priest: true,
+    elder: true,
+    medium: true,
   }),
   20: preset({
     werewolves: 4,
+    doppelganger: true,
+    cursed: true,
     seer: true,
     apprenticeSeer: true,
     witch: true,
@@ -621,6 +732,8 @@ export const PRESET_DECKS: Record<number, RoomConfig> = {
     mayor: true,
     guardianAngel: true,
     priest: true,
+    elder: true,
+    medium: true,
   }),
 };
 
@@ -700,6 +813,9 @@ export function specialRoleList(config: RoomConfig): Role[] {
   if (config.witch) roles.push("WITCH");
   if (config.hunter) roles.push("HUNTER");
   if (config.mayor) roles.push("MAYOR");
+  if (config.elder) roles.push("ELDER");
+  if (config.medium) roles.push("MEDIUM");
+  if (config.doppelganger) roles.push("DOPPELGANGER");
   // Tối đa một Kẻ Nguyền Rủa mỗi ván: một lá duy nhất trong bộ bài.
   if (config.cursed) roles.push("CURSED");
   // Tối đa một Thằng Hề mỗi ván, cùng lý do và cùng cách: cấu hình là boolean

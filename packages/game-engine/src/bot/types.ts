@@ -309,7 +309,8 @@ export type NightActionKind =
   | "DETECTIVE_CHECK"
   | "GUARDIAN_PROTECT"
   | "HOLY_WATER"
-  | "SERIAL_KILL";
+  | "SERIAL_KILL"
+  | "MEDIUM_CHECK";
 
 /**
  * Thông tin ban đêm của ĐÚNG một vai.

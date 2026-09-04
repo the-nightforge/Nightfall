@@ -81,6 +81,9 @@ describe("Shared Roles", () => {
       "GUARDIAN_ANGEL",
       "SEER",
       "APPRENTICE_SEER",
+      // Bà Đồng cùng nightOrder 1 với hai vai soi: cả ba chỉ ĐỌC, không đổi gì
+      // trong đêm, nên thứ tự giữa chúng không quan sát được từ bên ngoài.
+      "MEDIUM",
       "DETECTIVE",
       "WEREWOLF",
       "WOLF_CUB",

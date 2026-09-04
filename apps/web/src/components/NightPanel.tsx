@@ -104,6 +104,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
   const locked = night?.wolvesLocked ?? false;
   const vigilantNight = snapshot.activeEvent?.id === "VIGILANT_NIGHT";
   const clearingMist = snapshot.activeEvent?.id === "CLEARING_MIST";
+  const ghostCount = snapshot.players.filter((player) => !player.alive).length;
   const nameOf = (id: string | null | undefined) =>
     snapshot.players.find((p) => p.id === id)?.name ?? "?";
   const aliveOthers = (opts?: {
@@ -670,6 +671,49 @@ export function NightPanel({ snapshot, onAction }: Props) {
                   onClick={() => selected && onAction("GUARD", selected)}
                 >
                   🛡️ Bảo vệ người này
+                </button>
+              </>
+            )}
+          </>
+        )}
+
+        {/* BÀ ĐỒNG */}
+        {role === "MEDIUM" && (
+          <>
+            <p className="mb-2 text-[13px] text-mist-strong">
+              Chọn một người <b className="text-violet-300">đã khuất</b> để gọi hồn.
+              Bạn đọc ra <b>vai thật</b> của họ, không phải phe.
+            </p>
+            {night?.mediumResult && (
+              <div className="mb-2 rounded-lg bg-night-800 p-2.5 text-sm">
+                <p className="text-[13px] text-mist-strong">Hồn vừa trả lời:</p>
+                <p className="mt-1">
+                  <b>{night.mediumResult.target.name}</b> là{" "}
+                  <b className="text-violet-300">{ROLE_META[night.mediumResult.role].name}</b>
+                </p>
+              </div>
+            )}
+            {ghostCount === 0 ? (
+              // Đêm 1 nghĩa địa còn trống. Nói ra thay vì bày một lưới mà mọi ô
+              // đều bấm không được - engine cũng không chào hành động nào.
+              <p className="rounded-lg bg-night-800 p-3 text-center text-sm text-mist-strong">
+                Chưa có ai qua đời, nên đêm nay không có hồn nào để gọi.
+              </p>
+            ) : (
+              <>
+                <PlayerGrid
+                  snapshot={snapshot}
+                  selectable={!acted}
+                  selectedId={selected}
+                  onSelect={setSelected}
+                  targetDead
+                />
+                <button
+                  className="btn-primary mt-3 w-full"
+                  disabled={!selected || acted}
+                  onClick={() => selected && onAction("MEDIUM_CHECK", selected)}
+                >
+                  🔮 Gọi hồn người này
                 </button>
               </>
             )}

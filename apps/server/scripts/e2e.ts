@@ -64,11 +64,17 @@ async function waitForPhase(
 ): Promise<any> {
   const phases = Array.isArray(phase) ? phase : [phase];
   const deadline = Date.now() + timeoutMs;
-  let snap = watcher.last;
+  /*
+   * ĐỌC `last`, không chờ sự kiện MỚI.
+   *
+   * `last` đã luôn là bản mới nhất nhờ listener thường trực, nên chờ một
+   * snapshot KHÁC là tự dựng lại đúng cuộc đua vừa gỡ: bản đúng có thể đã tới
+   * trong lúc kịch bản còn bận `await` một người khác, và khi đó không còn bản
+   * nào sau nó để chờ.
+   */
   while (Date.now() < deadline) {
-    if (snap && phases.includes(snap.phase)) return snap;
-    snap = await nextSnapshot(watcher.socket, Math.min(deadline - Date.now(), 60_000));
-    watcher.last = snap;
+    if (watcher.last && phases.includes(watcher.last.phase)) return watcher.last;
+    await sleep(100);
   }
   throw new Error(`Timeout chờ phase ${phases.join("/")}`);
 }
@@ -112,6 +118,38 @@ async function main() {
   // Theo dõi riêng player 0 để chờ phase
   const watchers = sockets.map((socket) => ({ socket, last: null as any }));
 
+  /*
+   * Listener THƯỜNG TRỰC, không phải một tiện nghi.
+   *
+   * Snapshot của host tới CÙNG LÚC với snapshot của người vừa vào phòng, mà
+   * vòng join ngay dưới đang `await` đúng người đó - nên không ai nghe hộ
+   * host và bản đó rơi mất. Khi bản cũ `await nextSnapshot(host.socket)` sau
+   * vòng lặp, nó chờ một bản KHÁC mà server không có lý do gì để gửi: cả
+   * kịch bản chết đứng ở đây, đúng 120 giây, trước khi ván kịp bắt đầu.
+   *
+   * Giữ `last` luôn là bản mới nhất cũng chính là hợp đồng mà `waitForPhase`
+   * đã dựa vào - nó đọc `watcher.last` trước khi chịu chờ.
+   */
+  for (const watcher of watchers) {
+    watcher.socket.on("room:snapshot", (snap: any) => {
+      watcher.last = snap;
+    });
+  }
+
+  /*
+   * Lỗi phía server KHÔNG được nuốt.
+   *
+   * `RoomError`, `GameError` và `ZodError` cố ý không vào log của server -
+   * chúng là lỗi ĐÃ LƯỜNG TRƯỚC. Với kịch bản này thì ngược lại: một lệnh bị
+   * từ chối làm snapshot không bao giờ tới, và cái duy nhất hiện ra là
+   * "Chờ snapshot quá lâu" sau 120 giây - đúng câu nói ít nhất về nguyên nhân.
+   */
+  for (const [i, watcher] of watchers.entries()) {
+    watcher.socket.on("error", (err: any) => {
+      console.error(`[e2e] server từ chối p${i}: ${err?.message ?? JSON.stringify(err)}`);
+    });
+  }
+
   // 1. Tạo phòng
   const host = watchers[0];
   const createdPromise = nextSnapshot(host.socket);
@@ -126,8 +164,7 @@ async function main() {
     watchers[i].socket.emit("room:join", { code: CODE });
     watchers[i].last = await p;
   }
-  host.last = await nextSnapshot(host.socket);
-  if (host.last.players.length !== PLAYER_COUNT) throw new Error("Sai số người trong phòng");
+  if (host.last?.players.length !== PLAYER_COUNT) throw new Error("Sai số người trong phòng");
   console.log(`[e2e] Cả ${PLAYER_COUNT} người đã vào phòng`);
 
   // 3. Chat phòng chờ: mọi người nhận được
@@ -159,15 +196,33 @@ async function main() {
   host.last = await cfgSnapP;
   if (!host.last.phase.includes("LOBBY")) throw new Error("Không ở LOBBY sau cấu hình");
 
-  // Thử bắt đầu khi chưa đủ ready - vẫn cho phép theo luật MVP (chỉ cần đủ người)
+  /*
+   * MỌI người chơi thật ngoài host phải bấm sẵn sàng - xem
+   * `allRequiredPlayersReady`. Luật MVP cũ ("chỉ cần đủ người") đã bỏ, nhưng
+   * kịch bản này vẫn bấm bắt đầu ngay và nhận về đúng một lời từ chối mà nó
+   * không nghe: server không log RoomError, còn client thì chỉ thấy snapshot
+   * không tới.
+   */
+  for (let i = 1; i < PLAYER_COUNT; i++) {
+    watchers[i].socket.emit("room:set-ready", { ready: true });
+  }
+  const readyDeadline = Date.now() + 15_000;
+  while (Date.now() < readyDeadline) {
+    const others = (host.last?.players ?? []).filter((p: any) => p.id !== host.last.you?.id);
+    if (others.length === PLAYER_COUNT - 1 && others.every((p: any) => p.ready)) break;
+    await sleep(200);
+  }
+
   const startedP = waitForPhase(host, "ROLE_REVEAL", 30_000);
   host.socket.emit("room:start", {});
   const roleSnap = await startedP;
 
   // Kiểm tra bí mật: mỗi người thấy đúng vai trò của mình, không thấy vai trò người khác (trừ sói thấy đồng bọn)
   for (let i = 1; i < PLAYER_COUNT; i++) {
-    const s = watchers[i].last ?? (await nextSnapshot(watchers[i].socket));
-    watchers[i].last = s;
+    // Snapshot ROLE_REVEAL của mỗi người tới gần như cùng lúc với của host,
+    // nhưng "gần như" là chưa đủ: đọc thẳng `last` ngay sau khi host đổi pha
+    // sẽ bắt phải bản LOBBY cũ, và bản đó không có `you.role`.
+    const s = await waitForPhase(watchers[i], ["ROLE_REVEAL", "NIGHT"], 30_000);
     if (!s.you?.role) throw new Error(`p${i} không thấy vai trò của mình`);
     for (const p of s.players) {
       if (p.id === s.you.id) continue;
@@ -180,8 +235,12 @@ async function main() {
   console.log("[e2e] Chia vai trò bí mật OK:", identities.map((id, i) => `${i}:${(watchers[i].last.you.role ?? "").slice(0, 2)}`).join(" "));
 
   // 5. Vòng lặp game cho tới GAME_OVER
-  const deadline = Date.now() + 6 * 60_000;
+  const deadline = Date.now() + 8 * 60_000;
   let winnerSeen: string | null = null;
+  // Một lượt bấm bỏ qua mỗi vòng mỗi người: `skip-discussion` chỉ cho 10 lượt
+  // mỗi 3 giây, còn vòng lặp này quay lại sau mỗi snapshot.
+  const skippedRound = new Array(PLAYER_COUNT).fill(-1);
+  let loggedPhase = "";
   while (Date.now() < deadline) {
     // Mỗi player hành động theo phase hiện tại dựa vào snapshot mới nhất
     const snaps: any[] = [];
@@ -225,8 +284,29 @@ async function main() {
     } else if (current.phase === "DEFENSE") {
       const s = watchers[0].last;
       if (s?.trial?.canSpeak) sockets[0].emit("chat:send", { text: "Tôi là dân, đừng treo tôi!" });
-    } else if (current.phase === "DAY_DISCUSSION" && Math.random() < 0.05) {
-      sockets[0].emit("chat:send", { text: "Tôi nghi ngờ ai đó..." });
+    } else if (current.phase === "DAY_DISCUSSION") {
+      if (Math.random() < 0.05) sockets[0].emit("chat:send", { text: "Tôi nghi ngờ ai đó..." });
+      /*
+       * Bấm bỏ qua, không ngồi hết đồng hồ.
+       *
+       * `discussionSeconds` tối thiểu là 30 và một vòng đầy đủ tốn khoảng 85
+       * giây, nên một ván 8 người - thường 4 tới 5 vòng - dài hơn cả trần thời
+       * gian của kịch bản. Đây cũng là cái nút thật của client, chứ không phải
+       * một đường tắt riêng cho test.
+       */
+      for (let i = 0; i < PLAYER_COUNT; i++) {
+        const s = watchers[i].last;
+        if (s?.phase !== "DAY_DISCUSSION" || !s.you?.alive) continue;
+        if (skippedRound[i] === s.round) continue;
+        skippedRound[i] = s.round;
+        sockets[i].emit("game:skip-discussion", { skip: true });
+      }
+    }
+
+    if (current.phase !== loggedPhase) {
+      loggedPhase = current.phase;
+      const alive = current.players.filter((p: any) => p.alive).length;
+      console.log(`[e2e]   vòng ${current.round} ${current.phase} - còn sống ${alive}`);
     }
 
     // Đợi snapshot tiếp theo cho host

@@ -19,6 +19,11 @@ export interface EnginePlayer {
   alive: boolean;
   isBot: boolean;
   /**
+   * Kẻ Song Trùng đã hoá thành vai của người chết đầu tiên. Cùng luật lộ với
+   * `cursedTurned`: chỉ để bảng tổng kết kể lại đúng chuyện đã xảy ra.
+   */
+  doppelgangerTurned?: boolean;
+  /**
    * Kẻ Nguyền Rủa đã bị Sói cắn thành công và đổi phe. Khi đó `role` đã được
    * ghi đè thành WEREWOLF - cờ này chỉ giữ lại gốc nguyền rủa để hiển thị cuối
    * ván và để chặn lần chuyển phe thứ hai.
@@ -102,6 +107,13 @@ export interface NightState {
   detectiveTargets: { target1: string; target2: string } | null;
   detectiveResults: Record<string, { target1Id: string; target2Id: string; sameTeam: boolean }>;
   priestResults: Record<string, { targetId: string; isWolf: boolean }>;
+  /**
+   * Bà Đồng đã gọi hồn ai đêm nay và đọc ra vai gì.
+   *
+   * Optional vì state ghi trước bản này không có nó; constructor chuẩn hoá về
+   * `{}` đúng như `priestResults` ngay trên.
+   */
+  mediumResults?: Record<string, { targetId: string; role: Role }>;
   /**
    * Mục tiêu Sát Nhân đã chốt cho đêm nay; `null` là chưa chọn hoặc đã bỏ qua.
    *
@@ -210,6 +222,15 @@ export interface GameState {
   voteMutations: VoteMutation[];
   dayVoteHistory: DayVoteRecap[];
   guardPrevious: string | null;
+  /**
+   * Người thứ HAI mà Bảo Vệ đã che đêm trước; chỉ khác null sau một Đêm Cảnh Giác.
+   *
+   * Trường riêng thay vì đổi `guardPrevious` thành mảng: `guardPrevious` đã nằm
+   * trong snapshot, trong bot knowledge và trong mọi bản ghi đã lưu, nên đổi
+   * kiểu của nó là làm mọi ván đang chạy không khôi phục được. Cùng hình dạng
+   * với `guardianAngelPrevious` ngay bên cạnh.
+   */
+  guardSecondPrevious?: string | null;
   guardianAngelPrevious: string | null;
   guardianAngelCharges: Record<string, number>;
   priestHolyWaterUsed: Record<string, boolean>;
@@ -230,6 +251,25 @@ export interface GameState {
   eventHistory: GameEventView[];
   log: string[];
   pendingLastStandVictim: { playerId: string; dieRound: number } | null;
+  /**
+   * Trưởng Lão đã ăn xong tấm đệm của mình: nhát cắn tiếp theo giết thật.
+   *
+   * Optional vì state ghi trước bản này không có nó; constructor chuẩn hoá.
+   */
+  elderBiteSurvived?: boolean;
+  /**
+   * Người ĐẦU TIÊN của ván qua đời - nguyên liệu duy nhất của Kẻ Song Trùng.
+   *
+   * Phải là một ô RIÊNG chứ không suy ra từ `players.filter(!alive)`: danh sách
+   * đó không mang thứ tự chết, và một đêm hai người ngã xuống thì "ai trước"
+   * là một câu hỏi có đáp án - `deaths` giữ đúng thứ tự Sói cắn chính rồi phụ.
+   */
+  firstDeadId?: string | null;
+  /**
+   * Chính phe làng đã giết Trưởng Lão, nên mọi kỹ năng đặc biệt của phe làng
+   * mất hiệu lực tới hết ván. Một chiều: bật rồi không tắt lại.
+   */
+  villagePowersLost?: boolean;
   bloodMoonArmed: boolean;
   bloodMoonUsed: boolean;
   deadCanSpeakUsed: boolean;

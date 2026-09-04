@@ -280,13 +280,26 @@ export function renderIntentionText(
  */
 export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   const weights = input.weights ?? DEFAULT_BOT_WEIGHTS;
+  const events = input.events ?? false;
   const record: SelfPlayRecord = {
     seed: input.seed,
     playerCount: input.playerCount ?? 8,
-    config: baseConfig(input.config),
+    /*
+     * Bật sự kiện là bật CHẾ ĐỘ CHAOS, không chỉ đổi đường vào pha.
+     *
+     * `selectEvent` mở đầu bằng `if (mode !== "chaos") return null`. Trước dòng
+     * này, `--events` chỉ khiến runner gọi `startNight`/`startDay` thay cho
+     * `enterPhase` - đúng đường dẫn có thể bốc sự kiện, nhưng bốc ra null ở mọi
+     * lần gọi vì bộ bài preset để `mode: "ranked"`. Report vì thế ghi
+     * `events: true` bên cạnh `mode: "ranked"`, và không ván nào có sự kiện nào.
+     *
+     * Hệ quả: cả hệ thống sự kiện chưa từng được self-play đo, kể cả các núm
+     * cân bằng (`NIGHT_TILT_WEIGHT`, `TILT_LIMIT`) vốn nói rõ là cần đo.
+     */
+    config: baseConfig(events ? { ...input.config, mode: "chaos" } : input.config),
     weightsVersion: weights.version,
     maxRounds: input.maxRounds ?? MAX_ROUNDS,
-    events: input.events ?? false,
+    events,
     speech: input.speech ?? true,
   };
 
@@ -505,10 +518,15 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       activeEventId: engine.state.activeEvent?.id ?? null,
       shadowedSeerResults,
       // Suy từ chính state của engine, không phải một bản ghi chép tay ở
-      // harness: `cursedTurned` là cờ mà `resolveNight` bật cùng lúc nó ghi đè
-      // vai, nên hai thứ không thể lệch nhau. Xem `GroundTruth.cursedTurnedIds`.
-      cursedTurnedIds: new Set(
-        engine.state.players.filter((player) => player.cursedTurned).map((player) => player.id),
+      // harness: ba cờ dưới đều được bật CÙNG LÚC với dòng ghi đè `player.role`,
+      // nên chúng không thể lệch khỏi vai. Xem `GroundTruth.roleChangedIds`.
+      roleChangedIds: new Set(
+        engine.state.players
+          .filter(
+            (player) =>
+              player.cursedTurned || player.traitorTurned || player.doppelgangerTurned,
+          )
+          .map((player) => player.id),
       ),
     };
   };

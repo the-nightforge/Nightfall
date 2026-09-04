@@ -26,6 +26,9 @@ export const VILLAGE_ROLES: Role[] = [
   "WITCH",
   "HUNTER",
   "MAYOR",
+  "ELDER",
+  "MEDIUM",
+  "DOPPELGANGER",
   "CURSED",
 ];
 
@@ -52,6 +55,9 @@ export const CONFIG_KEY: Record<string, keyof RoomConfig> = {
   WITCH: "witch",
   HUNTER: "hunter",
   MAYOR: "mayor",
+  ELDER: "elder",
+  MEDIUM: "medium",
+  DOPPELGANGER: "doppelganger",
   CURSED: "cursed",
   WOLF_CUB: "wolfCub",
   JESTER: "jester",

@@ -91,6 +91,8 @@ const enginePlayerSchema = z.object({
   alive: z.boolean(),
   isBot: z.boolean(),
   cursedTurned: z.boolean().optional(),
+  // OPTIONAL vì cùng lý do với `cursedTurned` ngay trên.
+  doppelgangerTurned: z.boolean().optional(),
   // OPTIONAL vì cùng lý do với `cursedTurned` ngay trên: bắt buộc một trường
   // thêm sau là làm mọi snapshot đã ghi trước bản này trượt schema rồi rơi vào
   // `quarantine`. Constructor của engine chuẩn hoá về `false`.
@@ -137,6 +139,11 @@ const nightStateSchema = z.object({
     }),
   ),
   priestResults: z.record(z.string(), z.object({ targetId: z.string(), isWolf: z.boolean() })),
+  // OPTIONAL vì cùng lý do với mọi trường thêm sau: snapshot ghi trước bản này
+  // không có nó, và bắt buộc ở đây là làm một ván đang chạy không khôi phục được.
+  mediumResults: z
+    .record(z.string(), z.object({ targetId: z.string(), role: roleSchema }))
+    .optional(),
   // OPTIONAL vì đây là hai trường thêm sau. Bắt buộc chúng là mọi snapshot đã
   // ghi trước bản này trượt schema rồi rơi vào `quarantine` - tức giết sạch các
   // ván đang chạy ngay lúc deploy. Constructor của engine chuẩn hoá về
@@ -160,6 +167,7 @@ export const gameStateSchema = z.object({
   voteMutations: z.array(objectOf<VoteMutation>()),
   dayVoteHistory: z.array(objectOf<DayVoteRecap>()),
   guardPrevious: z.string().nullable(),
+  guardSecondPrevious: z.string().nullable().optional(),
   guardianAngelPrevious: z.string().nullable(),
   guardianAngelCharges: z.record(z.string(), z.number()),
   priestHolyWaterUsed: z.record(z.string(), z.boolean()),
@@ -194,6 +202,9 @@ export const gameStateSchema = z.object({
   eventHistory: z.array(objectOf<GameEventView>()),
   log: z.array(z.string()),
   pendingLastStandVictim: z.object({ playerId: z.string(), dieRound: z.number() }).nullable(),
+  elderBiteSurvived: z.boolean().optional(),
+  firstDeadId: z.string().nullable().optional(),
+  villagePowersLost: z.boolean().optional(),
   bloodMoonArmed: z.boolean(),
   bloodMoonUsed: z.boolean(),
   deadCanSpeakUsed: z.boolean(),

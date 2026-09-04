@@ -255,6 +255,7 @@ describe("BotRuntime · phương thức mới", () => {
             GUARDIAN_PROTECT: [],
             HOLY_WATER: [],
             SERIAL_KILL: [],
+            MEDIUM_CHECK: [],
           },
           wolfTarget: null,
           guardPrevious: null,

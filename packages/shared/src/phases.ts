@@ -126,6 +126,12 @@ export interface RoomConfig {
    * Optional vì snapshot Redis ghi trước bản này không có nó.
    */
   lastLetter?: boolean;
+  /** Trưởng Lão. Optional vì snapshot ghi trước bản này không có nó. */
+  elder?: boolean;
+  /** Bà Đồng. Optional vì snapshot ghi trước bản này không có nó. */
+  medium?: boolean;
+  /** Kẻ Song Trùng. Optional vì snapshot ghi trước bản này không có nó. */
+  doppelganger?: boolean;
   /**
    * BIẾN THỂ LUẬT ĐANG ĐO, chưa phải một lựa chọn của phòng.
    *

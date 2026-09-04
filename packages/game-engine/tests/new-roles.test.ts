@@ -1,0 +1,331 @@
+import { describe, expect, it } from "vitest";
+import { GameEngine } from "../src/engine";
+import type { EnginePlayer, GameState, NightState } from "../src/types";
+import { DEFAULT_ROOM_CONFIG, type Role } from "@masoi/shared";
+
+/**
+ * Trưởng Lão, Bà Đồng và Kẻ Song Trùng.
+ *
+ * Ba lá thêm vào để bàn 17-20 người bớt dân thường. Hai lá đầu là cơ chế mới
+ * hoàn toàn; lá thứ ba là lần thứ TƯ của một khuôn đã có (Nguyền Rủa, Phản Bội,
+ * Báo Thù đều đổi `role` giữa ván), nên phần lớn test ở đây hỏi đúng một câu:
+ * khuôn đó có còn đúng khi vai mới đi qua nó không.
+ */
+
+function emptyNight(): NightState {
+  return {
+    wolfVotes: {},
+    killTarget: null,
+    wolvesLocked: false,
+    guardTarget: null,
+    guardSecondTarget: null,
+    healTonight: false,
+    poisonTarget: null,
+    witchSkipped: false,
+    priestSkipped: false,
+    seerResults: {},
+    wolfSecondaryTarget: null,
+    wolfCubRageTonight: false,
+    guardianAngelTarget: null,
+    priestTarget: null,
+    detectiveTargets: null,
+    detectiveResults: {},
+    priestResults: {},
+    mediumResults: {},
+  };
+}
+
+function stateWith(players: Array<[string, Role, boolean?]>): GameState {
+  return {
+    deadCanSpeakChosenId: null,
+    phase: "NIGHT",
+    round: 1,
+    phaseEndsAt: 30_000,
+    phaseStartedAt: 0,
+    voteMutations: [],
+    dayVoteHistory: [],
+    trial: null,
+    lastTrial: null,
+    players: players.map(([id, role, alive]) => ({
+      id,
+      name: id,
+      role,
+      alive: alive ?? true,
+      isBot: false,
+    })) as EnginePlayer[],
+    config: { ...DEFAULT_ROOM_CONFIG, werewolves: 1, hunter: false },
+    winner: null,
+    night: emptyNight(),
+    votes: {},
+    guardPrevious: null,
+    healUsed: false,
+    poisonUsed: false,
+    lastNightDeaths: [],
+    nightHistory: [],
+    lastEliminated: null,
+    hunterReaction: null,
+    hunterShots: [],
+    guardianAngelPrevious: null,
+    guardianAngelCharges: {},
+    priestHolyWaterUsed: {},
+    apprenticeAwakened: false,
+    wolfCubRageNextNight: false,
+    activeEvent: null,
+    eventHistory: [],
+    log: [],
+    pendingLastStandVictim: null,
+    bloodMoonArmed: false,
+    bloodMoonUsed: false,
+    deadCanSpeakUsed: false,
+    howlBonusDay: null,
+    dayOfTruthClaims: {},
+  } as GameState;
+}
+
+const engineWith = (players: Array<[string, Role, boolean?]>) =>
+  new GameEngine(stateWith(players));
+
+/** Treo cổ một người: đề cử, biện hộ, rồi cả làng bỏ phiếu Treo. */
+function lynch(e: GameEngine, targetId: string): void {
+  e.setPhase("VOTING", 30_000);
+  for (const voter of e.state.players.filter((p) => p.alive && p.id !== targetId)) {
+    e.submitVote(voter.id, targetId);
+  }
+  e.resolveNomination(25_000, 30_000);
+  e.beginFinalVote(20_000);
+  for (const voter of e.finalVoters()) e.submitFinalVote(voter.id, true);
+  e.resolveFinalVote();
+}
+
+const roleOf = (e: GameEngine, id: string) =>
+  e.state.players.find((p) => p.id === id)!.role;
+const aliveOf = (e: GameEngine, id: string) =>
+  e.state.players.find((p) => p.id === id)!.alive;
+
+describe("Trưởng Lão", () => {
+  const roster: Array<[string, Role, boolean?]> = [
+    ["wolf", "WEREWOLF"],
+    ["elder", "ELDER"],
+    ["seer", "SEER"],
+    ["v1", "VILLAGER"],
+  ];
+
+  it("sống sót nhát cắn đầu tiên, chết ở nhát thứ hai", () => {
+    const e = engineWith(roster);
+    e.submitNightAction("wolf", "KILL", "elder");
+    expect(e.resolveNight(Date.now(), () => 0.9)).toHaveLength(0);
+    expect(aliveOf(e, "elder")).toBe(true);
+    expect(e.state.elderBiteSurvived).toBe(true);
+
+    e.setPhase("DAY_DISCUSSION", 30_000);
+    e.setPhase("NIGHT", 30_000);
+    e.submitNightAction("wolf", "KILL", "elder");
+    expect(e.resolveNight(Date.now(), () => 0.9).map((d) => d.playerId)).toContain("elder");
+  });
+
+  it("tấm đệm chỉ chắn MỘT nhát, kể cả khi cả hai rơi vào cùng một đêm", () => {
+    // Đêm Sói Con nổi giận: hai mục tiêu trong một vòng lặp. Cờ phải bật ngay
+    // tại nhát đầu, nếu không thì một tấm đệm chắn được cả hai.
+    const e = engineWith([
+      ["wolf", "WEREWOLF"],
+      ["elder", "ELDER"],
+      ["v1", "VILLAGER"],
+      ["v2", "VILLAGER"],
+    ]);
+    e.state.night.wolfCubRageTonight = true;
+    e.submitNightAction("wolf", "KILL", "elder", "v1");
+    const deaths = e.resolveNight(Date.now(), () => 0.9);
+
+    expect(aliveOf(e, "elder")).toBe(true);
+    expect(deaths.map((d) => d.playerId)).toContain("v1");
+  });
+
+  it("bị bầy Sói cắn chết KHÔNG tắt kỹ năng phe làng", () => {
+    // Nếu mọi cái chết đều kích bẫy, bầy Sói chỉ cần cắn Trưởng Lão hai đêm là
+    // tắt sạch vế làng - một nước đi trội tuyệt đối.
+    const e = engineWith(roster);
+    e.state.elderBiteSurvived = true;
+    e.submitNightAction("wolf", "KILL", "elder");
+    e.resolveNight(Date.now(), () => 0.9);
+
+    expect(e.state.villagePowersLost).not.toBe(true);
+    expect(e.hasNightAction("SEER")).toBe(true);
+  });
+
+  it("bị làng treo cổ thì tắt kỹ năng phe làng, không đụng phe Sói", () => {
+    const e = engineWith(roster);
+    lynch(e, "elder");
+
+    expect(aliveOf(e, "elder")).toBe(false);
+    expect(e.state.villagePowersLost).toBe(true);
+    expect(e.hasNightAction("SEER")).toBe(false);
+    expect(e.hasNightAction("WEREWOLF")).toBe(true);
+  });
+
+  it("kỹ năng đã tắt thì engine từ chối hành động đêm của phe làng", () => {
+    const e = engineWith(roster);
+    e.state.villagePowersLost = true;
+    expect(() => e.submitNightAction("seer", "SEE", "wolf")).toThrow(/mất hiệu lực/);
+    // Bầy Sói vẫn cắn bình thường.
+    expect(() => e.submitNightAction("wolf", "KILL", "v1")).not.toThrow();
+  });
+
+  it("kỹ năng đã tắt thì Thị Trưởng hết trọng số x2", () => {
+    const e = engineWith([
+      ["wolf", "WEREWOLF"],
+      ["mayor", "MAYOR"],
+      ["elder", "ELDER"],
+      ["v1", "VILLAGER"],
+    ]);
+    e.setPhase("VOTING", 30_000);
+    e.submitVote("mayor", "wolf");
+    expect(e.voteTally().players.wolf).toBe(2);
+
+    e.state.villagePowersLost = true;
+    expect(e.voteTally().players.wolf).toBe(1);
+  });
+});
+
+describe("Bà Đồng", () => {
+  const roster: Array<[string, Role, boolean?]> = [
+    ["wolf", "WEREWOLF"],
+    ["medium", "MEDIUM"],
+    ["seer", "SEER"],
+    ["ghost", "WITCH", false],
+    ["v1", "VILLAGER"],
+  ];
+
+  it("đọc ra VAI THẬT của người đã khuất, không phải phe", () => {
+    const e = engineWith(roster);
+    e.submitNightAction("medium", "MEDIUM_CHECK", "ghost");
+    expect(e.state.night.mediumResults?.medium).toEqual({ targetId: "ghost", role: "WITCH" });
+    expect(e.snapshotFor("medium").nightInfo?.mediumResult?.role).toBe("WITCH");
+  });
+
+  it("không gọi hồn người còn sống", () => {
+    const e = engineWith(roster);
+    expect(() => e.submitNightAction("medium", "MEDIUM_CHECK", "v1")).toThrow(/đã chết/);
+  });
+
+  it("một lượt mỗi đêm, chốt ngay tại lần nộp đầu", () => {
+    const e = engineWith([...roster, ["ghost2", "HUNTER", false]]);
+    e.submitNightAction("medium", "MEDIUM_CHECK", "ghost");
+    expect(() => e.submitNightAction("medium", "MEDIUM_CHECK", "ghost2")).toThrow(/đã gọi hồn/);
+  });
+
+  it("chỉ Bà Đồng mới gọi hồn được", () => {
+    const e = engineWith(roster);
+    expect(() => e.submitNightAction("seer", "MEDIUM_CHECK", "ghost")).toThrow(/Bà Đồng/);
+  });
+
+  it("nghĩa địa trống thì bot không được chào hành động nào", () => {
+    const e = engineWith([
+      ["wolf", "WEREWOLF"],
+      ["medium", "MEDIUM"],
+      ["v1", "VILLAGER"],
+      ["v2", "VILLAGER"],
+    ]);
+    const night = e.botKnowledgeFor("medium").night;
+    expect(night?.legalActions ?? []).not.toContain("MEDIUM_CHECK");
+  });
+
+  it("kết quả của Bà Đồng KHÔNG rò sang người khác", () => {
+    const e = engineWith(roster);
+    e.submitNightAction("medium", "MEDIUM_CHECK", "ghost");
+    expect(e.snapshotFor("seer").nightInfo?.mediumResult ?? null).toBeNull();
+  });
+});
+
+describe("Kẻ Song Trùng", () => {
+  it("hoá thành vai của người chết ĐẦU TIÊN", () => {
+    const e = engineWith([
+      ["wolf", "WEREWOLF"],
+      ["dop", "DOPPELGANGER"],
+      ["seer", "SEER"],
+      ["v1", "VILLAGER"],
+    ]);
+    e.submitNightAction("wolf", "KILL", "seer");
+    e.resolveNight(Date.now(), () => 0.9);
+    e.settleDoppelganger();
+
+    expect(roleOf(e, "dop")).toBe("SEER");
+    expect(e.state.players.find((p) => p.id === "dop")!.doppelgangerTurned).toBe(true);
+  });
+
+  it("sao chép trúng phe Sói thì ĐỔI PHE thật", () => {
+    const e = engineWith([
+      ["wolf", "WEREWOLF"],
+      ["wolf2", "WEREWOLF"],
+      ["dop", "DOPPELGANGER"],
+      ["seer", "SEER"],
+      ["v1", "VILLAGER"],
+    ]);
+    lynch(e, "wolf");
+    e.settleDoppelganger();
+
+    expect(roleOf(e, "dop")).toBe("WEREWOLF");
+  });
+
+  it("sao chép trúng Kẻ Báo Thù thì hoá Thằng Hề, không phải Kẻ Báo Thù", () => {
+    // Dùng lại đúng luật `settleExecutioner` đã có cho một Kẻ Báo Thù mất mục
+    // tiêu: một bản sao không có tên trong `executionerTargets` chính là ca đó.
+    const e = engineWith([
+      ["wolf", "WEREWOLF"],
+      ["dop", "DOPPELGANGER"],
+      ["exe", "EXECUTIONER"],
+      ["v1", "VILLAGER"],
+    ]);
+    e.submitNightAction("wolf", "KILL", "exe");
+    e.resolveNight(Date.now(), () => 0.9);
+    e.settleDoppelganger();
+
+    expect(roleOf(e, "dop")).toBe("JESTER");
+  });
+
+  it("chưa ai chết thì chưa hoá vai", () => {
+    const e = engineWith([
+      ["wolf", "WEREWOLF"],
+      ["dop", "DOPPELGANGER"],
+      ["v1", "VILLAGER"],
+      ["v2", "VILLAGER"],
+    ]);
+    e.settleDoppelganger();
+    expect(roleOf(e, "dop")).toBe("DOPPELGANGER");
+  });
+
+  it("chính nó chết đầu tiên thì không hoá vai", () => {
+    const e = engineWith([
+      ["wolf", "WEREWOLF"],
+      ["dop", "DOPPELGANGER"],
+      ["v1", "VILLAGER"],
+      ["v2", "VILLAGER"],
+    ]);
+    e.submitNightAction("wolf", "KILL", "dop");
+    e.resolveNight(Date.now(), () => 0.9);
+    e.settleDoppelganger();
+
+    expect(roleOf(e, "dop")).toBe("DOPPELGANGER");
+    expect(aliveOf(e, "dop")).toBe(false);
+  });
+
+  it("chỉ hoá MỘT lần: cái chết thứ hai không đổi vai lần nữa", () => {
+    const e = engineWith([
+      ["wolf", "WEREWOLF"],
+      ["dop", "DOPPELGANGER"],
+      ["seer", "SEER"],
+      ["guard", "GUARD"],
+      ["v1", "VILLAGER"],
+    ]);
+    e.submitNightAction("wolf", "KILL", "seer");
+    e.resolveNight(Date.now(), () => 0.9);
+    e.settleDoppelganger();
+
+    e.setPhase("DAY_DISCUSSION", 30_000);
+    e.setPhase("NIGHT", 30_000);
+    e.submitNightAction("wolf", "KILL", "guard");
+    e.resolveNight(Date.now(), () => 0.9);
+    e.settleDoppelganger();
+
+    expect(roleOf(e, "dop")).toBe("SEER");
+  });
+});

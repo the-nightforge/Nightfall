@@ -61,10 +61,19 @@ describe("đào alias", () => {
   });
 
   it("đếm cả 1-gram lẫn 2-gram, vì bảng vai có cả hai cỡ", () => {
-    const found = keys(said("tôi là bà đồng"));
+    /*
+     * Cụm mẫu phải là cụm CHƯA có trong `ROLE_PHRASES` - đó là toàn bộ việc của
+     * bộ đào alias. Chỗ này từng dùng "bà đồng", và nó ngừng đo được đúng vào
+     * ngày Bà Đồng trở thành một vai thật: miner nhận ra cụm đã biết rồi bỏ qua,
+     * nên test đỏ vì lý do hoàn toàn đúng.
+     *
+     * "ông mo" là một cách gọi dân gian không nằm trong bảng, nên nó giữ được
+     * tiền đề: hai cỡ n-gram vẫn phải cùng được đếm.
+     */
+    const found = keys(said("tôi là ông mo"));
 
-    expect(found).toContain("ba");
-    expect(found).toContain("ba dong");
+    expect(found).toContain("ong");
+    expect(found).toContain("ong mo");
   });
 
   it("bỏ từ chức năng đứng ngay sau neo", () => {
