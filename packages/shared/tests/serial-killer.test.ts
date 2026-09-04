@@ -75,9 +75,11 @@ describe("bộ bài và cấu hình", () => {
     // 9 người, 2 Sói + Tiên Tri + Bảo Vệ + Phù Thuỷ = 5 ghế; thêm Sát Nhân là
     // 6, vẫn còn chỗ cho Dân Làng.
     expect(validateRoomConfig(CONFIG, 9)).toBeNull();
-    // Đủ chật để lá thứ sáu đẩy bàn 6 người qua giới hạn.
-    expect(validateRoomConfig(CONFIG, 6)).toBe("Phải còn chỗ cho Dân Làng");
-    expect(validateRoomConfig({ ...CONFIG, serialKiller: false }, 6)).toBeNull();
+    // Bàn nhỏ nhất mở được là 8 người; 7 ghế đã kín thì lá Sát Nhân là lá thứ
+    // tám và không còn chỗ cho Dân Làng.
+    const tight: RoomConfig = { ...CONFIG, hunter: true, cursed: true };
+    expect(validateRoomConfig(tight, 8)).toBe("Phải còn chỗ cho Dân Làng");
+    expect(validateRoomConfig({ ...tight, serialKiller: false }, 8)).toBeNull();
   });
 
   it("không preset chuẩn nào chứa Sát Nhân", () => {

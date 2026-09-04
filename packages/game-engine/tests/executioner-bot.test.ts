@@ -279,8 +279,13 @@ describe("bộ bài nói được rằng một Thằng Hề CÓ THỂ xuất hi�
     const view = engine.botKnowledgeFor("s0");
     expect(view.neutralRolesInPlay).toContain("EXECUTIONER");
     expect(view.neutralRolesInPlay).toContain("JESTER");
-    // Và KHÔNG nói ai đang cầm lá nào: đây là danh sách vai, không phải bảng vai.
-    expect(view.knownRoles.s1).toBeUndefined();
+    /*
+     * Và KHÔNG nói ai đang cầm lá nào: đây là danh sách vai, không phải bảng
+     * vai. Bầy Sói vẫn biết nhau nên trần là 2 ô - chính viewer và đồng bọn.
+     * Khoá vào riêng `s1` là khoá vào thứ tự chia bài của seed 0, và thứ tự đó
+     * đã đổi một lần rồi.
+     */
+    expect(Object.keys(view.knownRoles).length).toBeLessThanOrEqual(2);
   });
 
   it("ván không có Kẻ Báo Thù thì danh sách giữ nguyên như trước", async () => {

@@ -88,7 +88,7 @@ describe("balanceCopy", () => {
   });
 
   /*
-   * `PRESET_DECKS` phủ kín 6..15, tức là ĐÚNG khoảng người chơi hợp lệ, nên
+   * `PRESET_DECKS` phủ kín 8..15, tức là ĐÚNG khoảng người chơi hợp lệ, nên
    * "Không có preset" chỉ xảy ra khi phòng chưa đủ người - không bao giờ vì
    * thừa người (sức chứa là 15). Câu chữ phải nói theo đúng miền đó.
    */

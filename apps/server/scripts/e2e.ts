@@ -1,12 +1,14 @@
 /**
- * E2E smoke test: mô phỏng 6 người chơi thật qua Socket.IO,
+ * E2E smoke test: mô phỏng 8 người chơi thật qua Socket.IO,
  * chơi trọn một ván Ma Sói từ tạo phòng đến GAME_OVER.
  * Chạy: npx tsx scripts/e2e.ts (cần server đang chạy)
  */
 import { io, type Socket } from "socket.io-client";
 
 const SERVER = process.env.SERVER_URL ?? "http://localhost:4100";
-const PLAYER_COUNT = 6;
+// 8 là `MIN_PLAYERS_TO_START` từ 2026-09-04; dưới ngưỡng đó server từ chối
+// `room:start` nên kịch bản khói không chạy hết được.
+const PLAYER_COUNT = 8;
 
 interface Identity {
   playerId: string;
@@ -99,7 +101,7 @@ function actNight(snap: any, socket: Socket) {
 }
 
 async function main() {
-  console.log("[e2e] Tạo 6 người chơi...");
+  console.log(`[e2e] Tạo ${PLAYER_COUNT} người chơi...`);
   const identities: Identity[] = [];
   for (let i = 1; i <= PLAYER_COUNT; i++) identities.push(await createPlayer(i));
 
@@ -126,7 +128,7 @@ async function main() {
   }
   host.last = await nextSnapshot(host.socket);
   if (host.last.players.length !== PLAYER_COUNT) throw new Error("Sai số người trong phòng");
-  console.log("[e2e] Cả 6 người đã vào phòng");
+  console.log(`[e2e] Cả ${PLAYER_COUNT} người đã vào phòng`);
 
   // 3. Chat phòng chờ: mọi người nhận được
   const chatReceived = new Promise<any>((resolve) => {
@@ -157,7 +159,7 @@ async function main() {
   host.last = await cfgSnapP;
   if (!host.last.phase.includes("LOBBY")) throw new Error("Không ở LOBBY sau cấu hình");
 
-  // Thử bắt đầu khi chưa đủ ready - vẫn cho phép theo luật MVP (chỉ cần đủ 6 người)
+  // Thử bắt đầu khi chưa đủ ready - vẫn cho phép theo luật MVP (chỉ cần đủ người)
   const startedP = waitForPhase(host, "ROLE_REVEAL", 30_000);
   host.socket.emit("room:start", {});
   const roleSnap = await startedP;
