@@ -20,7 +20,14 @@ export interface MicSyncDeps {
   setMic(on: boolean): Promise<void>;
   /** Mic đã thực sự chuyển sang trạng thái này. */
   onResult(open: boolean): void;
-  onError(error: unknown): void;
+  /**
+   * @param wanted hướng của lời gọi vừa hỏng - mở (`true`) hay đóng (`false`)
+   *
+   * Hướng đi kèm lỗi vì hai hướng có hai mức nghiêm trọng khác hẳn: mở hỏng thì
+   * hậu quả là im lặng, đóng hỏng thì mic có thể vẫn đang phát. Tầng trên không
+   * suy ra được điều này từ trạng thái, vì trạng thái đã đổi trong lúc chờ.
+   */
+  onError(error: unknown, wanted: boolean): void;
 }
 
 export interface MicSync {
@@ -48,7 +55,7 @@ export function createMicSync(deps: MicSyncDeps): MicSync {
           // Thiếu nhánh này thì mic hỏng là im lặng tuyệt đối: nút xám, không
           // lỗi, không cách nào biết chuyện gì đang xảy ra.
           busy = false;
-          deps.onError(error);
+          deps.onError(error, want);
         });
     },
     get busy() {

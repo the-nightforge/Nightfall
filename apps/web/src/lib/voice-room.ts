@@ -1,18 +1,32 @@
 "use client";
 
-import { DisconnectReason, Room, RoomEvent, type RemoteTrack } from "livekit-client";
+import { Room, RoomEvent, type RemoteTrack } from "livekit-client";
+import { classifyDisconnect, type VoiceDisconnectKind } from "./voice-disconnect";
 
 /**
  * Lớp bọc mỏng quanh client LiveKit.
  *
- * Là nơi DUY NHẤT phía web import SDK. Toàn bộ quyết định nằm ở `voice-state.ts`
- * (thuần, test được bằng node:test); file này chỉ dịch sự kiện của SDK thành
- * lời gọi lại, và dịch lệnh thành lời gọi SDK.
+ * Nơi duy nhất phía web chạm vào PHẦN CHẠY của SDK - `Room`, `RoomEvent`, các
+ * lời gọi. Toàn bộ quyết định nằm ở `voice-state.ts` (thuần, test được bằng
+ * node:test); file này chỉ dịch sự kiện của SDK thành lời gọi lại, và dịch lệnh
+ * thành lời gọi SDK.
+ *
+ * Việc dịch `DisconnectReason` nằm ở `voice-disconnect.ts` chứ không ở đây, dù
+ * nó cũng là một lớp dịch: tầng hook cần test được với chính enum THẬT của SDK,
+ * mà file này thì luôn bị thay bằng bản giả trong test hook. Bản trước gộp nó
+ * vào đây dưới dạng một boolean, và đó đúng là chỗ lỗi lọt qua.
  */
 
 export interface VoiceRoomHandlers {
   onConnected(): void;
-  onDisconnected(duplicate: boolean): void;
+  /**
+   * @param kind ngắt CÓ CHỦ ĐÍCH hay chỉ là sự cố - xem `voice-disconnect.ts`
+   *
+   * Không còn là boolean "có phải duplicate không". Câu hỏi ấy quá hẹp: nó gộp
+   * "bị đuổi khỏi phòng" và "host tắt voice" vào chung rổ với "rớt mạng", nên
+   * client tự xin token vào lại đúng cái phòng vừa tống mình ra.
+   */
+  onDisconnected(kind: VoiceDisconnectKind): void;
   /** Quyền nói do CHÍNH LiveKit báo - nguồn duy nhất được phép mở mic. */
   onPermission(canPublish: boolean): void;
   onAudioPlayback(canPlay: boolean): void;
@@ -24,6 +38,14 @@ export interface VoiceRoomHandlers {
    * phải tự giới thiệu lại - không thì kẹt câm.
    */
   onReconnected(): void;
+  /**
+   * LiveKit vừa MẤT đường truyền và đang tự vá.
+   *
+   * Khác `onDisconnected`: track chưa bị gỡ, phiên chưa chết. Chỉ để giao diện
+   * nói thật - im lặng ở đây nghĩa là dock vẫn khoe "Đã kết nối" trong lúc
+   * không ai nghe được gì.
+   */
+  onReconnecting(): void;
   /** Danh sách identity đang nói; LiveKit tự lọc theo ngưỡng âm lượng. */
   onSpeakers(identities: string[]): void;
   onFailed(message: string): void;
@@ -140,15 +162,18 @@ export function createVoiceRoom(
       next.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
         detachRemoteAudio(track);
       });
+      next.on(RoomEvent.Reconnecting, () => {
+        handlers.onReconnecting();
+      });
       next.on(RoomEvent.Reconnected, () => {
         handlers.onReconnected();
         // Đọc lại quyền thật: phiên mới có thể đã tụt về quyền của token.
         reportPermission();
       });
       next.on(RoomEvent.Disconnected, (reason) => {
-        // Trùng danh tính nghĩa là chính người này vừa mở ở tab khác. Phải phân
-        // biệt để UI khỏi báo "mất mạng" - người chơi sẽ đi sửa nhầm thứ.
-        handlers.onDisconnected(reason === DisconnectReason.DUPLICATE_IDENTITY);
+        // Lý do đi trọn vẹn tới hook. Ba nhóm đầu là quyết định của server -
+        // vào lại là đi ngược lại quyết định đó; nhóm cuối mới là sự cố.
+        handlers.onDisconnected(classifyDisconnect(reason));
       });
 
       try {

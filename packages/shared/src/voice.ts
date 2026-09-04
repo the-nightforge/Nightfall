@@ -35,8 +35,11 @@ const OPEN_TO_LIVING: ReadonlySet<Phase> = new Set<Phase>([
  * Pha mà mọi người đều được nói, kể cả người chết.
  *
  * GAME_OVER nằm đây có chủ ý: lúc lật bài xong là lúc đáng nói nhất cả ván, và
- * không còn bí mật nào để bảo vệ. Đây cũng là lý do room voice KHÔNG bị xoá ở
- * GAME_OVER mà chỉ bị xoá khi phòng quay về lobby.
+ * không còn bí mật nào để bảo vệ.
+ *
+ * LOBBY mở cho tất cả cũng là lý do reset về phòng chờ KHÔNG cần xoá room voice:
+ * quyền của pha mới đã rộng hơn quyền của mọi pha trong ván. Xem mục 8.6 của
+ * `docs/superpowers/specs/2026-08-30-voice-chat-design.md`.
  */
 const OPEN_TO_ALL: ReadonlySet<Phase> = new Set<Phase>(["LOBBY", "GAME_OVER"]);
 
