@@ -300,6 +300,11 @@ describe("bot knowledge security boundary", () => {
         "publicVoteHistory",
         "round",
         "seerResult",
+        // Kết quả gọi hồn của CHÍNH bot này, `null` với mọi vai khác - engine
+        // lọc theo chủ sở hữu đúng như `seerResult` ngay trên. Nó nói vai của
+        // một người ĐÃ CHẾT, nên kể cả khi có giá trị thì nó cũng không lộ vai
+        // của ai đang sống.
+        "mediumResult",
         // Vai TRUNG LẬP có trong bộ bài. Công khai y như `activeEventId`: cấu
         // hình phòng đi xuống mọi client trong `RoomSnapshot.config`. Nó nói
         // vai nào CÓ THỂ có mặt, không nói ai đang cầm lá nào.
@@ -393,5 +398,61 @@ describe("bot knowledge security boundary", () => {
     expect(() => knowledgeFixture().botKnowledgeFor("nobody")).toThrow(
       "Người chơi không tồn tại trong trận",
     );
+  });
+});
+
+/**
+ * Tiên Tri Tập Sự biết Tiên Tri là ai ngay từ đầu ván.
+ *
+ * Cặp hợp lệ THỨ HAI của luật "ai được biết vai của ai", sau "cùng phe Sói".
+ * Roster riêng chứ không dùng `knowledgeFixture`: fixture kia cố tình không có
+ * Tập Sự, và nhét thêm một vai vào nó sẽ đổi mọi khẳng định "không lộ" đang
+ * dựa trên đúng danh sách đó.
+ */
+describe("Tiên Tri Tập Sự biết Tiên Tri", () => {
+  const APPRENTICE_ROSTER: Array<{ id: string; name: string; role: Role }> = [
+    { id: "seer", name: "Tiên Tri", role: "SEER" },
+    { id: "apprentice", name: "Tập Sự", role: "APPRENTICE_SEER" },
+    { id: "villager", name: "Dân", role: "VILLAGER" },
+    { id: "wolf", name: "Sói", role: "WEREWOLF" },
+  ];
+
+  function engineWith(aliveOverrides: Record<string, boolean> = {}): GameEngine {
+    return new GameEngine({
+      ...knowledgeFixture("DAY_DISCUSSION").state,
+      players: APPRENTICE_ROSTER.map((player) => ({
+        ...player,
+        alive: aliveOverrides[player.id] ?? true,
+        isBot: true,
+      })),
+      night: { ...knowledgeFixture("DAY_DISCUSSION").state.night, seerResults: {} },
+    } as GameState);
+  }
+
+  it("Tập Sự thấy vai của Tiên Tri, cả trong snapshot lẫn knowledge của bot", () => {
+    const e = engineWith();
+    expect(e.botKnowledgeFor("apprentice").knownRoles.seer).toBe("SEER");
+    const seen = e.snapshotFor("apprentice").players.find((p) => p.id === "seer");
+    expect(seen?.role).toBe("SEER");
+  });
+
+  it("MỘT CHIỀU: Tiên Tri không biết ai là Tập Sự của mình", () => {
+    const e = engineWith();
+    expect(e.botKnowledgeFor("seer").knownRoles.apprentice).toBeUndefined();
+  });
+
+  it("chỉ Tập Sự thấy, và chỉ thấy đúng Tiên Tri", () => {
+    const e = engineWith();
+    expect(e.botKnowledgeFor("villager").knownRoles.seer).toBeUndefined();
+    // Không kèm theo vai nào khác: nó biết một người, không phải một danh sách.
+    expect(Object.keys(e.botKnowledgeFor("apprentice").knownRoles).sort()).toEqual([
+      "apprentice",
+      "seer",
+    ]);
+  });
+
+  it("Tập Sự đã chết thì thôi nhìn, đúng như luật của bầy Sói", () => {
+    const e = engineWith({ apprentice: false });
+    expect(e.botKnowledgeFor("apprentice").knownRoles.seer).toBeUndefined();
   });
 });

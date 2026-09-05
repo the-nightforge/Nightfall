@@ -52,6 +52,7 @@ function context(options: {
       players: players.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
       knownRoles: options.knownRoles ?? { me: options.selfRole ?? "VILLAGER" },
       seerResult: null,
+      mediumResult: null,
       night: null,
       trialAccusedId: options.trialAccusedId ?? null,
       canFinalVote: false,

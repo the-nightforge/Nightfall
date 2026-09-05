@@ -33,6 +33,7 @@ function contextFor(selfRole: Role): BotDecisionContext {
       players: IDS.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
       knownRoles: { accused: selfRole },
       seerResult: null,
+      mediumResult: null,
       night: null,
       trialAccusedId: "accused",
       canFinalVote: false,

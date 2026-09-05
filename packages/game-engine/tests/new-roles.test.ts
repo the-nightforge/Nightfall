@@ -148,23 +148,47 @@ describe("Trưởng Lão", () => {
     e.submitNightAction("wolf", "KILL", "elder");
     e.resolveNight(Date.now(), () => 0.9);
 
-    expect(e.state.villagePowersLost).not.toBe(true);
+    expect(e.state.villagePowersLostRound).toBe(null);
     expect(e.hasNightAction("SEER")).toBe(true);
   });
 
-  it("bị làng treo cổ thì tắt kỹ năng phe làng, không đụng phe Sói", () => {
+  it("bị làng treo cổ thì tắt kỹ năng phe làng ĐÚNG một vòng, không đụng phe Sói", () => {
     const e = engineWith(roster);
+    expect(e.state.round).toBe(1);
     lynch(e, "elder");
 
     expect(aliveOf(e, "elder")).toBe(false);
-    expect(e.state.villagePowersLost).toBe(true);
+    expect(e.state.villagePowersLostRound).toBe(2);
+    // Bản án rơi vào cuối ngày 1 và ngày đó kết thúc ngay sau đó, nên vòng đang
+    // chạy không bị đụng - hình phạt bắt đầu từ đêm kế tiếp.
+    expect(e.hasNightAction("SEER")).toBe(true);
+
+    e.setPhase("NIGHT", 30_000);
+    expect(e.state.round).toBe(2);
     expect(e.hasNightAction("SEER")).toBe(false);
     expect(e.hasNightAction("WEREWOLF")).toBe(true);
   });
 
+  it("hình phạt HẾT HẠN sau đúng một đêm và một ngày", () => {
+    // Vế quan trọng nhất của lần làm lại: bản cũ tắt tới hết ván, và đo ra 39%
+    // số ván ở preset 17-20 mất sạch kỹ năng làng - gần như luôn do treo nhầm.
+    const e = engineWith(roster);
+    lynch(e, "elder");
+
+    e.setPhase("NIGHT", 30_000);
+    expect(e.hasNightAction("SEER")).toBe(false);
+    e.setPhase("DAY_DISCUSSION", 30_000);
+    expect(e.state.round).toBe(2);
+
+    e.setPhase("NIGHT", 30_000);
+    expect(e.state.round).toBe(3);
+    expect(e.hasNightAction("SEER")).toBe(true);
+    expect(() => e.submitNightAction("seer", "SEE", "wolf")).not.toThrow();
+  });
+
   it("kỹ năng đã tắt thì engine từ chối hành động đêm của phe làng", () => {
     const e = engineWith(roster);
-    e.state.villagePowersLost = true;
+    e.state.villagePowersLostRound = e.state.round;
     expect(() => e.submitNightAction("seer", "SEE", "wolf")).toThrow(/mất hiệu lực/);
     // Bầy Sói vẫn cắn bình thường.
     expect(() => e.submitNightAction("wolf", "KILL", "v1")).not.toThrow();
@@ -181,7 +205,7 @@ describe("Trưởng Lão", () => {
     e.submitVote("mayor", "wolf");
     expect(e.voteTally().players.wolf).toBe(2);
 
-    e.state.villagePowersLost = true;
+    e.state.villagePowersLostRound = e.state.round;
     expect(e.voteTally().players.wolf).toBe(1);
   });
 });

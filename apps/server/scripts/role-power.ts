@@ -19,7 +19,7 @@ import { PRESET_DECKS, ROLE_POWER, type Role, type RoomConfig } from "@masoi/sha
  * nào cần đọc vị và nói dối - Thị Trưởng, Kẻ Nguyền Rủa - sẽ bị đo thấp hơn giá
  * trị thật của nó trên bàn người.
  *
- * Chạy: npx tsx apps/server/scripts/role-power.ts [--games N]
+ * Chạy: npx tsx apps/server/scripts/role-power.ts [--games N] [--only N]...
  */
 
 /** Các vai bật/tắt được, cùng khoá cấu hình của chúng. */
@@ -35,6 +35,9 @@ const TOGGLES: ReadonlyArray<[Role, keyof RoomConfig]> = [
   ["GUARDIAN_ANGEL", "guardianAngel"],
   ["PRIEST", "priest"],
   ["MAYOR", "mayor"],
+  ["ELDER", "elder"],
+  ["MEDIUM", "medium"],
+  ["DOPPELGANGER", "doppelganger"],
 ];
 
 function villageWinRate(
@@ -51,9 +54,21 @@ function villageWinRate(
     // Sự kiện tắt: chúng bơm phương sai vào đúng thứ đang cần đo, và ranked -
     // chế độ mà bộ chấm cân bằng gác - vốn không có sự kiện nào.
     events: false,
-    // Lời nói không đổi quyết định (lõi quyết trước, câu chữ dựng sau), nên tắt
-    // đi chỉ để chạy nhanh hơn.
-    speech: false,
+    /*
+     * BẬT, dù nó chạy chậm hơn nhiều.
+     *
+     * Bản cũ tắt với lý do "lời nói không đổi quyết định". Vế đó đúng cho CHÍNH
+     * người nói - có bất biến `SPEECH_CHANGED_ACTION` gác - nhưng sai cho người
+     * NGHE: bot khác đọc chat qua `chat-analysis`, và đó là kênh xác nhận chính
+     * của phe làng.
+     *
+     * Đo so cặp trên cùng bộ seed, preset 12, 1500 ván mỗi nhánh: phe làng
+     * thắng 54.4% với speech bật và 15.2% khi tắt (Δ 39.2 điểm, 19 sai số
+     * chuẩn). Tắt lời nói không phải một phép rút gọn cho nhanh - nó là một trò
+     * chơi khác, và một bảng `ROLE_POWER` đo trong đó không mô tả ván mà phòng
+     * xếp hạng thực sự chơi.
+     */
+    speech: true,
   });
 
   const finished = results.filter((game) => game.winner !== null);
@@ -67,11 +82,36 @@ function main(): void {
   const games = gamesFlag >= 0 ? Number(argv[gamesFlag + 1]) : 300;
   if (!Number.isFinite(games) || games <= 0) throw new Error("--games cần một số dương");
 
+  /*
+   * `--only <n>` (lặp được): chỉ quét những cỡ phòng này.
+   *
+   * Một lượt quét đầy đủ với speech BẬT tốn gần ba giờ trên một luồng, và các
+   * nhánh đo hoàn toàn độc lập nhau. Cờ này để chia việc ra nhiều tiến trình -
+   * cột "Δ thắng" của một lượt `--only` đúng bằng số đo thô của cỡ phòng đó,
+   * nên gộp lại bên ngoài được. Hai cột còn lại thì KHÔNG: chúng dựng trên vai
+   * làng mạnh nhất của chính lượt chạy, nên chỉ có nghĩa ở lượt quét đầy đủ.
+   */
+  const only = new Set(
+    argv.flatMap((arg, i) => (arg === "--only" ? [Number(argv[i + 1])] : [])),
+  );
+  if ([...only].some((n) => !Number.isFinite(n))) throw new Error("--only cần một số");
+
+  /*
+   * `--role <VAI>` (lặp được): chỉ đo những lá này, vẫn phải chạy nền để có
+   * mốc trừ. Cùng mục đích với `--only` - chia một lượt quét dài ra nhiều
+   * tiến trình - nhưng cắt theo chiều còn lại, cho những cỡ phòng mà riêng
+   * một preset đã quá dài.
+   */
+  const roleFilter = new Set(
+    argv.flatMap((arg, i) => (arg === "--role" ? [argv[i + 1]] : [])),
+  );
+
   const deltas = new Map<Role, number[]>();
   const baselines: Array<[number, number]> = [];
 
   for (const [countRaw, preset] of Object.entries(PRESET_DECKS)) {
     const playerCount = Number(countRaw);
+    if (only.size > 0 && !only.has(playerCount)) continue;
     const seedBase = `power:${playerCount}`;
     // Tiến độ ra stderr: một lượt quét đầy đủ mất vài phút, và một tiến trình
     // im lặng hàng phút thì không phân biệt được với một tiến trình treo.
@@ -80,6 +120,7 @@ function main(): void {
     baselines.push([playerCount, base]);
 
     for (const [role, key] of TOGGLES) {
+      if (roleFilter.size > 0 && !roleFilter.has(role)) continue;
       if (preset[key] !== true) continue;
       const without = { ...preset, [key]: false } as RoomConfig;
       const delta = base - villageWinRate(playerCount, without, games, seedBase);

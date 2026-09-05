@@ -29,6 +29,7 @@ function contextFor(
       players: IDS.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
       knownRoles: { jester: "JESTER" },
       seerResult: null,
+      mediumResult: null,
       night: null,
       trialAccusedId: null,
       canFinalVote: false,

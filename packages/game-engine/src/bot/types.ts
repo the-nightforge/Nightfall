@@ -68,6 +68,16 @@ export type EvidenceKind =
    */
   | "SEER_RESULT_WOLF"
   | "SEER_RESULT_CLEAR"
+  /**
+   * BOT có bằng chứng RIÊNG rằng một lời khai là dối: người còn sống đang nhận
+   * một vai mà bot biết chắc thuộc về người khác.
+   *
+   * Hai nguồn, cùng một loại suy luận - Bà Đồng đọc vai thật của một cái xác,
+   * và Tiên Tri Tập Sự được chỉ mặt Tiên Tri từ đêm 1. Cùng hạng với kết quả
+   * soi vì gốc đều là sự thật do engine cấp, nhưng nhẹ hơn hẳn: xem
+   * `privateInfo.provenFalseClaim`.
+   */
+  | "PROVEN_FALSE_CLAIM"
   /** Đồng đội do engine cấp (Sói thấy Sói), không phải claim ai đó tự nhận. */
   | "KNOWN_ALLY";
 
@@ -401,6 +411,15 @@ export interface BotKnowledgeView {
    * vì `isWolf === false` chỉ nói được "không phải Sói".
    */
   seerResult: { targetId: string; targetName: string; isWolf: boolean; team: Team } | null;
+  /**
+   * Vai THẬT của người đã khuất mà Bà Đồng gọi hồn đêm qua.
+   *
+   * Mang `role` chứ không phải `team` như `seerResult`: đó là cả điểm khác biệt
+   * của lá bài. Đổi lại nó nói về một cái xác, nên tự nó không chỉ ra mối nguy
+   * nào đang sống - giá trị nằm ở chỗ đối chiếu ngược với lời khai của người
+   * còn sống, xem `applyPrivateInformation`.
+   */
+  mediumResult: { targetId: string; targetName: string; role: Role } | null;
   /**
    * Vai TRUNG LẬP có trong bộ bài của ván này.
    *

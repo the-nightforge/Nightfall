@@ -226,6 +226,14 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
     checkKnowledge(knowledge, state, truth) {
       const self = knowledge.botId;
       const selfIsWolf = isWolfTeam(truth.roles[self]);
+      /*
+       * Cặp hợp lệ THỨ HAI, sau "cùng phe Sói": Tiên Tri Tập Sự được engine chỉ
+       * mặt Tiên Tri từ đêm 1. Một chiều và đúng một vai - Tiên Tri không biết
+       * ngược lại ai là Tập Sự của mình.
+       */
+      const selfIsApprentice = truth.roles[self] === "APPRENTICE_SEER";
+      const knowsAsApprentice = (otherId: string): boolean =>
+        selfIsApprentice && truth.roles[otherId] === "SEER";
       const at = { round: knowledge.round, phase: knowledge.phase, playerId: self };
 
       // --- Ai được biết vai của ai ---
@@ -242,7 +250,11 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
         // PHE chứ không theo mã vai - Sói Con và Kẻ Nguyền Rủa đã hoá Sói đều
         // hợp lệ, và một kiểm tra chỉ so với "WEREWOLF" sẽ báo động giả ở đúng
         // những cấu hình vai mà nó cần bảo vệ nhất.
-        if (!deadRoleIsPublic && (!selfIsWolf || !isWolfTeam(truth.roles[otherId]))) {
+        if (
+          !deadRoleIsPublic &&
+          !knowsAsApprentice(otherId) &&
+          (!selfIsWolf || !isWolfTeam(truth.roles[otherId]))
+        ) {
           auditor.report("ROLE_LEAK", {
             ...at,
             expected: `${self} không được biết vai của ${otherId}`,
@@ -280,6 +292,9 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
           // Đồng bọn Sói đã chết vẫn được nhớ - Sói biết bầy của mình là ai,
           // sống hay chết. Mọi trường hợp khác là lộ vai người chết.
           if (selfIsWolf && isWolfTeam(truth.roles[otherId])) continue;
+          // Tập Sự đã biết Tiên Tri từ khi ông ta còn sống; quên đi lúc ông ta
+          // chết là bịa ra một luật không có, và đó đúng là lúc nó thừa kế.
+          if (knowsAsApprentice(otherId)) continue;
           auditor.report("DEAD_ROLE_REVEALED", {
             ...at,
             expected: `vai của người chết ${otherId} phải ẩn tới GAME_OVER`,
@@ -471,9 +486,14 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
       const at = { round: trace.round, phase: trace.phase, playerId: trace.botId };
       const selfIsWolf = isWolfTeam(truth.roles[trace.botId]);
 
+      // Cùng hai cặp hợp lệ với `checkKnowledge`: cùng phe Sói, và Tiên Tri Tập
+      // Sự biết Tiên Tri. Trace chỉ chụp lại `knownRoles` nên nó phải nới đúng
+      // bằng, không rộng hơn.
+      const traceIsApprentice = truth.roles[trace.botId] === "APPRENTICE_SEER";
       for (const [otherId, role] of Object.entries(trace.knowledgeSnapshot.knownRoles)) {
         if (otherId === trace.botId) continue;
         if (selfIsWolf && isWolfTeam(truth.roles[otherId])) continue;
+        if (traceIsApprentice && truth.roles[otherId] === "SEER") continue;
         auditor.report("ROLE_LEAK", {
           ...at,
           expected: `trace của ${trace.botId} không được chứa vai của ${otherId}`,

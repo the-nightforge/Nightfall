@@ -223,7 +223,12 @@ export interface SelfPlayMetricsBundle {
  * Nhưng tỉ lệ cao nghĩa là decay không làm việc, và BOT đang biện luận bằng
  * những chuyện không còn liên quan.
  */
-const PERMANENT_KINDS = new Set(["SEER_RESULT_WOLF", "SEER_RESULT_CLEAR", "KNOWN_ALLY"]);
+const PERMANENT_KINDS = new Set([
+  "SEER_RESULT_WOLF",
+  "SEER_RESULT_CLEAR",
+  "KNOWN_ALLY",
+  "PROVEN_FALSE_CLAIM",
+]);
 
 /** Phiếu CHỐT của mỗi người trong mỗi vòng; các lá trước đó đã bị thay. */
 function finalVotesByRound(

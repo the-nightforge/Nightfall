@@ -204,7 +204,7 @@ export const gameStateSchema = z.object({
   pendingLastStandVictim: z.object({ playerId: z.string(), dieRound: z.number() }).nullable(),
   elderBiteSurvived: z.boolean().optional(),
   firstDeadId: z.string().nullable().optional(),
-  villagePowersLost: z.boolean().optional(),
+  villagePowersLostRound: z.number().nullable().optional(),
   bloodMoonArmed: z.boolean(),
   bloodMoonUsed: z.boolean(),
   deadCanSpeakUsed: z.boolean(),

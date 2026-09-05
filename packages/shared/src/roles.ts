@@ -117,7 +117,8 @@ export const ROLE_META: Record<Role, RoleMeta> = {
   APPRENTICE_SEER: {
     id: "APPRENTICE_SEER",
     name: "Tiên Tri Tập Sự",
-    description: "Ban đầu không có kỹ năng. Khi Tiên Tri chết, thừa kế kỹ năng soi từ đêm kế tiếp.",
+    description:
+      "Biết Tiên Tri là ai ngay từ đầu ván. Khi Tiên Tri chết, thừa kế kỹ năng soi từ đêm kế tiếp.",
     team: "village",
     nightOrder: 1,
   },
@@ -180,7 +181,7 @@ export const ROLE_META: Record<Role, RoleMeta> = {
     id: "ELDER",
     name: "Trưởng Lão",
     description:
-      "Sống sót nhát cắn đầu tiên của bầy Sói. Nếu chính làng giết bạn (treo cổ, bình độc, đạn Thợ Săn) thì mọi kỹ năng đặc biệt của phe làng mất hiệu lực tới hết ván.",
+      "Sống sót nhát cắn đầu tiên của bầy Sói. Nếu chính làng giết bạn (treo cổ, bình độc, đạn Thợ Săn) thì mọi kỹ năng đặc biệt của phe làng mất hiệu lực suốt đêm và ngày kế tiếp.",
     /*
      * KHÔNG có `nightOrder`: nó không thức dậy. Cả hai vế của lá này đều là
      * phản ứng - một tấm đệm trước nhát cắn, và một cái bẫy dưới chân phe làng.

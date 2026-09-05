@@ -132,6 +132,8 @@ export interface PrivateInfoWeights {
    */
   neutralKillerSuspicion: number;
   knownAlly: number;
+  /** Xem chú thích ở `DEFAULT_BOT_WEIGHTS.privateInfo.provenFalseClaim`. */
+  provenFalseClaim: number;
 }
 
 /**
@@ -872,6 +874,20 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     neutralClearTrust: 30,
     neutralKillerSuspicion: 55,
     knownAlly: -80,
+    /**
+     * ƯỚC LƯỢNG, chưa đo. Người sống nhận một vai mà bot BIẾT CHẮC thuộc về
+     * người khác - Bà Đồng đọc từ một cái xác, hoặc Tiên Tri Tập Sự được chỉ
+     * mặt Tiên Tri từ đêm 1.
+     *
+     * Nhẹ hơn hẳn `seerWolf` (400, ghim thẳng lên trần) vì nó KHÔNG phải bằng
+     * chứng Sói: một Thằng Hề khai láo, hay một dân thường hoảng loạn tranh
+     * claim, đều rơi vào đây. Nó chỉ chứng minh người đó nói dối.
+     *
+     * Đặt trên `neutralKillerSuspicion` (55) vì lời nói dối này được chứng minh
+     * chứ không suy đoán, và dưới `seerClear` (120) vì nó không nói được phe.
+     * Chốt lại bằng `npm run role-power` sau khi có số.
+     */
+    provenFalseClaim: 90,
   }),
 
   suspicion: Object.freeze({

@@ -587,13 +587,14 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   const castVote = (
     playerId: string,
     vote: { choice: { type: string; targetId?: string }; evidence: BotEvidence[] },
+    castAt: number,
   ): void => {
     const targetId = vote.choice.type === "PLAYER" ? vote.choice.targetId ?? null : null;
     const previous = engine.state.votes[playerId];
     if (previous !== undefined && previous === targetId) return;
 
     try {
-      engine.submitVote(playerId, targetId, tick(10));
+      engine.submitVote(playerId, targetId, castAt);
       actions += 1;
       log.push({
         kind: "VOTE",
@@ -608,6 +609,30 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     }
   };
 
+  /**
+   * Bước đồng hồ giả cho MỘT người trong MỘT lượt bỏ phiếu.
+   *
+   * Trước dòng này mọi lá phiếu dùng `tick(10)`, nên cả pha bỏ phiếu 15-120
+   * giây gói gọn trong 0.2 giây đồng hồ giả: `elapsedRatio` ra ~0.001 trong khi
+   * `voteHistory.lateSwitchRatio` là 0.8. Hệ quả là 25% số phiếu là phiếu ĐỔI
+   * mà chưa lá nào trong lịch sử self-play bị tính là đổi muộn - `LATE_SWITCH`
+   * chưa từng chạy trong một ván đo nào.
+   *
+   * Chia NỬA pha cho số người còn sống, và tiêu một bước cho MỖI người - kể cả
+   * người giữ nguyên phiếu. Tính bước theo lá phiếu thật sự nộp thì lượt cân
+   * nhắc lại (chỉ ~1/4 số người đổi ý) co lại vào đầu nửa sau và vẫn không
+   * chạm tới phần đuôi.
+   *
+   * ponytail: người đi sau trong danh sách ghế luôn bỏ phiếu muộn hơn người đi
+   * trước, nên trong MỘT ván thì ai bị gắn nhãn "đổi muộn" là do thứ tự ghế.
+   * Ghế được xáo theo `${seed}:setup` nên nó không dồn về một người qua nhiều
+   * ván. Cần đúng hơn thì rải offset theo `roundRng` thay vì theo thứ tự.
+   */
+  const voteStepMs = (): number =>
+    Math.max(
+      1,
+      Math.floor((config.voteSeconds * 1_000) / 2 / Math.max(1, engine.alivePlayers().length)),
+    );
   const recordDeaths = (deaths: ReadonlyArray<{ playerId: string; cause?: string }>): void => {
     for (const death of deaths) {
       log.push({
@@ -761,6 +786,8 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
 
     resetRoundBudget(engine.state.round);
     const spoken: BotChatObservation[] = [];
+    // Lượt đầu rải trên NỬA ĐẦU của pha, lượt cân nhắc lại trên nửa sau.
+    const firstPassStep = voteStepMs();
     for (const player of engine.alivePlayers()) {
       const runtime = runtimes.get(player.id)!;
       const context = contextFor(player.id);
@@ -768,7 +795,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       const vote = runtime.decideVote(context);
       void before;
 
-      castVote(player.id, vote);
+      castVote(player.id, vote, tick(firstPassStep));
       lastVote.set(player.id, vote);
 
       if (!record.speech) continue;
@@ -848,11 +875,12 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     //
     // Ở đây BOT thấy bảng kiểm phiếu sơ bộ và những câu vừa nói, rồi quyết lại.
     // Đổi phiếu là hành vi THẬT của người chơi, không phải nhiễu thêm vào.
+    const secondPassStep = voteStepMs();
     for (const player of engine.alivePlayers()) {
       const runtime = runtimes.get(player.id)!;
       const context = contextFor(player.id);
       runtime.observe(context);
-      castVote(player.id, runtime.decideVote(context));
+      castVote(player.id, runtime.decideVote(context), tick(secondPassStep));
     }
 
     const outcome = engine.resolveNomination(config.defenseSeconds * 1_000, tick(1_000));
