@@ -121,14 +121,14 @@ describe("PlayerStatsCard", () => {
     assert.match(text, /42%/);
     // Vai thắng tốt nhất theo số thắng: Dân Làng 3, Tiên Tri 2, rồi Thằng Hề 1/1 (100%) trước Ma Sói 1/3.
     const best = [...v.host.querySelectorAll("ul")][0]!.textContent ?? "";
-    assert.match(best, /Dân Làng.*Tiên Tri.*Thằng Hề/s);
+    assert.match(best, /Dân Làng[\s\S]*Tiên Tri[\s\S]*Thằng Hề/);
     assert.doesNotMatch(best, /Ma Sói/);
 
     const detail = v.host.querySelector<HTMLElement>("#player-stats-detail")!;
     assert.equal(detail.hidden, true);
     await v.click("Chi tiết");
     assert.equal(detail.hidden, false);
-    assert.match(detail.textContent ?? "", /Sói.*1\/3/s);
+    assert.match(detail.textContent ?? "", /Sói[\s\S]*1\/3/);
     assert.match(detail.textContent ?? "", /Thắng cá nhân 1/);
     await v.unmount();
   });
