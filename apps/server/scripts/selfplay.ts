@@ -35,6 +35,8 @@ interface Options {
   weights: BotWeights;
   events: boolean;
   speech: boolean;
+  /** Số ghế đầu gắn cờ isBot=false. Xem `SelfPlayRecord.humanSeats`. */
+  humans: number;
   verifyReplay: boolean;
   out: string | null;
   quiet: boolean;
@@ -68,6 +70,7 @@ function usage(): string {
     "  --preset            Dùng PRESET_DECKS của số người đó (bộ bài thật của ván xếp hạng)",
     "  --events            Bật sự kiện cân bằng động",
     "  --no-speech         Tắt lời nói giữa các BOT",
+    "  --humans <số>       Gắn cờ isBot=false cho n ghế đầu (vẫn bot điều khiển) để đo nhánh bàn-có-người",
     "  --verify-replay     Chạy lại mỗi ván để bắt REPLAY_DIVERGENCE (chậm gấp đôi)",
     "  --out <đường dẫn>   Ghi JSON ra file",
     "  --traces <thư mục>  Ghi trace quyết định ra JSONL, mỗi ván một file (mặc định: tắt)",
@@ -87,6 +90,7 @@ function parseArgs(argv: readonly string[]): Options {
     weights: DEFAULT_BOT_WEIGHTS,
     events: false,
     speech: true,
+    humans: 0,
     verifyReplay: false,
     out: null,
     quiet: false,
@@ -131,6 +135,9 @@ function parseArgs(argv: readonly string[]): Options {
         break;
       case "--no-speech":
         options.speech = false;
+        break;
+      case "--humans":
+        options.humans = number(argv[++i], flag);
         break;
       case "--verify-replay":
         options.verifyReplay = true;
@@ -214,6 +221,7 @@ function main(): void {
     weights: options.weights,
     events: options.events,
     speech: options.speech,
+    humanSeats: options.humans,
     verifyReplay: options.verifyReplay,
     // Bộ bài mặc định của runner (2 Sói, Tiên Tri, Bảo Vệ, Phù Thuỷ) không đổi
     // theo số người, nên một batch 15 người mặc định KHÔNG đo bộ bài mà ván 15

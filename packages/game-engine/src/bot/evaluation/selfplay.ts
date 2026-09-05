@@ -65,6 +65,16 @@ export interface SelfPlayRecord {
   maxRounds: number;
   events: boolean;
   speech: boolean;
+  /**
+   * Số ghế đầu được gắn cờ `isBot: false` - vẫn do bot điều khiển.
+   *
+   * Tồn tại để self-play đo được các nhánh "bàn có người thật" (P2: Tiên Tri
+   * giấu kết quả, Sói bán đồng đội sớm hơn), vốn chỉ mở khi
+   * `countHumansAlive >= humanTableThreshold`. Không có nó, mọi ghế là bot và
+   * những nhánh đó không bao giờ chạy trong harness. Optional vì record cũ
+   * không có trường này; vắng mặt là 0.
+   */
+  humanSeats?: number;
 }
 
 export interface SelfPlayInput {
@@ -79,6 +89,8 @@ export interface SelfPlayInput {
   speech?: boolean;
   /** Thu trace mọi quyết định. Tốn bộ nhớ; mặc định tắt. */
   trace?: boolean;
+  /** Xem `SelfPlayRecord.humanSeats`. Mặc định 0. */
+  humanSeats?: number;
 }
 
 export type SelfPlayEvent =
@@ -310,6 +322,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     maxRounds: input.maxRounds ?? MAX_ROUNDS,
     events,
     speech: input.speech ?? true,
+    humanSeats: input.humanSeats ?? 0,
   };
 
   const config = record.config;
@@ -320,10 +333,12 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   let rejected = 0;
   let skipped = 0;
 
+  // Ghế "người" chỉ khác ở cờ: vẫn là bot điều khiển. Xem `humanSeats`.
+  const humanSeats = record.humanSeats ?? 0;
   const players = Array.from({ length: record.playerCount }, (_, i) => ({
     id: `p${i + 1}`,
     name: `Người ${i + 1}`,
-    isBot: true,
+    isBot: i >= humanSeats,
   }));
 
   // Engine nhận rng đã gieo, nên không còn cần mẹo sort-rồi-xáo-lại của Phase 2.
@@ -1024,6 +1039,7 @@ export function replayGame(record: SelfPlayRecord, weights?: BotWeights): SelfPl
     maxRounds: record.maxRounds,
     events: record.events,
     speech: record.speech,
+    humanSeats: record.humanSeats,
   });
 }
 
@@ -1038,5 +1054,6 @@ export function replayCommand(record: SelfPlayRecord): string {
   ];
   if (record.events) flags.push("--events");
   if (!record.speech) flags.push("--no-speech");
+  if ((record.humanSeats ?? 0) > 0) flags.push(`--humans ${record.humanSeats}`);
   return `npm run selfplay -- ${flags.join(" ")}`;
 }

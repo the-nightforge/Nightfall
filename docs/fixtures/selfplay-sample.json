@@ -12,6 +12,7 @@
     "maxRounds": 20,
     "events": false,
     "speech": true,
+    "humanSeats": 0,
     "room": {
       "werewolves": 2,
       "seer": true,
@@ -94,6 +95,26 @@
       "value": null,
       "numerator": 0,
       "denominator": 0
+    },
+    "witchPoisonUnusedRate": {
+      "value": 1,
+      "numerator": 12,
+      "denominator": 12
+    },
+    "seerDiedNightTwoRate": {
+      "value": 0.16666666666666666,
+      "numerator": 2,
+      "denominator": 12
+    },
+    "seerClaimedRoundOneRate": {
+      "value": 0,
+      "numerator": 0,
+      "denominator": 12
+    },
+    "wolfFakeFightRate": {
+      "value": 0,
+      "numerator": 0,
+      "denominator": 12
     },
     "priestHolyWaterRate": {
       "value": null,

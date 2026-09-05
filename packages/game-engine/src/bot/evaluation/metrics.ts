@@ -90,6 +90,24 @@ export interface SelfPlayMetrics {
   /** Bình độc trúng một con Sói thật. Mẫu số là số bình độc đã dùng. */
   witchPoisonAccuracy: Ratio;
   /**
+   * Ván có Phù Thuỷ mà bình độc còn nguyên tới khi ván kết thúc (hoặc cô ta
+   * chết). Mẫu số là số ván có Phù Thuỷ. Đây là "ôm bình tới cuối" của P2.2.
+   */
+  witchPoisonUnusedRate: Ratio;
+  /**
+   * Ván có Tiên Tri mà Tiên Tri chết vào ĐÊM vòng 2 (cause khác lynch/hunter).
+   * Mẫu số là số ván có Tiên Tri. Đây là "hô sớm chết đêm 2" của P2.1.
+   */
+  seerDiedNightTwoRate: Ratio;
+  /** Ván có Tiên Tri mà Tiên Tri công khai khai vai ngay vòng 1. Cùng mẫu số. */
+  seerClaimedRoundOneRate: Ratio;
+  /**
+   * Ván có ít nhất một lá phiếu Sói -> Sói mà trước nó trong cùng vòng chưa ai
+   * bầu con Sói đó (dấu vân tay của cuộc cãi giả P2.3; bussing cần phiếu có
+   * sẵn nên không tạo ra hình dạng này). Mẫu số là số ván đã chạy.
+   */
+  wolfFakeFightRate: Ratio;
+  /**
    * Lượt Linh Mục kết thúc bằng một bình Nước thánh.
    *
    * Mẫu số gộp cả lượt GIỮ BÌNH, và lượt giữ bình đến đây dưới dạng `SKIP`
@@ -370,6 +388,12 @@ export function collectMetrics(
   let priestTurns = 0;
   let priestHolyWaters = 0;
   let priestHolyWatersOnWolf = 0;
+  let witchGames = 0;
+  let witchPoisonUnused = 0;
+  let seerGames = 0;
+  let seerDiedNightTwo = 0;
+  let seerClaimedRoundOne = 0;
+  let fakeFightGames = 0;
 
   const roleGames = new Map<Role, number>();
   const roleWins = new Map<Role, number>();
@@ -398,6 +422,68 @@ export function collectMetrics(
     }
 
     if (game.violations.some((item) => item.id === "ROUND_LIMIT")) roundLimited += 1;
+
+    // --- Vai chức năng (P2) ---
+    {
+      const witchId = Object.entries(game.roles).find(([, role]) => role === "WITCH")?.[0];
+      if (witchId) {
+        witchGames += 1;
+        const poisoned = game.events.some(
+          (e) => e.kind === "NIGHT_ACTION" && e.actorId === witchId && e.action === "POISON",
+        );
+        if (!poisoned) witchPoisonUnused += 1;
+      }
+      const seerId = Object.entries(game.roles).find(([, role]) => role === "SEER")?.[0];
+      if (seerId) {
+        seerGames += 1;
+        const death = game.events.find((e) => e.kind === "DEATH" && e.playerId === seerId);
+        if (
+          death?.kind === "DEATH" &&
+          death.round === 2 &&
+          death.cause !== "lynch" &&
+          death.cause !== "hunter"
+        ) {
+          seerDiedNightTwo += 1;
+        }
+        if (
+          game.events.some(
+            (e) =>
+              e.kind === "SPEECH" &&
+              e.actorId === seerId &&
+              e.round === 1 &&
+              (e.speech === "CLAIM_ROLE" || e.speech === "COUNTER_CLAIM") &&
+              e.claimedRole === "SEER",
+          )
+        ) {
+          seerClaimedRoundOne += 1;
+        }
+      }
+      const wolves = new Set(
+        Object.entries(game.roles)
+          .filter(([, role]) => role === "WEREWOLF" || role === "WOLF_CUB")
+          .map(([id]) => id),
+      );
+      const votersOn = new Map<string, Set<string>>();
+      let fought = false;
+      for (const e of game.events) {
+        if (e.kind === "PHASE") {
+          votersOn.clear();
+          continue;
+        }
+        if (e.kind !== "VOTE" || e.targetId === null) continue;
+        const seen = votersOn.get(e.targetId) ?? new Set<string>();
+        if (
+          wolves.has(e.voterId) &&
+          wolves.has(e.targetId) &&
+          [...seen].every((id) => id === e.voterId)
+        ) {
+          fought = true;
+        }
+        seen.add(e.voterId);
+        votersOn.set(e.targetId, seen);
+      }
+      if (fought) fakeFightGames += 1;
+    }
     boundaryViolations += game.violations.filter(
       (item) =>
         item.id === "ROLE_LEAK" ||
@@ -748,6 +834,10 @@ export function collectMetrics(
     witchHealSelfRate: ratio(witchSelfHeals, witchHeals),
     witchPoisonRate: ratio(witchPoisons, witchTurns),
     witchPoisonAccuracy: ratio(witchPoisonsOnWolf, witchPoisons),
+    witchPoisonUnusedRate: ratio(witchPoisonUnused, witchGames),
+    seerDiedNightTwoRate: ratio(seerDiedNightTwo, seerGames),
+    seerClaimedRoundOneRate: ratio(seerClaimedRoundOne, seerGames),
+    wolfFakeFightRate: ratio(fakeFightGames, games.length),
     priestHolyWaterRate: ratio(priestHolyWaters, priestTurns),
     priestHolyWaterAccuracy: ratio(priestHolyWatersOnWolf, priestHolyWaters),
     voteChangeRate: ratio(voteChanges, voteTotal),

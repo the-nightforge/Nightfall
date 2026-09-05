@@ -30,6 +30,8 @@ export interface SelfPlayBatchInput {
   maxRounds?: number;
   events?: boolean;
   speech?: boolean;
+  /** Xem `SelfPlayRecord.humanSeats`. */
+  humanSeats?: number;
   /** Chạy lại mọi ván lần thứ hai để bắt `REPLAY_DIVERGENCE`. Tốn gấp đôi. */
   verifyReplay?: boolean;
   /**
@@ -60,6 +62,8 @@ export interface SelfPlayReport {
     maxRounds: number;
     events: boolean;
     speech: boolean;
+    /** Optional: report cũ không có. Xem `SelfPlayRecord.humanSeats`. */
+    humanSeats?: number;
     room: SelfPlayGame["record"]["config"];
   };
   metrics: SelfPlayMetrics;
@@ -90,6 +94,7 @@ export function runBatch(input: SelfPlayBatchInput): SelfPlayGame[] {
       maxRounds: input.maxRounds,
       events: input.events,
       speech: input.speech,
+      humanSeats: input.humanSeats,
       // `false` chứ không phải `undefined` cho phần đuôi batch: `runSelfPlay`
       // đọc trường này bằng một phép kiểm chân trị, nên cả hai đều tắt - nhưng
       // viết thẳng ra thì trần trace là một luật đọc được ở đây.
@@ -162,6 +167,7 @@ export function buildReport(
       maxRounds: first?.maxRounds ?? 20,
       events: first?.events ?? false,
       speech: first?.speech ?? true,
+      humanSeats: first?.humanSeats ?? 0,
       room: first?.config ?? ({} as SelfPlayGame["record"]["config"]),
     },
     metrics: overall,
@@ -199,7 +205,7 @@ export function formatReportText(report: SelfPlayReport): string {
   const m = report.metrics;
   const lines: string[] = [
     `Self-play  ${report.games} ván  |  trọng số ${report.weightsVersion}  |  seed ${report.seedRange.first} … ${report.seedRange.last}`,
-    `Cấu hình   ${report.config.playerCount} người, trần ${report.config.maxRounds} vòng, events=${report.config.events}, speech=${report.config.speech}`,
+    `Cấu hình   ${report.config.playerCount} người, trần ${report.config.maxRounds} vòng, events=${report.config.events}, speech=${report.config.speech}, humans=${report.config.humanSeats ?? 0}`,
     report.commit ? `Commit     ${report.commit}` : "Commit     (không lấy được)",
     report.timing
       ? `Thời gian  ${report.timing.totalMs.toFixed(0)}ms tổng, ${report.timing.msPerGame.toFixed(1)}ms/ván`
@@ -224,6 +230,15 @@ export function formatReportText(report: SelfPlayReport): string {
     `  Gắn kết coalition        ${m.coalitionCohesion === null ? "n/a" : m.coalitionCohesion.toFixed(3)}`,
     `  Bằng chứng hết hạn       ${pct(m.staleEvidenceRate)}`,
     `  Lặp lời thoại            ${pct(m.speechRepetitionRate)}  (chỉ số cũ Phase 3)`,
+    "",
+    "── Vai chức năng (P2) ──",
+    `  Tiên Tri chết đêm 2      ${pct(m.seerDiedNightTwoRate)}`,
+    `  Tiên Tri khai vòng 1     ${pct(m.seerClaimedRoundOneRate)}`,
+    `  Phù Thuỷ giữ bình độc    ${pct(m.witchPoisonUnusedRate)}`,
+    `  Phù Thuỷ dùng bình độc   ${pct(m.witchPoisonRate)}  trúng Sói ${pct(m.witchPoisonAccuracy)}`,
+    `  Phù Thuỷ cứu             ${pct(m.witchHealRate)}`,
+    `  Linh Mục ném             ${pct(m.priestHolyWaterRate)}  trúng Sói ${pct(m.priestHolyWaterAccuracy)}`,
+    `  Sói cãi giả (ván có)     ${pct(m.wolfFakeFightRate)}`,
     "",
     "── Hội thoại ──",
     `  Lặp nguyên văn           ${pct(m.exactRepetitionRate)}${flag(m.exactRepetitionRate, 0.05, "trên")}`,
