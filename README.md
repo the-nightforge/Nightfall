@@ -576,7 +576,7 @@ Container start runs `prisma migrate deploy` before opening the port. Note the r
 
 </details>
 
-CI runs build → test → lint on every push and pull request, and deploys previews to Vercel. Render Free instances sleep when idle, so the first request after a quiet period is slow. A backend restart no longer drops the match: the room is rebuilt from its Redis snapshot and resumed — see [Crash recovery](#crash-recovery).
+CI runs build → test → lint on every push and pull request, and deploys previews to Vercel. Render Free instances sleep when idle, so the first request after a quiet period is slow. Two things soften that: the home page fires `GET /api/health` on load so the server starts waking while the player is still typing a nickname, and after three seconds without an answer it says so under the button instead of spinning silently (giving up at 90 s). `.github/workflows/keep-alive.yml` also pings the health URL every 10 minutes; disable it in Actions if the Render account runs any other Free service, since 750 h/month covers exactly one. A backend restart no longer drops the match: the room is rebuilt from its Redis snapshot and resumed — see [Crash recovery](#crash-recovery).
 
 ## Security model
 
