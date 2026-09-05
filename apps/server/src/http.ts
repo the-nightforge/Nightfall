@@ -13,7 +13,7 @@ import {
 import { redis } from "./redis";
 import { config } from "./config";
 import { allowAction } from "./rate-limit";
-import { buildVersion, healthHttpStatus, redisConnectionHealthy } from "./health";
+import { buildVersion, healthHttpStatus, healthStatus, redisConnectionHealthy } from "./health";
 import { speechStats } from "./bots/speech-stats";
 import { avatarRouter } from "./avatar/routes";
 import { requirePlayer, type PlayerRequest } from "./auth";
@@ -272,6 +272,7 @@ apiRouter.get("/health", async (_req, res) => {
   const health = { db: dbOk, redis: redisOk };
   res.status(healthHttpStatus(health)).json({
     ok: dbOk,
+    status: healthStatus(health),
     ...health,
     version: buildVersion(process.env),
     startedAt: new Date(STARTED_AT).toISOString(),

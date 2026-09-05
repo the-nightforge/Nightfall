@@ -90,9 +90,10 @@ snapshot đang có. Migration chỉ cần khi muốn xem lại từ lịch sử 
 vì ngại phạm vi mà vì dữ liệu nguồn không tồn tại trong `GameResult` (xem câu 2).
 Làm match history đồng nghĩa migration + ghi payload recap + đường đọc mới.
 
-**6 · Cách tạo PNG?** → Canvas 2D vẽ tay, **không thêm dependency**. Repo hiện
-**không cấu hình CSP nào** (`next.config.mjs` chỉ có `reactStrictMode`; không có
-header CSP ở `vercel.json` hay server) nên `canvas.toBlob` chạy thoải mái. Chi tiết §6.
+**6 · Cách tạo PNG?** → Canvas 2D vẽ tay, **không thêm dependency**. Lúc viết,
+repo chưa có CSP nào nên `canvas.toBlob` chạy thoải mái. Từ 2026-09-05 web có CSP
+(`apps/web/src/lib/security-headers.ts`) với `img-src`/`media-src` cho `blob:`,
+nên ràng buộc vẫn giữ nguyên. Chi tiết §6.
 
 **7 · Có tăng kích thước snapshot / lộ thông tin không?** → **Không, cả hai.**
 Thiết kế này **không thêm một trường nào** vào `RoomSnapshot` và không sửa

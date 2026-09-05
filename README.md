@@ -156,6 +156,16 @@ All server configuration is environment-driven. [`.env.example`](.env.example) a
 | `SIGNUP_RATE_LIMIT_WINDOW_MS` | `60000` | Signup rate-limit window |
 | `TRUST_PROXY` | `1` | Proxy hops to trust. Keep `1` behind Render; set `0` when self-hosting with the port exposed directly, where `X-Forwarded-For` is client-controlled |
 
+### Error reporting (optional)
+
+Both halves stay silent unless a DSN is present, so local development and CI never talk to Sentry.
+
+| Variable | Where | Description |
+|---|---|---|
+| `SENTRY_DSN` | Render | Backend. Only programming errors are sent — rule violations (`RoomError`, `GameError`) and stale-client `ZodError`s are filtered by the same rule as the server log. No tracing, no IPs, no payloads, no chat. |
+| `NEXT_PUBLIC_SENTRY_DSN` | Vercel | Frontend. Render errors caught by `error.tsx` plus uncaught exceptions. No tracing and **no session replay** — replay records the screen, which in a hidden-role game must never leave the device. The CSP `connect-src` is widened to the DSN's ingest host at build time. |
+| `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` | Vercel | Optional. When all three are set, `next build` uploads source maps so stack traces are readable; otherwise the upload is skipped and the build is unchanged. |
+
 ### Voice chat (optional)
 
 Leave all three empty to disable voice entirely. Setting only some of them makes the server **fail fast at startup** rather than silently running without voice.
@@ -449,7 +459,7 @@ Operational details — keys, TTLs, log lines, deploy checklist, when to bump
 | `GET` | `/api/players/me/matches/:matchId/chat` | — | `{ messages: MatchChatEntry[] }` | The full stored transcript of one finished match, every channel included. Bearer auth, and the authorisation is a condition of the SQL itself: the caller's id must appear in that match's stored roster, otherwise `404` — the same `404` whether the match exists or not. No further per-channel filtering, because `GAME_OVER` already opened the whole log to everyone in the room. |
 | `PUT` | `/api/players/me/avatar` | `multipart/form-data`, field `file` | `{ avatarUrl }` | Bearer auth. ≤ 5 MB. Format is decided by magic bytes (JPEG/PNG/WebP), never by the client-declared MIME type. The server auto-rotates by EXIF, crops to a centred square, resizes to 256×256 and encodes WebP under 200 KB. `503` when object storage is not configured. |
 | `DELETE` | `/api/players/me/avatar` | — | `204` | Bearer auth. Clears the avatar and deletes the stored object. Succeeds even when object storage is not configured — the database is the source of truth for "has an avatar". |
-| `GET` | `/api/health` | — | `{ ok, db, redis, version, startedAt }` | `503` when PostgreSQL is down. Redis trouble reports `redis: false` but still returns `200`, since in-memory rooms remain playable. |
+| `GET` | `/api/health` | — | `{ ok, status, db, redis, version, startedAt }` | `503` when PostgreSQL is down. Redis trouble reports `status: "degraded"`, `redis: false` and still returns `200` — deliberately: Render restarts the service when this URL goes red, and a restart while Redis is down is exactly the moment in-memory rooms cannot be recovered. `status` is `ok`, `degraded` or `down`. |
 
 `version` is the first 7 characters of the running commit (from `RENDER_GIT_COMMIT`), or `dev` outside a deploy environment — compare it against `git rev-parse --short HEAD` to confirm what is actually live.
 
@@ -578,7 +588,7 @@ Container start runs `prisma migrate deploy` before opening the port. Note the r
 
 </details>
 
-CI runs build → test → lint on every push and pull request, and deploys previews to Vercel. Render Free instances sleep when idle, so the first request after a quiet period is slow. Two things soften that: the home page fires `GET /api/health` on load so the server starts waking while the player is still typing a nickname, and after three seconds without an answer it says so under the button instead of spinning silently (giving up at 90 s). `.github/workflows/keep-alive.yml` also pings the health URL every 10 minutes; disable it in Actions if the Render account runs any other Free service, since 750 h/month covers exactly one. A backend restart no longer drops the match: the room is rebuilt from its Redis snapshot and resumed — see [Crash recovery](#crash-recovery).
+CI runs three jobs in parallel on every push and pull request: `verify` (build → test → lint), `e2e` (a real eight-socket match to `GAME_OVER` plus the SIGKILL recovery scenario, against Postgres and Redis service containers) and `docker-server` (a build of `Dockerfile.server`, the image Render deploys). Pull requests get a Vercel preview after `verify`; the production deploy waits for all three, so a broken Dockerfile can no longer ship a new frontend against a backend that will never build. Render Free instances sleep when idle, so the first request after a quiet period is slow. Two things soften that: the home page fires `GET /api/health` on load so the server starts waking while the player is still typing a nickname, and after three seconds without an answer it says so under the button instead of spinning silently (giving up at 90 s). `.github/workflows/keep-alive.yml` also pings the health URL every 10 minutes; disable it in Actions if the Render account runs any other Free service, since 750 h/month covers exactly one. A backend restart no longer drops the match: the room is rebuilt from its Redis snapshot and resumed — see [Crash recovery](#crash-recovery).
 
 ## Security model
 
@@ -592,6 +602,7 @@ CI runs build → test → lint on every push and pull request, and deploys prev
 - Voice speaking rights are granted after joining, never encoded in a token, so an old token cannot restore a dead player's mic.
 - A kicked player is recorded on the room and refused on re-entry. Without that the kick only removed them from the member list once, and the next `join` — a page refresh — put them straight back into the lobby they were just removed from.
 - Guest signup is rate-limited per IP. This one matters more than it looks: every socket rate limit is keyed by `playerId`, so unlimited free `playerId`s would have made all of them decorative.
+- Security headers on both origins. The API runs [helmet](https://helmetjs.github.io/) (HSTS for a year, `nosniff`, a default-deny CSP that only matters if a route ever returns HTML). The frontend sends a Content-Security-Policy built in [`apps/web/src/lib/security-headers.ts`](apps/web/src/lib/security-headers.ts): scripts and styles only from its own origin (inline allowed, because Next hydration and the PWA install hook are inline), `connect-src` limited to the API, LiveKit Cloud and the Sentry ingest host, `frame-ancestors 'none'`, and a Permissions-Policy that allows the microphone (voice chat) and denies camera, geolocation and payment. Self-hosting LiveKit means adding its origin to `CSP_CONNECT_SRC_EXTRA` at build time.
 
 ## Known limitations
 

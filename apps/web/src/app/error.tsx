@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 
 /**
  * Chốt chặn lỗi render cho toàn bộ route.
@@ -25,6 +26,8 @@ export default function RoomError({
   // để lỗi còn dấu vết ở phía máy người chơi khi họ gửi lại cho ta.
   useEffect(() => {
     console.error("Lỗi render:", error);
+    // Không có DSN thì captureException là no-op - xem instrumentation-client.ts.
+    Sentry.captureException(error);
   }, [error]);
 
   return (
