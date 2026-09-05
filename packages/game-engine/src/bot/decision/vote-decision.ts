@@ -96,15 +96,60 @@ export function voteThreshold(
   );
 }
 
-/** Khoảng cách tối thiểu để bỏ mục tiêu đang bầu và chuyển sang người khác. */
+/**
+ * Khoảng cách tối thiểu để bỏ mục tiêu đang bầu và chuyển sang người khác.
+ *
+ * `spokenLines` là số câu mục tiêu ĐANG BẦU đã nói trong vòng này (xem
+ * `linesSpokenThisRound`); từ `talkerHysteresisLines` trở lên thì cộng
+ * `talkerHysteresisBonus`. Bonus là 0 ở v1..v16 nên caller cũ không đổi gì.
+ */
 export function voteHysteresis(
   personality: BotPersonality,
   weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+  spokenLines = 0,
 ): number {
+  const talker =
+    weights.confidence.talkerHysteresisBonus > 0 &&
+    spokenLines >= weights.confidence.talkerHysteresisLines
+      ? weights.confidence.talkerHysteresisBonus
+      : 0;
   return (
     weights.confidence.hysteresisBase +
-    personality.stubbornness * weights.confidence.hysteresisStubbornSpan
+    personality.stubbornness * weights.confidence.hysteresisStubbornSpan +
+    talker
   );
+}
+
+/** Memory sinh từ một câu chat. Xem `analyzeChat`. */
+const CHAT_MEMORY_TYPES: ReadonlySet<BotBrainState["memories"][number]["type"]> = new Set([
+  "ACCUSE",
+  "DEFEND",
+  "ROLE_CLAIM",
+  "COUNTER_CLAIM",
+  "DIRECT_ADDRESS",
+  "DIRECT_QUESTION",
+]);
+
+/**
+ * Số CÂU một người đã nói trong vòng này, theo những gì bot nghe hiểu được.
+ *
+ * Đếm theo `sourceId` (message) chứ không theo memory: một câu "Tôi nghi An,
+ * đúng không An?" sinh cả ACCUSE lẫn DIRECT_QUESTION và vẫn là một câu.
+ * Không thêm state: `visibleChat` không mang số vòng, còn memory thì có, và
+ * mọi câu parser hiểu được đều đã thành memory ở `ingestChat`.
+ */
+export function linesSpokenThisRound(
+  state: BotBrainState,
+  playerId: string,
+  round: number,
+): number {
+  const messages = new Set<string>();
+  for (const memory of state.memories) {
+    if (memory.actorId !== playerId || memory.round !== round) continue;
+    if (!CHAT_MEMORY_TYPES.has(memory.type)) continue;
+    messages.add(memory.sourceId);
+  }
+  return messages.size;
 }
 
 /**
@@ -324,10 +369,12 @@ export function selectVote(
     const current = scored.find((item) => item.targetId === myVote.targetId);
     const currentQualifies =
       current !== undefined && current.evidence.length > 0 && current.score >= threshold;
+    // Dính hơn trước một người đang nói nhiều: xem `talkerHysteresisBonus`.
+    const spoken = linesSpokenThisRound(state, myVote.targetId, knowledge.round);
     if (
       currentQualifies &&
       winner.targetId !== current.targetId &&
-      winner.score < current.score + voteHysteresis(personality, weights)
+      winner.score < current.score + voteHysteresis(personality, weights, spoken)
     ) {
       winner = current;
     }

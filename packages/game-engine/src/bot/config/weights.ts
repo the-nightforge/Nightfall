@@ -492,6 +492,19 @@ export interface ConfidenceWeights {
   /** Khoảng cách tối thiểu để bỏ mục tiêu đang bầu: `base + stubbornness*span`. */
   hysteresisBase: number;
   hysteresisStubbornSpan: number;
+  /**
+   * Cộng thêm vào hysteresis khi mục tiêu ĐANG BẦU đã nói từ
+   * `talkerHysteresisLines` câu trở lên trong vòng này. `0` TẮT - v1..v16.
+   *
+   * Lật kèo vì nhiễu nhỏ trước một người vừa nói ba câu bào chữa bị đọc là
+   * "bot ngu": người đó vừa dồn sức thuyết phục, và con bot đổi ý mà không có
+   * lý do nào mới. Trước một người im lặng thì cùng cú lật ấy không ai để ý.
+   * Không đổi `aggression.thresholdBase`: ngưỡng ĐỀ CỬ giữ nguyên, chỉ độ
+   * dính của lá phiếu đã bầu là tăng. Bằng chứng mới đủ mạnh vẫn lật được.
+   */
+  talkerHysteresisBonus: number;
+  /** Số câu (message parser hiểu được) trong vòng để một người là "nói nhiều". */
+  talkerHysteresisLines: number;
   /** Phát bắn Thợ Săn phải chắc hơn một lá phiếu thường bấy nhiêu điểm. */
   hunterMargin: number;
   /** Biên tin tưởng cần có để THA một người cả làng vừa đưa ra xử. */
@@ -1061,6 +1074,9 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
   confidence: Object.freeze({
     hysteresisBase: 5,
     hysteresisStubbornSpan: 8,
+    // Tắt ở v1..v16 (0); v17 bật. `talkerHysteresisLines` chỉ có nghĩa khi bật.
+    talkerHysteresisBonus: 0,
+    talkerHysteresisLines: 3,
     hunterMargin: 20,
     spareTrustMargin: 15,
     jitterSpan: 6,
@@ -2034,6 +2050,32 @@ export const BOT_WEIGHTS_V16: BotWeights = Object.freeze({
 });
 
 /**
+ * Cấu hình v17 - phiếu dính hơn trước một mục tiêu đang nói nhiều.
+ *
+ * MỘT ô đổi: `confidence.talkerHysteresisBonus` 0 -> 2.
+ *
+ * Hysteresis thường là `2 + stubbornness x 3` (2.75..4.7 trên thang belief).
+ * Cộng 2 khi mục tiêu đang bầu đã nói >= 3 câu trong vòng: một cú lật trước
+ * người vừa bào chữa ba câu cần chênh lệch gần gấp rưỡi, còn một kết quả soi
+ * (ghim 100) hay một cáo buộc dồn dập (hostility x 20) vẫn lật được như cũ.
+ * `thresholdBase` không đổi.
+ *
+ * Đếm "câu" bằng số message của người đó sinh ra memory trong vòng
+ * (`linesSpokenThisRound`): `visibleChat` không mang số vòng, còn memory thì
+ * có - và một người nói ba câu mà parser không hiểu câu nào thì cũng không
+ * phải người "đang thuyết phục" theo nghĩa bàn nhìn thấy.
+ */
+export const BOT_WEIGHTS_V17: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V16,
+  version: "17.0.0",
+
+  confidence: Object.freeze({
+    ...BOT_WEIGHTS_V16.confidence,
+    talkerHysteresisBonus: 2,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
@@ -2049,8 +2091,9 @@ export const BOT_WEIGHTS_V16: BotWeights = Object.freeze({
  * người đã từng khai láo; v13.0.0 cho hồ sơ nguội chậm hơn belief; v14.0.0
  * cho Tiên Tri giấu kết quả tới ngày 2 khi bàn có người thật; v15.0.0 hạ
  * ngưỡng bình độc/bình cứu/Nước thánh một nấc khi làng đã mỏng; v16.0.0 cho
- * Sói cãi nhau giả ở vòng 1-2 và bán đồng đội sớm hơn trước người thật.
+ * Sói cãi nhau giả ở vòng 1-2 và bán đồng đội sớm hơn trước người thật;
+ * v17.0.0 cho phiếu dính hơn trước mục tiêu đang nói nhiều.
  * v1-v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset đích
  * danh, không bao giờ dựa vào hằng số này.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V16;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V17;
