@@ -2,10 +2,10 @@
 
 import { useMemo, useRef, useState } from "react";
 import type { RoomSnapshot, Team } from "@masoi/shared";
-import { ROLE_ICON_PATHS } from "@/lib/role-art";
 import { rulesLookup } from "@/lib/rules-lookup";
 import { TEAM_TAG_CLASS } from "@/lib/team-tone";
 import { useModalFocus } from "@/lib/useModalFocus";
+import { RoleGlyph } from "./RoleGlyph";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -177,24 +177,5 @@ export function RulesDrawer({ snapshot }: Props) {
         </div>
       )}
     </>
-  );
-}
-
-const GLYPH_TONE: Record<Team, string> = {
-  wolves: "text-blood-400",
-  village: "text-emerald-300",
-  neutral: "text-amber-300",
-};
-
-function RoleGlyph({ role, team }: { role: keyof typeof ROLE_ICON_PATHS; team: Team }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/[0.06] ${GLYPH_TONE[team]}`}
-    >
-      <svg viewBox="0 0 512 512" className="h-5 w-5 fill-current">
-        <path d={ROLE_ICON_PATHS[role]} />
-      </svg>
-    </span>
   );
 }
