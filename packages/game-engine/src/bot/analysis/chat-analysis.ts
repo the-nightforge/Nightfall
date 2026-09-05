@@ -84,6 +84,12 @@ export const ROLE_PHRASES: ReadonlyArray<readonly [string, Role]> = [
   // nhìn phần NGAY SAU "tôi là"/"X là", và phải khớp trọn từ.
   ["hề", "JESTER"],
   ["dân", "VILLAGER"],
+  // Viết tắt người chơi thật hay gõ. An toàn vì chỗ khớp chỉ nhìn phần NGAY
+  // SAU một cách tự xưng ("t là tt", "mình là bv") và phải khớp trọn token -
+  // "tt" hay "bv" nằm giữa câu không bao giờ tới được đây. "dan" không cần
+  // thêm: `roleAtStart` đã so cả dạng bỏ dấu của "dân".
+  ["tt", "SEER"],
+  ["bv", "GUARD"],
 ];
 
 /**
@@ -92,6 +98,36 @@ export const ROLE_PHRASES: ReadonlyArray<readonly [string, Role]> = [
  * được biến thành một cáo buộc nhắm vào An.
  */
 const NEGATIONS = ["không", "chưa", "chẳng", "chả", "đâu có", "làm gì"];
+
+/**
+ * Phủ định teencode. So theo TOKEN chứ không theo chuỗi con: "k" là chuỗi con
+ * của "ok", "kk", "kkk" và của mọi tên có chữ k - so chuỗi con thì gần hết chat
+ * bị coi là phủ định. Chỉ so trên dạng `plain` (giữ dấu): "hông" theo ascii là
+ * "hong", trùng tên Hồng.
+ */
+const NEGATION_TOKENS = ["k", "ko", "hok", "hông"];
+
+/**
+ * Tiếng đệm cảm thán mà người chat gõ liền trước câu chính, không dấu phẩy:
+ * "ok tôi là tiên tri", "ủa tôi nghi Bình". Bỏ chúng ở ĐẦU mệnh đề trước khi
+ * so mẫu, và chỉ chúng.
+ *
+ * Cố tình KHÔNG có "thì", "nếu", "vậy", "mà", "ai": đó là những từ đổi nghĩa
+ * cả câu ("nếu tôi là sói", "ai bảo tôi là sói"), và chính vì chúng mà parser
+ * chỉ nhận mẫu ở đầu mệnh đề.
+ */
+const LEADING_INTERJECTIONS = new Set([
+  "ok", "oke", "okie", "ừ", "ờ", "ừm", "ủa", "ơ", "hmm", "hm", "kk", "kkk", "haha",
+  "hehe", "hihi", "alo", "thôi", "rồi", "à", "ê", "haizz", "haiz", "uh", "ừa", "dạ",
+]);
+
+/**
+ * Cách tự xưng được nhận trước một lời khai. Teencode "t" đứng đầu mệnh đề gần
+ * như luôn là "tôi"; các ngôi khác là cách gọi tự nhiên của người chơi thật.
+ * `parseCounterClaim` vẫn chỉ nhận "tôi mới là" - phản bác là mẫu nặng hơn, nới
+ * riêng khi có bằng chứng từ log.
+ */
+const FIRST_PERSON_MARKERS = ["tôi là ", "t là ", "tui là ", "mình là ", "tớ là "];
 
 function importanceTable(weights: BotWeights): Partial<Record<BotMemoryType, number>> {
   const table = weights.memoryImportance;
@@ -175,9 +211,30 @@ export interface Clause {
  * sói" - tức những câu mà parser sẽ không bao giờ đọc tới.
  */
 export function hasNegation(clause: Clause): boolean {
-  return NEGATIONS.some(
-    (word) => clause.plain.includes(word) || clause.ascii.includes(asciiForm(word)),
-  );
+  if (
+    NEGATIONS.some(
+      (word) => clause.plain.includes(word) || clause.ascii.includes(asciiForm(word)),
+    )
+  ) {
+    return true;
+  }
+  const tokens = clause.plain.split(" ");
+  return NEGATION_TOKENS.some((word) => tokens.includes(word));
+}
+
+/**
+ * Bỏ tiếng đệm cảm thán ở đầu mệnh đề, giữ lại ít nhất một token.
+ *
+ * `export` cùng lý do với `hasNegation`: công cụ đào alias phải nhìn mệnh đề
+ * đúng như parser nhìn.
+ */
+export function stripLeadingInterjections(clause: Clause): Clause {
+  const tokens = clause.plain.split(" ").filter(Boolean);
+  let start = 0;
+  while (start < tokens.length - 1 && LEADING_INTERJECTIONS.has(tokens[start]!)) start += 1;
+  if (start === 0) return clause;
+  const plain = tokens.slice(start).join(" ");
+  return { plain, ascii: asciiForm(plain) };
 }
 
 /**
@@ -299,14 +356,18 @@ function parseCounterClaim(
 }
 
 function parseClause(
-  clause: Clause,
+  raw: Clause,
   players: readonly BotPlayerKnowledge[],
 ): ParsedSpeech | null {
-  if (clause.plain.length === 0) return null;
-  if (hasNegation(clause)) return null;
+  if (raw.plain.length === 0) return null;
+  if (hasNegation(raw)) return null;
+  // Bỏ "ok"/"ủa"/"kk" đứng trước câu chính. Phủ định đã được xét trên mệnh đề
+  // ĐẦY ĐỦ ở trên, nên bước này không mở đường cho "ko" lọt qua.
+  const clause = stripLeadingInterjections(raw);
 
-  const claim = afterMarker(clause, "tôi là ");
-  if (claim) {
+  for (const marker of FIRST_PERSON_MARKERS) {
+    const claim = afterMarker(clause, marker);
+    if (!claim) continue;
     const role = roleAtStart(claim);
     return role ? { type: "ROLE_CLAIM", data: { role } } : null;
   }
