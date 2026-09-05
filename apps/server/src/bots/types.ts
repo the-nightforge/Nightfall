@@ -9,7 +9,7 @@ import type { SpeechSource } from "./speech-stats";
  * `SKIP` — vô hại khi chỉ có provider sinh hành động, nhưng sai ngay khi lõi
  * deterministic tiếp quản, vì Phù Thuỷ chủ động bỏ lượt là một nước đi thật.
  *
- * Ba giá trị cuối đến từ các vai mở rộng (Thám Tử, Thiên Thần Hộ Mệnh, Sói Pháp
+ * Ba mã cuối đến từ các vai mở rộng (Thám Tử, Thiên Thần Hộ Mệnh, Sói Pháp
  * Sư), và `SERIAL_KILL` từ Sát Nhân - một mã RIÊNG, không dùng lại `KILL` của bầy Sói:
  * hai kỹ năng khác luật, khác nhịp và khác trạng thái, nên một mã dùng chung sẽ
  * buộc engine phân giải theo vai người gửi.

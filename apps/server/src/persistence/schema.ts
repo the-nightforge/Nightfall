@@ -127,7 +127,11 @@ const nightStateSchema = z.object({
       unknown: z.boolean().optional(),
     }),
   ),
-  sorcererResults: z.record(z.string(), z.object({ targetId: z.string(), isSeerLine: z.boolean() })),
+  // `.default({})` chứ không phải bắt buộc: ảnh ghi trước bản có Sói Pháp Sư
+  // thiếu key này, và bắt buộc ở đây là giết ván đang chạy ngay lúc deploy.
+  // Output vẫn required nên phép kiểm Assignable với engine không vỡ; engine
+  // `??=` + guard chuẩn hoá tiếp sau khi đọc.
+  sorcererResults: z.record(z.string(), z.object({ targetId: z.string(), isSeerLine: z.boolean() })).default({}),
   detectiveTargets: z.object({ target1: z.string(), target2: z.string() }).nullable(),
   detectiveResults: z.record(
     z.string(),
@@ -164,7 +168,9 @@ export const gameStateSchema = z.object({
   guardSecondPrevious: z.string().nullable().optional(),
   guardianAngelPrevious: z.string().nullable(),
   guardianAngelCharges: z.record(z.string(), z.number()),
-  alphaShieldUsed: z.record(z.string(), z.boolean()),
+  // `.default({})` cùng lý do với `sorcererResults` ngay trên: ảnh bản cũ
+  // thiếu khiên soi Alpha vẫn đọc được, output vẫn required cho tsc.
+  alphaShieldUsed: z.record(z.string(), z.boolean()).default({}),
   apprenticeAwakened: z.boolean(),
   wolfCubRageNextNight: z.boolean(),
   healUsed: z.boolean(),

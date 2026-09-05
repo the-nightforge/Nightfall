@@ -229,12 +229,14 @@ describe("Extended Roles and Events Server Flow Integration", () => {
       { id: "witch", name: "Witch", role: "WITCH" },
       { id: "v1", name: "Villager 1", role: "VILLAGER" },
       { id: "v2", name: "Villager 2", role: "VILLAGER" },
+      // Nạn nhân đêm đầu: dân thường có tên, để đêm hai còn đủ v1+v2 cho cắn kép.
+      { id: "v3", name: "Villager 3", role: "VILLAGER" },
     ]);
     const engine = room.engine!;
     engine.setPhase("NIGHT", 30000);
 
     // Witch poisons the cub (after the pack locks, when the Witch's turn opens)
-    engine.submitNightAction("w1", "KILL", "extra_1");
+    engine.submitNightAction("w1", "KILL", "v3");
     engine.lockWolves();
     engine.submitNightAction("witch", "POISON", "wc");
     engine.resolveNight();
