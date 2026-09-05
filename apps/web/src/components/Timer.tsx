@@ -36,7 +36,7 @@ function useServerTick(): number {
  * Mốc so sánh là serverNow() chứ không phải Date.now(): endsAt là giờ server,
  * còn đồng hồ máy người chơi có thể lệch hàng chục giây.
  */
-export function Timer({ endsAt }: { endsAt: number | null }) {
+export function Timer({ endsAt, compact = false }: { endsAt: number | null; compact?: boolean }) {
   const now = useServerTick();
 
   const msLeft = endsAt === null ? 0 : endsAt - now;
@@ -54,6 +54,35 @@ export function Timer({ endsAt }: { endsAt: number | null }) {
   const warning = endsAt !== null && !danger && msLeft <= 30_000;
   const ring = danger ? "stroke-blood-500" : warning ? "stroke-amber-400" : "stroke-mist/70";
   const label = endsAt === null ? "--:--" : fmt(msLeft);
+
+  /*
+   * Dạng GỌN: chỉ con số, không vòng - cho những chỗ chật như dải pha trong tấm
+   * trượt chat trên điện thoại. Cùng nhịp đếm, cùng hai nấc màu và cùng nhãn
+   * trợ năng với dạng đầy đủ, nên hai đồng hồ trên một màn không bao giờ lệch
+   * nhau hay nói hai câu khác nhau về cùng một pha.
+   */
+  if (compact) {
+    return (
+      <span
+        role="timer"
+        aria-label={
+          endsAt === null ? "Pha này không có hạn giờ" : `Còn ${label} trước khi hết giờ`
+        }
+        className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 font-mono text-[13px] font-bold tabular-nums ring-1 ${
+          endsAt === null
+            ? "text-mist/70 ring-white/10"
+            : danger
+              ? "bg-blood-600/20 text-blood-400 ring-blood-500/50 timer-danger-pulse"
+              : warning
+                ? "bg-amber-500/10 text-amber-200 ring-amber-400/40"
+                : "bg-white/[0.06] text-white ring-white/10"
+        }`}
+      >
+        <span aria-hidden="true">⏱</span>
+        {label}
+      </span>
+    );
+  }
 
   return (
     <div

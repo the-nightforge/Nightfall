@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { RoomSnapshot } from "@masoi/shared";
 import { hunterShotOutcomeText, legalHunterShotTargets } from "@/lib/hunter-shot";
 import { PlayerGrid } from "./PlayerGrid";
+import { PHASE_ACTION_ATTR } from "@/lib/phase-action";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -69,7 +70,12 @@ export function HunterShotPanel({ snapshot, onShoot }: Props) {
   };
 
   return (
-    <div className="card">
+    <div
+      className="card outline-none focus-visible:ring-2 focus-visible:ring-blood-500/60"
+      // Mốc cho nút "Chọn mục tiêu bắn" trong tấm trượt chat; xem `phase-action.ts`.
+      {...{ [PHASE_ACTION_ATTR]: "" }}
+      tabIndex={-1}
+    >
       <div className="mb-3 text-center">
         <p className="text-3xl">🔫</p>
         <h2 className="mt-1 font-bold text-amber-200">Lượt phản kích của bạn</h2>

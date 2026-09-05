@@ -1,13 +1,17 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
-import type { ChatMessage, Phase } from "@masoi/shared";
+import type { ChatMessage, Phase, RoomSnapshot } from "@masoi/shared";
 import type { ChatChannelId, ChatComposerState } from "@/lib/chat-channels";
 import type { PhaseMarker } from "@/lib/chat-timeline";
 import { useChatUnread, unreadLabel } from "@/lib/chat-unread";
+import { moodFor } from "@/lib/mood";
+import { jumpToPhaseAction, phaseActionFor } from "@/lib/phase-action";
+import { PHASE_META } from "@/lib/phase-meta";
 import { useModalFocus } from "@/lib/useModalFocus";
 import { ChatBox } from "./ChatBox";
+import { Timer } from "./Timer";
 
 interface Props {
   messages: ChatMessage[];
@@ -32,8 +36,16 @@ interface Props {
   draft: string;
   onDraftChange: (draft: string) => void;
   selfId: string | null;
-  phase: Phase | null;
+  /**
+   * Snapshot của phòng, để dải pha trong tấm trượt biết pha nào, còn bao lâu
+   * và người xem có việc gì đang chờ (`phaseActionFor`). Chỉ ĐỌC ba thứ đó -
+   * chat vẫn đi qua `messages`/`composer` như cũ.
+   */
+  snapshot: RoomSnapshot | null;
 }
+
+/** Bao lâu dải pha giữ màu nhấn sau khi pha đổi trong lúc tấm trượt đang mở. */
+const PHASE_FLASH_MS = 4_000;
 
 /**
  * Chat trên điện thoại.
@@ -57,10 +69,50 @@ export function MobileChatDock({
   draft,
   onDraftChange,
   selfId,
-  phase,
+  snapshot,
 }: Props) {
   const [open, setOpen] = useState(false);
   const unread = useChatUnread(messages, selfId, open);
+  const phase = snapshot?.phase ?? null;
+  const action = phaseActionFor(snapshot);
+
+  /*
+   * Pha đổi TRONG LÚC tấm trượt đang mở.
+   *
+   * Tấm trượt che 72% màn và đặt phần trang còn lại thành `inert`, nên chuyển
+   * cảnh, thanh pha và nút "Bỏ phiếu" vừa mọc ra đều nằm ngoài tầm mắt lẫn tầm
+   * tay của người đang gõ. Dải pha bên dưới nhấn màu vài giây và vùng
+   * `role="status"` đọc tên pha mới; KHÔNG tự đóng tấm trượt - đóng giữa lúc
+   * đang gõ là cướp lấy bàn phím của người chơi, và bản nháp sống ở trang nên
+   * dù có đóng cũng không mất, nhưng chuyện đó là của họ quyết.
+   */
+  const [flashPhase, setFlashPhase] = useState<Phase | null>(null);
+  const seenPhase = useRef(phase);
+  useEffect(() => {
+    if (phase === seenPhase.current) return;
+    seenPhase.current = phase;
+    if (!open || phase === null) return;
+    setFlashPhase(phase);
+    const timer = setTimeout(() => setFlashPhase(null), PHASE_FLASH_MS);
+    return () => clearTimeout(timer);
+  }, [phase, open]);
+
+  /**
+   * Đóng tấm trượt rồi dẫn tới khu thao tác chính của pha.
+   *
+   * Hai nhịp, vì `useModalFocus` trả focus về nút mở chat trong một
+   * requestAnimationFrame SAU khi đóng: cuộn + focus ở đây phải đứng sau nhịp
+   * đó, nếu không focus vừa đặt vào lưới bỏ phiếu đã bị kéo về nút Chat. Bản
+   * nháp không đụng tới - nó sống ở trang, không ở đây.
+   */
+  const jump = (): void => {
+    setOpen(false);
+    setTimeout(() => {
+      requestAnimationFrame(() => {
+        jumpToPhaseAction();
+      });
+    }, 60);
+  };
   /*
    * Bảng biểu tượng của ChatBox đang mở hay không.
    *
@@ -169,6 +221,71 @@ export function MobileChatDock({
                   Đóng
                 </button>
               </div>
+
+              {/*
+                * Dải pha: tên pha, ngày mấy, còn bao lâu, và việc đang chờ.
+                *
+                * Trước đây thứ duy nhất cho biết đang ở pha nào là dải trang
+                * còn hở phía trên tấm trượt - và dải đó chỉ hiện thanh pha
+                * khi trang đang cuộn ở đầu; cuộn xuống lưới bỏ phiếu rồi mở
+                * chat, hay bàn phím ảo co viewport còn 500px, là mất hẳn. Đọc
+                * cùng `PHASE_META` và cùng `Timer` với thanh pha, nên hai chỗ
+                * không bao giờ nói khác nhau.
+                *
+                * Chỉ hiện trong ván: ở phòng chờ và lúc kết thúc không có hạn
+                * giờ, không có việc gì chờ, và tiêu đề kênh đã đủ.
+                */}
+              {snapshot && phase !== null && phase !== "LOBBY" && phase !== "GAME_OVER" && (
+                <div
+                  className={`mx-3 mb-2 rounded-lg border px-2.5 py-1.5 transition-colors duration-300 ${
+                    flashPhase !== null
+                      ? "border-blood-500/60 bg-blood-600/15"
+                      : "border-white/[0.08] bg-white/[0.04]"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      aria-hidden="true"
+                      className={`h-2 w-2 shrink-0 rounded-full ${PHASE_META[phase].dot}`}
+                    />
+                    <p className="min-w-0 flex-1 truncate text-[13px] font-semibold text-white">
+                      <span className={PHASE_META[phase].accent}>{PHASE_META[phase].label}</span>
+                      {snapshot.round > 0 && (
+                        <span className="text-mist-strong">
+                          {" · "}
+                          {moodFor(phase) === "night" ? "Đêm" : "Ngày"} {snapshot.round}
+                        </span>
+                      )}
+                    </p>
+                    {/* Vùng này đứng yên và chỉ đổi chữ, nên trình đọc màn hình
+                      * nghe được đúng lúc pha đổi - cùng lý do với `PhaseBanner`. */}
+                    <span className="sr-only" role="status">
+                      {flashPhase !== null ? `Đã chuyển sang ${PHASE_META[flashPhase].label}` : ""}
+                    </span>
+                    {snapshot.phaseEndsAt !== null && <Timer endsAt={snapshot.phaseEndsAt} compact />}
+                  </div>
+                  {/*
+                    * Nút dẫn tới việc đang chờ đứng RIÊNG một hàng, toàn bề
+                    * ngang: chung hàng với tên pha thì ở 390px một trong hai
+                    * bị cắt cụt, và một nút 28px cao thì quá nhỏ cho ngón cái
+                    * đang gõ. Chỉ hiện khi CÓ việc, nên hàng này thường vắng.
+                    */}
+                  {action && (
+                    <button
+                      type="button"
+                      onClick={jump}
+                      className={`mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-bold ${
+                        action.urgent
+                          ? "bg-blood-500 text-white shadow-md shadow-black/40"
+                          : "border border-white/15 bg-night-800 text-mist-bright"
+                      }`}
+                    >
+                      {action.label}
+                      <span aria-hidden="true">→</span>
+                    </button>
+                  )}
+                </div>
+              )}
               <div className="min-h-0 flex-1 px-2 pb-2">
                 <ChatBox
                   messages={messages}

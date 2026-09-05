@@ -11,6 +11,7 @@ import { DeadWhisperPanel } from "./DeadWhisperPanel";
 import { LastLetterComposer } from "./LastLetterComposer";
 import { discussionSkipCopy } from "@/lib/discussion-skip-copy";
 import { leaderLabel, voteProgressOf } from "@/lib/vote-progress";
+import { PHASE_ACTION_ATTR } from "@/lib/phase-action";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -125,7 +126,13 @@ export function DayView({
          * thái "bạn đã chết" nói bằng một dải riêng bên dưới, và mọi ô người
          * chơi thì đã tự tắt (disabled) sẵn.
          */
-        <div className="card">
+        <div
+          className="card outline-none focus-visible:ring-2 focus-visible:ring-blood-500/60"
+          // Mốc mà nút "Bỏ phiếu ngay" trong tấm trượt chat cuộn tới và đặt
+          // focus. `tabIndex={-1}`: nhận focus bằng script, không chen vào Tab.
+          {...{ [PHASE_ACTION_ATTR]: "" }}
+          tabIndex={-1}
+        >
           <div className="mb-3 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
             <div className="min-w-0">
               {/*

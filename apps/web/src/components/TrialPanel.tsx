@@ -6,6 +6,7 @@ import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { nominationRecapFor } from "@/lib/defense-votes";
 import { CharacterPortrait } from "./CharacterPortrait";
 import { DefenseVotePanel } from "./DefenseVotePanel";
+import { PHASE_ACTION_ATTR } from "@/lib/phase-action";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -168,7 +169,12 @@ export function TrialPanel({ snapshot, onFinalVote, liveStage = false }: Props) 
       />
 
       {!isDefense && (
-        <div className={`card ${dead ? "opacity-70" : ""}`}>
+        <div
+          className={`card outline-none focus-visible:ring-2 focus-visible:ring-blood-500/60 ${dead ? "opacity-70" : ""}`}
+          // Mốc cho nút "Treo hay Tha" trong tấm trượt chat; xem `phase-action.ts`.
+          {...{ [PHASE_ACTION_ATTR]: "" }}
+          tabIndex={-1}
+        >
           <h3 className="mb-1 font-display text-xl font-bold text-white">
             {isAccused
               ? "Bạn không được bỏ phiếu cho chính mình"

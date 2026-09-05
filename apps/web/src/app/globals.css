@@ -1495,6 +1495,21 @@ button.lobby-player-tile:active {
   font-size: clamp(0.875rem, 0.92vw, 1.05rem);
 }
 
+/*
+ * Nút "Chơi thử có hướng dẫn": cùng cỡ với .gate-cta để đứng ngay dưới nó mà
+ * không so le, nhưng viền + nền mờ để đọc ra là lối phụ. Trạng thái tắt cùng
+ * lối với .gate-cta: xám trung tính, chữ vẫn rõ.
+ */
+.gate-guide {
+  @apply inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-amber-300/35 bg-amber-400/[0.08] px-5 font-semibold text-amber-100 transition;
+}
+.gate-guide:hover:not(:disabled) {
+  @apply border-amber-300/60 bg-amber-400/[0.14];
+}
+.gate-guide:disabled {
+  @apply cursor-not-allowed border-white/10 bg-white/[0.03] text-mist/60;
+}
+
 .gate-cta {
   @apply relative inline-flex w-full items-center justify-center gap-2.5 rounded-xl px-5
     font-bold tracking-wide text-white transition;
