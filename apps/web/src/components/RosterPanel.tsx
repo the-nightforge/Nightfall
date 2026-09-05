@@ -203,7 +203,7 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                     * một mục cài đặt của cả phòng chứ không phải "ảnh của tôi".
                     * Dán lên góc ảnh thì không còn phải đoán nó tác động lên
                     * ai. Chỉ mọc ra trên ảnh của người xem, và chỉ trong ván -
-                    * ở phòng chờ chức năng này thuộc về LobbyHeader.
+                    * ở phòng chờ `LobbyPlayerGrid` dán đúng nút này lên ảnh của người xem.
                     */}
                   {!lobby && isMe && (
                     <button

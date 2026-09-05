@@ -287,6 +287,35 @@ describe("dock nổi trên điện thoại", () => {
     await view.cleanup();
   });
 
+  it("chưa vào kênh thì dock chỉ còn MỘT hàng: không có chip nhắc lại cái nút, và nút không đỏ", async () => {
+    const view = await mount(
+      "dock",
+      fakeVoice({ ui: { visible: true, mode: "join", reconnecting: false } }),
+    );
+    // Chip "Chưa vào kênh thoại" và nút "Vào kênh thoại" nói cùng một điều;
+    // xếp chồng chúng lên trên nút Bắt đầu là cụm nổi cao gần nửa màn iPhone.
+    assert.doesNotMatch(view.text, /Chưa vào kênh thoại/);
+    assert.match(view.text, /Vào kênh thoại/);
+    const button = [...document.querySelectorAll("[data-voice-dock] button")].find((b) =>
+      /Vào kênh thoại/.test(b.textContent ?? ""),
+    );
+    assert.ok(button, "phải có nút vào kênh thoại");
+    // Đỏ là màu của CTA và của cảnh báo; một lời mời bình thường không được
+    // nổi hơn nút Bắt đầu đang xám ngay cạnh nó.
+    assert.doesNotMatch(button.getAttribute("class") ?? "", /bg-blood/);
+    await view.cleanup();
+  });
+
+  it("kênh thoại hỏng thì chip vẫn ở lại nói chuyện gì đã xảy ra", async () => {
+    const view = await mount(
+      "dock",
+      fakeVoice({ ui: { visible: true, mode: "error", reconnecting: false } }),
+    );
+    assert.match(view.text, /Mất kết nối thoại/);
+    assert.match(view.text, /Thử kết nối lại/);
+    await view.cleanup();
+  });
+
   it("bản trong cột phải không nổi", async () => {
     const view = await mount("panel", fakeVoice());
     // So bằng boolean, không so thẳng phần tử: `assert.equal` sẽ đi dựng diff

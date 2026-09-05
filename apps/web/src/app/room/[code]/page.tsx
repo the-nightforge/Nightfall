@@ -261,7 +261,10 @@ export default function RoomPage() {
             */}
           {snapshot?.phase !== "GAME_OVER" && (
             <button
-              className="btn-tertiary-danger shrink-0 whitespace-nowrap"
+              /* Có nền mờ vì nút này đứng ngay trên mặt trăng của phông nền:
+               * chữ trần ở đó chìm vào vùng sáng nhất của cả trang. Cùng độ
+               * cao với cụm mã phòng bên phải để cả hàng đọc ra là MỘT thanh. */
+              className="btn-tertiary-danger min-h-9 shrink-0 whitespace-nowrap bg-night-900/55 backdrop-blur-sm"
               onClick={leaveRoom}
             >
               <span aria-hidden="true">←</span> Rời phòng
