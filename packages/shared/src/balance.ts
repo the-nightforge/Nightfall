@@ -951,7 +951,12 @@ export function generateWarnings(config: RoomConfig, playerCount: number): Balan
    * lệch, không phải một luật mới cho bộ bài tuỳ chỉnh, và bật `blocking` ở đây
    * sẽ khoá luôn những phòng đang chạy được hôm nay.
    */
-  const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0);
+  /*
+   * Sói Alpha CẮN cùng bầy nên vào `wolfCount` như Sói Con - cùng phép đếm sát
+   * thương đêm của `validateRoomConfig`. Sói Pháp Sư thì KHÔNG (cùng cặp với Kẻ
+   * Phản Bội: chiếm ghế nhưng không cắn), nên nó vắng mặt ở đây một cách có chủ ý.
+   */
+  const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0) + (config.alphaWolf ? 1 : 0);
   if (wolfCount > 0) {
     /*
      * Ngân sách sai lầm của phe làng, chia cho số Sói phải treo.
@@ -1035,7 +1040,9 @@ export function generateWarnings(config: RoomConfig, playerCount: number): Balan
 
   const presetDeck = PRESET_DECKS[playerCount];
   if (presetDeck) {
-    const presetWolfCount = presetDeck.werewolves + (presetDeck.wolfCub ? 1 : 0);
+    // Cùng phép đếm với `wolfCount` ngay trên: preset 19-20 mang Sói Alpha.
+    const presetWolfCount =
+      presetDeck.werewolves + (presetDeck.wolfCub ? 1 : 0) + (presetDeck.alphaWolf ? 1 : 0);
     const wolfRatio = playerCount > 0 ? wolfCount / playerCount : 0;
     const presetRatio = playerCount > 0 ? presetWolfCount / playerCount : 0;
     const ratioDiff = Math.abs(wolfRatio - presetRatio);
