@@ -570,4 +570,95 @@ describe("conservative chat analysis", () => {
 
     expect(state.seenEventIds).toEqual(["m1"]);
   });
+
+  /**
+   * Task C — cách người Việt thật gõ trong chat.
+   *
+   * Vẫn bảo thủ: mỗi alias một test, và mỗi câu đùa có thể bị hiểu nhầm cũng
+   * một test. Nới parser mà không có test cho câu đùa là nới cả hai chiều.
+   */
+  describe("slang và teencode", () => {
+    function claims(text: string) {
+      return analyzeChat([message("m1", "a", text)], players).filter(
+        (item) => item.type === "ROLE_CLAIM" || item.type === "COUNTER_CLAIM",
+      );
+    }
+
+    it("t là tt đây → tự nhận Tiên Tri", () => {
+      expect(claims("t là tt đây")).toEqual([
+        expect.objectContaining({ type: "ROLE_CLAIM", data: { role: "SEER" } }),
+      ]);
+    });
+
+    it("tt / tien tri / tiên tri đều là Tiên Tri", () => {
+      for (const text of ["tôi là tt", "toi la tien tri", "tôi là tiên tri nè", "Tui là TT nha"]) {
+        expect(claims(text), text).toEqual([
+          expect.objectContaining({ type: "ROLE_CLAIM", data: { role: "SEER" } }),
+        ]);
+      }
+    });
+
+    it("bv / bảo vệ / bao ve đều là Bảo Vệ", () => {
+      for (const text of ["mình là bv", "tôi là bảo vệ", "toi la bao ve", "t là bv đây"]) {
+        expect(claims(text), text).toEqual([
+          expect.objectContaining({ type: "ROLE_CLAIM", data: { role: "GUARD" } }),
+        ]);
+      }
+    });
+
+    it("dan / dân là Dân Làng", () => {
+      for (const text of ["tôi là dân", "toi la dan thoi", "t là dân thường mà"]) {
+        expect(claims(text), text).toEqual([
+          expect.objectContaining({ type: "ROLE_CLAIM", data: { role: "VILLAGER" } }),
+        ]);
+      }
+    });
+
+    it("tớ/tui/mình cũng là ngôi thứ nhất", () => {
+      for (const text of ["tớ là tiên tri", "tui là bảo vệ", "mình là dân"]) {
+        expect(claims(text), text).toHaveLength(1);
+      }
+    });
+
+    it("sói trong câu cáo buộc vẫn là cáo buộc, không phải lời khai", () => {
+      const memories = analyzeChat([message("m1", "a", "Bình là sói, chắc luôn")], players);
+      expect(memories.map((item) => [item.type, item.targetId])).toEqual([["ACCUSE", "b"]]);
+    });
+
+    it("Nam không thể là sói: không cáo buộc, không phản bác", () => {
+      const withNam = [...players, { id: "n", name: "Nam", alive: true }];
+      const substantive = (text: string) =>
+        analyzeChat([message("m1", "a", text)], withNam).filter(
+          (item) => item.type !== "DIRECT_QUESTION" && item.type !== "DIRECT_ADDRESS",
+        );
+      expect(substantive("Nam không thể là sói")).toEqual([]);
+      // "đâu" cuối câu vẫn bị đọc là từ để hỏi nhắm vào Nam - đó là chuyện của
+      // parseDirectAddress, không phải của phần cáo buộc/khai vai đang kiểm.
+      expect(substantive("Nam ko thể là sói đâu")).toEqual([]);
+    });
+
+    it("phủ định teencode k/ko/hok giết mệnh đề như không", () => {
+      for (const text of ["t ko phải tt", "tôi k phải là tiên tri", "t hok phải bv", "tôi ko nghi Bình"]) {
+        expect(analyzeChat([message("m1", "a", text)], players), text).toEqual([]);
+      }
+    });
+
+    it("câu đùa không thành lời khai giả", () => {
+      for (const text of [
+        "tôi mà là tt thì tôi đã soi Bình rồi",
+        "ai bảo t là tt",
+        "nếu t là bv thì đã che An",
+        "tt đây",
+        "t tưởng t là tt =))",
+        "ước gì tôi là tiên tri",
+      ]) {
+        expect(claims(text), text).toEqual([]);
+      }
+    });
+
+    it("k đứng trong chữ khác (ok, kk) không phải phủ định", () => {
+      expect(claims("ok tôi là tiên tri")).toHaveLength(1);
+      expect(claims("kk tôi là tiên tri đây")).toHaveLength(1);
+    });
+  });
 });

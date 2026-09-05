@@ -172,3 +172,77 @@ describe("prompt diễn đạt ban ngày", () => {
     );
   });
 });
+
+/**
+ * Task D — prompt có ví dụ giọng người thật, và luật tiếng cười theo loại.
+ *
+ * Ví dụ giọng là để mô hình bắt NHỊP câu chữ, không phải nội dung để chép.
+ * Nên chúng không được mang tên người, tên vai, hay một lập trường cụ thể -
+ * mọi thứ đó đã chốt ở ý định, và một cái tên lạ trong ví dụ là một cái tên
+ * mô hình có thể chép vào phòng.
+ */
+describe("ví dụ giọng người thật", () => {
+  it("có khối ví dụ giọng, ghi rõ là để bắt nhịp chứ không phải để chép", () => {
+    const text = buildDaySpeechPrompt(request()).user;
+    expect(text).toContain("Ví dụ giọng");
+    expect(text.toLowerCase()).toContain("đừng chép");
+  });
+
+  it("có ít nhất ba ví dụ và chúng đọc như teencode", () => {
+    const text = buildDaySpeechPrompt(request()).user;
+    const block = text.slice(text.indexOf("Ví dụ giọng"));
+    const examples = block.split("\n").filter((line) => line.trim().startsWith("- \""));
+    expect(examples.length).toBeGreaterThanOrEqual(3);
+    // Ít nhất một ví dụ có teencode thật: t / ko / r / =))
+    expect(examples.some((line) => /\b(t|ko|r)\b|=\)\)/.test(line))).toBe(true);
+  });
+
+  it("ví dụ không mang tên người, tên vai hay dấu hiệu parser đọc thành khai/cáo buộc", () => {
+    const text = buildDaySpeechPrompt(request({ targetName: "Wolf" })).user;
+    const block = text.slice(text.indexOf("Ví dụ giọng")).toLowerCase();
+    for (const forbidden of [
+      "wolf", "sói", "tiên tri", "bảo vệ", "phù thu", "mình là",
+      "tôi là", " t là", "tôi nghi", "đừng treo", "tôi tin", "không thể là",
+    ]) {
+      expect(block, forbidden).not.toContain(forbidden);
+    }
+  });
+
+  it("TALKATIVE được tối đa ba câu, TERSE vẫn một câu", () => {
+    const talkative = deriveSpeechStyle(personality({ talkativeness: 0.95 }));
+    const terse = deriveSpeechStyle(personality({ talkativeness: 0.05 }));
+    expect(talkative.verbosity).toBe("TALKATIVE");
+    expect(terse.verbosity).toBe("TERSE");
+    expect(buildDaySpeechPrompt(request({ style: talkative })).user).toContain("tối đa ba câu");
+    expect(buildDaySpeechPrompt(request({ style: terse })).user).toContain("MỘT câu");
+  });
+});
+
+describe("tiếng cười theo loại ý định", () => {
+  const laughing = (over: Partial<SpeechRequest>) =>
+    buildDaySpeechPrompt(request(over)).user.includes("một tiếng cười");
+
+  it("HUMOR và REACTION được đúng một tiếng cười", () => {
+    expect(laughing({ intention: intention({ kind: "HUMOR", tone: "PLAYFUL" }) })).toBe(true);
+    expect(laughing({ intention: intention({ kind: "REACTION", tone: "NEUTRAL" }) })).toBe(true);
+  });
+
+  it("giọng PLAYFUL ở loại khác cũng được", () => {
+    expect(laughing({ intention: intention({ kind: "ACCUSE", tone: "PLAYFUL" }) })).toBe(true);
+  });
+
+  it("loại khác giọng khác thì không nhắc tới tiếng cười, và vẫn cấm emoji", () => {
+    const text = buildDaySpeechPrompt(
+      request({ intention: intention({ kind: "ACCUSE", tone: "FIRM" }) }),
+    ).user;
+    expect(text).not.toContain("một tiếng cười");
+    expect(text).toContain("không emoji");
+  });
+
+  it("được cười vẫn KHÔNG được emoji", () => {
+    const text = buildDaySpeechPrompt(
+      request({ intention: intention({ kind: "HUMOR", tone: "PLAYFUL" }) }),
+    ).user.toLowerCase();
+    expect(text).toContain("không emoji");
+  });
+});

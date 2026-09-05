@@ -15,11 +15,14 @@ function keys(messages: ReturnType<typeof said>): string[] {
 
 describe("đào alias", () => {
   it("bắt token lạ đứng sau neo tự nhận vai, cả có dấu lẫn không dấu", () => {
-    const found = keys(said("tôi là tt nhé", "toi la tt", "mình là pt", "nhận bv"));
+    // "tt" và "bv" từng đứng đây, và ngừng đo được đúng vào ngày chúng thành
+    // alias thật trong ROLE_PHRASES (cùng câu chuyện với "bà đồng" ở dưới).
+    // "pt"/"ts"/"sw" là viết tắt CHƯA có trong bảng.
+    const found = keys(said("tôi là pt nhé", "toi la pt", "mình là ts", "nhận sw"));
 
-    expect(found).toContain("tt");
     expect(found).toContain("pt");
-    expect(found).toContain("bv");
+    expect(found).toContain("ts");
+    expect(found).toContain("sw");
   });
 
   it("gom dạng có dấu và không dấu về CÙNG một ứng viên", () => {
@@ -43,16 +46,16 @@ describe("đào alias", () => {
   });
 
   it("bỏ qua mệnh đề phủ định, đúng như parser bỏ qua", () => {
-    expect(keys(said("tôi không phải tt đâu", "mình chưa là pt"))).toEqual([]);
+    expect(keys(said("tôi không phải pt đâu", "mình chưa là ts", "t ko phải pt"))).toEqual([]);
   });
 
   it("chỉ nhận neo ở ĐẦU mệnh đề - không đọc trộm giữa câu", () => {
     // "ai bảo tôi là tt" là một câu hỏi, không phải lời khai. Nhận nó ở đây thì
     // tờ đề xuất sẽ đếm cả những chỗ parser vốn cố tình không đọc - neo "X là"
     // chặn nó bằng `MAX_SUBJECT_TOKENS`, neo đầu câu bằng chính vị trí.
-    expect(keys(said("ai bảo tôi là tt vậy"))).toEqual([]);
+    expect(keys(said("ai bảo tôi là pt vậy"))).toEqual([]);
     // Nhưng sau dấu phẩy thì đó là một mệnh đề mới, và nó được đọc.
-    expect(keys(said("thôi được rồi, tôi là tt"))).toContain("tt");
+    expect(keys(said("thôi được rồi, tôi là pt"))).toContain("pt");
   });
 
   it("vế trước ` là ` phải ngắn như một cái tên", () => {
@@ -82,15 +85,15 @@ describe("đào alias", () => {
 
   it("xếp theo tần suất và giữ tối đa ba ví dụ", () => {
     const messages = said(
-      "tôi là tt",
-      "mình là tt",
-      "nhận tt",
-      "t là tt",
       "tôi là pt",
+      "mình là pt",
+      "nhận pt",
+      "t là pt",
+      "tôi là ts",
     );
     const [top] = mineAliases(messages);
 
-    expect(top!.key).toBe("tt");
+    expect(top!.key).toBe("pt");
     expect(top!.count).toBe(4);
     expect(top!.examples).toHaveLength(3);
   });
@@ -98,7 +101,7 @@ describe("đào alias", () => {
 
 describe("tờ đề xuất", () => {
   const report = formatProposal(
-    mineAliases(said("tôi là tt", "mình là tt", "nhận bảo kê")),
+    mineAliases(said("tôi là pt", "mình là pt", "nhận bảo kê")),
     { limit: 500, top: 30 },
     3,
     24,
@@ -114,7 +117,7 @@ describe("tờ đề xuất", () => {
   });
 
   it("gắn cờ cảnh báo lên đúng những ứng viên ≤2 ký tự", () => {
-    expect(report).toContain("`tt` — 2 lần ⚠️ ≤2 ký tự");
+    expect(report).toContain("`pt` — 2 lần ⚠️ ≤2 ký tự");
     // Cụm dài không bị gắn cờ: quy tắc đó nói về alias viết tắt, không phải về
     // mọi alias.
     expect(report).toContain("`bao ke` — 1 lần\n");

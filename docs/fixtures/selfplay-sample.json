@@ -150,6 +150,11 @@
       "numerator": 25,
       "denominator": 126
     },
+    "distinctOpeningRate": {
+      "value": 0.9174311926605505,
+      "numerator": 100,
+      "denominator": 109
+    },
     "consecutiveSameTargetRate": {
       "value": 0.15873015873015872,
       "numerator": 20,
@@ -172,7 +177,7 @@
       "numerator": 134,
       "denominator": 260
     },
-    "fallbackTemplateRate": {
+    "fromTemplateRate": {
       "value": 1,
       "numerator": 126,
       "denominator": 126

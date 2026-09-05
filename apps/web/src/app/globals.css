@@ -399,6 +399,17 @@ summary:focus-visible,
   background: linear-gradient(90deg, rgba(230, 190, 106, 0.5), rgba(230, 190, 106, 0.12), transparent);
 }
 
+/*
+ * Lúc còn thanh tiến độ thì chính nó là vạch ngăn.
+ *
+ * Thanh tiến độ vàng và vệt vàng này cùng chạy hết bề ngang, cách nhau 8px:
+ * hai gạch song song đọc ra như một đường kẻ đôi vẽ nhầm. Bỏ vệt đi lúc thanh
+ * có mặt; đủ người rồi thanh biến mất và vệt quay lại làm việc của nó.
+ */
+.lobby-board-head.has-progress::after {
+  display: none;
+}
+
 .lobby-board-heading {
   display: flex;
   min-width: 0;
@@ -530,7 +541,16 @@ button.lobby-player-tile:active {
   transform: translateY(1px);
 }
 
+/*
+ * Ô của chính mình có VIỀN, không chỉ có vệt sáng.
+ *
+ * Nhãn "Bạn" trên ảnh đã bỏ (xem `.lobby-avatar-edit`), nên đây là dấu hiệu
+ * nhìn thấy được duy nhất còn lại ngoài nút máy ảnh. Vệt sáng 15% một mình thì
+ * chìm trên nền tối của bảng; một đường viền chàm mảnh là đủ để tìm ra mình
+ * trong hai chục ô mà không đọc tên.
+ */
 .lobby-player-tile-you {
+  box-shadow: inset 0 0 0 1px rgba(129, 140, 248, 0.38);
   background: radial-gradient(circle at 50% 30%, rgba(105, 130, 180, 0.15), transparent 72%);
 }
 
@@ -573,17 +593,36 @@ button.lobby-player-tile:active {
   stroke-width: 1.8;
 }
 
-.lobby-you-badge {
+/*
+ * Nút đổi ảnh đại diện dán lên góc ảnh của CHÍNH MÌNH.
+ *
+ * Nó thế chỗ cái nhãn "Bạn" cũ ở cùng góc: ảnh của người xem từng mang ba huy
+ * hiệu một lúc (vương miện, "Bạn", dấu sẵn sàng) và cái nào cũng nhỏ tới mức
+ * phải nhìn kỹ. "Bạn" giờ là viền của ô (`.lobby-player-tile-you`) cộng chữ
+ * ẩn cho trình đọc màn hình, còn góc này dành cho thứ duy nhất người xem có
+ * thể LÀM với ảnh của mình. Cùng vị trí và cỡ với dấu
+ * máy ảnh trong ván ở `RosterPanel`, nên hai màn hình dạy cùng một cử chỉ.
+ */
+.lobby-avatar-edit {
   position: absolute;
-  top: 0.15rem;
-  right: -0.6rem;
-  padding: 0.12rem 0.38rem;
-  color: #eef3fd;
-  font-size: 0.62rem;
-  font-weight: 700;
-  border: 1px solid rgba(157, 185, 229, 0.32);
-  border-radius: 999px;
+  top: -0.2rem;
+  right: -0.35rem;
+  display: grid;
+  width: 1.65rem;
+  height: 1.65rem;
+  place-items: center;
+  font-size: 0.8rem;
+  line-height: 1;
+  border-radius: 50%;
+  background: #1a2238;
+  box-shadow: 0 0 0 1px rgba(157, 185, 229, 0.38);
+  transition: background-color var(--dur-base) var(--ease-out-soft), box-shadow var(--dur-base) var(--ease-out-soft);
+}
+
+.lobby-avatar-edit:hover,
+.lobby-avatar-edit[aria-expanded="true"] {
   background: #26365a;
+  box-shadow: 0 0 0 1px rgba(196, 214, 245, 0.7);
 }
 
 .lobby-status-mark {
@@ -895,8 +934,18 @@ button.lobby-player-tile:active {
     margin: 0;
     padding: 0.65rem 0.45rem;
     border-radius: 1rem;
-    background: linear-gradient(180deg, rgba(8, 13, 24, 0.86), rgba(8, 13, 24, 0.98));
-    box-shadow: 0 -14px 34px -24px rgba(0,0,0,0.95);
+    /*
+     * Nền ĐẶC, không phải mờ 86%.
+     *
+     * Tấm này nổi trên phần trang đang cuộn, và ở 86% chữ bên dưới - "Đang chờ
+     * thêm 7 người", dòng diễn biến - hiện lờ mờ xuyên qua ngay phía trên nút
+     * Bắt đầu. Chụp trên iPhone thì nó đọc ra như hai lớp chữ in đè nhau, tức
+     * một lỗi vẽ. Một đường viền mảnh cho tấm một cái mép để mắt biết nó là
+     * một thứ nằm TRÊN trang chứ không phải một mảng của trang.
+     */
+    border: 1px solid rgba(157, 178, 213, 0.16);
+    background: rgba(9, 14, 26, 0.985);
+    box-shadow: 0 -14px 34px -20px rgba(0, 0, 0, 0.95), 0 8px 24px -12px rgba(0, 0, 0, 0.8);
     transform: translateX(-50%);
   }
 }
@@ -1015,11 +1064,21 @@ button.lobby-player-tile:active {
     transform: translateY(1px);
   }
 
+  /*
+   * Tắt là VIỀN, không phải một nền đặc màu khác.
+   *
+   * Bản cũ đổ một nền xanh xám đặc: vẫn là một khối sáng, chữ trắng đậm, chỉ
+   * khác màu với lúc bật - trên iPhone nó trông như một nút đang chờ được bấm,
+   * và người chơi bấm vào rồi không hiểu vì sao không có gì xảy ra. Bỏ nền,
+   * để lại viền và chữ dịu, thì nút đọc ra là "chỗ nút sẽ mọc ra khi đủ điều
+   * kiện" - cùng ngôn ngữ với ô "Đang chờ..." nét đứt ở lưới người chơi.
+   */
   .btn-cta:disabled {
     cursor: not-allowed;
-    background: linear-gradient(180deg, rgba(58, 74, 106, 0.9) 0%, rgba(34, 46, 72, 0.92) 100%);
-    color: rgba(207, 224, 255, 0.8);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(157, 178, 213, 0.22);
+    background: rgba(24, 33, 54, 0.55);
+    color: rgba(199, 212, 233, 0.72);
+    box-shadow: none;
   }
 
   /*

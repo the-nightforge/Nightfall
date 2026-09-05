@@ -217,8 +217,26 @@ export default function RoomPage() {
         * chờ chỉ có hai vùng nên dừng ở 1440 - quá mốc đó thì sân người chơi
         * chỉ dãn ra thành những ô cách nhau quá xa để đọc thành một đám đông.
         */}
+      {/*
+        * pt phải cộng `env(safe-area-inset-top)`, không được để trần `pt-4`.
+        *
+        * Layout khai `viewport-fit=cover` và `statusBarStyle:
+        * "black-translucent"`, nên khi cài lên màn hình chính iPhone thì web
+        * view trải HẾT lên tận mép trên - đồng hồ, sóng, pin của iOS nằm ĐÈ
+        * lên hàng đầu trang. Chụp lại trên máy thật: "06:50" chồng lên "Rời
+        * phòng", cụm pin che nút âm thanh. Đây là cái giá của black-translucent
+        * và nó chỉ trả đúng một lần, ở đây, bằng lề an toàn.
+        *
+        * Trên trình duyệt thường và trên desktop `env(safe-area-inset-top)` là
+        * 0, nên biểu thức rút về đúng 1rem của bản cũ - không có nhánh riêng
+        * nào cần giữ đồng bộ.
+        *
+        * Lề đi bằng class Tailwind chứ không phải inline style: `env()` trong
+        * thuộc tính style của React bị bỏ qua ở một số trình duyệt, còn trong
+        * CSS sinh ra từ class thì luôn được tính.
+        */}
       <main
-        className={`mx-auto w-full max-w-lg px-3 pb-28 pt-4 lg:flex lg:h-[100dvh] lg:flex-col lg:overflow-hidden lg:pb-6 ${
+        className={`mx-auto w-full max-w-lg px-3 pb-28 pt-[calc(1rem+env(safe-area-inset-top))] lg:flex lg:h-[100dvh] lg:flex-col lg:overflow-hidden lg:pb-6 ${
           isLobby
             ? "lobby-page md:max-w-3xl lg:max-w-[1440px] lg:px-6"
             : "md:max-w-3xl lg:max-w-[1600px] lg:px-4 xl:px-6"
@@ -243,7 +261,10 @@ export default function RoomPage() {
             */}
           {snapshot?.phase !== "GAME_OVER" && (
             <button
-              className="btn-tertiary-danger shrink-0 whitespace-nowrap"
+              /* Có nền mờ vì nút này đứng ngay trên mặt trăng của phông nền:
+               * chữ trần ở đó chìm vào vùng sáng nhất của cả trang. Cùng độ
+               * cao với cụm mã phòng bên phải để cả hàng đọc ra là MỘT thanh. */
+              className="btn-tertiary-danger min-h-9 shrink-0 whitespace-nowrap bg-night-900/55 backdrop-blur-sm"
               onClick={leaveRoom}
             >
               <span aria-hidden="true">←</span> Rời phòng
@@ -410,13 +431,6 @@ export default function RoomPage() {
               * không có thêm gì để nói (chưa có hạn giờ, chưa có số vòng). */}
             {snapshot && snapshot.phase !== "LOBBY" && <PhaseBanner snapshot={snapshot} />}
 
-            {/* Voice là thao tác trực tiếp, không phải thông tin phụ: trên điện
-              * thoại nó phải ở ngay đầu cột nội dung chứ không theo cột phải đi
-              * mất. Trên desktop bản này ẩn đi, cái trong cột phải mới hiện. */}
-            <div className="lg:hidden">
-              <VoiceControl snapshot={snapshot} />
-            </div>
-
             {/*
               * Sân khấu phiên toà đứng NGOÀI `AnimatePresence`, và đó là điều
               * kiện để nó tồn tại được.
@@ -519,7 +533,7 @@ export default function RoomPage() {
               isLobby ? "order-3 lg:col-start-2 lg:row-start-2" : ""
             }`}
           >
-            <VoiceControl snapshot={snapshot} />
+            <VoiceControl snapshot={snapshot} variant="panel" />
             {/*
               * Khung chat lấy TRỌN phần còn lại của cột chứ không bị chặn ở một
               * con số đoán trước - ở mọi pha, phòng chờ nay cũng vậy.
@@ -573,6 +587,20 @@ export default function RoomPage() {
           )}
         </div>
       </main>
+
+      {/*
+        * Voice là thao tác trực tiếp, không phải thông tin phụ.
+        *
+        * Bản trước nhét nó vào ĐẦU cột nội dung trên điện thoại, nên nó trôi đi
+        * mất ngay khi người chơi cuộn xuống xem lưới bỏ phiếu - đúng lúc cần
+        * bấm mic nhất. Giờ nó nổi cố định ở góc phải dưới, đối diện nút chat
+        * (`bottom-4 left-4`), cùng một tầm ngón cái.
+        *
+        * Đứng cạnh `MobileChatDock` chứ không nằm trong lưới: cả hai đều là lớp
+        * `fixed` phủ lên trang, và để chúng cạnh nhau trong DOM là cách duy
+        * nhất còn đọc được thứ tự chồng lớp của chúng.
+        */}
+      <VoiceControl snapshot={snapshot} variant="dock" />
 
       <MobileChatDock
         messages={room.messages}

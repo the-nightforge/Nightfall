@@ -16,6 +16,30 @@ export interface PromptSpec {
 const THINK = { type: "string", description: "Suy luận ngắn, tối đa 200 ký tự" };
 
 /**
+ * Vài câu người Việt thật gõ khi chơi Ma Sói, để mô hình bắt NHỊP câu chữ:
+ * teencode vừa phải (t, ko, r), từ đệm, câu cụt, một tiếng cười.
+ *
+ * Ba luật cho khối này, có test:
+ *
+ * - KHÔNG tên người, KHÔNG tên vai. Một cái tên trong ví dụ là một cái tên mô
+ *   hình có thể chép ra phòng, và nếu phòng có người tên đó thì `chat-analysis`
+ *   của các bot khác đọc thành một cáo buộc lõi chưa từng chốt.
+ * - KHÔNG dấu hiệu parser đọc thành khai/cáo buộc ("tôi là", "tôi nghi",
+ *   "đừng treo", "tôi tin", "không thể là"): cổng `claimSurvivesRoundTrip` sẽ
+ *   từ chối đúng câu mà prompt vừa gợi ý.
+ * - KHÔNG lập trường: ví dụ chỉ là giọng, còn nói gì đã chốt ở `intentLine`.
+ *
+ * Đây là chú thích "Ví dụ giọng", không phải chỉ thị - dòng đầu nói rõ.
+ */
+const VOICE_EXAMPLES = [
+  "Ví dụ giọng (chỉ để bắt nhịp câu chữ, ĐỪNG chép lại nội dung):",
+  '- "ủa khoan, để t nghe thêm đã"',
+  '- "hmm ko chắc lắm, mà thấy hơi lươn =))"',
+  '- "thôi khỏi vòng vo, chốt đi cho lẹ"',
+  '- "nói thật là t để ý từ nãy r"',
+];
+
+/**
  * Prompt diễn đạt cho ban ngày.
  *
  * Nhận `SpeechRequest` chứ không nhận `RoomSnapshot`: LLM chỉ được thấy đúng
@@ -163,8 +187,19 @@ export function buildDaySpeechPrompt(request: SpeechRequest): PromptSpec {
   const lengthHint = {
     TERSE: "Viết MỘT câu ngắn, có thể cụt lủn.",
     NORMAL: "Viết một hoặc hai câu.",
-    TALKATIVE: "Viết tối đa hai câu, được phép nói thoải mái hơn một chút.",
+    TALKATIVE: "Viết tối đa ba câu, được phép nói thoải mái hơn một chút.",
   }[request.style.verbosity];
+
+  // Một tiếng cười cho loại/giọng đang đùa - và CHỈ một. Emoji vẫn cấm ở mọi
+  // loại: khung chat của game không render emoji nhất quán giữa các máy, và
+  // một chuỗi emoji là dấu hiệu "máy viết" rõ hơn cả một câu quá chỉnh.
+  const laughAllowed =
+    request.intention.kind === "HUMOR" ||
+    request.intention.kind === "REACTION" ||
+    request.intention.tone === "PLAYFUL";
+  const formLine = laughAllowed
+    ? 'Được thêm đúng một tiếng cười kiểu "haha", "=))" hoặc "kk" nếu hợp. Không markdown, không xuống dòng, không emoji.'
+    : "Không markdown, không xuống dòng, không emoji.";
 
   return {
     system: [
@@ -210,7 +245,8 @@ export function buildDaySpeechPrompt(request: SpeechRequest): PromptSpec {
       lengthHint,
       "Viết tiếng Việt đời thường, như đang chat trong game — không cần lúc nào cũng đủ câu.",
       'Được dùng từ đệm nhẹ như "ừ", "khoan", "hmm", "từ từ" nếu thấy tự nhiên.',
-      "Không markdown, không xuống dòng, không emoji.",
+      ...VOICE_EXAMPLES,
+      formLine,
       "Không được bịa ra sự kiện nào ngoài những gì ở trên.",
       "Không được đổi mục tiêu, đổi lá phiếu hay đổi hành động: chúng đã chốt rồi.",
       "Không được tiết lộ vai của mình hay của ai khác nếu ở trên không nói tới.",

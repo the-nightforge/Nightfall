@@ -152,6 +152,15 @@ export interface SelfPlayMetrics {
   semanticRepetitionRate: Ratio;
   /** Ba token mở đầu trùng câu LIỀN TRƯỚC của cùng BOT. */
   repeatedOpeningRate: Ratio;
+  /**
+   * Số cách mở đầu KHÁC NHAU trên số câu, cộng dồn theo từng BOT trong từng
+   * ván. 1.0 là không câu nào của một bot mở đầu như câu khác của chính nó
+   * trong ván; bảng mẫu bốn câu của Phase 4 cho khoảng 0.4.
+   *
+   * Khác `repeatedOpeningRate`: cái đó chỉ bắt hai câu LIỀN NHAU; cái này bắt
+   * "mọi câu đều bắt đầu bằng tôi nghi" dù có xen câu khác ở giữa.
+   */
+  distinctOpeningRate: Ratio;
   /** Hai câu liên tiếp của cùng BOT nhắm cùng một người. */
   consecutiveSameTargetRate: Ratio;
   /** Câu có trả lời một message cụ thể. */
@@ -168,8 +177,13 @@ export interface SelfPlayMetrics {
   maxDialogueChainLength: number;
   /** Lượt được mời nói mà BOT chọn im lặng. `null` khi không đo được. */
   silenceRate: Ratio;
-  /** Câu do bảng mẫu sinh ra. Trong self-play luôn bằng 1 theo thiết kế. */
-  fallbackTemplateRate: Ratio;
+  /**
+   * Câu do bảng mẫu sinh ra, đếm theo cờ `fromTemplate` trên từng câu.
+   * Trong self-play luôn bằng 1 theo thiết kế; ở production đây là con số cần
+   * theo dõi (một nhà cung cấp hỏng lặng lẽ trông y hệt một nhà cung cấp tốt
+   * nếu không có nó).
+   */
+  fromTemplateRate: Ratio;
 
   // ---- Lời khai vai (Phase 5) ----
 
@@ -311,6 +325,8 @@ export function collectMetrics(
   let normalizedRepeats = 0;
   let semanticRepeats = 0;
   let openingRepeats = 0;
+  let distinctOpenings = 0;
+  let fromTemplateCount = 0;
   let sameTargetRuns = 0;
   let replies = 0;
   let directQuestionTotal = 0;
@@ -552,6 +568,8 @@ export function collectMetrics(
     const saidNormalized = new Map<string, Set<string>>();
     const saidSemantic = new Map<string, Set<string>>();
     const lastOpening = new Map<string, string | null>();
+    /** Mọi cách mở đầu một BOT đã dùng trong ván này. */
+    const openingsSeen = new Map<string, Set<string>>();
     const lastTarget = new Map<string, string | null>();
     /** Câu hỏi nhắm thẳng vào một người: messageId -> người được hỏi. */
     const directQuestions = new Map<string, string>();
@@ -595,6 +613,12 @@ export function collectMetrics(
           openingRepeats += 1;
         }
         lastOpening.set(event.actorId, opening);
+        if (opening !== null && !remember(openingsSeen, event.actorId, opening)) {
+          distinctOpenings += 1;
+        }
+        // Báo cáo JSON lưu trước khi có cờ này không mang nó; thiếu cờ nghĩa là
+        // self-play cũ, tức bảng mẫu.
+        if (event.fromTemplate !== false) fromTemplateCount += 1;
 
         if (event.targetId !== null && lastTarget.get(event.actorId) === event.targetId) {
           sameTargetRuns += 1;
@@ -727,6 +751,7 @@ export function collectMetrics(
     normalizedRepetitionRate: ratio(normalizedRepeats, speechTotal),
     semanticRepetitionRate: ratio(semanticRepeats, speechTotal),
     repeatedOpeningRate: ratio(openingRepeats, speechTotal),
+    distinctOpeningRate: ratio(distinctOpenings, speechTotal),
     consecutiveSameTargetRate: ratio(sameTargetRuns, speechTotal),
     replyRate: ratio(replies, speechTotal),
     directQuestionResponseRate: ratio(directQuestionAnswered, directQuestionTotal),
@@ -745,10 +770,10 @@ export function collectMetrics(
      * Trong self-play, con số này luôn bằng 1 THEO THIẾT KẾ.
      *
      * Nhân mô phỏng là thuần và không gọi mạng, nên mọi câu đều do bảng mẫu
-     * sinh ra. Tỉ lệ thật của production được đo ở tầng server, nơi có nhà cung
-     * cấp để mà hỏng.
+     * sinh ra. Đếm theo cờ trên từng câu chứ không viết hằng số, để một bản ghi
+     * nhập từ production (nơi có nhà cung cấp để mà hỏng) đọc ra số thật.
      */
-    fallbackTemplateRate: ratio(speechTotal, speechTotal),
+    fromTemplateRate: ratio(fromTemplateCount, speechTotal),
 
     claimsPerGame: mean(claimCounts),
     counterClaimRate: ratio(counterClaimGames, games.length),

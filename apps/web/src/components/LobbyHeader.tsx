@@ -1,8 +1,6 @@
 "use client";
 
-import { useState } from "react";
 import { MAX_PLAYERS_PER_ROOM, MIN_PLAYERS_TO_START, type RoomSnapshot } from "@masoi/shared";
-import { AvatarPicker } from "./AvatarPicker";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -22,12 +20,13 @@ interface Props {
  * việc của cả phòng chứ không riêng bảng người chơi, và ở đó chúng đứng cùng
  * hàng với "Rời phòng" và nút âm thanh thay vì chiếm thêm một tầng.
  *
- * Nút đổi ảnh đại diện thì ngược lại - nó ở LẠI đây, ngay cạnh sĩ số, vì nó là
- * việc riêng của một người đang ngồi trong danh sách này.
+ * Nút đổi ảnh đại diện KHÔNG còn ở đây. Nó từng đứng một mình bên phải hàng
+ * chữ nhỏ này, và trên iPhone hàng đó xuống dòng nên nút trôi ra thành một
+ * dòng chữ lẻ dưới một khoảng trống. Giờ nó dán lên góc ảnh của chính người
+ * xem trong lưới - xem `LobbyPlayerGrid` - đúng chỗ mà cái nó thay đổi đang
+ * nằm. Đầu bảng nhờ vậy không còn state nào.
  */
 export function LobbyHeader({ snapshot }: Props) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-
   const count = snapshot.players.length;
   const missing = Math.max(0, MIN_PLAYERS_TO_START - count);
   const freeSeats = Math.max(0, MAX_PLAYERS_PER_ROOM - count);
@@ -37,7 +36,7 @@ export function LobbyHeader({ snapshot }: Props) {
   const progress = Math.min(100, Math.round((count / MIN_PLAYERS_TO_START) * 100));
 
   return (
-    <header className="lobby-board-head">
+    <header className={`lobby-board-head ${missing > 0 ? "has-progress" : ""}`}>
       <div className="lobby-board-heading">
         <span className="lobby-room-moon" aria-hidden="true">
           <svg viewBox="0 0 32 32">
@@ -64,32 +63,32 @@ export function LobbyHeader({ snapshot }: Props) {
           Chủ phòng: <b className="text-amber-100">{host?.name ?? "Đang chuyển giao"}</b>
         </span>
         {/*
-          * Tiến độ tối thiểu chỉ hiện khi CÒN THIẾU người.
+          * Lời rủ chỉ hiện khi CÒN THIẾU người và còn ghế trống.
           *
-          * Đủ người rồi mà vẫn để một thanh đầy 100% nằm đó thì nó thành trang
-          * trí, và mắt vẫn phải dừng lại đọc xem nó đang đo cái gì.
+          * Nó KHÔNG nhắc lại con số còn thiếu: con số đó đã đứng ngay dưới nút
+          * Bắt đầu (`BlockReason`), là chỗ mắt tìm tới khi nút xám - và trên
+          * iPhone cả hai dòng lọt vào cùng một khung nhìn, cùng một câu in hai
+          * lần. Ở đây chỉ còn việc cần LÀM: gửi mã phòng. Thanh tiến độ bên
+          * dưới vẫn mang đủ số qua aria.
+          *
+          * Dấu chấm và câu chữ nằm trong CÙNG một span: hàng này được phép
+          * xuống dòng, và khi tách rời thì dấu chấm ở lại cuối hàng trên còn
+          * chữ rơi xuống hàng dưới - một cái chấm lẻ sau tên chủ phòng.
           */}
-        {missing > 0 && (
-          <>
+        {missing > 0 && freeSeats > 0 && (
+          <span className="inline-flex min-w-0 items-center gap-2">
             <span aria-hidden="true" className="h-1 w-1 shrink-0 rounded-full bg-amber-300/50" />
-            <span className="min-w-0">
-              Cần thêm <b className="text-white">{missing}</b> người
-              {freeSeats > 0 ? " — gửi mã phòng cho bạn bè" : ""}
-            </span>
-          </>
-        )}
-        {snapshot.you && (
-          <button
-            type="button"
-            className="btn-tertiary ml-auto min-h-9 shrink-0 px-2.5 py-1 text-xs"
-            aria-expanded={pickerOpen}
-            onClick={() => setPickerOpen((open) => !open)}
-          >
-            {pickerOpen ? "Đóng ảnh đại diện" : "Đổi ảnh đại diện"}
-          </button>
+            <span className="min-w-0">Gửi mã phòng cho bạn bè để đủ người</span>
+          </span>
         )}
       </div>
 
+      {/*
+        * Tiến độ tối thiểu chỉ hiện khi CÒN THIẾU người.
+        *
+        * Đủ người rồi mà vẫn để một thanh đầy 100% nằm đó thì nó thành trang
+        * trí, và mắt vẫn phải dừng lại đọc xem nó đang đo cái gì.
+        */}
       {missing > 0 && (
         <div
           className="mt-2.5 h-1 overflow-hidden rounded-full bg-white/10"
@@ -102,15 +101,6 @@ export function LobbyHeader({ snapshot }: Props) {
           <div
             className="h-full rounded-full bg-gradient-to-r from-amber-600 to-amber-300 transition-[width] duration-500 motion-reduce:transition-none"
             style={{ width: `${progress}%` }}
-          />
-        </div>
-      )}
-
-      {pickerOpen && snapshot.you && (
-        <div className="mt-3 border-t border-white/[0.08] pt-3">
-          <AvatarPicker
-            currentUrl={snapshot.you.avatarUrl ?? null}
-            onDone={() => setPickerOpen(false)}
           />
         </div>
       )}

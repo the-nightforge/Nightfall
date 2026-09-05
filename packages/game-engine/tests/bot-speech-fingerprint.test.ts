@@ -141,6 +141,16 @@ describe("openingOf", () => {
     expect(openingOf("tôi nghi An vì lá phiếu")).toBe(openingOf("tôi nghi An thật đấy"));
   });
 
+  it("teencode mở đầu cũng là từ đệm: ủa/alo/kkk/haizz không tính vào cách mở đầu", () => {
+    // Nếu không thì "ủa, tôi nghi An" và "tôi nghi An" có hai opening khác
+    // nhau, và một bot chỉ cần đệm "ủa" là lách được luật chống lặp mở đầu.
+    expect(openingOf("ủa, tôi nghi An thật")).toBe("tôi nghi an");
+    expect(openingOf("alo alo, tôi nghi An")).toBe("tôi nghi an");
+    expect(openingOf("kkk tôi nghi An")).toBe("tôi nghi an");
+    expect(openingOf("haizz, tôi nghi An")).toBe("tôi nghi an");
+    expect(openingOf("ơ, tôi nghi An")).toBe("tôi nghi an");
+  });
+
   it("chuỗi rỗng trả về null chứ không phải chuỗi rỗng", () => {
     expect(openingOf("   ")).toBeNull();
   });

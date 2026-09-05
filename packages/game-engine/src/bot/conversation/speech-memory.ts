@@ -84,12 +84,45 @@ export function recentTextFingerprints(state: BotBrainState, count: number): str
     .filter((value): value is string => value !== null);
 }
 
+/**
+ * Bao nhiêu lượt nói gần nhất được xét khi hỏi "mình vừa mở đầu kiểu này rồi".
+ *
+ * Năm, không phải cả cửa sổ trí nhớ: cách mở đầu là thứ người nghe quên nhanh
+ * hơn nội dung. Cấm dài hơn thì một bot ba giọng nói cũng cạn cách mở đầu
+ * trước khi hết ngày.
+ */
+export const RECENT_OPENING_WINDOW = 5;
+
 /** Cách mở đầu gần nhất; đầu vào cho yêu cầu "đừng mở đầu giống lần trước". */
-export function recentOpenings(state: BotBrainState, count: number): string[] {
+export function recentOpenings(
+  state: BotBrainState,
+  count: number = RECENT_OPENING_WINDOW,
+): string[] {
   return state.speechMemory
     .slice(-count)
     .map((record) => record.opening)
     .filter((value): value is string => value !== null);
+}
+
+/**
+ * Cách mở đầu này đã dùng trong `RECENT_OPENING_WINDOW` lượt gần nhất chưa?
+ *
+ * Chỉ bản ghi CÓ văn bản mới tính - lõi ghi ý định trước khi biết câu chữ, và
+ * một bản ghi chưa render thì chưa mở đầu bằng gì cả.
+ *
+ * Lưu ý chỗ đứng: hàm này sống ở tầng TRÍ NHỚ, không ở `planSpeech`. Planner
+ * chốt ý định trước khi có câu chữ (nhà cung cấp hoặc bảng mẫu mới sinh ra
+ * chữ), nên nó không biết một ý định sẽ mở đầu bằng gì; đoán bằng bảng mẫu thì
+ * sai ở production, nơi câu là của nhà cung cấp. Luật "không mở đầu như 5 lượt
+ * trước" vì vậy được áp ở đúng hai chỗ có chữ: `renderSpeechTemplate`
+ * (`avoidOpenings`) và cổng ở `speech-renderer` phía server.
+ */
+export function hasRecentOpening(
+  state: BotBrainState,
+  opening: string,
+  count: number = RECENT_OPENING_WINDOW,
+): boolean {
+  return recentOpenings(state, count).includes(opening);
 }
 
 /**

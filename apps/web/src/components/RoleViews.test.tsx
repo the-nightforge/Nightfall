@@ -197,17 +197,34 @@ describe("RoleRevealView - nhấn giữ để nhìn", () => {
     await view.unmount();
   });
 
-  it("kéo tay ra khỏi thẻ cũng tính là thả tay", async () => {
+  it("con trỏ rời khỏi nút giữa chừng cú lật KHÔNG được úp thẻ lại", async () => {
+    /*
+     * Đây là cái sai người chơi gặp: bấm giữ, thẻ mới lật được nửa vòng thì
+     * tự úp lại, chưa kịp đọc vai.
+     *
+     * Nguyên nhân không nằm ở tay người chơi. Qua mốc 90 độ,
+     * `backface-visibility` rút mặt úp khỏi hit-test và mặt ngửa lên làm đích,
+     * nên trình duyệt bắn `pointerout` vào nút dù con trỏ đứng yên. Handler
+     * "kéo tay ra thì úp lại" nghe đúng cái đó và tự bắn vào chân mình.
+     *
+     * Nên hợp đồng bây giờ: chỉ THẢ TAY mới úp thẻ. Chuột rời khỏi nút - thật
+     * hay do cú lật gây ra - đều không tính.
+     */
     const view = await mountReveal();
 
     await view.fire(pointer("pointerdown"));
-    // Bắn `pointerout` chứ không phải `pointerleave`: `pointerleave` không nổi
-    // bọt, nên React không nghe nó ở gốc cây mà tự dựng `onPointerLeave` từ
-    // cặp `pointerover`/`pointerout`. Bắn thẳng `pointerleave` là test một sự
-    // kiện mà trình duyệt thật không bao giờ giao tới handler này.
+    // `pointerout` chứ không phải `pointerleave`: `pointerleave` không nổi bọt
+    // nên React dựng `onPointerLeave` từ cặp `pointerover`/`pointerout`. Đây
+    // đúng là sự kiện trình duyệt thật giao tới trong lúc thẻ đang xoay.
     await view.fire(pointer("pointerout"));
 
+    assert.equal(view.pressed(), "true", "thẻ phải còn ngửa cho tới khi thả tay");
+    assert.match(view.text(), /Sói Em/);
+
+    // Và thả tay ở đâu cũng vẫn úp lại - phần này không được lỏng ra.
+    await view.fire(pointer("pointerup"), window);
     assert.equal(view.pressed(), "false");
+
     await view.unmount();
   });
 

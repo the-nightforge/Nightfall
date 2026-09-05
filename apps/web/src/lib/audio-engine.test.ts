@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { PHASES } from "@masoi/shared";
-import { audioEngine } from "./audio-engine";
+import { audioEngine, installUnlockListener } from "./audio-engine";
 import { DEFAULT_SETTINGS } from "./audio-settings";
 import { trackFor } from "./audio-track";
 
@@ -43,7 +44,13 @@ interface FakeSource extends FakeNode {
 
 const LOOP_POINTS = { theme: { loopStart: 0.5, loopEnd: 48.975011 } };
 
+// Các listener của engine (chạm, đổi tab, statechange) cần một `document`
+// thật; phần còn lại của bộ giả không đụng tới DOM.
+GlobalRegistrator.register();
+
 let sources: FakeSource[] = [];
+/** Mọi AudioContext engine dựng ra. Engine giữ một cái duy nhất cho cả đời. */
+const contexts: FakeAudioContext[] = [];
 let gains: (FakeNode & { gain: FakeParam })[] = [];
 let musicBus: (FakeNode & { gain: FakeParam }) | null = null;
 let sfxBus: (FakeNode & { gain: FakeParam }) | null = null;
@@ -65,6 +72,24 @@ function param(): FakeParam {
 class FakeAudioContext {
   currentTime = 0;
   destination = { kind: "destination" };
+  /** iOS có thêm giá trị "interrupted" ngoài chuẩn, nên để là string. */
+  state = "running";
+  resumes = 0;
+  private listeners = new Set<() => void>();
+
+  constructor() {
+    contexts.push(this);
+  }
+
+  addEventListener(type: string, fn: () => void) {
+    if (type === "statechange") this.listeners.add(fn);
+  }
+
+  /** Giả lập iOS đổi trạng thái context rồi báo qua statechange. */
+  becomes(state: string) {
+    this.state = state;
+    for (const fn of this.listeners) fn();
+  }
 
   createGain() {
     const node = { gain: param(), connect() {}, disconnect() {} };
@@ -105,6 +130,8 @@ class FakeAudioContext {
   }
 
   resume() {
+    this.resumes += 1;
+    this.state = "running";
     return Promise.resolve();
   }
 }
@@ -126,12 +153,16 @@ async function settle(): Promise<void> {
 const realAudioContext = globalThis.AudioContext;
 const realFetch = globalThis.fetch;
 
+let removeListeners: () => void = () => undefined;
+
 before(() => {
   (globalThis as { AudioContext?: unknown }).AudioContext = FakeAudioContext;
   (globalThis as { fetch?: unknown }).fetch = fakeFetch;
+  removeListeners = installUnlockListener();
 });
 
 after(() => {
+  removeListeners();
   (globalThis as { AudioContext?: unknown }).AudioContext = realAudioContext;
   (globalThis as { fetch?: unknown }).fetch = realFetch;
 });
@@ -251,5 +282,113 @@ describe("audioEngine — hiệu ứng và âm lượng", () => {
     await settle();
 
     assert.deepEqual(fetched.filter((url) => url.startsWith("/audio/sfx/")), []);
+  });
+});
+
+/**
+ * iOS đưa AudioContext về trạng thái `interrupted` mỗi khi khoá màn hình,
+ * chuyển app, có cuộc gọi, bật Siri hay cắm/rút tai nghe - và KHÔNG tự phục
+ * hồi một cách đáng tin cậy. Bản trước chỉ gọi `resume()` ở cú chạm đầu tiên
+ * và khi ĐỔI track; mà cả ván chỉ có một track, nên sau lần gián đoạn đầu tiên
+ * nhạc lẫn hiệu ứng im tới hết ván. Đó là lỗi "lâu lâu mất nhạc nền trên iOS".
+ */
+describe("audioEngine — iOS ngắt AudioContext giữa ván", () => {
+  function ctx(): FakeAudioContext {
+    const live = contexts.at(-1);
+    assert.ok(live, "engine phải đã dựng một AudioContext");
+    return live;
+  }
+
+  /** Ép `document.hidden`; happy-dom không có API đổi nó. */
+  function hide(hidden: boolean): () => void {
+    const original = Object.getOwnPropertyDescriptor(Document.prototype, "hidden");
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+    return () => {
+      delete (document as unknown as Record<string, unknown>).hidden;
+      if (original) Object.defineProperty(Document.prototype, "hidden", original);
+    };
+  }
+
+  it("trang hiện lại sau khi bị ngắt: gọi resume, KHÔNG dựng lại nhạc", async () => {
+    audioEngine.setTrack(trackFor("NIGHT"));
+    await settle();
+    const live = ctx();
+    live.state = "interrupted";
+    live.resumes = 0;
+
+    document.dispatchEvent(new Event("visibilitychange"));
+    await settle();
+
+    assert.equal(live.resumes, 1, "phải gọi resume khi trang hiện lại");
+    assert.equal(sources.length, 1, "nhạc đang chạy phải được giữ nguyên, không tạo nguồn mới");
+  });
+
+  it("cú chạm bất kỳ SAU cú chạm mở khoá cũng gọi resume", async () => {
+    audioEngine.setTrack(trackFor("NIGHT"));
+    await settle();
+    const live = ctx();
+    live.state = "interrupted";
+    live.resumes = 0;
+
+    document.dispatchEvent(new Event("pointerdown"));
+    await settle();
+
+    assert.equal(live.resumes, 1, "listener chạm không được tự gỡ sau lần đầu");
+  });
+
+  it("context tự báo statechange rời khỏi running: engine gọi resume ngay", async () => {
+    audioEngine.setTrack(trackFor("NIGHT"));
+    await settle();
+    const live = ctx();
+    live.resumes = 0;
+
+    live.becomes("suspended");
+    await settle();
+
+    assert.equal(live.resumes, 1);
+  });
+
+  it("pageshow (iOS khôi phục từ bfcache) cũng gọi resume", async () => {
+    audioEngine.setTrack(trackFor("NIGHT"));
+    await settle();
+    const live = ctx();
+    live.state = "interrupted";
+    live.resumes = 0;
+
+    window.dispatchEvent(new Event("pageshow"));
+    await settle();
+
+    assert.equal(live.resumes, 1);
+  });
+
+  it("context vẫn đang chạy thì các tín hiệu này không gọi resume thừa", async () => {
+    audioEngine.setTrack(trackFor("NIGHT"));
+    await settle();
+    const live = ctx();
+    live.state = "running";
+    live.resumes = 0;
+
+    document.dispatchEvent(new Event("visibilitychange"));
+    document.dispatchEvent(new Event("pointerdown"));
+    window.dispatchEvent(new Event("pageshow"));
+    await settle();
+
+    assert.equal(live.resumes, 0);
+  });
+
+  it("trang đang ẩn thì chưa resume - iOS từ chối, và sẽ có lượt khi hiện lại", async () => {
+    audioEngine.setTrack(trackFor("NIGHT"));
+    await settle();
+    const live = ctx();
+    live.state = "interrupted";
+    live.resumes = 0;
+    const restore = hide(true);
+    try {
+      document.dispatchEvent(new Event("visibilitychange"));
+      await settle();
+      assert.equal(live.resumes, 0);
+    } finally {
+      restore();
+    }
   });
 });

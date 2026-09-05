@@ -50,7 +50,10 @@ export function SoundControl() {
   return (
     <div className="relative">
       <button
-        className={`rounded-lg border border-night-600 bg-night-800 px-2 py-1 text-sm ${
+        /* min-h-9 và bề ngang cố định: nó đứng cùng hàng với mã phòng, Mời và
+         * QR - ba nút đều cao 36px - và một nút thấp hơn vài pixel ở cuối hàng
+         * là thứ mắt bắt được ngay dù không gọi tên ra được. */
+        className={`inline-flex min-h-9 w-9 items-center justify-center rounded-lg border border-night-600 bg-night-800 text-sm ${
           unlocked ? "text-mist" : "text-mist/60"
         }`}
         onClick={() => setOpen((value) => !value)}

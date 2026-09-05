@@ -6,6 +6,7 @@ import { MAX_PLAYERS_PER_ROOM, MIN_PLAYERS_TO_START, type RoomSnapshot } from "@
 import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
 import { listItemMotion } from "@/lib/motion";
 import { useModalFocus } from "@/lib/useModalFocus";
+import { AvatarPicker } from "./AvatarPicker";
 import { CharacterPortrait } from "./CharacterPortrait";
 import { LobbyHeader } from "./LobbyHeader";
 
@@ -31,6 +32,14 @@ export function LobbyPlayerGrid({ snapshot, isHost, onKick }: Props) {
     [rosterKey],
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /*
+   * Bảng chọn ảnh đại diện mở từ góc ảnh của CHÍNH MÌNH, không từ đầu bảng.
+   *
+   * State nằm ở đây vì hai đầu của nó ở hai chỗ: nút bấm dán trên ô của người
+   * xem trong lưới, còn bảng chọn trải ra ngay dưới đầu bảng - đủ rộng cho
+   * lưới ảnh, và đứng yên khi lưới người chơi cuộn.
+   */
+  const [pickerOpen, setPickerOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -69,6 +78,15 @@ export function LobbyPlayerGrid({ snapshot, isHost, onKick }: Props) {
     <section className="lobby-player-board" aria-label="Người chơi trong phòng">
       <LobbyHeader snapshot={snapshot} />
 
+      {pickerOpen && snapshot.you && (
+        <div className="mb-3 shrink-0 border-b border-white/[0.08] pb-3">
+          <AvatarPicker
+            currentUrl={snapshot.you.avatarUrl ?? null}
+            onDone={() => setPickerOpen(false)}
+          />
+        </div>
+      )}
+
       {/* Chỉ LƯỚI cuộn, không phải cả bảng: đầu bảng giữ sĩ số và tiến độ
         * trong tầm mắt kể cả khi phòng đã đủ hai chục người. */}
       <div className="lobby-player-scroll lobby-roster-scroll">
@@ -94,11 +112,42 @@ export function LobbyPlayerGrid({ snapshot, isHost, onKick }: Props) {
                   isCustom={!!player.avatarUrl}
                 />
                 {isRoomHost && <HostCrown />}
-                {isMe && <span className="lobby-you-badge">Bạn</span>}
+                {/*
+                  * Nút máy ảnh đứng ĐÚNG chỗ nhãn "Bạn" cũ.
+                  *
+                  * Ba huy hiệu quanh một ảnh 64px (vương miện, "Bạn", dấu sẵn
+                  * sàng) là quá nhiều để đọc từ khoảng cách cầm điện thoại, nên
+                  * nhãn "Bạn" rút về viền ô cộng chữ ẩn cho trình đọc màn hình,
+                  * và góc này thành nút đổi ảnh. Nút này chỉ mọc trên ảnh
+                  * của người xem, và ô của người xem không bao giờ là nút "Mở
+                  * thao tác" - `canManage` loại chính mình - nên không có nút
+                  * lồng trong nút.
+                  */}
+                {isMe && (
+                  <button
+                    type="button"
+                    className="lobby-avatar-edit"
+                    aria-label={pickerOpen ? "Đóng bảng chọn ảnh đại diện" : "Đổi ảnh đại diện"}
+                    title="Đổi ảnh đại diện"
+                    aria-expanded={pickerOpen}
+                    onClick={() => setPickerOpen((open) => !open)}
+                  >
+                    <span aria-hidden="true">📷</span>
+                  </button>
+                )}
                 <StatusMark ready={ready} offline={offline} />
               </span>
               <span className="mt-3 block min-w-0 truncate text-center text-sm font-bold text-white" title={player.name}>
                 {player.name}
+                {/*
+                  * "Bạn" chỉ còn cho trình đọc màn hình.
+                  *
+                  * Ô này rộng chừng 100px trên desktop, và bất kỳ chữ nào thêm
+                  * vào dòng tên hay dòng trạng thái ("Bạn · Chưa sẵn sàng") đều
+                  * bị cắt cụt đúng ở ô của chính người xem. Mắt đã có hai dấu
+                  * không tốn bề ngang: viền ô và nút máy ảnh trên ảnh.
+                  */}
+                {isMe && <span className="sr-only"> (bạn)</span>}
               </span>
               <span
                 className={`mt-1 block truncate text-center text-xs font-semibold ${

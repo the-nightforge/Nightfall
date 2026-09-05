@@ -545,7 +545,10 @@ describe("giới hạn hiệu năng và luật của bản dựng", () => {
 
   it("KHÔNG import tĩnh three: cả module đi sau một import() động", () => {
     assert.ok(!/^\s*import\s+[^;]*from\s+"three"/m.test(source));
-    assert.ok(source.includes('import type { TrialStageAct'), "chỉ import kiểu");
+    assert.ok(
+      /import type \{[^}]*\bTrialStageAct\b[^}]*\} from "\.\/live-trial"/.test(source),
+      "chỉ import kiểu",
+    );
   });
 
   it("component chỉ với tới three và bản dựng cảnh qua import() động", () => {
@@ -602,7 +605,10 @@ function fakeLoader(THREE_: typeof THREE) {
   return { load, calls };
 }
 
-function setupPortrait(portrait: string | null = "/characters/hood.webp") {
+function setupPortrait(
+  portrait: string | null = "/characters/hood.webp",
+  portraitKind?: "sheet" | "photo",
+) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(42, 16 / 9, 0.1, 200);
   const registry = createDisposableRegistry();
@@ -610,7 +616,7 @@ function setupPortrait(portrait: string | null = "/characters/hood.webp") {
   const handle = buildTrialScene(
     THREE,
     scene,
-    { audience: 9, portrait },
+    { audience: 9, portrait, portraitKind },
     { registry, loadTexture: loader.load },
   );
   return { scene, camera, registry, handle, loader };
@@ -692,5 +698,64 @@ describe("khuôn mặt bị cáo", () => {
     // Không có cờ `disposed` công khai trên Texture, nên kiểm bằng cách khác:
     // gọi dispose hai lần không được ném, và cảnh đã tự nhận là đã dọn.
     assert.doesNotThrow(() => handle.dispose());
+  });
+});
+
+/**
+ * Ảnh người chơi tự tải lên.
+ *
+ * Bản đầu gửi null cho trường hợp này, nên ai có ảnh riêng thì lên bục lại
+ * mang khối đầu trơn - trong khi cột Người chơi bên cạnh vẫn hiện đúng mặt họ.
+ * Ảnh đó là MỘT khung vuông, không phải dải 4 frame, và mọi phép cắt của sheet
+ * áp lên nó đều sai.
+ */
+describe("khuôn mặt bị cáo là ảnh tự tải", () => {
+  const PHOTO = "https://cdn.example/avatars/abc.webp";
+  const matOf = (scene: THREE.Scene) =>
+    (portraitOf(scene) as THREE.Mesh).material as THREE.MeshBasicMaterial;
+
+  it("tải đúng URL ảnh và vẽ NGUYÊN khung, không cắt 25%", () => {
+    const { scene, loader } = setupPortrait(PHOTO, "photo");
+    assert.equal(loader.calls[0].url, PHOTO);
+    const map = matOf(scene).map!;
+    assert.equal(map.repeat.x, 1, "ảnh một khung thì không được cắt như sheet");
+    assert.equal(map.offset.x, 0);
+  });
+
+  it("cắt tròn như ô người chơi, không phải một tấm bảng vuông", () => {
+    const { scene } = setupPortrait(PHOTO, "photo");
+    const geometry = (portraitOf(scene) as THREE.Mesh).geometry;
+    assert.equal(geometry.type, "CircleGeometry");
+  });
+
+  it("sheet vẫn là tấm vuông cắt 25% - đường cũ không đổi", () => {
+    const { scene } = setupPortrait("/characters/hood.webp", "sheet");
+    assert.equal((portraitOf(scene) as THREE.Mesh).geometry.type, "PlaneGeometry");
+    assert.equal(matOf(scene).map!.repeat.x, 0.25);
+  });
+
+  it("không ghi `portraitKind` thì là sheet: nơi gọi cũ không phải đổi gì", () => {
+    const { scene } = setupPortrait("/characters/hood.webp");
+    assert.equal(matOf(scene).map!.repeat.x, 0.25);
+  });
+
+  it("bản án Treo làm ảnh tái đi bằng màu, KHÔNG dịch UV sang một frame không tồn tại", () => {
+    const { scene, handle, loader } = setupPortrait(PHOTO, "photo");
+    loader.calls[0].fire();
+    const mat = matOf(scene);
+    handle.setState({ act: "VERDICT", tilt: 1, verdict: "LYNCHED" }, { reduced: true, atMs: now });
+    assert.equal(mat.map!.offset.x, 0, "dịch 75% vào một ảnh một khung là ra mép ảnh");
+    assert.ok(mat.opacity < 1, "mặt phải mờ đi");
+    assert.notEqual(mat.color.getHex(), 0xffffff, "mặt phải đổi sắc");
+  });
+
+  it("án Tha - hay vào lại phòng sau án Tha - thì mặt tươi lại", () => {
+    const { scene, handle, loader } = setupPortrait(PHOTO, "photo");
+    loader.calls[0].fire();
+    const mat = matOf(scene);
+    handle.setState({ act: "VERDICT", tilt: 1, verdict: "LYNCHED" }, { reduced: true, atMs: now });
+    handle.setState({ act: "VERDICT", tilt: -1, verdict: "SPARED" }, { reduced: true, atMs: now });
+    assert.equal(mat.opacity, 1);
+    assert.equal(mat.color.getHex(), 0xffffff);
   });
 });

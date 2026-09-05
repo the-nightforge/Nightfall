@@ -16,7 +16,7 @@ import {
   speechSemanticFingerprint,
   speechTextFingerprint,
 } from "../conversation/fingerprint";
-import { recentTextFingerprints } from "../conversation/speech-memory";
+import { recentOpenings, recentTextFingerprints } from "../conversation/speech-memory";
 import { renderSpeechTemplate } from "../conversation/templates";
 import { createSeededRng } from "../rng";
 import type { BotDecisionTrace, BotTraceSink } from "../trace/trace";
@@ -118,6 +118,14 @@ export type SelfPlayEvent =
       semanticFingerprint: string;
       evidenceSourceIds: string[];
       /**
+       * Câu này do bảng mẫu sinh ra (true) hay do nhà cung cấp (false).
+       *
+       * Trong self-play luôn true - nhân mô phỏng không gọi mạng. Trường tồn
+       * tại để `fromTemplateRate` là một phép ĐẾM trên từng câu thay vì một
+       * hằng số, và để một bản ghi nhập từ production đọc được cùng một số đo.
+       */
+      fromTemplate: boolean;
+      /**
        * Vai mà ý định `CLAIM_ROLE`/`COUNTER_CLAIM` này khai, hoặc `null` với mọi
        * speech act khác.
        *
@@ -209,6 +217,7 @@ export function renderIntentionText(
     round: number;
     seq: number;
     avoidFingerprints?: readonly string[];
+    avoidOpenings?: readonly string[];
   },
 ): string {
   const target = speech.targetId ? nameOf(speech.targetId) : "người đó";
@@ -441,6 +450,8 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
           round,
           seq: chatSequence,
           avoidFingerprints: recentTextFingerprints(runtimes.get(playerId)!.state, 3),
+          // Cùng luật với server: không mở đầu như năm lượt vừa rồi của chính mình.
+          avoidOpenings: recentOpenings(runtimes.get(playerId)!.state),
         })
       : renderIntentionText(speech, nameOf);
 
@@ -483,6 +494,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       textFingerprint: speechTextFingerprint(text),
       semanticFingerprint: speechSemanticFingerprint(speech),
       evidenceSourceIds: speech.evidence.map((item) => item.sourceId),
+      fromTemplate: true,
       claimedRole: speech.claimedRole ?? null,
     });
 
