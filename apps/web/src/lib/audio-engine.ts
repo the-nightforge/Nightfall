@@ -64,7 +64,21 @@ function context(): AudioContext | null {
   musicBus.connect(ctx.destination);
   sfxBus.connect(ctx.destination);
   applyBusGains();
+  // iOS đổi trạng thái context mà không cần ai hỏi (xem `resume`). Bắt ngay
+  // tại nguồn là đường ngắn nhất; các listener trên document là lưới dự phòng.
+  ctx.addEventListener("statechange", () => audioEngine.resume());
   return ctx;
+}
+
+/**
+ * Context có đang thực sự phát hay không.
+ *
+ * iOS có thêm trạng thái "interrupted" ngoài chuẩn (không nằm trong kiểu của
+ * TypeScript) cho cuộc gọi, Siri, khoá màn hình, chuyển app, cắm/rút tai nghe.
+ * So với "running" thay vì liệt kê từng trạng thái khác để không bỏ sót nó.
+ */
+function isRunning(audio: AudioContext): boolean {
+  return (audio.state as string) === "running";
 }
 
 /** Hai bus tách biệt là lý do applySettings chỉ còn hai dòng. */
@@ -165,6 +179,27 @@ export const audioEngine = {
     return unlocked;
   },
 
+  /**
+   * Đánh thức context sau khi iOS ngắt nó.
+   *
+   * iOS đưa AudioContext về "interrupted" ở mỗi lần khoá màn hình, chuyển app,
+   * có cuộc gọi hay bật Siri, và không tự phục hồi một cách đáng tin cậy. Bản
+   * trước chỉ gọi `resume()` ở cú chạm đầu tiên và khi ĐỔI track - mà cả ván
+   * chỉ có một track - nên sau lần gián đoạn đầu tiên, nhạc lẫn hiệu ứng im
+   * tới hết ván.
+   *
+   * Không đụng tới nguồn đang chạy: `AudioBufferSourceNode` sống qua lần ngắt
+   * và tự chạy tiếp khi context chạy lại, nên chỉ cần `resume()`.
+   *
+   * Chỉ gọi khi trang đang hiện: iOS từ chối resume lúc trang ẩn, và sẽ có
+   * lượt gọi khác ở `visibilitychange` khi trang hiện lại.
+   */
+  resume(): void {
+    if (!unlocked || !ctx || isRunning(ctx)) return;
+    if (typeof document !== "undefined" && document.hidden) return;
+    void ctx.resume().catch(() => undefined);
+  },
+
   onUnlock(listener: () => void): () => void {
     unlockListeners.add(listener);
     return () => unlockListeners.delete(listener);
@@ -231,20 +266,31 @@ export const audioEngine = {
 /**
  * Mở khoá ở cú chạm đầu tiên bất kỳ trên trang, nhờ vậy không cần bắt người
  * chơi bấm thêm một nút "bật tiếng" riêng. Trả về hàm gỡ listener.
+ *
+ * Listener chạm KHÔNG tự gỡ sau lần đầu như bản trước: mọi cú chạm sau đó là
+ * một cơ hội gọi `resume()` trong stack của cử chỉ - thứ iOS đòi hỏi ở một số
+ * lần ngắt. `visibilitychange` và `pageshow` lo phần còn lại: người chơi quay
+ * lại app, hoặc iOS khôi phục trang từ bfcache mà không bắn `visibilitychange`.
  */
 export function installUnlockListener(): () => void {
   if (typeof document === "undefined") return () => undefined;
 
-  const remove = (): void => {
-    document.removeEventListener("pointerdown", onGesture);
-    document.removeEventListener("keydown", onGesture);
-  };
   function onGesture(): void {
     audioEngine.unlock();
-    remove();
+    audioEngine.resume();
+  }
+  function onWake(): void {
+    audioEngine.resume();
   }
 
   document.addEventListener("pointerdown", onGesture);
   document.addEventListener("keydown", onGesture);
-  return remove;
+  document.addEventListener("visibilitychange", onWake);
+  window.addEventListener("pageshow", onWake);
+  return (): void => {
+    document.removeEventListener("pointerdown", onGesture);
+    document.removeEventListener("keydown", onGesture);
+    document.removeEventListener("visibilitychange", onWake);
+    window.removeEventListener("pageshow", onWake);
+  };
 }
