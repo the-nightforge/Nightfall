@@ -68,6 +68,7 @@ export function speechEvent(
     textFingerprint: `fp${speechSeq}`,
     semanticFingerprint: `sem${speechSeq}`,
     evidenceSourceIds: [],
+    fromTemplate: true,
     claimedRole: null,
     ...over,
   };

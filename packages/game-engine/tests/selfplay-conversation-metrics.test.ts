@@ -53,6 +53,7 @@ function speech(
     semanticFingerprint: `sem-${text}`,
     evidenceSourceIds: [],
     claimedRole: null,
+    fromTemplate: true,
     ...over,
   };
 }
@@ -107,6 +108,33 @@ describe("đo lặp câu chữ THẬT", () => {
       }),
     ]);
     expect(overall.repeatedOpeningRate).toEqual({ value: 0.5, numerator: 1, denominator: 2 });
+  });
+
+  it("distinctOpeningRate: số cách mở đầu khác nhau trên số câu, theo từng bot trong từng ván", () => {
+    const { overall } = collectMetrics([
+      game({
+        events: [
+          speech(1, "v1", "Tôi nghi w1 vì lá phiếu."),
+          speech(1, "v1", "Tôi nghi w1 thật đấy."),
+          speech(2, "v1", "w1 im từ nãy giờ."),
+          speech(2, "v2", "Tôi nghi w1 luôn."),
+        ],
+      }),
+    ]);
+    // v1: 3 câu, 2 cách mở đầu; v2: 1 câu, 1 cách. (2 + 1) / 4.
+    expect(overall.distinctOpeningRate).toEqual({ value: 0.75, numerator: 3, denominator: 4 });
+  });
+
+  it("fromTemplateRate đếm đúng cờ trên từng câu, không phải một hằng số", () => {
+    const { overall } = collectMetrics([
+      game({
+        events: [
+          speech(1, "v1", "Tôi nghi w1 vì lá phiếu."),
+          speech(1, "v2", "w1 im từ nãy giờ.", { fromTemplate: false }),
+        ],
+      }),
+    ]);
+    expect(overall.fromTemplateRate).toEqual({ value: 0.5, numerator: 1, denominator: 2 });
   });
 
   it("nhắm mãi một người bị đếm riêng", () => {
@@ -236,6 +264,13 @@ describe("đo trên ván thật", () => {
   });
 
   it("self-play chạy hoàn toàn bằng mẫu câu, không gọi mạng", () => {
-    expect(overall.fallbackTemplateRate.value).toBe(1);
+    expect(overall.fromTemplateRate.value).toBe(1);
+    expect(overall.fromTemplateRate.denominator).toBeGreaterThan(0);
+  });
+
+  it("phần lớn câu của một bot trong một ván mở đầu khác nhau", () => {
+    // Task A/B tồn tại để đẩy số này lên. 0.6 thấp hơn hẳn mức đo được, đủ để
+    // bắt một hồi quy về bảng mẫu bốn câu chứ không đỏ vì đổi một mẫu.
+    expect(overall.distinctOpeningRate.value).toBeGreaterThan(0.6);
   });
 });

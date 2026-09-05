@@ -118,6 +118,14 @@ export type SelfPlayEvent =
       semanticFingerprint: string;
       evidenceSourceIds: string[];
       /**
+       * Câu này do bảng mẫu sinh ra (true) hay do nhà cung cấp (false).
+       *
+       * Trong self-play luôn true - nhân mô phỏng không gọi mạng. Trường tồn
+       * tại để `fromTemplateRate` là một phép ĐẾM trên từng câu thay vì một
+       * hằng số, và để một bản ghi nhập từ production đọc được cùng một số đo.
+       */
+      fromTemplate: boolean;
+      /**
        * Vai mà ý định `CLAIM_ROLE`/`COUNTER_CLAIM` này khai, hoặc `null` với mọi
        * speech act khác.
        *
@@ -486,6 +494,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       textFingerprint: speechTextFingerprint(text),
       semanticFingerprint: speechSemanticFingerprint(speech),
       evidenceSourceIds: speech.evidence.map((item) => item.sourceId),
+      fromTemplate: true,
       claimedRole: speech.claimedRole ?? null,
     });
 

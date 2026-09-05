@@ -25,7 +25,8 @@
       "defenseSeconds": 20,
       "finalVoteSeconds": 20,
       "jester": false,
-      "serialKiller": false
+      "serialKiller": false,
+      "executioner": false
     }
   },
   "metrics": {
@@ -149,6 +150,11 @@
       "numerator": 9,
       "denominator": 109
     },
+    "distinctOpeningRate": {
+      "value": 0.9174311926605505,
+      "numerator": 100,
+      "denominator": 109
+    },
     "consecutiveSameTargetRate": {
       "value": 0.05504587155963303,
       "numerator": 6,
@@ -171,7 +177,7 @@
       "numerator": 116,
       "denominator": 225
     },
-    "fallbackTemplateRate": {
+    "fromTemplateRate": {
       "value": 1,
       "numerator": 109,
       "denominator": 109
