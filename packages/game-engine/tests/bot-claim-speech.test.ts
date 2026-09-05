@@ -158,7 +158,7 @@ function contextFor(
       players: CLAIM_SPEECH_IDS.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
       knownRoles: { [selfId]: selfRole },
       seerResult: null,
-      mediumResult: null,
+      sorcererResult: null,
       night: null,
       trialAccusedId: null,
       canFinalVote: false,

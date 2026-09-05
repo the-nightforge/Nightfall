@@ -97,7 +97,7 @@ describe("lời nhắm tới KHÔNG phải bằng chứng", () => {
       players: PLAYERS,
       knownRoles: {},
       seerResult: null,
-      mediumResult: null,
+      sorcererResult: null,
       night: null,
       trialAccusedId: null,
       canFinalVote: false,

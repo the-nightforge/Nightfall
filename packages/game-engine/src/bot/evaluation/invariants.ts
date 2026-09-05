@@ -386,12 +386,9 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
         });
       }
       for (const [action, targets] of Object.entries(knowledge.night?.legalTargets ?? {})) {
-        /*
-         * Bà Đồng gọi hồn NGƯỜI ĐÃ CHẾT, nên với đúng mã này bất biến bị LẬT
-         * chứ không bị gỡ - cùng tinh thần với `seerReadsAsWolf`: một mục tiêu
-         * còn sống trong danh sách gọi hồn cũng là một lỗi, và phải kêu.
-         */
-        const mustBeAlive = action !== "MEDIUM_CHECK";
+        // Mọi hành động đêm còn lại đều nhắm người SỐNG (Bà Đồng - ngoại lệ duy
+        // nhất nhắm người chết - đã bị xóa cứng cùng MEDIUM_CHECK).
+        const mustBeAlive = true;
         for (const targetId of targets) {
           if (Boolean(truth.alive[targetId]) === mustBeAlive) continue;
           auditor.report("DEAD_TARGET", {
@@ -459,9 +456,9 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
         });
       }
 
-      // Lật cho Bà Đồng, xem khối cùng tên ở `checkTurn`. `MEDIUM_CHECK` không
-      // bao giờ có mục tiêu thứ hai, nên lật cả hai ô là vô hại.
-      const targetMustBeAlive = intention.action !== "MEDIUM_CHECK";
+      // Mọi hành động đêm còn lại đều nhắm người SỐNG (Bà Đồng - ngoại lệ duy
+      // nhất - đã bị xóa cứng cùng MEDIUM_CHECK).
+      const targetMustBeAlive = true;
       for (const targetId of [intention.targetId, intention.secondaryTargetId]) {
         if (!targetId) continue;
         if (Boolean(truth.alive[targetId]) !== targetMustBeAlive) {

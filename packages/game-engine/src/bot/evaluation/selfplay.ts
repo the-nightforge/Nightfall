@@ -1,4 +1,5 @@
 import {
+  isRole,
   ROLE_META,
   type GamePhase,
   type PersonalWin,
@@ -324,8 +325,12 @@ export function renderIntentionText(
   // Nguồn chữ vai DUY NHẤT là ROLE_META - cùng bảng UI dùng để hiển thị. Một
   // định danh Role thô ("SEER") không phải tiếng Việt và bộ phân tích chat
   // (`roleAtStart`) không đọc được nó; nhánh tối giản này vẫn phải sinh ra câu
-  // có thể đọc ngược, dù chỉ dùng khi hội thoại tắt.
-  const roleName = speech.claimedRole ? ROLE_META[speech.claimedRole].name : "dân làng";
+  // có thể đọc ngược, dù chỉ dùng khi hội thoại tắt. Ván cũ có thể mang vai đã
+  // bị xóa cứng (PRIEST/MEDIUM) nên guard `isRole`, rơi về "dân làng".
+  const roleName =
+    speech.claimedRole && isRole(speech.claimedRole)
+      ? ROLE_META[speech.claimedRole].name
+      : "dân làng";
 
   // Bảng mẫu đầy đủ khi chỗ gọi cho biết đây là lượt nói thứ mấy của ai. Nhánh
   // dưới là dạng tối giản một-câu-một-loại, giữ lại cho các test khẳng định

@@ -32,6 +32,7 @@ function emptyNight(): NightState {
     guardianAngelTarget: null,
     detectiveTargets: null,
     detectiveResults: {},
+    sorcererResults: {},
     serialKillerTarget: null,
     serialKillerSkipped: false,
   };
@@ -85,6 +86,7 @@ function killerState(over: Partial<GameState> = {}, seats: Seat[] = DEFAULT_SEAT
     hunterShots: [],
     guardianAngelPrevious: null,
     guardianAngelCharges: {},
+    alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
     activeEvent: null,

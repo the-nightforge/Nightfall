@@ -69,14 +69,19 @@ export const ROLE_PHRASES: ReadonlyArray<readonly [string, Role]> = [
   // "trưởng lão" trước "trưởng" của "thị trưởng"? Không đụng nhau - hai cụm
   // khác tiếng đầu - nhưng giữ đúng quy ước cụm dài đứng trước của bảng.
   ["trưởng lão", "ELDER"],
-  ["bà đồng", "MEDIUM"],
+  // Sói Pháp Sư: CHỈ nghe-hiểu, không bao giờ claim công khai (bầy giữ kín).
+  // Đứng trước "sói" để "sói pháp sư" không bị khớp thành "sói" thường.
+  ["sói pháp sư", "SORCERER"],
+  ["pháp sư", "SORCERER"],
   // "song trùng" không kèm "kẻ" vẫn là một cách gọi tự nhiên trong câu khai,
   // và nó không đụng cụm nào khác trong bảng - cùng quy ước với "phản bội".
   ["kẻ song trùng", "DOPPELGANGER"],
   ["song trùng", "DOPPELGANGER"],
-  ["linh mục", "PRIEST"],
   ["thị trưởng", "MAYOR"],
   ["sói con", "WOLF_CUB"],
+  // Trước "sói" để "sói alpha" không bị khớp thành "sói" thường - cùng lý do
+  // với "sói pháp sư" ngay trên. Nghe-hiểu cho parser đọc ngược lời khai.
+  ["sói alpha", "ALPHA_WOLF"],
   ["dân thường", "VILLAGER"],
   ["dân làng", "VILLAGER"],
   ["tiên tri", "SEER"],
@@ -98,11 +103,9 @@ export const ROLE_PHRASES: ReadonlyArray<readonly [string, Role]> = [
   ["tt", "SEER"],
   ["bv", "GUARD"],
   // Cùng quy ước với "tt"/"bv": chỉ khớp trọn token ngay sau một cách tự
-  // xưng. Nguồn: `reports/alias-proposal.md` (pt, lm, ts, bd, dl, sw).
+  // xưng. Nguồn: `reports/alias-proposal.md` (pt, ts, dl, sw).
   ["pt", "WITCH"],
-  ["lm", "PRIEST"],
   ["ts", "HUNTER"],
-  ["bd", "MEDIUM"],
   ["dl", "VILLAGER"],
   ["sw", "WEREWOLF"],
 ];

@@ -1,4 +1,4 @@
-import { isPowerRole, roleTeam, type Role } from "@masoi/shared";
+import { isPowerRole, isRole, roleTeam, type Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { fnv1a32 } from "../hash";
 import { isHumanTable } from "../knowledge";
@@ -104,18 +104,19 @@ export interface BotChatClaimIntention {
 /**
  * Vai có kết quả riêng chỉ được đích danh một người.
  *
- * KHÔNG có Thám Tử: `state.knownInformation.seerResults` chỉ được nạp ở đúng
- * một chỗ (`BotRuntime.ingestSeerResult`), và chỉ từ `knowledge.seerResult` -
- * trường engine chỉ cấp cho hành động SEE. Kỹ năng của Thám Tử
- * (`DETECTIVE_CHECK`) so hai người xem có cùng phe hay không, không bao giờ
- * chỉ đích danh một con Sói, nên nó không bao giờ tạo ra một mục trong
- * `seerResults` để mà khai. Tiên Tri Tập Sự vẫn ở đây vì nó thừa kế đúng hành
- * động SEE khi Tiên Tri chết.
+ * KHÔNG có Thám Tử: `state.knownInformation.seerResults` chỉ được nạp từ
+ * `knowledge.seerResult` (ở `BotRuntime.ingestSeerResult`) và từ lượt soi dòng
+ * Tiên Tri của Sói Pháp Sư (ở `applyPrivateInformation`, cờ `seerLine`, không
+ * có `isWolf`) - hai trường engine chỉ cấp cho hành động SEE và SORCERER_CHECK.
+ * Kỹ năng của Thám Tử (`DETECTIVE_CHECK`) so hai người xem có cùng phe hay
+ * không, không bao giờ chỉ đích danh một con Sói, nên nó không bao giờ tạo ra
+ * một mục trong `seerResults` để mà khai. Tiên Tri Tập Sự vẫn ở đây vì nó thừa
+ * kế đúng hành động SEE khi Tiên Tri chết.
  */
 const INFORMANT_ROLES = new Set<Role>(["SEER", "APPRENTICE_SEER"]);
 
 /** Vai chức năng mà một con Sói bị dồn có thể nấp sau. Thứ tự là thứ tự ưu tiên. */
-const BLUFF_COVERS: readonly Role[] = ["GUARD", "WITCH", "HUNTER", "PRIEST"];
+const BLUFF_COVERS: readonly Role[] = ["GUARD", "WITCH", "HUNTER", "GUARDIAN_ANGEL"];
 
 /**
  * "Vai chức năng" ở file này là ĐÚNG tập `isPowerRole` của `@masoi/shared`, tập
@@ -303,8 +304,10 @@ export function decideChatClaim(
       (memory) => memory.targetId === me && alivePlayers.has(memory.actorId),
     );
     if (challenger) {
-      const claimedRole = challenger.data.role as Role | undefined;
-      if (claimedRole) {
+      // Guard `isRole`: ván cũ có thể mang vai đã xóa cứng, mà vai đó đi thẳng
+      // thành lời phản bác công khai ở dưới.
+      const claimedRole = challenger.data.role;
+      if (isRole(claimedRole)) {
         return {
           role: claimedRole,
           kind: "COUNTER",
@@ -353,15 +356,16 @@ export function decideChatClaim(
         state.personality.deceptionSkill *
         state.personality.riskTolerance;
       if (rng() < dare) {
+        // Guard `isRole` cả hai chỗ: `isPowerRole` tra thẳng ROLE_META, và vai
+        // đè lên đi thẳng thành lời khai công khai ở dưới.
         const collision = claimsInOrder(state).find(
           (memory) =>
             memory.actorId !== me &&
             alivePlayers.has(memory.actorId) &&
-            isPowerRole((memory.data.role as Role | undefined) ?? COVER),
+            isPowerRole(isRole(memory.data.role) ? memory.data.role : COVER),
         );
-        const collidedRole = collision
-          ? ((collision.data.role as Role | undefined) ?? "SEER")
-          : "SEER";
+        const collidedRole =
+          collision && isRole(collision.data.role) ? collision.data.role : "SEER";
         return {
           role: collidedRole,
           kind: collision ? "COUNTER" : "PROACTIVE",

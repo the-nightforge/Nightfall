@@ -1,4 +1,4 @@
-import { roleTeam, type DayVoteRecap, type Role, type VoteMutation } from "@masoi/shared";
+import { isRole, roleTeam, type DayVoteRecap, type Role, type VoteMutation } from "@masoi/shared";
 import { analyzeChat } from "./analysis/chat-analysis";
 import { claimEvidence } from "./analysis/claim-credibility";
 import { applySocialEvidence } from "./analysis/social-analysis";
@@ -1083,7 +1083,9 @@ export class BotRuntime {
     for (const claim of this.state.claims) {
       if (claim.actorId === this.state.playerId) continue;
       const role = claim.data.role;
-      if (typeof role !== "string") continue;
+      // Ván cũ/memory chép tay có thể mang vai đã bị xóa cứng (PRIEST/MEDIUM):
+      // `roleTeam` tra thẳng ROLE_META nên phải guard, bỏ qua lặng lẽ.
+      if (typeof role !== "string" || !isRole(role)) continue;
 
       let bluffed: boolean | null = null;
       const known = knowledge.knownRoles[claim.actorId];
@@ -1094,7 +1096,7 @@ export class BotRuntime {
           (memory) => memory.targetId === claim.actorId,
         );
         if (seen && typeof seen.data.isWolf === "boolean") {
-          bluffed = (roleTeam(role as Role) === "wolves") !== seen.data.isWolf;
+          bluffed = (roleTeam(role) === "wolves") !== seen.data.isWolf;
         }
       }
       if (bluffed === null) continue;

@@ -2743,6 +2743,17 @@ export class GameEngine {
         }
       : null;
 
+    // Gương `seerResult` ngay trên: entry ghi theo botId nên chỉ chính Sói Pháp
+    // Sư mới có - không cần thêm cổng theo vai.
+    const sorcererEntry = st.night.sorcererResults[botId];
+    const sorcererResult = sorcererEntry
+      ? {
+          targetId: sorcererEntry.targetId,
+          targetName: this.player(sorcererEntry.targetId)?.name ?? "?",
+          isSeerLine: sorcererEntry.isSeerLine,
+        }
+      : null;
+
     return buildBotKnowledgeView({
       botId,
       round: st.round,
@@ -2756,10 +2767,7 @@ export class GameEngine {
       knownRoles,
       revealRoleOnDeath: st.config.revealRoleOnDeath === true,
       seerResult,
-      // Bà Đồng đã bị xóa cứng nên engine không còn gì để kể ở đây. Giữ key với
-      // null để `BotKnowledgeInput` (Task 6 sở hữu) vẫn biên dịch được cho tới
-      // khi Task 6 gỡ trường này khỏi bot/types.ts + knowledge.ts.
-      mediumResult: null,
+      sorcererResult,
       // Suy từ CHÍNH bộ bài mà `assignRoles` chia, không phải một danh sách
       // chép tay: bật thêm một vai trung lập sau này là nó tự vào đây.
       neutralRolesInPlay: neutralRolesFor(st.config),
@@ -2828,7 +2836,7 @@ export class GameEngine {
     const alive = this.alivePlayers();
 
     const legalActions: NightActionKind[] = [];
-    const legalTargets = {
+    const legalTargets: Record<NightActionKind, string[]> = {
       KILL: [],
       SEE: [],
       GUARD: [],
@@ -2838,7 +2846,8 @@ export class GameEngine {
       DETECTIVE_CHECK: [],
       GUARDIAN_PROTECT: [],
       SERIAL_KILL: [],
-    } as Record<NightActionKind, string[]>;
+      SORCERER_CHECK: [],
+    };
 
     // Tiên Tri Tập Sự soi y hệt Tiên Tri, nhưng chỉ SAU khi thức tỉnh.
     // `hasNightAction` đã chặn lúc chưa thức tỉnh, nên tới đây là đã đủ điều kiện.
@@ -2857,10 +2866,10 @@ export class GameEngine {
         .filter((player) => roleTeam(player.role) !== "wolves")
         .map((player) => player.id);
       // Sói Pháp Sư cắn cùng bầy NHƯNG soi riêng dòng Tiên Tri (gương Detective:
-      // người sống trừ mình). `as` vì `NightActionKind` thuộc Task 6 sở hữu.
+      // người sống trừ mình).
       if (viewer.role === "SORCERER") {
-        legalActions.push("SORCERER_CHECK" as NightActionKind);
-        (legalTargets as Record<string, string[]>)["SORCERER_CHECK"] = alive
+        legalActions.push("SORCERER_CHECK");
+        legalTargets.SORCERER_CHECK = alive
           .filter((player) => player.id !== viewer.id)
           .map((player) => player.id);
       }

@@ -27,6 +27,7 @@ function emptyNight(): NightState {
     guardianAngelTarget: null,
     detectiveTargets: null,
     detectiveResults: {},
+    sorcererResults: {},
   };
 }
 
@@ -70,6 +71,7 @@ function jesterState(over: Partial<GameState> = {}): GameState {
     hunterShots: [],
     guardianAngelPrevious: null,
     guardianAngelCharges: {},
+    alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
     activeEvent: null,

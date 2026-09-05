@@ -1,5 +1,7 @@
 import { roleTeam, type Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import { remember } from "../memory/memory-store";
+import { SORCERER_SIGHTING_SOURCE_PREFIX } from "../roles/sorcerer";
 import type { BotBrainState, BotEvidence, BotKnowledgeView } from "../types";
 import { applyEvidence, applyTrustEvidence } from "./belief-state";
 import { MAX_BELIEF_SCORE } from "./evidence";
@@ -56,21 +58,11 @@ interface ProvenRoleHolder {
 function provenRoleHolders(knowledge: BotKnowledgeView): ProvenRoleHolder[] {
   const found: ProvenRoleHolder[] = [];
 
-  const medium = knowledge.mediumResult;
-  if (medium) {
-    found.push({
-      holderId: medium.targetId,
-      holderName: medium.targetName,
-      role: medium.role,
-      sourceId: `medium:${medium.targetId}`,
-      because: `hồn ${medium.targetName} mới là vai đó`,
-    });
-  }
-
   /*
    * Tiên Tri Tập Sự đọc thẳng từ `knownRoles`, không cần một trường riêng:
    * engine đã đặt Tiên Tri vào đó cho đúng người xem này, y hệt cách Sói thấy
-   * bầy của mình.
+   * bầy của mình. (Bà Đồng - nguồn thứ hai của hàm này - đã bị xóa cứng cùng
+   * vai của nó.)
    */
   if (knowledge.selfRole === "APPRENTICE_SEER") {
     for (const [playerId, role] of Object.entries(knowledge.knownRoles)) {
@@ -171,10 +163,9 @@ export function applyPrivateInformation(
   /*
    * LỜI KHAI BỊ CHỨNG MINH LÀ DỐI.
    *
-   * Hai vai đi vào đây bằng hai đường nhưng cùng một suy luận: bot biết CHẮC
-   * một vai thuộc về ai, và một người CÒN SỐNG khác đang nhận đúng vai đó.
-   *  - Bà Đồng: gọi hồn đọc ra vai thật của một cái xác.
-   *  - Tiên Tri Tập Sự: được chỉ mặt Tiên Tri từ đêm 1.
+   * Bot biết CHẮC một vai thuộc về ai (ở đây: Tiên Tri Tập Sự được chỉ mặt
+   * Tiên Tri từ đêm 1), và một người CÒN SỐNG khác đang nhận đúng vai đó.
+   * (Bà Đồng - nguồn thứ hai của vòng này - đã bị xóa cứng cùng vai của nó.)
    *
    * Gộp một chỗ chứ không chép đôi: phần dễ trôi lệch nhất là bộ điều kiện loại
    * trừ, không phải phần áp bằng chứng.
@@ -304,6 +295,40 @@ export function applyPrivateInformation(
         pinScore(state.suspicion, result.targetId, 0, round);
       }
     }
+  }
+
+  /*
+   * SÓI PHÁP SƯ: mục tiêu thuộc dòng Tiên Tri là kẻ phải cắn trước.
+   *
+   * Không đi vào suspicion (thang đó đo "giống Sói", mà mục tiêu gần như chắc
+   * chắn thuộc phe làng) mà thành một bản soi ghim có cờ `seerLine`, CHUNG kho
+   * `knownInformation.seerResults` với Tiên Tri nhưng KHÔNG có `isWolf` - nên
+   * mọi chỗ đọc kết quả soi của Tiên Tri đều bỏ qua nó: chúng hỏi
+   * `data.isWolf === true` hoặc `typeof ... === "boolean"`. Hai chỗ đọc nó là
+   * `sorcererStrategy` (không soi lại, đẩy phiếu vào) và chính tiền tố nguồn
+   * `sorcerer:` ở dưới.
+   *
+   * `remember` tự chặn trùng theo `memoryKey`, nên `observe()` chạy nhiều lần
+   * một vòng vẫn chỉ để lại một bản ghi.
+   */
+  const sorcerer = knowledge.sorcererResult;
+  if (sorcerer?.isSeerLine) {
+    remember(
+      state,
+      {
+        id: `sorcerer:${sorcerer.targetId}`,
+        sourceId: `${SORCERER_SIGHTING_SOURCE_PREFIX}${sorcerer.targetId}`,
+        round,
+        phase: knowledge.phase,
+        type: "SEER_RESULT",
+        actorId: knowledge.botId,
+        targetId: sorcerer.targetId,
+        importance: weights.memoryImportance.seerResult,
+        pinned: true,
+        data: { seerLine: true },
+      },
+      weights,
+    );
   }
 
   // Chỉ Sói mới có đồng đội. Cổng này KHÔNG thừa: biến thể luật

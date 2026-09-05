@@ -193,12 +193,14 @@ describe("claimEvidence", () => {
   });
 
   /**
-   * FIX 3: `PRIEST` là chỗ nấp AN TOÀN NHẤT của một con Sói bị dồn (nó đứng
-   * trong `BLUFF_COVERS`), nhưng tập `POWER_ROLES` chép tay cũ của file này bỏ
-   * sót nó - nên đúng lời nói dối rẻ nhất lại là lời mô hình mù hoàn toàn.
+   * FIX 3: Linh Mục từng là chỗ nấp AN TOÀN NHẤT của một con Sói bị dồn (nó đứng
+   * trong `BLUFF_COVERS`) nhưng tập `POWER_ROLES` chép tay cũ của file này bỏ
+   * sót nó. Linh Mục đã bị xóa cứng, nhưng bài học còn: mọi vai trong
+   * `BLUFF_COVERS` hôm nay (GUARDIAN_ANGEL thay chỗ PRIEST) đều phải là vai
+   * quyền lực mà mô hình nhìn thấy.
    */
-  it("FIX: PRIEST/GUARDIAN_ANGEL/MAYOR nay cũng là vai quyền lực", () => {
-    for (const role of ["PRIEST", "GUARDIAN_ANGEL", "MAYOR"]) {
+  it("FIX: GUARDIAN_ANGEL/MAYOR nay cũng là vai quyền lực", () => {
+    for (const role of ["GUARDIAN_ANGEL", "MAYOR"]) {
       const found = claimEvidence(
         { ...BASE, claims: [claim("p1", role, 1, "m1"), claim("p2", role, 2, "m2")] },
         BOT_WEIGHTS_V4,
@@ -209,8 +211,24 @@ describe("claimEvidence", () => {
     }
   });
 
-  it("nhóm claim tắt thì không phát gì", () => {
-    const off = { ...BOT_WEIGHTS_V4, claim: { ...BOT_WEIGHTS_V4.claim, accusationWeight: 0 } };
+  it("vai đã xóa (PRIEST/MEDIUM) trong memory cũ: bỏ qua lặng lẽ, không nổ", () => {
+    // Đúng chỗ Task 4 từng nổ: `isPowerRole(claimedRole)` tra thẳng ROLE_META.
+    const found = claimEvidence(
+      {
+        ...BASE,
+        claims: [
+          claim("p1", "PRIEST", 1, "m1"),
+          claim("p2", "PRIEST", 2, "m2"),
+          claim("p1", "MEDIUM", 1, "m1"),
+        ],
+      },
+      BOT_WEIGHTS_V4,
+    );
+    expect(found.some((item) => item.id.includes("collision:PRIEST"))).toBe(false);
+    expect(found.some((item) => item.id.includes("collision:MEDIUM"))).toBe(false);
+  });
+
+  it("nhóm claim tắt thì không phát gì", () => {    const off = { ...BOT_WEIGHTS_V4, claim: { ...BOT_WEIGHTS_V4.claim, accusationWeight: 0 } };
     expect(claimEvidence({ ...BASE, claims: [claim("p1", "SEER", 1, "m1")] }, off)).toEqual([]);
   });
 
@@ -305,7 +323,7 @@ function dayOfTruthContext(round: number): BotDecisionContext {
       ],
       knownRoles: { me: "VILLAGER" },
       seerResult: null,
-      mediumResult: null,
+      sorcererResult: null,
       night: null,
       trialAccusedId: null,
       canFinalVote: false,

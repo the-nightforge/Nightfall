@@ -253,7 +253,6 @@ export function formatReportText(report: SelfPlayReport): string {
     `  Đêm giữ bình vì veto tin tưởng ${pct(m.witchHoldVetoedByTrustRate)}`,
     `  Phù Thuỷ dùng bình độc   ${pct(m.witchPoisonRate)}  trúng Sói ${pct(m.witchPoisonAccuracy)}`,
     `  Phù Thuỷ cứu             ${pct(m.witchHealRate)}`,
-    `  Linh Mục ném             ${pct(m.priestHolyWaterRate)}  trúng Sói ${pct(m.priestHolyWaterAccuracy)}`,
     `  Sói cãi giả (ván có)     ${pct(m.wolfFakeFightRate)}`,
     "",
     "── Hội thoại ──",

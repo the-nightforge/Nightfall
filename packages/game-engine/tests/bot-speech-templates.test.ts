@@ -624,4 +624,19 @@ describe("renderSpeechTemplate tránh cách mở đầu vừa dùng", () => {
       );
     }
   });
+
+  it("vai đã xóa (PRIEST/MEDIUM) rơi về 'dân làng', không nổ", () => {
+    // Ván cũ/log cũ có thể mang lời khai vai đã bị xóa cứng: đây là đúng chỗ
+    // Task 4 từng nổ (`ROLE_META[claimedRole]` trên undefined).
+    for (const deleted of ["PRIEST", "MEDIUM"]) {
+      const base = request({
+        intention: intention({
+          kind: "CLAIM_ROLE",
+          claimedRole: deleted as unknown as BotSpeechIntention["claimedRole"],
+        }),
+      });
+      const text = fillSpeechTemplate("Tôi là {role}.", base);
+      expect(text).toBe("Tôi là dân làng.");
+    }
+  });
 });

@@ -31,6 +31,7 @@ function emptyNight(): NightState {
     guardianAngelTarget: null,
     detectiveTargets: null,
     detectiveResults: {},
+    sorcererResults: {},
   };
 }
 
@@ -75,6 +76,7 @@ function executionerState(over: Partial<GameState> = {}): GameState {
     hunterShots: [],
     guardianAngelPrevious: null,
     guardianAngelCharges: {},
+    alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
     activeEvent: null,
