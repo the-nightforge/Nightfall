@@ -171,9 +171,24 @@ export function RoleRevealView({ snapshot }: { snapshot: RoomSnapshot }) {
           <button
             type="button"
             aria-pressed={revealed}
-            onPointerDown={() => setRevealed(true)}
+            // `setPointerCapture` là thứ giữ cho cú lật sống được tới lúc thả
+            // tay. Ngay khi thẻ quay quá 90 độ, `backface-visibility` rút mặt
+            // úp khỏi hit-test và mặt ngửa nhảy lên làm đích - trình duyệt lập
+            // tức bắn `pointerout` vào nút dù con trỏ chưa hề nhúc nhích. Bắt
+            // pointer về nút thì mọi sự kiện của ngón/chuột ấy vẫn đi thẳng
+            // vào đây bất kể bên dưới là mặt nào, nên thẻ ở yên cho tới
+            // `pointerup` thật. (Cảm ứng đã có capture ngầm sẵn; đây là trả
+            // cùng luật đó cho chuột.)
+            onPointerDown={(e) => {
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+              } catch {
+                // Trình duyệt cũ không có capture: lưới `pointerup` ở `window`
+                // bên dưới vẫn lo được phần úp thẻ.
+              }
+              setRevealed(true);
+            }}
             onPointerUp={hide}
-            onPointerLeave={hide}
             onPointerCancel={hide}
             // Giữ lâu trên di động mở menu "sao chép ảnh/chia sẻ" và nhả tay ra
             // ngoài menu đó - chặn ở đây thì cái menu không bao giờ che mất thẻ
