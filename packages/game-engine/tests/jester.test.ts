@@ -21,15 +21,12 @@ function emptyNight(): NightState {
     healTonight: false,
     poisonTarget: null,
     witchSkipped: false,
-    priestSkipped: false,
     seerResults: {},
     wolfSecondaryTarget: null,
     wolfCubRageTonight: false,
     guardianAngelTarget: null,
-    priestTarget: null,
     detectiveTargets: null,
     detectiveResults: {},
-    priestResults: {},
   };
 }
 
@@ -54,7 +51,7 @@ function jesterState(over: Partial<GameState> = {}): GameState {
       { id: "wolf", name: "Sói", role: "WEREWOLF", alive: true, isBot: false },
       { id: "jester", name: "Hề", role: "JESTER", alive: true, isBot: false },
       { id: "seer", name: "Tiên Tri", role: "SEER", alive: true, isBot: false },
-      { id: "priest", name: "Linh Mục", role: "PRIEST", alive: true, isBot: false },
+      { id: "extra", name: "Dân Thêm", role: "VILLAGER", alive: true, isBot: false },
       { id: "witch", name: "Phù Thuỷ", role: "WITCH", alive: true, isBot: false },
       { id: "detective", name: "Thám Tử", role: "DETECTIVE", alive: true, isBot: false },
       { id: "villager", name: "Dân", role: "VILLAGER", alive: true, isBot: false },
@@ -73,7 +70,6 @@ function jesterState(over: Partial<GameState> = {}): GameState {
     hunterShots: [],
     guardianAngelPrevious: null,
     guardianAngelCharges: {},
-    priestHolyWaterUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
     activeEvent: null,
@@ -185,23 +181,6 @@ describe("Thằng Hề - điều kiện thắng cá nhân", () => {
     expect(engine.personalWins()).toEqual([]);
   });
 
-  it("Nước thánh ném vào Hề thì Linh Mục chết, Hề sống và không thắng", () => {
-    // Hề không phải Sói, nên đây là đúng nhánh phản đòn của Nước thánh. Nó
-    // cũng là cách một Hề vô tình sống sót qua đêm mà không được gì.
-    const engine = jesterEngine();
-    engine.submitNightAction("priest", "HOLY_WATER", "jester");
-    engine.resolveNight();
-
-    expect(playerOf(engine, "priest").alive).toBe(false);
-    expect(playerOf(engine, "jester").alive).toBe(true);
-    expect(engine.personalWins()).toEqual([]);
-    expect(engine.state.nightHistory[0].priest).toEqual({
-      priest: { id: "priest", name: "Linh Mục" },
-      target: { id: "jester", name: "Hề" },
-      isWolf: false,
-    });
-  });
-
   it("ghi nhận ĐÚNG MỘT LẦN, kể cả khi bước chuyển pha chạy lại", () => {
     // Ca thật đứng sau khẳng định này: một process khôi phục sau restart có
     // thể dựng lại engine từ snapshot rồi chạy lại đúng bước vừa chạy.
@@ -250,7 +229,7 @@ describe("Thằng Hề - điều kiện thắng cá nhân", () => {
      * ván mà Hề mua bằng cả mạng mình - sẽ nuốt mất nó.
      */
     const engine = jesterEngine();
-    for (const id of ["seer", "priest", "witch", "detective"]) {
+    for (const id of ["seer", "extra", "witch", "detective"]) {
       playerOf(engine, id).alive = false;
     }
     // Còn: wolf, jester, villager. Treo Hề -> 1 Sói vs 1 người còn lại.
@@ -333,7 +312,7 @@ describe("Thằng Hề - tương tác với luật hiện có", () => {
 
   it("Hề còn sống được tính vào số người KHÔNG phải Sói", () => {
     const engine = jesterEngine();
-    for (const id of ["seer", "priest", "witch", "detective"]) {
+    for (const id of ["seer", "extra", "witch", "detective"]) {
       playerOf(engine, id).alive = false;
     }
     // 1 Sói vs (Hề + Dân) = 2 -> chưa cân bằng, ván chưa xong.

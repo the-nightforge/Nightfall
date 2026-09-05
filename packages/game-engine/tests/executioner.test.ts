@@ -25,15 +25,12 @@ function emptyNight(): NightState {
     healTonight: false,
     poisonTarget: null,
     witchSkipped: false,
-    priestSkipped: false,
     seerResults: {},
     wolfSecondaryTarget: null,
     wolfCubRageTonight: false,
     guardianAngelTarget: null,
-    priestTarget: null,
     detectiveTargets: null,
     detectiveResults: {},
-    priestResults: {},
   };
 }
 
@@ -78,7 +75,6 @@ function executionerState(over: Partial<GameState> = {}): GameState {
     hunterShots: [],
     guardianAngelPrevious: null,
     guardianAngelCharges: {},
-    priestHolyWaterUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
     activeEvent: null,
