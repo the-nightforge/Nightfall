@@ -28,6 +28,7 @@ import type {
   BotEvidence,
   BotMemory,
   BotSpeechRecord,
+  PlayerProfile,
   SocialEdge,
 } from "@masoi/game-engine";
 import type { LastLetterRoomState } from "../game/last-letter";
@@ -320,6 +321,9 @@ export const botBrainStateSchema = z.object({
   repliedMessageIds: z.array(z.string()),
   seenEventIds: z.array(z.string()),
   appliedClaimEvidenceIds: z.array(z.string()),
+  // Snapshot trước P1.1 không có hồ sơ; khôi phục thành bảng trống rồi bot
+  // tự lập lại từ những gì nó thấy tiếp theo.
+  profiles: z.record(z.string(), objectOf<PlayerProfile>()).default({}),
 });
 
 const botSessionSchema = z.object({

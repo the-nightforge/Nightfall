@@ -5,6 +5,8 @@ import { createBotBrainState, remember } from "../src/bot/memory/memory-store";
 import { decayAndPrune } from "../src/bot/memory/memory-decay";
 import { validateEvidence } from "../src/bot/belief/evidence";
 import { applyEvidence, applyTrustEvidence } from "../src/bot/belief/belief-state";
+import { neutralProfile, observeProfile, profileFor } from "../src/bot/belief/player-profile";
+import { profileStrength } from "../src/bot/types";
 import type { BotBrainState, BotEvidence, BotMemory, BotPersonality } from "../src/bot/types";
 
 const PLAYERS = ["me", "b", "c", "d"];
@@ -329,5 +331,72 @@ describe("bot evidence validation and belief updates", () => {
     applyEvidence(state, evidence({ actorId: "me" }));
 
     expect(state.suspicion).not.toHaveProperty("me");
+  });
+});
+
+describe("hồ sơ người chơi trong ván (P1.1)", () => {
+  let state: BotBrainState;
+
+  beforeEach(() => {
+    state = createBotBrainState("me", personality(), PLAYERS);
+  });
+
+  it("khởi tạo trung tính cho mọi người khác, không có cho chính mình", () => {
+    expect(Object.keys(state.profiles).sort()).toEqual(["b", "c", "d"]);
+    expect(state.profiles.b).toEqual({
+      bluffRate: 0,
+      aggroRate: 0,
+      accuracy: 0.5,
+      samples: 0,
+      lastUpdatedRound: 0,
+    });
+    expect(neutralProfile()).toEqual(state.profiles.b);
+  });
+
+  it("một mẫu đặt tỉ lệ đúng bằng mẫu, mẫu sau kéo về trung bình", () => {
+    observeProfile(state, "b", "bluff", 1, 2);
+    expect(state.profiles.b).toMatchObject({ bluffRate: 1, samples: 1, lastUpdatedRound: 2 });
+
+    observeProfile(state, "b", "bluff", 0, 3);
+    expect(state.profiles.b!.bluffRate).toBeCloseTo(0.5);
+    expect(state.profiles.b!.samples).toBe(2);
+    expect(state.profiles.b!.lastUpdatedRound).toBe(3);
+  });
+
+  it("là hàm tất định: cùng dãy mẫu cho cùng hồ sơ", () => {
+    const other = createBotBrainState("me", personality(), PLAYERS);
+    for (const target of [state, other]) {
+      observeProfile(target, "c", "accuracy", 1, 1);
+      observeProfile(target, "c", "aggro", 1, 1);
+      observeProfile(target, "c", "accuracy", 0, 2);
+    }
+    expect(state.profiles.c).toEqual(other.profiles.c);
+  });
+
+  it("không lập hồ sơ về chính mình", () => {
+    observeProfile(state, "me", "bluff", 1, 1);
+    expect(state.profiles.me).toBeUndefined();
+  });
+
+  it("tự tạo hồ sơ trung tính cho người vào roster sau", () => {
+    expect(profileFor(state, "late")).toEqual(neutralProfile());
+    observeProfile(state, "late", "aggro", 1, 1);
+    expect(state.profiles.late!.aggroRate).toBe(1);
+  });
+
+  it("sức nặng hồ sơ tăng theo số mẫu và bị prior kìm", () => {
+    const profile = neutralProfile();
+    expect(profileStrength(profile, 2)).toBe(0);
+    profile.samples = 1;
+    expect(profileStrength(profile, 2)).toBeCloseTo(1 / 3);
+    profile.samples = 3;
+    expect(profileStrength(profile, 2)).toBeCloseTo(0.6);
+    profile.samples = 100;
+    expect(profileStrength(profile, 2)).toBeLessThan(1);
+  });
+
+  it("mẫu ngoài 0..1 bị kẹp lại", () => {
+    observeProfile(state, "b", "accuracy", 5, 1);
+    expect(state.profiles.b!.accuracy).toBe(1);
   });
 });

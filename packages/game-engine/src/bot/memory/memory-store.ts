@@ -1,5 +1,6 @@
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
-import type { BeliefEntry, BotBrainState, BotMemory, BotPersonality } from "../types";
+import { neutralProfile } from "../belief/player-profile";
+import type { BeliefEntry, BotBrainState, BotMemory, BotPersonality, PlayerProfile } from "../types";
 
 /**
  * Ba loại này LUÔN là pinned fact, bất kể caller truyền gì. Ghim theo type chứ
@@ -33,12 +34,14 @@ export function createBotBrainState(
 ): BotBrainState {
   const suspicion: Record<string, BeliefEntry> = {};
   const trust: Record<string, BeliefEntry> = {};
+  const profiles: Record<string, PlayerProfile> = {};
   for (const id of playerIds) {
     // BOT không nghi ngờ chính mình: một entry cho self sẽ được decision layer
     // chấm điểm như mọi người khác và có thể khiến BOT tự đề cử mình.
     if (id === playerId) continue;
     suspicion[id] = neutralBelief();
     trust[id] = neutralBelief();
+    profiles[id] = neutralProfile();
   }
 
   return {
@@ -61,6 +64,9 @@ export function createBotBrainState(
     repliedMessageIds: [],
     seenEventIds: [],
     appliedClaimEvidenceIds: [],
+    // Đứng CUỐI, khớp thứ tự khoá của schema server: test khôi phục so sánh
+    // JSON chuỗi, nên thứ tự khoá là một phần của hợp đồng.
+    profiles,
   };
 }
 

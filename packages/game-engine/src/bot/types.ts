@@ -290,6 +290,37 @@ export interface BeliefEntry {
   lastUpdatedRound: number;
 }
 
+/**
+ * Hồ sơ TRONG VÁN về một người chơi. Xem `belief/player-profile.ts`.
+ *
+ * Khác `BeliefEntry` ở chỗ nó nói về NGƯỜI chứ không về sự kiện: "người này
+ * hay khai láo" chứ không phải "người này đã khai láo ở vòng 2". Nguội chậm
+ * hơn belief (`recency.profileDecayPerRound`).
+ */
+export interface PlayerProfile {
+  /** Tỉ lệ lời khai vai đã bị KIỂM CHỨNG là sai. Trung tính 0. */
+  bluffRate: number;
+  /** Tỉ lệ vòng có công khai buộc tội ai đó. Trung tính 0. */
+  aggroRate: number;
+  /** Tỉ lệ phiếu Treo/Tha đã kiểm chứng là đúng. Trung tính 0.5. */
+  accuracy: number;
+  /** Số quan sát (đã nguội). Sức nặng của hồ sơ là `profileStrength`. */
+  samples: number;
+  /** Mốc để decay không nhân đôi khi gọi hai lần một vòng. */
+  lastUpdatedRound: number;
+}
+
+/**
+ * Sức nặng của một hồ sơ, `0..1`: `samples / (samples + prior)`.
+ *
+ * Ở đây - chứ không ở `player-profile.ts` - vì `claim-credibility` cũng cần
+ * nó mà module đó bị khoá danh sách import (xem test CLAIM_BLINDNESS).
+ */
+export function profileStrength(profile: PlayerProfile, prior: number): number {
+  if (profile.samples <= 0) return 0;
+  return profile.samples / (profile.samples + Math.max(0, prior));
+}
+
 export interface BotMemory {
   id: string;
   sourceId: string;
@@ -524,6 +555,13 @@ export interface BotBrainState {
   trust: Record<string, BeliefEntry>;
   knownInformation: { knownRoles: Record<string, Role>; seerResults: BotMemory[] };
   claims: BotMemory[];
+  /**
+   * Hồ sơ trong ván về từng người khác. Xem `PlayerProfile`.
+   *
+   * Khởi tạo trung tính cho cả roster; cập nhật tất định từ những gì bot đã
+   * thấy (phán quyết đã lộ vai, lời khai bị kiểm chứng, buộc tội mỗi vòng).
+   */
+  profiles: Record<string, PlayerProfile>;
   /**
    * Vai chính BOT này đã công khai nhận, hoặc `null`.
    *

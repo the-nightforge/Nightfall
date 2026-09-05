@@ -600,6 +600,17 @@ export interface ClaimWeights {
   wolfBluffChance: number;
   /** Vòng sớm nhất Sói được khai láo chủ động. */
   wolfBluffFromRound: number;
+  /**
+   * Trừ sẵn vào phần thưởng tin cậy S1 của một người đã từng khai sai:
+   * `knownBluffPenalty x bluffRate x profileStrength`. `0` TẮT.
+   *
+   * Đọc từ `BotBrainState.profiles` (P1.1). Không bao giờ đảo dấu phần
+   * thưởng - một người từng khai láo được tin ÍT HƠN khi khai lại, chứ không
+   * bị nghi thêm chỉ vì mở miệng.
+   */
+  knownBluffPenalty: number;
+  /** Prior của `profileStrength`: hồ sơ phải có bấy nhiêu mẫu mới nặng bằng nửa. */
+  profilePriorStrength: number;
 }
 
 export interface BotWeights {
@@ -1053,6 +1064,9 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     voteInconsistencyPenalty: 0,
     wolfBluffChance: 0,
     wolfBluffFromRound: 0,
+    // Tắt ở v1..v11; v12 bật. Không đổi một bit của preset cũ vì cổng `0`.
+    knownBluffPenalty: 0,
+    profilePriorStrength: 2,
   }),
 
   /**
@@ -1315,6 +1329,8 @@ export const BOT_WEIGHTS_V4: BotWeights = Object.freeze({
     voteInconsistencyPenalty: 5,
     wolfBluffChance: 0.35,
     wolfBluffFromRound: 2,
+    knownBluffPenalty: 0,
+    profilePriorStrength: 2,
   }),
 });
 
@@ -1776,6 +1792,33 @@ export const BOT_WEIGHTS_V11: BotWeights = Object.freeze({
 });
 
 /**
+ * Cấu hình v12 - bot nhớ ai đã từng khai láo.
+ *
+ * MỘT ô đổi: `claim.knownBluffPenalty` 0 -> 1.2.
+ *
+ * 1.2 = 0.2 x `claimantTrustWeight` (6): hệ số khởi đầu NHỎ có chủ ý. Nó
+ * nhân với `bluffRate` (0..1) và `profileStrength` (một mẫu: 1/3, ba mẫu:
+ * 3/5), nên một người bị bắt quả tang khai láo đúng một lần mất 0.4 trong 6
+ * điểm thưởng tin cậy khi khai lại - còn khai lúc đang bị dồn phiếu (thưởng
+ * chỉ 1.5) thì mất hơn một phần tư. Ba lần thì mất 0.72. Không bao giờ lật
+ * dấu: `Math.max(0, ...)` ở S1.
+ *
+ * Trong ván, hồ sơ bluff chỉ có mẫu khi vai được kiểm chứng: `revealRoleOnDeath`
+ * bật, kết quả soi của chính bot, hoặc Sói nhìn đồng bọn. Nghĩa là ở luật mặc
+ * định, ô này chủ yếu có tác dụng với BOT Tiên Tri - và với hồ sơ qua nhiều
+ * ván do server nạp sau này.
+ */
+export const BOT_WEIGHTS_V12: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V11,
+  version: "12.0.0",
+
+  claim: Object.freeze({
+    ...BOT_WEIGHTS_V11.claim,
+    knownBluffPenalty: 1.2,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
@@ -1787,8 +1830,9 @@ export const BOT_WEIGHTS_V11: BotWeights = Object.freeze({
  * thật; v7.0.0 bật hành vi của Thằng Hề; v8.0.0 bật hành vi của Sát Nhân;
  * v9.0.0 bật hành vi của Kẻ Báo Thù; v10.0.0 hạ `spareTrustMargin` về 0 để
  * phiên toà thôi kết án 100% bị cáo và để lời khai vai có sức nặng; v11.0.0
- * bật hai tín hiệu né tránh và bào chữa kém.
+ * bật hai tín hiệu né tránh và bào chữa kém; v12.0.0 trừ sẵn tin cậy của
+ * người đã từng khai láo.
  * v1-v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset đích
  * danh, không bao giờ dựa vào hằng số này.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V11;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V12;

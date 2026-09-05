@@ -1,6 +1,6 @@
 import { isPowerRole, type DayVoteRecap, type Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
-import type { BotEvidence, BotMemory } from "../types";
+import { profileStrength, type BotEvidence, type BotMemory, type PlayerProfile } from "../types";
 
 /**
  * Uy tín của một lời khai, dựng từ dữ liệu CÔNG KHAI và chỉ từ đó.
@@ -83,6 +83,14 @@ export interface ClaimSignalInput {
   lastNightDeaths: readonly { playerId: string; name: string }[];
   publicVoteHistory: readonly DayVoteRecap[];
   seenEventIds: readonly string[];
+  /**
+   * Hồ sơ trong ván của bot về từng người (P1.1), hoặc bỏ trống.
+   *
+   * Module này không hỏi hồ sơ đến từ đâu - nó là những gì CHÍNH bot đã quan
+   * sát và đã ghi, cùng loại đầu vào với `claims`. Chỉ `bluffRate` được đọc:
+   * người từng khai sai thì được tin ít hơn khi khai lại.
+   */
+  profiles?: Readonly<Record<string, PlayerProfile>>;
 }
 
 /**
@@ -193,6 +201,17 @@ export function claimEvidence(
     // trước.
     if (!isPowerRole(claim.role)) continue;
 
+    // P1.1: trừ SẴN vào phần thưởng của người đã từng khai sai, trước khi
+    // S2-S4 xét gì thêm. Chỉ trừ tới 0, không lật dấu - xem `knownBluffPenalty`.
+    const profile = input.profiles?.[claim.claimantId];
+    const distrust = profile
+      ? tuning.knownBluffPenalty *
+        profile.bluffRate *
+        profileStrength(profile, tuning.profilePriorStrength)
+      : 0;
+    const reward = Math.max(0, tuning.claimantTrustWeight * factor - distrust);
+    if (reward <= 0) continue;
+
     push(
       evidence(
         "ROLE_CLAIM",
@@ -201,9 +220,11 @@ export function claimEvidence(
         claim.claimantId,
         claim.claimantId,
         claim.round,
-        -tuning.claimantTrustWeight * factor,
+        -reward,
         confidence,
-        "Công khai nhận một vai và chịu rủi ro đi kèm.",
+        distrust > 0
+          ? "Công khai nhận một vai, nhưng đã từng khai sai nên được tin ít hơn."
+          : "Công khai nhận một vai và chịu rủi ro đi kèm.",
       ),
     );
   }

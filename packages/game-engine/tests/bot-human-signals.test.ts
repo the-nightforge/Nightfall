@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DayVoteRecap, PublicVoteChoice } from "@masoi/shared";
 import { BotRuntime } from "../src/bot/BotRuntime";
-import { BOT_WEIGHTS_V10, BOT_WEIGHTS_V11 } from "../src/bot/config/weights";
+import { BOT_WEIGHTS_V10, BOT_WEIGHTS_V11, BOT_WEIGHTS_V12 } from "../src/bot/config/weights";
 import type {
   BotChatObservation,
   BotDecisionContext,
@@ -260,5 +260,152 @@ describe("DEFENSE_QUALITY qua BotRuntime", () => {
     ctx.knowledge.botId = "c";
     bot.observe(ctx);
     expect(bot.state.suspicion.c).toBeUndefined();
+  });
+});
+
+describe("hồ sơ người chơi qua BotRuntime (P1.1)", () => {
+  function claimContext(round: number, over: Partial<BotKnowledgeView> = {}): BotDecisionContext {
+    return context(
+      { round, phase: "DAY_DISCUSSION", ...over },
+      [{ id: `claim-${round}`, actorId: "c", text: "Tôi là tiên tri", at: round * 1_000 }],
+    );
+  }
+
+  it("lời khai bị lộ vai là sai -> bluffRate tăng, đúng một lần dù observe nhiều lần", () => {
+    const bot = runtime(BOT_WEIGHTS_V12);
+    bot.observe(claimContext(1));
+    expect(bot.state.profiles.c!.samples).toBe(0);
+
+    // c chết, luật lộ vai: c hoá ra là Sói. Cùng vòng 1 để không chốt sổ
+    // aggro (mỗi vòng mới thêm một mẫu aggro cho mọi người).
+    const revealed = claimContext(1, { knownRoles: { me: "VILLAGER", c: "WEREWOLF" }, revealRoleOnDeath: true });
+    bot.observe(revealed);
+    expect(bot.state.profiles.c).toMatchObject({ bluffRate: 1, samples: 1 });
+
+    bot.observe(revealed);
+    bot.observe(revealed);
+    expect(bot.state.profiles.c!.samples).toBe(1);
+  });
+
+  it("lời khai khớp vai đã lộ -> một mẫu sạch", () => {
+    const bot = runtime(BOT_WEIGHTS_V12);
+    bot.observe(claimContext(1));
+    bot.observe(claimContext(1, { knownRoles: { me: "VILLAGER", c: "SEER" }, revealRoleOnDeath: true }));
+    expect(bot.state.profiles.c).toMatchObject({ bluffRate: 0, samples: 1 });
+  });
+
+  it("kết quả soi của chính bot cũng kiểm chứng được lời khai", () => {
+    const bot = new BotRuntime({
+      playerId: "me",
+      rng: () => 0,
+      playerIds: PLAYERS,
+      personality: SHARP,
+      weights: BOT_WEIGHTS_V12,
+    });
+    bot.observe(claimContext(1, { selfRole: "SEER", knownRoles: { me: "SEER" } }));
+    bot.observe(
+      claimContext(1, {
+        selfRole: "SEER",
+        knownRoles: { me: "SEER" },
+        seerResult: { targetId: "c", targetName: "C", isWolf: true, team: "wolves" },
+      }),
+    );
+    expect(bot.state.profiles.c).toMatchObject({ bluffRate: 1, samples: 1 });
+  });
+
+  it("phán quyết đã kiểm chứng -> accuracy", () => {
+    const trial: DayVoteRecap = {
+      ...recap(1, { me: "c", a: "c", b: "c", c: "a", d: "c" }, "c"),
+      finalJudgment: {
+        ballots: [
+          { voterId: "a", guilty: true },
+          { voterId: "b", guilty: false },
+        ],
+        guilty: 1,
+        innocent: 1,
+        abstain: 0,
+        lynched: true,
+      },
+    };
+    const bot = runtime(BOT_WEIGHTS_V12);
+    bot.observe(
+      context({
+        round: 1,
+        publicVoteHistory: [trial],
+        revealRoleOnDeath: true,
+        knownRoles: { me: "VILLAGER", c: "WEREWOLF" },
+      }),
+    );
+    // a treo đúng Sói, b tha nhầm Sói.
+    expect(bot.state.profiles.a).toMatchObject({ accuracy: 1, samples: 1 });
+    expect(bot.state.profiles.b).toMatchObject({ accuracy: 0, samples: 1 });
+    expect(bot.state.profiles.d!.samples).toBe(0);
+  });
+
+  it("cuối vòng: ai đã buộc tội ai đó -> aggroRate, người im lặng cũng có mẫu", () => {
+    const bot = runtime(BOT_WEIGHTS_V12);
+    bot.observe(
+      context({ round: 1, phase: "DAY_DISCUSSION" }, [
+        { id: "m1", actorId: "a", text: "Tôi nghi B", at: 1_000 },
+      ]),
+    );
+    expect(bot.state.profiles.a!.samples).toBe(0);
+
+    bot.observe(context({ round: 2, phase: "NIGHT" }));
+    expect(bot.state.profiles.a).toMatchObject({ aggroRate: 1, samples: 1 });
+    expect(bot.state.profiles.b).toMatchObject({ aggroRate: 0, samples: 1 });
+
+    // Cùng vòng, observe thêm không chốt sổ lần nữa.
+    bot.observe(context({ round: 2, phase: "DAY_DISCUSSION" }));
+    expect(bot.state.profiles.a!.samples).toBe(1);
+  });
+
+  it("hồ sơ khai láo làm lời khai sau của cùng người đó được tin ít hơn (v12), v11 thì không", () => {
+    const run = (weights: typeof BOT_WEIGHTS_V12) => {
+      const bot = runtime(weights);
+      // c khai Tiên Tri ở vòng 1; bot là Tiên Tri thật soi ra c là Sói.
+      bot.observe(claimContext(1, { selfRole: "SEER", knownRoles: { me: "SEER" } }));
+      bot.observe(
+        claimContext(2, {
+          selfRole: "SEER",
+          knownRoles: { me: "SEER" },
+          seerResult: { targetId: "c", targetName: "C", isWolf: true, team: "wolves" },
+        }),
+      );
+      // c khai lại ở vòng 3 (một tin nhắn mới): mảnh S1 cho tin nhắn đó.
+      bot.observe(
+        context(
+          { round: 3, phase: "DAY_DISCUSSION", selfRole: "SEER", knownRoles: { me: "SEER" } },
+          [{ id: "claim-3", actorId: "c", text: "Tôi là tiên tri", at: 3_000 }],
+        ),
+      );
+      return bot.state.trust.c!.reasons.find((r) => r.id === "claim-3:ROLE_CLAIM:claimant");
+    };
+    const v12 = run(BOT_WEIGHTS_V12);
+    const v11 = run(BOT_WEIGHTS_V11);
+    expect(v11).toBeDefined();
+    expect(v12).toBeDefined();
+    // Trust lưu mảnh với dấu đã đảo (dương = tin); v12 tin ít hơn.
+    expect(Math.abs(v12!.weight)).toBeLessThan(Math.abs(v11!.weight));
+    expect(v12!.summary).toContain("từng khai sai");
+  });
+
+  it("khôi phục snapshot cũ không có hồ sơ vẫn chạy", () => {
+    const bot = runtime(BOT_WEIGHTS_V12);
+    const snapshot = bot.serialize();
+    const legacy = { ...snapshot.state } as Partial<typeof snapshot.state>;
+    delete legacy.profiles;
+    const restored = new BotRuntime({
+      playerId: "me",
+      rng: () => 0,
+      playerIds: PLAYERS,
+      state: legacy as typeof snapshot.state,
+      lastDecayRound: snapshot.lastDecayRound,
+      weights: BOT_WEIGHTS_V12,
+    });
+    expect(restored.state.profiles).toEqual({});
+    restored.observe(claimContext(1));
+    expect(() => restored.observe(claimContext(2, { knownRoles: { me: "VILLAGER", c: "WEREWOLF" } }))).not.toThrow();
+    expect(restored.state.profiles.c!.bluffRate).toBe(1);
   });
 });
