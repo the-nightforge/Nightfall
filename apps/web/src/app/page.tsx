@@ -9,6 +9,7 @@ import { getIdentity, saveIdentity, clearIdentity } from "@/lib/identity";
 import { hasCompletedGuide } from "@/lib/guide-session";
 import type { RoomEntryRequest } from "@/lib/room-entry";
 import { disconnectSocket } from "@/lib/socket";
+import { GIVE_UP_MESSAGE, WakeWatch, prewakeServer, wakeStatusText } from "@/lib/server-wake";
 import type { Identity } from "@/lib/identity";
 import { Backdrop } from "@/components/Backdrop";
 import { BrandMark, VillageScene } from "@/components/HomeHero";
@@ -25,6 +26,8 @@ import { InstallPrompt } from "@/components/InstallPrompt";
  */
 type Pending = "create" | "join" | "guide" | null;
 
+const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL ?? "http://localhost:4000";
+
 /**
  * POST /api/players, có thể huỷ giữa chừng.
  *
@@ -33,15 +36,12 @@ type Pending = "create" | "join" | "guide" | null;
  * muộn rồi ghi một phiên mới vào máy họ.
  */
 async function createPlayer(nickname: string, signal: AbortSignal): Promise<CreatePlayerOutcome> {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_SERVER_URL ?? "http://localhost:4000"}/api/players`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nickname }),
-      signal,
-    },
-  );
+  const res = await fetch(`${SERVER_URL}/api/players`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nickname }),
+    signal,
+  });
   const data = await res.json();
   if (!res.ok) return { ok: false, message: data.error ?? "Có lỗi xảy ra" };
   return { ok: true, identity: data as Identity };
@@ -70,6 +70,15 @@ export default function Home() {
    */
   const [pending, setPending] = useState<Pending>(null);
   const [error, setError] = useState<string | null>(null);
+  /*
+   * Mốc bắt đầu chờ máy chủ thức dậy, hoặc null khi không có gì đáng nói.
+   *
+   * Không phải lỗi: máy chủ miễn phí ngủ khi vắng người và lần gọi đầu treo
+   * cả phút là chuyện bình thường. Nói ra điều đó thay vì để nút quay trong
+   * im lặng, vì im lặng là thứ khiến người ta bấm lại rồi bỏ đi.
+   */
+  const [wakingSince, setWakingSince] = useState<number | null>(null);
+  const [wakingElapsed, setWakingElapsed] = useState(0);
   /*
    * Có phiên đã lưu hay không phải là STATE, không được đọc thẳng localStorage
    * trong lúc render: server render không có localStorage nên luôn ra null, còn
@@ -106,6 +115,9 @@ export default function Home() {
   if (managerRef.current === null) managerRef.current = new EntryAttemptManager();
   const attempts = managerRef.current;
 
+  /** Đồng hồ của lượt đang chạy; mỗi lượt một cái, lượt sau dừng lượt trước. */
+  const wakeWatchRef = useRef<WakeWatch | null>(null);
+
   /*
    * Component còn sống hay không. Chỉ dùng để quyết định có được setState.
    *
@@ -139,9 +151,31 @@ export default function Home() {
    */
   const cancelActiveEntry = useCallback(() => {
     attempts.cancelActive();
+    wakeWatchRef.current?.stop();
     pendingRef.current = null;
-    if (mountedRef.current) setPending(null);
+    if (mountedRef.current) {
+      setPending(null);
+      setWakingSince(null);
+    }
   }, [attempts]);
+
+  /*
+   * Đánh thức máy chủ ngay khi trang mở, trong lúc người chơi còn gõ tên.
+   * Chạy một lần; kết quả không quan trọng - xem `prewakeServer`.
+   */
+  useEffect(() => {
+    void prewakeServer(SERVER_URL);
+  }, []);
+
+  /* Đồng hồ giây cho dòng "đã chờ N giây". Chỉ chạy khi đang chờ. */
+  useEffect(() => {
+    if (wakingSince === null) return;
+    setWakingElapsed(0);
+    const id = setInterval(() => {
+      setWakingElapsed(Math.floor((Date.now() - wakingSince) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [wakingSince]);
 
   useEffect(() => {
     const existing = getIdentity();
@@ -188,6 +222,24 @@ export default function Home() {
     startPending(as);
 
     const attempt = attempts.begin();
+    /*
+     * Mọi callback của đồng hồ đều hỏi `attempt.isActive()` trước, cùng lý do
+     * với mọi callback khác trong lượt: người dùng có thể đã huỷ.
+     */
+    const watch = new WakeWatch({
+      onSlow: () => {
+        if (attempt.isActive() && mountedRef.current) setWakingSince(Date.now());
+      },
+      onGiveUp: () => {
+        if (!attempt.isActive()) return;
+        cancelActiveEntry();
+        if (mountedRef.current) setError(GIVE_UP_MESSAGE);
+      },
+    });
+    wakeWatchRef.current?.stop();
+    wakeWatchRef.current = watch;
+    watch.start();
+
     const ports: EntryPorts = {
       readStoredIdentity: getIdentity,
       storeIdentity: saveIdentity,
@@ -199,14 +251,19 @@ export default function Home() {
       },
       onIdentityStored: () => setHasIdentity(true),
       onFailed: (message) => {
+        watch.stop();
+        setWakingSince(null);
         setError(message);
         stopPending();
       },
       // Cố ý KHÔNG hạ cờ bận: đang điều hướng, để nút quay tiếp cho tới khi
       // trang phòng thay chỗ. Hạ xuống là nút sáng lại một nhịp và mời người
       // dùng bấm thêm lần nữa.
-      onEntered: (code) =>
-        router.push(pendingRef.current === "guide" ? `/room/${code}?guide=1` : `/room/${code}`),
+      onEntered: (code) => {
+        watch.stop();
+        setWakingSince(null);
+        router.push(pendingRef.current === "guide" ? `/room/${code}?guide=1` : `/room/${code}`);
+      },
     };
 
     await runEntryAttempt(attempt, request, nickname, ports);
@@ -517,6 +574,21 @@ export default function Home() {
                   {/* Dấu chấm than là bắt buộc, không phải trang trí: một khối
                     * đỏ nhạt là màu, và màu một mình thì người mù màu đọc ra
                     * đúng bằng một dòng chữ bình thường. */}
+                  {/* Trạng thái, không phải lỗi: màu trung tính, có vòng quay
+                    * để biết là vẫn đang chờ chứ không phải kẹt. */}
+                  {wakingSince !== null && busy && (
+                    <p
+                      role="status"
+                      className="flex items-start gap-2.5 rounded-xl border border-white/15 bg-white/[0.06] px-3.5 py-2.5 text-sm text-mist"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-mist/40 border-t-white"
+                      />
+                      <span>{wakeStatusText(wakingElapsed)}</span>
+                    </p>
+                  )}
+
                   {error && (
                     <p
                       role="alert"
