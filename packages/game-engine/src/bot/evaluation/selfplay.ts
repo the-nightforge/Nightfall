@@ -544,7 +544,12 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   };
 
   const contextFor = (playerId: string): BotDecisionContext => ({
-    knowledge: engine.botKnowledgeFor(playerId),
+    // Harness đi thẳng `resolveNomination` -> `beginFinalVote`, KHÔNG chạy pha
+    // DEFENSE, nên bị cáo chưa từng được mở miệng. Engine vẫn ghi một cửa sổ
+    // bào chữa (dài đúng một tick), và để nguyên thì mọi bị cáo đều bị chấm
+    // "im lặng" ở FINAL_VOTE - một tín hiệu mà harness tự bịa ra. Xoá cửa sổ
+    // để lõi thấy đúng điều đã xảy ra: không có lượt bào chữa nào.
+    knowledge: { ...engine.botKnowledgeFor(playerId), trialDefense: null },
     // Bản sao: runtime không được giữ tham chiếu sống vào lịch sử chung.
     visibleChat: chat.map((message) => ({ ...message })),
   });

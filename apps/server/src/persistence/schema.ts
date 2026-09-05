@@ -179,7 +179,12 @@ export const gameStateSchema = z.object({
   nightHistory: z.array(objectOf<NightRecap>()),
   lastEliminated: publicDeathSchema.nullable(),
   trial: z
-    .object({ accusedId: z.string(), finalVotes: z.record(z.string(), z.boolean()) })
+    .object({
+      accusedId: z.string(),
+      finalVotes: z.record(z.string(), z.boolean()),
+      defenseStartedAt: z.number().optional(),
+      defenseEndedAt: z.number().optional(),
+    })
     .nullable(),
   lastTrial: z
     .object({

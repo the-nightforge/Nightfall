@@ -291,6 +291,7 @@ describe("bot knowledge security boundary", () => {
         // vẫn nằm trong FORBIDDEN_KEYS: state thô của chúng chứa `finalVotes`,
         // tức ai bỏ phiếu Treo/Tha, và đó là bí mật khi phiên toà còn mở.
         "trialAccusedId",
+        "trialDefense",
         "canFinalVote",
         "hunterShot",
         "phase",

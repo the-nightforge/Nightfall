@@ -75,6 +75,10 @@ export interface MemoryImportanceWeights {
    */
   directAddress: number;
   directQuestion: number;
+  /** Ghi nhận né tránh nhiều vòng; ngang `accuse` vì nó cũng là một nhận xét về người. */
+  avoidance: number;
+  /** Lời bào chữa bị chấm kém; nặng hơn `accuse` một chút vì hiếm và đáng nhớ. */
+  defenseQuality: number;
 }
 
 /**
@@ -313,6 +317,14 @@ export interface VoteHistoryWeights {
   lateSwitchRatio: number;
   /** Một wagon phải có sẵn bấy nhiêu phiếu thì nhảy vào mới là "theo đuôi". */
   minBandwagonLead: number;
+  /**
+   * Bấy nhiêu vòng LIÊN TIẾP né tránh thì thành một tín hiệu `AVOIDANCE`.
+   *
+   * Ba: hai vòng đầu ai cũng còn dò, và một người chỉ bỏ phiếu trắng qua hai
+   * vòng chưa nói lên điều gì. Tới vòng thứ ba mà vẫn chưa đứng vào một cáo
+   * buộc nào thì đó là một lựa chọn, không phải một sự thận trọng.
+   */
+  avoidanceRounds: number;
 }
 
 export interface SocialWeights {
@@ -844,6 +856,11 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     // v1..v6 ở phòng thật - vì vậy không có version bump nào ở đây.
     VERDICT_MISS: { weight: 14, confidence: 0.8 },
     VERDICT_HIT: { weight: 10, confidence: 0.7 },
+    // TẮT ở v1..v10 (weight 0), và `analyzeAvoidance`/`analyzeDefense` thoát
+    // ra TRƯỚC khi rút số ngẫu nhiên khi weight <= 0 - nên hai ô này không đổi
+    // một bit nào của các preset cũ. v11 bật chúng; xem chú thích ở đó.
+    AVOIDANCE: { weight: 0, confidence: 0.4 },
+    DEFENSE_QUALITY: { weight: 0, confidence: 0.45 },
   }),
 
   memoryImportance: Object.freeze({
@@ -863,6 +880,8 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     finalJudgment: 6,
     directAddress: 2,
     directQuestion: 3,
+    avoidance: 4,
+    defenseQuality: 5,
   }),
 
   privateInfo: Object.freeze({
@@ -886,7 +905,7 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
 
   trust: Object.freeze({ damping: 0.2 }),
 
-  voteHistory: Object.freeze({ lateSwitchRatio: 0.8, minBandwagonLead: 2 }),
+  voteHistory: Object.freeze({ lateSwitchRatio: 0.8, minBandwagonLead: 2, avoidanceRounds: 3 }),
 
   social: Object.freeze({
     edgeStepDivisor: 20,
@@ -1721,6 +1740,42 @@ export const BOT_WEIGHTS_V10: BotWeights = Object.freeze({
 });
 
 /**
+ * Cấu hình v11 - bot bắt đầu đọc hai tín hiệu mà người chơi thật vẫn đọc.
+ *
+ * HAI ô đổi, cả hai từ 0 lên một giá trị dương: `evidence.AVOIDANCE` và
+ * `evidence.DEFENSE_QUALITY`. Bản này tồn tại vì bot được tune bằng self-play
+ * bot-vs-bot, và gặp người thì bị chê "ngu" theo cùng một cách: nó không nhận
+ * ra người né tránh suốt ba vòng, và không nhận ra một bị cáo im lặng hay chỉ
+ * biết chỉ sang người khác khi bị đưa lên xử.
+ *
+ * - `AVOIDANCE: 2` = 0.5 x `BANDWAGON` (4). Né tránh là tín hiệu YẾU HƠN theo
+ *   đuôi: theo đuôi là một hành động, né tránh là sự vắng mặt của hành động,
+ *   và người chơi mới cũng né. Confidence 0.4 - dưới `ACCUSE`, ngang
+ *   `VOTE_ALIGNMENT`.
+ * - `DEFENSE_QUALITY: 2` = 0.5 x `ACCUSE` (4). Nhẹ vì đây là bằng chứng về
+ *   CÁCH nói chứ không phải về nội dung, và một người mới chơi cũng im lặng
+ *   khi bị dồn. Confidence 0.45 - bằng `ACCUSE`.
+ *
+ * Cả hai đọc trên thang belief THẬT (p90 ≈ 1.8): một mảnh cộng vào khoảng
+ * 0.5-0.6 sau confidence và quán tính, tức đủ để phá hoà giữa hai ứng viên
+ * ngang nhau, không đủ để tự mình đưa ai lên giá treo cổ.
+ *
+ * Self-play KHÔNG đo được `DEFENSE_QUALITY`: harness đi thẳng từ
+ * `resolveNomination` sang `beginFinalVote`, không có pha DEFENSE, nên không
+ * có cửa sổ bào chữa nào để chấm. Ô đó chỉ chạy trong phòng thật.
+ */
+export const BOT_WEIGHTS_V11: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V10,
+  version: "11.0.0",
+
+  evidence: freezeEvidenceTable({
+    ...BOT_WEIGHTS_V10.evidence,
+    AVOIDANCE: { weight: 2, confidence: 0.4 },
+    DEFENSE_QUALITY: { weight: 2, confidence: 0.45 },
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
@@ -1731,8 +1786,9 @@ export const BOT_WEIGHTS_V10: BotWeights = Object.freeze({
  * vai có quyền năng dùng-một-lần (Phù Thuỷ, Thợ Săn, Linh Mục) về thang belief
  * thật; v7.0.0 bật hành vi của Thằng Hề; v8.0.0 bật hành vi của Sát Nhân;
  * v9.0.0 bật hành vi của Kẻ Báo Thù; v10.0.0 hạ `spareTrustMargin` về 0 để
- * phiên toà thôi kết án 100% bị cáo và để lời khai vai có sức nặng.
+ * phiên toà thôi kết án 100% bị cáo và để lời khai vai có sức nặng; v11.0.0
+ * bật hai tín hiệu né tránh và bào chữa kém.
  * v1-v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset đích
  * danh, không bao giờ dựa vào hằng số này.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V10;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V11;

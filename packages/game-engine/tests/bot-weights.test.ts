@@ -257,7 +257,9 @@ describe("cấu hình thật sự bất biến", () => {
     // `resolveWeights` chia sẻ tham chiếu cho nhóm không đổi. Đó là lý do freeze
     // phải đúng: sửa qua cấu hình dẫn xuất sẽ sửa luôn bản gốc.
     const derived = resolveWeights({ trust: { damping: 0.9 } });
-    expect(derived.evidence).toBe(BOT_WEIGHTS_V1.evidence);
+    // v11 có bảng `evidence` riêng (bật hai ô mới), nên tham chiếu chung là
+    // của bản mặc định chứ không còn là của v1.
+    expect(derived.evidence).toBe(DEFAULT_BOT_WEIGHTS.evidence);
     expect(Object.isFrozen(derived.evidence.DEFEND)).toBe(true);
   });
 });
@@ -669,7 +671,7 @@ describe("v2 là cấu hình production", () => {
     return rates;
   }
 
-  it("mặc định trỏ tới v10", () => {
+  it("mặc định trỏ tới v11", () => {
     // Cùng cơ chế rollout mà docstring của `DEFAULT_BOT_WEIGHTS` mô tả: nâng
     // chính hằng số này lên bản mới để `session-registry.ts` (chỗ ván thật
     // dựng `BotRuntime`, không tự truyền `weights`) chạy bản mới mà không phải
@@ -677,8 +679,9 @@ describe("v2 là cấu hình production", () => {
     // nốt Linh Mục, v7 bật hành vi của Thằng Hề, v8 bật hành vi của Sát Nhân,
     // v9 bật hành vi của Kẻ Báo Thù, v10 hạ `spareTrustMargin` về 0;
     // v2-v4 vẫn tồn tại nguyên vẹn làm mốc so sánh.
-    expect(DEFAULT_BOT_WEIGHTS.version).toBe("10.0.0");
-    expect(weightsPreset("10.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    expect(DEFAULT_BOT_WEIGHTS.version).toBe("11.0.0");
+    expect(weightsPreset("11.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    expect(weightsPreset("10.0.0")).toBe(BOT_WEIGHTS_V10);
     expect(weightsPreset("9.0.0")).toBe(BOT_WEIGHTS_V9);
     expect(weightsPreset("8.0.0")).toBe(BOT_WEIGHTS_V8);
     expect(weightsPreset("7.0.0")).toBe(BOT_WEIGHTS_V7);

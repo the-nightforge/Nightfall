@@ -9,6 +9,7 @@ import {
   BOT_WEIGHTS_V8,
   BOT_WEIGHTS_V9,
   BOT_WEIGHTS_V10,
+  BOT_WEIGHTS_V11,
   DEFAULT_BOT_WEIGHTS,
   type BotWeights,
 } from "./weights";
@@ -32,6 +33,7 @@ export const BOT_WEIGHTS_PRESETS: Readonly<Record<string, BotWeights>> = Object.
   [BOT_WEIGHTS_V8.version]: BOT_WEIGHTS_V8,
   [BOT_WEIGHTS_V9.version]: BOT_WEIGHTS_V9,
   [BOT_WEIGHTS_V10.version]: BOT_WEIGHTS_V10,
+  [BOT_WEIGHTS_V11.version]: BOT_WEIGHTS_V11,
 });
 
 export function weightsPreset(version: string): BotWeights {
@@ -54,5 +56,6 @@ export {
   BOT_WEIGHTS_V8,
   BOT_WEIGHTS_V9,
   BOT_WEIGHTS_V10,
+  BOT_WEIGHTS_V11,
   DEFAULT_BOT_WEIGHTS,
 };

@@ -1403,7 +1403,11 @@ describe("Phiên toà: biện hộ và bỏ phiếu xác nhận", () => {
     const e = makeEngine(6);
     expect(nominate(e, "p2")).toEqual({ kind: "TRIAL", accusedId: "p2" });
     expect(e.state.phase).toBe("DEFENSE");
-    expect(e.state.trial).toEqual({ accusedId: "p2", finalVotes: {} });
+    expect(e.state.trial).toEqual({
+      accusedId: "p2",
+      finalVotes: {},
+      defenseStartedAt: expect.any(Number),
+    });
     expect(e.state.lastEliminated).toBeNull();
     expect(e.state.lastTrial).toBeNull();
   });

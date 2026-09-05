@@ -27,7 +27,15 @@ export type BotMemoryType =
   /** Đồng đội Sói đã chết; buộc phải đổi cách chơi phần còn lại của ván. */
   | "ALLY_LOST"
   /** Tóm tắt một vòng, để bot còn nhớ chuyện gì đã xảy ra chứ không chỉ nhớ điểm số. */
-  | "ROUND_SUMMARY";
+  | "ROUND_SUMMARY"
+  /**
+   * Một người né tránh suốt nhiều vòng: chỉ phiếu trắng hoặc phiếu lẻ, hoặc
+   * không ai đụng tới dù vẫn có mặt. Ghi lại để bot nhắc được "anh im suốt
+   * ba vòng rồi" chứ không chỉ cộng điểm. Xem `analyzeAvoidance`.
+   */
+  | "AVOIDANCE"
+  /** Lượt bào chữa của một bị cáo bị chấm là kém. Xem `analyzeDefense`. */
+  | "DEFENSE_QUALITY";
 
 /**
  * Bằng chứng rút ra từ hành vi CÔNG KHAI: lịch sử phiếu và lời nói.
@@ -55,7 +63,14 @@ export type PublicEvidenceKind =
    * mọi tín hiệu hành vi khác chứ không được miễn như thông tin riêng của vai.
    */
   | "VERDICT_HIT"
-  | "VERDICT_MISS";
+  | "VERDICT_MISS"
+  /**
+   * Hai tín hiệu hành vi mà người chơi thật đọc ra nhau, còn bot thì không:
+   * né tránh suốt nhiều vòng, và bào chữa kém khi bị đưa ra xử. Cả hai đều
+   * là suy đoán từ dữ liệu công khai và decay như mọi tín hiệu hành vi khác.
+   */
+  | "AVOIDANCE"
+  | "DEFENSE_QUALITY";
 
 export type EvidenceKind =
   | PublicEvidenceKind
@@ -443,6 +458,19 @@ export interface BotKnowledgeView {
    * còn mở. Một object cùng tên là lời mời để ai đó spread cả cụm vào view.
    */
   trialAccusedId: string | null;
+  /**
+   * Cửa sổ thời gian của lượt bào chữa trong vòng này, hoặc `null`.
+   *
+   * `endedAt` là `null` khi lượt bào chữa còn mở (pha DEFENSE) và là mốc khép
+   * khi đã sang FINAL_VOTE. Lõi cần nó vì các bot KHÔNG quan sát trong pha
+   * DEFENSE (chỉ bị cáo mới được đánh thức), nên lúc chấm lời bào chữa ở
+   * FINAL_VOTE chúng phải biết câu nào của bị cáo nằm trong lượt đó. Công
+   * khai như `trialAccusedId`: cả phòng cùng nhìn đồng hồ đó.
+   *
+   * Optional vì `BotKnowledgeView` được dựng lại từ record self-play cũ, và
+   * harness self-play không chạy pha DEFENSE nên không có gì để điền.
+   */
+  trialDefense?: { startedAt: number; endedAt: number | null } | null;
   canFinalVote: boolean;
   /** `null` khi bot không phải Thợ Săn đang có lượt phản kích. */
   hunterShot: { canAct: boolean; legalTargets: string[] } | null;

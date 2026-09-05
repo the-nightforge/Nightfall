@@ -171,6 +171,13 @@ export interface HunterReactionState {
 export interface TrialState {
   accusedId: string;
   /**
+   * Mốc mở và khép lượt bào chữa. Optional vì snapshot cũ không có, và vì
+   * `phaseStartedAt` KHÔNG đổi khi vào DEFENSE/FINAL_VOTE (hai pha này được
+   * gán thẳng chứ không qua `setPhase`), nên không suy ra được từ nó.
+   */
+  defenseStartedAt?: number;
+  defenseEndedAt?: number;
+  /**
    * voterId -> true là Treo, false là Tha.
    *
    * boolean chứ không phải string|null như votes: lá phiếu này chỉ có hai giá

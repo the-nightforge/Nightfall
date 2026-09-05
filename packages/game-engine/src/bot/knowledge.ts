@@ -99,6 +99,8 @@ export interface BotKnowledgeInput {
   /** Engine đã quyết định vai này có được thấy gì; ở đây chỉ sao chép. */
   night: NightKnowledge | null;
   trialAccusedId: string | null;
+  /** Engine tính từ `TrialState`; xem `BotKnowledgeView.trialDefense`. */
+  trialDefense: { startedAt: number; endedAt: number | null } | null;
   canFinalVote: boolean;
   hunterShot: { canAct: boolean; legalTargets: string[] } | null;
   publicVoteHistory: readonly DayVoteRecap[];
@@ -131,6 +133,7 @@ export function buildBotKnowledgeView(input: BotKnowledgeInput): BotKnowledgeVie
     executionerTargetId: input.executionerTargetId,
     night: input.night ? copyNightKnowledge(input.night) : null,
     trialAccusedId: input.trialAccusedId,
+    trialDefense: input.trialDefense ? { ...input.trialDefense } : null,
     canFinalVote: input.canFinalVote,
     hunterShot: input.hunterShot
       ? { canAct: input.hunterShot.canAct, legalTargets: [...input.hunterShot.legalTargets] }

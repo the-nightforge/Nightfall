@@ -1,6 +1,6 @@
-import type { DayVoteRecap, PublicVoteChoice, VoteMutation } from "@masoi/shared";
+import { isPowerRole, type DayVoteRecap, type PublicVoteChoice, type VoteMutation } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
-import type { BotEvidence, BotRng, PublicEvidenceKind } from "../types";
+import type { BotEvidence, BotMemory, BotRng, PublicEvidenceKind } from "../types";
 
 /**
  * "Không treo ai" là một ứng viên ngang hàng với người chơi trong bảng kiểm
@@ -229,4 +229,225 @@ export function analyzeVoteRecap(
   }
 
   return found;
+}
+
+export interface AvoidanceInput {
+  /** Recap của mọi vòng đã công khai, thứ tự tuỳ ý. */
+  history: readonly DayVoteRecap[];
+  /** Vòng vừa khép - mốc mà chuỗi vòng liên tiếp được đếm ngược từ đó. */
+  round: number;
+  /** Những người còn đáng xét, thường là người còn sống. */
+  playerIds: readonly string[];
+}
+
+/** Nguồn của một mảnh né tránh: dấu "đã đọc recap vòng này" mà `BotRuntime` ghi. */
+export function avoidanceSourceId(round: number): string {
+  return `recap:${round}`;
+}
+
+/**
+ * Né tránh suốt nhiều vòng liên tiếp - tín hiệu mà người chơi thật đọc ra
+ * nhau bằng mắt thường ("anh im suốt ba vòng rồi") còn bot thì mù.
+ *
+ * Hai hình dạng, mỗi hình dạng một mảnh riêng:
+ *
+ * - `throwaway`: có mặt bỏ phiếu đủ mọi vòng, nhưng phiếu cuối vòng nào cũng
+ *   là phiếu trắng hoặc một phiếu LẺ - nhắm vào người mà không ai khác nhắm.
+ *   Đó là hình dạng của một người không muốn đứng vào bất kỳ cáo buộc nào.
+ * - `untouched`: có mặt bỏ phiếu đủ mọi vòng, mà không nhận một phiếu nào và
+ *   không bị đưa ra xử. Không phải hành vi của chính người đó, nhưng là hình
+ *   dạng của một người đang chơi để không bị nhìn thấy.
+ *
+ * "Có mặt" = có ít nhất một mutation trong vòng. Người vắng mặt một vòng thì
+ * không bị tính, vì né là một lựa chọn và người vắng mặt không chọn gì cả.
+ *
+ * Thoát ra TRƯỚC khi rút số ngẫu nhiên khi weight tắt: các preset cũ giữ
+ * nguyên dòng RNG và vì thế tái lập được từng bit.
+ */
+export function analyzeAvoidance(
+  input: AvoidanceInput,
+  analyticalSkill: number,
+  rng: BotRng,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): BotEvidence[] {
+  if (weights.evidence.AVOIDANCE.weight <= 0) return [];
+
+  const span = weights.voteHistory.avoidanceRounds;
+  const recaps: DayVoteRecap[] = [];
+  for (let round = input.round - span + 1; round <= input.round; round += 1) {
+    const recap = input.history.find((item) => item.round === round);
+    if (!recap) return [];
+    recaps.push(recap);
+  }
+
+  const found: BotEvidence[] = [];
+  const notice = (candidate: BotEvidence) => {
+    if (rng() < analyticalSkill) found.push(candidate);
+  };
+  const sourceId = avoidanceSourceId(input.round);
+
+  // Sắp để thứ tự trong `playerIds` (thứ tự roster, hay thứ tự Map) không
+  // quyết định thứ tự rút RNG.
+  for (const playerId of [...input.playerIds].sort()) {
+    let throwaway = true;
+    let untouched = true;
+    let present = true;
+
+    for (const recap of recaps) {
+      if (!recap.mutations.some((mutation) => mutation.voterId === playerId)) {
+        present = false;
+        break;
+      }
+      const own = recap.finalBallots.find((ballot) => ballot.voterId === playerId);
+      const ownTarget = own && own.choice.type === "PLAYER" ? own.choice.targetId : null;
+      if (ownTarget !== null) {
+        const joined = recap.finalBallots.some(
+          (ballot) =>
+            ballot.voterId !== playerId &&
+            ballot.choice.type === "PLAYER" &&
+            ballot.choice.targetId === ownTarget,
+        );
+        if (joined) throwaway = false;
+      }
+      const received = recap.finalBallots.some(
+        (ballot) => ballot.choice.type === "PLAYER" && ballot.choice.targetId === playerId,
+      );
+      const tried = recap.nomination.kind === "TRIAL" && recap.nomination.accusedId === playerId;
+      if (received || tried) untouched = false;
+    }
+    if (!present) continue;
+
+    if (throwaway) {
+      notice(
+        evidenceOf(
+          weights,
+          "AVOIDANCE",
+          sourceId,
+          playerId,
+          undefined,
+          input.round,
+          `${span} vòng liền chỉ bỏ phiếu trắng hoặc phiếu lẻ, chưa từng đứng vào một cáo buộc nào.`,
+          `:throwaway:${playerId}`,
+        ),
+      );
+    }
+    if (untouched) {
+      notice(
+        evidenceOf(
+          weights,
+          "AVOIDANCE",
+          sourceId,
+          playerId,
+          undefined,
+          input.round,
+          `${span} vòng liền không ai đụng tới, dù vẫn có mặt bỏ phiếu đều.`,
+          `:untouched:${playerId}`,
+        ),
+      );
+    }
+  }
+
+  return found;
+}
+
+export interface DefenseReviewInput {
+  round: number;
+  accusedId: string;
+  /** Số câu bị cáo đã nói trong lượt bào chữa, kể cả câu parser không hiểu. */
+  spoken: number;
+  /** Memory parse được từ đúng những câu đó (của bị cáo). */
+  statements: readonly BotMemory[];
+  /** Bị cáo đã khai vai từ TRƯỚC phiên toà. */
+  claimedBefore: boolean;
+}
+
+/** Nguồn của một mảnh bào chữa: memory `NOMINATED` mà `writeRecapMemories` ghi. */
+export function defenseSourceId(round: number): string {
+  return `${round}:nomination:result`;
+}
+
+/**
+ * Chấm lượt bào chữa của bị cáo, SAU khi lượt đó đã khép.
+ *
+ * Ba hình dạng kém, ưu tiên theo thứ tự và tối đa MỘT mảnh mỗi phiên toà:
+ *
+ * - `silent`: không nói một lời nào. Người vô tội bị dồn thường không im.
+ * - `deflect`: không tự bào chữa gì, chỉ chỉ sang người khác. Nhắm vào người
+ *   bị chỉ sang, để bot còn biết lời cáo buộc đó ra đời trong hoàn cảnh nào.
+ * - `grab` ("nhận vơ"): LẦN ĐẦU khai một vai chức năng đúng lúc bị đưa lên
+ *   xử. Khai Dân thường thì không tính - không ai nhận vơ cái vai chẳng có gì.
+ *
+ * Bảo thủ ở chỗ: bị cáo có nói mà parser không hiểu gì thì KHÔNG có tín hiệu.
+ * Một bot phạt người ta vì chính nó không hiểu là một bot ngu theo đúng nghĩa
+ * người chơi hay dùng.
+ *
+ * Cùng cổng weight/RNG với `analyzeAvoidance`.
+ */
+export function analyzeDefense(
+  input: DefenseReviewInput,
+  analyticalSkill: number,
+  rng: BotRng,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): BotEvidence[] {
+  if (weights.evidence.DEFENSE_QUALITY.weight <= 0) return [];
+
+  const sourceId = defenseSourceId(input.round);
+  const own = input.statements.filter((memory) => memory.actorId === input.accusedId);
+  const claims = own.filter(
+    (memory) => memory.type === "ROLE_CLAIM" || memory.type === "COUNTER_CLAIM",
+  );
+  const accusations = own
+    .filter(
+      (memory) =>
+        memory.type === "ACCUSE" &&
+        memory.targetId !== undefined &&
+        memory.targetId !== input.accusedId,
+    )
+    .sort((a, b) => a.sourceId.localeCompare(b.sourceId));
+
+  let candidate: BotEvidence | null = null;
+  if (input.spoken === 0) {
+    candidate = evidenceOf(
+      weights,
+      "DEFENSE_QUALITY",
+      sourceId,
+      input.accusedId,
+      undefined,
+      input.round,
+      "Bị đưa ra xử mà không nói một lời nào để tự bào chữa.",
+      ":silent",
+    );
+  } else if (claims.length === 0 && accusations.length > 0) {
+    const target = accusations[0]!.targetId!;
+    candidate = evidenceOf(
+      weights,
+      "DEFENSE_QUALITY",
+      sourceId,
+      input.accusedId,
+      target,
+      input.round,
+      "Lượt bào chữa chỉ dùng để chỉ sang người khác, không nói gì về mình.",
+      `:deflect:${target}`,
+    );
+  } else if (
+    !input.claimedBefore &&
+    claims.some((memory) => {
+      const role = memory.data.role;
+      return typeof role === "string" && isPowerRole(role as Parameters<typeof isPowerRole>[0]);
+    })
+  ) {
+    candidate = evidenceOf(
+      weights,
+      "DEFENSE_QUALITY",
+      sourceId,
+      input.accusedId,
+      undefined,
+      input.round,
+      "Chỉ nhận vai chức năng khi đã bị đưa lên giá treo cổ, chưa từng nói trước đó.",
+      ":grab",
+    );
+  }
+
+  if (!candidate) return [];
+  return rng() < analyticalSkill ? [candidate] : [];
 }
