@@ -241,18 +241,23 @@ describe("Hunter config compatibility", () => {
     });
 
     /*
-     * Ngưỡng của chốt này là `MAX_PLAYERS_PER_ROOM - 1`, nên fixture phải SUY RA
-     * từ hằng số chứ không ghim số. Bản cũ ghim `werewolves: 10` để tổng chạm 14
-     * đúng bằng ngưỡng của trần 15; khi trần lên 20 thì 14 không còn chạm ngưỡng
-     * 19 nữa và test đỏ vì fixture cũ, không vì chốt hỏng.
+     * Ngưỡng của chốt này là `MAX_PLAYERS_PER_ROOM`, nên fixture phải SUY RA từ
+     * hằng số chứ không ghim số: cấu hình này không khai `villagers`, nên nó đi
+     * đường tương thích, nơi Dân Làng còn lấp phần trống - và thứ duy nhất chắc
+     * chắn sai là một bộ bài không chừa nổi một ghế trong phòng đông nhất.
      *
-     * `- 5` là để bốn vai đếm được còn lại (Tiên Tri, Bảo Vệ, Phù Thuỷ, Thợ Săn)
-     * đưa tổng lên đúng `MAX_PLAYERS_PER_ROOM - 1`: chạm ngưỡng nhờ ĐÚNG lá cuối
-     * cùng, tức Thợ Săn.
+     * Ngưỡng cũ là `MAX_PLAYERS_PER_ROOM - 1` và lệch đúng một ghế: 19 lá đặc
+     * biệt trong phòng 20 người vẫn còn chỗ cho một Dân Làng. Nó cũng chỉ đếm
+     * SÁU trường (Sói, Tiên Tri, Bảo Vệ, Phù Thuỷ, Thợ Săn, Kẻ Nguyền Rủa) và
+     * mù với mười một vai còn lại; `deckSeats` đếm đủ.
+     *
+     * `- 4` là để ba vai còn lại (Tiên Tri, Bảo Vệ, Phù Thuỷ) cộng Thợ Săn đưa
+     * tổng lên đúng `MAX_PLAYERS_PER_ROOM`: chạm ngưỡng nhờ ĐÚNG lá cuối cùng,
+     * tức Thợ Săn.
      */
     const base = {
       ...DEFAULT_ROOM_CONFIG,
-      werewolves: MAX_PLAYERS_PER_ROOM - 5,
+      werewolves: MAX_PLAYERS_PER_ROOM - 4,
       seer: true,
       guard: true,
       witch: true,
@@ -264,6 +269,6 @@ describe("Hunter config compatibility", () => {
     // Thêm Thợ Săn là chạm ngưỡng. Đây mới là điều test này nói: lá đó ĐƯỢC ĐẾM.
     expect(() =>
       roomService.updateConfig("host", { ...base, hunter: true }),
-    ).toThrow("Cấu hình vai trò không hợp lệ");
+    ).toThrow("Phải còn chỗ cho Dân Làng");
   });
 });

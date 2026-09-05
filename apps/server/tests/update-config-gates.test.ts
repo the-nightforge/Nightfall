@@ -112,11 +112,9 @@ describe("updateConfig với bộ bài đang lệch (Ranked)", () => {
     expect(calls.persist).toBe(0);
   });
 
-  it("vẫn CHẶN một bộ bài mới không vừa bàn", () => {
-    // Đổi một lá nhưng vẫn giữ tổng 10 lá cho bàn 11 người: cân bằng có thể
-    // qua nhưng cỡ bàn thì không.
-    const resized: RoomConfig = { ...PRESET_DECKS[11], villagers: (PRESET_DECKS[11].villagers ?? 1) - 1 };
-    expect(() => roomService.updateConfig("host", resized)).toThrow();
+  it("vẫn CHẶN một bộ bài không còn chỗ cho Dân Làng", () => {
+    const noVillager: RoomConfig = { ...PRESET_DECKS[11], villagers: 0 };
+    expect(() => roomService.updateConfig("host", noVillager)).toThrow(/chỗ cho Dân Làng/);
     expect(calls.persist).toBe(0);
   });
 
@@ -132,5 +130,70 @@ describe("updateConfig ở bàn 6-7 người", () => {
     rooms.current = room(7, { ...DEFAULT_ROOM_CONFIG });
     expect(() => roomService.updateConfig("host", { ...DEFAULT_ROOM_CONFIG, lastLetter: true })).not.toThrow();
     expect((rooms.current as Room).config.lastLetter).toBe(true);
+  });
+
+  /*
+   * Cổng cũ là `members.length >= 6` nhưng lại gọi `validateRoomConfig`, mà
+   * dòng đầu của hàm đó chặn dưới `MIN_PLAYERS_TO_START` (8). Bàn 6-7 người vì
+   * thế nhận lại "Cần ít nhất 8 người để bắt đầu" cho một thao tác chẳng liên
+   * quan gì tới việc bắt đầu - và ô Dân Làng thì đứng im.
+   */
+  it("cho chỉnh số Dân Làng, không trả về câu lỗi của nút Bắt đầu", () => {
+    const base: RoomConfig = { ...DEFAULT_ROOM_CONFIG, villagers: 3 };
+    rooms.current = room(7, base);
+    expect(() => roomService.updateConfig("host", { ...base, villagers: 4 })).not.toThrow();
+    expect((rooms.current as Room).config.villagers).toBe(4);
+  });
+});
+
+/**
+ * Bảng xếp bài đổi ĐÚNG MỘT LÁ mỗi cú bấm.
+ *
+ * Bản cũ đòi bộ bài khớp đúng sĩ số ở mỗi lượt `update-config`, nên trạng thái
+ * ngay sau mỗi cú bấm luôn lệch một người và luôn bị đá về: không có đường đi
+ * nào giữa hai bộ bài hợp lệ. Với host thì hai ô +/− và cả mười mấy công tắc
+ * vai đơn giản là không ăn - đó là lỗi mà cả file này gác.
+ */
+describe("chỉnh từng lá một trên bàn đã đủ người", () => {
+  const P11 = PRESET_DECKS[11];
+
+  beforeEach(() => {
+    rooms.current = room(11, { ...P11, mode: "ranked" });
+  });
+
+  it("thêm một Dân Làng: bộ bài giờ cần 12 người, và server nhận", () => {
+    const grown: RoomConfig = { ...P11, villagers: (P11.villagers ?? 1) + 1 };
+    expect(() => roomService.updateConfig("host", grown)).not.toThrow();
+    expect((rooms.current as Room).config.villagers).toBe((P11.villagers ?? 1) + 1);
+  });
+
+  it("bật thêm một vai: cũng chỉ lệch một người, cũng phải nhận", () => {
+    expect(() => roomService.updateConfig("host", { ...P11, detective: true })).not.toThrow();
+    expect((rooms.current as Room).config.detective).toBe(true);
+  });
+
+  it("lệch sĩ số vẫn CHẶN ở nút Bắt đầu, chỉ không chặn ở lối xếp bài", () => {
+    const grown: RoomConfig = { ...P11, villagers: (P11.villagers ?? 1) + 1 };
+    roomService.updateConfig("host", grown);
+    expect(() => roomService.start("host")).toThrow(/Bộ bài cần 12 người, phòng đang có 11/);
+  });
+
+  it("thêm Sói vào bàn 11 vẫn bị cân bằng chặn, nhưng nói ra thành câu", () => {
+    // Không phải im lặng: đây là luật cân bằng làm đúng việc của nó. Host mở
+    // rộng bàn trước rồi thêm Sói sau - đường đó đi được, xem test kế tiếp.
+    expect(() => roomService.updateConfig("host", { ...P11, werewolves: 3 })).toThrow(
+      /BALANCE_UNSTABLE/,
+    );
+  });
+
+  it("nới bàn rộng ra rồi mới thêm Sói thì đi được tới đích", () => {
+    let cfg: RoomConfig = { ...P11, mode: "ranked" };
+    for (const villagers of [2, 3, 4]) {
+      cfg = { ...cfg, villagers };
+      expect(() => roomService.updateConfig("host", cfg), `villagers ${villagers}`).not.toThrow();
+    }
+    cfg = { ...cfg, werewolves: 3 };
+    expect(() => roomService.updateConfig("host", cfg)).not.toThrow();
+    expect((rooms.current as Room).config.werewolves).toBe(3);
   });
 });

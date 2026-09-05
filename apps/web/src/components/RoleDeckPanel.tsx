@@ -60,22 +60,29 @@ export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
     onUpdateConfig({ ...config, [key]: !config[key] } as RoomConfig);
   };
 
-  const setWolves = (n: number) => {
-    if (!isHost) return;
-    // Kẹp ở đây chứ không tin vào việc nút đã bị disable: `werewolves` đi thẳng
-    // vào `roomConfigSchema` (min 1, max 4) và một giá trị ngoài dải sẽ bị
-    // server từ chối bằng một dòng lỗi đỏ không nói được phải sửa gì.
-    onUpdateConfig({ ...config, werewolves: Math.min(WOLF_MAX, Math.max(WOLF_MIN, n)) });
-  };
+  /*
+   * Ghế còn trống tới `MAX_PLAYERS_PER_ROOM`, và nó ÂM được.
+   *
+   * Bộ bài lớn hơn phòng đông nhất là một trạng thái có thật, không phải một
+   * trạng thái không thể tới: host đặt 3 Dân Làng rồi bật thêm mười mấy vai là
+   * đủ. Giữ dấu âm ở đây để hai ô số biết mình đang vượt trần bao nhiêu, thay
+   * vì `Math.max(0, ...)` xoá mất thông tin đó ngay tại chỗ cần nó.
+   */
+  const roomLeft = MAX_PLAYERS_PER_ROOM - wolves - specials - villagers;
 
   /*
    * Trần của ô Dân Làng: phần ghế còn lại tới `MAX_PLAYERS_PER_ROOM`.
    *
    * Không kẹp theo số người ĐANG có trong phòng - bộ bài giờ quyết định số
    * người cần, nên host phải kéo được lên trước rồi mời thêm người sau. Lệch
-   * giữa hai con số là việc của `validateRoomConfig`, và nó nói ra thành câu.
+   * giữa hai con số là việc của `validateRoomConfig`, và nó nói ra thành câu
+   * dưới nút Bắt đầu.
+   *
+   * `Math.max(villagers, ...)` chứ không phải trần trần: một bộ bài ĐANG vượt
+   * trần phải giảm được từng bước một. Kẹp cứng thì cú bấm "−" đầu tiên nhảy
+   * thẳng từ 3 về 1 - bỏ qua 2, tức bỏ qua đúng bộ bài host đang nhắm tới.
    */
-  const villagerMax = Math.max(VILLAGER_MIN, MAX_PLAYERS_PER_ROOM - wolves - specials);
+  const villagerMax = Math.max(VILLAGER_MIN, villagers, villagers + roomLeft);
 
   const setVillagers = (n: number) => {
     if (!isHost) return;
@@ -83,6 +90,24 @@ export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
       ...config,
       villagers: Math.min(villagerMax, Math.max(VILLAGER_MIN, n)),
     });
+  };
+
+  /*
+   * Ô Ma Sói có HAI trần và lấy cái thấp hơn.
+   *
+   * `WOLF_MAX` là trần của luật; `roomLeft` là trần của cái phòng. Thiếu vế
+   * sau thì thêm con Sói thứ tư vào một bộ bài đã kín 20 ghế chỉ đổi được một
+   * dòng lỗi đỏ từ server lấy chỗ cho một nút xám - và dòng lỗi đó hiện ở cột
+   * chính, không ở bảng xếp bài đang mở.
+   */
+  const wolfMax = Math.min(WOLF_MAX, Math.max(WOLF_MIN, config.werewolves, config.werewolves + roomLeft));
+
+  const setWolves = (n: number) => {
+    if (!isHost) return;
+    // Kẹp ở đây chứ không tin vào việc nút đã bị disable: `werewolves` đi thẳng
+    // vào `roomConfigSchema` (min 1, max 4) và một giá trị ngoài dải sẽ bị
+    // server từ chối bằng một dòng lỗi đỏ không nói được phải sửa gì.
+    onUpdateConfig({ ...config, werewolves: Math.min(wolfMax, Math.max(WOLF_MIN, n)) });
   };
 
   return (
@@ -147,7 +172,7 @@ export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
           onToggle={() => undefined}
           stepper={
             isHost
-              ? { value: config.werewolves, min: WOLF_MIN, max: WOLF_MAX, onChange: setWolves }
+              ? { value: config.werewolves, min: WOLF_MIN, max: wolfMax, onChange: setWolves }
               : undefined
           }
         />
