@@ -12,6 +12,7 @@ import {
   presentChannels,
 } from "@/lib/chat-channels";
 import { usePhaseMarkers } from "@/lib/use-phase-markers";
+import { mentionNamesFor, quickPhrasesFor } from "@/lib/quick-phrases";
 import { useLiveTrial } from "@/lib/useLiveTrial";
 import { useRoomSocket } from "@/lib/useRoomSocket";
 import { VoiceControl } from "@/components/VoiceControl";
@@ -266,6 +267,11 @@ export default function RoomPage() {
   const channels = presentChannels(snapshot, room.messages);
   const markers = usePhaseMarkers(snapshot);
   const chatEmpty = chatEmptyHint(snapshot);
+  // Ba thứ chat cần từ snapshot, tính một lần cho cả cột chat desktop lẫn tấm
+  // trượt điện thoại - hai bên phải gợi ý cùng một danh sách tên.
+  const mentionNames = useMemo(() => mentionNamesFor(snapshot), [snapshot]);
+  const quickPhrases = useMemo(() => quickPhrasesFor(snapshot, composer.channel), [snapshot, composer.channel]);
+  const meName = snapshot?.you?.name;
 
   return (
     <VoiceProvider snapshot={snapshot}>
@@ -670,6 +676,9 @@ export default function RoomPage() {
                 emptyHint={chatEmpty}
                 draft={chatDraft}
                 onDraftChange={setChatDraft}
+                mentionNames={mentionNames}
+                meName={meName}
+                quickPhrases={quickPhrases}
               />
             </div>
           </div>
@@ -724,6 +733,9 @@ export default function RoomPage() {
         selfId={snapshot?.you?.id ?? null}
         snapshot={snapshot}
         title={heading.title}
+        mentionNames={mentionNames}
+        meName={meName}
+        quickPhrases={quickPhrases}
       />
     </VoiceProvider>
   );

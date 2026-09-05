@@ -5,6 +5,7 @@ import { AnimatePresence, m } from "motion/react";
 import type { ChatMessage, Phase, RoomSnapshot } from "@masoi/shared";
 import type { ChatChannelId, ChatComposerState } from "@/lib/chat-channels";
 import type { PhaseMarker } from "@/lib/chat-timeline";
+import type { QuickPhrase } from "@/lib/quick-phrases";
 import { useChatUnread, unreadLabel } from "@/lib/chat-unread";
 import { moodFor } from "@/lib/mood";
 import { jumpToPhaseAction, phaseActionFor } from "@/lib/phase-action";
@@ -36,6 +37,10 @@ interface Props {
   draft: string;
   onDraftChange: (draft: string) => void;
   selfId: string | null;
+  /** Ba thứ đi thẳng xuống `ChatBox`; xem chú thích ở đó. */
+  mentionNames?: string[];
+  meName?: string;
+  quickPhrases?: QuickPhrase[];
   /**
    * Snapshot của phòng, để dải pha trong tấm trượt biết pha nào, còn bao lâu
    * và người xem có việc gì đang chờ (`phaseActionFor`). Chỉ ĐỌC ba thứ đó -
@@ -68,6 +73,9 @@ export function MobileChatDock({
   title,
   draft,
   onDraftChange,
+  mentionNames,
+  meName,
+  quickPhrases,
   selfId,
   snapshot,
 }: Props) {
@@ -296,6 +304,9 @@ export function MobileChatDock({
                   emptyHint={emptyHint}
                   draft={draft}
                   onDraftChange={onDraftChange}
+                  mentionNames={mentionNames}
+                  meName={meName}
+                  quickPhrases={quickPhrases}
                   // Không còn `autoFocus`: focus lúc mở giờ do useModalFocus đặt,
                   // và nó gọi focus({ preventScroll: true }) - autoFocus của React
                   // thì không, nên nó cuộn trang ngay giữa lúc tấm trượt đang
