@@ -22,6 +22,26 @@ import {
 
 const CONFIG: RoomConfig = { ...DEFAULT_ROOM_CONFIG, serialKiller: true };
 
+/*
+ * Khối đo cân bằng neo trên PRESET, không phải trên `DEFAULT_ROOM_CONFIG`.
+ *
+ * `calculateBalanceScore` chấm ĐỘ LỆCH so với preset cùng cỡ phòng, nên một bộ
+ * bài tự dựng mang theo độ lệch của CHÍNH NÓ vào phép đo. Bộ mặc định 9 người
+ * thiếu cả Thợ Săn lẫn Thám Tử so với preset: nó đo ra 41 điểm khi chưa có Sát
+ * Nhân, rồi tụt xuống 39.5 - tức BỊ CHẶN - ngay khi thêm lá bài đang thử. Test
+ * đỏ khi ấy nói về hai vai vắng mặt chứ không về lá bài nó tự nhận đang đo, và
+ * nó đã đỏ đúng như vậy khi preset 9 người đổi "1 Sói + Sói Con" thành "2 Sói".
+ *
+ * Lấy đúng preset rồi ĐỔI một ghế Dân Làng lấy Sát Nhân thì độ lệch duy nhất
+ * còn lại chính là lá bài cần đo.
+ */
+const BALANCE_BASE = PRESET_DECKS[9];
+const BALANCE_CONFIG: RoomConfig = {
+  ...BALANCE_BASE,
+  serialKiller: true,
+  villagers: BALANCE_BASE.villagers! - 1,
+};
+
 describe("Sát Nhân trong bảng vai", () => {
   it("là vai TRUNG LẬP có hành động đêm", () => {
     expect(ROLE_META.SERIAL_KILLER.team).toBe("neutral");
@@ -94,8 +114,8 @@ describe("bảng cân bằng KHÔNG đo được Sát Nhân", () => {
   it("không cộng vào sức mạnh của phe nào", () => {
     expect(ROLE_POWER.SERIAL_KILLER).toBe(0);
 
-    const without = calculateBalanceScore({ ...CONFIG, serialKiller: false }, 9);
-    const with_ = calculateBalanceScore(CONFIG, 9);
+    const without = calculateBalanceScore(BALANCE_BASE, 9);
+    const with_ = calculateBalanceScore(BALANCE_CONFIG, 9);
 
     // Sói không đổi: lá này không nằm ở vế đó.
     expect(with_.wolfPower).toBe(without.wolfPower);
@@ -110,27 +130,23 @@ describe("bảng cân bằng KHÔNG đo được Sát Nhân", () => {
   });
 
   it("phát một cảnh báo RIÊNG thay vì để điểm số đứng ra bảo lãnh", () => {
-    const warning = generateWarnings(CONFIG, 9);
-    const without = generateWarnings({ ...CONFIG, serialKiller: false }, 9);
+    const warning = generateWarnings(BALANCE_CONFIG, 9);
 
-    // Điểm vẫn nằm gọn trong ngưỡng "cân bằng" - đúng cái bẫy mà cảnh báo này
-    // sinh ra để chặn.
-    expect(warning.score).toBeGreaterThanOrEqual(40);
-    expect(warning.score).toBeLessThanOrEqual(60);
-    expect(warning.warnings.some((line) => line.includes("Sát Nhân"))).toBe(true);
     /*
-     * CẢNH BÁO, không phải cổng chặn: bộ bài này hợp lệ và host được mở nó.
-     *
-     * So với CHÍNH bộ bài đó khi tắt Sát Nhân chứ không khẳng định `false`
-     * tuyệt đối: `blocking` của một bộ bài tuỳ chỉnh còn phụ thuộc những lệch
-     * lạc khác (ở đây là năng lực soi so với preset 9 người), và một khẳng định
-     * tuyệt đối sẽ đỏ vì một lý do chẳng liên quan gì tới lá bài đang thử.
+     * Điểm nằm gọn trong ngưỡng "cân bằng" - đúng cái bẫy mà cảnh báo này sinh
+     * ra để chặn. Và bẫy sập sâu hơn thế: cảnh báo về Sát Nhân là cảnh báo DUY
+     * NHẤT của bộ bài, tức không có lấy một dấu hiệu nào khác để host nghi ngờ.
      */
-    expect(warning.blocking).toBe(without.blocking);
+    expect(warning.score).toBeGreaterThanOrEqual(45);
+    expect(warning.score).toBeLessThanOrEqual(55);
+    expect(warning.warnings).toHaveLength(1);
+    expect(warning.warnings[0]).toContain("Sát Nhân");
+    // CẢNH BÁO, không phải cổng chặn: bộ bài này hợp lệ và host được mở nó.
+    expect(warning.blocking).toBe(false);
   });
 
   it("ván không bật Sát Nhân không mọc thêm cảnh báo nào", () => {
-    const off = generateWarnings({ ...CONFIG, serialKiller: false }, 9);
+    const off = generateWarnings(BALANCE_BASE, 9);
     expect(off.warnings.some((line) => line.includes("Sát Nhân"))).toBe(false);
   });
 });
