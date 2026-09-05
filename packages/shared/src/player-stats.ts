@@ -48,7 +48,10 @@ export interface PlayerStats {
  * Đúng bằng `personalOutcome` ở màn kết thúc và `cuesFor` bên âm thanh.
  */
 export function matchWon(entry: MatchHistoryEntry): boolean | null {
-  if (!entry.myRole || entry.winner === "unknown") return null;
+  // `winner` là `Winner | "unknown"`, và `Winner` chứa null (ván chưa xong).
+  // Lịch sử chỉ ghi ván đã xong, nhưng kiểu thì không hứa, nên null cũng là
+  // "không đọc được" chứ không phải một kết cục.
+  if (!entry.myRole || entry.winner === "unknown" || entry.winner === null) return null;
   if (entry.myPersonalWin) return true;
   return roleWonOutcome(entry.myRole, entry.winner);
 }
