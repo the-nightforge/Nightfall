@@ -17,6 +17,8 @@ import { useRoomSocket } from "@/lib/useRoomSocket";
 import { VoiceControl } from "@/components/VoiceControl";
 import { VoiceProvider } from "@/components/VoiceProvider";
 import { useGameAudio } from "@/lib/useGameAudio";
+import { useAttention } from "@/lib/useAttention";
+import { requestAttentionPermission } from "@/lib/attention";
 import { moodFor } from "@/lib/mood";
 import { Backdrop } from "@/components/Backdrop";
 import { PhaseBanner } from "@/components/PhaseBanner";
@@ -57,6 +59,7 @@ export default function RoomPage() {
   const room = useRoomSocket(code);
   const snapshot = room.snapshot;
   useGameAudio(snapshot);
+  useAttention(snapshot);
   /*
    * "Phiên toà sống" đọc TỪNG snapshot, kể cả những pha không có phiên toà nào.
    *
@@ -167,8 +170,18 @@ export default function RoomPage() {
           <Lobby
             snapshot={snapshot}
             identity={getIdentity()!}
-            onReady={(ready) => room.emit("room:set-ready", { ready })}
-            onStart={() => room.emit("room:start")}
+            /* Xin quyền thông báo ngay trong cử chỉ bấm nút, vì Safari chỉ
+             * nhận yêu cầu từ một cử chỉ người dùng. Hỏi ở đây chứ không lúc
+             * vào phòng: người vừa mở trang chưa có lý do gì để đồng ý, còn
+             * người bấm "Sẵn sàng" đã quyết định ở lại một ván 20 phút. */
+            onReady={(ready) => {
+              if (ready) requestAttentionPermission();
+              room.emit("room:set-ready", { ready });
+            }}
+            onStart={() => {
+              requestAttentionPermission();
+              room.emit("room:start");
+            }}
             onAddBot={() => room.emit("room:add-bot")}
           />
         );

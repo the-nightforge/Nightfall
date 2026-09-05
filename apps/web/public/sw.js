@@ -1,8 +1,13 @@
 /*
  * Service worker của Ma Sói Online.
  *
- * Nó làm ĐÚNG MỘT VIỆC: khi một lần điều hướng thất bại vì mất mạng, trả về
- * trang offline thay cho màn hình lỗi trắng của trình duyệt. Không có gì khác.
+ * Nó làm HAI VIỆC, và chỉ hai:
+ *
+ *   - khi một lần điều hướng thất bại vì mất mạng, trả về trang offline thay
+ *     cho màn hình lỗi trắng của trình duyệt;
+ *   - khi người chơi bấm vào thông báo "tới lượt bạn", đưa họ về đúng tab đang
+ *     mở (xem `notificationclick` ở cuối file). Thông báo được gửi từ trang
+ *     qua `registration.showNotification`, service worker không tự gửi gì.
  *
  * Bản đầu còn cache thêm `/_next/static/`, `/icons/`, `/characters/` và
  * `/images/` theo lối cache-first. Bỏ hết, vì ba lý do:
@@ -208,3 +213,23 @@ async function navigateOrOffline(request) {
     );
   }
 }
+
+/**
+ * Bấm vào thông báo "tới lượt bạn": quay về tab đang có ván.
+ *
+ * Trang phòng gửi thông báo qua `registration.showNotification` (Android bắt
+ * buộc đường này với PWA đã cài), nên sự kiện bấm rơi vào đây chứ không vào
+ * trang. Ưu tiên một tab CÙNG origin đang mở - đó chính là ván đang chờ - và
+ * chỉ mở tab mới khi không còn tab nào; mở thêm một tab khi ván vẫn còn ở tab
+ * cũ là tạo ra hai kết nối cho một ghế.
+ */
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const room = clients.find((c) => c.url.includes("/room/")) ?? clients[0];
+      if (room) return room.focus();
+      return self.clients.openWindow("/");
+    }),
+  );
+});

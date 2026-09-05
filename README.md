@@ -63,6 +63,7 @@ The interesting parts are not the CRUD. They are:
 | 💬 | **Full chat reveal** at game over — the wolves' den and the dead's channel open up once roles are public |
 | 🗂️ | **Case file** at game over: 3-5 turning points picked from authoritative match data, with a shareable 9:16 card |
 | 🕘 | **Match history** on the home page: your recent games, your role in each, the final roster, and the turning points that decided them |
+| 🔔 | **Turn attention** — when the tab is in the background, the tab title, a short vibration and (if granted) a system notification call the player back for their night action, an open ballot, their own trial, a death or the end of the match. Capability-gated, no toggle: the title always works, the other two degrade silently |
 | 📥 | **Installable PWA** — add to home screen, and a cached offline page instead of the browser's error screen when a navigation fails |
 | ✉️ | **Last letter** (optional add-on): write a sealed note of at most 100 characters during the day; it opens only when its writer dies |
 
