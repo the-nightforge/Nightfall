@@ -348,6 +348,15 @@ export interface RecencyWeights {
   /** Cùng ý tưởng nhưng cho importance của memory. */
   memoryDecayPerRound: number;
   /**
+   * Tốc độ nguội của HỒ SƠ người chơi (`BotBrainState.profiles`), mỗi vòng.
+   *
+   * Cố ý CHẬM hơn `beliefDecayPerRound`: sự kiện nguội nhanh ("hôm qua anh
+   * đổi phiếu muộn" hết quan trọng sau hai ngày), còn người nguội chậm ("anh
+   * từng khai láo" vẫn đáng nhớ tới cuối ván). Hai tốc độ, hai thứ khác nhau.
+   * `1` là không nguội.
+   */
+  profileDecayPerRound: number;
+  /**
    * Evidence cũ hơn bấy nhiêu vòng bị coi là *stale* khi ĐO.
    *
    * Đây là ngưỡng của một METRIC, không phải một luật: dùng bằng chứng cũ không
@@ -667,6 +676,7 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   ["social", "deathMotiveConfidence"],
   ["recency", "beliefDecayPerRound"],
   ["recency", "memoryDecayPerRound"],
+  ["recency", "profileDecayPerRound"],
   ["selfPreservation", "guardSuspicionPenalty"],
   ["deceptionRisk", "abstainPressureCeiling"],
   ["roleThresholds", "guardianAngelWorthACharge"],
@@ -932,6 +942,9 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
   recency: Object.freeze({
     beliefDecayPerRound: 0.85,
     memoryDecayPerRound: 0.88,
+    // 1 = không nguội ở v1..v12; v13 đặt 0.93. Hồ sơ không ảnh hưởng gì tới
+    // v1..v11 (cổng `knownBluffPenalty = 0`), nên đây thuần là giữ v12 nguyên.
+    profileDecayPerRound: 1,
     staleAfterRounds: 3,
   }),
 
@@ -1819,6 +1832,31 @@ export const BOT_WEIGHTS_V12: BotWeights = Object.freeze({
 });
 
 /**
+ * Cấu hình v13 - hồ sơ người chơi nguội chậm hơn sự kiện.
+ *
+ * MỘT ô đổi: `recency.profileDecayPerRound` 1 -> 0.93.
+ *
+ * Belief nguội 0.85/vòng: sau ba vòng còn 61%, sau năm vòng còn 44% - đúng
+ * cho một lá phiếu muộn hay một lời tố, những thứ mà ván đấu đã đi qua. Hồ sơ
+ * nguội 0.93/vòng: sau năm vòng còn 70%. Một người bị bắt quả tang khai láo
+ * ở vòng 2 vẫn là một người đáng ngờ khi khai lại ở vòng 6, dù mọi bằng
+ * chứng của vòng 2 đã phai gần hết. Đó là cái "nhớ người" mà bot thiếu.
+ *
+ * Nguội cả `samples` (sức nặng) lẫn tỉ lệ (kéo về trung tính), cùng hệ số,
+ * và chỉ trên tuổi tính từ `lastUpdatedRound` - gọi hai lần một vòng không
+ * nguội gấp đôi, cùng cơ chế với `decayEntry`.
+ */
+export const BOT_WEIGHTS_V13: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V12,
+  version: "13.0.0",
+
+  recency: Object.freeze({
+    ...BOT_WEIGHTS_V12.recency,
+    profileDecayPerRound: 0.93,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
@@ -1831,8 +1869,8 @@ export const BOT_WEIGHTS_V12: BotWeights = Object.freeze({
  * v9.0.0 bật hành vi của Kẻ Báo Thù; v10.0.0 hạ `spareTrustMargin` về 0 để
  * phiên toà thôi kết án 100% bị cáo và để lời khai vai có sức nặng; v11.0.0
  * bật hai tín hiệu né tránh và bào chữa kém; v12.0.0 trừ sẵn tin cậy của
- * người đã từng khai láo.
+ * người đã từng khai láo; v13.0.0 cho hồ sơ nguội chậm hơn belief.
  * v1-v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset đích
  * danh, không bao giờ dựa vào hằng số này.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V12;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V13;

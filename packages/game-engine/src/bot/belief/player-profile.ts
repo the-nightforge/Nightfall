@@ -74,3 +74,25 @@ export function observeProfile(
   profile.samples += 1;
   profile.lastUpdatedRound = round;
 }
+
+/**
+ * Làm nguội mọi hồ sơ không được củng cố kể từ `lastUpdatedRound`.
+ *
+ * Cả sức nặng (`samples`) lẫn tỉ lệ (kéo về trung tính) cùng nguội theo
+ * `rate ** age`. Ghi lại mốc để lần gọi sau không nhân tiếp phần vừa nhân -
+ * cùng lý do với `decayEntry` ở `belief-state.ts`: `observe()` chạy nhiều lần
+ * một vòng, và số vòng bot "quên" một người không được phụ thuộc vào việc
+ * scheduler gọi mấy lần.
+ */
+export function decayProfiles(state: BotBrainState, round: number, rate: number): void {
+  for (const profile of Object.values(state.profiles)) {
+    const age = Math.max(0, round - profile.lastUpdatedRound);
+    if (age === 0) continue;
+    const factor = rate ** age;
+    profile.samples *= factor;
+    profile.bluffRate = NEUTRAL_PROFILE.bluffRate + (profile.bluffRate - NEUTRAL_PROFILE.bluffRate) * factor;
+    profile.aggroRate = NEUTRAL_PROFILE.aggroRate + (profile.aggroRate - NEUTRAL_PROFILE.aggroRate) * factor;
+    profile.accuracy = NEUTRAL_PROFILE.accuracy + (profile.accuracy - NEUTRAL_PROFILE.accuracy) * factor;
+    profile.lastUpdatedRound = round;
+  }
+}
