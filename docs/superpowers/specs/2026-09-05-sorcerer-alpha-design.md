@@ -59,8 +59,9 @@ tests (`roles.test.ts`, `new-roles.test.ts` xóa describe Bà Đồng, `traitor.
 
 ## 5. Preset và đo lường
 
-- Thay ghế 1–1: preset 17–18 `medium → sorcerer`, preset 19–20 `priest → alpha` (tổng role giữ 20,
-  mỗi preset vẫn còn ≥1 ghế Dân theo `preset-coverage.test.ts`).
+- Thay ghế 1–1 (xóa 2 ghế/preset nên phải lấp đủ 2): preset 17–18 `medium → sorcerer`,
+  ghế `priest` trả về Dân Làng; preset 19–20 `priest → alpha`, ghế `medium` trả về Dân Làng.
+  Mỗi preset lớn thêm đúng 1 sói mới (không nhồi cả 2 vào cùng 1 preset trước khi có số đo).
 - Cập nhật `preset-coverage.test.ts` (bỏ MEDIUM/PRIEST khỏi diện bắt buộc, thêm SORCERER/ALPHA_WOLF),
   `CORE_PRESET_ROLES` không đổi.
 - Đo: `role-power.ts` so cặp trên đúng seed, **speech BẬT**, ≥600 ván/ô cho 2 role mới trước khi chốt số;
