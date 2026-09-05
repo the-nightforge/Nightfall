@@ -15,6 +15,8 @@ import { Backdrop } from "@/components/Backdrop";
 import { BrandMark, VillageScene } from "@/components/HomeHero";
 import { JoinCodeFromQuery } from "@/components/JoinCodeFromQuery";
 import { MatchHistoryPanel } from "@/components/MatchHistoryPanel";
+import { PlayerStatsCard } from "@/components/PlayerStatsCard";
+import { LeaderboardPanel } from "@/components/LeaderboardPanel";
 import { AssetCredits } from "@/components/AssetCredits";
 import { InstallPrompt } from "@/components/InstallPrompt";
 
@@ -633,7 +635,13 @@ export default function Home() {
               * người mới vào không thấy một khung rỗng nói rằng họ chưa làm gì -
               * và `gap` của flex cũng không chừa chỗ cho một thẻ không tồn tại.
               */}
+            {/* Hồ sơ đứng trên lịch sử: con số tổng trước, từng ván sau. Cùng
+              * quy tắc tự ẩn với thẻ lịch sử. */}
+            <PlayerStatsCard />
             <MatchHistoryPanel />
+            {/* Bảng xếp hạng đứng SAU lịch sử của chính mình: việc của mình
+              * trước, việc của làng sau. Hiện cả khi chưa đăng nhập. */}
+            <LeaderboardPanel />
 
             {/*
               * Lời mời cài app: thẻ cuối cùng của cột, sau lịch sử ván.
