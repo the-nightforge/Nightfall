@@ -151,9 +151,9 @@
       "denominator": 126
     },
     "distinctOpeningRate": {
-      "value": 0.9174311926605505,
-      "numerator": 100,
-      "denominator": 109
+      "value": 0.8015873015873016,
+      "numerator": 101,
+      "denominator": 126
     },
     "consecutiveSameTargetRate": {
       "value": 0.15873015873015872,

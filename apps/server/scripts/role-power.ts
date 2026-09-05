@@ -122,7 +122,19 @@ function main(): void {
     for (const [role, key] of TOGGLES) {
       if (roleFilter.size > 0 && !roleFilter.has(role)) continue;
       if (preset[key] !== true) continue;
-      const without = { ...preset, [key]: false } as RoomConfig;
+      /*
+       * Gỡ một vai ra thì ghế đó phải thành một DÂN LÀNG, và giờ phải nói ra.
+       *
+       * Trước đây `buildRoleDeck` tự lấp phần còn thiếu nên dòng này không cần
+       * làm gì. Từ khi `villagers` do host đặt, bộ bài phải khớp đúng số người -
+       * thiếu một lá là engine ném ngay, và đó chính là phép so cặp mà cả bảng
+       * `ROLE_POWER` dựng lên: "vai này đáng bao nhiêu SO VỚI một lá Dân Làng".
+       */
+      const without = {
+        ...preset,
+        [key]: false,
+        ...(preset.villagers === undefined ? {} : { villagers: preset.villagers + 1 }),
+      } as RoomConfig;
       const delta = base - villageWinRate(playerCount, without, games, seedBase);
       // Sói Con nằm phe Sói: gỡ nó ra thì phe làng KHOẺ lên, nên dấu phải lật để
       // "delta" ở mọi dòng đều đọc là "đóng góp cho phe sở hữu nó".

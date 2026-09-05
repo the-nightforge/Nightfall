@@ -352,7 +352,8 @@ export const CORE_PRESET_ROLES: readonly Role[] = [
  */
 export function missingCoreRoles(config: RoomConfig, playerCount: number): Role[] {
   const roles = new Set<Role>(specialRoleList(config));
-  if (playerCount - specialRoleList(config).length > 0) roles.add("VILLAGER");
+  const villagerSeats = config.villagers ?? playerCount - specialRoleList(config).length;
+  if (villagerSeats > 0) roles.add("VILLAGER");
   return CORE_PRESET_ROLES.filter((role) => !roles.has(role));
 }
 
@@ -470,7 +471,7 @@ function preset(overrides: Partial<RoomConfig>): RoomConfig {
  * 15: WEREWOLF x3, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, PRIEST, VILLAGER x3
  */
 
-export const PRESET_DECKS: Record<number, RoomConfig> = {
+const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
   8: preset({ werewolves: 2, seer: true, witch: true, guard: true, hunter: true, detective: true }),
   9: preset({ werewolves: 1, wolfCub: true, seer: true, witch: true, guard: true, detective: true, hunter: true }),
   10: preset({
@@ -736,6 +737,22 @@ export const PRESET_DECKS: Record<number, RoomConfig> = {
     medium: true,
   }),
 };
+
+/**
+ * Preset, có `villagers` khai TƯỜNG MINH.
+ *
+ * Suy từ chính khoá của record chứ không chép tay: khoá LÀ cỡ phòng, nên
+ * `villagers = cỡ phòng - số lá đặc biệt` cho ra đúng bộ bài mà bảng này vẫn
+ * chia từ trước khi `villagers` tồn tại. Chép tay 13 con số là 13 chỗ để trôi
+ * lệch mỗi lần một preset đổi một lá.
+ */
+export const PRESET_DECKS: Record<number, RoomConfig> = Object.fromEntries(
+  Object.entries(RAW_PRESET_DECKS).map(([size, config]) => [
+    Number(size),
+    { ...config, villagers: Number(size) - specialRoleList(config).length },
+  ]),
+);
+
 
 /**
  * Cảnh báo "thang đo này không đo được lá bài đó".

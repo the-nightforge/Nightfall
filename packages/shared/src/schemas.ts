@@ -23,6 +23,8 @@ export const roomModeSchema = z.enum(["ranked", "chaos"]);
 export const roomConfigSchema = z
   .object({
     werewolves: z.number().int().min(1).max(4),
+    // Trần là MAX_PLAYERS_PER_ROOM - 1: bộ bài phải còn chỗ cho ít nhất một Sói.
+    villagers: z.number().int().min(1).max(MAX_PLAYERS_PER_ROOM - 1).optional(),
     seer: bool,
     guard: bool,
     witch: bool,
@@ -102,12 +104,38 @@ export function validateRoomConfig(config: RoomConfig, playerCount: number): str
    */
   const traitorSeats = config.traitor ? 1 : 0;
   const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0);
-  const totalRoles = wolfCount + specials + traitorSeats;
-  if (totalRoles > playerCount) {
-    return "Tổng số vai trò đặc biệt vượt quá số người chơi";
-  }
-  if (totalRoles === playerCount) {
-    return "Phải còn chỗ cho Dân Làng";
+  const seats = wolfCount + specials + traitorSeats;
+
+  if (config.villagers === undefined) {
+    /*
+     * ĐƯỜNG TƯƠNG THÍCH, không phải một chế độ.
+     *
+     * Cấu hình ghi trước khi `villagers` tồn tại - và mọi cấu hình dựng bằng tay
+     * trong test hay harness self-play - không có trường đó. Với chúng, Dân Làng
+     * vẫn lấp phần còn lại đúng như `buildRoleDeck` làm, nên luật cũ được giữ
+     * nguyên: phải còn ÍT NHẤT một ghế trống để lấp.
+     */
+    if (seats > playerCount) {
+      return "Tổng số vai trò đặc biệt vượt quá số người chơi";
+    }
+    if (seats === playerCount) {
+      return "Phải còn chỗ cho Dân Làng";
+    }
+  } else {
+    /*
+     * Bộ bài quyết định SỐ NGƯỜI CẦN, nên phép kiểm là BẰNG chứ không phải nhỏ hơn.
+     *
+     * Câu lỗi nêu cả hai con số vì nó đi thẳng ra nút bắt đầu qua `startBlock`:
+     * "thiếu một người" và "thừa một lá" cần hai cách sửa khác nhau, và một câu
+     * chỉ nói "không khớp" thì host không biết kéo ô nào.
+     */
+    if (config.villagers < 1) {
+      return "Phải còn chỗ cho Dân Làng";
+    }
+    const deckSize = seats + config.villagers;
+    if (deckSize !== playerCount) {
+      return `Bộ bài cần ${deckSize} người, phòng đang có ${playerCount}`;
+    }
   }
   // `playerCount - wolfCount` là "số người KHÔNG phải Sói", nên cả hai vai trung
   // lập đều được tính vào đó - đúng bằng cách `checkWin` đếm thế cân bằng của

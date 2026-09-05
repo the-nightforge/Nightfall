@@ -74,7 +74,7 @@ export interface DeckCounts {
 /**
  * Bộ bài quy ra ba con số.
  *
- * Dân Làng lấp phần còn lại, đúng như `buildRoleDeck` làm ở engine - đây là
+ * Đọc thẳng `config.villagers`, đúng như `buildRoleDeck` làm ở engine - đây là
  * bản xem trước, không phải một luật chia bài thứ hai.
  */
 export function deckCounts(config: RoomConfig, playerCount: number): DeckCounts {
@@ -85,7 +85,10 @@ export function deckCounts(config: RoomConfig, playerCount: number): DeckCounts 
     (role) => config[CONFIG_KEY[role]],
   ).length;
   const wolves = config.werewolves + WOLF_SPECIAL_ROLES.filter((r) => config[CONFIG_KEY[r]]).length;
-  return { wolves, specials, villagers: Math.max(0, playerCount - wolves - specials) };
+  // `villagers` do host đặt. Nhánh `??` là đường tương thích cho cấu hình ghi
+  // trước khi trường đó tồn tại; xem `RoomConfig.villagers`.
+  const villagers = config.villagers ?? Math.max(0, playerCount - wolves - specials);
+  return { wolves, specials, villagers };
 }
 
 /**
@@ -98,6 +101,9 @@ export function isPresetDeck(config: RoomConfig, playerCount: number): boolean {
   const preset = PRESET_DECKS[playerCount];
   if (!preset) return false;
   if (preset.werewolves !== config.werewolves) return false;
+  // Số Dân Làng giờ là một lựa chọn của host, nên nó thuộc về phần BÀI: hai bộ
+  // giống hệt nhau ở mọi lá đặc biệt mà khác số Dân Làng là hai bộ bài khác cỡ.
+  if (preset.villagers !== config.villagers) return false;
   return Object.values(CONFIG_KEY).every((key) => !!preset[key] === !!config[key]);
 }
 

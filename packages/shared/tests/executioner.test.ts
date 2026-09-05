@@ -124,7 +124,9 @@ describe("bộ bài và số ghế", () => {
   });
 
   it("cấu hình hợp lệ vẫn hợp lệ khi bật vai này", () => {
-    expect(validateRoomConfig(CONFIG, 8)).toBeNull();
+    // 9 chứ không phải 8: từ khi `villagers` do host đặt, bật thêm một lá là
+    // bộ bài dày thêm một ghế, nên phòng cũng phải đông thêm một người.
+    expect(validateRoomConfig(CONFIG, 9)).toBeNull();
   });
 
   it("ghế bị lấy được đếm: bộ bài chật thì bị từ chối", () => {
@@ -138,8 +140,15 @@ describe("bộ bài và số ghế", () => {
       cursed: true,
       executioner: true,
     };
-    // 2 Sói + 5 vai đặc biệt + 1 Kẻ Báo Thù = 8 lá cho 8 người: hết chỗ Dân Làng.
-    expect(validateRoomConfig(tight, 8)).toBe("Phải còn chỗ cho Dân Làng");
+    // 2 Sói + 5 vai đặc biệt + 1 Kẻ Báo Thù = 8 ghế đã bị lấy. Bộ bài chật giờ
+    // hỏng theo HAI đường, và cả hai đều phải bị chặn.
+    //
+    // Không còn Dân Làng nào:
+    expect(validateRoomConfig({ ...tight, villagers: 0 }, 8)).toBe("Phải còn chỗ cho Dân Làng");
+    // Còn một Dân Làng thì bộ bài dày 9, không mở được ở phòng 8 người:
+    expect(validateRoomConfig({ ...tight, villagers: 1 }, 8)).toBe(
+      "Bộ bài cần 9 người, phòng đang có 8",
+    );
   });
 });
 

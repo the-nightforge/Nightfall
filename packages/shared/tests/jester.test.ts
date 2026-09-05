@@ -66,12 +66,18 @@ describe("Thằng Hề - cấu hình phòng", () => {
       guard: false,
       witch: false,
       jester: true,
+      // 3 Sói + Hề + 4 Dân Làng = 8 ghế. `villagers` giờ do host đặt, nên bộ
+      // bài phải tự khớp số người chứ không co giãn theo nữa.
+      villagers: 4,
     };
     // 8 người, không phải 7: `MIN_PLAYERS_TO_START` lên 8 từ 2026-09-04, và
     // dưới ngưỡng đó `validateRoomConfig` trả về lỗi số người TRƯỚC khi tới
     // được phép đếm phe mà test này muốn khẳng định.
     expect(validateRoomConfig(config, 8)).toBeNull();
-    expect(validateRoomConfig({ ...config, werewolves: 4 }, 8)).toBe(
+    // Bớt một Dân Làng để bộ bài vẫn dày đúng 8: nếu để lệch cỡ thì
+    // `validateRoomConfig` trả về lỗi SỐ NGƯỜI trước khi tới được phép đếm phe
+    // mà test này muốn khẳng định.
+    expect(validateRoomConfig({ ...config, werewolves: 4, villagers: 3 }, 8)).toBe(
       "Số Ma Sói phải ít hơn phe làng",
     );
   });
