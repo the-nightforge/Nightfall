@@ -15,6 +15,7 @@ import { usePhaseMarkers } from "@/lib/use-phase-markers";
 import { useLiveTrial } from "@/lib/useLiveTrial";
 import { useRoomSocket } from "@/lib/useRoomSocket";
 import { VoiceControl } from "@/components/VoiceControl";
+import { RulesDrawer } from "@/components/RulesDrawer";
 import { VoiceProvider } from "@/components/VoiceProvider";
 import { useGameAudio } from "@/lib/useGameAudio";
 import { useAttention } from "@/lib/useAttention";
@@ -378,6 +379,11 @@ export default function RoomPage() {
               * cho bạn bè chép, còn trong ván nó chỉ là chỗ tra lại.
               */}
             <RoomInvite code={code} size={isLobby ? "lg" : "sm"} />
+            {/* Chỉ trong ván: phòng chờ đã có "Luật và vai trò" ở thanh điều
+              * khiển, còn màn kết thúc thì lật hết bài rồi, không còn gì để tra. */}
+            {snapshot && !isLobby && snapshot.phase !== "GAME_OVER" && (
+              <RulesDrawer snapshot={snapshot} />
+            )}
             <SoundControl />
             {/*
               * Điều kiện là `snapshot &&`, không phải chỉ `!connected`.
