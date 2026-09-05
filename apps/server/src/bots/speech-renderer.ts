@@ -1,4 +1,9 @@
-import { analyzeChat, renderSpeechTemplate, speechTextFingerprint } from "@masoi/game-engine";
+import {
+  analyzeChat,
+  openingOf,
+  renderSpeechTemplate,
+  speechTextFingerprint,
+} from "@masoi/game-engine";
 import { botBrain } from "./index";
 import { DEFAULT_CHAT_MAX } from "./decide";
 import type { BotBrain, RenderedSpeech, SpeechRequest } from "./types";
@@ -60,6 +65,8 @@ export function speechTemplate(request: SpeechRequest): string | null {
     seq: request.seq,
     // Vân tay của chính những câu BOT vừa nói: mẫu trùng sẽ bị bỏ qua.
     avoidFingerprints: request.recentOwnLines.map(speechTextFingerprint),
+    // Cách mở đầu vừa dùng: mẫu trùng mở đầu bị dịch qua khi còn mẫu khác.
+    avoidOpenings: request.avoidOpenings,
   });
 }
 
@@ -97,7 +104,7 @@ export async function renderBotSpeech(
     chat = null;
   }
 
-  if (chat && !echoesRecentOwnLine(request, chat) && claimSurvivesRoundTrip(request, chat)) {
+  if (chat && passesGates(request, chat)) {
     return { text: chat.slice(0, chatMaxLength), fromTemplate: false };
   }
 
@@ -117,6 +124,37 @@ export async function renderBotSpeech(
     return { text: null, fromTemplate: true };
   }
   return { text: template, fromTemplate: true };
+}
+
+/**
+ * Ba cổng mà một câu của nhà cung cấp phải qua, theo thứ tự rẻ trước đắt sau:
+ * không nhại lại chính mình, không mở đầu như vài câu vừa rồi, và nói đúng lời
+ * khai đã chốt (hoặc không khai gì nếu lõi không khai).
+ */
+function passesGates(request: SpeechRequest, chat: string): boolean {
+  return (
+    !echoesRecentOwnLine(request, chat) &&
+    !repeatsRecentOpening(request, chat) &&
+    claimSurvivesRoundTrip(request, chat)
+  );
+}
+
+/**
+ * Câu này có mở đầu y hệt một trong vài câu vừa rồi của chính BOT không?
+ *
+ * `avoidOpenings` là ba token mở đầu (sau khi bỏ từ đệm) của năm lượt gần nhất,
+ * do lõi ghi vào `BotSpeechRecord.opening` bằng đúng `openingOf`. Danh sách đó
+ * đi vào prompt kèm lời dặn "đừng mở đầu giống những lần trước" - nhưng cũng
+ * như `recentOwnLines`, lời dặn chỉ là đề nghị, và "mọi câu đều bắt đầu bằng
+ * tôi nghi" là triệu chứng dễ nhận nhất của một bot. Bảng mẫu đã né bằng
+ * `avoidOpenings`; nhà cung cấp phải chịu cùng một luật.
+ *
+ * Đệm "ủa"/"hmm" rồi mở đầu y hệt vẫn là trùng: `openingOf` bỏ từ đệm đầu câu.
+ */
+function repeatsRecentOpening(request: SpeechRequest, chat: string): boolean {
+  if (request.avoidOpenings.length === 0) return false;
+  const opening = openingOf(chat);
+  return opening !== null && request.avoidOpenings.includes(opening);
 }
 
 /**

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   deriveSpeechStyle,
   describeSpeechStyle,
+  openingOf,
   speechTextFingerprint,
 } from "@masoi/game-engine";
 import type { BotPersonality, BotSpeechIntention } from "@masoi/game-engine";
@@ -379,5 +380,48 @@ describe("nhà cung cấp không được nhại lại chính BOT", () => {
     );
     expect(result.fromTemplate).toBe(false);
     expect(result.text!.length).toBe(120);
+  });
+});
+
+/**
+ * Task B — nhà cung cấp cũng không được mở đầu y hệt vài câu vừa rồi.
+ *
+ * `avoidOpenings` đi vào prompt kèm lời dặn, nhưng lời dặn chỉ là đề nghị.
+ * Cổng ở đây so ba token mở đầu của câu trả về với các cách mở đầu gần đây,
+ * dùng đúng `openingOf` mà lõi ghi vào `BotSpeechRecord`.
+ */
+describe("nhà cung cấp không được mở đầu như vài câu vừa rồi", () => {
+  it("câu mở đầu trùng bị bỏ, và câu thay thế mở đầu khác", async () => {
+    const payload = request({}, { avoidOpenings: ["tôi nghi chi"], recentOwnLines: ["Tôi nghi Chi vì lá phiếu."] });
+    const result = await renderBotSpeech(payload, speaking("Tôi nghi Chi thật đấy, đổi phiếu sát giờ chót."));
+    expect(result.fromTemplate).toBe(true);
+    expect(result.text).not.toBeNull();
+    expect(openingOf(result.text!)).not.toBe("tôi nghi chi");
+  });
+
+  it("đệm ủa/hmm rồi mở đầu y hệt vẫn là trùng", async () => {
+    const payload = request({}, { avoidOpenings: ["tôi nghi chi"] });
+    const result = await renderBotSpeech(payload, speaking("Ủa, tôi nghi Chi mà."));
+    expect(result.fromTemplate).toBe(true);
+  });
+
+  it("mở đầu khác thì câu của nhà cung cấp vẫn được dùng", async () => {
+    const payload = request({}, { avoidOpenings: ["tôi nghi chi"] });
+    const line = "Chi đổi phiếu sát giờ chót, ai giải thích giúp tôi.";
+    const result = await renderBotSpeech(payload, speaking(line));
+    expect(result.text).toBe(line);
+    expect(result.fromTemplate).toBe(false);
+  });
+
+  it("bảng mẫu ở server cũng nhận avoidOpenings", () => {
+    const first = speechTemplate(request())!;
+    const opening = openingOf(first)!;
+    const next = speechTemplate(request({}, { avoidOpenings: [opening] }))!;
+    expect(openingOf(next)).not.toBe(opening);
+  });
+
+  it("chưa có cách mở đầu nào để tránh thì không chặn gì", async () => {
+    const result = await renderBotSpeech(request({}, { avoidOpenings: [] }), speaking("Tôi nghi Chi thật."));
+    expect(result.fromTemplate).toBe(false);
   });
 });

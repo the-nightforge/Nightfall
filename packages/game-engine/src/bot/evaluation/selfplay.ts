@@ -16,7 +16,7 @@ import {
   speechSemanticFingerprint,
   speechTextFingerprint,
 } from "../conversation/fingerprint";
-import { recentTextFingerprints } from "../conversation/speech-memory";
+import { recentOpenings, recentTextFingerprints } from "../conversation/speech-memory";
 import { renderSpeechTemplate } from "../conversation/templates";
 import { createSeededRng } from "../rng";
 import type { BotDecisionTrace, BotTraceSink } from "../trace/trace";
@@ -209,6 +209,7 @@ export function renderIntentionText(
     round: number;
     seq: number;
     avoidFingerprints?: readonly string[];
+    avoidOpenings?: readonly string[];
   },
 ): string {
   const target = speech.targetId ? nameOf(speech.targetId) : "người đó";
@@ -441,6 +442,8 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
           round,
           seq: chatSequence,
           avoidFingerprints: recentTextFingerprints(runtimes.get(playerId)!.state, 3),
+          // Cùng luật với server: không mở đầu như năm lượt vừa rồi của chính mình.
+          avoidOpenings: recentOpenings(runtimes.get(playerId)!.state),
         })
       : renderIntentionText(speech, nameOf);
 

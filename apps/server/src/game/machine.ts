@@ -922,7 +922,10 @@ export function toSpeechRequest(
       text: message.text,
       isSelf: message.actorId === member.playerId,
     })),
-    avoidOpenings: recentOpenings(runtime.state, limits.promptRecentOwnLines),
+    // Cửa sổ mở đầu (5) rộng hơn cửa sổ câu gửi vào prompt (4): xem
+    // RECENT_OPENING_WINDOW. Cùng danh sách này đi vào prompt VÀ vào cổng ở
+    // speech-renderer, nên nhà cung cấp và bảng mẫu chịu chung một luật.
+    avoidOpenings: recentOpenings(runtime.state),
     recentSpeechSourceIds: recentSpeechSourceIds(
       runtime.state,
       limits.promptRecentOwnLines,

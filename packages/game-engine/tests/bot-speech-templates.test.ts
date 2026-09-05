@@ -539,3 +539,89 @@ describe("nhiễu người trong renderSpeechTemplate", () => {
     }
   });
 });
+
+/**
+ * Task B — chống lặp cách mở đầu.
+ *
+ * "Mọi câu đều bắt đầu bằng *tôi nghi*" là triệu chứng dễ nhận nhất của một
+ * bot. Vân tay toàn câu không bắt được nó, nên bảng mẫu nhận thêm
+ * `avoidOpenings` và dịch qua mẫu khác khi trùng.
+ */
+import { openingOf } from "../src/bot/conversation/fingerprint";
+
+describe("renderSpeechTemplate tránh cách mở đầu vừa dùng", () => {
+  it("né mẫu có cùng ba token mở đầu với câu gần đây", () => {
+    const base = request({ intention: intention({ kind: "ACCUSE", tone: "FIRM" }) });
+    for (let seq = 0; seq < 40; seq += 1) {
+      const first = renderSpeechTemplate({ ...base, seq });
+      const opening = openingOf(first)!;
+      const next = renderSpeechTemplate({ ...base, seq, avoidOpenings: [opening] });
+      expect(openingOf(next), `seq ${seq}: ${first} -> ${next}`).not.toBe(opening);
+    }
+  });
+
+  it("một bot không mở ba lượt liên tiếp bằng cùng một cách", () => {
+    // Mô phỏng đúng vòng lặp của scheduler: mỗi lượt mang theo cách mở đầu của
+    // năm lượt trước. Quét mọi loại có mục tiêu, vì đó là chỗ "tôi nghi X" và
+    // "X nói đi" lặp dễ nhất.
+    for (const kind of ["ACCUSE", "QUESTION", "AGREE", "DISAGREE", "DEFEND", "CHANGE_MIND"] as BotSpeechKind[]) {
+      for (const tone of BOT_SPEECH_TONES) {
+        const base = request({ intention: intention({ kind, tone }) });
+        const openings: string[] = [];
+        for (let seq = 0; seq < 30; seq += 1) {
+          const text = renderSpeechTemplate({
+            ...base,
+            seq,
+            avoidOpenings: openings.slice(-5),
+            avoidFingerprints: [],
+          });
+          const opening = openingOf(text)!;
+          const last = openings.slice(-2);
+          if (last.length === 2 && last[0] === opening && last[1] === opening) {
+            throw new Error(`${kind}/${tone}: ba lượt liên tiếp mở bằng "${opening}"`);
+          }
+          openings.push(opening);
+        }
+      }
+    }
+  });
+
+  it("hai bot cùng cáo buộc cùng vòng hiếm khi mở đầu giống nhau", () => {
+    let same = 0;
+    const trials = 300;
+    for (let i = 0; i < trials; i += 1) {
+      const base = request({
+        intention: intention({ kind: "ACCUSE", tone: "NEUTRAL" }),
+        seedTag: `room:${i}`,
+        round: 2,
+        seq: 3,
+      });
+      const a = renderSpeechTemplate({ ...base, botId: "a" });
+      const b = renderSpeechTemplate({ ...base, botId: "b" });
+      if (openingOf(a) === openingOf(b)) same += 1;
+    }
+    // 13 mẫu nhưng nhiều mẫu mở đầu bằng "{target}" nên trùng ngẫu nhiên vẫn có;
+    // ngưỡng 30% cao hơn hẳn mức đo để không đỏ vì đổi một mẫu.
+    expect(same / trials).toBeLessThan(0.3);
+  });
+
+  it("cả bể trùng mở đầu thì vẫn nói, chỉ không nói lại nguyên câu", () => {
+    const base = request({
+      intention: intention({ kind: "REACTION", tone: "FIRM" }),
+      targetName: null,
+      replyToName: null,
+    });
+    const pool = SPEECH_TEMPLATES.REACTION.FIRM!;
+    const everyOpening = pool.map((template) => openingOf(fillSpeechTemplate(template, base))!);
+    const text = renderSpeechTemplate({ ...base, avoidOpenings: everyOpening });
+    expect(text.trim().length).toBeGreaterThan(0);
+  });
+
+  it("avoidOpenings không đổi kết quả khi rỗng: tương thích với chỗ gọi cũ", () => {
+    for (let seq = 0; seq < 30; seq += 1) {
+      expect(renderSpeechTemplate(request({ seq, avoidOpenings: [] }))).toBe(
+        renderSpeechTemplate(request({ seq })),
+      );
+    }
+  });
+});
