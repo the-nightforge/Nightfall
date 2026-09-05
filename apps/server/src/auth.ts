@@ -39,3 +39,31 @@ export async function requirePlayer(
     res.status(500).json({ error: "Không thể xác thực lúc này" });
   }
 }
+
+/**
+ * Như `requirePlayer` nhưng KHÔNG chặn: token thiếu hay hỏng thì đi tiếp với
+ * `player` để trống. Cho những endpoint công khai muốn nói thêm một câu riêng
+ * với người đã đăng nhập - bảng xếp hạng là một.
+ *
+ * Lỗi DB thì vẫn là 500: đó không phải "ẩn danh", đó là không trả lời được.
+ */
+export async function optionalPlayer(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const auth = req.header("authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  if (!token) {
+    next();
+    return;
+  }
+  try {
+    const player = await prisma.player.findUnique({ where: { tokenHash: sha256(token) } });
+    if (player) (req as PlayerRequest).player = { id: player.id };
+    next();
+  } catch (err) {
+    console.error("[api] Xác thực thất bại:", err);
+    res.status(500).json({ error: "Không thể xác thực lúc này" });
+  }
+}

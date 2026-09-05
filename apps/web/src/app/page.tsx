@@ -16,6 +16,7 @@ import { BrandMark, VillageScene } from "@/components/HomeHero";
 import { JoinCodeFromQuery } from "@/components/JoinCodeFromQuery";
 import { MatchHistoryPanel } from "@/components/MatchHistoryPanel";
 import { PlayerStatsCard } from "@/components/PlayerStatsCard";
+import { LeaderboardPanel } from "@/components/LeaderboardPanel";
 import { AssetCredits } from "@/components/AssetCredits";
 import { InstallPrompt } from "@/components/InstallPrompt";
 
@@ -638,6 +639,9 @@ export default function Home() {
               * quy tắc tự ẩn với thẻ lịch sử. */}
             <PlayerStatsCard />
             <MatchHistoryPanel />
+            {/* Bảng xếp hạng đứng SAU lịch sử của chính mình: việc của mình
+              * trước, việc của làng sau. Hiện cả khi chưa đăng nhập. */}
+            <LeaderboardPanel />
 
             {/*
               * Lời mời cài app: thẻ cuối cùng của cột, sau lịch sử ván.
