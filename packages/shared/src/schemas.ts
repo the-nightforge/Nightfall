@@ -57,16 +57,23 @@ export const roomConfigSchema = z
   .strict();
 
 /**
- * Kiểm tra cấu hình vai trò hợp lệ với số lượng người chơi.
- * Lưu ý: hàm này KHÔNG phải dữ liệu bí mật, dùng chung client/server.
+ * Số Sói THẬT trong bộ bài.
+ *
+ * Gác luật "Sói phải ít hơn phe làng", và luật đó mô hình hoá SỨC SÁT THƯƠNG
+ * BAN ĐÊM - bao nhiêu người chết mỗi đêm. Kẻ Phản Bội không giết ai nên không
+ * nằm ở đây; xem `deckSeats`.
  */
-export function validateRoomConfig(config: RoomConfig, playerCount: number): string | null {
-  if (playerCount < MIN_PLAYERS_TO_START) {
-    return `Cần ít nhất ${MIN_PLAYERS_TO_START} người để bắt đầu`;
-  }
-  if (playerCount > MAX_PLAYERS_PER_ROOM) {
-    return `Tối đa ${MAX_PLAYERS_PER_ROOM} người mỗi phòng`;
-  }
+export function deckWolfCount(config: RoomConfig): number {
+  return config.werewolves + (config.wolfCub ? 1 : 0);
+}
+
+/**
+ * Số ghế mà bộ bài đã lấy TRƯỚC khi tính Dân Làng.
+ *
+ * Đếm GHẾ ĐÃ BỊ LẤY, không đếm sức mạnh của phe nào: vai trung lập và Kẻ Phản
+ * Bội chiếm chỗ y hệt một lá phe làng, nên chúng nằm cả ở đây.
+ */
+export function deckSeats(config: RoomConfig): number {
   const specials =
     (config.seer ? 1 : 0) +
     (config.guard ? 1 : 0) +
@@ -103,8 +110,81 @@ export function validateRoomConfig(config: RoomConfig, playerCount: number): str
    * đó là `checkWin` - hai câu hỏi khác nhau, hai phép đếm khác nhau.
    */
   const traitorSeats = config.traitor ? 1 : 0;
-  const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0);
-  const seats = wolfCount + specials + traitorSeats;
+  return deckWolfCount(config) + specials + traitorSeats;
+}
+
+/**
+ * Cỡ bàn mà bộ bài này ĐÒI, hoặc null nếu nó chưa khai `villagers`.
+ *
+ * Null không phải "không biết đếm": nó là đường tương thích, nơi Dân Làng còn
+ * lấp phần trống nên cỡ bàn do sĩ số quyết định chứ không do bộ bài. Xem
+ * `RoomConfig.villagers`.
+ */
+export function deckSize(config: RoomConfig): number | null {
+  return config.villagers === undefined ? null : deckSeats(config) + config.villagers;
+}
+
+/**
+ * Bộ bài có tự mâu thuẫn không - phép kiểm KHÔNG hỏi phòng đang có bao nhiêu người.
+ *
+ * Tách ra khỏi `validateRoomConfig` vì hai câu hỏi khác nhau bị gộp làm một đã
+ * khoá chết cả bảng xếp bài:
+ *
+ *   "bộ bài này có chơi được không"  -> hàm này
+ *   "bộ bài này có khớp sĩ số ĐANG CÓ không" -> `validateRoomConfig`
+ *
+ * Câu thứ hai chỉ có nghĩa lúc BẮT ĐẦU ván. Đặt nó ở lối `update-config` thì
+ * mọi cú bấm +/− trên ô Dân Làng, ô Ma Sói, và mọi công tắc vai đều bị từ chối:
+ * chúng đổi bộ bài đúng MỘT lá mỗi lần, nên trạng thái ngay sau cú bấm luôn
+ * lệch sĩ số đúng một người. Không có đường đi nào giữa hai bộ bài hợp lệ, và
+ * với host thì nút đơn giản là không ăn.
+ */
+export function validateDeckShape(config: RoomConfig): string | null {
+  const seats = deckSeats(config);
+  const wolfCount = deckWolfCount(config);
+  const size = deckSize(config);
+
+  if (size === null) {
+    // Đường tương thích: Dân Làng còn lấp chỗ, nên thứ duy nhất chắc chắn sai
+    // là một bộ bài không chừa nổi một ghế trong phòng đông nhất có thể.
+    return seats >= MAX_PLAYERS_PER_ROOM ? "Phải còn chỗ cho Dân Làng" : null;
+  }
+  if (config.villagers! < 1) {
+    return "Phải còn chỗ cho Dân Làng";
+  }
+  if (size > MAX_PLAYERS_PER_ROOM) {
+    return `Bộ bài cần ${size} người, tối đa ${MAX_PLAYERS_PER_ROOM} mỗi phòng`;
+  }
+  // `size - wolfCount` là "số người KHÔNG phải Sói" TRONG BỘ BÀI - cùng phép
+  // đếm mà `validateRoomConfig` làm với sĩ số, và hai con số đó bằng nhau đúng
+  // lúc ván được phép bắt đầu.
+  if (wolfCount >= size - wolfCount) {
+    return "Số Ma Sói phải ít hơn phe làng";
+  }
+  return null;
+}
+
+/**
+ * Kiểm tra cấu hình vai trò hợp lệ với số lượng người chơi.
+ *
+ * Đây là phép kiểm của lúc BẮT ĐẦU ván, không phải của lúc xếp bài: nó hỏi cả
+ * "bộ bài có chơi được không" (uỷ cho `validateDeckShape`) lẫn "bộ bài có khớp
+ * đúng số người đang ngồi không". Lối `update-config` chỉ được gọi vế đầu.
+ *
+ * Lưu ý: hàm này KHÔNG phải dữ liệu bí mật, dùng chung client/server.
+ */
+export function validateRoomConfig(config: RoomConfig, playerCount: number): string | null {
+  if (playerCount < MIN_PLAYERS_TO_START) {
+    return `Cần ít nhất ${MIN_PLAYERS_TO_START} người để bắt đầu`;
+  }
+  if (playerCount > MAX_PLAYERS_PER_ROOM) {
+    return `Tối đa ${MAX_PLAYERS_PER_ROOM} người mỗi phòng`;
+  }
+  const shape = validateDeckShape(config);
+  if (shape) return shape;
+
+  const seats = deckSeats(config);
+  const wolfCount = deckWolfCount(config);
 
   if (config.villagers === undefined) {
     /*
@@ -128,13 +208,14 @@ export function validateRoomConfig(config: RoomConfig, playerCount: number): str
      * Câu lỗi nêu cả hai con số vì nó đi thẳng ra nút bắt đầu qua `startBlock`:
      * "thiếu một người" và "thừa một lá" cần hai cách sửa khác nhau, và một câu
      * chỉ nói "không khớp" thì host không biết kéo ô nào.
+     *
+     * Và nó ở lại ĐÚNG chỗ này - lúc bắt đầu ván. `validateDeckShape` là phần
+     * dùng được ở lối xếp bài; phép so bằng dưới đây thì không, xem chú thích
+     * của hàm đó.
      */
-    if (config.villagers < 1) {
-      return "Phải còn chỗ cho Dân Làng";
-    }
-    const deckSize = seats + config.villagers;
-    if (deckSize !== playerCount) {
-      return `Bộ bài cần ${deckSize} người, phòng đang có ${playerCount}`;
+    const size = seats + config.villagers;
+    if (size !== playerCount) {
+      return `Bộ bài cần ${size} người, phòng đang có ${playerCount}`;
     }
   }
   // `playerCount - wolfCount` là "số người KHÔNG phải Sói", nên cả hai vai trung
