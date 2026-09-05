@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildCaseFile } from "../src/case-file";
 import { DEFAULT_ROOM_CONFIG } from "../src/phases";
+import type { Role } from "../src/roles";
 import type { Phase } from "../src/phases";
 import type { DayVoteRecap, HunterShotRecap, NightRecap, PlayerView, RoomSnapshot } from "../src/snapshot";
 
@@ -16,7 +17,10 @@ function cast(): PlayerView[] {
     { id: "p-phuthuy", name: "Phù Thuỷ", alive: true, isBot: false, role: "WITCH" },
     { id: "p-thosan", name: "Thợ Săn", alive: false, isBot: false, role: "HUNTER" },
     { id: "p-baove", name: "Bảo Vệ", alive: true, isBot: false, role: "GUARD" },
-    { id: "p-linhmuc", name: "Linh Mục", alive: false, isBot: false, role: "PRIEST" },
+    // Vai đã bị xóa cứng (Linh Mục thay bằng Sói Pháp Sư/Sói Alpha): ván cũ vẫn
+    // mang chuỗi này trong JSON. Giữ nguyên để khóa đường `isRole` fallback -
+    // buildCast phải loại khỏi cast thay vì ném lỗi khi tra `ROLE_META`.
+    { id: "p-linhmuc", name: "Linh Mục", alive: false, isBot: false, role: "PRIEST" as unknown as Role },
     { id: "p-dan", name: "Dân Làng", alive: false, isBot: false, role: "VILLAGER" },
     { id: "p-he", name: "Thằng Hề", alive: true, isBot: false, role: "JESTER" },
   ];
@@ -792,6 +796,52 @@ describe("chịu được dữ liệu từ server cũ", () => {
       }),
     );
     expect(file).not.toBeNull();
+  });
+
+  it("vai đã bị xóa (ván cũ) bị loại khỏi cast thay vì làm vỡ hồ sơ", () => {
+    const players = cast();
+    expect(players.find((p) => p.id === "p-linhmuc")!.role as unknown as string).toBe("PRIEST");
+    const file = buildCaseFile(snap({ players }));
+    expect(file).not.toBeNull();
+    expect(file!.cast.find((p) => p.id === "p-linhmuc")).toBeUndefined();
+  });
+
+  it("lịch sử Nước thánh cũ (cause priest) vẫn dựng được PRIEST_STRIKE", () => {
+    const file = buildCaseFile(
+      snap({
+        nightHistory: [
+          night({
+            round: 1,
+            priest: {
+              priest: { id: "p-linhmuc", name: "Linh Mục" },
+              target: { id: "p-soi", name: "Sói Cả" },
+              isWolf: true,
+            },
+            deaths: [{ player: { id: "p-soi", name: "Sói Cả" }, cause: "priest" }],
+          }),
+        ],
+      }),
+    );
+    expect(typesOf(file)).toContain("PRIEST_STRIKE");
+  });
+
+  it("lịch sử Nước thánh phản vệ (cause priest_backfire) vẫn dựng được PRIEST_BACKFIRE", () => {
+    const file = buildCaseFile(
+      snap({
+        nightHistory: [
+          night({
+            round: 1,
+            priest: {
+              priest: { id: "p-linhmuc", name: "Linh Mục" },
+              target: { id: "p-dan", name: "Dân Làng" },
+              isWolf: false,
+            },
+            deaths: [{ player: { id: "p-linhmuc", name: "Linh Mục" }, cause: "priest_backfire" }],
+          }),
+        ],
+      }),
+    );
+    expect(typesOf(file)).toContain("PRIEST_BACKFIRE");
   });
 });
 

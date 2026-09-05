@@ -35,6 +35,13 @@ describe("Shared Roles", () => {
     }
   });
 
+  it("hard-deletes PRIEST/MEDIUM (no deprecated entries)", () => {
+    expect(ROLES).not.toContain("PRIEST");
+    expect(ROLES).not.toContain("MEDIUM");
+    expect((ROLE_META as Record<string, unknown>)["PRIEST"]).toBeUndefined();
+    expect((ROLE_META as Record<string, unknown>)["MEDIUM"]).toBeUndefined();
+  });
+
   it("assigns correct teams to all roles", () => {
     expect(roleTeam("WEREWOLF")).toBe("wolves");
     expect(roleTeam("WOLF_CUB")).toBe("wolves");

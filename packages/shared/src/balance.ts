@@ -136,6 +136,23 @@ export const ROLE_POWER: Record<Role, number> = {
    * dòng này.
    */
   TRAITOR: 3.5,
+  /**
+   * 2, TẠM (chờ đo Task 9) - mirror Detective bên phe Sói.
+   *
+   * Sói Pháp Sư soi mỗi đêm để tìm dòng Tiên Tri, hẹp hơn Tiên Tri (chỉ trả
+   * lời "có phải dòng Tiên Tri không" thay vì phe đầy đủ), nên đặt ngang
+   * Detective - vai soi hẹp bên phe làng. Đo so cặp speech BẬT rồi chốt.
+   */
+  SORCERER: 2,
+  /**
+   * 6, TẠM (chờ đo Task 9) - ngang Sói Con nhưng ổn định hơn.
+   *
+   * Sói Alpha cắn cùng bầy mỗi đêm như Sói thường, cộng thêm khiên miễn soi
+   * lần đầu. Đặt ngang Sói Con (lá mạnh nhất bộ bài) vì thêm một con cắn mà
+   * còn che được một lượt soi; không phụ thuộc cỡ bàn như cơn phẫn nộ của
+   * Sói Con nên con số này ít rủi ro hơn. Đo so cặp speech BẬT rồi chốt.
+   */
+  ALPHA_WOLF: 6,
   SEER: 5,
   /**
    * 1, hạ từ 2. Đo lại 2026-09-04 bằng SO CẶP trên đúng bộ seed, speech BẬT,
@@ -180,7 +197,6 @@ export const ROLE_POWER: Record<Role, number> = {
   DETECTIVE: 2,
   GUARD: 2.5,
   GUARDIAN_ANGEL: 1.5,
-  PRIEST: 1.5,
   WITCH: 3,
   /**
    * 0.5 - HẠ TỪ 1.5 sau khi làm lại kỹ năng và đo lại ở 1000 ván/nhánh.
@@ -195,20 +211,6 @@ export const ROLE_POWER: Record<Role, number> = {
    * 1.5 nằm NGOÀI khoảng đó - hạ xuống là kết luận của số đo, không phải làm tròn.
    */
   ELDER: 0.5,
-  /**
-   * -0.5 - HẠ TỪ 1.5, và ÂM là có chủ ý.
-   *
-   * Đo -2.80 điểm ở 1000 ván/nhánh (SE 0.91, tức 3.1 sai số chuẩn), sau khi đã
-   * sửa một lỗ hổng thật: `mediumResult` trước đó không tới được lõi bot, nên lá
-   * bài hỏi xong không bao giờ nghe được câu trả lời. Nối xong nó vẫn âm.
-   *
-   * NGHI PHẠM CHÍNH KHÔNG PHẢI LÁ BÀI, mà là chi phí KHAI VAI của lõi bot: 70.7%
-   * lời khai bị tranh chấp và 51.2% lời khai là sai (5850 ván). Một Dân Làng
-   * không khai gì thì không trả cái giá đó. Con số ở đây vì thế là "bot khai
-   * thác được bao nhiêu", và với lá bài này khoảng cách tới người thật có thể
-   * lớn hơn mọi dòng khác trong bảng - nó sống bằng việc đối chiếu lời khai.
-   */
-  MEDIUM: -0.5,
   /**
    * 0.5 - HẠ TỪ 1.5, và con số cũ đo một kỹ năng CHƯA TỪNG CHẠY.
    *
@@ -317,8 +319,8 @@ const BASE_TIMINGS: Pick<
  * `WEREWOLF` nghĩa là Sói THƯỜNG, ít nhất một con: một bầy chỉ toàn Sói Con là
  * một bầy chơi bằng luật khác.
  *
- * Lá được phép gỡ ra để chỉnh cân bằng là phần còn lại: Thám Tử, Thị Trưởng,
- * Thiên Thần Hộ Mệnh, Linh Mục, Tiên Tri Tập Sự, Sói Con, Kẻ Nguyền Rủa.
+ *  Lá được phép gỡ ra để chỉnh cân bằng là phần còn lại: Thám Tử, Thị Trưởng,
+ *  Thiên Thần Hộ Mệnh, Tiên Tri Tập Sự, Sói Con, Kẻ Nguyền Rủa.
  */
 export const CORE_PRESET_ROLES: readonly Role[] = [
   "SEER",
@@ -358,13 +360,13 @@ function preset(overrides: Partial<RoomConfig>): RoomConfig {
     hunter: false,
     cursed: false,
     wolfCub: false,
+    sorcerer: false,
+    alphaWolf: false,
     apprenticeSeer: false,
     detective: false,
     guardianAngel: false,
-    priest: false,
     mayor: false,
     elder: false,
-    medium: false,
     doppelganger: false,
     mode: "ranked",
     ...BASE_TIMINGS,
@@ -453,8 +455,8 @@ function preset(overrides: Partial<RoomConfig>): RoomConfig {
  * 11: xem khối chú thích ngay trên `11: preset(...)` - đã đổi 2026-09-04
  * 12: xem khối chú thích ngay trên `11: preset(...)` - đã đổi 2026-09-04
  * 13: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, VILLAGER x3
- * 14: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, PRIEST, VILLAGER x3
- * 15: WEREWOLF x3, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, PRIEST, VILLAGER x3
+ * 14: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, VILLAGER x4
+ * 15: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, VILLAGER x3
  */
 
 const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
@@ -545,7 +547,6 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     hunter: true,
     mayor: true,
     guardianAngel: true,
-    priest: true,
   }),
   15: preset({
     werewolves: 3,
@@ -558,7 +559,6 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     hunter: true,
     mayor: true,
     guardianAngel: true,
-    priest: true,
   }),
   /*
    * 16-20: bộ vai làng đã CẠN, nên lá điều chỉnh là Kẻ Nguyền Rủa.
@@ -615,11 +615,17 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
    * không bị đụng tới ở đây vì bàn đông cần NHIỀU thời gian nói hơn chứ không
    * ít hơn, nhưng con số đó là một quyết định sản phẩm chưa ai ra.
    *
-   * 16: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, PRIEST, VILLAGER x3
-   * 17: như trên, VILLAGER x4
-   * 18: như trên, VILLAGER x5
-   * 19: WEREWOLF x4, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, PRIEST, VILLAGER x6
-   * 20: như trên, VILLAGER x7
+   * 16: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, VILLAGER x4
+   * 17: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, ELDER, SORCERER, VILLAGER x3
+   * 18: WEREWOLF x4, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, ELDER, SORCERER, VILLAGER x4
+   * 19: WEREWOLF x4, DOPPELGANGER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, ELDER, ALPHA_WOLF, VILLAGER x4
+   * 20: như trên thêm CURSED, VILLAGER x4
+   *
+   * Đổi 2026-09-05 (SORCERER + ALPHA_WOLF thay MEDIUM + PRIEST, xóa cứng):
+   * 14-16 trả ghế Linh Mục về Dân Làng (mỗi preset +1 Dân); 17-18 đổi
+   * Bà Đồng thành Sói Pháp Sư, ghế Linh Mục về Dân (+1 Dân); 19-20 đổi Linh
+   * Mục thành Sói Alpha, ghế Bà Đồng về Dân (+1 Dân). Mỗi preset lớn thêm
+   * đúng 1 sói mới, villagers suy tự động từ cỡ phòng trừ số lá đặc biệt.
    */
   /*
    * ĐO LẠI 2026-09-04 sau khi 17-20 nhận Trưởng Lão, Bà Đồng, Kẻ Song Trùng.
@@ -660,7 +666,6 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     hunter: true,
     mayor: true,
     guardianAngel: true,
-    priest: true,
   }),
   17: preset({
     werewolves: 3,
@@ -673,9 +678,8 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     hunter: true,
     mayor: true,
     guardianAngel: true,
-    priest: true,
     elder: true,
-    medium: true,
+    sorcerer: true,
   }),
   18: preset({
     werewolves: 4,
@@ -687,9 +691,8 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     hunter: true,
     mayor: true,
     guardianAngel: true,
-    priest: true,
     elder: true,
-    medium: true,
+    sorcerer: true,
   }),
   19: preset({
     werewolves: 4,
@@ -702,9 +705,8 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     hunter: true,
     mayor: true,
     guardianAngel: true,
-    priest: true,
     elder: true,
-    medium: true,
+    alphaWolf: true,
   }),
   20: preset({
     werewolves: 4,
@@ -718,9 +720,8 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     hunter: true,
     mayor: true,
     guardianAngel: true,
-    priest: true,
     elder: true,
-    medium: true,
+    alphaWolf: true,
   }),
 };
 
@@ -807,17 +808,19 @@ export function specialRoleList(config: RoomConfig): Role[] {
   if (config.wolfCub) roles.push("WOLF_CUB");
   // Tối đa một Kẻ Phản Bội mỗi ván; boolean nên "tối đa 1" là tính chất của kiểu.
   if (config.traitor) roles.push("TRAITOR");
+  // Hai sói mới, mỗi lá tối đa một như mọi cờ boolean khác. Sói Pháp Sư không
+  // cắn nhưng vẫn thuộc bầy (isWolfPack) nên nó nằm trong bộ bài như một lá sói.
+  if (config.sorcerer) roles.push("SORCERER");
+  if (config.alphaWolf) roles.push("ALPHA_WOLF");
   if (config.seer) roles.push("SEER");
   if (config.apprenticeSeer) roles.push("APPRENTICE_SEER");
   if (config.detective) roles.push("DETECTIVE");
   if (config.guard) roles.push("GUARD");
   if (config.guardianAngel) roles.push("GUARDIAN_ANGEL");
-  if (config.priest) roles.push("PRIEST");
   if (config.witch) roles.push("WITCH");
   if (config.hunter) roles.push("HUNTER");
   if (config.mayor) roles.push("MAYOR");
   if (config.elder) roles.push("ELDER");
-  if (config.medium) roles.push("MEDIUM");
   if (config.doppelganger) roles.push("DOPPELGANGER");
   // Tối đa một Kẻ Nguyền Rủa mỗi ván: một lá duy nhất trong bộ bài.
   if (config.cursed) roles.push("CURSED");
