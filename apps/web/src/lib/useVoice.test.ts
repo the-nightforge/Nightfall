@@ -171,6 +171,14 @@ async function mount() {
     micOpenAttempts: () => micCalls.filter((on) => on).length,
     micCloseAttempts: () => micCalls.filter((on) => !on).length,
     disconnects: () => roomCalls.filter((c) => c === "disconnect").length,
+    /** Số lần gọi `startAudio` - đường DUY NHẤT phát lại tiếng người khác trên iOS. */
+    startAudioCalls: () => roomCalls.filter((c) => c === "startAudio").length,
+    /** Thứ tự các lời gọi tới lớp bọc LiveKit, để so "trước/sau". */
+    calls: () => [...roomCalls],
+    /** Server trả token: hook vào phòng rồi mới ngã ngũ chuyện phát tiếng. */
+    token: async () => {
+      await run(() => wire.fire("voice:token", { url: "wss://lk", token: "t" }));
+    },
     /** Quay vài vòng event loop + render, đủ để một vòng retry lộ diện. */
     churn: async () => {
       for (let i = 0; i < 5; i += 1) {
@@ -760,6 +768,67 @@ describe("một hook, một Room", () => {
     await view.wakeAll();
 
     assert.equal(view.roomsCreated(), 1);
+    await view.cleanup();
+  });
+});
+
+/**
+ * iOS tạm dừng mọi thẻ <audio> của người khác khi app xuống nền, và LiveKit chỉ
+ * phát lại chúng qua `Room.startAudio()`. Bản trước gọi `startAudio` đúng một
+ * lần - ở cú bấm "Vào kênh thoại" - tức là TRƯỚC khi token về và Room tồn tại,
+ * nên lời gọi ấy rơi vào khoảng không. Không lần nào sau đó gọi lại: quay lại
+ * app là điếc, mà dock vẫn ghi "Đã kết nối" vì chẳng có `play()` nào hỏng để
+ * LiveKit báo bị chặn.
+ */
+describe("phát lại tiếng người khác trên iOS", () => {
+  it("vào phòng xong mới gọi startAudio - lúc bấm nút thì Room chưa tồn tại", async () => {
+    const view = await mount();
+    await view.run(() => view.api.current?.activate());
+    await view.token();
+    await view.churn();
+
+    const calls = view.calls();
+    const connectAt = calls.lastIndexOf("connect");
+    const startAt = calls.lastIndexOf("startAudio");
+    assert.ok(connectAt >= 0, "phải có một lần connect");
+    assert.ok(startAt > connectAt, "startAudio phải đi SAU connect, khi Room đã có");
+    await view.cleanup();
+  });
+
+  it("LiveKit tự vá xong đường truyền: gọi lại startAudio", async () => {
+    const view = await mount();
+    await view.join();
+    const before = view.startAudioCalls();
+
+    await view.run(() => roomHandlers?.onReconnected());
+    await view.churn();
+
+    assert.equal(view.startAudioCalls(), before + 1);
+    await view.cleanup();
+  });
+
+  it("đang kết nối mà app hiện lại: gọi startAudio, không xin token", async () => {
+    const view = await mount();
+    await view.join();
+    const startBefore = view.startAudioCalls();
+    const tokensBefore = view.tokenRequests();
+
+    await view.wakeAll();
+    await view.churn();
+
+    assert.ok(view.startAudioCalls() > startBefore, "phải thử phát lại tiếng");
+    assert.equal(view.tokenRequests(), tokensBefore, "cùng phiên: không xin token");
+    await view.cleanup();
+  });
+
+  it("chưa vào voice thì app hiện lại không gọi startAudio", async () => {
+    const view = await mount();
+    const before = view.startAudioCalls();
+
+    await view.wakeAll();
+    await view.churn();
+
+    assert.equal(view.startAudioCalls(), before);
     await view.cleanup();
   });
 });

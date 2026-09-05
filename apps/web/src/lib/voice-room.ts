@@ -54,7 +54,13 @@ export interface VoiceRoomHandlers {
 export interface VoiceRoomHandle {
   connect(url: string, token: string): Promise<void>;
   setMic(on: boolean): Promise<void>;
-  /** Phải gọi TRONG handler của cử chỉ người dùng, nếu không iOS chặn. */
+  /**
+   * Phát (lại) tiếng của người khác. Không bao giờ ném.
+   *
+   * Gọi sau khi vào phòng, khi LiveKit nối lại, và khi app hiện lại - iOS tạm
+   * dừng các thẻ <audio> mỗi lần app xuống nền. Nếu trình duyệt đòi cử chỉ,
+   * LiveKit báo qua `onAudioPlayback(false)` và dock mời người chơi chạm.
+   */
   startAudio(): Promise<void>;
   disconnect(): Promise<void>;
 }
@@ -195,7 +201,10 @@ export function createVoiceRoom(
     },
 
     async startAudio() {
-      await room?.startAudio();
+      // LiveKit vừa bắn `AudioPlaybackStatusChanged(false)` vừa ném lỗi khi
+      // `play()` bị chặn. Sự kiện đã đủ để dock đổi sang "Chạm để nghe"; ném
+      // tiếp lên hook chỉ làm gãy chuỗi `connect → startAudio → voice:ready`.
+      await room?.startAudio().catch(() => undefined);
     },
 
     async disconnect() {

@@ -194,6 +194,10 @@ export function useVoice(socket: Socket | null, view: VoiceView | undefined): Us
       onReconnected: () => {
         dispatch({ type: "reconnected" });
         socketRef.current?.emit(CLIENT_EVENTS.VOICE_READY, {});
+        // Việc thứ ba, riêng cho điện thoại: iOS đã tạm dừng các thẻ <audio>
+        // trong lúc đường truyền đứt. Nối lại xong mà không phát lại thì "Đã
+        // kết nối" là thật với server nhưng vẫn là im lặng với người chơi.
+        void roomRef.current?.startAudio();
       },
       onFailed: (error) => dispatch({ type: "failed", error }),
     });
@@ -204,11 +208,21 @@ export function useVoice(socket: Socket | null, view: VoiceView | undefined): Us
     if (view) dispatch({ type: "snapshot_can_publish", canPublish: view.canPublish });
   }, [view?.canPublish, view]);
 
-  // Nhận token rồi vào phòng, và báo lại để server cấp quyền theo pha hiện tại.
+  /**
+   * Nhận token rồi vào phòng, và báo lại để server cấp quyền theo pha hiện tại.
+   *
+   * `startAudio` đi NGAY SAU `connect`, không phải ở cú bấm "Vào kênh thoại".
+   * Lúc bấm thì token chưa về và Room chưa tồn tại, nên lời gọi ở đó rơi vào
+   * khoảng không - và đó là lời gọi duy nhất của bản trước. Trên iOS,
+   * `startAudio` còn là thứ cài cơ chế phát lại tiếng khi app hiện lại; thiếu nó
+   * thì quay lại app là điếc, mà dock vẫn ghi "Đã kết nối" vì chẳng có `play()`
+   * nào hỏng để LiveKit báo bị chặn.
+   */
   useEffect(() => {
     if (!socket) return;
     const onToken = async (payload: VoiceTokenPayload) => {
       await roomRef.current?.connect(payload.url, payload.token);
+      await roomRef.current?.startAudio();
       socket.emit(CLIENT_EVENTS.VOICE_READY, {});
     };
     socket.on(SERVER_EVENTS.VOICE_TOKEN, onToken);
@@ -298,20 +312,43 @@ export function useVoice(socket: Socket | null, view: VoiceView | undefined): Us
   attemptRef.current = attempt;
 
   useEffect(() => {
+    /**
+     * Nửa kia của việc thức dậy: phiên LiveKit VẪN CÒN SỐNG.
+     *
+     * Cổng nối lại từ chối đúng - không có gì để nối - nhưng iOS đã tạm dừng
+     * mọi thẻ <audio> của người khác khi app xuống nền, và LiveKit chỉ phát lại
+     * chúng qua `startAudio`. Cơ chế tự gọi của SDK bám vào Room ĐẦU TIÊN được
+     * `startAudio` (qua một thẻ audio câm định danh theo id), nên mọi Room dựng
+     * sau một lần rớt mạng đều không được nó che. Gọi từ đây thì Room nào cũng
+     * được che như nhau.
+     *
+     * Nếu iOS từ chối `play()` ngoài cử chỉ, LiveKit bắn trạng thái "bị chặn"
+     * và dock đổi sang "Chạm để nghe" - vẫn tốt hơn hẳn im lặng mà không báo.
+     */
+    const replayIfConnected = () => {
+      if (stateRef.current.connection !== "connected") return;
+      void roomRef.current?.startAudio();
+    };
     const onVisibility = () => {
-      if (!document.hidden) attempt();
+      if (document.hidden) return;
+      attempt();
+      replayIfConnected();
     };
 
     // Bọc lại thành hàm không tham số: `attempt` nhận một override, mà listener
     // của trình duyệt thì truyền Event vào tham số đầu tiên.
     const onWake = () => attempt();
+    const onShow = () => {
+      attempt();
+      replayIfConnected();
+    };
     document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("pageshow", onWake);
+    window.addEventListener("pageshow", onShow);
     window.addEventListener("online", onWake);
     socket?.on("connect", onWake);
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("pageshow", onWake);
+      window.removeEventListener("pageshow", onShow);
       window.removeEventListener("online", onWake);
       socket?.off("connect", onWake);
     };
