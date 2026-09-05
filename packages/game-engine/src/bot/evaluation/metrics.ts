@@ -1,4 +1,5 @@
 import { roleTeam, roleWonOutcome, type Role, type Team, type Winner } from "@masoi/shared";
+import { measureHumanChat } from "./human-chat";
 
 /**
  * Mọi KẾT CỤC một ván có thể dừng ở.
@@ -208,6 +209,22 @@ export interface SelfPlayMetrics {
    * phần thông tin của làng.
    */
   claimAccuracy: Ratio;
+
+  // ---- Nghe người thật (P0.3) ----
+
+  /**
+   * Trên corpus câu người thật mẫu (`human-chat-corpus.ts`): bao nhiêu lời
+   * buộc tội parser đọc ra ĐÚNG người. Mục tiêu > 0.8; trước P0 ước < 0.5.
+   *
+   * Không phụ thuộc ván: cùng parser thì cùng số. Nằm ở đây vì báo cáo
+   * self-play là nơi người tune nhìn, và vì mọi con số khác trong báo cáo
+   * chỉ có nghĩa với phòng thật khi bot nghe được người.
+   */
+  humanAccuseSeenRate: Ratio;
+  humanDefendSeenRate: Ratio;
+  humanClaimSeenRate: Ratio;
+  /** Câu bẫy (đùa, hỏi, phủ định) parser bỏ qua đúng. Phải bằng 1. */
+  humanTrapIgnoredRate: Ratio;
 }
 
 export interface RoleMetrics {
@@ -292,6 +309,7 @@ export function collectMetrics(
   weights: BotWeights = DEFAULT_BOT_WEIGHTS,
 ): SelfPlayMetricsBundle {
   const staleAfter = weights.recency.staleAfterRounds;
+  const humanChat = measureHumanChat(weights);
 
   let finished = 0;
   let villageWins = 0;
@@ -774,6 +792,11 @@ export function collectMetrics(
     counterClaimRate: ratio(counterClaimGames, games.length),
     claimFollowRate: ratio(claimPointFollowed, claimPointTotal),
     claimAccuracy: ratio(seerClaimsAccurate, seerClaimsBelieved),
+
+    humanAccuseSeenRate: ratio(humanChat.accuseSeen, humanChat.accuseTotal),
+    humanDefendSeenRate: ratio(humanChat.defendSeen, humanChat.defendTotal),
+    humanClaimSeenRate: ratio(humanChat.claimSeen, humanChat.claimTotal),
+    humanTrapIgnoredRate: ratio(humanChat.trapIgnored, humanChat.trapTotal),
   };
 
   const byTeam: Record<VotingTeam, TeamMetrics> = {

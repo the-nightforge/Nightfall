@@ -146,10 +146,12 @@ const LEADING_INTERJECTIONS = new Set([
 /**
  * Cách tự xưng được nhận trước một lời khai. Teencode "t" đứng đầu mệnh đề gần
  * như luôn là "tôi"; các ngôi khác là cách gọi tự nhiên của người chơi thật.
+ * "nhận bv" là cách khai không có chủ ngữ ("tôi nhận vai bảo vệ"); nó an toàn
+ * vì token ngay sau vẫn phải là một tên vai.
  * `parseCounterClaim` vẫn chỉ nhận "tôi mới là" - phản bác là mẫu nặng hơn, nới
  * riêng khi có bằng chứng từ log.
  */
-const FIRST_PERSON_MARKERS = ["tôi là ", "t là ", "tui là ", "mình là ", "tớ là "];
+const FIRST_PERSON_MARKERS = ["tôi là ", "t là ", "tui là ", "mình là ", "tớ là ", "nhận "];
 
 /**
  * Cách người chơi thật mở một lời buộc tội. "tôi nghi" là mẫu gốc; phần còn
@@ -160,20 +162,45 @@ const FIRST_PERSON_MARKERS = ["tôi là ", "t là ", "tui là ", "mình là ", "
  * cùng rút về "nghi", và "t nghi Binh vo toi" phải không thành cáo buộc.
  */
 const SUSPECT_MARKERS = ["tôi nghi ", "t nghi ", "tui nghi ", "mình nghi ", "tớ nghi ", "nghi "];
-const PUSH_MARKERS = ["vote ", "treo ", "chốt "];
+
+/**
+ * Người gõ KHÔNG dấu thì "nghi" có thể là "nghĩ". Khi đó vẫn nhận "nghi X"
+ * là cáo buộc - đó là cách gõ phổ biến nhất trong phòng - TRỪ khi vế sau có
+ * một từ nói X vô tội: "nghi Binh vo toi" là "nghĩ Bình vô tội".
+ */
+const INNOCENCE_ASCII = ["dan", "sach", "vo toi", "trong", "ok", "oke", "tot", "an toan", "uy tin", "that"];
+
+/** Cách người thật nói "tôi bỏ phiếu cho X"; mỗi mẫu có thêm dạng có chủ ngữ. */
+const PUSH_VERBS = ["vote ", "treo ", "chốt ", "up ", "đẩy ", "lynch ", "kill ", "bỏ phiếu "];
+const SUBJECT_PREFIXES = ["", "tôi ", "t ", "tui ", "mình ", "tớ "];
+const PUSH_MARKERS = SUBJECT_PREFIXES.flatMap((subject) =>
+  PUSH_VERBS.map((verb) => `${subject}${verb}`),
+);
+
+/** "sói là Bình": vai đứng trước, tên đứng sau. */
+const WOLF_IS_MARKER = "sói là ";
 
 /** Cách mở một lời bênh vực, cùng tinh thần với `SUSPECT_MARKERS`. */
 const TRUST_MARKERS = ["tôi tin ", "t tin ", "tui tin ", "mình tin ", "tớ tin ", "tin "];
-const SPARE_MARKERS = ["đừng treo ", "đừng vote ", "tha "];
+const SPARE_MARKERS = ["đừng treo ", "đừng vote ", "đừng chốt ", "đừng up ", "đừng đẩy ", "tha cho ", "tha "];
 
 /**
- * Nhãn đứng NGAY SAU tên: "Bình sói", "Bình dân", "Bình sạch". Chỉ dạng CÓ
+ * Nhãn đứng SAU tên: "Bình sói", "Bình dân", "Bình khả nghi". Chỉ dạng CÓ
  * DẤU, và đó là ranh giới quan trọng nhất của nhóm này: "soi" không dấu là
  * động từ soi của Tiên Tri ("Bình soi Chi"), và "dan"/"sach" nằm trong đủ thứ
- * tên và chữ khác.
+ * tên và chữ khác. Cụm nhiều tiếng so theo dãy token.
  */
-const ACCUSE_LABELS = ["sói"];
-const DEFEND_LABELS = ["dân", "sạch"];
+const ACCUSE_LABELS = ["sói", "sủa", "fake", "giả", "khả nghi", "đáng nghi", "đáng ngờ", "xạo", "nói dối", "láo"];
+const DEFEND_LABELS = ["dân", "sạch", "trong sạch", "vô tội", "ok", "oke", "uy tín", "an toàn"];
+
+/**
+ * Tiếng đệm được phép chen giữa tên và nhãn: "Bình đúng sói rồi", "Bình chắc
+ * dân", "Bình 100% sói". Chỉ từ nhấn mạnh, không có từ đổi nghĩa.
+ */
+const LABEL_INTENSIFIERS = new Set([
+  "đúng", "chắc", "chắn", "chuẩn", "100", "quá", "rất", "hơi", "khá", "là", "thì",
+  "đích", "thị", "cũng", "đang", "vẫn", "mới",
+]);
 
 function importanceTable(weights: BotWeights): Partial<Record<BotMemoryType, number>> {
   const table = weights.memoryImportance;
@@ -272,7 +299,12 @@ export function hasNegation(clause: Clause): boolean {
   ) {
     return true;
   }
-  return NEGATION_TOKENS.some((word) => plainTokens.includes(word));
+  if (NEGATION_TOKENS.some((word) => plainTokens.includes(word))) return true;
+  // "Bình sói đâu" / "Bình mà tt gì": "đâu"/"gì" ở CUỐI câu là phủ định
+  // theo lối nói, không phải từ để hỏi. Một mình "đâu" ("Bình đâu") thì
+  // không phải câu nào để mà phủ định.
+  const last = plainTokens.at(-1);
+  return plainTokens.length > 1 && (last === "đâu" || last === "gì");
 }
 
 /**
@@ -429,13 +461,24 @@ function parseClause(
   }
 
   // "nghi" tự nó không có dấu, nên `acceptAscii = false` không đủ để chặn
-  // "nghi Binh vo toi" (nghĩ Bình vô tội) gõ không dấu. Đòi cả mệnh đề phải có
-  // ít nhất một dấu: người đã gõ dấu mà viết "nghi" thì đúng là đang nghi.
+  // "nghi Binh vo toi" (nghĩ Bình vô tội) gõ không dấu. Người đã gõ dấu mà
+  // viết "nghi" thì đúng là đang nghi; người gõ không dấu thì chỉ được nhận
+  // khi vế sau không nói gì tới sự vô tội của người bị nêu tên.
+  //
+  // Người gõ có dấu: chỉ so dạng có dấu, để "tôi nghĩ Bình" không khớp "tôi
+  // nghi" qua đường ascii. Người gõ không dấu: so ascii, kèm cổng vô tội.
   const typedWithDiacritics = clause.plain !== clause.ascii;
   for (const marker of SUSPECT_MARKERS) {
-    const suspect = typedWithDiacritics ? afterMarker(clause, marker, false) : null;
+    const suspect = afterMarker(clause, marker, !typedWithDiacritics);
     if (!suspect) continue;
+    if (!typedWithDiacritics && mentionsInnocence(suspect.ascii)) return null;
     const target = resolveTarget(suspect.plain, players);
+    return target ? { type: "ACCUSE", targetId: target.id, data: {} } : null;
+  }
+
+  const wolfIs = afterMarker(clause, WOLF_IS_MARKER);
+  if (wolfIs) {
+    const target = resolveTarget(wolfIs.plain, players);
     return target ? { type: "ACCUSE", targetId: target.id, data: {} } : null;
   }
 
@@ -460,6 +503,14 @@ function parseClause(
   if (wolfCall) {
     const target = resolveTarget(wolfCall.text.slice(0, wolfCall.index), players);
     return target ? { type: "ACCUSE", targetId: target.id, data: {} } : null;
+  }
+
+  // Đối xứng với " là sói", và cũng nhận dạng không dấu: "Binh la dan" là
+  // câu bênh vực phổ biến nhất trong phòng.
+  const villagerCall = markerIndex(clause, " là dân");
+  if (villagerCall) {
+    const target = resolveTarget(villagerCall.text.slice(0, villagerCall.index), players);
+    return target ? { type: "DEFEND", targetId: target.id, data: {} } : null;
   }
 
   for (const marker of TRUST_MARKERS) {
@@ -491,12 +542,24 @@ function labelledTarget(
   players: readonly BotPlayerKnowledge[],
 ): BotPlayerKnowledge | null {
   const tokens = clause.plain.split(" ").filter(Boolean);
-  for (let index = 1; index < tokens.length; index += 1) {
-    if (!labels.includes(tokens[index]!)) continue;
-    const target = resolveTarget(tokens[index - 1]!, players);
-    if (target) return target;
+  for (const label of labels) {
+    const needle = label.split(" ");
+    for (let index = 1; index + needle.length <= tokens.length; index += 1) {
+      if (!needle.every((token, offset) => tokens[index + offset] === token)) continue;
+      // Lùi qua tiếng đệm nhấn mạnh: "Bình đúng là sói" -> "bình".
+      let head = index - 1;
+      while (head > 0 && LABEL_INTENSIFIERS.has(tokens[head]!)) head -= 1;
+      const target = resolveTarget(tokens[head]!, players);
+      if (target) return target;
+    }
   }
   return null;
+}
+
+
+function mentionsInnocence(asciiRest: string): boolean {
+  const tokens = asciiRest.split(" ").filter(Boolean);
+  return INNOCENCE_ASCII.some((word) => containsTokens(tokens, word.split(" ")));
 }
 
 export interface ChatAnalysisOptions {

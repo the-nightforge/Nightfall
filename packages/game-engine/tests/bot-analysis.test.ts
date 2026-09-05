@@ -503,12 +503,15 @@ describe("conservative chat analysis", () => {
   });
 
   it("does not confuse the verb nghi with the verb nghi-tilde", () => {
+    // "Tôi nghĩ Bình vô tội": không bao giờ là cáo buộc. Nó là một lời bênh
+    // vực (nhãn "vô tội" sau tên), và đó là điều đúng.
     const memories = analyzeChat(
       [message("m1", "a", "T\u00f4i ngh\u0129 B\u00ecnh v\u00f4 t\u1ed9i")],
       players,
     );
 
-    expect(memories).toEqual([]);
+    expect(memories.map((item) => [item.type, item.targetId])).toEqual([["DEFEND", "b"]]);
+    expect(analyzeChat([message("m2", "a", "T\u00f4i ngh\u0129 B\u00ecnh")], players)).toEqual([]);
   });
 
   it("still understands a player typing without diacritics", () => {
@@ -727,6 +730,12 @@ describe("conservative chat analysis", () => {
       expect(claims("tôi là sát thủ")).toEqual(claimOf("SERIAL_KILLER"));
     });
 
+    it("nhận <vai> là lời khai không chủ ngữ", () => {
+      expect(claims("nhận bv, tối qua đỡ cho An")).toEqual(claimOf("GUARD"));
+      expect(claims("nhận pt đây")).toEqual(claimOf("WITCH"));
+      expect(claims("nhận được tin gì chưa")).toEqual([]);
+    });
+
     it("sw là Sói", () => {
       expect(claims("tôi là sw, đừng treo tôi")).toEqual(claimOf("WEREWOLF"));
     });
@@ -772,11 +781,6 @@ describe("conservative chat analysis", () => {
       for (const text of ["nghi Bình", "nghi Bình lắm", "t nghi Bình", "mình nghi Bình rồi", "nghi ngờ Bình"]) {
         expect(substantive(text), text).toEqual([["ACCUSE", "b"]]);
       }
-    });
-
-    it("nghi không dấu vẫn bị bỏ qua vì trùng với nghĩ", () => {
-      expect(substantive("nghi Binh")).toEqual([]);
-      expect(substantive("t nghi Binh")).toEqual([]);
     });
 
     it("vote X / treo X / chốt X là cáo buộc X", () => {
@@ -845,6 +849,58 @@ describe("conservative chat analysis", () => {
       expect(substantive("thằng Bình sói")).toEqual([["ACCUSE", "b"]]);
       expect(substantive("thang Binh la soi")).toEqual([["ACCUSE", "b"]]);
       expect(substantive("tính Bình sao")).toEqual([]);
+    });
+
+    it("tiếng đệm nhấn mạnh được chen giữa tên và nhãn", () => {
+      for (const text of ["Bình đúng sói rồi", "Bình chuẩn sói", "Bình 100% sói", "Bình chắc dân", "Bình đúng dân rồi"]) {
+        expect(substantive(text), text).toHaveLength(1);
+      }
+      expect(substantive("Bình đúng sói rồi")).toEqual([["ACCUSE", "b"]]);
+      expect(substantive("Bình chắc dân")).toEqual([["DEFEND", "b"]]);
+    });
+
+    it("nhãn nhiều tiếng: khả nghi, đáng ngờ, nói dối, trong sạch, vô tội", () => {
+      for (const text of ["Bình khả nghi", "tôi thấy Bình đáng ngờ nhất", "Bình nói dối", "Bình sủa", "Bình fake tt"]) {
+        expect(substantive(text), text).toEqual([["ACCUSE", "b"]]);
+      }
+      for (const text of ["Bình trong sạch", "Bình vô tội", "tôi nghĩ Bình vô tội", "Bình uy tín", "Bình ok"]) {
+        expect(substantive(text), text).toEqual([["DEFEND", "b"]]);
+      }
+    });
+
+    it("sói là X đảo trật tự vẫn là cáo buộc X", () => {
+      expect(substantive("sói là Bình")).toEqual([["ACCUSE", "b"]]);
+      expect(substantive("soi la Binh")).toEqual([["ACCUSE", "b"]]);
+    });
+
+    it("X là dân, kể cả không dấu, là bênh vực X", () => {
+      expect(substantive("Bình là dân")).toEqual([["DEFEND", "b"]]);
+      expect(substantive("Binh la dan")).toEqual([["DEFEND", "b"]]);
+    });
+
+    it("vote/treo/chốt có chủ ngữ, và up/đẩy/lynch/kill/bỏ phiếu", () => {
+      for (const text of ["t vote Bình", "mình vote Bình nhé", "tôi treo Bình", "t chốt Bình", "up Bình", "đẩy Bình lên", "day Binh len", "lynch Bình", "kill Bình", "tôi bỏ phiếu Bình", "bỏ phiếu Bình đi"]) {
+        expect(substantive(text), text).toEqual([["ACCUSE", "b"]]);
+      }
+    });
+
+    it("nghi không dấu được nhận khi vế sau không nói tới sự vô tội", () => {
+      expect(substantive("nghi Binh")).toEqual([["ACCUSE", "b"]]);
+      expect(substantive("t nghi Binh nhat")).toEqual([["ACCUSE", "b"]]);
+      // "nghĩ Bình dân" / "nghĩ Bình vô tội" gõ không dấu: không đọc thành gì.
+      expect(substantive("nghi Binh dan")).toEqual([]);
+      expect(substantive("nghi Binh vo toi")).toEqual([]);
+      expect(substantive("toi nghi Binh")).toEqual([["ACCUSE", "b"]]);
+      // "tôi nghĩ Bình ok" gõ không dấu: có thể là nghi hoặc nghĩ, và vế sau
+      // nói người đó ổn - bỏ qua cả câu thay vì đoán.
+      expect(substantive("toi nghi Binh ok")).toEqual([]);
+    });
+
+    it("đâu/gì ở cuối câu là phủ định theo lối nói", () => {
+      expect(substantive("Bình sói đâu")).toEqual([]);
+      expect(substantive("Bình mà sói gì")).toEqual([]);
+      // Một mình "đâu" là câu hỏi chỗ, không phải phủ định - và không sinh gì.
+      expect(substantive("Bình đâu")).toEqual([]);
     });
 
     it("chắc/chào/chạy không phải phủ định dù chứa chả khi bỏ dấu", () => {

@@ -197,6 +197,26 @@
       "value": null,
       "numerator": 0,
       "denominator": 0
+    },
+    "humanAccuseSeenRate": {
+      "value": 0.8787878787878788,
+      "numerator": 58,
+      "denominator": 66
+    },
+    "humanDefendSeenRate": {
+      "value": 0.8846153846153846,
+      "numerator": 23,
+      "denominator": 26
+    },
+    "humanClaimSeenRate": {
+      "value": 1,
+      "numerator": 24,
+      "denominator": 24
+    },
+    "humanTrapIgnoredRate": {
+      "value": 1,
+      "numerator": 34,
+      "denominator": 34
     }
   },
   "metricsByTeam": {

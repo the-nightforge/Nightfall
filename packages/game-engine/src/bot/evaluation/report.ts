@@ -243,6 +243,12 @@ export function formatReportText(report: SelfPlayReport): string {
       m.maxDialogueChainLength > 4 ? "  ⚠ dài bất thường" : ""
     }`,
     "",
+    "── Nghe người thật (corpus mẫu, không phụ thuộc ván) ──",
+    `  Thấy lời buộc tội        ${pct(m.humanAccuseSeenRate)}${flag(m.humanAccuseSeenRate, 0.8, "dưới")}`,
+    `  Thấy lời bênh vực        ${pct(m.humanDefendSeenRate)}`,
+    `  Thấy lời khai vai        ${pct(m.humanClaimSeenRate)}`,
+    `  Bỏ qua câu bẫy           ${pct(m.humanTrapIgnoredRate)}${flag(m.humanTrapIgnoredRate, 1, "dưới")}`,
+    "",
     "── An toàn ──",
     `  Vi phạm ranh giới hiểu biết  ${m.knowledgeBoundaryViolations}`,
     `  Nước đi bị engine từ chối    ${m.fallbackActions}`,
