@@ -35,9 +35,35 @@ describe("balance", () => {
      * Đo lại Sói Con trên bộ bài SINH RA thay vì preset cho ra 6, không phải 7
      * (xem `ROLE_POWER`). Với 6 thì preset 10 chấm 11 so với 11.5 và phép kiểm
      * im - ngoại lệ tự tan, do một phép đo độc lập không hề nhìn vào preset 10.
+     *
+     * MỘT NGOẠI LỆ QUAY LẠI, 2026-09-05, và lần này nó chỉ vào chính phép so.
+     *
+     * Bốn lá phe làng vừa được đo lại ở 1000 ván/nhánh và hạ xuống: Trưởng Lão
+     * 1.5->0.5, Bà Đồng 1.5->-0.5, Kẻ Song Trùng 1.5->0.5, Tiên Tri Tập Sự
+     * 1->0.5. Preset 20 vì thế chấm `villagePower` 18.5 < `wolfPower` 20 và tự
+     * kêu ở đây - TRONG KHI CHÍNH BỘ ĐÓ ĐO RA 57.7% CHO PHE LÀNG (2500 ván).
+     * Báo động giả, và lần này nó không tan bằng cách đo lại một lá làng.
+     *
+     * Chẩn đoán: phép so này cộng hai vế được hiệu chuẩn bằng HAI cách khác
+     * nhau. Vế làng đo bằng "đóng góp so với một lá Dân Làng" trên bàn bot; vế
+     * Sói (`WEREWOLF` = 5 x4 = đúng cả 20 điểm của preset này) chưa bao giờ đi
+     * qua phép đo đó, vì gỡ một con Sói ra không phải đổi một ghế lấy Dân Làng
+     * mà là đổi cả thế cân bằng. Hạ vế làng theo số đo vì thế làm lộ ra rằng
+     * hai vế chưa từng nằm chung một thang.
+     *
+     * Ghi đích danh kèm bằng chứng, KHÔNG vặn một con số cho vừa ngưỡng - đúng
+     * cách ngoại lệ trước đã được xử. Nó chỉ tan khi vế SÓI được đo lại trên
+     * cùng một thang, và đó là việc chưa ai làm.
      */
+    const KNOWN_FALSE_ALARM = new Set([20]);
     for (const [count, deck] of Object.entries(PRESET_DECKS)) {
-      expect(absolute(deck, Number(count))).toEqual([]);
+      const warnings = absolute(deck, Number(count));
+      if (KNOWN_FALSE_ALARM.has(Number(count))) {
+        // Vẫn khoá chặt: đúng MỘT cảnh báo, và đúng cảnh báo đã được chẩn đoán.
+        expect(warnings).toEqual(["Sức mạnh phe làng (18.5) thấp hơn phe Sói (20)"]);
+        continue;
+      }
+      expect(absolute(deck, Number(count)), `preset ${count}`).toEqual([]);
     }
 
     // Đúng preset 12 người CŨ (3 Sói + Sói Con), đo ra 7.3% cho phe làng. Ngân

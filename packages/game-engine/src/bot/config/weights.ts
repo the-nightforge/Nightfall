@@ -136,6 +136,8 @@ export interface PrivateInfoWeights {
    */
   neutralKillerSuspicion: number;
   knownAlly: number;
+  /** Xem chú thích ở `DEFAULT_BOT_WEIGHTS.privateInfo.provenFalseClaim`. */
+  provenFalseClaim: number;
 }
 
 /**
@@ -1018,6 +1020,33 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     neutralClearTrust: 30,
     neutralKillerSuspicion: 55,
     knownAlly: -80,
+    /**
+     * Người sống nhận một vai mà bot BIẾT CHẮC thuộc về người khác - Bà Đồng
+     * đọc từ một cái xác, hoặc Tiên Tri Tập Sự được chỉ mặt Tiên Tri từ đêm 1.
+     *
+     * Nhẹ hơn hẳn `seerWolf` (400, ghim thẳng lên trần) vì nó KHÔNG phải bằng
+     * chứng Sói: một Thằng Hề khai láo, hay một dân thường hoảng loạn tranh
+     * claim, đều rơi vào đây. Nó chỉ chứng minh người đó nói dối.
+     *
+     * ĐÃ QUÉT, và kết quả là con số này KHÔNG QUAN TRỌNG. Preset 17 và 19,
+     * 3000 ván mỗi giá trị, cùng bộ seed:
+     *
+     *   30 -> 61.6%   90 -> 61.5%   200 -> 61.6%   400 -> 61.6%
+     *
+     * Cả dải 13 lần chỉ trải 0.1 điểm, trong khi SE ở cỡ mẫu đó là ±0.9. Ở n=17
+     * hai cặp (30, 90) và (200, 400) còn cho ra ĐÚNG cùng số ván thắng, tức
+     * trọng số không lật được kết quả của một ván nào.
+     *
+     * Lý do đã đo được chứ không đoán: bằng chứng này chỉ chạm 1.9% số phiếu
+     * (227 lần trên 100 ván preset 17-20). Nó cần một trùng hợp hẹp - phải có
+     * người CÒN SỐNG đang khai đúng cái vai mà bot biết chắc thuộc về người
+     * khác - nên dù nặng tới đâu nó cũng hiếm khi là lá phiếu quyết định.
+     *
+     * Giữ 90 vì nó nằm giữa dải đã quét, không phải vì nó tối ưu. Muốn lá này
+     * đáng giá hơn thì chỗ sửa là TẦN SUẤT (cho bot nhiều nguồn xác nhận hơn),
+     * không phải con số ở đây.
+     */
+    provenFalseClaim: 90,
   }),
 
   suspicion: Object.freeze({

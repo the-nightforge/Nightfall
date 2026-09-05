@@ -77,9 +77,10 @@ describe("bộ bài và cấu hình", () => {
     expect(validateRoomConfig(CONFIG, 9)).toBeNull();
     // Bàn nhỏ nhất mở được là 8 người; 7 ghế đã kín thì lá Sát Nhân là lá thứ
     // tám và không còn chỗ cho Dân Làng.
-    const tight: RoomConfig = { ...CONFIG, hunter: true, cursed: true };
+    const tight: RoomConfig = { ...CONFIG, hunter: true, cursed: true, villagers: 0 };
     expect(validateRoomConfig(tight, 8)).toBe("Phải còn chỗ cho Dân Làng");
-    expect(validateRoomConfig({ ...tight, serialKiller: false }, 8)).toBeNull();
+    // Gỡ Sát Nhân ra là ghế thứ tám trống lại, vừa đúng một Dân Làng.
+    expect(validateRoomConfig({ ...tight, serialKiller: false, villagers: 1 }, 8)).toBeNull();
   });
 
   it("không preset chuẩn nào chứa Sát Nhân", () => {

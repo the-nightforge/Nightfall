@@ -136,6 +136,7 @@ function context(over: Partial<BotKnowledgeView> = {}): BotDecisionContext {
       players: PLAYERS.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
       knownRoles: { me: "VILLAGER" },
       seerResult: null,
+      mediumResult: null,
       night: null,
       trialAccusedId: null,
       canFinalVote: false,

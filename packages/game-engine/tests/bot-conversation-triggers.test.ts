@@ -32,6 +32,7 @@ function context(chat: BotChatObservation[], round = 1): BotDecisionContext {
       players: PLAYERS,
       knownRoles: {},
       seerResult: null,
+      mediumResult: null,
       night: null,
       trialAccusedId: null,
       canFinalVote: false,

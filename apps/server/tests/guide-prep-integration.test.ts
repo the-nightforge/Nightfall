@@ -230,7 +230,10 @@ describe("ván hướng dẫn trên server thật: bộ bài + bot đi qua đún
     const room = store.getRoom(CODE)!;
     const bot = room.members.find((m) => m.isBot)!;
     // Đổi bộ bài khi còn đủ 8 (server chặn đổi cấu hình ở bàn 6-7 người), rồi đuổi bot.
-    roomService.updateConfig(HOST, { ...PRESET_DECKS[8]!, hunter: false });
+    // Bỏ một lá đặc biệt thì ghế đó thành Dân Làng: `villagers` là số TƯỜNG MINH,
+    // không tự co giãn, nên bộ bài vẫn phải cộng đủ 8.
+    const deck8 = PRESET_DECKS[8]!;
+    roomService.updateConfig(HOST, { ...deck8, hunter: false, villagers: (deck8.villagers ?? 0) + 1 });
     await settle();
     await roomService.kick(HOST, bot.playerId);
     await settle();

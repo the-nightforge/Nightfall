@@ -90,6 +90,7 @@ function knowledge(over: Partial<BotKnowledgeView> = {}): BotKnowledgeView {
     players: PLAYERS.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
     knownRoles: { me: "VILLAGER" },
     seerResult: null,
+    mediumResult: null,
     night: null,
     trialAccusedId: null,
     canFinalVote: false,
@@ -566,6 +567,12 @@ describe("v1 là mốc so sánh đóng băng", () => {
    *    "giữ mục tiêu cũ" chưa từng chạy trong mô phỏng. Phase 1 dựng quyền đổi
    *    phiếu rồi không ván nào kiểm nó, và chỉ số "tỉ lệ đổi phiếu" luôn bằng 0
    *    vì lý do cấu trúc chứ không phải vì hành vi.
+   * 3. Rải mốc thời gian bỏ phiếu trên cả pha thay vì dồn hết vào 0.2 giây
+   *    đầu. Trước đó `elapsedRatio` của mọi lá phiếu là ~0.001 so với ngưỡng
+   *    `lateSwitchRatio` 0.8, nên bằng chứng `LATE_SWITCH` chưa từng chạy
+   *    trong một ván mô phỏng nào - cùng loại lỗ hổng với mục 2, và cũng chỉ
+   *    ở tầng harness. Sói thắng 22/24 -> 23/24.
+
    *
    * Task 8 đã đổi `DEFAULT_BOT_WEIGHTS` sang v4 (không phải v2 như dòng này
    * từng dự đoán). Khẳng định dưới đây neo vào `BOT_WEIGHTS_V1` một cách tường
@@ -573,30 +580,30 @@ describe("v1 là mốc so sánh đóng băng", () => {
    * đã âm thầm chạm vào cái mốc.
    */
   const V1_FINGERPRINT = [
-    "golden-0 village 3 44",
-    "golden-1 wolves 4 47",
-    "golden-2 wolves 5 81",
+    "golden-0 wolves 5 53",
+    "golden-1 village 5 59",
+    "golden-2 wolves 4 55",
     "golden-3 wolves 4 58",
-    "golden-4 wolves 4 60",
-    "golden-5 wolves 3 45",
-    "golden-6 wolves 3 53",
-    "golden-7 wolves 4 61",
-    "golden-8 wolves 3 45",
-    "golden-9 wolves 4 55",
-    "golden-10 wolves 3 39",
-    "golden-11 wolves 5 75",
-    "golden-12 wolves 3 45",
-    "golden-13 village 3 44",
-    "golden-14 wolves 2 36",
-    "golden-15 wolves 4 56",
-    "golden-16 wolves 4 53",
-    "golden-17 wolves 5 68",
-    "golden-18 wolves 4 53",
-    "golden-19 wolves 3 43",
-    "golden-20 wolves 3 44",
-    "golden-21 wolves 7 86",
-    "golden-22 wolves 4 51",
-    "golden-23 wolves 4 44",
+    "golden-4 wolves 4 58",
+    "golden-5 wolves 3 50",
+    "golden-6 wolves 5 64",
+    "golden-7 wolves 4 59",
+    "golden-8 wolves 3 43",
+    "golden-9 wolves 4 54",
+    "golden-10 wolves 3 34",
+    "golden-11 wolves 6 71",
+    "golden-12 wolves 4 51",
+    "golden-13 wolves 3 41",
+    "golden-14 wolves 3 48",
+    "golden-15 wolves 3 44",
+    "golden-16 wolves 3 42",
+    "golden-17 wolves 6 89",
+    "golden-18 wolves 4 67",
+    "golden-19 wolves 5 65",
+    "golden-20 wolves 5 62",
+    "golden-21 wolves 4 67",
+    "golden-22 wolves 4 42",
+    "golden-23 wolves 3 50",
   ];
 
   it("tái lập chính xác cấu hình v1 trên 24 ván", () => {
@@ -621,11 +628,16 @@ describe("v1 là mốc so sánh đóng băng", () => {
     // Ghi lại như một SỰ THẬT ĐO ĐƯỢC, không phải một mục tiêu. Test cân bằng
     // của Phase 2 chỉ đòi mỗi phe thắng ít nhất một ván, nên 21/24 vẫn lọt qua.
     //
-    // Lượt cân nhắc lại (Task 5) đã kéo từ 23/24 xuống 21/24: cho làng nhìn
-    // bảng kiểm phiếu rồi quyết lại giúp được một chút, nhưng không giải quyết
-    // được vấn đề. Đó là việc của Task 8.
+    // Lượt cân nhắc lại (Task 5) đã kéo xuống 22/24: cho làng nhìn bảng kiểm
+    // phiếu rồi quyết lại giúp được một chút, nhưng không giải quyết được vấn
+    // đề. Đó là việc của Task 8.
+    //
+    // Rải mốc thời gian bỏ phiếu (xem lý do 3 ở `V1_FINGERPRINT`) đẩy ngược
+    // lên 23/24. CHƯA đo được vì sao: `LATE_SWITCH` nặng 7 điểm nghi ngờ và nó
+    // vừa được bật lần đầu, nhưng 24 ván không đủ để nói nó nghiêng về phe nào.
+    // Vẫn là một sự thật ĐO ĐƯỢC, không phải một mục tiêu.
     const wolfWins = V1_FINGERPRINT.filter((line) => line.includes("wolves")).length;
-    expect(wolfWins).toBe(22);
+    expect(wolfWins).toBe(23);
   });
 });
 

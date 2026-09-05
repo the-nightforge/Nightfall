@@ -1,4 +1,4 @@
-import { roleTeam } from "@masoi/shared";
+import { roleTeam, type Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { BotBrainState, BotEvidence, BotKnowledgeView } from "../types";
 import { applyEvidence, applyTrustEvidence } from "./belief-state";
@@ -43,6 +43,98 @@ function seerSourceId(targetId: string): string {
   return `seer:${targetId}`;
 }
 
+/** Một vai mà bot biết CHẮC thuộc về ai, kèm nguồn để dựng bằng chứng. */
+interface ProvenRoleHolder {
+  holderId: string;
+  holderName: string;
+  role: Role;
+  sourceId: string;
+  /** Vì sao bot biết - đi thẳng vào `summary` của bằng chứng. */
+  because: string;
+}
+
+function provenRoleHolders(knowledge: BotKnowledgeView): ProvenRoleHolder[] {
+  const found: ProvenRoleHolder[] = [];
+
+  const medium = knowledge.mediumResult;
+  if (medium) {
+    found.push({
+      holderId: medium.targetId,
+      holderName: medium.targetName,
+      role: medium.role,
+      sourceId: `medium:${medium.targetId}`,
+      because: `hồn ${medium.targetName} mới là vai đó`,
+    });
+  }
+
+  /*
+   * Tiên Tri Tập Sự đọc thẳng từ `knownRoles`, không cần một trường riêng:
+   * engine đã đặt Tiên Tri vào đó cho đúng người xem này, y hệt cách Sói thấy
+   * bầy của mình.
+   */
+  if (knowledge.selfRole === "APPRENTICE_SEER") {
+    for (const [playerId, role] of Object.entries(knowledge.knownRoles)) {
+      if (playerId === knowledge.botId || role !== "SEER") continue;
+      const name = knowledge.players.find((player) => player.id === playerId)?.name ?? playerId;
+      found.push({
+        holderId: playerId,
+        holderName: name,
+        role: "SEER",
+        sourceId: `mentor:${playerId}`,
+        because: `${name} mới là Tiên Tri thật`,
+      });
+    }
+  }
+
+  return found;
+}
+
+/**
+ * Ai còn sống mà đang nhận `known.role` thì đang nói dối.
+ *
+ * Bỏ qua Dân Làng và mọi vai phe Sói: hai người cùng khai "Dân Làng" không mâu
+ * thuẫn, và không ai đi khai mình là Sói. Mọi vai còn lại là lá đơn trong bộ
+ * bài (cấu hình phòng bật/tắt bằng boolean), nên hai người cùng nhận là một
+ * mâu thuẫn thật.
+ */
+function flagFalseClaimants(
+  state: BotBrainState,
+  knowledge: BotKnowledgeView,
+  weights: BotWeights,
+  known: ProvenRoleHolder,
+): void {
+  if (known.role === "VILLAGER" || roleTeam(known.role) === "wolves") return;
+
+  const aliveIds = new Set(
+    knowledge.players.filter((player) => player.alive).map((player) => player.id),
+  );
+
+  for (const claim of state.claims) {
+    if (claim.actorId === knowledge.botId || claim.actorId === known.holderId) continue;
+    if (!aliveIds.has(claim.actorId)) continue;
+    if (claim.data.role !== known.role) continue;
+
+    ensureSource(state, known.sourceId);
+    applyEvidence(
+      state,
+      evidenceFor(
+        {
+          // Khoá theo CẶP (nguồn, người khai): một bot có nhiều nguồn khác nhau
+          // sinh nhiều mâu thuẫn khác nhau, và chúng không được đè lên nhau.
+          id: `false-claim:${known.sourceId}:${claim.actorId}`,
+          kind: "PROVEN_FALSE_CLAIM",
+          sourceId: known.sourceId,
+          actorId: claim.actorId,
+          weight: weights.privateInfo.provenFalseClaim,
+          summary: `${known.because}, nên lời khai này là dối`,
+        },
+        knowledge.round,
+      ),
+      weights,
+    );
+  }
+}
+
 function allySourceId(allyId: string): string {
   return `ally:${allyId}`;
 }
@@ -76,6 +168,20 @@ export function applyPrivateInformation(
   const round = knowledge.round;
   const result = knowledge.seerResult;
 
+  /*
+   * LỜI KHAI BỊ CHỨNG MINH LÀ DỐI.
+   *
+   * Hai vai đi vào đây bằng hai đường nhưng cùng một suy luận: bot biết CHẮC
+   * một vai thuộc về ai, và một người CÒN SỐNG khác đang nhận đúng vai đó.
+   *  - Bà Đồng: gọi hồn đọc ra vai thật của một cái xác.
+   *  - Tiên Tri Tập Sự: được chỉ mặt Tiên Tri từ đêm 1.
+   *
+   * Gộp một chỗ chứ không chép đôi: phần dễ trôi lệch nhất là bộ điều kiện loại
+   * trừ, không phải phần áp bằng chứng.
+   */
+  for (const known of provenRoleHolders(knowledge)) {
+    flagFalseClaimants(state, knowledge, weights, known);
+  }
   if (result) {
     const sourceId = seerSourceId(result.targetId);
     ensureSource(state, sourceId);

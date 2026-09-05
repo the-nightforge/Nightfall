@@ -63,6 +63,7 @@ function ctx(over: Partial<BotKnowledgeView>, chat: BotChatObservation[]): BotDe
       players: IDS.map((id) => ({ id, name: NAMES[id]!, alive: true })),
       knownRoles: { me: "VILLAGER" },
       seerResult: null,
+      mediumResult: null,
       neutralRolesInPlay: [],
       night: null,
       trialAccusedId: null,

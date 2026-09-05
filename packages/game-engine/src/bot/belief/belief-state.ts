@@ -106,6 +106,9 @@ const PERMANENT_KINDS = new Set<BotEvidence["kind"]>([
   "SEER_RESULT_WOLF",
   "SEER_RESULT_CLEAR",
   "KNOWN_ALLY",
+  // Lời khai bị chứng minh là dối không nguội đi: bằng chứng phơi nó ra là sự
+  // thật do engine cấp, không phải một ấn tượng.
+  "PROVEN_FALSE_CLAIM",
 ]);
 
 function isPermanent(entry: BeliefEntry): boolean {

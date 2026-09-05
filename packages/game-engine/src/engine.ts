@@ -282,7 +282,7 @@ export class GameEngine {
     this.state.pendingLastStandVictim ??= null;
     this.state.elderBiteSurvived ??= false;
     this.state.firstDeadId ??= null;
-    this.state.villagePowersLost ??= false;
+    this.state.villagePowersLostRound ??= null;
     this.state.bloodMoonArmed ??= false;
     this.state.bloodMoonUsed ??= false;
     this.state.deadCanSpeakUsed ??= false;
@@ -400,7 +400,7 @@ export class GameEngine {
       pendingLastStandVictim: null,
       elderBiteSurvived: false,
       firstDeadId: null,
-      villagePowersLost: false,
+      villagePowersLostRound: null,
       bloodMoonArmed: false,
       bloodMoonUsed: false,
       deadCanSpeakUsed: false,
@@ -484,10 +484,22 @@ export class GameEngine {
    */
   private elderKilledByVillage(playerId: string): void {
     const victim = this.player(playerId);
-    if (!victim || victim.role !== "ELDER" || this.state.villagePowersLost) return;
-    this.state.villagePowersLost = true;
+    if (!victim || victim.role !== "ELDER") return;
+    if (this.state.villagePowersLostRound != null) return;
+    /*
+     * VÒNG KẾ TIẾP, không phải vòng đang chạy.
+     *
+     * Treo cổ xảy ra ở ban ngày và ngày đó kết thúc ngay sau bản án, nên tắt từ
+     * vòng hiện tại thì hình phạt gần như không chạm vào gì. Bình độc và đạn Thợ
+     * Săn thì ngược lại - chúng nổ ở đêm hoặc ngay sau một cái chết đêm - và tắt
+     * ngay sẽ ăn luôn phần ngày mà làng chưa kịp biết mình vừa mất gì.
+     *
+     * Lấy đúng một vòng cho cả hai đường: `round` tăng một lần mỗi khi vào
+     * `NIGHT`, nên vòng `round + 1` phủ đúng đêm kế tiếp và ngày sau nó.
+     */
+    this.state.villagePowersLostRound = this.state.round + 1;
     this.state.log.push(
-      `Trưởng Lão ${victim.name} ngã xuống bởi chính tay dân làng - mọi kỹ năng đặc biệt của phe làng đã tắt.`,
+      `Trưởng Lão ${victim.name} ngã xuống bởi chính tay dân làng - mọi kỹ năng đặc biệt của phe làng mất hiệu lực suốt đêm và ngày kế tiếp.`,
     );
   }
 
@@ -508,7 +520,9 @@ export class GameEngine {
 
   /** Kỹ năng đặc biệt phe làng còn hiệu lực không. Xem `elderKilledByVillage`. */
   private villagePowersActive(): boolean {
-    return this.state.villagePowersLost !== true;
+    // So bằng, không so "nhỏ hơn hoặc bằng": hình phạt phủ ĐÚNG một vòng rồi
+    // tự hết, và ô này không cần dọn lại.
+    return this.state.villagePowersLostRound !== this.state.round;
   }
 
   setPhase(phase: GamePhase, durationMs: number, now = Date.now()) {
@@ -2157,6 +2171,37 @@ export class GameEngine {
    * hai không tìm thấy gì. Một pha chạy lại sau khôi phục vì thế vô hại.
    */
   /**
+   * Chốt mọi lá ĐỔI VAI rồi hỏi ván đã xong chưa.
+   *
+   * Tồn tại vì THỨ TỰ, không phải vì gõ ít đi. Ba lời gọi này từng nằm chép tay
+   * ở hai nơi - `checkWinOrContinue` của server và `finished()` của harness
+   * self-play - và không có gì bắt hai bản khớp nhau. Chúng đã lệch: harness
+   * thiếu hẳn `settleDoppelganger`, nên trong MỌI ván tự chơi Kẻ Song Trùng
+   * không hoá vai lần nào và mọi số đo sức mạnh của nó đo một kỹ năng chưa từng
+   * chạy. Một bản sao thứ ba sẽ lệch theo cách khác.
+   *
+   * Thứ tự bên trong không tuỳ ý:
+   *
+   *  1. Kẻ Song Trùng trước, vì nó có thể hoá thành một con SÓI - và
+   *     `settleTraitor` hỏi "bầy còn con nào sống không", nên nó phải thấy bầy
+   *     ở trạng thái đã cập nhật.
+   *  2. Kẻ Phản Bội trước Kẻ Báo Thù, vì một Kẻ Phản Bội vừa thăng cấp làm đổi
+   *     câu trả lời của `checkWin`, mà `settleExecutioner` đọc thế cuộc để
+   *     quyết một Kẻ Báo Thù mất mục tiêu có hoá Thằng Hề hay không.
+   *
+   * Gọi ở đâu thì vẫn là quyết định của người gọi: đây phải là cửa duy nhất mà
+   * cả hai đường chết đi qua SAU khi chuỗi phản ứng Thợ Săn đã xử xong. Sớm hơn
+   * thì một lá sắp trúng đạn kịp đổi vai trong chính đợt chết đã hạ nó.
+   *
+   * Cả ba `settle*` đều TỰ CHẶN LẶP, nên gọi lại sau khôi phục là vô hại.
+   */
+  settleAndCheckWin(): Winner {
+    this.settleDoppelganger();
+    this.settleTraitor();
+    this.settleExecutioner();
+    return this.checkWin();
+  }
+  /**
    * Kẻ Song Trùng hoá thành vai của NGƯỜI CHẾT ĐẦU TIÊN.
    *
    * Gọi cùng chỗ với `settleTraitor`/`settleExecutioner` - cửa duy nhất mà cả
@@ -2496,6 +2541,9 @@ export class GameEngine {
     const revealDead = st.config.revealRoleOnDeath === true;
     // Sói luôn biết đồng bọn của mình
     const viewerIsWolf = viewer !== undefined && viewer.alive && isWolfPack(viewer.role);
+    // Tiên Tri Tập Sự luôn biết Tiên Tri; xem chú thích dài ở `botKnowledgeFor`.
+    const viewerIsApprentice =
+      viewer !== undefined && viewer.alive && viewer.role === "APPRENTICE_SEER";
 
     const tally = this.voteTally(false);
     // Số phiếu sơ bộ là bối cảnh của cả phiên toà: giấu đi trong lúc biện hộ thì
@@ -2514,7 +2562,9 @@ export class GameEngine {
           ? p.role
           : viewerIsWolf && p.id !== viewerId && isWolfPack(p.role)
             ? p.role
-            : undefined,
+            : viewerIsApprentice && p.role === "SEER"
+              ? p.role
+              : undefined,
       // Đồng bọn Sói chỉ được biết đây là một con Sói, không được biết nó vốn
       // là Kẻ Nguyền Rủa: gốc nguyền rủa chỉ lộ cùng lúc với toàn bộ vai trò.
       cursedTurned: revealAll ? p.cursedTurned === true : undefined,
@@ -2709,6 +2759,22 @@ export class GameEngine {
     const viewerIsWolf = viewer.alive && isWolfPack(viewer.role);
 
     const knownRoles: Record<string, Role> = { [viewer.id]: viewer.role };
+    /*
+     * Tiên Tri Tập Sự được chỉ mặt Tiên Tri ngay từ đêm 1.
+     *
+     * Trước đó lá này KHÔNG có kỹ năng nào cho tới khi Tiên Tri chết - một điều
+     * kiện có thể không bao giờ xảy ra - mà vẫn chiếm một ghế đặc biệt, tức bộ
+     * bài bớt một Dân Làng để bầy Sói phí nhát cắn vào. Đo ra -2.6 điểm.
+     *
+     * Biết Tiên Tri là ai cho nó việc để làm từ đêm đầu: khi có hai người cùng
+     * khai Tiên Tri, nó là người DUY NHẤT biết ai thật. Vẫn thừa kế kỹ năng soi
+     * khi Tiên Tri chết, phần đó không đổi.
+     */
+    if (viewer.alive && viewer.role === "APPRENTICE_SEER") {
+      for (const player of st.players) {
+        if (player.role === "SEER") knownRoles[player.id] = player.role;
+      }
+    }
     if (viewerIsWolf) {
       for (const player of st.players) {
         if (player.id !== viewer.id && isWolfPack(player.role)) {
@@ -2736,6 +2802,23 @@ export class GameEngine {
         }
       : null;
 
+    /*
+     * Câu trả lời của Bà Đồng phải QUAY LẠI được với lõi bot.
+     *
+     * Thiếu dòng này thì `mediumStrategy` chọn xong mục tiêu, engine ghi đúng
+     * vai thật vào `night.mediumResults`, UI hiện đúng cho người chơi - còn con
+     * bot thì hỏi xong không bao giờ nghe được câu trả lời. Đo ra đúng như vậy:
+     * lá này đóng góp -2.2 điểm, tức một Dân Làng chiếm mất một ghế đặc biệt.
+     */
+    const mediumResultEntry = st.night.mediumResults?.[botId];
+    const mediumResultForBot = mediumResultEntry
+      ? {
+          targetId: mediumResultEntry.targetId,
+          targetName: this.player(mediumResultEntry.targetId)?.name ?? "?",
+          role: mediumResultEntry.role,
+        }
+      : null;
+
     return buildBotKnowledgeView({
       botId,
       round: st.round,
@@ -2749,6 +2832,7 @@ export class GameEngine {
       knownRoles,
       revealRoleOnDeath: st.config.revealRoleOnDeath === true,
       seerResult,
+      mediumResult: mediumResultForBot,
       // Suy từ CHÍNH bộ bài mà `assignRoles` chia, không phải một danh sách
       // chép tay: bật thêm một vai trung lập sau này là nó tự vào đây.
       neutralRolesInPlay: neutralRolesFor(st.config),

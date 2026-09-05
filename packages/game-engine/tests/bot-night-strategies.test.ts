@@ -51,6 +51,7 @@ function context(
       players: PLAYERS.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
       knownRoles: {},
       seerResult: null,
+      mediumResult: null,
       night: {
         bonusSecondTargetFor: null,
         canAct: true,

@@ -284,10 +284,20 @@ export interface GameState {
    */
   firstDeadId?: string | null;
   /**
-   * Chính phe làng đã giết Trưởng Lão, nên mọi kỹ năng đặc biệt của phe làng
-   * mất hiệu lực tới hết ván. Một chiều: bật rồi không tắt lại.
+   * VÒNG mà kỹ năng đặc biệt của phe làng mất hiệu lực, do chính làng giết
+   * Trưởng Lão. `null` là đang còn hiệu lực.
+   *
+   * Một SỐ VÒNG chứ không phải một cờ một chiều: hình phạt kéo đúng một đêm và
+   * một ngày, mà `round` tăng đúng một lần mỗi khi vào `NIGHT` - nên "vòng kế
+   * tiếp" chính là đêm kế tiếp cộng ngày sau nó, không cần đếm pha.
+   *
+   * Trường MỚI chứ không phải đổi kiểu của `villagePowersLost`: đổi kiểu một
+   * trường đã nằm trong snapshot là làm mọi ván đang chạy không khôi phục được.
+   * Snapshot ghi trước bản này mang khoá cũ; zod bỏ khoá lạ, nên ván đó khôi
+   * phục với kỹ năng còn nguyên - chấp nhận được, vì hình phạt cũ kéo cả ván
+   * còn hình phạt mới thì đằng nào cũng đã hết hạn sau một vòng.
    */
-  villagePowersLost?: boolean;
+  villagePowersLostRound?: number | null;
   bloodMoonArmed: boolean;
   bloodMoonUsed: boolean;
   deadCanSpeakUsed: boolean;

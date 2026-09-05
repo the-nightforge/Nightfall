@@ -58,10 +58,12 @@ function villageWinRate(
     games,
     playerCount,
     config,
-    // Cùng lý do với `role-power.ts`: sự kiện bơm phương sai vào đúng thứ đang
-    // đo, và lời nói không đổi quyết định nên tắt đi chỉ để chạy nhanh hơn.
+    // Sự kiện tắt vì cùng lý do với `role-power.ts`: chúng bơm phương sai vào
+    // đúng thứ đang đo, và ranked vốn không có sự kiện nào.
     events: false,
-    speech: false,
+    // Lời nói BẬT, xem chú thích dài ở `role-power.ts`: tắt nó kéo phe làng từ
+    // 54.4% xuống 15.2% trên cùng bộ seed, tức đo một trò chơi khác.
+    speech: true,
   });
 
   const finished = results.filter((game) => game.winner !== null);

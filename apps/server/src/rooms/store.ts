@@ -1,6 +1,6 @@
 import type { GameEngine } from "@masoi/game-engine";
 import type { ChatMessage, RoomConfig } from "@masoi/shared";
-import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
+import { DEFAULT_ROOM_CONFIG, DEFAULT_VILLAGERS } from "@masoi/shared";
 import { redis } from "../redis";
 import {
   FINISHED_ROOM_TTL_SECONDS,
@@ -125,7 +125,10 @@ export function createRoom(code: string, host: RoomMember): Room {
     hostId: host.playerId,
     status: "LOBBY",
     members: [host],
-    config: { ...DEFAULT_ROOM_CONFIG },
+    // `villagers` khai ngay từ đây chứ không nằm trong `DEFAULT_ROOM_CONFIG`:
+    // xem chú thích ở khuôn đó. Mọi phòng thật vì thế có bộ bài tường minh, và
+    // luật "bộ bài quyết định số người cần" áp ngay từ lúc phòng mở ra.
+    config: { ...DEFAULT_ROOM_CONFIG, villagers: DEFAULT_VILLAGERS },
     engine: null,
     chatLog: [],
     createdAt: Date.now(),

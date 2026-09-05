@@ -135,13 +135,7 @@ function checkWinOrContinue(room: Room, next: () => void): void {
    * `settleExecutioner` tự chặn lặp, nên một bước chuyển pha chạy lại sau khôi
    * phục không đổi vai ai lần thứ hai.
    */
-  // Kẻ Song Trùng đứng TRƯỚC hai lá kia: nó có thể hoá thành một con Sói, và
-  // `settleTraitor` phải nhìn thấy bầy Sói ở trạng thái đã cập nhật khi hỏi
-  // "còn con nào sống không".
-  e.settleDoppelganger();
-  e.settleTraitor();
-  e.settleExecutioner();
-  const winner = e.checkWin();
+  const winner = e.settleAndCheckWin();
   if (winner) {
     e.finishGame(winner);
     onGameOver(room);

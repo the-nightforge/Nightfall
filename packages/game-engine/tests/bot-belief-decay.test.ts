@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import { BotRuntime } from "../src/bot/BotRuntime";
 import { createSeededRng } from "../src/bot/rng";
 import { createBotPersonality } from "../src/bot/personality/personality";
-import { createBotBrainState } from "../src/bot/memory/memory-store";
+import { createBotBrainState, remember } from "../src/bot/memory/memory-store";
 import { applyEvidence, decayBeliefs } from "../src/bot/belief/belief-state";
 import { observeProfile } from "../src/bot/belief/player-profile";
 import { BOT_WEIGHTS_V12, BOT_WEIGHTS_V13 } from "../src/bot/config/weights";
 import { applyPrivateInformation } from "../src/bot/belief/private-info";
+import type { Role } from "@masoi/shared";
 import type {
   BotBrainState,
   BotDecisionContext,
@@ -34,6 +35,7 @@ function knowledge(over: Partial<BotKnowledgeView> = {}): BotKnowledgeView {
     players: PLAYERS.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
     knownRoles: { me: "VILLAGER" },
     seerResult: null,
+    mediumResult: null,
     night: null,
     trialAccusedId: null,
     canFinalVote: false,
@@ -196,6 +198,104 @@ describe("applyPrivateInformation", () => {
 
     expect(state.suspicion.b.score).toBe(0);
     expect(state.trust.b.score).toBeGreaterThan(0);
+  });
+
+  /*
+   * BÀ ĐỒNG: vai của cái xác chỉ có nghĩa khi đối chiếu ngược với người sống.
+   *
+   * Trước khi nối, `mediumResult` không tồn tại trong `BotKnowledgeView`: engine
+   * ghi đúng vai thật, UI hiện đúng, mà lõi bot thì hỏi xong không nghe được
+   * câu trả lời. Đo ra -2.2 điểm, tức một ghế đặc biệt bị lãng phí.
+   */
+  function claim(state: BotBrainState, actorId: string, role: Role, round = 1): void {
+    remember(state, {
+      id: `claim-${actorId}`,
+      sourceId: `msg-${actorId}`,
+      round,
+      phase: "DAY_DISCUSSION",
+      type: "ROLE_CLAIM",
+      actorId,
+      importance: 5,
+      pinned: false,
+      data: { role },
+    });
+  }
+
+  const mediumSaw = (targetId: string, role: Role) => ({
+    targetId,
+    targetName: targetId.toUpperCase(),
+    role,
+  });
+
+  it("người CÒN SỐNG nhận đúng vai của cái xác thì bị lật mặt", () => {
+    const state = stateFor();
+    claim(state, "a", "SEER");
+
+    applyPrivateInformation(
+      state,
+      knowledge({ selfRole: "MEDIUM", mediumResult: mediumSaw("b", "SEER") }),
+    );
+
+    expect(state.suspicion.a.score).toBeGreaterThan(0);
+  });
+
+  it("khai một vai KHÁC thì không bị đụng tới", () => {
+    const state = stateFor();
+    claim(state, "a", "WITCH");
+
+    applyPrivateInformation(
+      state,
+      knowledge({ selfRole: "MEDIUM", mediumResult: mediumSaw("b", "SEER") }),
+    );
+
+    expect(state.suspicion.a.score).toBe(0);
+  });
+
+  it("xác là Dân Làng thì không lật ai: hai người cùng khai Dân Làng không mâu thuẫn", () => {
+    const state = stateFor();
+    claim(state, "a", "VILLAGER");
+
+    applyPrivateInformation(
+      state,
+      knowledge({ selfRole: "MEDIUM", mediumResult: mediumSaw("b", "VILLAGER") }),
+    );
+
+    expect(state.suspicion.a.score).toBe(0);
+  });
+
+  it("người khai đã CHẾT thì không lật: lời khai đó không còn chỉ vào ai", () => {
+    const state = stateFor();
+    claim(state, "a", "SEER");
+
+    applyPrivateInformation(
+      state,
+      knowledge({
+        selfRole: "MEDIUM",
+        mediumResult: mediumSaw("b", "SEER"),
+        players: PLAYERS.map((id) => ({ id, name: id.toUpperCase(), alive: id !== "a" })),
+      }),
+    );
+
+    expect(state.suspicion.a.score).toBe(0);
+  });
+
+  it("Tiên Tri Tập Sự lật mặt người khai giả Tiên Tri", () => {
+    // Cùng luật với Bà Đồng, nguồn khác: `knownRoles` do engine cấp thay cho
+    // một lượt gọi hồn. Đây là việc lá bài làm được NGAY đêm 1.
+    const state = stateFor();
+    claim(state, "a", "SEER");
+
+    applyPrivateInformation(
+      state,
+      knowledge({
+        selfRole: "APPRENTICE_SEER",
+        knownRoles: { me: "APPRENTICE_SEER", b: "SEER" },
+      }),
+    );
+
+    expect(state.suspicion.a.score).toBeGreaterThan(0);
+    // Không đụng tới chính Tiên Tri thật.
+    expect(state.suspicion.b.score).toBe(0);
   });
 
   it("đồng bọn Sói đã biết được tin tưởng, không bị nghi", () => {

@@ -199,8 +199,20 @@ describe("startBlock", () => {
    * preset 10 dùng ở bàn 9 người chấm 39.5 (nghiêng về Sói) mới đúng kịch bản
    * cần hồi quy.
    */
-  it("preset 10 người dùng ở phòng 9 người: Ranked chặn, Chaos cho qua", () => {
-    const config = PRESET_DECKS[10];
+  it("bộ bài nghiêng về Sói ở phòng 9 người: Ranked chặn, Chaos cho qua", () => {
+    /*
+     * Bộ bài của preset 10 nhưng BỚT một Dân Làng, nên nó dày đúng 9.
+     *
+     * Bản cũ dùng thẳng `PRESET_DECKS[10]` ở phòng 9 người. Từ khi `villagers`
+     * do host đặt, cỡ bộ bài lệch số người là một LỖI CẤU HÌNH - tiền đề "không
+     * có lỗi nào khác" của test này vì thế không còn tồn tại được, và nó sẽ đo
+     * nhánh `config` thay cho nhánh `balance` mà nó muốn đo. Điểm cân bằng vẫn
+     * 36.5, tức vẫn nghiêng về Sói đúng như kịch bản cần.
+     */
+    const config: RoomConfig = {
+      ...PRESET_DECKS[10],
+      villagers: (PRESET_DECKS[10].villagers ?? 0) - 1,
+    };
     const balance = generateWarnings(config, 9);
     assert.equal(balance.blocking, true, "tiền đề: engine phải coi đây là mất cân bằng");
     assert.equal(validateRoomConfig(config, 9), null, "tiền đề: cấu hình không có lỗi nào khác");

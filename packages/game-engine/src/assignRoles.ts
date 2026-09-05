@@ -13,7 +13,11 @@ export function shuffle<T>(items: T[], rng: () => number = Math.random): T[] {
 
 /**
  * Xây dựng danh sách vai trò theo cấu hình rồi xáo trộn.
- * Dân Làng lấp đầy chỗ còn lại.
+ *
+ * `config.villagers` là số Dân Làng do host đặt, và khi có nó thì bộ bài phải
+ * khớp ĐÚNG số người - không lấp thêm, không cắt bớt. Thiếu trường đó thì Dân
+ * Làng lấp phần còn lại như trước; xem chú thích ở `RoomConfig.villagers` cho
+ * lý do đường tương thích này tồn tại.
  */
 export function buildRoleDeck(
   config: RoomConfig,
@@ -22,7 +26,8 @@ export function buildRoleDeck(
 ): Role[] {
   if (playerCount < 6) throw new Error("Cần ít nhất 6 người chơi");
   const deck = specialRoleList(config);
-  while (deck.length < playerCount) deck.push("VILLAGER");
+  const villagers = config.villagers ?? Math.max(0, playerCount - deck.length);
+  for (let i = 0; i < villagers; i += 1) deck.push("VILLAGER");
   if (deck.length !== playerCount) throw new Error("Cấu hình vai trò không khớp số người chơi");
   // Xáo bằng ĐÚNG nguồn ngẫu nhiên được truyền vào. Trước đây hàm này luôn dùng
   // `Math.random`, nên một `assignRoles` đã gieo hạt vẫn cho ra ván khác nhau ở

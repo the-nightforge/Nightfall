@@ -305,6 +305,7 @@ function dayOfTruthContext(round: number): BotDecisionContext {
       ],
       knownRoles: { me: "VILLAGER" },
       seerResult: null,
+      mediumResult: null,
       night: null,
       trialAccusedId: null,
       canFinalVote: false,

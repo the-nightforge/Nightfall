@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  MAX_PLAYERS_PER_ROOM,
   ROLE_META,
   type Role,
   type RoomConfig,
@@ -25,6 +26,15 @@ import {
 const WOLF_MIN = 1;
 const WOLF_MAX = 4;
 
+/**
+ * Sàn của ô Dân Làng, bám theo `validateRoomConfig`.
+ *
+ * Luật "phải còn chỗ cho Dân Làng" có từ trước khi ô này tồn tại và không đổi:
+ * một bộ bài không có Dân Làng nào là một bộ mà mọi người đều biết một điều gì
+ * đó, tức không còn ai để đánh lừa.
+ */
+const VILLAGER_MIN = 1;
+
 interface Props {
   snapshot: RoomSnapshot;
   isHost: boolean;
@@ -42,7 +52,7 @@ interface Props {
 export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
   const config = snapshot.config;
   const playerCount = snapshot.players.length;
-  const { villagers } = deckCounts(config, playerCount);
+  const { wolves, specials, villagers } = deckCounts(config, playerCount);
 
   const toggle = (role: Role) => {
     if (!isHost) return;
@@ -58,6 +68,23 @@ export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
     onUpdateConfig({ ...config, werewolves: Math.min(WOLF_MAX, Math.max(WOLF_MIN, n)) });
   };
 
+  /*
+   * Trần của ô Dân Làng: phần ghế còn lại tới `MAX_PLAYERS_PER_ROOM`.
+   *
+   * Không kẹp theo số người ĐANG có trong phòng - bộ bài giờ quyết định số
+   * người cần, nên host phải kéo được lên trước rồi mời thêm người sau. Lệch
+   * giữa hai con số là việc của `validateRoomConfig`, và nó nói ra thành câu.
+   */
+  const villagerMax = Math.max(VILLAGER_MIN, MAX_PLAYERS_PER_ROOM - wolves - specials);
+
+  const setVillagers = (n: number) => {
+    if (!isHost) return;
+    onUpdateConfig({
+      ...config,
+      villagers: Math.min(villagerMax, Math.max(VILLAGER_MIN, n)),
+    });
+  };
+
   return (
     <div>
       <p className="mb-3 text-xs text-mist/70">
@@ -71,6 +98,11 @@ export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
           enabled
           locked
           onToggle={() => undefined}
+          stepper={
+            isHost
+              ? { value: villagers, min: VILLAGER_MIN, max: villagerMax, onChange: setVillagers }
+              : undefined
+          }
         />
         {VILLAGE_ROLES.map((role) => (
           <RoleCard

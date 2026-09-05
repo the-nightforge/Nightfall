@@ -52,9 +52,23 @@ export function isMatchOutcome(value: unknown): value is MatchOutcome {
 
 export type RoomMode = "ranked" | "chaos";
 
-/** Cấu hình số lượng vai trò do chủ phòng đặt. Dân Làng tự động lấp chỗ còn lại. */
+/** Cấu hình số lượng vai trò do chủ phòng đặt. */
 export interface RoomConfig {
   werewolves: number;
+  /**
+   * Số Dân Làng, do host đặt như `werewolves` chứ KHÔNG tự lấp chỗ trống.
+   *
+   * Đổi lại: tổng bộ bài quyết định số người cần để bắt đầu, chứ không phải số
+   * người quyết định số Dân Làng. Thêm một người vào phòng vì thế không tự
+   * thành một Dân Làng nữa - `validateRoomConfig` báo lệch và host tự chỉnh.
+   *
+   * OPTIONAL, và nhánh thiếu nó là đường TƯƠNG THÍCH chứ không phải một lựa
+   * chọn: cấu hình ghi trước bản này không có trường nào, và cả harness
+   * self-play lẫn test dựng cấu hình bằng tay cũng không. Thiếu nó thì bộ chia
+   * bài và bộ kiểm quay về luật lấp chỗ cũ - xem `buildRoleDeck` và
+   * `validateRoomConfig`.
+   */
+  villagers?: number;
   seer: boolean;
   guard: boolean;
   witch: boolean;
@@ -165,6 +179,18 @@ export interface RoomConfig {
   finalVoteSeconds: number;
 }
 
+/**
+ * Khuôn cấu hình dùng chung, CỐ Ý không có `villagers`.
+ *
+ * Một số Dân Làng chỉ có nghĩa khi đi kèm một cỡ bàn, mà khuôn này thì không
+ * biết cỡ bàn: test, harness self-play và mọi công cụ đều spread nó ra rồi dùng
+ * với đủ loại số người. Nhét một con số vào đây là làm mọi chỗ đó sai cùng lúc.
+ *
+ * Phòng THẬT lấy số Dân Làng từ `DEFAULT_VILLAGERS` ngay lúc được tạo, nên luật
+ * "bộ bài quyết định số người cần" áp cho mọi ván có người chơi. Bộ bài preset
+ * cũng khai tường minh. Chỉ những cấu hình dựng bằng tay mới rơi vào đường lấp
+ * chỗ - xem `RoomConfig.villagers`.
+ */
 export const DEFAULT_ROOM_CONFIG: RoomConfig = {
   werewolves: 2,
   seer: true,
@@ -238,6 +264,14 @@ export const GHOST_AUTHOR_NAME = "Một linh hồn";
  * 8 là cỡ phòng nhỏ nhất mà preset đo ra quanh 50%.
  */
 export const MIN_PLAYERS_TO_START = 8;
+
+/**
+ * Số Dân Làng của một phòng vừa tạo.
+ *
+ * 2 Sói + Tiên Tri + Bảo Vệ + Phù Thuỷ (bộ bài mặc định) + 3 Dân Làng = 8, đúng
+ * `MIN_PLAYERS_TO_START`: phòng mới mở được ngay mà host không phải chỉnh gì.
+ */
+export const DEFAULT_VILLAGERS = 3;
 
 /**
  * 20, nâng từ 15.

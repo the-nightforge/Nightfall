@@ -35,13 +35,13 @@
     "finished": 12,
     "winRate": {
       "village": {
-        "value": 0.6666666666666666,
-        "numerator": 8,
+        "value": 0.4166666666666667,
+        "numerator": 5,
         "denominator": 12
       },
       "wolves": {
-        "value": 0.3333333333333333,
-        "numerator": 4,
+        "value": 0.5833333333333334,
+        "numerator": 7,
         "denominator": 12
       },
       "serial_killer": {
@@ -55,16 +55,16 @@
         "denominator": 12
       }
     },
-    "averageRounds": 2.9166666666666665,
+    "averageRounds": 3.5833333333333335,
     "villageVoteAccuracy": {
-      "value": 0.5220588235294118,
-      "numerator": 71,
-      "denominator": 136
+      "value": 0.4585987261146497,
+      "numerator": 72,
+      "denominator": 157
     },
     "wolfSelfSabotage": {
-      "value": 0.2,
+      "value": 0.16216216216216217,
       "numerator": 12,
-      "denominator": 60
+      "denominator": 74
     },
     "hunterShotRate": {
       "value": null,
@@ -77,19 +77,19 @@
       "denominator": 0
     },
     "witchHealRate": {
-      "value": 0.10344827586206896,
-      "numerator": 3,
-      "denominator": 29
+      "value": 0.19444444444444445,
+      "numerator": 7,
+      "denominator": 36
     },
     "witchHealSelfRate": {
       "value": 1,
-      "numerator": 3,
-      "denominator": 3
+      "numerator": 7,
+      "denominator": 7
     },
     "witchPoisonRate": {
       "value": 0,
       "numerator": 0,
-      "denominator": 29
+      "denominator": 36
     },
     "witchPoisonAccuracy": {
       "value": null,
@@ -102,8 +102,8 @@
       "denominator": 12
     },
     "seerDiedNightTwoRate": {
-      "value": 0.16666666666666666,
-      "numerator": 2,
+      "value": 0.08333333333333333,
+      "numerator": 1,
       "denominator": 12
     },
     "seerClaimedRoundOneRate": {
@@ -117,8 +117,8 @@
       "denominator": 0
     },
     "seerUnclaimedR1DiedNightTwoRate": {
-      "value": 0.2222222222222222,
-      "numerator": 2,
+      "value": 0.1111111111111111,
+      "numerator": 1,
       "denominator": 9
     },
     "seerDiedNightAfterClaimRate": {
@@ -127,29 +127,29 @@
       "denominator": 0
     },
     "witchHoldTopWolfRate": {
-      "value": 0.3793103448275862,
-      "numerator": 11,
-      "denominator": 29
+      "value": 0.4166666666666667,
+      "numerator": 15,
+      "denominator": 36
     },
-    "witchHoldWolfGapMean": 91.40190613139583,
+    "witchHoldWolfGapMean": 91.47229335924749,
     "witchHoldVetoedByTrustRate": {
       "value": 0,
       "numerator": 0,
-      "denominator": 29
+      "denominator": 36
     },
     "witchPoisonUnusedDiedEarlyRate": {
-      "value": 0.16666666666666666,
-      "numerator": 2,
-      "denominator": 12
-    },
-    "witchPoisonUnusedNoTargetRate": {
       "value": 0.08333333333333333,
       "numerator": 1,
       "denominator": 12
     },
+    "witchPoisonUnusedNoTargetRate": {
+      "value": 0,
+      "numerator": 0,
+      "denominator": 12
+    },
     "witchPoisonUnusedTopWolfBelowBarRate": {
-      "value": 0.75,
-      "numerator": 9,
+      "value": 0.9166666666666666,
+      "numerator": 11,
       "denominator": 12
     },
     "wolfFakeFightRate": {
@@ -168,24 +168,24 @@
       "denominator": 0
     },
     "voteChangeRate": {
-      "value": 0.3188405797101449,
-      "numerator": 88,
-      "denominator": 276
+      "value": 0.2908496732026144,
+      "numerator": 89,
+      "denominator": 306
     },
-    "consensus": 0.5427128427128428,
-    "coalitionCohesion": 0.026906199848024316,
+    "consensus": 0.5250305250305249,
+    "coalitionCohesion": 0.030686474820752166,
     "staleEvidenceRate": {
-      "value": 0,
-      "numerator": 0,
-      "denominator": 105
+      "value": 0.00904977375565611,
+      "numerator": 2,
+      "denominator": 221
     },
     "knowledgeBoundaryViolations": 0,
     "fallbackActions": 0,
-    "declinedTurns": 29,
+    "declinedTurns": 37,
     "speechRepetitionRate": {
-      "value": 0.03669724770642202,
-      "numerator": 4,
-      "denominator": 109
+      "value": 0.1111111111111111,
+      "numerator": 14,
+      "denominator": 126
     },
     "roundLimitRate": {
       "value": 0,
@@ -193,87 +193,87 @@
       "denominator": 12
     },
     "exactRepetitionRate": {
-      "value": 0.03669724770642202,
-      "numerator": 4,
-      "denominator": 109
+      "value": 0.1111111111111111,
+      "numerator": 14,
+      "denominator": 126
     },
     "normalizedRepetitionRate": {
-      "value": 0.03669724770642202,
-      "numerator": 4,
-      "denominator": 109
+      "value": 0.1111111111111111,
+      "numerator": 14,
+      "denominator": 126
     },
     "semanticRepetitionRate": {
-      "value": 0.03669724770642202,
-      "numerator": 4,
-      "denominator": 109
+      "value": 0.023809523809523808,
+      "numerator": 3,
+      "denominator": 126
     },
     "repeatedOpeningRate": {
-      "value": 0.08256880733944955,
-      "numerator": 9,
-      "denominator": 109
+      "value": 0.1984126984126984,
+      "numerator": 25,
+      "denominator": 126
     },
     "distinctOpeningRate": {
-      "value": 0.9174311926605505,
-      "numerator": 100,
-      "denominator": 109
+      "value": 0.8015873015873016,
+      "numerator": 101,
+      "denominator": 126
     },
     "consecutiveSameTargetRate": {
-      "value": 0.05504587155963303,
-      "numerator": 6,
-      "denominator": 109
+      "value": 0.15873015873015872,
+      "numerator": 20,
+      "denominator": 126
     },
     "replyRate": {
       "value": 0,
       "numerator": 0,
-      "denominator": 109
+      "denominator": 126
     },
     "directQuestionResponseRate": {
       "value": 0,
       "numerator": 0,
-      "denominator": 75
+      "denominator": 65
     },
     "messagesPerBotPerDay": 1,
     "maxDialogueChainLength": 0,
     "silenceRate": {
-      "value": 0.5155555555555555,
-      "numerator": 116,
-      "denominator": 225
+      "value": 0.5153846153846153,
+      "numerator": 134,
+      "denominator": 260
     },
     "directQuestionOutcomes": {
       "ANSWERED": {
         "value": 0,
         "numerator": 0,
-        "denominator": 75
+        "denominator": 65
       },
       "NOT_PARSED": {
         "value": 0,
         "numerator": 0,
-        "denominator": 75
+        "denominator": 65
       },
       "BLOCKED_ROOM": {
         "value": 0,
         "numerator": 0,
-        "denominator": 75
+        "denominator": 65
       },
       "NO_TURN": {
         "value": 1,
-        "numerator": 75,
-        "denominator": 75
+        "numerator": 65,
+        "denominator": 65
       },
       "DECLINED_SPOKE_OTHER": {
         "value": 0,
         "numerator": 0,
-        "denominator": 75
+        "denominator": 65
       },
       "DECLINED_SILENT": {
         "value": 0,
         "numerator": 0,
-        "denominator": 75
+        "denominator": 65
       },
       "UNDETERMINED": {
         "value": 0,
         "numerator": 0,
-        "denominator": 75
+        "denominator": 65
       }
     },
     "speechBlockedByRoom": {
@@ -283,8 +283,8 @@
     },
     "fromTemplateRate": {
       "value": 1,
-      "numerator": 109,
-      "denominator": 109
+      "numerator": 126,
+      "denominator": 126
     },
     "claimsPerGame": 0,
     "counterClaimRate": {
@@ -337,27 +337,27 @@
     "village": {
       "team": "village",
       "wins": {
-        "value": 0.6666666666666666,
-        "numerator": 8,
+        "value": 0.4166666666666667,
+        "numerator": 5,
         "denominator": 12
       },
       "voteAccuracy": {
-        "value": 0.5220588235294118,
-        "numerator": 71,
-        "denominator": 136
+        "value": 0.4585987261146497,
+        "numerator": 72,
+        "denominator": 157
       }
     },
     "wolves": {
       "team": "wolves",
       "wins": {
-        "value": 0.3333333333333333,
-        "numerator": 4,
+        "value": 0.5833333333333334,
+        "numerator": 7,
         "denominator": 12
       },
       "voteAccuracy": {
-        "value": 0.23076923076923078,
-        "numerator": 12,
-        "denominator": 52
+        "value": 0.18333333333333332,
+        "numerator": 11,
+        "denominator": 60
       }
     }
   },
@@ -366,8 +366,8 @@
       "role": "GUARD",
       "games": 12,
       "wins": {
-        "value": 0.6666666666666666,
-        "numerator": 8,
+        "value": 0.4166666666666667,
+        "numerator": 5,
         "denominator": 12
       }
     },
@@ -375,8 +375,8 @@
       "role": "SEER",
       "games": 12,
       "wins": {
-        "value": 0.6666666666666666,
-        "numerator": 8,
+        "value": 0.4166666666666667,
+        "numerator": 5,
         "denominator": 12
       }
     },
@@ -384,8 +384,8 @@
       "role": "VILLAGER",
       "games": 12,
       "wins": {
-        "value": 0.6666666666666666,
-        "numerator": 8,
+        "value": 0.4166666666666667,
+        "numerator": 5,
         "denominator": 12
       }
     },
@@ -393,8 +393,8 @@
       "role": "WEREWOLF",
       "games": 12,
       "wins": {
-        "value": 0.3333333333333333,
-        "numerator": 4,
+        "value": 0.5833333333333334,
+        "numerator": 7,
         "denominator": 12
       }
     },
@@ -402,8 +402,8 @@
       "role": "WITCH",
       "games": 12,
       "wins": {
-        "value": 0.6666666666666666,
-        "numerator": 8,
+        "value": 0.4166666666666667,
+        "numerator": 5,
         "denominator": 12
       }
     }
