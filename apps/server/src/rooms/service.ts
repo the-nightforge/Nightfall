@@ -1,6 +1,7 @@
 import {
   MAX_PLAYERS_PER_ROOM,
   SERVER_EVENTS,
+  sameDeck,
   validateRoomConfig,
   type RoomConfig,
 } from "@masoi/shared";
@@ -363,26 +364,44 @@ export const roomService = {
     // bằng. Đứng SAU hai lối lỗi trên nên thông báo lỗi giữ nguyên. Cảnh báo
     // cân bằng vẫn tới được sảnh chờ vì snapshot mang sẵn `balanceWarning`.
     if (sameRoomConfig(room.config, config)) return;
-    // Balance check before basic validation so BALANCE_UNSTABLE is surfaced for ranked mode (only when lobby has enough players)
-    if (room.members.length >= 6) {
-      const balance = generateWarnings(config, room.members.length);
-      if (balance.blocking && (config.mode ?? "ranked") === "ranked") {
-        throw new RoomError("BALANCE_UNSTABLE: " + balance.warnings.join("; "));
+    /*
+     * Hai cổng dưới đây chỉ gác BỘ BÀI, không gác cả cấu hình.
+     *
+     * Một bộ bài đã được nhận vào phòng có thể thành lệch mà không ai đổi nó:
+     * phòng 10 người áp preset 10, người thứ 11 vào, điểm rơi xuống 38 và
+     * thiếu một ghế. `start` vẫn chặn - đúng - nhưng bản cũ còn chấm cân bằng
+     * cho MỌI lượt đổi cấu hình, nên từ lúc đó host gạt Phong thư sau cùng,
+     * đổi giây thảo luận hay bật voice đều bị từ chối bằng BALANCE_UNSTABLE.
+     * Những công tắc ấy không làm bộ bài lệch thêm chút nào, và lỗi lại hiện ở
+     * cột chính chứ không ở lớp phủ thiết lập đang mở: với host, công tắc chỉ
+     * đơn giản là không ăn.
+     *
+     * Chuyển Chaos -> Ranked với bộ bài lệch cũng đi qua: hệ quả của nó là nút
+     * Bắt đầu xám đi kèm thẻ cảnh báo đỏ và nút "Áp dụng đội hình chuẩn" -
+     * đúng chỗ để nói bộ bài lệch, thay vì một công tắc chế độ không gạt được.
+     */
+    if (!sameDeck(room.config, config)) {
+      // Balance check before basic validation so BALANCE_UNSTABLE is surfaced for ranked mode (only when lobby has enough players)
+      if (room.members.length >= 6) {
+        const balance = generateWarnings(config, room.members.length);
+        if (balance.blocking && (config.mode ?? "ranked") === "ranked") {
+          throw new RoomError("BALANCE_UNSTABLE: " + balance.warnings.join("; "));
+        }
       }
-    }
-    // Chỉ chặn cấu hình vô lý; điều kiện đủ người kiểm tra chặt lúc bắt đầu
-    const totalSpecial =
-      config.werewolves +
-      (config.seer ? 1 : 0) +
-      (config.guard ? 1 : 0) +
-      (config.witch ? 1 : 0) +
-      (config.hunter ? 1 : 0) +
-      (config.cursed ? 1 : 0);
-    if (room.members.length >= 6) {
-      const err = validateRoomConfig(config, room.members.length);
-      if (err) throw new RoomError(err);
-    } else if (totalSpecial >= MAX_PLAYERS_PER_ROOM - 1) {
-      throw new RoomError("Cấu hình vai trò không hợp lệ");
+      // Chỉ chặn cấu hình vô lý; điều kiện đủ người kiểm tra chặt lúc bắt đầu
+      const totalSpecial =
+        config.werewolves +
+        (config.seer ? 1 : 0) +
+        (config.guard ? 1 : 0) +
+        (config.witch ? 1 : 0) +
+        (config.hunter ? 1 : 0) +
+        (config.cursed ? 1 : 0);
+      if (room.members.length >= 6) {
+        const err = validateRoomConfig(config, room.members.length);
+        if (err) throw new RoomError(err);
+      } else if (totalSpecial >= MAX_PLAYERS_PER_ROOM - 1) {
+        throw new RoomError("Cấu hình vai trò không hợp lệ");
+      }
     }
     const voiceTurnedOff = room.config.voice === true && config.voice !== true;
     room.config = config;

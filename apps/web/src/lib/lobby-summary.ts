@@ -1,5 +1,5 @@
 import type { Role, RoomConfig } from "@masoi/shared";
-import { MIN_PLAYERS_TO_START } from "@masoi/shared";
+import { MIN_PLAYERS_TO_START, sameDeck } from "@masoi/shared";
 import { PRESET_DECKS } from "./balance";
 
 /**
@@ -99,12 +99,11 @@ export function deckCounts(config: RoomConfig, playerCount: number): DeckCounts 
  */
 export function isPresetDeck(config: RoomConfig, playerCount: number): boolean {
   const preset = PRESET_DECKS[playerCount];
-  if (!preset) return false;
-  if (preset.werewolves !== config.werewolves) return false;
-  // Số Dân Làng giờ là một lựa chọn của host, nên nó thuộc về phần BÀI: hai bộ
-  // giống hệt nhau ở mọi lá đặc biệt mà khác số Dân Làng là hai bộ bài khác cỡ.
-  if (preset.villagers !== config.villagers) return false;
-  return Object.values(CONFIG_KEY).every((key) => !!preset[key] === !!config[key]);
+  // `sameDeck` là ranh giới bộ bài / luật chơi của shared - cùng ranh giới mà
+  // server dùng để quyết định có chấm lại cân bằng hay không. Số Dân Làng nằm
+  // trong đó: hai bộ giống nhau ở mọi lá đặc biệt mà khác số Dân Làng là hai
+  // bộ bài khác cỡ.
+  return !!preset && sameDeck(preset, config);
 }
 
 export type StartBlock =
