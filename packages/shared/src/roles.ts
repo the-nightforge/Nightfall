@@ -2,16 +2,16 @@
 export const ROLES = [
   "WEREWOLF",
   "WOLF_CUB",
+  "SORCERER",
+  "ALPHA_WOLF",
   "TRAITOR",
   "SEER",
   "APPRENTICE_SEER",
   "DETECTIVE",
   "GUARD",
   "GUARDIAN_ANGEL",
-  "PRIEST",
   "WITCH",
   "ELDER",
-  "MEDIUM",
   "DOPPELGANGER",
   "HUNTER",
   "MAYOR",
@@ -87,6 +87,13 @@ export const ROLE_META: Record<Role, RoleMeta> = {
     team: "wolves",
     nightOrder: 2,
   },
+  ALPHA_WOLF: {
+    id: "ALPHA_WOLF",
+    name: "Sói Alpha",
+    description: "Cắn cùng bầy mỗi đêm. Lần bị Tiên Tri soi đầu tiên hiện ra là Dân, từ lần sau hiện nguyên hình.",
+    team: "wolves",
+    nightOrder: 2,
+  },
   TRAITOR: {
     id: "TRAITOR",
     name: "Kẻ Phản Bội",
@@ -122,6 +129,13 @@ export const ROLE_META: Record<Role, RoleMeta> = {
     team: "village",
     nightOrder: 1,
   },
+  SORCERER: {
+    id: "SORCERER",
+    name: "Sói Pháp Sư",
+    description: "Mỗi đêm soi một người còn sống để biết họ có thuộc dòng Tiên Tri (Tiên Tri, Tiên Tri Tập Sự) không.",
+    team: "wolves",
+    nightOrder: 1,
+  },
   DETECTIVE: {
     id: "DETECTIVE",
     name: "Thám Tử",
@@ -147,16 +161,6 @@ export const ROLE_META: Record<Role, RoleMeta> = {
       "Tối đa 2 lần cả ván, chọn 1 người để bảo vệ khỏi đòn giết ban đêm (không lặp 2 đêm liền).",
     team: "village",
     nightOrder: 0.5,
-  },
-  PRIEST: {
-    id: "PRIEST",
-    name: "Linh Mục",
-    // "Không phải Sói", không phải "Dân": ném vào một vai TRUNG LẬP cũng phản
-    // vệ, và câu cũ khiến người chơi tưởng mình đang đánh cược với đúng hai phe.
-    description:
-      "Có 1 bình Nước thánh cả ván: Ném vào Sói thì Sói chết, ném vào người không phải Sói thì Linh mục chết do phản vệ.",
-    team: "village",
-    nightOrder: 2.5,
   },
   DOPPELGANGER: {
     id: "DOPPELGANGER",
@@ -187,17 +191,6 @@ export const ROLE_META: Record<Role, RoleMeta> = {
      * phản ứng - một tấm đệm trước nhát cắn, và một cái bẫy dưới chân phe làng.
      */
     team: "village",
-  },
-  MEDIUM: {
-    id: "MEDIUM",
-    name: "Bà Đồng",
-    description: "Mỗi đêm chọn một người ĐÃ CHẾT để biết vai thật của họ.",
-    /*
-     * Cùng `nightOrder` với Tiên Tri: cả hai chỉ ĐỌC, không đổi gì trong đêm,
-     * nên thứ tự giữa chúng không quan sát được từ bên ngoài.
-     */
-    team: "village",
-    nightOrder: 1,
   },
   WITCH: {
     id: "WITCH",
@@ -326,7 +319,7 @@ export function sameFaction(a: Role, b: Role): boolean {
  * danh sách bầy.
  */
 export function isWolfPack(role: Role): boolean {
-  return role === "WEREWOLF" || role === "WOLF_CUB";
+  return role === "WEREWOLF" || role === "WOLF_CUB" || role === "SORCERER" || role === "ALPHA_WOLF";
 }
 
 /**
