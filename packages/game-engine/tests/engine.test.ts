@@ -984,6 +984,7 @@ describe("Lịch sử diễn biến ban đêm", () => {
         cursedTurned: null,
         guardianAngelTarget: null,
         detectiveChecks: [],
+        sorcererChecks: [],
         wolfSecondaryTarget: null,
         serialKillerTarget: null,
       },
