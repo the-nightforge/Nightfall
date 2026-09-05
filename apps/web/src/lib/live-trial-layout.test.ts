@@ -68,6 +68,19 @@ describe("thứ tự nhường chỗ", () => {
     assert.ok(band.includes("vh"), band);
   });
 
+  it("từ lg khung 3D cao hơn hẳn: đó là chỗ duy nhất có chỗ cho một khuôn mặt", () => {
+    // Ở màn rộng cột giữa tự cuộn và không có nút nào bị đẩy xuống dưới mép,
+    // nên sân khấu được phép lớn. Bản đầu dừng ở trần 224px cho MỌI màn: trên
+    // 1440x900 khung rộng 900px mà cao 224px, khuôn mặt bị cáo còn chừng 27px.
+    const band = classesOf("relative h-[clamp(");
+    const lg = /lg:h-\[clamp\((\d+)px,(\d+)vh,(\d+)px\)\]/.exec(band);
+    assert.ok(lg, `thiếu chiều cao riêng cho lg: "${band}"`);
+    const sm = /sm:h-\[clamp\((\d+)px,(\d+)vh,(\d+)px\)\]/.exec(band);
+    assert.ok(sm, band);
+    assert.ok(Number(lg[3]) > Number(sm[3]), "trần ở lg phải cao hơn trần ở sm");
+    assert.ok(Number(lg[1]) >= 200, "sàn ở lg phải đủ cho một khuôn mặt đọc được");
+  });
+
   it("khối chữ shrink-0: không bao giờ bị cắt một dòng nào", () => {
     const text = classesOf("shrink-0 space-y-2.5");
     assert.ok(text.includes("shrink-0"), text);

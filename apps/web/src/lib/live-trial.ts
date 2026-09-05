@@ -367,6 +367,34 @@ export function stepTrialStage(
  * có riêng một con số bằng chữ. Trộn hai câu đó vào một hình ảnh là cách nhanh
  * nhất để một cán cân nghiêng hết cỡ bị đọc thành một bản án.
  */
+export type TrialPortraitKind = "sheet" | "photo";
+
+export interface TrialPortrait {
+  url: string;
+  kind: TrialPortraitKind;
+}
+
+/**
+ * Khuôn mặt đưa lên bục.
+ *
+ * Ảnh người chơi tự tải lên ĐI TRƯỚC hình gán theo bảng - cùng thứ tự ưu tiên
+ * với ô người chơi, cột Người chơi và cảnh đêm (`player.avatarUrl ?? avatars[id]`).
+ * Bản đầu chỉ tra bảng sheet, nên ai có ảnh riêng thì lên bục lại mang mặt của
+ * một nhân vật lạ - trong khi cột bên cạnh vẫn đang hiện đúng ảnh của họ.
+ *
+ * `kind` đi kèm vì hai loại ảnh KHÔNG cùng hình dạng: sheet là dải 4 frame
+ * ngang, ảnh tự tải là một khung vuông duy nhất. Cảnh 3D cắt UV theo `kind`,
+ * và cắt sai là ra một dải vô nghĩa thay cho một khuôn mặt.
+ */
+export function accusedPortrait(
+  avatarUrl: string | null | undefined,
+  sheet: string | null | undefined,
+): TrialPortrait | null {
+  if (avatarUrl) return { url: avatarUrl, kind: "photo" };
+  if (sheet) return { url: sheet, kind: "sheet" };
+  return null;
+}
+
 export function scaleTilt(guilty: number, innocent: number): number {
   const total = guilty + innocent;
   if (total <= 0) return 0;

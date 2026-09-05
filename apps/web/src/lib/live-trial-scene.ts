@@ -1,4 +1,4 @@
-import type { TrialStageAct, TrialVerdict } from "./live-trial";
+import type { TrialPortraitKind, TrialStageAct, TrialVerdict } from "./live-trial";
 import { TRIAL_HEX } from "./live-trial-palette";
 import { createDisposableRegistry, type DisposableRegistry } from "./village-memory-resources";
 
@@ -82,6 +82,20 @@ export const SCALES_X = 1.85;
 /** Góc nghiêng tối đa của đòn cân (radian). Đủ đọc, chưa tới mức đổ. */
 const MAX_TILT = 0.3;
 
+/**
+ * Cạnh tấm chân dung trên bục, đơn vị cảnh.
+ *
+ * Gần gấp đôi khối đầu trơn (đường kính 0.34), và đó là cố ý: đây là thứ camera
+ * dồn vào ở pha biện hộ, mà khung sân khấu ở cột giữa chỉ cao hơn 200px một
+ * chút. Bản đầu để 0.46 cộng camera đứng cách 5 đơn vị, đo trên 1440x900 ra
+ * một khuôn mặt 27px - nhỏ hơn cả ô người chơi ở cột trái, tức là sân khấu nói
+ * ÍT hơn cái danh sách bên cạnh về đúng người mà nó đang chiếu.
+ */
+const PORTRAIT_SIZE = 0.62;
+
+/** Sắc phủ lên ảnh tự tải khi bị treo. Xám lạnh, không phải đen: mặt tái đi chứ không biến mất. */
+const PHOTO_LYNCHED_TINT = 0x8892a6;
+
 export interface TrialSceneModel {
   /**
    * Số bóng người trong vòng khán giả.
@@ -91,16 +105,23 @@ export interface TrialSceneModel {
    */
   audience: number;
   /**
-   * Sprite sheet chân dung của bị cáo, hoặc null/thiếu thì để khối đầu trơn.
+   * Chân dung của bị cáo, hoặc null/thiếu thì để khối đầu trơn.
    *
-   * Đường dẫn tới file 4 frame ngang, đúng bộ mà lớp chân dung 2D đang dùng -
-   * xem `character-art.ts`. Cảnh chỉ lấy frame `idle` và frame `dead`.
+   * Hai dạng, phân biệt bằng `portraitKind` - và KHÔNG được đoán từ URL:
    *
-   * Null ở ba trường hợp: người chơi tự tải ảnh lên (ảnh đó không phải sheet 4
-   * frame nên cắt UV 25% sẽ ra một dải vô nghĩa), avatar chưa có sheet, và
-   * Save-Data. Cả ba đều rơi về khối đầu, y như trước khi có tính năng này.
+   *   - "sheet": file 4 frame ngang, đúng bộ mà lớp chân dung 2D đang dùng -
+   *     xem `character-art.ts`. Cảnh chỉ lấy frame `idle` và frame `dead`.
+   *   - "photo": ảnh người chơi tự tải lên - MỘT khung vuông 256x256, không có
+   *     frame nào để hoán. Cắt UV 25% vào ảnh này là ra một dải vô nghĩa, nên
+   *     cảnh vẽ nguyên ảnh, cắt tròn như ô người chơi, và làm tái bằng màu
+   *     thay vì đổi frame khi bị treo.
+   *
+   * Null ở hai trường hợp: avatar chưa có sheet, và Save-Data. Cả hai đều rơi
+   * về khối đầu, y như trước khi có tính năng này.
    */
   portrait?: string | null;
+  /** Mặc định "sheet". Xem `portrait`. */
+  portraitKind?: TrialPortraitKind;
 }
 
 export interface TrialSceneState {
@@ -219,11 +240,25 @@ interface CameraPose {
  * mà nhìn, và thứ duy nhất đang diễn ra là một người đang nói. FINAL_VOTE lùi
  * lại vừa đủ để cả bị cáo lẫn cán cân cùng trong khung - đó mới là lúc hai thứ
  * đó nói chuyện với nhau.
+ *
+ * Khoảng cách tính theo chiều CAO khung, không phải chiều rộng. Camera giữ góc
+ * mở dọc 42°, còn khung sân khấu thì rất dẹt (cột giữa 900px chỉ cao ~250px),
+ * nên chiều ngang luôn thừa chỗ và thứ quyết định khuôn mặt to hay nhỏ là
+ * camera đứng cách bục bao xa. Ở 3.5 đơn vị khung dọc thấy được 2.7 đơn vị,
+ * bị cáo (từ bục tới đỉnh đầu ~1.4) chiếm nửa khung; ở 5 đơn vị của bản đầu
+ * chỉ còn một phần ba, và khuôn mặt là một cái chấm. Cả dải bục lẫn cán cân
+ * rộng 5.8 đơn vị vẫn lọt khung FINAL_VOTE ở 4.5 đơn vị kể cả trên điện thoại
+ * dựng dọc (tỉ lệ khung 2.6 - thấy 9 đơn vị ngang).
+ *
+ * Mọi khung đều đứng TRONG vòng khán giả (bán kính 4.9-5.6). Bản đầu đặt
+ * FINAL_VOTE ở 6.5 - ngoài vòng - còn DEFENSE ở 4.9 thì ngồi đúng lên vòng:
+ * một bóng khán giả có thể đứng sát ống kính. Tiến vào trong thì cả vòng nằm
+ * sau lưng camera, và không bóng nào chắn được bục.
  */
 const POSES: Record<TrialStageAct, CameraPose> = {
-  DEFENSE: { px: -0.55, py: 1.95, pz: 4.9, tx: ACCUSED_X, ty: 1.05, tz: 0 },
-  FINAL_VOTE: { px: 0.3, py: 2.35, pz: 6.5, tx: 0.35, ty: 1.0, tz: 0 },
-  VERDICT: { px: 0.15, py: 2.15, pz: 6.0, tx: 0.2, ty: 1.0, tz: 0 },
+  DEFENSE: { px: -0.5, py: 1.75, pz: 3.4, tx: ACCUSED_X, ty: 1.15, tz: 0 },
+  FINAL_VOTE: { px: 0.3, py: 2.05, pz: 4.4, tx: 0.35, ty: 1.0, tz: 0 },
+  VERDICT: { px: 0.15, py: 1.95, pz: 4.2, tx: 0.2, ty: 1.0, tz: 0 },
 };
 
 /** Khung mở màn: đứng xa hơn hẳn, để cú tiến vào bục có chỗ mà diễn. */
@@ -380,6 +415,7 @@ function assemble(
   root.add(accused);
 
   const portraitUrl = model.portrait ?? null;
+  const portraitKind: TrialPortraitKind = model.portraitKind ?? "sheet";
 
   /*
    * Có mặt người thật ở trên thì thân phải là QUẦN ÁO.
@@ -424,6 +460,7 @@ function assemble(
    */
   let portraitMesh: Mesh3D | null = null;
   let portraitTex: Texture3D | null = null;
+  let portraitMat: Material3D | null = null;
 
   if (portraitUrl && load) {
     const tex = load(portraitUrl, () => {
@@ -432,23 +469,39 @@ function assemble(
       head.visible = false;
     });
     tex.colorSpace = THREE.SRGBColorSpace;
-    // Bốn frame nằm ngang; lấy frame 0 (`idle`). Xem `PORTRAIT_FRAMES`.
-    tex.repeat.set(0.25, 1);
+    /*
+     * Sheet: bốn frame nằm ngang, lấy frame 0 (`idle`) - xem `PORTRAIT_FRAMES`.
+     * Ảnh tự tải: MỘT khung, vẽ nguyên. Cắt 25% vào một bức ảnh chân dung là
+     * lấy đúng cái tai trái của người ta.
+     */
+    tex.repeat.set(portraitKind === "sheet" ? 0.25 : 1, 1);
     tex.offset.set(0, 0);
     track(tex);
     portraitTex = tex;
 
-    const portraitGeo = track(new THREE.PlaneGeometry(0.46, 0.46));
-    const portraitMat = track(
+    /*
+     * Sheet có nền trong suốt sẵn nên vẽ lên tấm vuông là đủ. Ảnh tự tải là một
+     * bức ảnh vuông đặc kín tới mép - đặt nguyên lên bục ra một cái bảng, không
+     * ra một khuôn mặt. Cắt tròn cho khớp với chính bức ảnh đó ở ô người chơi.
+     * `CircleGeometry` trải UV theo hình vuông ngoại tiếp, nên đường tròn lấy
+     * đúng phần giữa ảnh - vốn đã được server cắt vuông và canh giữa.
+     */
+    const portraitGeo = track(
+      portraitKind === "photo"
+        ? new THREE.CircleGeometry(PORTRAIT_SIZE / 2, 40)
+        : new THREE.PlaneGeometry(PORTRAIT_SIZE, PORTRAIT_SIZE),
+    );
+    portraitMat = track(
       new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }),
     );
     portraitMesh = new THREE.Mesh(portraitGeo, portraitMat);
     /*
-     * Cao 1.06 chứ không phải 1.12 của khối đầu: bức chân dung là ảnh BÁN THÂN,
-     * nên mép dưới của nó phải chìm vào bóng áo choàng thay vì cắt ngang qua.
-     * Nhích ra trước một chút để không z-fight với cái nón áo choàng.
+     * Tâm ở 1.14 để mép dưới (1.14 - 0.31 = 0.83) chìm vào bóng áo choàng thay
+     * vì cắt ngang qua: bức chân dung là ảnh BÁN THÂN. Cùng mép dưới với bản
+     * 0.46 cũ - chỉ có phần trên cao lên. Nhích ra trước một chút để không
+     * z-fight với cái nón áo choàng.
      */
-    portraitMesh.position.set(0, 1.06, 0.05);
+    portraitMesh.position.set(0, 1.14, 0.05);
     portraitMesh.visible = false;
     portraitMesh.name = "accused-portrait";
     accused.add(portraitMesh);
@@ -684,8 +737,16 @@ function assemble(
        * ván đang dở: một người vào lại phòng sau khi bản án đã tuyên vẫn phải
        * thấy đúng khuôn mặt ấy.
        */
-      if (portraitTex) {
+      if (portraitTex && portraitKind === "sheet") {
         portraitTex.offset.x = state.verdict === "LYNCHED" ? 0.75 : 0;
+      }
+      if (portraitMat && portraitKind === "photo") {
+        // Ảnh tự tải không có frame chết. Tái đi bằng cách phủ xám và hạ độ
+        // đục - cùng một ý "mặt nhợt" bằng phương tiện khác, và đảo lại được
+        // y như frame: một người vào lại phòng sau án Tha vẫn thấy mặt tươi.
+        const lynched = state.verdict === "LYNCHED";
+        portraitMat.color.setHex(lynched ? PHOTO_LYNCHED_TINT : 0xffffff);
+        portraitMat.opacity = lynched ? 0.6 : 1;
       }
 
       if (state.act !== currentAct) {

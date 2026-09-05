@@ -7,6 +7,7 @@ import { sheetFor } from "@/lib/character-art";
 import { playbackMode, readNetworkHints, readPlaybackInputs } from "@/lib/cinematic-settings";
 import { hasWebgl2 } from "@/lib/cinematic-webgl";
 import {
+  accusedPortrait,
   actLabel,
   scaleTilt,
   tallyAnnouncement,
@@ -86,6 +87,14 @@ interface Props {
 export function TrialStage({ view, beats, beatsId, onBeatsConsumed, snapshot }: Props) {
   const roster = snapshot.players.map((player) => player.id).join(",");
   const avatars = useMemo(() => assignAvatars(roster ? roster.split(",") : []), [roster]);
+  /*
+   * Ảnh người chơi tự tải lên đi trước hình gán theo bảng - cùng luật với ô
+   * người chơi và cột Người chơi. Bản đầu chỉ tra bảng, nên người có ảnh riêng
+   * lên bục mang mặt của một nhân vật lạ, ngay cạnh cột đang hiện đúng ảnh họ.
+   */
+  const accusedAvatarUrl =
+    snapshot.players.find((player) => player.id === view.accusedId)?.avatarUrl ?? null;
+  const accusedAvatar = accusedAvatarUrl ?? avatars[view.accusedId];
 
   /*
    * Ba cờ dưới đây đọc SAU khi hydrate, không phải trong lúc render.
@@ -161,28 +170,34 @@ export function TrialStage({ view, beats, beatsId, onBeatsConsumed, snapshot }: 
    * Bị cáo đổi nghĩa là một phiên toà KHÁC, và một phiên toà khác vốn đã dựng
    * lại cảnh từ trước - nên thêm nó vào đây không mở thêm đường dựng lại nào.
    *
-   * Chân dung bị cáo: cùng bộ sheet mà lớp chân dung 2D đang dùng, nên không
-   * tốn thêm một byte nào - tới lúc phiên toà mở, ảnh này đã nằm trong cache
-   * của trình duyệt vì ô người chơi vừa vẽ nó suốt cả pha ngày.
-   *
-   * Cùng bộ sheet mà lớp chân dung 2D đang dùng, nên không tốn thêm một byte
-   * nào: tới lúc phiên toà mở, ảnh này đã nằm trong cache của trình duyệt vì
-   * ô người chơi vừa vẽ nó suốt cả pha ngày.
+   * Chân dung bị cáo: chính bức ảnh mà lớp chân dung 2D đang dùng - ảnh tự tải
+   * hay sheet của nhân vật - nên không tốn thêm một byte nào: tới lúc phiên toà
+   * mở, ảnh này đã nằm trong cache của trình duyệt vì ô người chơi vừa vẽ nó
+   * suốt cả pha ngày. (Với ảnh tự tải, cache chỉ dùng lại được khi bucket trả
+   * CORS - xem README; không có CORS thì WebGL từ chối ảnh và bục giữ khối đầu
+   * trơn, trong khi ảnh 2D bên dưới vẫn hiện.)
    *
    * KHÔNG cần kiểm Save-Data ở đây: `hasWebgl2() && !readNetworkHints().saveData`
    * đã tắt hẳn sân khấu 3D từ trước, nên không có sân khấu thì cũng không có
    * chân dung để tải.
    *
    * `avatars` đã memo theo `roster`, còn `accusedId` cố định suốt một phiên -
-   * nên `model` vẫn giữ được ràng buộc ỔN ĐỊNH của nó.
+   * nên `model` vẫn giữ được ràng buộc ỔN ĐỊNH của nó. `accusedAvatarUrl` là
+   * một chuỗi và chỉ đổi khi bị cáo đổi ảnh GIỮA phiên toà của chính mình -
+   * hiếm tới mức một lần dựng lại cảnh ở đó là cái giá chấp nhận được, còn hơn
+   * để bục hiện một bức ảnh người ta vừa xoá.
    */
-  const model = useMemo(
-    () => ({
+  const model = useMemo(() => {
+    const portrait = accusedPortrait(
+      accusedAvatarUrl,
+      sheetFor(avatars[view.accusedId] ?? "")?.src ?? null,
+    );
+    return {
       audience: view.audience,
-      portrait: sheetFor(avatars[view.accusedId] ?? "")?.src ?? null,
-    }),
-    [view.audience, avatars, view.accusedId],
-  );
+      portrait: portrait?.url ?? null,
+      portraitKind: portrait?.kind,
+    };
+  }, [view.audience, avatars, view.accusedId, accusedAvatarUrl]);
   const sceneState = useMemo(
     () => ({
       act: view.act,
@@ -263,8 +278,15 @@ export function TrialStage({ view, beats, beatsId, onBeatsConsumed, snapshot }: 
          * cái nút Treo/Tha xuống sâu hơn dưới mép màn. Thứ tự ưu tiên ở màn hẹp
          * là bấm được trước, xem sau - nên sân khấu nhận phần còn lại chứ không
          * lấy phần của mình trước.
+         *
+         * Từ `lg` khung CAO HƠN HẲN, và lý do ngược lại y hệt: ở đó cột giữa
+         * tự cuộn, hai cái nút không nằm dưới sân khấu mà ở cột riêng, nên
+         * không có gì bị đẩy đi cả. Bản đầu giữ trần 224px cho mọi màn, và trên
+         * 1440x900 một khung rộng 900px cao 224px cho ra khuôn mặt bị cáo chừng
+         * 27px - nhỏ hơn cả ô người chơi ở cột trái. Sân khấu đang chiếu đúng
+         * một người mà lại nói về người đó ít hơn cái danh sách bên cạnh.
          */
-        <div className="relative h-[clamp(116px,16vh,168px)] min-h-0 w-full overflow-hidden rounded-t-xl bg-night-950 sm:h-[clamp(132px,22vh,224px)]">
+        <div className="relative h-[clamp(116px,16vh,168px)] min-h-0 w-full overflow-hidden rounded-t-xl bg-night-950 sm:h-[clamp(132px,22vh,224px)] lg:h-[clamp(220px,34vh,360px)]">
           {visual === "webgl" ? (
             <TrialStageCanvas
               model={model}
@@ -320,12 +342,13 @@ export function TrialStage({ view, beats, beatsId, onBeatsConsumed, snapshot }: 
               />
             )}
             <CharacterPortrait
-              avatar={avatars[view.accusedId]}
+              avatar={accusedAvatar}
+              isCustom={accusedAvatarUrl !== null}
               tint={tintFor(view.accusedId)}
               alive
               speaking={speaking}
               breathOffset={breathOffsetFor(view.accusedId)}
-              className="h-10 w-10 ring-2 ring-amber-500/50 sm:h-12 sm:w-12"
+              className="h-12 w-12 ring-2 ring-amber-500/50 sm:h-14 sm:w-14"
             />
           </span>
           {/* min-w-0 + break-words: một cái tên 20 ký tự không dấu cách phải
