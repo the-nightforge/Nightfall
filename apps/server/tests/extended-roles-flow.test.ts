@@ -71,7 +71,6 @@ function setupRoomWithRoles(
     detective: false,
     guard: false,
     guardianAngel: false,
-    priest: false,
     mayor: false,
     cursed: false,
     discussionSeconds: 60,
@@ -160,39 +159,84 @@ describe("Extended Roles and Events Server Flow Integration", () => {
     expect(engine.state.guardianAngelCharges["ga"]).toBe(1);
   });
 
-  it("handles Priest holy water success vs failure", () => {
+  it("handles Sorcerer seer-line check and Sorcerer snapshot", () => {
     const room = setupRoomWithRoles([
-      { id: "priest", name: "Priest", role: "PRIEST" },
+      { id: "sorc", name: "Sorcerer", role: "SORCERER" },
+      { id: "seer", name: "Seer", role: "SEER" },
       { id: "w1", name: "Wolf", role: "WEREWOLF" },
       { id: "v1", name: "Villager", role: "VILLAGER" },
     ]);
     const engine = room.engine!;
     engine.setPhase("NIGHT", 30000);
 
-    // Priest sprays Wolf
-    engine.submitNightAction("priest", "HOLY_WATER", "w1");
-    // Bình cũng vậy: đánh dấu đã dùng lúc khép đêm, không phải lúc bấm.
-    expect(buildSnapshot(room, "priest").night?.priestHolyWaterUsed).toBe(false);
+    // Sorcerer checks the Seer: seer-line
+    engine.submitNightAction("sorc", "SORCERER_CHECK", "seer");
+    expect(engine.state.night.sorcererResults["sorc"]).toEqual({
+      targetId: "seer",
+      isSeerLine: true,
+    });
 
-    const deaths = engine.resolveNight();
-    expect(deaths.map((d) => d.playerId)).toContain("w1");
-    expect(engine.player("priest")?.alive).toBe(true);
-    expect(engine.state.priestHolyWaterUsed["priest"]).toBe(true);
+    const snap = buildSnapshot(room, "sorc");
+    expect(snap.night?.sorcererResult).toMatchObject({
+      target: { id: "seer", name: "Seer" },
+      isSeerLine: true,
+    });
+    // The pack sees nothing of the check.
+    expect(buildSnapshot(room, "w1").night?.sorcererResult ?? null).toBeNull();
+
+    // Next night the same Sorcerer checks a Villager: not seer-line.
+    engine.setPhase("DAY_DISCUSSION", 30000);
+    engine.setPhase("NIGHT", 30000);
+    engine.submitNightAction("sorc", "SORCERER_CHECK", "v1");
+    expect(engine.state.night.sorcererResults["sorc"]).toEqual({
+      targetId: "v1",
+      isSeerLine: false,
+    });
+  });
+
+  it("handles Alpha Wolf seer shield on first SEE, exposed on second", () => {
+    const room = setupRoomWithRoles([
+      { id: "seer", name: "Seer", role: "SEER" },
+      { id: "alpha", name: "Alpha", role: "ALPHA_WOLF" },
+      { id: "w1", name: "Wolf", role: "WEREWOLF" },
+      { id: "v1", name: "Villager", role: "VILLAGER" },
+    ]);
+    const engine = room.engine!;
+    engine.setPhase("NIGHT", 30000);
+
+    // First SEE on Alpha reads as village and burns the shield.
+    engine.submitNightAction("seer", "SEE", "alpha");
+    expect(engine.state.night.seerResults["seer"]).toMatchObject({
+      targetId: "alpha",
+      isWolf: false,
+    });
+    expect(engine.state.alphaShieldUsed["alpha"]).toBe(true);
+
+    // Second night the same SEE exposes the wolf.
+    engine.setPhase("DAY_DISCUSSION", 30000);
+    engine.setPhase("NIGHT", 30000);
+    engine.submitNightAction("seer", "SEE", "alpha");
+    expect(engine.state.night.seerResults["seer"]).toMatchObject({
+      targetId: "alpha",
+      isWolf: true,
+    });
   });
 
   it("handles Wolf Cub rage triggering double bite next night", () => {
     const room = setupRoomWithRoles([
       { id: "w1", name: "Wolf", role: "WEREWOLF" },
       { id: "wc", name: "Cub", role: "WOLF_CUB" },
-      { id: "priest", name: "Priest", role: "PRIEST" },
+      { id: "witch", name: "Witch", role: "WITCH" },
       { id: "v1", name: "Villager 1", role: "VILLAGER" },
       { id: "v2", name: "Villager 2", role: "VILLAGER" },
     ]);
     const engine = room.engine!;
     engine.setPhase("NIGHT", 30000);
 
-    // Priest kills cub
-    engine.submitNightAction("priest", "HOLY_WATER", "wc");
+    // Witch poisons the cub (after the pack locks, when the Witch's turn opens)
+    engine.submitNightAction("w1", "KILL", "extra_1");
+    engine.lockWolves();
+    engine.submitNightAction("witch", "POISON", "wc");
     engine.resolveNight();
 
     expect(engine.state.wolfCubRageNextNight).toBe(true);

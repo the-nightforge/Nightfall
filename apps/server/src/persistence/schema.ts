@@ -127,8 +127,7 @@ const nightStateSchema = z.object({
       unknown: z.boolean().optional(),
     }),
   ),
-  priestTarget: z.string().nullable(),
-  priestSkipped: z.boolean(),
+  sorcererResults: z.record(z.string(), z.object({ targetId: z.string(), isSeerLine: z.boolean() })),
   detectiveTargets: z.object({ target1: z.string(), target2: z.string() }).nullable(),
   detectiveResults: z.record(
     z.string(),
@@ -139,12 +138,6 @@ const nightStateSchema = z.object({
       unknown: z.boolean().optional(),
     }),
   ),
-  priestResults: z.record(z.string(), z.object({ targetId: z.string(), isWolf: z.boolean() })),
-  // OPTIONAL vì cùng lý do với mọi trường thêm sau: snapshot ghi trước bản này
-  // không có nó, và bắt buộc ở đây là làm một ván đang chạy không khôi phục được.
-  mediumResults: z
-    .record(z.string(), z.object({ targetId: z.string(), role: roleSchema }))
-    .optional(),
   // OPTIONAL vì đây là hai trường thêm sau. Bắt buộc chúng là mọi snapshot đã
   // ghi trước bản này trượt schema rồi rơi vào `quarantine` - tức giết sạch các
   // ván đang chạy ngay lúc deploy. Constructor của engine chuẩn hoá về
@@ -171,7 +164,7 @@ export const gameStateSchema = z.object({
   guardSecondPrevious: z.string().nullable().optional(),
   guardianAngelPrevious: z.string().nullable(),
   guardianAngelCharges: z.record(z.string(), z.number()),
-  priestHolyWaterUsed: z.record(z.string(), z.boolean()),
+  alphaShieldUsed: z.record(z.string(), z.boolean()),
   apprenticeAwakened: z.boolean(),
   wolfCubRageNextNight: z.boolean(),
   healUsed: z.boolean(),
@@ -304,13 +297,8 @@ export const botBrainStateSchema = z.object({
         "SKIP",
         "DETECTIVE_CHECK",
         "GUARDIAN_PROTECT",
-        // "HOLY_WATER" bị bỏ sót từ đầu: `NightActionKind` gọi lượt của Linh
-        // Mục như thế, còn danh sách này giữ một cái tên chưa từng tồn tại
-        // ("PRIEST_BLESS"). Hậu quả là một phòng có Linh Mục BOT đã ném Nước
-        // thánh sẽ trượt schema lúc khôi phục. Giữ tên cũ để snapshot đã ghi
-        // vẫn đọc được, và thêm tên thật cạnh nó.
-        "PRIEST_BLESS",
-        "HOLY_WATER",
+        // Sói Pháp Sư soi dòng Tiên Tri; thay cặp Linh Mục/Bà Đồng đã xóa cứng.
+        "SORCERER_CHECK",
         "SERIAL_KILL",
       ]),
       targetId: z.string().nullable(),

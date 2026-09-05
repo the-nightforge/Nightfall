@@ -61,8 +61,7 @@ export interface DetectiveResultView {
 }
 
 export interface SorcererResultView {
-  targetId: string;
-  targetName: string;
+  target: { id: string; name: string };
   isSeerLine: boolean;
 }
 
@@ -2580,8 +2579,10 @@ export class GameEngine {
     const sorcererResult: SorcererResultView | null =
       sorcererEntry && viewer
         ? {
-            targetId: sorcererEntry.targetId,
-            targetName: this.player(sorcererEntry.targetId)?.name ?? "?",
+            target: {
+              id: sorcererEntry.targetId,
+              name: this.player(sorcererEntry.targetId)?.name ?? "?",
+            },
             isSeerLine: sorcererEntry.isSeerLine,
           }
         : null;
