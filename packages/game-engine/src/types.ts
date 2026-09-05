@@ -118,11 +118,18 @@ export interface NightState {
   /**
    * Sát Nhân đã chủ động bỏ qua đêm nay.
    *
-    * Cần một cờ riêng vì `serialKillerTarget === null` mang HAI nghĩa: chưa
-    * quyết, và quyết là không giết ai - đúng cặp trạng thái mà `witchSkipped`
-    * tồn tại để phân biệt.
+   * Cần một cờ riêng vì `serialKillerTarget === null` mang HAI nghĩa: chưa
+   * quyết, và quyết là không giết ai - đúng cặp trạng thái mà `witchSkipped`
+   * tồn tại để phân biệt.
    */
   serialKillerSkipped?: boolean;
+  /**
+   * Kết quả soi dòng Tiên Tri của Sói Pháp Sư: sorcererId -> { targetId, isSeerLine }.
+   *
+   * `isSeerLine` true khi mục tiêu là SEER hoặc APPRENTICE_SEER. Chốt ngay lần
+   * nộp đầu mỗi đêm như SEE (kết quả về ngay nên "đổi ý" = soi lại).
+   */
+  sorcererResults: Record<string, { targetId: string; isSeerLine: boolean }>;
 }
 
 export interface DeathInfo {
@@ -242,6 +249,13 @@ export interface GameState {
   guardianAngelCharges: Record<string, number>;
   apprenticeAwakened: boolean;
   wolfCubRageNextNight: boolean;
+  /**
+   * Khiên soi của Sói Alpha đã dùng chưa: alphaId -> true sau lần SEE đầu tiên.
+   *
+   * Lần SEE đầu lên Alpha trả về làng; từ lần hai hiện nguyên hình. Chỉ hook
+   * case SEE trực tiếp, không chặn Detective sameFaction.
+   */
+  alphaShieldUsed: Record<string, boolean>;
   healUsed: boolean;
   poisonUsed: boolean;
   lastNightDeaths: PublicDeath[];

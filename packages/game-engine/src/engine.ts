@@ -60,6 +60,12 @@ export interface DetectiveResultView {
   sameTeam: boolean;
 }
 
+export interface SorcererResultView {
+  targetId: string;
+  targetName: string;
+  isSeerLine: boolean;
+}
+
 export interface NightInfoView {
   canAct: boolean;
   acted: boolean;
@@ -76,6 +82,7 @@ export interface NightInfoView {
   seerResult: SeerResultView | null;
   apprenticeAwakened?: boolean;
   detectiveResult?: DetectiveResultView | null;
+  sorcererResult?: SorcererResultView | null;
   /** Chỉ Sát Nhân thấy; xem `NightActionView.serialKillerTarget`. */
   serialKillerTarget?: string | null;
   serialKillerSkipped?: boolean;
@@ -214,6 +221,7 @@ function emptyNight(wolfCubRageTonight = false): GameState["night"] {
     seerResults: {},
     detectiveTargets: null,
     detectiveResults: {},
+    sorcererResults: {},
     serialKillerTarget: null,
     serialKillerSkipped: false,
   };
@@ -246,6 +254,8 @@ export class GameEngine {
     this.state.night.guardianAngelTarget ??= null;
     this.state.night.detectiveTargets ??= null;
     this.state.night.detectiveResults ??= {};
+    this.state.night.sorcererResults ??= {};
+    this.state.alphaShieldUsed ??= {};
     // State lưu trước khi có Sát Nhân không có ba trường dưới. Mặc định an toàn
     // là "role tắt, đêm nay chưa ra tay": không ván cũ nào bỗng dưng mọc thêm
     // một nhát dao.
@@ -372,6 +382,7 @@ export class GameEngine {
       guardianAngelCharges,
       apprenticeAwakened: false,
       wolfCubRageNextNight: false,
+      alphaShieldUsed: {},
       healUsed: false,
       poisonUsed: false,
       lastNightDeaths: [],
@@ -647,7 +658,8 @@ export class GameEngine {
       | "SKIP"
       | "DETECTIVE_CHECK"
       | "GUARDIAN_PROTECT"
-      | "SERIAL_KILL",
+      | "SERIAL_KILL"
+      | "SORCERER_CHECK",
     targetId: string | null,
     secondaryTargetId?: string | null,
     rng: () => number = Math.random,
@@ -798,8 +810,16 @@ export class GameEngine {
          */
         const seenTeam = (role: Role): Team =>
           role === "TRAITOR" ? "village" : roleTeam(role);
-        const team = flipTeam(seenTeam(target.role));
+        let team = flipTeam(seenTeam(target.role));
         if (secTeam !== undefined) secTeam = flipTeam(secTeam);
+        // Khiên Alpha ép về làng SAU khi Bóng Sói đã lật team thật.
+        // Lật trước rồi khiên đè lên nên lần SEE đầu lên Alpha luôn ra làng.
+        // Chỉ lừa lượt soi chính; mục tiêu phụ của Màn Sương Tan giữ nguyên.
+        const targetPlayer = this.player(targetId)!;
+        if (targetPlayer.role === "ALPHA_WOLF" && !st.alphaShieldUsed[targetId]) {
+          st.alphaShieldUsed[targetId] = true;
+          team = "village";
+        }
 
         const seerResult: GameState["night"]["seerResults"][string] = {
           targetId,
@@ -928,6 +948,17 @@ export class GameEngine {
           target2Id: secondaryTargetId,
           sameTeam,
         };
+        break;
+      }
+      case "SORCERER_CHECK": {
+        if (p.role !== "SORCERER") throw new GameError("Chỉ Sói Pháp Sư mới được kiểm tra dòng Tiên Tri");
+        if (st.night.sorcererResults[playerId]) {
+          throw new GameError("Sói Pháp Sư đã kiểm tra trong đêm nay");
+        }
+        if (!targetId || !target) throw new GameError("Hãy chọn một người để kiểm tra");
+        if (targetId === playerId) throw new GameError("Sói Pháp Sư không thể tự kiểm tra mình");
+        const isSeerLine = target.role === "SEER" || target.role === "APPRENTICE_SEER";
+        st.night.sorcererResults[playerId] = { targetId, isSeerLine };
         break;
       }
       case "HEAL": {
@@ -2342,6 +2373,7 @@ export class GameEngine {
     viewer: EnginePlayer,
     seerResult: SeerResultView | null,
     detectiveResult: DetectiveResultView | null,
+    sorcererResult?: SorcererResultView | null,
   ): NightInfoView {
     const st = this.state;
     const locked = st.night.wolvesLocked;
@@ -2350,7 +2382,11 @@ export class GameEngine {
     const tally = isWolf ? this.wolfVoteTally() : null;
 
     let acted = false;
-    if (isWolf) {
+    if (viewer.role === "SORCERER") {
+      acted =
+        st.night.wolfVotes[viewer.id] !== undefined &&
+        st.night.sorcererResults[viewer.id] !== undefined;
+    } else if (isWolf) {
       acted = st.night.wolfVotes[viewer.id] !== undefined;
     } else if (viewer.role === "SEER" || (viewer.role === "APPRENTICE_SEER" && st.apprenticeAwakened)) {
       acted = st.night.seerResults[viewer.id] !== undefined;
@@ -2367,6 +2403,11 @@ export class GameEngine {
     }
 
     let canAct = isWitch ? locked : isWolf ? !locked : true;
+    if (viewer.role === "SORCERER") {
+      const checkDone = st.night.sorcererResults[viewer.id] !== undefined;
+      const voteDone = st.night.wolfVotes[viewer.id] !== undefined;
+      canAct = !checkDone || (!voteDone && !locked);
+    }
     if ((viewer.role === "SEER" || viewer.role === "APPRENTICE_SEER") && st.activeEvent?.id === "MOONLESS_NIGHT") {
       canAct = false;
     }
@@ -2389,6 +2430,10 @@ export class GameEngine {
       seerResult,
       apprenticeAwakened: viewer.role === "APPRENTICE_SEER" ? st.apprenticeAwakened : undefined,
       detectiveResult,
+      sorcererResult:
+        viewer.role === "SORCERER"
+          ? (sorcererResult ?? null)
+          : undefined,
       // CHỈ cho chính Sát Nhân. Mọi vai khác nhận `undefined`, kể cả người đang
       // bị nhắm - biết đêm nay ai bị chọn đã là một rò rỉ, dù không kèm vai.
       serialKillerTarget:
@@ -2524,6 +2569,16 @@ export class GameEngine {
           }
         : null;
 
+    const sorcererEntry = viewer ? st.night.sorcererResults[viewerId] : undefined;
+    const sorcererResult: SorcererResultView | null =
+      sorcererEntry && viewer
+        ? {
+            targetId: sorcererEntry.targetId,
+            targetName: this.player(sorcererEntry.targetId)?.name ?? "?",
+            isSeerLine: sorcererEntry.isSeerLine,
+          }
+        : null;
+
     return {
       phase: st.phase,
       round: st.round,
@@ -2542,7 +2597,7 @@ export class GameEngine {
       players: playersView,
       nightInfo:
         st.phase === "NIGHT" && viewer && viewer.alive && this.hasNightAction(viewer.role)
-          ? this.nightInfoFor(viewer, seerResult, detectiveResult)
+          ? this.nightInfoFor(viewer, seerResult, detectiveResult, sorcererResult)
           : null,
       hunterShotInfo:
         st.phase === "HUNTER_SHOT" && st.hunterReaction
@@ -2801,6 +2856,14 @@ export class GameEngine {
       legalTargets.KILL = alive
         .filter((player) => roleTeam(player.role) !== "wolves")
         .map((player) => player.id);
+      // Sói Pháp Sư cắn cùng bầy NHƯNG soi riêng dòng Tiên Tri (gương Detective:
+      // người sống trừ mình). `as` vì `NightActionKind` thuộc Task 6 sở hữu.
+      if (viewer.role === "SORCERER") {
+        legalActions.push("SORCERER_CHECK" as NightActionKind);
+        (legalTargets as Record<string, string[]>)["SORCERER_CHECK"] = alive
+          .filter((player) => player.id !== viewer.id)
+          .map((player) => player.id);
+      }
     } else if (canSee && !seerBlocked) {
       legalActions.push("SEE");
       legalTargets.SEE = alive
@@ -2962,6 +3025,14 @@ export class GameEngine {
   private nightActionPending(viewer: EnginePlayer): boolean {
     const st = this.state;
     if (roleTeam(viewer.role) === "village" && !this.villagePowersActive()) return false;
+    // Sói Pháp Sư có HAI lượt: phiếu cắn cùng bầy + soi dòng Tiên Tri riêng.
+    // Còn lượt khi một trong hai chưa xong; `nightInfoFor` soi cùng điều kiện.
+    if (viewer.role === "SORCERER") {
+      return (
+        st.night.wolfVotes[viewer.id] === undefined ||
+        st.night.sorcererResults[viewer.id] === undefined
+      );
+    }
     if (isWolfPack(viewer.role)) {
       return st.night.wolfVotes[viewer.id] === undefined;
     }
