@@ -35,10 +35,10 @@ export const roomConfigSchema = z
     apprenticeSeer: bool.optional(),
     detective: bool.optional(),
     guardianAngel: bool.optional(),
-    priest: bool.optional(),
+    sorcerer: bool.optional(),
+    alphaWolf: bool.optional(),
     mayor: bool.optional(),
     elder: bool.optional(),
-    medium: bool.optional(),
     doppelganger: bool.optional(),
     jester: bool.optional(),
     serialKiller: bool.optional(),
@@ -76,10 +76,8 @@ export function validateRoomConfig(config: RoomConfig, playerCount: number): str
     (config.apprenticeSeer ? 1 : 0) +
     (config.detective ? 1 : 0) +
     (config.guardianAngel ? 1 : 0) +
-    (config.priest ? 1 : 0) +
     (config.mayor ? 1 : 0) +
     (config.elder ? 1 : 0) +
-    (config.medium ? 1 : 0) +
     (config.doppelganger ? 1 : 0) +
     // Thằng Hề chiếm một ghế như mọi vai đặc biệt khác, dù nó không thuộc phe
     // làng: chỗ này đếm GHẾ ĐÃ BỊ LẤY, không đếm sức mạnh của phe nào.
@@ -103,8 +101,15 @@ export function validateRoomConfig(config: RoomConfig, playerCount: number): str
    * đó là `checkWin` - hai câu hỏi khác nhau, hai phép đếm khác nhau.
    */
   const traitorSeats = config.traitor ? 1 : 0;
-  const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0);
-  const seats = wolfCount + specials + traitorSeats;
+  /*
+   * Sói Pháp Sư chiếm một GHẾ nhưng KHÔNG vào `wolfCount`, cùng cặp với Kẻ
+   * Phản Bội: `wolfCount` gác luật "Sói phải ít hơn phe làng" và mô hình hoá
+   * SỨC SÁT THƯƠNG BAN ĐÊM, mà Sói Pháp Sư không cắn. Sói Alpha thì cắn cùng
+   * bầy nên vào `wolfCount`.
+   */
+  const sorcererSeats = config.sorcerer ? 1 : 0;
+  const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0) + (config.alphaWolf ? 1 : 0);
+  const seats = wolfCount + specials + traitorSeats + sorcererSeats;
 
   if (config.villagers === undefined) {
     /*
@@ -180,7 +185,7 @@ export const nightActionTypeSchema = z.enum([
   "SKIP",
   "DETECTIVE_CHECK",
   "GUARDIAN_PROTECT",
-  "HOLY_WATER",
+  "SORCERER_CHECK",
   // Hành động RIÊNG của Sát Nhân, không dùng chung "KILL" với bầy Sói: một mã
   // duy nhất cho hai kỹ năng sẽ buộc engine phân giải theo vai người gửi, và
   // đó đúng là chỗ để một phiếu cắn của Sói đi nhầm vào ô của Sát Nhân.

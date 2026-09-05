@@ -141,7 +141,7 @@ describe("Shared Game Events", () => {
 });
 
 describe("Shared Schemas and Payloads", () => {
-  it("validates gameActionPayload for detective, priest, guardian angel", () => {
+  it("validates gameActionPayload for detective, sorcerer, guardian angel", () => {
     // Detective action with targetId and secondary target or targetId1 & targetId2
     const detectiveAction = gameActionPayload.parse({
       type: "DETECTIVE_CHECK",
@@ -157,11 +157,11 @@ describe("Shared Schemas and Payloads", () => {
     });
     expect(guardianAction.type).toBe("GUARDIAN_PROTECT");
 
-    // Priest action
-    const priestAction = gameActionPayload.parse({
-      type: "HOLY_WATER",
+    // Sorcerer action
+    const sorcererAction = gameActionPayload.parse({
+      type: "SORCERER_CHECK",
       targetId: "p2",
     });
-    expect(priestAction.type).toBe("HOLY_WATER");
+    expect(sorcererAction.type).toBe("SORCERER_CHECK");
   });
 });
