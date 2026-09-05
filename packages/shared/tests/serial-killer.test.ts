@@ -90,12 +90,26 @@ describe("bộ bài và cấu hình", () => {
   });
 });
 
+/*
+ * Bộ bài cho khối cân bằng: bật thêm Thợ Săn và Thám Tử để đứng GẦN preset
+ * 9 người.
+ *
+ * Khối này cần một bộ bài mà điểm cân bằng nằm gọn trong vùng 40-60 - đó
+ * chính là cái bẫy mà cảnh báo Sát Nhân sinh ra để chặn. `CONFIG` trần ở 9
+ * người chỉ được 41, và Sát Nhân lấy mất một ghế Dân Làng là rơi xuống 39.5:
+ * điểm đỏ vì lệch preset, không phải vì lá bài đang thử. Kể từ khi preset 9
+ * đổi Sói Con thành Sói thường, khoảng cách đó không còn đủ. Riêng một fixture
+ * chứ không sửa `CONFIG`: khối đếm ghế ở trên dựa vào việc `CONFIG` có đúng
+ * năm lá đặc biệt.
+ */
+const BALANCED: RoomConfig = { ...CONFIG, hunter: true, detective: true };
+
 describe("bảng cân bằng KHÔNG đo được Sát Nhân", () => {
   it("không cộng vào sức mạnh của phe nào", () => {
     expect(ROLE_POWER.SERIAL_KILLER).toBe(0);
 
-    const without = calculateBalanceScore({ ...CONFIG, serialKiller: false }, 9);
-    const with_ = calculateBalanceScore(CONFIG, 9);
+    const without = calculateBalanceScore({ ...BALANCED, serialKiller: false }, 9);
+    const with_ = calculateBalanceScore(BALANCED, 9);
 
     // Sói không đổi: lá này không nằm ở vế đó.
     expect(with_.wolfPower).toBe(without.wolfPower);
@@ -110,8 +124,8 @@ describe("bảng cân bằng KHÔNG đo được Sát Nhân", () => {
   });
 
   it("phát một cảnh báo RIÊNG thay vì để điểm số đứng ra bảo lãnh", () => {
-    const warning = generateWarnings(CONFIG, 9);
-    const without = generateWarnings({ ...CONFIG, serialKiller: false }, 9);
+    const warning = generateWarnings(BALANCED, 9);
+    const without = generateWarnings({ ...BALANCED, serialKiller: false }, 9);
 
     // Điểm vẫn nằm gọn trong ngưỡng "cân bằng" - đúng cái bẫy mà cảnh báo này
     // sinh ra để chặn.
@@ -130,7 +144,7 @@ describe("bảng cân bằng KHÔNG đo được Sát Nhân", () => {
   });
 
   it("ván không bật Sát Nhân không mọc thêm cảnh báo nào", () => {
-    const off = generateWarnings({ ...CONFIG, serialKiller: false }, 9);
+    const off = generateWarnings({ ...BALANCED, serialKiller: false }, 9);
     expect(off.warnings.some((line) => line.includes("Sát Nhân"))).toBe(false);
   });
 });
