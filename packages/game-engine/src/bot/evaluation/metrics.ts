@@ -1,4 +1,5 @@
 import { roleTeam, roleWonOutcome, type Role, type Team, type Winner } from "@masoi/shared";
+import { looksCasual } from "./casual-tone";
 import { measureHumanChat } from "./human-chat";
 
 /**
@@ -282,6 +283,14 @@ export interface SelfPlayMetrics {
    * nếu không có nó).
    */
   fromTemplateRate: Ratio;
+  /**
+   * Câu đọc lên như người gõ trong phòng, chứ không như một đoạn văn.
+   *
+   * Xem `casual-tone.ts` cho định nghĩa và cho lý do nó tồn tại. Trong
+   * self-play, con số này đo BẢNG MẪU; ở một bản ghi nhập từ production nó đo
+   * chính nhà cung cấp, và đó mới là chỗ giọng thật sự trôi được.
+   */
+  casualToneRate: Ratio;
 
   // ---- Lời khai vai (Phase 5) ----
 
@@ -444,6 +453,7 @@ export function collectMetrics(
   let speechRepeats = 0;
   let speechTotal = 0;
   let roundLimited = 0;
+  let casualLines = 0;
   let exactRepeats = 0;
   let normalizedRepeats = 0;
   let semanticRepeats = 0;
@@ -894,6 +904,7 @@ export function collectMetrics(
         // Báo cáo JSON lưu trước khi có cờ này không mang nó; thiếu cờ nghĩa là
         // self-play cũ, tức bảng mẫu.
         if (event.fromTemplate !== false) fromTemplateCount += 1;
+        if (looksCasual(event.text)) casualLines += 1;
 
         if (event.targetId !== null && lastTarget.get(event.actorId) === event.targetId) {
           sameTargetRuns += 1;
@@ -1075,6 +1086,7 @@ export function collectMetrics(
      * nhập từ production (nơi có nhà cung cấp để mà hỏng) đọc ra số thật.
      */
     fromTemplateRate: ratio(fromTemplateCount, speechTotal),
+    casualToneRate: ratio(casualLines, speechTotal),
 
     claimsPerGame: mean(claimCounts),
     counterClaimRate: ratio(counterClaimGames, games.length),
