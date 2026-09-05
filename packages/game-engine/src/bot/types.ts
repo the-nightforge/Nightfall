@@ -417,6 +417,19 @@ export interface BotPlayerKnowledge {
   id: string;
   name: string;
   alive: boolean;
+  /**
+   * Ghế này là BOT hay người thật. Engine cấp, lõi không đoán.
+   *
+   * CÔNG KHAI: `PlayerView.isBot` đi xuống mọi client trong `RoomSnapshot`,
+   * cả phòng nhìn thấy ai là bot từ sảnh chờ. Lõi cần nó vì cùng một nước đi
+   * có giá khác nhau trước hai loại khán giả: Tiên Tri hô kết quả ngày 1 là
+   * đúng trong bàn toàn bot (bầy Sói bot không đọc chat để cắn) và là tự xin
+   * chết đêm 2 trước người thật.
+   *
+   * Optional vì `BotKnowledgeView` được dựng lại từ record self-play cũ và từ
+   * fixture test; thiếu cờ thì coi là bot - xem `countHumansAlive`.
+   */
+  isBot?: boolean;
 }
 
 export interface BotKnowledgeView {

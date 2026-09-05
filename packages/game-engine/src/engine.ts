@@ -2743,7 +2743,9 @@ export class GameEngine {
       phaseStartedAt: st.phaseStartedAt,
       phaseEndsAt: st.phaseEndsAt,
       selfRole: viewer.role,
-      players: st.players.map(({ id, name, alive }) => ({ id, name, alive })),
+      // `isBot` là công khai (`PlayerView.isBot` trong snapshot của cả phòng);
+      // lõi dùng nó để biết bàn có người thật hay không, xem `countHumansAlive`.
+      players: st.players.map(({ id, name, alive, isBot }) => ({ id, name, alive, isBot })),
       knownRoles,
       revealRoleOnDeath: st.config.revealRoleOnDeath === true,
       seerResult,

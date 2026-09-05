@@ -1,5 +1,5 @@
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
-import { decideChatClaim } from "../decision/claim-decision";
+import { decideChatClaim, seerHoldsForHumans } from "../decision/claim-decision";
 import type { BotSpeechStyle } from "../personality/speech-style";
 import type { DecisionProbeCollector } from "../trace/trace";
 import type {
@@ -256,11 +256,19 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
    * vi của chúng: ở đó không BOT nào khai vai bao giờ, nên "chưa khai" luôn
    * đúng và bằng chứng soi sẽ không bao giờ được nói ra — trong khi hôm nay
    * `seerRevealRound = 0` nghĩa là nó LUÔN được nói ra.
+   *
+   * Bàn có người thật (P2.1) thêm một điều kiện giữ nữa, dùng CHUNG với cổng
+   * PROACTIVE của `decideChatClaim`: chưa khai vai VÀ chưa tới
+   * `seerRevealRoundHuman` thì kết quả soi không lọt vào lời nào cả. Đã khai
+   * rồi (bị dồn, bị mạo danh) thì thả - giấu bằng chứng sau khi đã lộ vai chỉ
+   * làm lời khai yếu đi. `0` ở v1..v13 nên biểu thức này rút gọn về luật cũ.
    */
+  const holdForHumans = state.myClaim === null && seerHoldsForHumans(context, weights);
   const holdSeerEvidence =
-    weights.claim.accusationWeight > 0
+    holdForHumans ||
+    (weights.claim.accusationWeight > 0
       ? state.myClaim === null
-      : round < weights.deceptionRisk.seerRevealRound;
+      : round < weights.deceptionRisk.seerRevealRound);
   const usable = vote.evidence
     .filter((item) => !spoken.has(item.sourceId))
     .filter(

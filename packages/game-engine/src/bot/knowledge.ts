@@ -1,4 +1,5 @@
 import type { DayVoteRecap, PublicVoteChoice } from "@masoi/shared";
+import type { BotWeights } from "./config/weights";
 import type {
   BotKnowledgeView,
   BotPlayerKnowledge,
@@ -150,4 +151,29 @@ export function buildBotKnowledgeView(input: BotKnowledgeInput): BotKnowledgeVie
     activeEventId: input.activeEventId,
     dayOfTruthClaims: { ...input.dayOfTruthClaims },
   };
+}
+
+/**
+ * Số NGƯỜI THẬT còn sống trên bàn.
+ *
+ * Thiếu cờ `isBot` (record self-play cũ, fixture test) thì coi là bot: mọi
+ * nhánh "biết bàn có người" phải là nhánh MỞ THÊM, và một view không nói gì
+ * về chuyện đó phải rơi về đúng hành vi bot-vs-bot đã đo.
+ */
+export function countHumansAlive(knowledge: Pick<BotKnowledgeView, "players">): number {
+  return knowledge.players.filter((player) => player.alive && player.isBot === false).length;
+}
+
+/**
+ * "Bàn có người" theo `deceptionRisk.humanTableThreshold`.
+ *
+ * Là NGƯỠNG chứ không phải "có ít nhất một người": một người thật giữa năm
+ * bot vẫn là một bàn bot - thông tin lan theo tốc độ của bot, và mọi số đo
+ * self-play vẫn áp dụng. Ngưỡng mặc định 4 vào weights để tune được.
+ */
+export function isHumanTable(
+  knowledge: Pick<BotKnowledgeView, "players">,
+  weights: BotWeights,
+): boolean {
+  return countHumansAlive(knowledge) >= weights.deceptionRisk.humanTableThreshold;
 }

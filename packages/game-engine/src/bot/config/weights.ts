@@ -422,6 +422,28 @@ export interface DeceptionRiskWeights {
    */
   seerRevealRound: number;
   /**
+   * Vòng sớm nhất Tiên Tri CHỦ ĐỘNG khai vai (kèm kết quả soi) khi bàn có
+   * người thật - xem `humanTableThreshold`. `0` để tắt (dùng luật chung).
+   *
+   * Tách khỏi `seerRevealRound` vì hai quần thể khán giả trả hai cái giá khác
+   * nhau cho cùng một lời khai. Trong bàn toàn bot, giấu tới vòng 2 làm làng
+   * mất 4 điểm win-rate (thông tin lan quá chậm để một đêm sống thêm bù lại
+   * được - chú thích ở v2). Trước người thật, khai ngày 1 là cách chắc nhất
+   * để chết đêm 2: người thật đọc chat và cắn đúng con Tiên Tri.
+   *
+   * Chỉ chặn nhánh PROACTIVE của `decideChatClaim` và phần bằng chứng soi
+   * trong lời nói; bị dồn phiếu (UNDER_FIRE) hay bị mạo danh (COUNTER) thì vẫn
+   * khai như thường. Lá phiếu không đổi: Tiên Tri vẫn bầu đúng con Sói đã soi.
+   */
+  seerRevealRoundHuman: number;
+  /**
+   * Số người thật CÒN SỐNG tối thiểu để bàn được coi là "bàn có người".
+   *
+   * Không phải "có ít nhất một người": một người giữa năm bot vẫn là một bàn
+   * bot về mặt tốc độ lan thông tin, và mọi số đo self-play vẫn đúng ở đó.
+   */
+  humanTableThreshold: number;
+  /**
    * Ngưỡng vote hiệu dụng tăng thêm sau khi một Sói mất đồng đội.
    *
    * Mất đồng bọn thì đẩy phiếu lộ liễu là tự chỉ vào mình. `0` để tắt.
@@ -968,6 +990,10 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     bussingDeceptionScale: 0,
     bussingJoinBonus: 0,
     seerRevealRound: 0,
+    // Tắt ở v1..v13 (0 = không chặn gì); v14 bật. Ngưỡng bàn có người là 4
+    // ở mọi bản - nó chỉ có nghĩa khi `seerRevealRoundHuman > 0`.
+    seerRevealRoundHuman: 0,
+    humanTableThreshold: 4,
     allyLostThresholdBonus: 0,
     abstainPressureCeiling: 0.3,
   }),
@@ -1213,6 +1239,8 @@ export const BOT_WEIGHTS_V2: BotWeights = Object.freeze({
      * để việc sống thêm một đêm bù lại được. Giữ cơ chế, tắt mặc định.
      */
     seerRevealRound: 0,
+    seerRevealRoundHuman: 0,
+    humanTableThreshold: 4,
     allyLostThresholdBonus: 6,
     /**
      * `0` = Sói không bao giờ chọn "không treo ai".
@@ -1857,6 +1885,33 @@ export const BOT_WEIGHTS_V13: BotWeights = Object.freeze({
 });
 
 /**
+ * Cấu hình v14 - Tiên Tri giấu kết quả khi bàn có người thật.
+ *
+ * MỘT ô đổi: `deceptionRisk.seerRevealRoundHuman` 0 -> 2.
+ *
+ * `seerRevealRound` (bàn toàn bot) vẫn là 0, vì lý do v2 đã đo: trong quần thể
+ * bot, thông tin của Tiên Tri lan quá chậm để một đêm sống thêm bù lại được
+ * (giấu tới vòng 2 mất 4 điểm win-rate). Trước người thật thì ngược lại - từ
+ * blind test: Tiên Tri bot hô kết quả ngày 1 và chết đêm 2 gần như mọi ván,
+ * vì người thật đọc chat và cắn đúng nó. 2 = khai từ ngày 2 (engine đếm
+ * `round` tăng mỗi đêm, nên ngày 1 là `round 1`): Tiên Tri có hai kết quả
+ * soi trong tay khi mở miệng, và lời khai của nó nặng gấp đôi.
+ *
+ * Self-play KHÔNG đo được ô này: mọi ghế trong harness là bot, nên
+ * `countHumansAlive` luôn 0 và nhánh không bao giờ mở. Đó là chủ ý - win-rate
+ * self-play của v14 phải bằng v13 từng bit.
+ */
+export const BOT_WEIGHTS_V14: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V13,
+  version: "14.0.0",
+
+  deceptionRisk: Object.freeze({
+    ...BOT_WEIGHTS_V13.deceptionRisk,
+    seerRevealRoundHuman: 2,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
@@ -1869,8 +1924,9 @@ export const BOT_WEIGHTS_V13: BotWeights = Object.freeze({
  * v9.0.0 bật hành vi của Kẻ Báo Thù; v10.0.0 hạ `spareTrustMargin` về 0 để
  * phiên toà thôi kết án 100% bị cáo và để lời khai vai có sức nặng; v11.0.0
  * bật hai tín hiệu né tránh và bào chữa kém; v12.0.0 trừ sẵn tin cậy của
- * người đã từng khai láo; v13.0.0 cho hồ sơ nguội chậm hơn belief.
+ * người đã từng khai láo; v13.0.0 cho hồ sơ nguội chậm hơn belief; v14.0.0
+ * cho Tiên Tri giấu kết quả tới ngày 2 khi bàn có người thật.
  * v1-v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset đích
  * danh, không bao giờ dựa vào hằng số này.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V13;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V14;
