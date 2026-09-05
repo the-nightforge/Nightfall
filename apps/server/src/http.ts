@@ -17,7 +17,8 @@ import { allowAction } from "./rate-limit";
 import { buildVersion, healthHttpStatus, healthStatus, redisConnectionHealthy } from "./health";
 import { speechStats } from "./bots/speech-stats";
 import { avatarRouter } from "./avatar/routes";
-import { requirePlayer, type PlayerRequest } from "./auth";
+import { optionalPlayer, requirePlayer, type PlayerRequest } from "./auth";
+import { leaderboardView } from "./leaderboard";
 
 export const apiRouter = Router();
 apiRouter.use(avatarRouter);
@@ -215,6 +216,24 @@ apiRouter.get("/players/me/stats", requirePlayer, async (req, res) => {
   } catch (err) {
     console.error("[api] Đọc hồ sơ người chơi thất bại:", err);
     res.status(500).json({ error: "Không thể đọc hồ sơ lúc này" });
+  }
+});
+
+/**
+ * Bảng xếp hạng 30 ngày. CÔNG KHAI: ai cũng xem được, không cần phiên.
+ *
+ * Bearer là tuỳ chọn: có thì đáp thêm dòng "của bạn" và số ván đã tính, để
+ * trang chủ nói "còn N ván nữa"; không có, hoặc token hỏng, thì vẫn trả bảng
+ * chứ không 401 - một token cũ trong localStorage không được làm mất bảng
+ * xếp hạng của người đang xem. Luật tính điểm và cache: xem `leaderboard.ts`.
+ */
+apiRouter.get("/leaderboard", optionalPlayer, async (req, res) => {
+  const viewerId = (req as PlayerRequest).player?.id ?? null;
+  try {
+    res.json(await leaderboardView(viewerId));
+  } catch (err) {
+    console.error("[api] Dựng bảng xếp hạng thất bại:", err);
+    res.status(500).json({ error: "Không thể đọc bảng xếp hạng lúc này" });
   }
 });
 
