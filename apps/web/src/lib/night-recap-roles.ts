@@ -7,7 +7,8 @@ import type { NightRecap, RecapPlayer, RoomConfig } from "@masoi/shared";
  * logic có thể sai theo cách test bắt được, còn JSX thì không.
  *
  * Bản cũ trộn hai quy tắc vào một chỗ: Bảo Vệ / Tiên Tri / Phù Thuỷ LUÔN có
- * dòng, còn Thiên Thần / Thám Tử / Linh Mục chỉ hiện khi đêm đó có hành động.
+ * dòng, còn Thiên Thần / Thám Tử / Sói Pháp Sư chỉ hiện khi đêm đó có hành
+ * động.
  * Cả hai đều sai, theo hai hướng ngược nhau - ván không bật Bảo Vệ vẫn in "Bảo
  * Vệ: không hành động", còn đêm Thiên Thần ngồi im thì vai đó biến mất hẳn, và
  * người đọc không phân biệt được "không có vai này" với "có nhưng không dùng".

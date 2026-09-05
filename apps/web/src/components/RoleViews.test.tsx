@@ -179,6 +179,56 @@ describe("RoleRevealView - nhấn giữ để nhìn", () => {
     await view.unmount();
   });
 
+  it("Sói Con cũng thấy đồng bọn Ma Sói", async () => {
+    const view = await mountReveal(
+      snapshot({
+        you: {
+          id: "cub",
+          name: "Sói Em",
+          ready: false,
+          connected: true,
+          role: "WOLF_CUB",
+          alive: true,
+        },
+        players: [
+          { id: "cub", name: "Sói Em", alive: true, isBot: false, role: "WOLF_CUB" },
+          { id: "wolf", name: "Sói Cả", alive: true, isBot: false, role: "WEREWOLF" },
+          { id: "villager", name: "Dân Đen", alive: true, isBot: false },
+        ],
+      }),
+    );
+
+    await view.fire(pointer("pointerdown"));
+    const text = view.text();
+
+    assert.match(text, /Đồng bọn của bạn/);
+    assert.match(text, /Sói Cả/);
+    assert.doesNotMatch(text, /Dân Đen/);
+
+    await view.unmount();
+  });
+
+  it("Ma Sói thấy đồng bọn Sói Con", async () => {
+    const view = await mountReveal(
+      snapshot({
+        players: [
+          { id: "wolf", name: "Sói Cả", alive: true, isBot: false, role: "WEREWOLF" },
+          { id: "wolf2", name: "Sói Em", alive: true, isBot: false, role: "WOLF_CUB" },
+          { id: "villager", name: "Dân Đen", alive: true, isBot: false },
+        ],
+      }),
+    );
+
+    await view.fire(pointer("pointerdown"));
+    const text = view.text();
+
+    assert.match(text, /Đồng bọn của bạn/);
+    assert.match(text, /Sói Em/);
+    assert.doesNotMatch(text, /Dân Đen/);
+
+    await view.unmount();
+  });
+
   it("thả tay là úp lại NGAY, và danh sách Sói rời khỏi DOM", async () => {
     const view = await mountReveal();
 
