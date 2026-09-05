@@ -459,7 +459,7 @@ function preset(overrides: Partial<RoomConfig>): RoomConfig {
 
 const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
   8: preset({ werewolves: 2, seer: true, witch: true, guard: true, hunter: true, detective: true }),
-  9: preset({ werewolves: 2, seer: true, witch: true, guard: true, detective: true, hunter: true }),
+  9: preset({ werewolves: 1, wolfCub: true, seer: true, witch: true, guard: true, detective: true, hunter: true }),
   10: preset({
     werewolves: 1,
     wolfCub: true,
