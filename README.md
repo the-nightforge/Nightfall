@@ -65,6 +65,7 @@ The interesting parts are not the CRUD. They are:
 | 🕘 | **Match history** on the home page: your recent games, your role in each, the final roster, and the turning points that decided them |
 | 🔔 | **Turn attention** — when the tab is in the background, the tab title, a short vibration and (if granted) a system notification call the player back for their night action, an open ballot, their own trial, a death or the end of the match. Capability-gated, no toggle: the title always works, the other two degrade silently |
 | ❓ | **Rules lookup mid-match** — a `?` button in the room header opens a read-only drawer with the current phase and what to do in it, your own role and goal, the running event in chaos rooms, and the full deck. Same copy as the lobby and the role card, never a second wording |
+| 💬 | **Chat that types faster than you** — `@` opens an accent-insensitive name picker (arrow keys, Enter, Tab, tap), messages that address you are highlighted, and a phase-aware row of quick phrases inserts a sentence into the draft without sending it. Bots read `@An` as `An`; nothing changed server-side |
 | 📥 | **Installable PWA** — add to home screen, and a cached offline page instead of the browser's error screen when a navigation fails |
 | ✉️ | **Last letter** (optional add-on): write a sealed note of at most 100 characters during the day; it opens only when its writer dies |
 
