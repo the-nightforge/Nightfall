@@ -14,6 +14,7 @@ import { redis } from "./redis";
 import { config } from "./config";
 import { allowAction } from "./rate-limit";
 import { buildVersion, healthHttpStatus, redisConnectionHealthy } from "./health";
+import { speechStats } from "./bots/speech-stats";
 import { avatarRouter } from "./avatar/routes";
 import { requirePlayer, type PlayerRequest } from "./auth";
 
@@ -274,5 +275,8 @@ apiRouter.get("/health", async (_req, res) => {
     ...health,
     version: buildVersion(process.env),
     startedAt: new Date(STARTED_AT).toISOString(),
+    // Thống kê tầng diễn đạt lời bot, cộng dồn từ lúc tiến trình khởi động.
+    // Chỉ số đếm và mili giây - không có mã phòng, không có nội dung chat.
+    botSpeech: speechStats.snapshot(),
   });
 });

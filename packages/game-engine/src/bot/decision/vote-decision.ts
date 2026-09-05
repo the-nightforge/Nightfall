@@ -107,11 +107,16 @@ export function voteHysteresis(
   personality: BotPersonality,
   weights: BotWeights = DEFAULT_BOT_WEIGHTS,
   spokenLines = 0,
+  freshlyExculpated = false,
 ): number {
+  // `freshlyExculpated`: mục tiêu vừa có bằng chứng gỡ tội mới trong vòng (xem
+  // `hasFreshExculpation`). Khi đó bonus "nói nhiều" bị nhân
+  // `talkerHysteresisExculpatedScale` - 1 ở v1..v17, 0 ở v18.
   const talker =
     weights.confidence.talkerHysteresisBonus > 0 &&
     spokenLines >= weights.confidence.talkerHysteresisLines
-      ? weights.confidence.talkerHysteresisBonus
+      ? weights.confidence.talkerHysteresisBonus *
+        (freshlyExculpated ? weights.confidence.talkerHysteresisExculpatedScale : 1)
       : 0;
   return (
     weights.confidence.hysteresisBase +
@@ -150,6 +155,26 @@ export function linesSpokenThisRound(
     messages.add(memory.sourceId);
   }
   return messages.size;
+}
+
+/**
+ * Người này vừa nhận được bằng chứng GỠ TỘI mới trong vòng này chưa?
+ *
+ * "Gỡ tội" = một `reason` weight âm trong `suspicion[playerId]`, sinh ở đúng
+ * vòng hiện tại: họ khai một vai quyền lực (`claimant` của claim-credibility),
+ * có người công khai bênh (`DEFEND`), hay một tín hiệu khác kéo nghi ngờ xuống.
+ * Đọc từ chính bảng belief thay vì đoán lại từ chat: đó là nơi mọi bằng chứng
+ * đã đi qua `applyEvidence`, và cũng là lý do duy nhất mà bot "đổi ý" có căn
+ * cứ. Ba câu "tôi là dân" không tạo ra reason âm nào, nên không tính.
+ */
+export function hasFreshExculpation(
+  state: BotBrainState,
+  playerId: string,
+  round: number,
+): boolean {
+  return (state.suspicion[playerId]?.reasons ?? []).some(
+    (reason) => reason.weight < 0 && reason.round === round,
+  );
 }
 
 /**
@@ -370,11 +395,13 @@ export function selectVote(
     const currentQualifies =
       current !== undefined && current.evidence.length > 0 && current.score >= threshold;
     // Dính hơn trước một người đang nói nhiều: xem `talkerHysteresisBonus`.
+    // Trừ khi họ vừa đưa ra được điều gì gỡ tội - xem `hasFreshExculpation`.
     const spoken = linesSpokenThisRound(state, myVote.targetId, knowledge.round);
+    const exculpated = hasFreshExculpation(state, myVote.targetId, knowledge.round);
     if (
       currentQualifies &&
       winner.targetId !== current.targetId &&
-      winner.score < current.score + voteHysteresis(personality, weights, spoken)
+      winner.score < current.score + voteHysteresis(personality, weights, spoken, exculpated)
     ) {
       winner = current;
     }

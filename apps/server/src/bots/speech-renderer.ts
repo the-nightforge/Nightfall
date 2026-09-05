@@ -6,6 +6,7 @@ import {
 } from "@masoi/game-engine";
 import { botBrain } from "./index";
 import { DEFAULT_CHAT_MAX } from "./decide";
+import { speechStats, type SpeechStats } from "./speech-stats";
 import type { BotBrain, RenderedSpeech, SpeechRequest } from "./types";
 
 /**
@@ -87,6 +88,22 @@ export async function renderBotSpeech(
   request: SpeechRequest,
   brain: BotBrain = botBrain(),
   chatMaxLength = DEFAULT_CHAT_MAX,
+  stats: SpeechStats = speechStats,
+  now: () => number = Date.now,
+): Promise<RenderedSpeech> {
+  // Đo TRỌN lượt diễn đạt - cả hai lượt hỏi và cổng - vì đó là độ trễ mà
+  // scheduler phải chờ trước khi phát. Ghi vào `stats` đúng một lần ở lối ra,
+  // dù đi đường nào; `source` nói đường đó là đường nào.
+  const startedAt = now();
+  const rendered = await renderUnmeasured(request, brain, chatMaxLength);
+  stats.record(rendered.source, now() - startedAt);
+  return rendered;
+}
+
+async function renderUnmeasured(
+  request: SpeechRequest,
+  brain: BotBrain,
+  chatMaxLength: number,
 ): Promise<RenderedSpeech> {
   // `try` chỉ bọc LỜI GỌI NHÀ CUNG CẤP, không bọc cổng chạy sau nó. Nhà cung
   // cấp hỏng (timeout, 429, JSON vỡ) là chuyện xảy ra hằng ngày và phải rơi êm
@@ -97,7 +114,7 @@ export async function renderBotSpeech(
   // tuần không ai biết. Hai loại lỗi phải KHÔNG dùng chung một quan sát.
   const first = await askProvider(brain, request);
   if (first && passesGates(request, first)) {
-    return { text: first.slice(0, chatMaxLength), fromTemplate: false };
+    return { text: first.slice(0, chatMaxLength), fromTemplate: false, source: "provider" };
   }
 
   // Trượt cổng thì hỏi lại ĐÚNG MỘT lần, mang theo chính câu vừa bị từ chối.
@@ -117,7 +134,11 @@ export async function renderBotSpeech(
     const retryRequest = withRejectedLine(request, first);
     const second = await askProvider(brain, retryRequest);
     if (second && passesGates(retryRequest, second)) {
-      return { text: second.slice(0, chatMaxLength), fromTemplate: false };
+      return {
+        text: second.slice(0, chatMaxLength),
+        fromTemplate: false,
+        source: "provider_retry",
+      };
     }
   }
 
@@ -132,11 +153,15 @@ export async function renderBotSpeech(
   // lại chính BOT, rồi tự nhại lại bằng đường khác. Im lặng mới là câu trả lời
   // đúng, và nó không tốn gì - scheduler không tính lượt cho một câu rỗng, nên
   // BOT giữ nguyên hạn mức và nói tiếp ở checkpoint sau.
+  // Vì sao tới được đây: nhà cung cấp không trả câu nào, hay trả mà trượt cổng.
+  // Hai chuyện phải sửa theo hai hướng khác nhau (hạ tầng / prompt), nên nhãn
+  // phải khác nhau.
+  const source = first ? "gate_rejected" : "provider_failed";
   const template = speechTemplate(request);
   if (template !== null && echoesRecentOwnLine(request, template)) {
-    return { text: null, fromTemplate: true };
+    return { text: null, fromTemplate: true, source: "template_silent" };
   }
-  return { text: template, fromTemplate: true };
+  return { text: template, fromTemplate: true, source };
 }
 
 /**

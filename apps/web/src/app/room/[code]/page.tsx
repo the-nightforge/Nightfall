@@ -40,6 +40,15 @@ import { CinematicOverlay } from "@/components/CinematicOverlay";
 import { LastLetterReveal } from "@/components/LastLetterReveal";
 import { RoomInvite } from "@/components/RoomInvite";
 import { LobbyPlayerGrid } from "@/components/LobbyPlayerGrid";
+import { GuideBanner } from "@/components/GuideBanner";
+import {
+  finishGuide,
+  guideRoomState,
+  hideGuide,
+  markGuidedRoom,
+  type GuideRoomState,
+} from "@/lib/guide-session";
+import { useGuidePrep } from "@/lib/useGuidePrep";
 
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
@@ -67,6 +76,35 @@ export default function RoomPage() {
    */
   const [chatDraft, setChatDraft] = useState("");
 
+  /*
+   * Ván đầu có hướng dẫn.
+   *
+   * Cờ đọc SAU khi mount, không phải trong lúc render: `?guide=1` và
+   * sessionStorage đều là chuyện của trình duyệt, server render không có.
+   * `?guide=1` được cất vào sessionStorage theo mã phòng rồi GỠ khỏi URL - nếu
+   * để lại, người bấm "Ẩn" rồi tải lại trang sẽ thấy hướng dẫn mọc lại từ
+   * chính cái URL đó. Đường dẫn sạch cũng là đường dẫn chia sẻ được: bạn vào
+   * bằng link không bị ép xem hướng dẫn của người tạo phòng.
+   *
+   * Ba trạng thái (`guide-session.ts`): `active` hiện thẻ, `hidden` đã ẩn thẻ
+   * nhưng bàn vẫn được chuẩn bị, `finished` đã đi hết ván - chỉ còn lời tổng
+   * kết ở GAME_OVER, ván sau trong cùng phòng không tự bật lại.
+   */
+  const [guideState, setGuideState] = useState<GuideRoomState>("none");
+  useEffect(() => {
+    if (!code) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("guide") === "1") {
+      markGuidedRoom(code);
+      router.replace(`/room/${code}`);
+      // Đặt thẳng, không đọc lại từ kho: kho bị chặn thì hướng dẫn vẫn sống
+      // trọn lần tải này (chỉ mất khi F5).
+      setGuideState("active");
+      return;
+    }
+    setGuideState(guideRoomState(code));
+  }, [code, router]);
+
   // Chưa đăng nhập -> về trang chủ kèm mã phòng
   useEffect(() => {
     if (room.identityMissing) router.replace(`/?code=${code}`);
@@ -76,6 +114,44 @@ export default function RoomPage() {
   const isHost = !!snapshot && snapshot.hostId === identity?.playerId;
   const droppedConnection = !!snapshot && !room.connected;
   const isLobby = snapshot?.phase === "LOBBY";
+
+  /*
+   * Ván hướng dẫn tự chuẩn bị bàn: bộ bài chuẩn của bàn 8 rồi bot cho đủ 8,
+   * bằng ĐÚNG hai sự kiện mà các nút trong phòng chờ gửi, mỗi bước chờ
+   * snapshot xác nhận rồi mới đi tiếp. Luật ở `lib/guide-prep.ts`; ở đây chỉ
+   * nối nó vào socket. Chạy khi hướng dẫn đã được XIN cho phòng này - kể cả
+   * khi người dùng đã ẩn thẻ - và không chạy cho phòng thường hay phòng đã đi
+   * hết ván hướng dẫn. Bắt đầu ván vẫn là việc của người chơi.
+   */
+  const guideRequested = guideState === "active" || guideState === "hidden";
+  const guidePrep = useGuidePrep({
+    code,
+    requested: guideRequested,
+    snapshot,
+    isHost,
+    connected: room.connected,
+    emit: room.emit,
+  });
+
+  /* Đi hết một ván hướng dẫn: khoá phòng này lại, nhớ toàn cục để trang chủ
+   * đổi lời mời. Thẻ vẫn hiện lời tổng kết ở GAME_OVER (xem `guideVisible`). */
+  useEffect(() => {
+    if (guideRequested && snapshot?.phase === "GAME_OVER") {
+      finishGuide(code);
+      setGuideState("finished");
+    }
+  }, [guideRequested, snapshot?.phase, code]);
+
+  const guideVisible =
+    !!snapshot &&
+    (guideState === "active" || (guideState === "finished" && snapshot.phase === "GAME_OVER"));
+  const guideContext = { prep: isHost ? guidePrep : null };
+
+  const onHideGuide = () => {
+    hideGuide(code);
+    // "Ẩn" chỉ ẩn thẻ; bàn vẫn được chuẩn bị (`guideRequested` vẫn true).
+    setGuideState((state) => (state === "active" ? "hidden" : state));
+  };
 
   const content = useMemo(() => {
     if (!snapshot) {
@@ -394,7 +470,13 @@ export default function RoomPage() {
             * thanh điều khiển bên phải, và bảng bên trong tự cuộn phần lưới.
             */}
           {isLobby ? (
-            <div className="order-1 flex min-w-0 flex-col lg:order-none lg:col-start-1 lg:row-span-3 lg:row-start-1 lg:min-h-0">
+            <div className="order-1 flex min-w-0 flex-col gap-3 lg:order-none lg:col-start-1 lg:row-span-3 lg:row-start-1 lg:min-h-0">
+              {/* Ở phòng chờ thẻ hướng dẫn đứng TRÊN sân người chơi: trên điện
+                * thoại cột điều khiển nằm dưới lưới và nút Bắt đầu dính đáy che
+                * mất nó - đúng chỗ người mới cần đọc "bấm Bắt đầu" nhất. */}
+              {guideVisible && (
+                <GuideBanner snapshot={snapshot} context={guideContext} onDismiss={onHideGuide} />
+              )}
               {snapshot && (
                 <LobbyPlayerGrid
                   snapshot={snapshot}
@@ -430,6 +512,15 @@ export default function RoomPage() {
               * người chơi ở cột trái - đã in tên cảnh, và ở pha này thanh pha
               * không có thêm gì để nói (chưa có hạn giờ, chưa có số vòng). */}
             {snapshot && snapshot.phase !== "LOBBY" && <PhaseBanner snapshot={snapshot} />}
+
+            {/*
+              * Thẻ hướng dẫn đứng NGAY DƯỚI thanh pha, trên nội dung pha: đọc
+              * theo đúng thứ tự "đang ở đâu -> cần làm gì -> làm ở đây". Không
+              * phải modal, không che, không chặn - xem `GuideBanner`.
+              */}
+            {guideVisible && !isLobby && (
+              <GuideBanner snapshot={snapshot} context={guideContext} onDismiss={onHideGuide} />
+            )}
 
             {/*
               * Sân khấu phiên toà đứng NGOÀI `AnimatePresence`, và đó là điều
@@ -612,7 +703,7 @@ export default function RoomPage() {
         draft={chatDraft}
         onDraftChange={setChatDraft}
         selfId={snapshot?.you?.id ?? null}
-        phase={snapshot?.phase ?? null}
+        snapshot={snapshot}
         title={heading.title}
       />
     </VoiceProvider>
