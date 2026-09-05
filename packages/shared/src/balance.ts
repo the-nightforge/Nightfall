@@ -45,11 +45,9 @@ import type { BalanceWarningView } from "./snapshot";
  *    theo hướng số đo.
  *
  * Cảnh báo cho lần hiệu chỉnh sau: Sói Con tụt từ 7 mẫu xuống 2 vì bảng preset
- * mới chỉ còn để nó ở preset 9 và 10, và xuống ĐÚNG MỘT khi preset 9 đổi sang
- * hai Sói thường. Lá mạnh nhất bộ bài giờ là lá được đo thưa nhất. Muốn đo nó
- * cho ra hồn thì phải cho script chạy cả những bộ bài KHÔNG phải preset, chứ
- * không phải chạy thêm ván - đó đúng là cách con số 6 hiện tại được đo, xem chú
- * thích ngay dưới.
+ * mới chỉ còn để nó ở preset 9 và 10. Lá mạnh nhất bộ bài giờ là lá được đo thưa
+ * nhất. Muốn đo nó cho ra hồn thì phải cho script chạy cả những bộ bài KHÔNG
+ * phải preset, chứ không phải chạy thêm ván.
  *
  * Thứ số đo nói chắc chắn:
  * - Tiên Tri đứng RIÊNG một bậc trên đầu vế làng; Phù Thuỷ là bậc thứ hai; phần
