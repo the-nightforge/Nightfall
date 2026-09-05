@@ -252,6 +252,30 @@ export function VoiceControl({
     ) : null;
 
   if (isDock) {
+    /*
+     * Chip trạng thái KHÔNG hiện khi nó chỉ nhắc lại cái nút ngay dưới nó.
+     *
+     * Ở `join` chip nói "Chưa vào kênh thoại" và nút nói "Vào kênh thoại"; ở
+     * `unblock-audio` cả hai cùng nói "Chạm để nghe". Trên điện thoại hai thứ
+     * đó xếp chồng ngay trên nút Bắt đầu, và chụp lại trên iPhone thì cụm nổi
+     * ở đáy cao gần bằng nửa màn hình, che luôn "Thêm bot để chơi thử". Bỏ chip
+     * đi thì dock còn đúng một hàng. `duplicate` và `error` vẫn giữ chip: ở đó
+     * chip nói CHUYỆN GÌ đã xảy ra, còn nút nói cách thoát ra.
+     */
+    const chipRedundant =
+      !micError && prompt !== null && (ui.mode === "join" || ui.mode === "unblock-audio");
+    /*
+     * Đỏ chỉ dành cho lúc kênh thoại HỎNG.
+     *
+     * Bản cũ tô đỏ cả lời mời "Vào kênh thoại" - trong app này đỏ là màu của
+     * CTA và của cảnh báo, nên một nút đỏ rực ở góc phải nổi hơn cả nút Bắt
+     * đầu đang xám, và người chơi đọc nó như một việc đang gấp. Lời mời bình
+     * thường dùng đúng hình của nút Chat ở góc đối diện.
+     */
+    const promptTone =
+      ui.mode === "duplicate" || ui.mode === "error"
+        ? "bg-blood-500 text-white hover:bg-blood-400"
+        : "border border-night-600 bg-night-800/95 text-mist backdrop-blur hover:border-mist/40 hover:text-white";
     return (
       <div
         data-voice-dock=""
@@ -261,7 +285,7 @@ export function VoiceControl({
          * `pb-28` nên không đè lên nút cuối trang. */
         className="fixed bottom-4 right-4 z-40 mb-[env(safe-area-inset-bottom)] flex flex-col items-end gap-2 lg:hidden"
       >
-        <StatusChip status={status} hint={micError ? null : hint} />
+        {!chipRedundant && <StatusChip status={status} hint={micError ? null : hint} />}
         {micError && (
           <p className="max-w-[15rem] rounded-xl border border-blood-500/40 bg-night-900/95 px-3 py-2 text-right text-[11px] leading-snug text-blood-400 backdrop-blur">
             {micError}
@@ -275,7 +299,7 @@ export function VoiceControl({
             <button
               type="button"
               onClick={prompt.onClick}
-              className="inline-flex h-12 items-center rounded-full bg-blood-500 px-4 text-sm font-semibold text-white shadow-lg shadow-black/40 transition hover:bg-blood-400"
+              className={`inline-flex h-12 items-center rounded-full px-4 text-sm font-semibold shadow-lg shadow-black/40 transition ${promptTone}`}
             >
               🎙️ {prompt.text}
             </button>
