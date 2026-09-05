@@ -111,7 +111,8 @@ const FORBIDDEN_KEYS = [
   "lastEliminated",
   "config",
   "winner",
-  "isBot",
+  // `isBot` KHÔNG còn ở đây: nó là công khai (`PlayerView.isBot` trong snapshot
+  // của cả phòng) và lõi cần nó để biết bàn có người thật hay không.
   "cursedTurned",
   "role",
   "log",
@@ -156,7 +157,7 @@ describe("bot knowledge security boundary", () => {
 
     const view = e.botKnowledgeFor("villager");
 
-    expect(view.players).toContainEqual({ id: "dead-seer", name: "Tiên Tri", alive: false });
+    expect(view.players).toContainEqual({ id: "dead-seer", name: "Tiên Tri", alive: false, isBot: true });
     expect(view.knownRoles).not.toHaveProperty("dead-seer");
   });
 
@@ -291,6 +292,7 @@ describe("bot knowledge security boundary", () => {
         // vẫn nằm trong FORBIDDEN_KEYS: state thô của chúng chứa `finalVotes`,
         // tức ai bỏ phiếu Treo/Tha, và đó là bí mật khi phiên toà còn mở.
         "trialAccusedId",
+        "trialDefense",
         "canFinalVote",
         "hunterShot",
         "phase",

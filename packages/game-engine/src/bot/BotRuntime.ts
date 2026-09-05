@@ -1,14 +1,21 @@
-import type { DayVoteRecap, Role, VoteMutation } from "@masoi/shared";
+import { roleTeam, type DayVoteRecap, type Role, type VoteMutation } from "@masoi/shared";
 import { analyzeChat } from "./analysis/chat-analysis";
 import { claimEvidence } from "./analysis/claim-credibility";
 import { applySocialEvidence } from "./analysis/social-analysis";
-import { analyzeVoteRecap } from "./analysis/vote-analysis";
+import {
+  analyzeAvoidance,
+  analyzeDefense,
+  analyzeVoteRecap,
+  avoidanceSourceId,
+  defenseSourceId,
+} from "./analysis/vote-analysis";
 import {
   analyzeRevealedVerdict,
   finalBallotSourceId,
   lynchedIdOf,
 } from "./analysis/verdict-review";
 import { applyEvidence, applyTrustEvidence, decayBeliefs } from "./belief/belief-state";
+import { observeProfile } from "./belief/player-profile";
 import { applyPrivateInformation } from "./belief/private-info";
 import {
   decideChatClaim,
@@ -216,6 +223,9 @@ export class BotRuntime {
 
     if (options.state) {
       this.state = options.state;
+      // Snapshot ghi trước P1.1 không có hồ sơ; schema server đã điền bảng
+      // trống, nhưng đường khôi phục không qua zod (test, harness) thì chưa.
+      this.state.profiles ??= {};
       this.lastDecayRound = options.lastDecayRound ?? -1;
     } else {
       const personality =
@@ -260,6 +270,11 @@ export class BotRuntime {
     // được ghi thành memory ở đó, và `applyEvidence` từ chối nguồn chưa thấy.
     this.ingestVerdictReviews(knowledge);
     this.ingestChat(context);
+    // SAU `ingestChat` (lời khai mới nhất đã vào `claims`) và SAU `ingestSeerResult`.
+    this.ingestClaimVerdicts(knowledge);
+    // Phải chạy SAU `ingestRecaps` (nguồn là memory `NOMINATED` của vòng này)
+    // và SAU `ingestChat` (lời khai trước phiên toà đã nằm trong `claims`).
+    this.ingestDefenseReview(context);
 
     // Phải chạy SAU `ingestDeaths`, `ingestRecaps` và `ingestChat`: cả ba đẩy
     // `sourceId` vào `seenEventIds`, và `claimEvidence` neo vào đúng những id
@@ -281,6 +296,7 @@ export class BotRuntime {
         lastNightDeaths: knowledge.lastNightDeaths,
         publicVoteHistory: knowledge.publicVoteHistory,
         seenEventIds: this.state.seenEventIds,
+        profiles: this.state.profiles,
       },
       this.weights,
     )) {
@@ -305,6 +321,9 @@ export class BotRuntime {
     // soi vừa ghi ở chính vòng này sẽ bị nguội ngay trong cùng một lượt observe.
     // Decay chỉ được phép chạm vào những gì đã cũ.
     if (this.lastDecayRound !== knowledge.round) {
+      // Chốt sổ vòng TRƯỚC vào hồ sơ trước khi làm nguội gì cả: đây là "cuối
+      // mỗi vòng" của hồ sơ, và nó chỉ chạy đúng một lần nhờ cùng cái cổng.
+      this.recordAggression(knowledge);
       decayAndPrune(this.state, knowledge.round, undefined, this.weights);
       decayBeliefs(this.state, knowledge.round, this.weights);
       this.lastDecayRound = knowledge.round;
@@ -890,6 +909,101 @@ export class BotRuntime {
         applyEvidence(this.state, item, this.weights);
         if (item.targetId) applySocialEvidence(this.state, item, this.weights);
       }
+
+      // Né tránh được đọc trên CHUỖI vòng, nên nó sống ở đây - nơi mỗi recap
+      // được xử lý đúng một lần - chứ không trong `analyzeVoteRecap` vốn chỉ
+      // nhìn một vòng. Nguồn là chính `marker` vừa đẩy vào `seenEventIds`.
+      for (const item of analyzeAvoidance(
+        {
+          history: knowledge.publicVoteHistory.filter((item) => item.round <= recap.round),
+          round: recap.round,
+          // Không xét chính mình: `applyEvidence` vốn bỏ qua, nhưng một memory
+          // "tôi né tránh" cũng vô nghĩa.
+          playerIds: knowledge.players
+            .filter((player) => player.alive && player.id !== this.state.playerId)
+            .map((player) => player.id),
+        },
+        this.state.personality.analyticalSkill,
+        this.rng,
+        this.weights,
+      )) {
+        this.write(
+          {
+            type: "AVOIDANCE",
+            sourceId: avoidanceSourceId(recap.round),
+            actorId: item.actorId,
+            importance: this.weights.memoryImportance.avoidance,
+            data: { reason: item.id.slice(item.sourceId.length + 1) },
+          },
+          knowledge,
+        );
+        applyEvidence(this.state, item, this.weights);
+      }
+    }
+  }
+
+  /**
+   * Chấm lượt bào chữa của bị cáo, đúng một lần mỗi phiên toà, SAU khi lượt
+   * đó đã khép (`trialDefense.endedAt` khác `null`).
+   *
+   * Các bot không được đánh thức trong pha DEFENSE - chỉ bị cáo mới được - nên
+   * lời bào chữa được đọc lại ở FINAL_VOTE từ `visibleChat`, lọc theo cửa sổ
+   * thời gian mà engine công bố. Không có cửa sổ (harness self-play, record
+   * cũ) thì không chấm gì: sự vắng mặt của dữ liệu chính là cái cổng, y như
+   * `ingestVerdictReviews`.
+   *
+   * Parse lại bằng `analyzeChat` chứ không lục `memories`: hàm đó thuần, rẻ,
+   * và `memories` có thể đã bị cắt ngân sách. Kết quả parse ở đây KHÔNG ghi
+   * vào memory - `ingestChat` đã ghi những câu đó rồi.
+   */
+  private ingestDefenseReview(context: BotDecisionContext): void {
+    const knowledge = context.knowledge;
+    const accusedId = knowledge.trialAccusedId;
+    const window = knowledge.trialDefense;
+    if (!accusedId || !window || window.endedAt === null) return;
+
+    const marker = `defense-review:${knowledge.round}`;
+    if (this.state.seenEventIds.includes(marker)) return;
+    // Recap của vòng này chưa vào thì chưa có nguồn để neo; đừng đánh dấu, lần
+    // observe sau sẽ thử lại.
+    const sourceId = defenseSourceId(knowledge.round);
+    if (!this.state.seenEventIds.includes(sourceId)) return;
+    this.state.seenEventIds.push(marker);
+
+    const said = context.visibleChat.filter(
+      (message) =>
+        message.actorId === accusedId &&
+        message.at >= window.startedAt &&
+        message.at <= (window.endedAt as number),
+    );
+    const saidIds = new Set(said.map((message) => message.id));
+    const statements = analyzeChat(said, knowledge.players, {
+      round: knowledge.round,
+      phase: "DEFENSE",
+      weights: this.weights,
+    });
+    const claimedBefore = this.state.claims.some(
+      (claim) => claim.actorId === accusedId && !saidIds.has(claim.sourceId),
+    );
+
+    for (const item of analyzeDefense(
+      { round: knowledge.round, accusedId, spoken: said.length, statements, claimedBefore },
+      this.state.personality.analyticalSkill,
+      this.rng,
+      this.weights,
+    )) {
+      this.write(
+        {
+          type: "DEFENSE_QUALITY",
+          sourceId,
+          actorId: accusedId,
+          targetId: item.targetId,
+          importance: this.weights.memoryImportance.defenseQuality,
+          data: { reason: item.id.slice(sourceId.length + 1) },
+        },
+        knowledge,
+      );
+      applyEvidence(this.state, item, this.weights);
     }
   }
 
@@ -944,7 +1058,72 @@ export class BotRuntime {
         // đây thì không có ai tố ai: sự thật đã lộ, và một phán đoán sai đã
         // được kiểm chứng thì đúng là một lý do để tin người đó ít đi.
         applyTrustEvidence(this.state, item, this.weights);
+        // Hồ sơ: một phán đoán đã kiểm chứng là một mẫu về độ chính xác.
+        observeProfile(
+          this.state,
+          item.actorId,
+          "accuracy",
+          item.kind === "VERDICT_HIT" ? 1 : 0,
+          recap.round,
+        );
       }
+    }
+  }
+
+  /**
+   * Lời khai vai bị KIỂM CHỨNG: vai của người khai đã lộ (`knownRoles`, tức
+   * `revealRoleOnDeath` hoặc đồng bọn Sói) hoặc chính bot đã soi người đó.
+   *
+   * Chỉ chạm HỒ SƠ (bluffRate), không chạm belief: belief về người đó hoặc
+   * đã ghim bởi kết quả soi, hoặc vô nghĩa vì họ đã chết. Thứ còn lại đáng
+   * nhớ là "người này từng khai láo" - và `claim-credibility` đọc nó khi họ
+   * khai lần nữa. Mỗi lời khai chấm đúng một lần (dấu trong `seenEventIds`).
+   */
+  private ingestClaimVerdicts(knowledge: BotKnowledgeView): void {
+    for (const claim of this.state.claims) {
+      if (claim.actorId === this.state.playerId) continue;
+      const role = claim.data.role;
+      if (typeof role !== "string") continue;
+
+      let bluffed: boolean | null = null;
+      const known = knowledge.knownRoles[claim.actorId];
+      if (known !== undefined) {
+        bluffed = known !== role;
+      } else {
+        const seen = this.state.knownInformation.seerResults.find(
+          (memory) => memory.targetId === claim.actorId,
+        );
+        if (seen && typeof seen.data.isWolf === "boolean") {
+          bluffed = (roleTeam(role as Role) === "wolves") !== seen.data.isWolf;
+        }
+      }
+      if (bluffed === null) continue;
+
+      const marker = `profile:claim:${claim.sourceId}:${claim.actorId}`;
+      if (this.state.seenEventIds.includes(marker)) continue;
+      this.state.seenEventIds.push(marker);
+      observeProfile(this.state, claim.actorId, "bluff", bluffed ? 1 : 0, knowledge.round);
+    }
+  }
+
+  /**
+   * Cuối mỗi vòng: ai đã công khai buộc tội ai đó trong vòng vừa qua.
+   *
+   * Một mẫu `1`/`0` cho MỖI người còn sống, kể cả người im lặng - im lặng
+   * cũng là dữ liệu về một người. Đọc từ memory `ACCUSE` của vòng trước, thứ
+   * `ingestChat` ghi từ lời nói; phiếu bầu không tính, vì ai cũng phải bỏ
+   * phiếu còn mở miệng tố người khác thì không.
+   */
+  private recordAggression(knowledge: BotKnowledgeView): void {
+    const previous = knowledge.round - 1;
+    if (previous < 1) return;
+    for (const player of knowledge.players) {
+      if (!player.alive || player.id === this.state.playerId) continue;
+      const accused = this.state.memories.some(
+        (memory) =>
+          memory.type === "ACCUSE" && memory.actorId === player.id && memory.round === previous,
+      );
+      observeProfile(this.state, player.id, "aggro", accused ? 1 : 0, previous);
     }
   }
 

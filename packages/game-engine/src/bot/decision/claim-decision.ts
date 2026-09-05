@@ -1,6 +1,7 @@
 import { isPowerRole, roleTeam, type Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { fnv1a32 } from "../hash";
+import { isHumanTable } from "../knowledge";
 import type { BotBrainState, BotDecisionContext, BotMemory, BotRng } from "../types";
 
 /**
@@ -170,6 +171,24 @@ export function voteLeader(counts: Record<string, number>): string | null {
   return leader;
 }
 
+/**
+ * Tiên Tri có đang GIỮ kết quả soi vì bàn có người thật không.
+ *
+ * Bàn toàn bot: không bao giờ giữ - `seerRevealRound` của bàn bot đã được đo
+ * là tốt nhất ở 0 (chú thích v2), và self-play của mọi preset phải giữ nguyên
+ * từng bit. Bàn có người (`isHumanTable`): giữ tới `seerRevealRoundHuman`.
+ * Không rút số ngẫu nhiên; `0` là tắt và thoát ngay ở phép so sánh đầu.
+ *
+ * EXPORT vì `planSpeech` phải giữ bằng chứng soi ra khỏi lời nói bằng ĐÚNG
+ * điều kiện này (qua `holdSeerEvidence`), không phải một bản chép tay.
+ */
+export function seerHoldsForHumans(context: BotDecisionContext, weights: BotWeights): boolean {
+  const revealRound = weights.deceptionRisk.seerRevealRoundHuman;
+  if (revealRound <= 0) return false;
+  if (context.knowledge.round >= revealRound) return false;
+  return isHumanTable(context.knowledge, weights);
+}
+
 /** Vai đã có người công khai nhận, kể cả người đã chết. */
 function alreadyClaimed(state: BotBrainState): Set<Role> {
   return new Set(state.claims.map((memory) => memory.data.role as Role));
@@ -298,7 +317,11 @@ export function decideChatClaim(
   }
 
   // ---- PROACTIVE: phe làng đang cầm một kết quả chỉ đích danh ----
-  if (!isWolf && INFORMANT_ROLES.has(role)) {
+  //
+  // Trước người thật thì CHƯA: xem `seerHoldsForHumans`. Chỉ nhánh chủ động
+  // này bị chặn - bị dồn phiếu (UNDER_FIRE, phía dưới) hay bị mạo danh
+  // (COUNTER, phía trên) thì Tiên Tri vẫn khai, vì lúc đó im lặng đắt hơn.
+  if (!isWolf && INFORMANT_ROLES.has(role) && !seerHoldsForHumans(context, weights)) {
     const hit = state.knownInformation.seerResults.find(
       (memory) => memory.data.isWolf === true && memory.targetId !== undefined,
     );

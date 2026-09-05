@@ -1628,7 +1628,7 @@ export class GameEngine {
     if (uniqueLeader && leader.type === "PLAYER") {
       const accused = this.player(leader.targetId);
       if (accused && accused.alive) {
-        st.trial = { accusedId: accused.id, finalVotes: {} };
+        st.trial = { accusedId: accused.id, finalVotes: {}, defenseStartedAt: now };
         st.log.push(`${accused.name} bị đưa ra biện hộ.`);
         st.phase = "DEFENSE";
         st.phaseEndsAt = now + defenseMs;
@@ -1688,7 +1688,8 @@ export class GameEngine {
   }
 
   beginFinalVote(durationMs: number, now = Date.now()): void {
-    this.mustTrial();
+    const trial = this.mustTrial();
+    trial.defenseEndedAt = now;
     this.state.phase = "FINAL_VOTE";
     this.state.phaseEndsAt = now + durationMs;
   }
@@ -2794,7 +2795,9 @@ export class GameEngine {
       phaseStartedAt: st.phaseStartedAt,
       phaseEndsAt: st.phaseEndsAt,
       selfRole: viewer.role,
-      players: st.players.map(({ id, name, alive }) => ({ id, name, alive })),
+      // `isBot` là công khai (`PlayerView.isBot` trong snapshot của cả phòng);
+      // lõi dùng nó để biết bàn có người thật hay không, xem `countHumansAlive`.
+      players: st.players.map(({ id, name, alive, isBot }) => ({ id, name, alive, isBot })),
       knownRoles,
       revealRoleOnDeath: st.config.revealRoleOnDeath === true,
       seerResult,
@@ -2813,6 +2816,17 @@ export class GameEngine {
       trialAccusedId:
         (st.phase === "DEFENSE" || st.phase === "FINAL_VOTE") && st.trial
           ? st.trial.accusedId
+          : null,
+      // Cùng cổng pha với `trialAccusedId`. Thiếu mốc mở (snapshot cũ) thì
+      // không có cửa sổ, và lõi sẽ không chấm lời bào chữa của phiên toà đó.
+      trialDefense:
+        (st.phase === "DEFENSE" || st.phase === "FINAL_VOTE") &&
+        st.trial &&
+        st.trial.defenseStartedAt !== undefined
+          ? {
+              startedAt: st.trial.defenseStartedAt,
+              endedAt: st.phase === "FINAL_VOTE" ? (st.trial.defenseEndedAt ?? null) : null,
+            }
           : null,
       canFinalVote:
         st.phase === "FINAL_VOTE" &&

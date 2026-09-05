@@ -27,7 +27,15 @@ export type BotMemoryType =
   /** Đồng đội Sói đã chết; buộc phải đổi cách chơi phần còn lại của ván. */
   | "ALLY_LOST"
   /** Tóm tắt một vòng, để bot còn nhớ chuyện gì đã xảy ra chứ không chỉ nhớ điểm số. */
-  | "ROUND_SUMMARY";
+  | "ROUND_SUMMARY"
+  /**
+   * Một người né tránh suốt nhiều vòng: chỉ phiếu trắng hoặc phiếu lẻ, hoặc
+   * không ai đụng tới dù vẫn có mặt. Ghi lại để bot nhắc được "anh im suốt
+   * ba vòng rồi" chứ không chỉ cộng điểm. Xem `analyzeAvoidance`.
+   */
+  | "AVOIDANCE"
+  /** Lượt bào chữa của một bị cáo bị chấm là kém. Xem `analyzeDefense`. */
+  | "DEFENSE_QUALITY";
 
 /**
  * Bằng chứng rút ra từ hành vi CÔNG KHAI: lịch sử phiếu và lời nói.
@@ -55,7 +63,14 @@ export type PublicEvidenceKind =
    * mọi tín hiệu hành vi khác chứ không được miễn như thông tin riêng của vai.
    */
   | "VERDICT_HIT"
-  | "VERDICT_MISS";
+  | "VERDICT_MISS"
+  /**
+   * Hai tín hiệu hành vi mà người chơi thật đọc ra nhau, còn bot thì không:
+   * né tránh suốt nhiều vòng, và bào chữa kém khi bị đưa ra xử. Cả hai đều
+   * là suy đoán từ dữ liệu công khai và decay như mọi tín hiệu hành vi khác.
+   */
+  | "AVOIDANCE"
+  | "DEFENSE_QUALITY";
 
 export type EvidenceKind =
   | PublicEvidenceKind
@@ -285,6 +300,37 @@ export interface BeliefEntry {
   lastUpdatedRound: number;
 }
 
+/**
+ * Hồ sơ TRONG VÁN về một người chơi. Xem `belief/player-profile.ts`.
+ *
+ * Khác `BeliefEntry` ở chỗ nó nói về NGƯỜI chứ không về sự kiện: "người này
+ * hay khai láo" chứ không phải "người này đã khai láo ở vòng 2". Nguội chậm
+ * hơn belief (`recency.profileDecayPerRound`).
+ */
+export interface PlayerProfile {
+  /** Tỉ lệ lời khai vai đã bị KIỂM CHỨNG là sai. Trung tính 0. */
+  bluffRate: number;
+  /** Tỉ lệ vòng có công khai buộc tội ai đó. Trung tính 0. */
+  aggroRate: number;
+  /** Tỉ lệ phiếu Treo/Tha đã kiểm chứng là đúng. Trung tính 0.5. */
+  accuracy: number;
+  /** Số quan sát (đã nguội). Sức nặng của hồ sơ là `profileStrength`. */
+  samples: number;
+  /** Mốc để decay không nhân đôi khi gọi hai lần một vòng. */
+  lastUpdatedRound: number;
+}
+
+/**
+ * Sức nặng của một hồ sơ, `0..1`: `samples / (samples + prior)`.
+ *
+ * Ở đây - chứ không ở `player-profile.ts` - vì `claim-credibility` cũng cần
+ * nó mà module đó bị khoá danh sách import (xem test CLAIM_BLINDNESS).
+ */
+export function profileStrength(profile: PlayerProfile, prior: number): number {
+  if (profile.samples <= 0) return 0;
+  return profile.samples / (profile.samples + Math.max(0, prior));
+}
+
 export interface BotMemory {
   id: string;
   sourceId: string;
@@ -381,6 +427,19 @@ export interface BotPlayerKnowledge {
   id: string;
   name: string;
   alive: boolean;
+  /**
+   * Ghế này là BOT hay người thật. Engine cấp, lõi không đoán.
+   *
+   * CÔNG KHAI: `PlayerView.isBot` đi xuống mọi client trong `RoomSnapshot`,
+   * cả phòng nhìn thấy ai là bot từ sảnh chờ. Lõi cần nó vì cùng một nước đi
+   * có giá khác nhau trước hai loại khán giả: Tiên Tri hô kết quả ngày 1 là
+   * đúng trong bàn toàn bot (bầy Sói bot không đọc chat để cắn) và là tự xin
+   * chết đêm 2 trước người thật.
+   *
+   * Optional vì `BotKnowledgeView` được dựng lại từ record self-play cũ và từ
+   * fixture test; thiếu cờ thì coi là bot - xem `countHumansAlive`.
+   */
+  isBot?: boolean;
 }
 
 export interface BotKnowledgeView {
@@ -462,6 +521,19 @@ export interface BotKnowledgeView {
    * còn mở. Một object cùng tên là lời mời để ai đó spread cả cụm vào view.
    */
   trialAccusedId: string | null;
+  /**
+   * Cửa sổ thời gian của lượt bào chữa trong vòng này, hoặc `null`.
+   *
+   * `endedAt` là `null` khi lượt bào chữa còn mở (pha DEFENSE) và là mốc khép
+   * khi đã sang FINAL_VOTE. Lõi cần nó vì các bot KHÔNG quan sát trong pha
+   * DEFENSE (chỉ bị cáo mới được đánh thức), nên lúc chấm lời bào chữa ở
+   * FINAL_VOTE chúng phải biết câu nào của bị cáo nằm trong lượt đó. Công
+   * khai như `trialAccusedId`: cả phòng cùng nhìn đồng hồ đó.
+   *
+   * Optional vì `BotKnowledgeView` được dựng lại từ record self-play cũ, và
+   * harness self-play không chạy pha DEFENSE nên không có gì để điền.
+   */
+  trialDefense?: { startedAt: number; endedAt: number | null } | null;
   canFinalVote: boolean;
   /** `null` khi bot không phải Thợ Săn đang có lượt phản kích. */
   hunterShot: { canAct: boolean; legalTargets: string[] } | null;
@@ -515,6 +587,13 @@ export interface BotBrainState {
   trust: Record<string, BeliefEntry>;
   knownInformation: { knownRoles: Record<string, Role>; seerResults: BotMemory[] };
   claims: BotMemory[];
+  /**
+   * Hồ sơ trong ván về từng người khác. Xem `PlayerProfile`.
+   *
+   * Khởi tạo trung tính cho cả roster; cập nhật tất định từ những gì bot đã
+   * thấy (phán quyết đã lộ vai, lời khai bị kiểm chứng, buộc tội mỗi vòng).
+   */
+  profiles: Record<string, PlayerProfile>;
   /**
    * Vai chính BOT này đã công khai nhận, hoặc `null`.
    *

@@ -4,6 +4,8 @@ import { createSeededRng } from "../src/bot/rng";
 import { createBotPersonality } from "../src/bot/personality/personality";
 import { createBotBrainState, remember } from "../src/bot/memory/memory-store";
 import { applyEvidence, decayBeliefs } from "../src/bot/belief/belief-state";
+import { observeProfile } from "../src/bot/belief/player-profile";
+import { BOT_WEIGHTS_V12, BOT_WEIGHTS_V13 } from "../src/bot/config/weights";
 import { applyPrivateInformation } from "../src/bot/belief/private-info";
 import type { Role } from "@masoi/shared";
 import type {
@@ -406,5 +408,85 @@ describe("BotRuntime · tích hợp decay và thông tin riêng", () => {
     };
 
     expect(run()).toEqual(run());
+  });
+});
+
+describe("decay hai tốc độ: hồ sơ nguội chậm hơn sự kiện (P1.2)", () => {
+  function primed(): BotBrainState {
+    const state = stateFor();
+    state.seenEventIds.push("src-1");
+    applyEvidence(state, evidence({ round: 1 }), BOT_WEIGHTS_V13);
+    observeProfile(state, "a", "bluff", 1, 1);
+    observeProfile(state, "a", "bluff", 1, 1);
+    return state;
+  }
+
+  it("hằng số nằm trong RecencyWeights và chậm hơn belief", () => {
+    expect(BOT_WEIGHTS_V13.recency.profileDecayPerRound).toBe(0.93);
+    expect(BOT_WEIGHTS_V13.recency.profileDecayPerRound).toBeGreaterThan(
+      BOT_WEIGHTS_V13.recency.beliefDecayPerRound,
+    );
+    expect(BOT_WEIGHTS_V13.recency.beliefDecayPerRound).toBe(0.85);
+  });
+
+  it("sau ba vòng, belief còn 0.85^3 nhưng hồ sơ còn 0.93^3", () => {
+    const state = primed();
+    const belief = state.suspicion.a!.score;
+    decayBeliefs(state, 4, BOT_WEIGHTS_V13);
+
+    expect(state.suspicion.a!.score).toBeCloseTo(belief * 0.85 ** 3);
+    expect(state.profiles.a!.samples).toBeCloseTo(2 * 0.93 ** 3);
+    expect(state.profiles.a!.bluffRate).toBeCloseTo(0.93 ** 3);
+    expect(state.profiles.a!.lastUpdatedRound).toBe(4);
+  });
+
+  it("không nhân đôi khi gọi hai lần trong cùng một vòng", () => {
+    const state = primed();
+    decayBeliefs(state, 3, BOT_WEIGHTS_V13);
+    const once = { ...state.profiles.a! };
+    decayBeliefs(state, 3, BOT_WEIGHTS_V13);
+    decayBeliefs(state, 3, BOT_WEIGHTS_V13);
+    expect(state.profiles.a).toEqual(once);
+  });
+
+  it("tỉ lệ kéo về trung tính chứ không về 0: accuracy nguội về 0.5", () => {
+    const state = stateFor();
+    observeProfile(state, "b", "accuracy", 1, 1);
+    decayBeliefs(state, 11, BOT_WEIGHTS_V13);
+    expect(state.profiles.b!.accuracy).toBeGreaterThan(0.5);
+    expect(state.profiles.b!.accuracy).toBeLessThan(0.75);
+    expect(state.profiles.b!.accuracy).toBeCloseTo(0.5 + 0.5 * 0.93 ** 10);
+  });
+
+  it("không đụng hồ sơ vừa cập nhật ở chính vòng này", () => {
+    const state = stateFor();
+    observeProfile(state, "c", "aggro", 1, 5);
+    decayBeliefs(state, 5, BOT_WEIGHTS_V13);
+    expect(state.profiles.c).toMatchObject({ aggroRate: 1, samples: 1 });
+  });
+
+  it("v12 không làm nguội hồ sơ (hệ số 1)", () => {
+    const state = primed();
+    decayBeliefs(state, 9, BOT_WEIGHTS_V12);
+    expect(state.profiles.a).toMatchObject({ bluffRate: 1, samples: 2 });
+  });
+
+  it("qua BotRuntime: hồ sơ nguội đúng một lần mỗi vòng dù observe nhiều lần", () => {
+    const runtime = new BotRuntime({
+      playerId: "me",
+      rng: () => 0,
+      playerIds: PLAYERS,
+      personality: createBotPersonality(createSeededRng("decay")),
+      weights: BOT_WEIGHTS_V13,
+    });
+    observeProfile(runtime.state, "a", "bluff", 1, 1);
+    runtime.observe(context({ round: 1 }));
+    runtime.observe(context({ round: 2 }));
+    runtime.observe(context({ round: 2 }));
+    runtime.observe(context({ round: 2 }));
+    // Vòng 2 chốt sổ aggro cho vòng 1 (mẫu 0) TRƯỚC khi nguội, nên samples đi
+    // 1 -> 2 rồi mới nhân 0.93 một lần; bluffRate đi 1 -> 1 -> 0.93.
+    expect(runtime.state.profiles.a!.samples).toBeCloseTo(2 * 0.93);
+    expect(runtime.state.profiles.a!.bluffRate).toBeCloseTo(0.93);
   });
 });

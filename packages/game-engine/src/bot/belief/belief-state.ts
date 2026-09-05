@@ -1,6 +1,7 @@
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { BeliefEntry, BotBrainState, BotEvidence, BotPersonality } from "../types";
 import { clampBeliefScore, clampConfidence, validateEvidence } from "./evidence";
+import { decayProfiles } from "./player-profile";
 
 function neutralBelief(): BeliefEntry {
   return { score: 0, reasons: [], lastUpdatedRound: 0 };
@@ -153,4 +154,8 @@ export function decayBeliefs(
     edge.voteAlignment *= factor;
     edge.lastUpdatedRound = round;
   }
+
+  // Hồ sơ người chơi nguội theo tốc độ RIÊNG, chậm hơn: xem
+  // `RecencyWeights.profileDecayPerRound`.
+  decayProfiles(state, round, weights.recency.profileDecayPerRound);
 }

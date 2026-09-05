@@ -8,8 +8,89 @@ import type { Role } from "@masoi/shared";
 import { incomingHostilityOf } from "../analysis/social-analysis";
 import { MAX_BELIEF_SCORE } from "../belief/evidence";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import { wolfBluffSeat } from "../decision/claim-decision";
+import { fnv1a32 } from "../hash";
 import { sumTerms, type TraceTerm } from "../trace/trace";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
+
+/** Vai thuộc bầy mà `knownRoles` của một con Sói còn sống liệt kê. */
+function isPackRole(role: Role | undefined): boolean {
+  return role === "WEREWOLF" || role === "WOLF_CUB";
+}
+
+/**
+ * Đồng bọn mà con Sói này CÃI GIẢ ở vòng này, hoặc `null`.
+ *
+ * "Hai đứa này chưa từng nghi nhau" là tín hiệu người thật đọc ra sau hai ván,
+ * và bot chưa từng định phát ra nó. Cuộc cãi giả là một lá phiếu nhẹ vào đồng
+ * bọn ở vòng 1-2, đúng lúc nó rẻ nhất: chưa ai bầu hay công kích con Sói nào,
+ * nên một phiếu lẻ không đưa được ai lên xử, mà cặp Sói từ đó có một lịch sử
+ * từng nghi nhau.
+ *
+ * Bốn luật, tất cả CỤC BỘ và TẤT ĐỊNH - mọi con trong bầy tính ra cùng đáp án
+ * từ dữ liệu cả bầy cùng thấy, không cần kênh đồng bộ, và KHÔNG rút RNG:
+ *
+ * 1. Cổng `fakeFightChance <= 0` đứng đầu: v1..v15 ra khỏi hàm mà không đọc
+ *    thêm gì.
+ * 2. Chỉ ở vòng `1..fakeFightUntilRound`, bầy còn >= 2, và chưa có áp lực
+ *    công khai (phiếu hay công kích) lên bất kỳ con nào.
+ * 3. Mỗi vòng đúng MỘT ghế mở miệng, chốt bằng hash như `wolfBluffSeat`, và
+ *    không phải ghế đang bluff Tiên Tri vòng đó - một con vừa khai Tiên Tri
+ *    vừa bầu đồng bọn là một lời "soi ra Sói" thật, tức bán đứng chứ không
+ *    phải diễn.
+ * 4. Canh bạc `chance x deceptionSkill` chốt bằng hash trên (bầy, vòng,
+ *    deceptionSkill) thay vì `rng()`: hai lần hỏi trong cùng vòng (thảo luận
+ *    rồi bỏ phiếu) phải cho cùng đáp án, nếu không con Sói tự mâu thuẫn giữa
+ *    lời nói và lá phiếu. `deceptionSkill` là muối theo ván - cùng bầy cùng
+ *    vòng ở hai ván khác seed vẫn ra hai kết quả khác nhau.
+ *
+ * EXPORT vì `selectVote` là nơi biến nó thành số hạng điểm.
+ */
+export function fakeFightTarget(
+  context: BotDecisionContext,
+  state: BotBrainState,
+  weights: BotWeights,
+): string | null {
+  const chance = weights.deceptionRisk.fakeFightChance;
+  if (chance <= 0) return null;
+
+  const knowledge = context.knowledge;
+  const round = knowledge.round;
+  if (round < 1 || round > weights.deceptionRisk.fakeFightUntilRound) return null;
+
+  const me = state.playerId;
+  if (!isPackRole(knowledge.knownRoles[me])) return null;
+
+  const alive = new Set(knowledge.players.filter((p) => p.alive).map((p) => p.id));
+  // Cả bầy kể cả đã chết là KHOÁ của ván (như `wolfBluffSeat`); còn sống là
+  // danh sách ghế.
+  const roster = Object.entries(knowledge.knownRoles)
+    .filter(([, role]) => isPackRole(role))
+    .map(([id]) => id)
+    .sort();
+  const pack = roster.filter((id) => alive.has(id));
+  if (pack.length < 2 || !pack.includes(me)) return null;
+
+  for (const id of pack) {
+    if ((knowledge.currentVoteCounts.players[id] ?? 0) > 0) return null;
+    if (incomingHostilityOf(state, id) > 0) return null;
+  }
+
+  const key = roster.join(",");
+  const bluffSeat = wolfBluffSeat(pack, roster, round);
+  const seats = pack.filter((id) => id !== bluffSeat);
+  if (seats.length === 0) return null;
+  const accuser = seats[fnv1a32(`fake-fight|${key}|${round}`) % seats.length];
+  if (accuser !== me) return null;
+
+  const roll =
+    (fnv1a32(`fake-fight-roll|${key}|${round}|${state.personality.deceptionSkill}`) % 10_000) /
+    10_000;
+  if (roll >= chance * state.personality.deceptionSkill) return null;
+
+  const others = pack.filter((id) => id !== me);
+  return others[fnv1a32(`fake-fight-target|${key}|${round}`) % others.length] ?? null;
+}
 
 /** Vai có thể lật ngược ván đấu nếu sống thêm một đêm. */
 const POWER_ROLES = new Set(["SEER", "WITCH", "GUARD", "HUNTER"]);

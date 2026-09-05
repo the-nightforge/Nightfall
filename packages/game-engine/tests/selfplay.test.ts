@@ -148,6 +148,7 @@ describe("replay độc lập", () => {
     expect(Object.keys(record).sort()).toEqual([
       "config",
       "events",
+      "humanSeats",
       "maxRounds",
       "playerCount",
       "seed",

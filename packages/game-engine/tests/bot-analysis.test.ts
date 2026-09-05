@@ -3,7 +3,12 @@ import type { DayVoteRecap, PublicVoteChoice, VoteMutation } from "@masoi/shared
 import { createBotPersonality } from "../src/bot/personality/personality";
 import { createSeededRng } from "../src/bot/rng";
 import { createBotBrainState, remember } from "../src/bot/memory/memory-store";
-import { analyzeVoteRecap } from "../src/bot/analysis/vote-analysis";
+import {
+  analyzeAvoidance,
+  analyzeDefense,
+  analyzeVoteRecap,
+} from "../src/bot/analysis/vote-analysis";
+import { BOT_WEIGHTS_V10, BOT_WEIGHTS_V11 } from "../src/bot/config/weights";
 import {
   applySocialEvidence,
   possibleWolfPairScore,
@@ -14,6 +19,7 @@ import type {
   BotBrainState,
   BotChatObservation,
   BotEvidence,
+  BotMemory,
   BotPlayerKnowledge,
 } from "../src/bot/types";
 
@@ -497,12 +503,15 @@ describe("conservative chat analysis", () => {
   });
 
   it("does not confuse the verb nghi with the verb nghi-tilde", () => {
+    // "Tôi nghĩ Bình vô tội": không bao giờ là cáo buộc. Nó là một lời bênh
+    // vực (nhãn "vô tội" sau tên), và đó là điều đúng.
     const memories = analyzeChat(
       [message("m1", "a", "T\u00f4i ngh\u0129 B\u00ecnh v\u00f4 t\u1ed9i")],
       players,
     );
 
-    expect(memories).toEqual([]);
+    expect(memories.map((item) => [item.type, item.targetId])).toEqual([["DEFEND", "b"]]);
+    expect(analyzeChat([message("m2", "a", "T\u00f4i ngh\u0129 B\u00ecnh")], players)).toEqual([]);
   });
 
   it("still understands a player typing without diacritics", () => {
@@ -660,5 +669,545 @@ describe("conservative chat analysis", () => {
       expect(claims("ok tôi là tiên tri")).toHaveLength(1);
       expect(claims("kk tôi là tiên tri đây")).toHaveLength(1);
     });
+  });
+
+  /**
+   * Alias lấy từ tờ đề xuất `reports/alias-proposal.md` (`npm run mine-aliases`).
+   * Mỗi alias một test, và mỗi alias chỉ được khớp NGAY SAU một cách tự xưng.
+   */
+  describe("alias vai từ log người chơi", () => {
+    function claims(text: string) {
+      return analyzeChat([message("m1", "a", text)], players).filter(
+        (item) => item.type === "ROLE_CLAIM" || item.type === "COUNTER_CLAIM",
+      );
+    }
+    const claimOf = (role: string) => [
+      expect.objectContaining({ type: "ROLE_CLAIM", data: { role } }),
+    ];
+
+    it("pt / phù thuỷ là Phù Thuỷ", () => {
+      for (const text of ["mình là pt nè", "t là pt", "toi la phu thuy"]) {
+        expect(claims(text), text).toEqual(claimOf("WITCH"));
+      }
+    });
+
+    it("lm / linh mục là Linh Mục", () => {
+      for (const text of ["mình là lm nha", "tôi là linh mục"]) {
+        expect(claims(text), text).toEqual(claimOf("PRIEST"));
+      }
+    });
+
+    it("ts / thợ săn là Thợ Săn", () => {
+      for (const text of ["tôi là ts nhé", "t là thợ săn", "tui la tho san"]) {
+        expect(claims(text), text).toEqual(claimOf("HUNTER"));
+      }
+    });
+
+    it("bd / bà đồng là Bà Đồng", () => {
+      for (const text of ["mình là bd", "tôi là bà đồng"]) {
+        expect(claims(text), text).toEqual(claimOf("MEDIUM"));
+      }
+    });
+
+    it("dl / dân đen là Dân Làng", () => {
+      for (const text of ["tôi là dl thôi", "t là dân đen", "mình là dân thường"]) {
+        expect(claims(text), text).toEqual(claimOf("VILLAGER"));
+      }
+    });
+
+    it("thầy bói là Tiên Tri", () => {
+      expect(claims("tôi là thầy bói")).toEqual(claimOf("SEER"));
+      expect(claims("t la thay boi ne")).toEqual(claimOf("SEER"));
+    });
+
+    it("hộ vệ / bảo kê là Bảo Vệ", () => {
+      for (const text of ["tôi là hộ vệ", "tôi là bảo kê của làng", "t la ho ve"]) {
+        expect(claims(text), text).toEqual(claimOf("GUARD"));
+      }
+    });
+
+    it("sát thủ là Sát Nhân", () => {
+      expect(claims("tôi là sát thủ")).toEqual(claimOf("SERIAL_KILLER"));
+    });
+
+    it("nhận <vai> là lời khai không chủ ngữ", () => {
+      expect(claims("nhận bv, tối qua đỡ cho An")).toEqual(claimOf("GUARD"));
+      expect(claims("nhận pt đây")).toEqual(claimOf("WITCH"));
+      expect(claims("nhận được tin gì chưa")).toEqual([]);
+    });
+
+    it("sw là Sói", () => {
+      expect(claims("tôi là sw, đừng treo tôi")).toEqual(claimOf("WEREWOLF"));
+    });
+
+    it("alias ngắn nằm giữa câu không thành lời khai", () => {
+      for (const text of [
+        "pt nào cũng được",
+        "ts đâu rồi",
+        "cho tôi hỏi lm là gì",
+        "bd với ts chưa lên tiếng",
+        "sw cắn ai tối qua",
+      ]) {
+        expect(claims(text), text).toEqual([]);
+      }
+    });
+
+    it("câu đùa với alias mới không thành lời khai", () => {
+      for (const text of [
+        "t mà là pt thì đã cứu Bình rồi",
+        "ai bảo t là ts",
+        "ước gì tôi là bà đồng",
+        "nếu mình là lm thì đã rảy Chi",
+        "t k phải pt nha",
+        "tôi hem phải thợ săn",
+        "mình hổng phải bd đâu",
+      ]) {
+        expect(claims(text), text).toEqual([]);
+      }
+    });
+  });
+
+  /**
+   * Cáo buộc và bênh vực theo cách người chơi thật gõ: không có "tôi", không
+   * có "là", nhiều khi không có dấu. Mỗi mẫu một test, kèm test phủ định.
+   */
+  describe("cáo buộc và bênh vực kiểu người thật", () => {
+    const substantive = (text: string, list = players) =>
+      analyzeChat([message("m1", "a", text)], list)
+        .filter((item) => item.type === "ACCUSE" || item.type === "DEFEND")
+        .map((item) => [item.type, item.targetId]);
+
+    it("nghi X (không có tôi) là cáo buộc X", () => {
+      for (const text of ["nghi Bình", "nghi Bình lắm", "t nghi Bình", "mình nghi Bình rồi", "nghi ngờ Bình"]) {
+        expect(substantive(text), text).toEqual([["ACCUSE", "b"]]);
+      }
+    });
+
+    it("vote X / treo X / chốt X là cáo buộc X", () => {
+      for (const text of ["vote Bình", "vote cho Bình đi", "treo Bình", "treo Binh di", "chốt Bình nhé", "vote Bình thôi"]) {
+        expect(substantive(text), text).toEqual([["ACCUSE", "b"]]);
+      }
+    });
+
+    it("X sói (không có là) là cáo buộc X", () => {
+      for (const text of ["Bình sói", "Bình sói chắc luôn", "Bình sói rồi", "thằng Bình sói 100%"]) {
+        expect(substantive(text), text).toEqual([["ACCUSE", "b"]]);
+      }
+    });
+
+    it("soi không dấu là động từ soi, không phải Sói", () => {
+      // "An soi Bình" = Tiên Tri An soi Bình. Không suy ra ai là Sói cả.
+      expect(substantive("Binh soi Chi")).toEqual([]);
+      expect(substantive("Bình soi Chi ra dân")).toEqual([]);
+    });
+
+    it("tin X / tha X / đừng vote X là bênh vực X", () => {
+      for (const text of ["tin Bình", "t tin Bình", "mình tin Bình mà", "tha Bình đi", "đừng vote Bình", "dung treo Binh"]) {
+        expect(substantive(text), text).toEqual([["DEFEND", "b"]]);
+      }
+    });
+
+    it("X dân / X sạch là bênh vực X", () => {
+      for (const text of ["Bình dân", "Bình dân chắc", "Bình sạch", "Bình sạch rồi"]) {
+        expect(substantive(text), text).toEqual([["DEFEND", "b"]]);
+      }
+    });
+
+    it("phủ định teencode giết cả mẫu mới", () => {
+      for (const text of [
+        "ko nghi Bình",
+        "k vote Bình",
+        "hok treo Bình",
+        "Bình ko sói",
+        "Bình hem sói đâu",
+        "t k tin Bình",
+        "Bình đếch phải dân",
+        "Bình éo sạch",
+      ]) {
+        expect(substantive(text), text).toEqual([]);
+      }
+    });
+
+    it("mẫu mới vẫn chỉ nhận ở đầu mệnh đề", () => {
+      // "ai vote Bình" là câu hỏi; "sao treo Bình" là thắc mắc.
+      for (const text of ["ai vote Bình", "sao lại treo Bình", "ai nghi Bình giơ tay"]) {
+        expect(substantive(text), text).toEqual([]);
+      }
+    });
+
+    it("tên trùng thì mẫu mới cũng bỏ qua", () => {
+      const twins: BotPlayerKnowledge[] = [
+        { id: "x", name: "Lê Bình", alive: true },
+        { id: "y", name: "Trần Bình", alive: true },
+        { id: "a", name: "An", alive: true },
+      ];
+      expect(substantive("vote Bình", twins)).toEqual([]);
+      expect(substantive("Bình sói", twins)).toEqual([]);
+    });
+
+    it("marker không dấu phải khớp trọn từ: tha ≠ thằng, tin ≠ tính", () => {
+      expect(substantive("thằng Bình sói")).toEqual([["ACCUSE", "b"]]);
+      expect(substantive("thang Binh la soi")).toEqual([["ACCUSE", "b"]]);
+      expect(substantive("tính Bình sao")).toEqual([]);
+    });
+
+    it("tiếng đệm nhấn mạnh được chen giữa tên và nhãn", () => {
+      for (const text of ["Bình đúng sói rồi", "Bình chuẩn sói", "Bình 100% sói", "Bình chắc dân", "Bình đúng dân rồi"]) {
+        expect(substantive(text), text).toHaveLength(1);
+      }
+      expect(substantive("Bình đúng sói rồi")).toEqual([["ACCUSE", "b"]]);
+      expect(substantive("Bình chắc dân")).toEqual([["DEFEND", "b"]]);
+    });
+
+    it("nhãn nhiều tiếng: khả nghi, đáng ngờ, nói dối, trong sạch, vô tội", () => {
+      for (const text of ["Bình khả nghi", "tôi thấy Bình đáng ngờ nhất", "Bình nói dối", "Bình sủa", "Bình fake tt"]) {
+        expect(substantive(text), text).toEqual([["ACCUSE", "b"]]);
+      }
+      for (const text of ["Bình trong sạch", "Bình vô tội", "tôi nghĩ Bình vô tội", "Bình uy tín", "Bình ok"]) {
+        expect(substantive(text), text).toEqual([["DEFEND", "b"]]);
+      }
+    });
+
+    it("sói là X đảo trật tự vẫn là cáo buộc X", () => {
+      expect(substantive("sói là Bình")).toEqual([["ACCUSE", "b"]]);
+      expect(substantive("soi la Binh")).toEqual([["ACCUSE", "b"]]);
+    });
+
+    it("X là dân, kể cả không dấu, là bênh vực X", () => {
+      expect(substantive("Bình là dân")).toEqual([["DEFEND", "b"]]);
+      expect(substantive("Binh la dan")).toEqual([["DEFEND", "b"]]);
+    });
+
+    it("vote/treo/chốt có chủ ngữ, và up/đẩy/lynch/kill/bỏ phiếu", () => {
+      for (const text of ["t vote Bình", "mình vote Bình nhé", "tôi treo Bình", "t chốt Bình", "up Bình", "đẩy Bình lên", "day Binh len", "lynch Bình", "kill Bình", "tôi bỏ phiếu Bình", "bỏ phiếu Bình đi"]) {
+        expect(substantive(text), text).toEqual([["ACCUSE", "b"]]);
+      }
+    });
+
+    it("nghi không dấu được nhận khi vế sau không nói tới sự vô tội", () => {
+      expect(substantive("nghi Binh")).toEqual([["ACCUSE", "b"]]);
+      expect(substantive("t nghi Binh nhat")).toEqual([["ACCUSE", "b"]]);
+      // "nghĩ Bình dân" / "nghĩ Bình vô tội" gõ không dấu: không đọc thành gì.
+      expect(substantive("nghi Binh dan")).toEqual([]);
+      expect(substantive("nghi Binh vo toi")).toEqual([]);
+      expect(substantive("toi nghi Binh")).toEqual([["ACCUSE", "b"]]);
+      // "tôi nghĩ Bình ok" gõ không dấu: có thể là nghi hoặc nghĩ, và vế sau
+      // nói người đó ổn - bỏ qua cả câu thay vì đoán.
+      expect(substantive("toi nghi Binh ok")).toEqual([]);
+    });
+
+    it("đâu/gì ở cuối câu là phủ định theo lối nói", () => {
+      expect(substantive("Bình sói đâu")).toEqual([]);
+      expect(substantive("Bình mà sói gì")).toEqual([]);
+      // Một mình "đâu" là câu hỏi chỗ, không phải phủ định - và không sinh gì.
+      expect(substantive("Bình đâu")).toEqual([]);
+    });
+
+    it("chắc/chào/chạy không phải phủ định dù chứa chả khi bỏ dấu", () => {
+      expect(substantive("Bình là sói chắc luôn")).toEqual([["ACCUSE", "b"]]);
+      expect(substantive("Binh la soi chac luon")).toEqual([["ACCUSE", "b"]]);
+      expect(substantive("Bình chả phải sói")).toEqual([]);
+      // "cha" không dấu là cha xứ/cha nội, không phải "chả".
+      expect(substantive("cha noi Binh la soi")).toEqual([["ACCUSE", "b"]]);
+    });
+  });
+});
+
+/**
+ * Một vòng đề cử rút gọn: chỉ cần ai bỏ cho ai (phiếu cuối) và ai bị đưa ra xử.
+ * `null` là phiếu trắng; vắng mặt trong bảng là không có mặt vòng đó.
+ */
+function roundOf(
+  round: number,
+  ballots: Record<string, string | null>,
+  accusedId: string | null = null,
+): DayVoteRecap {
+  const list = Object.entries(ballots).map(([voterId, to], index) => ({
+    id: `${round}:nomination:${index + 1}`,
+    round,
+    voterId,
+    previousChoice: null,
+    choice: (to === null ? { type: "NO_ELIMINATION" } : player(to)) as PublicVoteChoice,
+    castAt: 1_000 * (index + 1),
+    phaseStartedAt: PHASE_START,
+    phaseEndsAt: PHASE_END,
+    sequence: index + 1,
+  }));
+  return {
+    round,
+    mutations: list,
+    finalBallots: list.map((m) => ({ voterId: m.voterId, choice: m.choice })),
+    nomination: accusedId ? { kind: "TRIAL", accusedId } : { kind: "NONE", reason: "tie" },
+    finalJudgment: null,
+  };
+}
+
+describe("AVOIDANCE: né tránh suốt nhiều vòng", () => {
+  const alive = ["a", "b", "c", "d", "e", "f"];
+  const weights = BOT_WEIGHTS_V11;
+
+  /**
+   * Ba vòng: a và b đều đặn tố c; c và f tố ngược lại cùng một người; d luôn
+   * bỏ phiếu trắng; e mỗi vòng bỏ một phiếu lẻ không ai theo.
+   */
+  function history() {
+    return [
+      roundOf(1, { a: "c", b: "c", c: "a", f: "a", d: null, e: "b" }, "c"),
+      roundOf(2, { a: "c", b: "c", c: "a", f: "a", d: null, e: "b" }),
+      roundOf(3, { a: "c", b: "c", c: "b", f: "b", d: null, e: "a" }, "c"),
+    ];
+  }
+
+  it("bắt người ba vòng liền chỉ bỏ phiếu trắng hoặc phiếu lẻ", () => {
+    const found = analyzeAvoidance(
+      { history: history(), round: 3, playerIds: alive },
+      1,
+      alwaysNotice,
+      weights,
+    );
+    const throwaway = found.filter((item) => item.id.includes(":throwaway:"));
+    expect(throwaway.map((item) => item.actorId).sort()).toEqual(["d", "e"]);
+    for (const item of throwaway) {
+      expect(item).toMatchObject({
+        kind: "AVOIDANCE",
+        sourceId: "recap:3",
+        round: 3,
+        targetId: undefined,
+      });
+      expect(item.weight).toBe(weights.evidence.AVOIDANCE.weight);
+    }
+  });
+
+  it("bắt người ba vòng liền không ai đụng tới dù vẫn bỏ phiếu", () => {
+    const found = analyzeAvoidance(
+      { history: history(), round: 3, playerIds: alive },
+      1,
+      alwaysNotice,
+      weights,
+    );
+    const untouched = found.filter((item) => item.id.includes(":untouched:"));
+    // c bị đưa ra xử, a và b từng nhận phiếu; d, e, f sạch phiếu suốt ba vòng -
+    // f dù đứng vào cáo buộc chung vẫn "không ai đụng tới", hai nhãn độc lập.
+    expect(untouched.map((item) => item.actorId).sort()).toEqual(["d", "e", "f"]);
+  });
+
+  it("không sinh gì khi chưa đủ ba vòng liên tiếp", () => {
+    const short = history().slice(1);
+    expect(
+      analyzeAvoidance({ history: short, round: 3, playerIds: alive }, 1, alwaysNotice, weights),
+    ).toEqual([]);
+    // Có ba vòng nhưng thiếu vòng giữa thì không phải "liên tiếp".
+    const gap = [roundOf(1, { a: "c", d: null }), roundOf(3, { a: "c", d: null })];
+    expect(
+      analyzeAvoidance({ history: gap, round: 3, playerIds: alive }, 1, alwaysNotice, weights),
+    ).toEqual([]);
+  });
+
+  it("người vắng mặt một vòng không bị tính - né là hành vi của người có mặt", () => {
+    const list = history();
+    // e không bỏ phiếu ở vòng 2.
+    list[1] = roundOf(2, { a: "c", b: "c", c: "a", f: "a", d: null });
+    const found = analyzeAvoidance(
+      { history: list, round: 3, playerIds: alive },
+      1,
+      alwaysNotice,
+      weights,
+    );
+    expect(found.some((item) => item.actorId === "e")).toBe(false);
+    expect(found.some((item) => item.actorId === "d")).toBe(true);
+  });
+
+  it("đứng vào một cáo buộc chung dù chỉ một lần là thoát nhãn throwaway", () => {
+    const list = history();
+    list[2] = roundOf(3, { a: "c", b: "c", c: "b", f: "b", d: "c", e: "a" }, "c");
+    const found = analyzeAvoidance(
+      { history: list, round: 3, playerIds: alive },
+      1,
+      alwaysNotice,
+      weights,
+    );
+    expect(found.filter((item) => item.id.includes(":throwaway:")).map((i) => i.actorId)).toEqual(
+      ["e"],
+    );
+  });
+
+  it("chỉ xét người còn trong danh sách được đưa vào", () => {
+    const found = analyzeAvoidance(
+      { history: history(), round: 3, playerIds: ["a", "b", "c"] },
+      1,
+      alwaysNotice,
+      weights,
+    );
+    expect(found).toEqual([]);
+  });
+
+  it("mỗi mảnh có id duy nhất và ổn định", () => {
+    const found = analyzeAvoidance(
+      { history: history(), round: 3, playerIds: alive },
+      1,
+      alwaysNotice,
+      weights,
+    );
+    expect(new Set(found.map((item) => item.id)).size).toBe(found.length);
+    expect(found.map((item) => item.id)).toEqual(
+      analyzeAvoidance(
+        { history: history(), round: 3, playerIds: alive },
+        1,
+        alwaysNotice,
+        weights,
+      ).map((item) => item.id),
+    );
+  });
+
+  it("tắt hoàn toàn ở v10 và không rút một số ngẫu nhiên nào", () => {
+    let draws = 0;
+    const counting = () => {
+      draws += 1;
+      return 0;
+    };
+    expect(
+      analyzeAvoidance(
+        { history: history(), round: 3, playerIds: alive },
+        1,
+        counting,
+        BOT_WEIGHTS_V10,
+      ),
+    ).toEqual([]);
+    expect(draws).toBe(0);
+  });
+
+  it("bot kém tinh ý bỏ sót, không bao giờ bịa", () => {
+    expect(
+      analyzeAvoidance(
+        { history: history(), round: 3, playerIds: alive },
+        0.2,
+        () => 0.9,
+        weights,
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("DEFENSE_QUALITY: chất lượng lời bào chữa", () => {
+  const weights = BOT_WEIGHTS_V11;
+  const base = { round: 2, accusedId: "c", claimedBefore: false };
+
+  function statement(type: BotMemory["type"], overrides: Partial<BotMemory> = {}): BotMemory {
+    return {
+      id: `${type}:m1:`,
+      sourceId: "m1",
+      round: 2,
+      phase: "DEFENSE",
+      type,
+      actorId: "c",
+      importance: 4,
+      pinned: false,
+      data: {},
+      ...overrides,
+    };
+  }
+
+  it("im lặng suốt lượt bào chữa", () => {
+    const found = analyzeDefense({ ...base, spoken: 0, statements: [] }, 1, alwaysNotice, weights);
+    expect(found).toEqual([
+      expect.objectContaining({
+        id: "2:nomination:result:DEFENSE_QUALITY:silent",
+        kind: "DEFENSE_QUALITY",
+        sourceId: "2:nomination:result",
+        actorId: "c",
+        targetId: undefined,
+        round: 2,
+        weight: weights.evidence.DEFENSE_QUALITY.weight,
+      }),
+    ]);
+  });
+
+  it("lái sang người khác thay vì tự bào chữa", () => {
+    const found = analyzeDefense(
+      { ...base, spoken: 2, statements: [statement("ACCUSE", { targetId: "a" })] },
+      1,
+      alwaysNotice,
+      weights,
+    );
+    expect(found).toEqual([
+      expect.objectContaining({
+        id: "2:nomination:result:DEFENSE_QUALITY:deflect:a",
+        actorId: "c",
+        targetId: "a",
+      }),
+    ]);
+  });
+
+  it("nhận vơ: lần đầu khai vai chức năng đúng lúc bị đưa ra xử", () => {
+    const found = analyzeDefense(
+      { ...base, spoken: 1, statements: [statement("ROLE_CLAIM", { data: { role: "SEER" } })] },
+      1,
+      alwaysNotice,
+      weights,
+    );
+    expect(found).toEqual([
+      expect.objectContaining({ id: "2:nomination:result:DEFENSE_QUALITY:grab", actorId: "c" }),
+    ]);
+  });
+
+  it("đã khai vai từ trước rồi nhắc lại thì không phải nhận vơ", () => {
+    const found = analyzeDefense(
+      {
+        ...base,
+        claimedBefore: true,
+        spoken: 1,
+        statements: [statement("ROLE_CLAIM", { data: { role: "SEER" } })],
+      },
+      1,
+      alwaysNotice,
+      weights,
+    );
+    expect(found).toEqual([]);
+  });
+
+  it("khai Dân thường lúc bị xử không phải nhận vơ - không ai nhận vơ cái vai không có gì", () => {
+    const found = analyzeDefense(
+      { ...base, spoken: 1, statements: [statement("ROLE_CLAIM", { data: { role: "VILLAGER" } })] },
+      1,
+      alwaysNotice,
+      weights,
+    );
+    expect(found).toEqual([]);
+  });
+
+  it("khai vai kèm chỉ mặt là bào chữa có nội dung, không phải lái đi", () => {
+    const found = analyzeDefense(
+      {
+        ...base,
+        claimedBefore: true,
+        spoken: 2,
+        statements: [
+          statement("ROLE_CLAIM", { data: { role: "SEER" } }),
+          statement("ACCUSE", { sourceId: "m2", targetId: "a" }),
+        ],
+      },
+      1,
+      alwaysNotice,
+      weights,
+    );
+    expect(found).toEqual([]);
+  });
+
+  it("nói nhưng parser không hiểu gì thì không có tín hiệu - bảo thủ", () => {
+    expect(
+      analyzeDefense({ ...base, spoken: 3, statements: [] }, 1, alwaysNotice, weights),
+    ).toEqual([]);
+  });
+
+  it("tắt ở v10, không rút số ngẫu nhiên", () => {
+    let draws = 0;
+    const counting = () => {
+      draws += 1;
+      return 0;
+    };
+    expect(
+      analyzeDefense({ ...base, spoken: 0, statements: [] }, 1, counting, BOT_WEIGHTS_V10),
+    ).toEqual([]);
+    expect(draws).toBe(0);
   });
 });

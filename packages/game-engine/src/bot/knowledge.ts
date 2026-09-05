@@ -1,4 +1,5 @@
 import type { DayVoteRecap, PublicVoteChoice } from "@masoi/shared";
+import type { BotWeights } from "./config/weights";
 import type {
   BotKnowledgeView,
   BotPlayerKnowledge,
@@ -100,6 +101,8 @@ export interface BotKnowledgeInput {
   /** Engine đã quyết định vai này có được thấy gì; ở đây chỉ sao chép. */
   night: NightKnowledge | null;
   trialAccusedId: string | null;
+  /** Engine tính từ `TrialState`; xem `BotKnowledgeView.trialDefense`. */
+  trialDefense: { startedAt: number; endedAt: number | null } | null;
   canFinalVote: boolean;
   hunterShot: { canAct: boolean; legalTargets: string[] } | null;
   publicVoteHistory: readonly DayVoteRecap[];
@@ -133,6 +136,7 @@ export function buildBotKnowledgeView(input: BotKnowledgeInput): BotKnowledgeVie
     executionerTargetId: input.executionerTargetId,
     night: input.night ? copyNightKnowledge(input.night) : null,
     trialAccusedId: input.trialAccusedId,
+    trialDefense: input.trialDefense ? { ...input.trialDefense } : null,
     canFinalVote: input.canFinalVote,
     hunterShot: input.hunterShot
       ? { canAct: input.hunterShot.canAct, legalTargets: [...input.hunterShot.legalTargets] }
@@ -149,4 +153,46 @@ export function buildBotKnowledgeView(input: BotKnowledgeInput): BotKnowledgeVie
     activeEventId: input.activeEventId,
     dayOfTruthClaims: { ...input.dayOfTruthClaims },
   };
+}
+
+/**
+ * Số NGƯỜI THẬT còn sống trên bàn.
+ *
+ * Thiếu cờ `isBot` (record self-play cũ, fixture test) thì coi là bot: mọi
+ * nhánh "biết bàn có người" phải là nhánh MỞ THÊM, và một view không nói gì
+ * về chuyện đó phải rơi về đúng hành vi bot-vs-bot đã đo.
+ */
+export function countHumansAlive(knowledge: Pick<BotKnowledgeView, "players">): number {
+  return knowledge.players.filter((player) => player.alive && player.isBot === false).length;
+}
+
+/**
+ * "Bàn có người" theo `deceptionRisk.humanTableThreshold`.
+ *
+ * Là NGƯỠNG chứ không phải "có ít nhất một người": một người thật giữa năm
+ * bot vẫn là một bàn bot - thông tin lan theo tốc độ của bot, và mọi số đo
+ * self-play vẫn áp dụng. Ngưỡng mặc định 4 vào weights để tune được.
+ */
+export function isHumanTable(
+  knowledge: Pick<BotKnowledgeView, "players">,
+  weights: BotWeights,
+): boolean {
+  return countHumansAlive(knowledge) >= weights.deceptionRisk.humanTableThreshold;
+}
+
+/**
+ * Làng đã MỎNG: số người còn sống không quá `thinVillageShare` của cả bàn.
+ *
+ * Đếm trên `players` (cả người chết), tức đúng thứ một người chơi nhìn thấy
+ * trên bảng. Là một phép đếm, không rút số ngẫu nhiên - điều kiện để các
+ * chiến thuật đêm dùng nó mà không lệch chuỗi RNG của preset cũ.
+ */
+export function isThinVillage(
+  knowledge: Pick<BotKnowledgeView, "players">,
+  weights: BotWeights,
+): boolean {
+  const total = knowledge.players.length;
+  if (total === 0) return false;
+  const alive = knowledge.players.filter((player) => player.alive).length;
+  return alive <= total * weights.roleThresholds.thinVillageShare;
 }

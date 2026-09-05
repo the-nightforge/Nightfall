@@ -4,7 +4,8 @@ import type { DayVoteRecap } from "@masoi/shared";
 import { describe, expect, it } from "vitest";
 import { claimEvidence } from "../src/bot/analysis/claim-credibility";
 import { BotRuntime } from "../src/bot/BotRuntime";
-import { BOT_WEIGHTS_V4 } from "../src/bot/config/weights";
+import { BOT_WEIGHTS_V4, BOT_WEIGHTS_V11, BOT_WEIGHTS_V12 } from "../src/bot/config/weights";
+import type { PlayerProfile } from "../src/bot/types";
 import type { BotDecisionContext, BotMemory, BotPersonality } from "../src/bot/types";
 
 function claim(actorId: string, role: string, round: number, sourceId: string): BotMemory {
@@ -319,6 +320,71 @@ function dayOfTruthContext(round: number): BotDecisionContext {
     visibleChat: [],
   };
 }
+
+describe("P1.1: hồ sơ người từng khai láo", () => {
+  const profile = (bluffRate: number, samples: number): PlayerProfile => ({
+    bluffRate,
+    aggroRate: 0,
+    accuracy: 0.5,
+    samples,
+    lastUpdatedRound: 1,
+  });
+  const rewardOf = (found: ReturnType<typeof claimEvidence>) =>
+    found.find((item) => item.id.endsWith(":claimant"))?.weight ?? 0;
+  const input = { ...BASE, claims: [claim("p1", "SEER", 1, "m1")] };
+
+  it("người từng khai láo được thưởng tin cậy S1 ít hơn người sạch", () => {
+    const clean = rewardOf(claimEvidence({ ...input, profiles: { p1: profile(0, 3) } }, BOT_WEIGHTS_V12));
+    const liar = rewardOf(claimEvidence({ ...input, profiles: { p1: profile(1, 3) } }, BOT_WEIGHTS_V12));
+    // Cả hai là mảnh GỠ TỘI (âm); kẻ khai láo ít âm hơn.
+    expect(clean).toBeLessThan(0);
+    expect(liar).toBeLessThan(0);
+    expect(liar).toBeGreaterThan(clean);
+    // Đúng công thức: 1.2 x bluffRate 1 x strength 3/(3+2).
+    expect(clean - liar).toBeCloseTo(-BOT_WEIGHTS_V12.claim.knownBluffPenalty * 0.6);
+  });
+
+  it("một mẫu duy nhất chỉ trừ một phần nhỏ - chưa thành định kiến", () => {
+    const clean = rewardOf(claimEvidence({ ...input }, BOT_WEIGHTS_V12));
+    const once = rewardOf(claimEvidence({ ...input, profiles: { p1: profile(1, 1) } }, BOT_WEIGHTS_V12));
+    expect(once - clean).toBeCloseTo(BOT_WEIGHTS_V12.claim.knownBluffPenalty / 3);
+    expect(once - clean).toBeLessThan(0.5);
+  });
+
+  it("không bao giờ lật dấu: thưởng tin cậy chỉ xuống tới 0 rồi biến mất", () => {
+    const cornered = {
+      ...input,
+      claims: [{ ...claim("p1", "SEER", 1, "m1"), data: { role: "SEER", underFire: true } }],
+    };
+    // Thưởng lúc bị dồn = 6 x 0.25 = 1.5; hồ sơ 100 mẫu khai láo trừ ~1.18.
+    const heavy = claimEvidence({ ...cornered, profiles: { p1: profile(1, 100) } }, BOT_WEIGHTS_V12);
+    expect(rewardOf(heavy)).toBeLessThanOrEqual(0);
+    // Ép thưởng về 0 bằng hệ số lớn: mảnh không được phát ra chứ không đổi dấu.
+    const extreme = { ...BOT_WEIGHTS_V12, claim: { ...BOT_WEIGHTS_V12.claim, knownBluffPenalty: 100 } };
+    const gone = claimEvidence({ ...cornered, profiles: { p1: profile(1, 100) } }, extreme);
+    expect(gone.some((item) => item.id.endsWith(":claimant"))).toBe(false);
+    expect(gone.every((item) => item.actorId !== "p1" || item.weight >= 0)).toBe(true);
+  });
+
+  it("hồ sơ trắng hay không có hồ sơ đều là người sạch", () => {
+    const none = rewardOf(claimEvidence({ ...input }, BOT_WEIGHTS_V12));
+    const blank = rewardOf(claimEvidence({ ...input, profiles: { p1: profile(0, 0) } }, BOT_WEIGHTS_V12));
+    const other = rewardOf(claimEvidence({ ...input, profiles: { p2: profile(1, 9) } }, BOT_WEIGHTS_V12));
+    expect(blank).toBe(none);
+    expect(other).toBe(none);
+  });
+
+  it("v11 chưa bật: hồ sơ không đổi một số nào", () => {
+    const clean = claimEvidence({ ...input }, BOT_WEIGHTS_V11);
+    const liar = claimEvidence({ ...input, profiles: { p1: profile(1, 9) } }, BOT_WEIGHTS_V11);
+    expect(liar).toEqual(clean);
+  });
+
+  it("lời giải thích nói rõ vì sao tin ít hơn", () => {
+    const liar = claimEvidence({ ...input, profiles: { p1: profile(1, 3) } }, BOT_WEIGHTS_V12);
+    expect(liar.find((item) => item.id.endsWith(":claimant"))?.summary).toContain("từng khai sai");
+  });
+});
 
 describe("BotRuntime.observe — claimEvidence không bị áp lại", () => {
   it("năm lượt observe cùng một lời khai đứng yên cho ra cùng một delta như một lượt", () => {

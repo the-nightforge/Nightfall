@@ -75,6 +75,10 @@ export interface MemoryImportanceWeights {
    */
   directAddress: number;
   directQuestion: number;
+  /** Ghi nhận né tránh nhiều vòng; ngang `accuse` vì nó cũng là một nhận xét về người. */
+  avoidance: number;
+  /** Lời bào chữa bị chấm kém; nặng hơn `accuse` một chút vì hiếm và đáng nhớ. */
+  defenseQuality: number;
 }
 
 /**
@@ -315,6 +319,14 @@ export interface VoteHistoryWeights {
   lateSwitchRatio: number;
   /** Một wagon phải có sẵn bấy nhiêu phiếu thì nhảy vào mới là "theo đuôi". */
   minBandwagonLead: number;
+  /**
+   * Bấy nhiêu vòng LIÊN TIẾP né tránh thì thành một tín hiệu `AVOIDANCE`.
+   *
+   * Ba: hai vòng đầu ai cũng còn dò, và một người chỉ bỏ phiếu trắng qua hai
+   * vòng chưa nói lên điều gì. Tới vòng thứ ba mà vẫn chưa đứng vào một cáo
+   * buộc nào thì đó là một lựa chọn, không phải một sự thận trọng.
+   */
+  avoidanceRounds: number;
 }
 
 export interface SocialWeights {
@@ -337,6 +349,15 @@ export interface RecencyWeights {
   beliefDecayPerRound: number;
   /** Cùng ý tưởng nhưng cho importance của memory. */
   memoryDecayPerRound: number;
+  /**
+   * Tốc độ nguội của HỒ SƠ người chơi (`BotBrainState.profiles`), mỗi vòng.
+   *
+   * Cố ý CHẬM hơn `beliefDecayPerRound`: sự kiện nguội nhanh ("hôm qua anh
+   * đổi phiếu muộn" hết quan trọng sau hai ngày), còn người nguội chậm ("anh
+   * từng khai láo" vẫn đáng nhớ tới cuối ván). Hai tốc độ, hai thứ khác nhau.
+   * `1` là không nguội.
+   */
+  profileDecayPerRound: number;
   /**
    * Evidence cũ hơn bấy nhiêu vòng bị coi là *stale* khi ĐO.
    *
@@ -384,6 +405,28 @@ export interface DeceptionRiskWeights {
    * Đặt `> 1` để tắt hoàn toàn.
    */
   bussingVoteShare: number;
+  /**
+   * Cùng ngưỡng ấy khi BÀN CÓ NGƯỜI THẬT (`isHumanTable`).
+   *
+   * Người thật dồn phiếu nhanh hơn bot: một cái tên được hai người nhắc là đã
+   * thành đa số trong vài giây, và một con Sói còn đứng che lúc đó là con Sói
+   * bị đọc ra đầu tiên. Bằng `bussingVoteShare` ở v1..v15 (không đổi gì);
+   * v16 hạ xuống 0.15 để Sói bán sớm hơn một nhịp trước người.
+   */
+  bussingVoteShareHuman: number;
+  /**
+   * Xác suất một con Sói mở một cuộc CÃI GIẢ với đồng bọn ở vòng 1-2, trước
+   * khi nhân `deceptionSkill`. Trong `[0, 1]`; `0` TẮT - đúng ở v1..v15.
+   *
+   * Hai con Sói bot không bao giờ đụng nhau, và người chơi đọc được điều đó
+   * sau hai ván. Cuộc cãi giả là một lá phiếu nhẹ vào đồng bọn khi CHƯA AI
+   * nghi một trong hai - lúc nó rẻ nhất - do một ghế hash chốt (không rút
+   * RNG, không thêm state; xem `fakeFightTarget`). Không phải bussing: bussing
+   * đi theo đám đông đã có, cãi giả tự mở màn khi chưa có đám đông nào.
+   */
+  fakeFightChance: number;
+  /** Vòng cuối cùng còn được cãi giả. Sau đó bầu đồng bọn chỉ còn là bussing. */
+  fakeFightUntilRound: number;
   /** Sói có `deceptionSkill` cao mới dám bán đồng đội. */
   bussingDeceptionScale: number;
   /**
@@ -402,6 +445,28 @@ export interface DeceptionRiskWeights {
    * đêm 2: bầy Sói biết ngay ai là Tiên Tri. Đặt `0` để tắt (luôn nói ngay).
    */
   seerRevealRound: number;
+  /**
+   * Vòng sớm nhất Tiên Tri CHỦ ĐỘNG khai vai (kèm kết quả soi) khi bàn có
+   * người thật - xem `humanTableThreshold`. `0` để tắt (dùng luật chung).
+   *
+   * Tách khỏi `seerRevealRound` vì hai quần thể khán giả trả hai cái giá khác
+   * nhau cho cùng một lời khai. Trong bàn toàn bot, giấu tới vòng 2 làm làng
+   * mất 4 điểm win-rate (thông tin lan quá chậm để một đêm sống thêm bù lại
+   * được - chú thích ở v2). Trước người thật, khai ngày 1 là cách chắc nhất
+   * để chết đêm 2: người thật đọc chat và cắn đúng con Tiên Tri.
+   *
+   * Chỉ chặn nhánh PROACTIVE của `decideChatClaim` và phần bằng chứng soi
+   * trong lời nói; bị dồn phiếu (UNDER_FIRE) hay bị mạo danh (COUNTER) thì vẫn
+   * khai như thường. Lá phiếu không đổi: Tiên Tri vẫn bầu đúng con Sói đã soi.
+   */
+  seerRevealRoundHuman: number;
+  /**
+   * Số người thật CÒN SỐNG tối thiểu để bàn được coi là "bàn có người".
+   *
+   * Không phải "có ít nhất một người": một người giữa năm bot vẫn là một bàn
+   * bot về mặt tốc độ lan thông tin, và mọi số đo self-play vẫn đúng ở đó.
+   */
+  humanTableThreshold: number;
   /**
    * Ngưỡng vote hiệu dụng tăng thêm sau khi một Sói mất đồng đội.
    *
@@ -429,6 +494,19 @@ export interface ConfidenceWeights {
   /** Khoảng cách tối thiểu để bỏ mục tiêu đang bầu: `base + stubbornness*span`. */
   hysteresisBase: number;
   hysteresisStubbornSpan: number;
+  /**
+   * Cộng thêm vào hysteresis khi mục tiêu ĐANG BẦU đã nói từ
+   * `talkerHysteresisLines` câu trở lên trong vòng này. `0` TẮT - v1..v16.
+   *
+   * Lật kèo vì nhiễu nhỏ trước một người vừa nói ba câu bào chữa bị đọc là
+   * "bot ngu": người đó vừa dồn sức thuyết phục, và con bot đổi ý mà không có
+   * lý do nào mới. Trước một người im lặng thì cùng cú lật ấy không ai để ý.
+   * Không đổi `aggression.thresholdBase`: ngưỡng ĐỀ CỬ giữ nguyên, chỉ độ
+   * dính của lá phiếu đã bầu là tăng. Bằng chứng mới đủ mạnh vẫn lật được.
+   */
+  talkerHysteresisBonus: number;
+  /** Số câu (message parser hiểu được) trong vòng để một người là "nói nhiều". */
+  talkerHysteresisLines: number;
   /** Phát bắn Thợ Săn phải chắc hơn một lá phiếu thường bấy nhiêu điểm. */
   hunterMargin: number;
   /** Biên tin tưởng cần có để THA một người cả làng vừa đưa ra xử. */
@@ -445,6 +523,30 @@ export interface RoleThresholdWeights {
   /** Nước thánh có phản đòn, nên ngưỡng cao hơn cả bình độc. */
   priestSuspicion: number;
   priestTrustVeto: number;
+  /**
+   * Chiết khấu ngưỡng của kỹ năng dùng-một-lần khi LÀNG ĐÃ MỎNG
+   * (`isThinVillage`): `witchPoisonSuspicion` và `priestSuspicion` trừ đi
+   * bấy nhiêu. `0` TẮT - đúng ở v1..v14.
+   *
+   * Không ép xài: vẫn cần bằng chứng, chỉ là bằng chứng "vừa đủ" thì dùng
+   * thay vì ôm tới cuối. Một bình còn nguyên khi ván kết thúc có giá trị bằng
+   * 0, và nửa sau ván là lúc mỗi đêm mất một người nặng gấp đôi nửa đầu.
+   * Trên thang belief thật (p90 ≈ 1.8, p99 ≈ 8.6), một nấc là 1.
+   */
+  witchPoisonLosingDiscount: number;
+  /**
+   * Cùng ý với `witchPoisonLosingDiscount`, cho bình cứu: `witchHealTrust`
+   * trừ đi bấy nhiêu khi làng đã mỏng. Tách khoá vì hai thang khác nhau
+   * (trust 1.5 so với suspicion 5). `0` TẮT.
+   */
+  witchHealLosingDiscount: number;
+  /**
+   * Làng "mỏng" khi `sống <= tổng x thinVillageShare`. Trong `[0, 1]`.
+   *
+   * 0.5 = đã mất một nửa bàn. Chỉ có nghĩa khi một trong hai chiết khấu trên
+   * khác 0, nên giữ 0.5 ở mọi preset mà không đổi hành vi nào.
+   */
+  thinVillageShare: number;
   /** Thiên Thần chỉ có hai lượt cả ván nên ngưỡng cao hơn Bảo Vệ. */
   guardianAngelWorthACharge: number;
   guardianAngelHostilityBonus: number;
@@ -590,6 +692,17 @@ export interface ClaimWeights {
   wolfBluffChance: number;
   /** Vòng sớm nhất Sói được khai láo chủ động. */
   wolfBluffFromRound: number;
+  /**
+   * Trừ sẵn vào phần thưởng tin cậy S1 của một người đã từng khai sai:
+   * `knownBluffPenalty x bluffRate x profileStrength`. `0` TẮT.
+   *
+   * Đọc từ `BotBrainState.profiles` (P1.1). Không bao giờ đảo dấu phần
+   * thưởng - một người từng khai láo được tin ÍT HƠN khi khai lại, chứ không
+   * bị nghi thêm chỉ vì mở miệng.
+   */
+  knownBluffPenalty: number;
+  /** Prior của `profileStrength`: hồ sơ phải có bấy nhiêu mẫu mới nặng bằng nửa. */
+  profilePriorStrength: number;
 }
 
 export interface BotWeights {
@@ -646,8 +759,12 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   ["social", "deathMotiveConfidence"],
   ["recency", "beliefDecayPerRound"],
   ["recency", "memoryDecayPerRound"],
+  ["recency", "profileDecayPerRound"],
   ["selfPreservation", "guardSuspicionPenalty"],
   ["deceptionRisk", "abstainPressureCeiling"],
+  // So THẲNG với một số trong [0, 1) sinh từ hash trong `fakeFightTarget`.
+  ["deceptionRisk", "fakeFightChance"],
+  ["roleThresholds", "thinVillageShare"],
   ["roleThresholds", "guardianAngelWorthACharge"],
   ["roleThresholds", "guardianAngelSuspicionPenalty"],
   ["personalityRange", "min"],
@@ -846,6 +963,11 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     // v1..v6 ở phòng thật - vì vậy không có version bump nào ở đây.
     VERDICT_MISS: { weight: 14, confidence: 0.8 },
     VERDICT_HIT: { weight: 10, confidence: 0.7 },
+    // TẮT ở v1..v10 (weight 0), và `analyzeAvoidance`/`analyzeDefense` thoát
+    // ra TRƯỚC khi rút số ngẫu nhiên khi weight <= 0 - nên hai ô này không đổi
+    // một bit nào của các preset cũ. v11 bật chúng; xem chú thích ở đó.
+    AVOIDANCE: { weight: 0, confidence: 0.4 },
+    DEFENSE_QUALITY: { weight: 0, confidence: 0.45 },
   }),
 
   memoryImportance: Object.freeze({
@@ -865,6 +987,8 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     finalJudgment: 6,
     directAddress: 2,
     directQuestion: 3,
+    avoidance: 4,
+    defenseQuality: 5,
   }),
 
   privateInfo: Object.freeze({
@@ -915,7 +1039,7 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
 
   trust: Object.freeze({ damping: 0.2 }),
 
-  voteHistory: Object.freeze({ lateSwitchRatio: 0.8, minBandwagonLead: 2 }),
+  voteHistory: Object.freeze({ lateSwitchRatio: 0.8, minBandwagonLead: 2, avoidanceRounds: 3 }),
 
   social: Object.freeze({
     edgeStepDivisor: 20,
@@ -931,6 +1055,9 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
   recency: Object.freeze({
     beliefDecayPerRound: 0.85,
     memoryDecayPerRound: 0.88,
+    // 1 = không nguội ở v1..v12; v13 đặt 0.93. Hồ sơ không ảnh hưởng gì tới
+    // v1..v11 (cổng `knownBluffPenalty = 0`), nên đây thuần là giữ v12 nguyên.
+    profileDecayPerRound: 1,
     staleAfterRounds: 3,
   }),
 
@@ -951,9 +1078,18 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     // Phase 2 từng bit, nên chúng phải trung tính ở đây; v2 bật chúng lên.
     // `> 1` là cách tắt bussing mà không cần một cờ boolean riêng.
     bussingVoteShare: 2,
+    // Bằng `bussingVoteShare` ở v1..v15; v16 tách hai ngưỡng. Cãi giả tắt
+    // (chance 0) ở v1..v15, `fakeFightUntilRound` chỉ có nghĩa khi nó bật.
+    bussingVoteShareHuman: 2,
+    fakeFightChance: 0,
+    fakeFightUntilRound: 2,
     bussingDeceptionScale: 0,
     bussingJoinBonus: 0,
     seerRevealRound: 0,
+    // Tắt ở v1..v13 (0 = không chặn gì); v14 bật. Ngưỡng bàn có người là 4
+    // ở mọi bản - nó chỉ có nghĩa khi `seerRevealRoundHuman > 0`.
+    seerRevealRoundHuman: 0,
+    humanTableThreshold: 4,
     allyLostThresholdBonus: 0,
     abstainPressureCeiling: 0.3,
   }),
@@ -967,6 +1103,9 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
   confidence: Object.freeze({
     hysteresisBase: 5,
     hysteresisStubbornSpan: 8,
+    // Tắt ở v1..v16 (0); v17 bật. `talkerHysteresisLines` chỉ có nghĩa khi bật.
+    talkerHysteresisBonus: 0,
+    talkerHysteresisLines: 3,
     hunterMargin: 20,
     spareTrustMargin: 15,
     jitterSpan: 6,
@@ -978,6 +1117,10 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     witchPoisonTrustVeto: 50,
     priestSuspicion: 90,
     priestTrustVeto: 30,
+    // Tắt ở v1..v14 (0); v15 bật. `thinVillageShare` vô nghĩa khi chiết khấu 0.
+    witchPoisonLosingDiscount: 0,
+    witchHealLosingDiscount: 0,
+    thinVillageShare: 0.5,
     guardianAngelWorthACharge: 0.35,
     guardianAngelHostilityBonus: 80,
     guardianAngelSuspicionPenalty: 0.5,
@@ -1063,6 +1206,9 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     voteInconsistencyPenalty: 0,
     wolfBluffChance: 0,
     wolfBluffFromRound: 0,
+    // Tắt ở v1..v11; v12 bật. Không đổi một bit của preset cũ vì cổng `0`.
+    knownBluffPenalty: 0,
+    profilePriorStrength: 2,
   }),
 
   /**
@@ -1185,6 +1331,9 @@ export const BOT_WEIGHTS_V2: BotWeights = Object.freeze({
 
   deceptionRisk: Object.freeze({
     bussingVoteShare: 0.2,
+    bussingVoteShareHuman: 0.2,
+    fakeFightChance: 0,
+    fakeFightUntilRound: 2,
     bussingDeceptionScale: 3,
     bussingJoinBonus: 120,
     /**
@@ -1196,6 +1345,8 @@ export const BOT_WEIGHTS_V2: BotWeights = Object.freeze({
      * để việc sống thêm một đêm bù lại được. Giữ cơ chế, tắt mặc định.
      */
     seerRevealRound: 0,
+    seerRevealRoundHuman: 0,
+    humanTableThreshold: 4,
     allyLostThresholdBonus: 6,
     /**
      * `0` = Sói không bao giờ chọn "không treo ai".
@@ -1325,6 +1476,8 @@ export const BOT_WEIGHTS_V4: BotWeights = Object.freeze({
     voteInconsistencyPenalty: 5,
     wolfBluffChance: 0.35,
     wolfBluffFromRound: 2,
+    knownBluffPenalty: 0,
+    profilePriorStrength: 2,
   }),
 });
 
@@ -1750,6 +1903,208 @@ export const BOT_WEIGHTS_V10: BotWeights = Object.freeze({
 });
 
 /**
+ * Cấu hình v11 - bot bắt đầu đọc hai tín hiệu mà người chơi thật vẫn đọc.
+ *
+ * HAI ô đổi, cả hai từ 0 lên một giá trị dương: `evidence.AVOIDANCE` và
+ * `evidence.DEFENSE_QUALITY`. Bản này tồn tại vì bot được tune bằng self-play
+ * bot-vs-bot, và gặp người thì bị chê "ngu" theo cùng một cách: nó không nhận
+ * ra người né tránh suốt ba vòng, và không nhận ra một bị cáo im lặng hay chỉ
+ * biết chỉ sang người khác khi bị đưa lên xử.
+ *
+ * - `AVOIDANCE: 2` = 0.5 x `BANDWAGON` (4). Né tránh là tín hiệu YẾU HƠN theo
+ *   đuôi: theo đuôi là một hành động, né tránh là sự vắng mặt của hành động,
+ *   và người chơi mới cũng né. Confidence 0.4 - dưới `ACCUSE`, ngang
+ *   `VOTE_ALIGNMENT`.
+ * - `DEFENSE_QUALITY: 2` = 0.5 x `ACCUSE` (4). Nhẹ vì đây là bằng chứng về
+ *   CÁCH nói chứ không phải về nội dung, và một người mới chơi cũng im lặng
+ *   khi bị dồn. Confidence 0.45 - bằng `ACCUSE`.
+ *
+ * Cả hai đọc trên thang belief THẬT (p90 ≈ 1.8): một mảnh cộng vào khoảng
+ * 0.5-0.6 sau confidence và quán tính, tức đủ để phá hoà giữa hai ứng viên
+ * ngang nhau, không đủ để tự mình đưa ai lên giá treo cổ.
+ *
+ * Self-play KHÔNG đo được `DEFENSE_QUALITY`: harness đi thẳng từ
+ * `resolveNomination` sang `beginFinalVote`, không có pha DEFENSE, nên không
+ * có cửa sổ bào chữa nào để chấm. Ô đó chỉ chạy trong phòng thật.
+ */
+export const BOT_WEIGHTS_V11: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V10,
+  version: "11.0.0",
+
+  evidence: freezeEvidenceTable({
+    ...BOT_WEIGHTS_V10.evidence,
+    AVOIDANCE: { weight: 2, confidence: 0.4 },
+    DEFENSE_QUALITY: { weight: 2, confidence: 0.45 },
+  }),
+});
+
+/**
+ * Cấu hình v12 - bot nhớ ai đã từng khai láo.
+ *
+ * MỘT ô đổi: `claim.knownBluffPenalty` 0 -> 1.2.
+ *
+ * 1.2 = 0.2 x `claimantTrustWeight` (6): hệ số khởi đầu NHỎ có chủ ý. Nó
+ * nhân với `bluffRate` (0..1) và `profileStrength` (một mẫu: 1/3, ba mẫu:
+ * 3/5), nên một người bị bắt quả tang khai láo đúng một lần mất 0.4 trong 6
+ * điểm thưởng tin cậy khi khai lại - còn khai lúc đang bị dồn phiếu (thưởng
+ * chỉ 1.5) thì mất hơn một phần tư. Ba lần thì mất 0.72. Không bao giờ lật
+ * dấu: `Math.max(0, ...)` ở S1.
+ *
+ * Trong ván, hồ sơ bluff chỉ có mẫu khi vai được kiểm chứng: `revealRoleOnDeath`
+ * bật, kết quả soi của chính bot, hoặc Sói nhìn đồng bọn. Nghĩa là ở luật mặc
+ * định, ô này chủ yếu có tác dụng với BOT Tiên Tri - và với hồ sơ qua nhiều
+ * ván do server nạp sau này.
+ */
+export const BOT_WEIGHTS_V12: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V11,
+  version: "12.0.0",
+
+  claim: Object.freeze({
+    ...BOT_WEIGHTS_V11.claim,
+    knownBluffPenalty: 1.2,
+  }),
+});
+
+/**
+ * Cấu hình v13 - hồ sơ người chơi nguội chậm hơn sự kiện.
+ *
+ * MỘT ô đổi: `recency.profileDecayPerRound` 1 -> 0.93.
+ *
+ * Belief nguội 0.85/vòng: sau ba vòng còn 61%, sau năm vòng còn 44% - đúng
+ * cho một lá phiếu muộn hay một lời tố, những thứ mà ván đấu đã đi qua. Hồ sơ
+ * nguội 0.93/vòng: sau năm vòng còn 70%. Một người bị bắt quả tang khai láo
+ * ở vòng 2 vẫn là một người đáng ngờ khi khai lại ở vòng 6, dù mọi bằng
+ * chứng của vòng 2 đã phai gần hết. Đó là cái "nhớ người" mà bot thiếu.
+ *
+ * Nguội cả `samples` (sức nặng) lẫn tỉ lệ (kéo về trung tính), cùng hệ số,
+ * và chỉ trên tuổi tính từ `lastUpdatedRound` - gọi hai lần một vòng không
+ * nguội gấp đôi, cùng cơ chế với `decayEntry`.
+ */
+export const BOT_WEIGHTS_V13: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V12,
+  version: "13.0.0",
+
+  recency: Object.freeze({
+    ...BOT_WEIGHTS_V12.recency,
+    profileDecayPerRound: 0.93,
+  }),
+});
+
+/**
+ * Cấu hình v14 - Tiên Tri giấu kết quả khi bàn có người thật.
+ *
+ * MỘT ô đổi: `deceptionRisk.seerRevealRoundHuman` 0 -> 2.
+ *
+ * `seerRevealRound` (bàn toàn bot) vẫn là 0, vì lý do v2 đã đo: trong quần thể
+ * bot, thông tin của Tiên Tri lan quá chậm để một đêm sống thêm bù lại được
+ * (giấu tới vòng 2 mất 4 điểm win-rate). Trước người thật thì ngược lại - từ
+ * blind test: Tiên Tri bot hô kết quả ngày 1 và chết đêm 2 gần như mọi ván,
+ * vì người thật đọc chat và cắn đúng nó. 2 = khai từ ngày 2 (engine đếm
+ * `round` tăng mỗi đêm, nên ngày 1 là `round 1`): Tiên Tri có hai kết quả
+ * soi trong tay khi mở miệng, và lời khai của nó nặng gấp đôi.
+ *
+ * Self-play KHÔNG đo được ô này: mọi ghế trong harness là bot, nên
+ * `countHumansAlive` luôn 0 và nhánh không bao giờ mở. Đó là chủ ý - win-rate
+ * self-play của v14 phải bằng v13 từng bit.
+ */
+export const BOT_WEIGHTS_V14: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V13,
+  version: "14.0.0",
+
+  deceptionRisk: Object.freeze({
+    ...BOT_WEIGHTS_V13.deceptionRisk,
+    seerRevealRoundHuman: 2,
+  }),
+});
+
+/**
+ * Cấu hình v15 - Phù Thuỷ và Linh Mục thôi ôm bình khi làng đã mỏng.
+ *
+ * HAI ô đổi: `roleThresholds.witchPoisonLosingDiscount` 0 -> 1 và
+ * `roleThresholds.witchHealLosingDiscount` 0 -> 0.5.
+ *
+ * Từ blind test: Phù Thuỷ bot giữ cả hai bình tới khi ván kết thúc trong phần
+ * lớn ván có người thật - ngưỡng 5 (p99 của thang belief) là đúng cho nửa
+ * đầu ván, nhưng ở nửa sau, khi mỗi đêm mất một người là mất một phần năm
+ * làng, một bình còn nguyên lúc GAME_OVER có giá trị bằng 0.
+ *
+ * Chiết khấu chỉ mở khi `sống <= tổng / 2` (`thinVillageShare`), và chỉ hạ
+ * ngưỡng một nấc: độc 5 -> 4, Nước thánh 8 -> 7, cứu 1.5 -> 1.0. Cả ba mức
+ * hạ đều còn nằm trên mốc chọn bừa theo bảng đo ở v5/v6 (độc ở 4: 25.5% so
+ * với ~23% bừa; Nước thánh ở 7: 33-36% so với ~29%) - và ở làng mỏng mốc
+ * chọn bừa còn cao hơn vì tỉ lệ Sói trên đầu người đã tăng. Không ép xài:
+ * nghi 0 vẫn giữ bình. Không rút RNG: `isThinVillage` là một phép đếm.
+ */
+export const BOT_WEIGHTS_V15: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V14,
+  version: "15.0.0",
+
+  roleThresholds: Object.freeze({
+    ...BOT_WEIGHTS_V14.roleThresholds,
+    witchPoisonLosingDiscount: 1,
+    witchHealLosingDiscount: 0.5,
+  }),
+});
+
+/**
+ * Cấu hình v16 - Sói diễn: cãi nhau giả ở vòng 1-2, bán đồng đội sớm hơn
+ * trước người thật.
+ *
+ * HAI ô đổi: `deceptionRisk.fakeFightChance` 0 -> 0.3 và
+ * `deceptionRisk.bussingVoteShareHuman` 0.2 -> 0.15.
+ *
+ * - Cãi giả: 0.3 x `deceptionSkill` (0.25..0.9) = 7-27% mỗi vòng cho đúng
+ *   một ghế trong bầy, và chỉ khi chưa ai bầu hay công kích con Sói nào. Giá
+ *   là một lá phiếu vào đồng bọn giữa lúc không ai khác bầu nó - gần như
+ *   không bao giờ đủ để đưa lên xử - đổi lấy một cặp Sói có lịch sử từng nghi
+ *   nhau. Số hạng `fakeFight` = 0.3 x `bussingJoinBonus` (36): đủ để thắng
+ *   `trustDamping` (-20) của một đồng bọn bị ghim trust 100 khi bàn còn phẳng,
+ *   không đủ để át một người đang bị cả bàn công kích (`hostility` x 20).
+ * - Bán mềm: chỉ đổi khi `isHumanTable`, tức self-play (toàn bot) không đo
+ *   được và cũng không bị ảnh hưởng.
+ *
+ * Self-play chỉ đo được vế cãi giả. Không rút RNG ở cả hai: cãi giả chốt bằng
+ * hash trên (bầy, vòng, deceptionSkill) nên hai lần hỏi trong cùng vòng cho
+ * cùng đáp án - con Sói không tự mâu thuẫn giữa lượt thảo luận và lượt bầu.
+ */
+export const BOT_WEIGHTS_V16: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V15,
+  version: "16.0.0",
+
+  deceptionRisk: Object.freeze({
+    ...BOT_WEIGHTS_V15.deceptionRisk,
+    fakeFightChance: 0.3,
+    bussingVoteShareHuman: 0.15,
+  }),
+});
+
+/**
+ * Cấu hình v17 - phiếu dính hơn trước một mục tiêu đang nói nhiều.
+ *
+ * MỘT ô đổi: `confidence.talkerHysteresisBonus` 0 -> 2.
+ *
+ * Hysteresis thường là `2 + stubbornness x 3` (2.75..4.7 trên thang belief).
+ * Cộng 2 khi mục tiêu đang bầu đã nói >= 3 câu trong vòng: một cú lật trước
+ * người vừa bào chữa ba câu cần chênh lệch gần gấp rưỡi, còn một kết quả soi
+ * (ghim 100) hay một cáo buộc dồn dập (hostility x 20) vẫn lật được như cũ.
+ * `thresholdBase` không đổi.
+ *
+ * Đếm "câu" bằng số message của người đó sinh ra memory trong vòng
+ * (`linesSpokenThisRound`): `visibleChat` không mang số vòng, còn memory thì
+ * có - và một người nói ba câu mà parser không hiểu câu nào thì cũng không
+ * phải người "đang thuyết phục" theo nghĩa bàn nhìn thấy.
+ */
+export const BOT_WEIGHTS_V17: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V16,
+  version: "17.0.0",
+
+  confidence: Object.freeze({
+    ...BOT_WEIGHTS_V16.confidence,
+    talkerHysteresisBonus: 2,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
@@ -1760,8 +2115,14 @@ export const BOT_WEIGHTS_V10: BotWeights = Object.freeze({
  * vai có quyền năng dùng-một-lần (Phù Thuỷ, Thợ Săn, Linh Mục) về thang belief
  * thật; v7.0.0 bật hành vi của Thằng Hề; v8.0.0 bật hành vi của Sát Nhân;
  * v9.0.0 bật hành vi của Kẻ Báo Thù; v10.0.0 hạ `spareTrustMargin` về 0 để
- * phiên toà thôi kết án 100% bị cáo và để lời khai vai có sức nặng.
+ * phiên toà thôi kết án 100% bị cáo và để lời khai vai có sức nặng; v11.0.0
+ * bật hai tín hiệu né tránh và bào chữa kém; v12.0.0 trừ sẵn tin cậy của
+ * người đã từng khai láo; v13.0.0 cho hồ sơ nguội chậm hơn belief; v14.0.0
+ * cho Tiên Tri giấu kết quả tới ngày 2 khi bàn có người thật; v15.0.0 hạ
+ * ngưỡng bình độc/bình cứu/Nước thánh một nấc khi làng đã mỏng; v16.0.0 cho
+ * Sói cãi nhau giả ở vòng 1-2 và bán đồng đội sớm hơn trước người thật;
+ * v17.0.0 cho phiếu dính hơn trước mục tiêu đang nói nhiều.
  * v1-v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset đích
  * danh, không bao giờ dựa vào hằng số này.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V10;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V17;

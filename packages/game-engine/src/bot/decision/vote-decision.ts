@@ -3,7 +3,9 @@ import { isolationScore } from "../analysis/coalition";
 import { incomingHostilityOf, possibleWolfPairScore } from "../analysis/social-analysis";
 import { MAX_BELIEF_SCORE } from "../belief/evidence";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import { isHumanTable } from "../knowledge";
 import { strategyFor } from "../roles/registry";
+import { fakeFightTarget } from "../roles/werewolf";
 import { sumTerms, type DecisionProbe, type TraceTerm } from "../trace/trace";
 import type {
   BotBrainState,
@@ -70,6 +72,16 @@ function clampUnit(value: number): number {
 }
 
 /**
+ * Cuộc cãi giả dùng `bussingJoinBonus` ở mức này, không dùng trọn.
+ *
+ * Trọn (120 x voteShare) là để NHẢY LÊN một chuyến xe đang lăn; cãi giả không
+ * có chuyến xe nào. 0.3 x 120 = 36: thắng được `trustDamping` (-20) của một
+ * đồng bọn bị ghim trust 100 khi bàn còn phẳng, thua một người đang bị cả bàn
+ * công kích - đúng như một lời nghi "cho có" giữa hai người chưa ai để ý.
+ */
+const FAKE_FIGHT_JOIN_SCALE = 0.3;
+
+/**
  * Ngưỡng tối thiểu để dám đề cử ai đó. Người hung hăng và người chịu rủi ro
  * cao hạ ngưỡng này xuống, nhưng không ai xuống dưới ~48 ở cấu hình mặc định.
  */
@@ -84,15 +96,60 @@ export function voteThreshold(
   );
 }
 
-/** Khoảng cách tối thiểu để bỏ mục tiêu đang bầu và chuyển sang người khác. */
+/**
+ * Khoảng cách tối thiểu để bỏ mục tiêu đang bầu và chuyển sang người khác.
+ *
+ * `spokenLines` là số câu mục tiêu ĐANG BẦU đã nói trong vòng này (xem
+ * `linesSpokenThisRound`); từ `talkerHysteresisLines` trở lên thì cộng
+ * `talkerHysteresisBonus`. Bonus là 0 ở v1..v16 nên caller cũ không đổi gì.
+ */
 export function voteHysteresis(
   personality: BotPersonality,
   weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+  spokenLines = 0,
 ): number {
+  const talker =
+    weights.confidence.talkerHysteresisBonus > 0 &&
+    spokenLines >= weights.confidence.talkerHysteresisLines
+      ? weights.confidence.talkerHysteresisBonus
+      : 0;
   return (
     weights.confidence.hysteresisBase +
-    personality.stubbornness * weights.confidence.hysteresisStubbornSpan
+    personality.stubbornness * weights.confidence.hysteresisStubbornSpan +
+    talker
   );
+}
+
+/** Memory sinh từ một câu chat. Xem `analyzeChat`. */
+const CHAT_MEMORY_TYPES: ReadonlySet<BotBrainState["memories"][number]["type"]> = new Set([
+  "ACCUSE",
+  "DEFEND",
+  "ROLE_CLAIM",
+  "COUNTER_CLAIM",
+  "DIRECT_ADDRESS",
+  "DIRECT_QUESTION",
+]);
+
+/**
+ * Số CÂU một người đã nói trong vòng này, theo những gì bot nghe hiểu được.
+ *
+ * Đếm theo `sourceId` (message) chứ không theo memory: một câu "Tôi nghi An,
+ * đúng không An?" sinh cả ACCUSE lẫn DIRECT_QUESTION và vẫn là một câu.
+ * Không thêm state: `visibleChat` không mang số vòng, còn memory thì có, và
+ * mọi câu parser hiểu được đều đã thành memory ở `ingestChat`.
+ */
+export function linesSpokenThisRound(
+  state: BotBrainState,
+  playerId: string,
+  round: number,
+): number {
+  const messages = new Set<string>();
+  for (const memory of state.memories) {
+    if (memory.actorId !== playerId || memory.round !== round) continue;
+    if (!CHAT_MEMORY_TYPES.has(memory.type)) continue;
+    messages.add(memory.sourceId);
+  }
+  return messages.size;
 }
 
 /**
@@ -171,6 +228,15 @@ export function selectVote(
   const bias = strategyFor(knowledge.selfRole, weights).voteBias(context, state);
   const aliveIds = knowledge.players.filter((p) => p.alive).map((p) => p.id);
 
+  // Đồng bọn mà con Sói này cãi giả vòng này; `null` ở mọi vai khác và ở mọi
+  // preset có `fakeFightChance = 0`. Xem `fakeFightTarget` - không rút RNG.
+  const fightTarget = selfIsWolf ? fakeFightTarget(context, state, weights) : null;
+  // Người thật dồn phiếu nhanh hơn bot, nên Sói phải bán sớm hơn một nhịp.
+  // Hai ngưỡng bằng nhau ở v1..v15.
+  const bussingShare = isHumanTable(knowledge, weights)
+    ? weights.deceptionRisk.bussingVoteShareHuman
+    : weights.deceptionRisk.bussingVoteShare;
+
   const scored: ScoredTarget[] = [];
   for (const targetId of candidatesFor(knowledge, state.playerId, aliveIds)) {
     // Engine cho phép tự bầu mình, nhưng một BOT tự đề cử mình là hành vi vô
@@ -205,8 +271,9 @@ export function selectVote(
     const willBus =
       selfIsWolf &&
       targetIsWolf &&
-      voteShare >= weights.deceptionRisk.bussingVoteShare &&
+      voteShare >= bussingShare &&
       personality.deceptionSkill * weights.deceptionRisk.bussingDeceptionScale >= 1;
+    const willFight = targetIsWolf && targetId === fightTarget;
 
     // Điểm được cộng theo TỪNG SỐ HẠNG chứ không phải một biểu thức dài. Thứ tự
     // cộng giữ nguyên nên kết quả giống hệt từng bit (xem `sumTerms`), nhưng giờ
@@ -231,7 +298,7 @@ export function selectVote(
       },
       // Bỏ luôn bias của vai khi đã quyết hy sinh: `voteBias` của Sói đẩy -100
       // vào mỗi đồng bọn, và một số hạng lớn thế sẽ nuốt chửng mọi thứ khác.
-      { name: "roleBias", value: willBus ? 0 : bias[targetId] ?? 0 },
+      { name: "roleBias", value: willBus || willFight ? 0 : bias[targetId] ?? 0 },
       // Người bị cả làng dồn vào mà không ai bênh thì dễ bị treo; đó vừa là tín
       // hiệu (có thể họ đã lộ), vừa là cái bẫy (đám đông có khi đang sai).
       // Trọng số nhỏ có chủ đích: nó không được tự mình đẩy ai qua ngưỡng.
@@ -248,13 +315,20 @@ export function selectVote(
             // suspicion bằng 0 trong mắt chính con Sói, nên không gì đẩy nó lên
             // đầu bảng. Bussing thật là *bỏ phiếu cùng đa số*.
             { name: "bussingJoin", value: voteShare * weights.deceptionRisk.bussingJoinBonus }
-          : {
-              name: "teammateProtection",
-              value: -(
-                weights.teammateProtection.penaltyBase +
-                personality.loyalty * weights.teammateProtection.loyaltySpan
-              ),
-            },
+          : willFight
+            ? // Cãi giả: cùng cơ chế nhưng không có chuyến xe nào, nên chỉ một
+              // phần. Xem `FAKE_FIGHT_JOIN_SCALE`.
+              {
+                name: "fakeFight",
+                value: FAKE_FIGHT_JOIN_SCALE * weights.deceptionRisk.bussingJoinBonus,
+              }
+            : {
+                name: "teammateProtection",
+                value: -(
+                  weights.teammateProtection.penaltyBase +
+                  personality.loyalty * weights.teammateProtection.loyaltySpan
+                ),
+              },
       );
     }
 
@@ -295,10 +369,12 @@ export function selectVote(
     const current = scored.find((item) => item.targetId === myVote.targetId);
     const currentQualifies =
       current !== undefined && current.evidence.length > 0 && current.score >= threshold;
+    // Dính hơn trước một người đang nói nhiều: xem `talkerHysteresisBonus`.
+    const spoken = linesSpokenThisRound(state, myVote.targetId, knowledge.round);
     if (
       currentQualifies &&
       winner.targetId !== current.targetId &&
-      winner.score < current.score + voteHysteresis(personality, weights)
+      winner.score < current.score + voteHysteresis(personality, weights, spoken)
     ) {
       winner = current;
     }
@@ -321,7 +397,18 @@ export function selectVote(
   const abstainHelpsMyTeam =
     selfIsWolf && pressure < weights.deceptionRisk.abstainPressureCeiling;
 
-  if (abstainHelpsMyTeam && (winner.score < threshold || winner.evidence.length === 0)) {
+  // Cuộc cãi giả CỐ Ý không có bằng chứng - đồng bọn bị ghim suspicion 0 nên
+  // không có lý do nào để mang - và nó phải ra tới lá phiếu, nếu không lời
+  // "tôi thấy anh hơi lạ" chưa bao giờ được nói. `fightTarget` chỉ khác null
+  // khi đã qua mọi cổng ở `fakeFightTarget`, nên đây không mở đường cho một
+  // lá phiếu vô căn cứ nào khác.
+  const isFakeFight = winner.targetId === fightTarget;
+
+  if (
+    abstainHelpsMyTeam &&
+    !isFakeFight &&
+    (winner.score < threshold || winner.evidence.length === 0)
+  ) {
     probe?.fallback(
       winner.evidence.length === 0
         ? `dẫn đầu ${winner.targetId} không có bằng chứng nào và làng còn đủ đông`
