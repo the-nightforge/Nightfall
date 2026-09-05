@@ -1413,6 +1413,22 @@ function poolFor(kind: BotSpeechKind, tone: BotSpeechTone): string[] {
 }
 
 /**
+ * Chuỗi bằng chứng ở dạng ghép được vào giữa câu.
+ *
+ * `summary` do tầng phân tích viết như một CÂU ("Đổi phiếu trong 80% thời gian
+ * cuối của vòng đề cử."), còn mẫu thì ghép nó sau dấu phẩy và tự thêm dấu chấm.
+ * Không sửa thì ra "..., Đổi phiếu ... đề cử.." - hai dấu chấm và một chữ hoa
+ * giữa câu, hai thứ không ai gõ trong chat. Chỉ đụng chữ ĐẦU và dấu CUỐI; tên
+ * người bên trong ("soi ra Nam là Sói") giữ nguyên để parser vẫn đọc được.
+ */
+function evidenceClause(summary: string | undefined, leading: boolean): string {
+  if (summary === undefined) return "tôi thấy hơi lạ";
+  const trimmed = summary.trim().replace(/[.!?…]+$/u, "");
+  if (trimmed.length === 0 || leading) return trimmed || "tôi thấy hơi lạ";
+  return trimmed.charAt(0).toLowerCase() + trimmed.slice(1);
+}
+
+/**
  * Điền chỗ trống, KHÔNG nhiễu.
  *
  * Bốn khoá, không hơn. Thiếu dữ liệu thì dùng một từ chung chung thay vì để lộ
@@ -1427,7 +1443,7 @@ export function fillSpeechTemplate(template: string, request: SpeechTemplateRequ
   return template
     .replace(/\{target\}/g, request.targetName ?? "người đó")
     .replace(/\{author\}/g, request.replyToName ?? request.targetName ?? "bạn")
-    .replace(/\{evidence\}/g, first?.summary ?? "tôi thấy hơi lạ")
+    .replace(/\{evidence\}/g, evidenceClause(first?.summary, template.startsWith("{evidence}")))
     .replaceAll("{role}", request.intention.claimedRole
       ? ROLE_META[request.intention.claimedRole].name
       : "dân làng");
