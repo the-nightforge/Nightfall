@@ -22,17 +22,15 @@ export const VILLAGE_ROLES: Role[] = [
   "DETECTIVE",
   "GUARD",
   "GUARDIAN_ANGEL",
-  "PRIEST",
   "WITCH",
   "HUNTER",
   "MAYOR",
   "ELDER",
-  "MEDIUM",
   "DOPPELGANGER",
   "CURSED",
 ];
 
-export const WOLF_SPECIAL_ROLES: Role[] = ["WOLF_CUB"];
+export const WOLF_SPECIAL_ROLES: Role[] = ["WOLF_CUB", "SORCERER", "ALPHA_WOLF"];
 
 /**
  * Vai TRUNG LẬP, bày thành nhóm thứ ba trong bộ bài.
@@ -51,15 +49,15 @@ export const CONFIG_KEY: Record<string, keyof RoomConfig> = {
   DETECTIVE: "detective",
   GUARD: "guard",
   GUARDIAN_ANGEL: "guardianAngel",
-  PRIEST: "priest",
   WITCH: "witch",
   HUNTER: "hunter",
   MAYOR: "mayor",
   ELDER: "elder",
-  MEDIUM: "medium",
   DOPPELGANGER: "doppelganger",
   CURSED: "cursed",
   WOLF_CUB: "wolfCub",
+  SORCERER: "sorcerer",
+  ALPHA_WOLF: "alphaWolf",
   JESTER: "jester",
   SERIAL_KILLER: "serialKiller",
   EXECUTIONER: "executioner",

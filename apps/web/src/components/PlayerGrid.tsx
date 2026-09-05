@@ -34,15 +34,6 @@ interface Props {
   disabledIdsReason?: string;
   /** Bảo Vệ được tự bảo vệ mình, nên vài lưới đêm phải mở ô của chính người chơi. */
   allowSelf?: boolean;
-  /**
-   * Lật điều kiện sống/chết của lưới: chỉ người ĐÃ CHẾT bấm được.
-   *
-   * Bà Đồng là vai duy nhất cần điều này, và nó là một CỜ chứ không phải một
-   * lưới thứ hai: mọi thứ khác của ô ghế - đệm, cỡ chữ, dấu tích, lý do bị tắt -
-   * phải giống hệt lưới thường, nếu không thì một pha đêm sẽ nhìn như một màn
-   * hình khác của một trò chơi khác.
-   */
-  targetDead?: boolean;
 }
 
 export function PlayerGrid({
@@ -55,7 +46,6 @@ export function PlayerGrid({
   disabledIds = [],
   disabledIdsReason,
   allowSelf = false,
-  targetDead = false,
 }: Props) {
   // snapshot.you thay cho getIdentity(): id của chính người xem đã nằm sẵn
   // trong snapshot, không việc gì phải đọc localStorage ở mỗi lần render.
@@ -155,7 +145,7 @@ export function PlayerGrid({
     >
       {snapshot.players.map((player) => {
           const isMe = player.id === meId;
-          const wrongSide = targetDead ? player.alive : !player.alive;
+          const wrongSide = !player.alive;
           const disabled =
             !selectable ||
             wrongSide ||
@@ -173,9 +163,7 @@ export function PlayerGrid({
           const disabledReason = !selectable
             ? null
             : wrongSide
-              ? targetDead
-                ? "Người này còn sống"
-                : "Người này đã chết"
+              ? "Người này đã chết"
               : isMe && !allowSelf
                 ? "Không thể chọn chính mình"
                 : disabledIds.includes(player.id)

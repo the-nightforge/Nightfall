@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ROLE_META, type RoomSnapshot } from "@masoi/shared";
+import { isWolfPack, ROLE_META, type RoomSnapshot } from "@masoi/shared";
 import { PlayerGrid } from "./PlayerGrid";
 import { canActAtNight } from "@/lib/night-role";
 import { seerReading } from "@/lib/seer-reading";
@@ -30,6 +30,10 @@ export function NightPanel({ snapshot, onAction }: Props) {
   const [seerSecondary, setSeerSecondary] = useState<string | null>(null);
   const [detectiveTarget1, setDetectiveTarget1] = useState<string | null>(null);
   const [detectiveTarget2, setDetectiveTarget2] = useState<string | null>(null);
+  /** Mục tiêu kiểm tra dòng Tiên Tri của Sói Pháp Sư; riêng khỏi `selected`
+   *  vì lá này MỖI ĐÊM CÓ HAI VIỆC: một phiếu cắn cùng bầy (dùng `selected`)
+   *  và một lượt kiểm tra riêng - chung một ô chọn thì bấm bên này đổi bên kia. */
+  const [sorcererTarget, setSorcererTarget] = useState<string | null>(null);
   const [poisoning, setPoisoning] = useState(false);
   /*
    * Phiếu cắn vừa gửi mà snapshot chưa xác nhận.
@@ -105,7 +109,6 @@ export function NightPanel({ snapshot, onAction }: Props) {
   const locked = night?.wolvesLocked ?? false;
   const vigilantNight = snapshot.activeEvent?.id === "VIGILANT_NIGHT";
   const clearingMist = snapshot.activeEvent?.id === "CLEARING_MIST";
-  const ghostCount = snapshot.players.filter((player) => !player.alive).length;
   const nameOf = (id: string | null | undefined) =>
     snapshot.players.find((p) => p.id === id)?.name ?? "?";
   const aliveOthers = (opts?: {
@@ -136,17 +139,21 @@ export function NightPanel({ snapshot, onAction }: Props) {
    * khi trời sáng, nên "đã hành động" đọc như một cánh cửa đã đóng.
    */
   const showActedBadge =
-    acted && role !== "WEREWOLF" && role !== "WOLF_CUB" && role !== "SERIAL_KILLER";
+    acted &&
+    role !== "WEREWOLF" &&
+    role !== "WOLF_CUB" &&
+    role !== "ALPHA_WOLF" &&
+    role !== "SORCERER" &&
+    role !== "SERIAL_KILLER";
 
   /*
    * Đồng đội trong phe Sói - những ô mà luật không cho nhắm tới.
    *
-   * Lọc theo `ROLE_META[...].team` chứ không liệt kê tay "WEREWOLF" và
-   * "WOLF_CUB": bảng vai là nơi duy nhất biết vai nào thuộc phe nào, và một vai
-   * Sói thêm vào sau này sẽ tự được che ở đây thay vì lặng lẽ trở thành một
-   * mục tiêu bấm được. `p.role` chỉ có mặt khi người xem LÀ Sói - snapshotFor
-   * giấu nó với mọi người khác - nên danh sách này rỗng ở mọi vai khác, đúng
-   * như nó phải thế.
+   * Lọc theo `ROLE_META[...].team` chứ không liệt kê tay từng vai Sói: bảng vai
+   * là nơi duy nhất biết vai nào thuộc phe nào, và một vai Sói thêm vào sau này
+   * sẽ tự được che ở đây thay vì lặng lẽ trở thành một mục tiêu bấm được.
+   * `p.role` chỉ có mặt khi người xem LÀ Sói - snapshotFor giấu nó với mọi
+   * người khác - nên danh sách này rỗng ở mọi vai khác, đúng như nó phải thế.
    */
   const wolfAllyIds = snapshot.players
     .filter((p) => p.role && ROLE_META[p.role].team === "wolves")
@@ -213,8 +220,12 @@ export function NightPanel({ snapshot, onAction }: Props) {
           <CursedNote snapshot={snapshot} />
         </div>
 
-        {/* MA SÓI & SÓI CON */}
-        {(role === "WEREWOLF" || role === "WOLF_CUB") && (
+        {/*
+          * Mọi vai trong bầy Sói cắn chung một phiếu: Ma Sói, Sói Con, Sói
+          * Alpha và Sói Pháp Sư. Sói Pháp Sư ngoài phiếu cắn còn có một lượt
+          * kiểm tra dòng Tiên Tri riêng ở khối bên dưới.
+          */}
+        {role && isWolfPack(role) && (
           <>
             <WolfTally snapshot={snapshot} nameOf={nameOf} />
             {role === "WOLF_CUB" && (
@@ -559,45 +570,50 @@ export function NightPanel({ snapshot, onAction }: Props) {
           </>
         )}
 
-        {/* LINH MỤC */}
-        {role === "PRIEST" && (
+        {/* SÓI PHÁP SƯ: lượt kiểm tra dòng Tiên Tri, ngoài phiếu cắn cùng bầy */}
+        {role === "SORCERER" && (
           <>
-            <div className="mb-2 flex items-center justify-between gap-2 text-sm">
-              <span className={`rounded px-2 py-1 text-xs font-semibold ${night?.priestHolyWaterUsed ? "bg-night-700 text-mist/60 line-through" : "bg-cyan-900/50 text-cyan-300 border border-cyan-500/30"}`}>
-                Nước thánh: {night?.priestHolyWaterUsed ? "Đã sử dụng" : "1 Bình duy nhất"}
-              </span>
-            </div>
             <p className="mb-2 text-[13px] text-mist-strong">
-              Ném Nước thánh vào 1 người: Nếu là <b>Sói</b> thì Sói chết. Nếu <b>không phải Sói</b> thì Linh mục bị phản vệ tử vong!
+              Chọn 1 người còn sống để kiểm tra xem họ có thuộc{" "}
+              <b className="text-violet-300">dòng Tiên Tri</b> (Tiên Tri, Tiên Tri
+              Tập Sự) không. Mỗi đêm một lượt, chốt ngay lần đầu.
             </p>
-            {night?.priestResult && (
+            {night?.sorcererResult && (
               <div className="mb-2 rounded-lg bg-night-800 p-2.5 text-sm">
-                <p className="text-[13px] text-mist-strong">Kết quả dùng Nước thánh:</p>
+                <p className="text-[13px] text-mist-strong">Kết quả kiểm tra gần nhất:</p>
                 <p className="mt-1">
-                  Mục tiêu <b>{night.priestResult.target.name}</b> {night.priestResult.isWolf ? "là Ma Sói và đã bị thanh tẩy!" : "không phải Ma Sói!"}
+                  <b>{night.sorcererResult.target.name}</b>{" "}
+                  {night.sorcererResult.isSeerLine ? (
+                    <>
+                      thuộc <b className="text-amber-300">dòng Tiên Tri</b>
+                    </>
+                  ) : (
+                    <>
+                      <b className="text-emerald-300">không</b> thuộc dòng Tiên Tri
+                    </>
+                  )}
                 </p>
               </div>
             )}
-            {acted ? (
-              <p className="rounded-lg bg-night-800 p-3 text-center text-sm text-mist-strong">Bạn đã hành động đêm nay.</p>
+            {night?.sorcererResult ? (
+              <p className="rounded-lg bg-night-800 p-3 text-center text-sm text-mist-strong">
+                Bạn đã kiểm tra đêm nay. Phiếu cắn cùng bầy vẫn đổi được tới khi chốt.
+              </p>
             ) : (
               <>
-                {aliveOthers({
-                  allowSelf: false,
-                })}
+                <PlayerGrid
+                  snapshot={snapshot}
+                  selectable={true}
+                  selectedId={sorcererTarget}
+                  onSelect={setSorcererTarget}
+                  allowSelf={false}
+                />
                 <button
                   className="btn-primary mt-3 w-full"
-                  disabled={!selected || night?.priestHolyWaterUsed}
-                  onClick={() => selected && onAction("HOLY_WATER", selected)}
+                  disabled={!sorcererTarget}
+                  onClick={() => sorcererTarget && onAction("SORCERER_CHECK", sorcererTarget)}
                 >
-                  💧 {night?.priestHolyWaterUsed ? "Đã dùng Nước thánh" : "Ném Nước thánh vào mục tiêu"}
-                </button>
-                <button
-                  className="btn-secondary mt-2 w-full"
-                  disabled={!!night?.priestHolyWaterUsed}
-                  onClick={() => onAction("SKIP", null)}
-                >
-                  Không dùng Nước thánh đêm nay
+                  🔮 Kiểm tra người này
                 </button>
               </>
             )}
@@ -677,49 +693,6 @@ export function NightPanel({ snapshot, onAction }: Props) {
                   onClick={() => selected && onAction("GUARD", selected)}
                 >
                   🛡️ Bảo vệ người này
-                </button>
-              </>
-            )}
-          </>
-        )}
-
-        {/* BÀ ĐỒNG */}
-        {role === "MEDIUM" && (
-          <>
-            <p className="mb-2 text-[13px] text-mist-strong">
-              Chọn một người <b className="text-violet-300">đã khuất</b> để gọi hồn.
-              Bạn đọc ra <b>vai thật</b> của họ, không phải phe.
-            </p>
-            {night?.mediumResult && (
-              <div className="mb-2 rounded-lg bg-night-800 p-2.5 text-sm">
-                <p className="text-[13px] text-mist-strong">Hồn vừa trả lời:</p>
-                <p className="mt-1">
-                  <b>{night.mediumResult.target.name}</b> là{" "}
-                  <b className="text-violet-300">{ROLE_META[night.mediumResult.role].name}</b>
-                </p>
-              </div>
-            )}
-            {ghostCount === 0 ? (
-              // Đêm 1 nghĩa địa còn trống. Nói ra thay vì bày một lưới mà mọi ô
-              // đều bấm không được - engine cũng không chào hành động nào.
-              <p className="rounded-lg bg-night-800 p-3 text-center text-sm text-mist-strong">
-                Chưa có ai qua đời, nên đêm nay không có hồn nào để gọi.
-              </p>
-            ) : (
-              <>
-                <PlayerGrid
-                  snapshot={snapshot}
-                  selectable={!acted}
-                  selectedId={selected}
-                  onSelect={setSelected}
-                  targetDead
-                />
-                <button
-                  className="btn-primary mt-3 w-full"
-                  disabled={!selected || acted}
-                  onClick={() => selected && onAction("MEDIUM_CHECK", selected)}
-                >
-                  🔮 Gọi hồn người này
                 </button>
               </>
             )}
