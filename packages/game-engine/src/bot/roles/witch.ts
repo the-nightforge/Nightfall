@@ -2,6 +2,25 @@ import type { Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { isThinVillage } from "../knowledge";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
+import type { BotDecisionContext } from "../types";
+
+/**
+ * Ngưỡng nghi ngờ để Phù Thuỷ dám dùng bình độc ĐÊM NAY.
+ *
+ * Tách ra để harness self-play ghi được "đêm này bình còn mà không dùng thì
+ * ngưỡng là bao nhiêu" (`WITCH_HOLD`) bằng ĐÚNG con số chiến lược đang dùng,
+ * thay vì chép lại phép tính rồi trôi lệch. Chiết khấu là 0 ở v1..v14.
+ */
+export function witchPoisonThreshold(
+  knowledge: BotDecisionContext["knowledge"],
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+): number {
+  const tuning = weights.roleThresholds;
+  return (
+    tuning.witchPoisonSuspicion -
+    (isThinVillage(knowledge, weights) ? tuning.witchPoisonLosingDiscount : 0)
+  );
+}
 
 /**
  * Hai bình dùng ĐÚNG MỘT LẦN cả ván, nên ngưỡng phải cao.
@@ -36,8 +55,7 @@ export function witchStrategy(
       // Chiết khấu là 0 ở v1..v14, nên hai ngưỡng dưới đây bằng đúng bảng cũ.
       const thin = isThinVillage(context.knowledge, weights);
       const healTrust = tuning.witchHealTrust - (thin ? tuning.witchHealLosingDiscount : 0);
-      const poisonSuspicion =
-        tuning.witchPoisonSuspicion - (thin ? tuning.witchPoisonLosingDiscount : 0);
+      const poisonSuspicion = witchPoisonThreshold(context.knowledge, weights);
 
       // --- Bình cứu ---
       // Chỉ được chào HEAL khi engine xác nhận có nạn nhân và bình còn.

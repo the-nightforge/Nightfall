@@ -110,6 +110,12 @@ export function runBatch(input: SelfPlayBatchInput): SelfPlayGame[] {
         maxRounds: input.maxRounds,
         events: input.events,
         speech: input.speech,
+        // `humanSeats` PHẢI đi theo: thiếu nó thì lần đối chứng chạy một bàn
+        // toàn bot trong khi lần chính chạy bàn có cờ người thật, và mọi nhánh
+        // `isHumanTable` (Tiên Tri giấu kết quả, Sói bán sớm) làm hai chuỗi
+        // lệch nhau - `--verify-replay --humans n` báo REPLAY_DIVERGENCE ở
+        // ~15% ván dù ván tái lập hoàn hảo. Đã xảy ra thật ở v17.
+        humanSeats: input.humanSeats,
         // Lần chạy đối chứng KHÔNG thu trace: nó chỉ tồn tại để so chuỗi sự
         // kiện, và thu trace ở đây là trả gấp đôi bộ nhớ cho một bản sao không
         // ai đọc.
@@ -234,7 +240,17 @@ export function formatReportText(report: SelfPlayReport): string {
     "── Vai chức năng (P2) ──",
     `  Tiên Tri chết đêm 2      ${pct(m.seerDiedNightTwoRate)}`,
     `  Tiên Tri khai vòng 1     ${pct(m.seerClaimedRoundOneRate)}`,
+    `    đã khai R1, chết đêm 2   ${pct(m.seerClaimedR1DiedNightTwoRate)}`,
+    `    chưa khai R1, chết đêm 2 ${pct(m.seerUnclaimedR1DiedNightTwoRate)}`,
+    `    chết đêm ngay sau khai   ${pct(m.seerDiedNightAfterClaimRate)}`,
     `  Phù Thuỷ giữ bình độc    ${pct(m.witchPoisonUnusedRate)}`,
+    `    chết sớm, chưa có mục tiêu ${pct(m.witchPoisonUnusedDiedEarlyRate)}`,
+    `    sống, không có mục tiêu    ${pct(m.witchPoisonUnusedNoTargetRate)}`,
+    `    nghi nhất đúng Sói, dưới ngưỡng ${pct(m.witchPoisonUnusedTopWolfBelowBarRate)}`,
+    `  Đêm giữ bình, nghi nhất là Sói ${pct(m.witchHoldTopWolfRate)}  cách ngưỡng TB ${
+      m.witchHoldWolfGapMean === null ? "n/a" : m.witchHoldWolfGapMean.toFixed(1)
+    }`,
+    `  Đêm giữ bình vì veto tin tưởng ${pct(m.witchHoldVetoedByTrustRate)}`,
     `  Phù Thuỷ dùng bình độc   ${pct(m.witchPoisonRate)}  trúng Sói ${pct(m.witchPoisonAccuracy)}`,
     `  Phù Thuỷ cứu             ${pct(m.witchHealRate)}`,
     `  Linh Mục ném             ${pct(m.priestHolyWaterRate)}  trúng Sói ${pct(m.priestHolyWaterAccuracy)}`,
@@ -249,6 +265,17 @@ export function formatReportText(report: SelfPlayReport): string {
     `  Nhắm mãi một người       ${pct(m.consecutiveSameTargetRate)}`,
     `  Có trả lời ai đó         ${pct(m.replyRate)}${flag(m.replyRate, 0.15, "dưới")}`,
     `  Đáp câu hỏi trực tiếp    ${pct(m.directQuestionResponseRate)}${flag(m.directQuestionResponseRate, 0.4, "dưới")}`,
+    // Bảy ngăn rời nhau của cùng một mẫu số. Chỉ hai ngăn đầu là chỗ có thể
+    // sửa bằng code (parser, lịch phòng); ba ngăn DECLINED/NO_TURN là tính cách
+    // và hạn mức - đọc chúng như một lựa chọn, không phải một lỗi.
+    `    đã đáp                 ${pct(m.directQuestionOutcomes.ANSWERED)}`,
+    `    parser không nhận ra   ${pct(m.directQuestionOutcomes.NOT_PARSED)}`,
+    `    phòng chặn             ${pct(m.directQuestionOutcomes.BLOCKED_ROOM)}`,
+    `    hết lượt/hạn mức       ${pct(m.directQuestionOutcomes.NO_TURN)}`,
+    `    né - nói việc khác     ${pct(m.directQuestionOutcomes.DECLINED_SPOKE_OTHER)}`,
+    `    né - im lặng           ${pct(m.directQuestionOutcomes.DECLINED_SILENT)}`,
+    `    chưa xác định          ${pct(m.directQuestionOutcomes.UNDETERMINED)}`,
+    `  Câu bị phòng chặn        hạn mức ${m.speechBlockedByRoom.BUDGET} · chuỗi ${m.speechBlockedByRoom.CHAIN_DEPTH} · đủ phản hồi ${m.speechBlockedByRoom.REPLIES_PER_MESSAGE}`,
     `  Im lặng                  ${pct(m.silenceRate)}`,
     `  Dùng mẫu câu             ${pct(m.fromTemplateRate)}`,
     `  Tin/BOT/ngày             ${m.messagesPerBotPerDay === null ? "n/a" : m.messagesPerBotPerDay.toFixed(2)}${
@@ -263,6 +290,8 @@ export function formatReportText(report: SelfPlayReport): string {
     `  Thấy lời bênh vực        ${pct(m.humanDefendSeenRate)}`,
     `  Thấy lời khai vai        ${pct(m.humanClaimSeenRate)}`,
     `  Bỏ qua câu bẫy           ${pct(m.humanTrapIgnoredRate)}${flag(m.humanTrapIgnoredRate, 1, "dưới")}`,
+    `  Thấy câu hỏi đích danh   ${pct(m.humanQuestionSeenRate)}${flag(m.humanQuestionSeenRate, 0.8, "dưới")}`,
+    `  Bỏ qua tên chỉ nhắc tới  ${pct(m.humanAddressTrapIgnoredRate)}${flag(m.humanAddressTrapIgnoredRate, 1, "dưới")}`,
     "",
     "── An toàn ──",
     `  Vi phạm ranh giới hiểu biết  ${m.knowledgeBoundaryViolations}`,

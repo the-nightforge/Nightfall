@@ -23,7 +23,12 @@ type GameOutcome = Exclude<Winner, null>;
 type VotingTeam = "village" | "wolves";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { normalizeSpeechText, openingOf } from "../conversation/fingerprint";
-import type { SelfPlayEvent, SelfPlayGame } from "./selfplay";
+import type {
+  QuestionOutcome,
+  SelfPlayEvent,
+  SelfPlayGame,
+  SpeechBlockReason,
+} from "./selfplay";
 
 /**
  * Chỉ số chất lượng chơi, gom từ nhiều ván.
@@ -101,6 +106,69 @@ export interface SelfPlayMetrics {
   seerDiedNightTwoRate: Ratio;
   /** Ván có Tiên Tri mà Tiên Tri công khai khai vai ngay vòng 1. Cùng mẫu số. */
   seerClaimedRoundOneRate: Ratio;
+  /**
+   * Tiên Tri ĐÃ khai vòng 1 và còn sống bước vào đêm 2, rồi chết đêm đó.
+   *
+   * Mẫu số là số Tiên Tri đã khai vòng 1 VÀ không bị treo ngay vòng 1 - người
+   * bị treo không có đêm 2 để mà chết. Đây là "nguy cơ chết sau khai vai"
+   * đúng nghĩa; `seerDiedNightTwoRate` gộp cả người chưa khai nên không đo
+   * được nó.
+   */
+  seerClaimedR1DiedNightTwoRate: Ratio;
+  /**
+   * Tiên Tri CHƯA khai vòng 1, còn sống bước vào đêm 2, rồi chết đêm đó.
+   *
+   * Đối chứng của chỉ số trên: nếu hai tỉ lệ này gần nhau thì khai sớm không
+   * phải điều khiến Tiên Tri chết, và "hô sớm chết đêm 2" là một chẩn đoán sai.
+   */
+  seerUnclaimedR1DiedNightTwoRate: Ratio;
+  /**
+   * Tiên Tri khai ở vòng r (bất kỳ) và chết ngay đêm r+1 vì lý do KHÔNG phải
+   * lynch/hunter. Mẫu số là số Tiên Tri đã khai và còn sống hết ngày khai.
+   * Tổng quát hoá của chỉ số vòng 1, cho bàn mà Tiên Tri hay khai muộn.
+   */
+  seerDiedNightAfterClaimRate: Ratio;
+  /**
+   * Đêm Phù Thuỷ còn bình độc mà không dùng, VÀ người cô ta nghi nhất lúc đó
+   * là một con Sói thật. Mẫu số là mọi đêm giữ bình (`WITCH_HOLD`).
+   *
+   * Đo độ lệch giữa belief và ngưỡng: cao nghĩa là cô ta đã chỉ đúng người
+   * nhưng ngưỡng không cho phép - một tín hiệu về `witchPoisonSuspicion`,
+   * không phải về belief.
+   */
+  witchHoldTopWolfRate: Ratio;
+  /**
+   * Khoảng cách trung bình `threshold - topSuspicion` ở những đêm giữ bình mà
+   * người nghi nhất là Sói thật. `null` khi không có đêm nào như vậy.
+   *
+   * Đọc cùng `witchHoldTopWolfRate`: tỉ lệ đó cao mà khoảng cách này lớn nghĩa
+   * là belief đúng hướng nhưng còn xa ngưỡng - không phải "bỏ lỡ", là "chưa đủ
+   * bằng chứng". Khoảng cách nhỏ mới là chỗ đáng cân nhắc ngưỡng.
+   */
+  witchHoldWolfGapMean: number | null;
+  /**
+   * Đêm giữ bình mà CÓ mục tiêu đã vượt ngưỡng nghi ngờ nhưng bị veto vì tin
+   * tưởng còn cao. Mẫu số là mọi đêm giữ bình. Đây là dạng "giữ" duy nhất là
+   * một quyết định giữa hai tín hiệu mâu thuẫn, không phải thiếu bằng chứng.
+   */
+  witchHoldVetoedByTrustRate: Ratio;
+  /**
+   * Ba ngăn RỜI NHAU của "giữ bình tới cuối" (`witchPoisonUnusedRate`), cùng
+   * mẫu số là số ván bình độc còn nguyên. Tổng ba tử số bằng đúng mẫu số.
+   *
+   * - `diedEarly`: chết trước khi ván xong và chưa đêm nào nghi nhất một con
+   *   Sói - không có cơ hội nào, kể cả theo belief của chính cô ta.
+   * - `noTarget`: sống tới cuối nhưng chưa đêm nào nghi nhất một con Sói -
+   *   giữ bình là ĐÚNG, dùng là giết dân.
+   * - `topWolfBelowBar`: có ít nhất một đêm người nghi nhất là Sói thật mà
+   *   vẫn giữ. KHÔNG gọi đây là "quyết định sai": ở thang belief thật, điểm
+   *   nghi nhất ở những đêm này thường chỉ là một linh cảm mờ (xem
+   *   `witchHoldWolfGapMean`). Nó là ngăn duy nhất mà đổi ngưỡng có thể đổi
+   *   kết quả, nên nó được tách riêng - để cân nhắc, không để kết tội.
+   */
+  witchPoisonUnusedDiedEarlyRate: Ratio;
+  witchPoisonUnusedNoTargetRate: Ratio;
+  witchPoisonUnusedTopWolfBelowBarRate: Ratio;
   /**
    * Ván có ít nhất một lá phiếu Sói -> Sói mà trước nó trong cùng vòng chưa ai
    * bầu con Sói đó (dấu vân tay của cuộc cãi giả P2.3; bussing cần phiếu có
@@ -197,6 +265,17 @@ export interface SelfPlayMetrics {
   /** Lượt được mời nói mà BOT chọn im lặng. `null` khi không đo được. */
   silenceRate: Ratio;
   /**
+   * Số phận từng câu hỏi trực tiếp, chia theo `QuestionOutcome`. Bảy tỉ lệ
+   * cùng một mẫu số (số câu hỏi đã được chốt) và cộng lại bằng 1.
+   *
+   * `ANSWERED` ở đây và `directQuestionResponseRate` đo cùng một thứ theo hai
+   * đường độc lập (harness chốt ở cuối vòng / tầng đo dò `replyToMessageId`);
+   * lệch nhau là một lỗi ở một trong hai.
+   */
+  directQuestionOutcomes: Record<QuestionOutcome, Ratio>;
+  /** Số câu bị PHÒNG chặn, theo lý do. Không phải tỉ lệ: đây là số đếm thô. */
+  speechBlockedByRoom: Record<SpeechBlockReason, number>;
+  /**
    * Câu do bảng mẫu sinh ra, đếm theo cờ `fromTemplate` trên từng câu.
    * Trong self-play luôn bằng 1 theo thiết kế; ở production đây là con số cần
    * theo dõi (một nhà cung cấp hỏng lặng lẽ trông y hệt một nhà cung cấp tốt
@@ -243,6 +322,14 @@ export interface SelfPlayMetrics {
   humanClaimSeenRate: Ratio;
   /** Câu bẫy (đùa, hỏi, phủ định) parser bỏ qua đúng. Phải bằng 1. */
   humanTrapIgnoredRate: Ratio;
+  /**
+   * Câu hỏi / lời gọi đích danh mà parser đọc ra đúng người được hỏi
+   * (`HUMAN_QUESTIONS`). Đây là mặt "corpus" của `directQuestionOutcomes.NOT_PARSED`:
+   * ngăn kia đo trên câu bot sinh ra, ngăn này đo trên câu người gõ.
+   */
+  humanQuestionSeenRate: Ratio;
+  /** Câu nêu tên nhưng không nói với ai (`HUMAN_ADDRESS_TRAPS`) mà parser bỏ qua đúng. Phải bằng 1. */
+  humanAddressTrapIgnoredRate: Ratio;
 }
 
 export interface RoleMetrics {
@@ -398,7 +485,35 @@ export function collectMetrics(
   let seerGames = 0;
   let seerDiedNightTwo = 0;
   let seerClaimedRoundOne = 0;
+  let seerClaimedR1AliveNight2 = 0;
+  let seerClaimedR1DiedNight2 = 0;
+  let seerUnclaimedR1AliveNight2 = 0;
+  let seerUnclaimedR1DiedNight2 = 0;
+  let seerClaimedAliveNextNight = 0;
+  let seerDiedNightAfterClaim = 0;
+  let witchHolds = 0;
+  let witchHoldTopWolf = 0;
+  let witchHoldVetoed = 0;
+  const witchHoldWolfGaps: number[] = [];
+  let witchUnusedDiedEarly = 0;
+  let witchUnusedNoTarget = 0;
+  let witchUnusedMissedWolf = 0;
   let fakeFightGames = 0;
+  const questionOutcomes: Record<QuestionOutcome, number> = {
+    ANSWERED: 0,
+    NOT_PARSED: 0,
+    BLOCKED_ROOM: 0,
+    NO_TURN: 0,
+    DECLINED_SPOKE_OTHER: 0,
+    DECLINED_SILENT: 0,
+    UNDETERMINED: 0,
+  };
+  let questionOutcomeTotal = 0;
+  const blockedByRoom: Record<SpeechBlockReason, number> = {
+    BUDGET: 0,
+    CHAIN_DEPTH: 0,
+    REPLIES_PER_MESSAGE: 0,
+  };
 
   const roleGames = new Map<Role, number>();
   const roleWins = new Map<Role, number>();
@@ -430,37 +545,93 @@ export function collectMetrics(
 
     // --- Vai chức năng (P2) ---
     {
+      const isWolfRole = (id: string | null): boolean =>
+        id !== null && (game.roles[id] === "WEREWOLF" || game.roles[id] === "WOLF_CUB");
       const witchId = Object.entries(game.roles).find(([, role]) => role === "WITCH")?.[0];
       if (witchId) {
         witchGames += 1;
         const poisoned = game.events.some(
           (e) => e.kind === "NIGHT_ACTION" && e.actorId === witchId && e.action === "POISON",
         );
-        if (!poisoned) witchPoisonUnused += 1;
+        // Mọi đêm giữ bình, kể cả ở ván sau đó có dùng: `witchHoldTopWolfRate`
+        // đo từng đêm, không đo từng ván.
+        let everTopWolf = false;
+        for (const e of game.events) {
+          if (e.kind !== "WITCH_HOLD" || e.actorId !== witchId) continue;
+          witchHolds += 1;
+          if (e.vetoedByTrust) witchHoldVetoed += 1;
+          if (isWolfRole(e.topSuspectId)) {
+            witchHoldTopWolf += 1;
+            witchHoldWolfGaps.push(e.threshold - e.topSuspicion);
+            everTopWolf = true;
+          }
+        }
+        if (!poisoned) {
+          witchPoisonUnused += 1;
+          const witchDied = game.events.some(
+            (e) => e.kind === "DEATH" && e.playerId === witchId,
+          );
+          // Ba ngăn rời nhau, xét theo đúng thứ tự này: cơ hội bị bỏ lỡ được
+          // ưu tiên, vì đó là ngăn duy nhất nói về một quyết định.
+          if (everTopWolf) witchUnusedMissedWolf += 1;
+          else if (witchDied) witchUnusedDiedEarly += 1;
+          else witchUnusedNoTarget += 1;
+        }
       }
       const seerId = Object.entries(game.roles).find(([, role]) => role === "SEER")?.[0];
       if (seerId) {
         seerGames += 1;
         const death = game.events.find((e) => e.kind === "DEATH" && e.playerId === seerId);
-        if (
-          death?.kind === "DEATH" &&
-          death.round === 2 &&
-          death.cause !== "lynch" &&
-          death.cause !== "hunter"
-        ) {
-          seerDiedNightTwo += 1;
-        }
-        if (
-          game.events.some(
+        const deathRound = death?.kind === "DEATH" ? death.round : null;
+        const nightDeathRound =
+          death?.kind === "DEATH" && death.cause !== "lynch" && death.cause !== "hunter"
+            ? death.round
+            : null;
+        if (nightDeathRound === 2) seerDiedNightTwo += 1;
+
+        const claimRounds = game.events
+          .filter(
             (e) =>
               e.kind === "SPEECH" &&
               e.actorId === seerId &&
-              e.round === 1 &&
               (e.speech === "CLAIM_ROLE" || e.speech === "COUNTER_CLAIM") &&
               e.claimedRole === "SEER",
           )
+          .map((e) => e.round);
+        const claimedR1 = claimRounds.includes(1);
+        if (claimedR1) seerClaimedRoundOne += 1;
+
+        // "Còn sống bước vào đêm 2" = không chết ở vòng 1 (đêm 1 hay treo vòng
+        // 1), và ván có vòng 2 để mà bước vào.
+        const aliveIntoNight2 = (deathRound === null || deathRound >= 2) && game.rounds >= 2;
+        if (aliveIntoNight2) {
+          if (claimedR1) {
+            seerClaimedR1AliveNight2 += 1;
+            if (nightDeathRound === 2) seerClaimedR1DiedNight2 += 1;
+          } else {
+            seerUnclaimedR1AliveNight2 += 1;
+            if (nightDeathRound === 2) seerUnclaimedR1DiedNight2 += 1;
+          }
+        }
+
+        // Lời khai ĐẦU TIÊN mở cửa sổ rủi ro; khai lại không mở cửa sổ mới.
+        // Đếm mỗi ván đúng một lần nên tử số không bao giờ vượt mẫu số.
+        const firstClaim = claimRounds.length > 0 ? Math.min(...claimRounds) : null;
+        if (
+          firstClaim !== null &&
+          (deathRound === null || deathRound > firstClaim) &&
+          game.rounds > firstClaim
         ) {
-          seerClaimedRoundOne += 1;
+          seerClaimedAliveNextNight += 1;
+          if (nightDeathRound === firstClaim + 1) seerDiedNightAfterClaim += 1;
+        }
+      }
+      for (const e of game.events) {
+        if (e.kind === "QUESTION_OUTCOME") {
+          questionOutcomes[e.outcome] += 1;
+          questionOutcomeTotal += 1;
+        } else if (e.kind === "SPEECH_BLOCKED") {
+          blockedByRoom[e.reason] += 1;
         }
       }
       const wolves = new Set(
@@ -842,6 +1013,18 @@ export function collectMetrics(
     witchPoisonUnusedRate: ratio(witchPoisonUnused, witchGames),
     seerDiedNightTwoRate: ratio(seerDiedNightTwo, seerGames),
     seerClaimedRoundOneRate: ratio(seerClaimedRoundOne, seerGames),
+    seerClaimedR1DiedNightTwoRate: ratio(seerClaimedR1DiedNight2, seerClaimedR1AliveNight2),
+    seerUnclaimedR1DiedNightTwoRate: ratio(
+      seerUnclaimedR1DiedNight2,
+      seerUnclaimedR1AliveNight2,
+    ),
+    seerDiedNightAfterClaimRate: ratio(seerDiedNightAfterClaim, seerClaimedAliveNextNight),
+    witchHoldTopWolfRate: ratio(witchHoldTopWolf, witchHolds),
+    witchHoldWolfGapMean: mean(witchHoldWolfGaps),
+    witchHoldVetoedByTrustRate: ratio(witchHoldVetoed, witchHolds),
+    witchPoisonUnusedDiedEarlyRate: ratio(witchUnusedDiedEarly, witchPoisonUnused),
+    witchPoisonUnusedNoTargetRate: ratio(witchUnusedNoTarget, witchPoisonUnused),
+    witchPoisonUnusedTopWolfBelowBarRate: ratio(witchUnusedMissedWolf, witchPoisonUnused),
     wolfFakeFightRate: ratio(fakeFightGames, games.length),
     priestHolyWaterRate: ratio(priestHolyWaters, priestTurns),
     priestHolyWaterAccuracy: ratio(priestHolyWatersOnWolf, priestHolyWaters),
@@ -874,6 +1057,16 @@ export function collectMetrics(
      * không có chỉ số nào khác nhìn thấy điều đó.
      */
     silenceRate: ratio(silentBotDays, silenceOpportunities),
+    directQuestionOutcomes: {
+      ANSWERED: ratio(questionOutcomes.ANSWERED, questionOutcomeTotal),
+      NOT_PARSED: ratio(questionOutcomes.NOT_PARSED, questionOutcomeTotal),
+      BLOCKED_ROOM: ratio(questionOutcomes.BLOCKED_ROOM, questionOutcomeTotal),
+      NO_TURN: ratio(questionOutcomes.NO_TURN, questionOutcomeTotal),
+      DECLINED_SPOKE_OTHER: ratio(questionOutcomes.DECLINED_SPOKE_OTHER, questionOutcomeTotal),
+      DECLINED_SILENT: ratio(questionOutcomes.DECLINED_SILENT, questionOutcomeTotal),
+      UNDETERMINED: ratio(questionOutcomes.UNDETERMINED, questionOutcomeTotal),
+    },
+    speechBlockedByRoom: blockedByRoom,
     /**
      * Trong self-play, con số này luôn bằng 1 THEO THIẾT KẾ.
      *
@@ -892,6 +1085,8 @@ export function collectMetrics(
     humanDefendSeenRate: ratio(humanChat.defendSeen, humanChat.defendTotal),
     humanClaimSeenRate: ratio(humanChat.claimSeen, humanChat.claimTotal),
     humanTrapIgnoredRate: ratio(humanChat.trapIgnored, humanChat.trapTotal),
+    humanQuestionSeenRate: ratio(humanChat.questionSeen, humanChat.questionTotal),
+    humanAddressTrapIgnoredRate: ratio(humanChat.addressTrapIgnored, humanChat.addressTrapTotal),
   };
 
   const byTeam: Record<VotingTeam, TeamMetrics> = {

@@ -23,7 +23,9 @@
 export type HumanChatExpectation =
   | { type: "ACCUSE"; targetId: string }
   | { type: "DEFEND"; targetId: string }
-  | { type: "ROLE_CLAIM"; role: string };
+  | { type: "ROLE_CLAIM"; role: string }
+  /** Câu nói THẲNG VỚI một người: hỏi hoặc gọi. Không sinh bằng chứng. */
+  | { type: "DIRECT"; targetId: string };
 
 export interface HumanChatSample {
   text: string;
@@ -50,6 +52,10 @@ const defend = (text: string, targetId = "b"): HumanChatSample => ({
 const claim = (text: string, role: string): HumanChatSample => ({
   text,
   expect: { type: "ROLE_CLAIM", role },
+});
+const ask = (text: string, targetId = "a"): HumanChatSample => ({
+  text,
+  expect: { type: "DIRECT", targetId },
 });
 
 /** Lời buộc tội. Mục tiêu: parser đọc ra đúng người ở > 80% số câu. */
@@ -222,4 +228,85 @@ export const HUMAN_TRAPS: readonly string[] = [
   "Bình nghĩ sao",
   "toi nghi Binh vo toi",
   "cha noi Binh dang o dau",
+];
+
+/**
+ * Câu hỏi / lời gọi NHẮM THẲNG vào một người - thứ làm bot biết mình đang bị
+ * hỏi (`DIRECT_QUESTION` / `DIRECT_ADDRESS`). Nguồn: self-play v17 xếp ~8,6%
+ * câu hỏi giữa bot với nhau vào ngăn "parser không nhận ra", và hai mẫu chiếm
+ * trọn con số đó ("hóng ý kiến X.", "X nói rõ hơn được không.") là hai cách
+ * người thật cũng gõ. Mục tiêu: > 80%.
+ */
+export const HUMAN_QUESTIONS: readonly HumanChatSample[] = [
+  // Dấu hỏi và từ để hỏi - đường cũ, giữ để con số không trôi.
+  ask("An nghĩ sao?"),
+  ask("An nghi ai"),
+  ask("An oi sao vote t?"),
+  ask("An ơi, bầu ai?"),
+  ask("An đâu rồi"),
+  ask("tại sao An lại đổi phiếu"),
+  ask("bằng chứng đâu An"),
+  ask("An giải thích đi"),
+  ask("An nói xem nào"),
+  // Đuôi hỏi có/không - không có dấu "?".
+  ask("An nói rõ hơn được không"),
+  ask("An nói rõ hơn được không."),
+  ask("An giải thích được ko"),
+  ask("An giai thich duoc khong"),
+  ask("An nói rõ đc k"),
+  ask("An dân phải ko"),
+  ask("An soi ai đêm qua, nói được không"),
+  // Xin ý kiến.
+  ask("hóng ý kiến An"),
+  ask("hóng ý kiến An."),
+  ask("hong y kien An"),
+  ask("xin ý kiến An"),
+  ask("cho xin ý kiến của An cái"),
+  ask("hóng ý An"),
+  // Có dấu / không dấu / viết tắt, gọi đích danh.
+  ask("Bình ơi", "b"),
+  ask("Binh oi bau ai", "b"),
+  ask("Dũng nói đi", "d"),
+  ask("Dung giai thich duoc ko", "d"),
+  // Những câu dưới đây parser CHƯA hiểu, giữ lại để con số nói thật: tên
+  // người so ở dạng không dấu, nên "đúng" đụng Dũng và "hả" đụng Hà - hai tên
+  // trong một câu thì parser cố ý không đoán. Sửa cần đổi cách so tên
+  // (ưu tiên dạng có dấu), tức đụng tới mọi mẫu buộc tội/bênh vực - ngoài
+  // phạm vi đợt này.
+  ask("An là tt đúng không"),
+  ask("An la tt dung khong"),
+  ask("An đổi phiếu hả"),
+];
+
+/**
+ * Câu có NÊU TÊN nhưng KHÔNG nói với người đó: parser không được sinh
+ * `DIRECT_*`. Phủ định, kể chuyện người thứ ba, giả định, trích dẫn, và hai
+ * tên trong một câu (parser cố ý không đoán).
+ */
+export const HUMAN_ADDRESS_TRAPS: readonly string[] = [
+  "An không phải sói",
+  "tôi không tin An",
+  "An im suốt",
+  "ý kiến của An hay đấy",
+  "tôi cùng ý kiến với An",
+  "nếu An nói rõ hơn được thì tốt",
+  "An bảo là An dân",
+  "An bầu Chi hả",
+  "An với Bình cùng phe",
+  "tôi nghi An",
+  "toi nghi Ha",
+  "An dân",
+  "vote An",
+  // Phủ định đứng trước dấu hiệu hỏi mới.
+  "tôi không hóng ý kiến An",
+  "ko xin ý kiến An đâu",
+  "t k hong y kien An",
+  "tôi ko tin An đâu",
+  "An không phải sói đúng không",
+  // Giả định mở đầu mệnh đề.
+  "nếu An trả lời được không thì tính sau",
+  "giả sử An là sói đúng không",
+  "lỡ An nói rõ hơn được ko",
+  // Trích dẫn.
+  "An bảo “nói rõ hơn được không” xong im luôn",
 ];

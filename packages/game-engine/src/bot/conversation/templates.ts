@@ -1480,6 +1480,10 @@ const TYPO_PROTECTED: ReadonlySet<string> = new Set([
   "chưa", "chẳng", "chả", "đâu", "có", "làm", "gì", "sao", "tại", "vì", "thế", "nào",
   "ai", "ơi", "à", "ê", "này", "nhé", "nhá", "đi", "xem", "coi", "thử", "t", "tui",
   "ko", "k", "hok", "tt", "bv", "dân",
+  // Đuôi hỏi có/không và lời xin ý kiến (`YES_NO_TAILS`, `OPINION_REQUESTS`
+  // trong chat-analysis): "nói rõ hơn được không" mà dính thành "hơnđược" là
+  // bot kia không còn thấy mình bị hỏi.
+  "được", "đc", "phải", "đúng", "hả", "hở", "hử", "hóng", "ý", "kiến", "xin",
 ]);
 
 const COMBINING_MARKS = /[\u0300-\u036f]/g;

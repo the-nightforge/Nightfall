@@ -111,6 +111,47 @@
       "numerator": 0,
       "denominator": 12
     },
+    "seerClaimedR1DiedNightTwoRate": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "seerUnclaimedR1DiedNightTwoRate": {
+      "value": 0.1111111111111111,
+      "numerator": 1,
+      "denominator": 9
+    },
+    "seerDiedNightAfterClaimRate": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
+    "witchHoldTopWolfRate": {
+      "value": 0.4166666666666667,
+      "numerator": 15,
+      "denominator": 36
+    },
+    "witchHoldWolfGapMean": 91.47229335924749,
+    "witchHoldVetoedByTrustRate": {
+      "value": 0,
+      "numerator": 0,
+      "denominator": 36
+    },
+    "witchPoisonUnusedDiedEarlyRate": {
+      "value": 0.08333333333333333,
+      "numerator": 1,
+      "denominator": 12
+    },
+    "witchPoisonUnusedNoTargetRate": {
+      "value": 0,
+      "numerator": 0,
+      "denominator": 12
+    },
+    "witchPoisonUnusedTopWolfBelowBarRate": {
+      "value": 0.9166666666666666,
+      "numerator": 11,
+      "denominator": 12
+    },
     "wolfFakeFightRate": {
       "value": 0,
       "numerator": 0,
@@ -198,6 +239,48 @@
       "numerator": 134,
       "denominator": 260
     },
+    "directQuestionOutcomes": {
+      "ANSWERED": {
+        "value": 0,
+        "numerator": 0,
+        "denominator": 65
+      },
+      "NOT_PARSED": {
+        "value": 0,
+        "numerator": 0,
+        "denominator": 65
+      },
+      "BLOCKED_ROOM": {
+        "value": 0,
+        "numerator": 0,
+        "denominator": 65
+      },
+      "NO_TURN": {
+        "value": 1,
+        "numerator": 65,
+        "denominator": 65
+      },
+      "DECLINED_SPOKE_OTHER": {
+        "value": 0,
+        "numerator": 0,
+        "denominator": 65
+      },
+      "DECLINED_SILENT": {
+        "value": 0,
+        "numerator": 0,
+        "denominator": 65
+      },
+      "UNDETERMINED": {
+        "value": 0,
+        "numerator": 0,
+        "denominator": 65
+      }
+    },
+    "speechBlockedByRoom": {
+      "BUDGET": 0,
+      "CHAIN_DEPTH": 0,
+      "REPLIES_PER_MESSAGE": 0
+    },
     "fromTemplateRate": {
       "value": 1,
       "numerator": 126,
@@ -238,6 +321,16 @@
       "value": 1,
       "numerator": 34,
       "denominator": 34
+    },
+    "humanQuestionSeenRate": {
+      "value": 0.896551724137931,
+      "numerator": 26,
+      "denominator": 29
+    },
+    "humanAddressTrapIgnoredRate": {
+      "value": 1,
+      "numerator": 22,
+      "denominator": 22
     }
   },
   "metricsByTeam": {

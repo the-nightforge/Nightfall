@@ -3,9 +3,11 @@ import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { BotChatObservation, BotMemory, BotPlayerKnowledge } from "../types";
 import {
   HUMAN_ACCUSATIONS,
+  HUMAN_ADDRESS_TRAPS,
   HUMAN_CHAT_PLAYERS,
   HUMAN_CLAIMS,
   HUMAN_DEFENCES,
+  HUMAN_QUESTIONS,
   HUMAN_TRAPS,
   type HumanChatSample,
 } from "./human-chat-corpus";
@@ -32,6 +34,12 @@ export interface HumanChatMeasure {
   /** Câu bẫy mà parser đúng là không đọc ra bằng chứng nào. */
   trapIgnored: number;
   trapTotal: number;
+  /** Câu hỏi / lời gọi mà parser đọc ra ĐÚNG người được nói với. */
+  questionSeen: number;
+  questionTotal: number;
+  /** Câu nêu tên nhưng không nói với ai, và parser đúng là không sinh `DIRECT_*`. */
+  addressTrapIgnored: number;
+  addressTrapTotal: number;
   /** Để in ra khi cần biết parser trượt ở đâu; không vào JSON báo cáo. */
   missed: string[];
   leaked: string[];
@@ -50,16 +58,23 @@ const EVIDENCE_TYPES = new Set<BotMemory["type"]>([
   "COUNTER_CLAIM",
 ]);
 
-function parse(text: string, index: number, weights: BotWeights): BotMemory[] {
+const DIRECT_TYPES = new Set<BotMemory["type"]>(["DIRECT_QUESTION", "DIRECT_ADDRESS"]);
+
+function parseAll(text: string, index: number, weights: BotWeights): BotMemory[] {
   const message: BotChatObservation = { id: `corpus-${index}`, actorId: "me", text, at: index };
-  return analyzeChat([message], PLAYERS, { weights }).filter((memory) =>
-    EVIDENCE_TYPES.has(memory.type),
-  );
+  return analyzeChat([message], PLAYERS, { weights });
+}
+
+function parse(text: string, index: number, weights: BotWeights): BotMemory[] {
+  return parseAll(text, index, weights).filter((memory) => EVIDENCE_TYPES.has(memory.type));
 }
 
 function matches(sample: HumanChatSample, memories: readonly BotMemory[]): boolean {
   const want = sample.expect;
   return memories.some((memory) => {
+    if (want.type === "DIRECT") {
+      return DIRECT_TYPES.has(memory.type) && memory.targetId === want.targetId;
+    }
     if (memory.type !== want.type) return false;
     if (want.type === "ROLE_CLAIM") return memory.data.role === want.role;
     return memory.targetId === want.targetId;
@@ -76,6 +91,10 @@ export function measureHumanChat(weights: BotWeights = DEFAULT_BOT_WEIGHTS): Hum
     claimTotal: HUMAN_CLAIMS.length,
     trapIgnored: 0,
     trapTotal: HUMAN_TRAPS.length,
+    questionSeen: 0,
+    questionTotal: HUMAN_QUESTIONS.length,
+    addressTrapIgnored: 0,
+    addressTrapTotal: HUMAN_ADDRESS_TRAPS.length,
     missed: [],
     leaked: [],
   };
@@ -97,6 +116,20 @@ export function measureHumanChat(weights: BotWeights = DEFAULT_BOT_WEIGHTS): Hum
     const found = parse(trap, index, weights);
     if (found.length === 0) measure.trapIgnored += 1;
     else measure.leaked.push(`${trap} -> ${found.map((m) => `${m.type}:${m.targetId ?? m.data.role}`).join(", ")}`);
+  }
+
+  // Lời nhắm tới đo bằng TOÀN BỘ memory, vì `DIRECT_*` không phải bằng chứng
+  // và bị lọc khỏi `parse` ở trên.
+  for (const sample of HUMAN_QUESTIONS) {
+    index += 1;
+    if (matches(sample, parseAll(sample.text, index, weights))) measure.questionSeen += 1;
+    else measure.missed.push(sample.text);
+  }
+  for (const trap of HUMAN_ADDRESS_TRAPS) {
+    index += 1;
+    const found = parseAll(trap, index, weights).filter((memory) => DIRECT_TYPES.has(memory.type));
+    if (found.length === 0) measure.addressTrapIgnored += 1;
+    else measure.leaked.push(`${trap} -> ${found.map((m) => `${m.type}:${m.targetId}`).join(", ")}`);
   }
 
   return measure;

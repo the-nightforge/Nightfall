@@ -165,3 +165,105 @@ describe("lời nhắm tới KHÔNG phải bằng chứng", () => {
     expect(JSON.stringify(memories)).not.toContain("cái câu rất riêng này");
   });
 });
+
+/**
+ * Hai nhóm câu hỏi mà self-play (`QUESTION_OUTCOME = NOT_PARSED`, ~8,6% ở v17)
+ * cho thấy chính bot sinh ra mà bot kia không nhận: câu hỏi có/không kết bằng
+ * "được không", và lời xin ý kiến "hóng ý kiến X". Cả hai đều là cách người
+ * thật gõ, nên sửa ở parser chứ không đổi mẫu lời thoại cho vừa parser.
+ */
+describe("câu hỏi có/không và lời xin ý kiến - không cần dấu hỏi", () => {
+  const asks = (text: string, actorId = "p2") =>
+    analyzeChat([message(text, actorId)], PLAYERS)
+      .filter((m) => m.type === "DIRECT_QUESTION" || m.type === "DIRECT_ADDRESS")
+      .map((m) => `${m.type}:${m.targetId}`);
+
+  it("đuôi 'được không' là một câu hỏi nhắm tới người được nêu tên", () => {
+    expect(asks("An nói rõ hơn được không")).toEqual(["DIRECT_QUESTION:p1"]);
+    expect(asks("An nói rõ hơn được không.")).toEqual(["DIRECT_QUESTION:p1"]);
+    expect(asks("An giải thích được ko")).toEqual(["DIRECT_QUESTION:p1"]);
+    expect(asks("An giai thich duoc khong")).toEqual(["DIRECT_QUESTION:p1"]);
+    expect(asks("An nói rõ đc k")).toEqual(["DIRECT_QUESTION:p1"]);
+    expect(asks("An là tt đúng không")).toEqual(["DIRECT_QUESTION:p1"]);
+    expect(asks("An dân phải ko")).toEqual(["DIRECT_QUESTION:p1"]);
+    expect(asks("An đổi phiếu hả")).toEqual(["DIRECT_QUESTION:p1"]);
+    // Hai tên trong một câu: parser giữ luật cũ, không đoán ai được hỏi.
+    expect(asks("An bầu Chi hả")).toEqual([]);
+  });
+
+  it("đuôi hỏi đứng cuối một MỆNH ĐỀ cũng được, không cần cuối cả tin nhắn", () => {
+    expect(asks("An nói rõ hơn được không, tôi chưa hiểu")).toEqual(["DIRECT_QUESTION:p1"]);
+  });
+
+  it("'hóng ý kiến X' / 'xin ý kiến X' là lời hỏi ý", () => {
+    expect(asks("hóng ý kiến An")).toEqual(["DIRECT_QUESTION:p1"]);
+    expect(asks("hóng ý kiến An.")).toEqual(["DIRECT_QUESTION:p1"]);
+    expect(asks("hong y kien An")).toEqual(["DIRECT_QUESTION:p1"]);
+    expect(asks("xin ý kiến An")).toEqual(["DIRECT_QUESTION:p1"]);
+    expect(asks("cho xin ý kiến của An cái")).toEqual(["DIRECT_QUESTION:p1"]);
+  });
+
+  it("một câu hỏi có/không KHÔNG thành bằng chứng: 'An là sói đúng không' không buộc tội ai", () => {
+    const types = analyzeChat([message("An là sói đúng không")], PLAYERS).map((m) => m.type);
+    expect(types).toEqual(["DIRECT_QUESTION"]);
+  });
+
+  it("phủ định, kể chuyện người thứ ba, giả định: không thành câu hỏi nhắm tới", () => {
+    // "không" ở giữa câu là phủ định, không phải đuôi hỏi.
+    expect(asks("An không phải sói")).toEqual([]);
+    expect(asks("tôi không tin An")).toEqual([]);
+    // Nói VỀ ý kiến của An, không xin ý kiến An.
+    expect(asks("ý kiến của An hay đấy")).toEqual([]);
+    expect(asks("tôi cùng ý kiến với An")).toEqual([]);
+    // Giả định.
+    expect(asks("nếu An nói rõ hơn được thì tốt")).toEqual([]);
+    // Chỉ nêu tên.
+    expect(asks("An im suốt")).toEqual([]);
+  });
+
+  it("phủ định đứng trước dấu hiệu hỏi mới: không phải câu hỏi", () => {
+    expect(asks("tôi không hóng ý kiến An")).toEqual([]);
+    expect(asks("ko xin ý kiến An đâu")).toEqual([]);
+    expect(asks("chả hóng ý kiến An")).toEqual([]);
+    expect(asks("t k hong y kien An")).toEqual([]);
+    // "không phải" trước đuôi "đúng không": parser bảo thủ chọn im (không có "?").
+    expect(asks("An không phải sói đúng không")).toEqual([]);
+    expect(asks("An chưa nói được không")).toEqual([]);
+    // "đâu" cuối câu phủ định là tiểu từ, không phải từ để hỏi; "An đâu rồi" vẫn là hỏi.
+    expect(asks("tôi ko tin An đâu")).toEqual([]);
+    expect(asks("An đâu rồi")).toEqual(["DIRECT_QUESTION:p1"]);
+  });
+
+  it("giả định mở đầu mệnh đề: không phải câu hỏi", () => {
+    expect(asks("nếu An trả lời được không thì tính sau")).toEqual([]);
+    expect(asks("giả sử An là sói đúng không")).toEqual([]);
+    expect(asks("lỡ An nói rõ hơn được ko")).toEqual([]);
+    expect(asks("nếu là tôi thì tôi hóng ý kiến An")).toEqual([]);
+    // Giả định ở mệnh đề TRƯỚC không làm mất câu hỏi ở mệnh đề sau.
+    expect(asks("nếu An là dân, An nói rõ hơn được không")).toEqual(["DIRECT_QUESTION:p1"]);
+  });
+
+  it("trích dẫn: dấu hiệu hỏi nằm trong ngoặc kép không tính", () => {
+    expect(asks("An bảo “nói rõ hơn được không” xong im luôn")).toEqual([]);
+    expect(asks('An toàn nói "hóng ý kiến" thôi')).toEqual([]);
+    // Ngoài ngoặc thì vẫn là hỏi.
+    expect(asks("An nói “tôi là dân” đúng không")).toEqual(["DIRECT_QUESTION:p1"]);
+  });
+
+  it("dấu hỏi và từ để hỏi giữ nguyên luật cũ: phủ định kèm '?' vẫn là câu hỏi", () => {
+    expect(asks("An không phải sói à?")).toEqual(["DIRECT_QUESTION:p1"]);
+    expect(asks("tại sao An không nói")).toEqual(["DIRECT_QUESTION:p1"]);
+  });
+
+  it("tên rút gọn 'Hà' không bị đọc thành đuôi hỏi 'hả' khi gõ không dấu", () => {
+    const withHa: BotPlayerKnowledge[] = [...PLAYERS, { id: "p4", name: "Hà", alive: true }];
+    const found = analyzeChat([message("toi nghi Ha", "p2")], withHa).map((m) => m.type);
+    expect(found).not.toContain("DIRECT_QUESTION");
+    expect(found).toContain("ACCUSE");
+  });
+
+  it("người gửi tự hỏi mình hoặc hai tên trùng nhau thì vẫn im", () => {
+    expect(asks("Bình nói rõ hơn được không", "p2")).toEqual([]);
+    expect(typesOf("An nói rõ hơn được không", AMBIGUOUS)).toEqual([]);
+  });
+});

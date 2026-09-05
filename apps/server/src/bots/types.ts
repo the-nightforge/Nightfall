@@ -1,5 +1,6 @@
 import type { DefenseStance } from "@masoi/game-engine";
 import type { BotSpeechIntention, BotSpeechStyle } from "@masoi/game-engine";
+import type { SpeechSource } from "./speech-stats";
 
 /**
  * Hành động đêm engine chấp nhận.
@@ -128,6 +129,11 @@ export interface RenderedSpeech {
   text: string | null;
   /** `true` khi câu đến từ bảng mẫu chứ không phải nhà cung cấp. */
   fromTemplate: boolean;
+  /**
+   * Đường đã đi để ra được câu này - hoặc ra im lặng. Chi tiết hơn
+   * `fromTemplate`: nói được VÌ SAO rơi về bảng mẫu. Xem `SpeechSource`.
+   */
+  source: SpeechSource;
 }
 
 /**

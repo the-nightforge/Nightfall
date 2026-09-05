@@ -6,6 +6,7 @@ import { MAX_PLAYERS_PER_ROOM, MIN_PLAYERS_TO_START } from "@masoi/shared";
 import { EntryAttemptManager } from "@/lib/entry-attempt";
 import { runEntryAttempt, type CreatePlayerOutcome, type EntryPorts } from "@/lib/home-entry";
 import { getIdentity, saveIdentity, clearIdentity } from "@/lib/identity";
+import { hasCompletedGuide } from "@/lib/guide-session";
 import type { RoomEntryRequest } from "@/lib/room-entry";
 import { disconnectSocket } from "@/lib/socket";
 import type { Identity } from "@/lib/identity";
@@ -17,7 +18,12 @@ import { AssetCredits } from "@/components/AssetCredits";
 import { InstallPrompt } from "@/components/InstallPrompt";
 
 /** Hành động đang chạy, hoặc null khi rảnh. */
-type Pending = "create" | "join" | null;
+/**
+ * `guide` là "tạo phòng" cộng một cờ: cùng POST, cùng socket, cùng đường vào -
+ * chỉ khác đích điều hướng (`?guide=1`) để trang phòng bật thẻ hướng dẫn và tự
+ * gọi bot. Tách thành một `Pending` riêng để nút nào bấm thì nút đó quay.
+ */
+type Pending = "create" | "join" | "guide" | null;
 
 /**
  * POST /api/players, có thể huỷ giữa chừng.
@@ -72,6 +78,11 @@ export default function Home() {
    * dưới mới bật lên sau khi hydrate xong.
    */
   const [hasIdentity, setHasIdentity] = useState(false);
+  /*
+   * Đã đi hết một ván hướng dẫn chưa - cũng đọc SAU khi hydrate, cùng lý do
+   * với `hasIdentity`. Chỉ đổi LỜI MỜI: nút vẫn ở đó cho người muốn xem lại.
+   */
+  const [guideDone, setGuideDone] = useState(false);
   const busy = pending !== null;
 
   /*
@@ -138,6 +149,7 @@ export default function Home() {
       setNickname(existing.nickname);
       setHasIdentity(true);
     }
+    setGuideDone(hasCompletedGuide());
   }, []);
 
   /*
@@ -170,10 +182,10 @@ export default function Home() {
    * fetch, localStorage, socket và router - và mọi chốt kiểm tra "lượt còn
    * hợp lệ không" đều do `runEntryAttempt` giữ.
    */
-  async function beginEntry(request: RoomEntryRequest) {
+  async function beginEntry(request: RoomEntryRequest, as: Exclude<Pending, null> = request.kind) {
     if (pendingRef.current !== null) return;
     setError(null);
-    startPending(request.kind);
+    startPending(as);
 
     const attempt = attempts.begin();
     const ports: EntryPorts = {
@@ -193,7 +205,8 @@ export default function Home() {
       // Cố ý KHÔNG hạ cờ bận: đang điều hướng, để nút quay tiếp cho tới khi
       // trang phòng thay chỗ. Hạ xuống là nút sáng lại một nhịp và mời người
       // dùng bấm thêm lần nữa.
-      onEntered: (code) => router.push(`/room/${code}`),
+      onEntered: (code) =>
+        router.push(pendingRef.current === "guide" ? `/room/${code}?guide=1` : `/room/${code}`),
     };
 
     await runEntryAttempt(attempt, request, nickname, ports);
@@ -201,6 +214,17 @@ export default function Home() {
 
   function handleCreate() {
     void beginEntry({ kind: "create" });
+  }
+
+  /**
+   * Ván đầu có hướng dẫn: đúng luồng tạo phòng, thêm cờ `?guide=1`.
+   *
+   * `beginEntry` từ chối khi đang có lượt khác chạy, và `onEntered` không hạ cờ
+   * bận cho tới khi trang phòng thay chỗ - nên bấm liên tiếp không tạo hai tài
+   * khoản hay hai phòng, cùng lớp bảo vệ với "Tạo phòng mới".
+   */
+  function handleGuide() {
+    void beginEntry({ kind: "create" }, "guide");
   }
 
   function handleJoin() {
@@ -393,6 +417,35 @@ export default function Home() {
                         {createHint}
                       </p>
                     )}
+                    {/*
+                      * Lối vào cho người mới: một phòng với bot, có thẻ hướng dẫn
+                      * theo từng pha. Hạng hai so với "Tạo phòng mới" - đây là
+                      * ván tập, không phải ván chính - nên là viền chứ không phải
+                      * nền đặc, và đứng ngay dưới CTA để không phải đi tìm.
+                      */}
+                    <button
+                      type="button"
+                      className="gate-guide mt-2.5 w-full"
+                      disabled={busy || !nameReady}
+                      aria-describedby="guide-hint"
+                      onClick={handleGuide}
+                    >
+                      {pending === "guide" ? (
+                        <>
+                          <span className="gate-spinner" aria-hidden="true" />
+                          Đang mở ván hướng dẫn...
+                        </>
+                      ) : (
+                        <>
+                          <span aria-hidden="true">🧭</span> {guideDone ? "Xem lại ván hướng dẫn" : "Chơi thử có hướng dẫn"}
+                        </>
+                      )}
+                    </button>
+                    <p id="guide-hint" className="mt-1.5 text-xs text-mist/80">
+                      {guideDone
+                        ? "Bạn đã đi hết một ván hướng dẫn. Vẫn mở lại được nếu muốn ôn - ván thật thì dùng “Tạo phòng mới”."
+                        : "Một ván với 7 bot, luật thật, kèm lời nhắc ngắn ở mỗi pha. Ẩn được bất cứ lúc nào."}
+                    </p>
                   </div>
 
                   <div className="flex items-center gap-3" aria-hidden="true">

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import { measureHumanChat } from "../src/bot/evaluation/human-chat";
 import {
   HUMAN_ACCUSATIONS,
+  HUMAN_ADDRESS_TRAPS,
   HUMAN_CHAT_PLAYERS,
   HUMAN_CLAIMS,
   HUMAN_DEFENCES,
+  HUMAN_QUESTIONS,
   HUMAN_TRAPS,
 } from "../src/bot/evaluation/human-chat-corpus";
 import { collectMetrics } from "../src/bot/evaluation/metrics";
@@ -22,15 +24,22 @@ describe("corpus câu người thật", () => {
     expect(HUMAN_DEFENCES.length).toBeGreaterThanOrEqual(15);
     expect(HUMAN_CLAIMS.length).toBeGreaterThanOrEqual(15);
     expect(HUMAN_TRAPS.length).toBeGreaterThanOrEqual(20);
+    expect(HUMAN_QUESTIONS.length).toBeGreaterThanOrEqual(25);
+    expect(HUMAN_ADDRESS_TRAPS.length).toBeGreaterThanOrEqual(10);
   });
 
   it("mọi kỳ vọng đều trỏ tới một người có thật trong bàn mẫu", () => {
     const ids = new Set(HUMAN_CHAT_PLAYERS.map((player) => player.id));
-    for (const sample of [...HUMAN_ACCUSATIONS, ...HUMAN_DEFENCES]) {
+    for (const sample of [...HUMAN_ACCUSATIONS, ...HUMAN_DEFENCES, ...HUMAN_QUESTIONS]) {
       expect(sample.expect.type === "ROLE_CLAIM" || ids.has(sample.expect.targetId), sample.text).toBe(
         true,
       );
     }
+  });
+
+  it("không câu hỏi nào trùng với bẫy nhắm tới", () => {
+    const traps = new Set(HUMAN_ADDRESS_TRAPS);
+    for (const sample of HUMAN_QUESTIONS) expect(traps.has(sample.text), sample.text).toBe(false);
   });
 
   it("không có câu nào vừa là mẫu vừa là bẫy", () => {
@@ -58,6 +67,14 @@ describe("humanAccuseSeenRate", () => {
     expect(measure.trapIgnored).toBe(measure.trapTotal);
   });
 
+  it("thấy hơn 80% câu hỏi đích danh, và không câu 'chỉ nhắc tên' nào thành lời nhắm tới", () => {
+    // Hai mẫu chiếm trọn 8,6% NOT_PARSED của self-play v17 phải nằm trong phần THẤY.
+    expect(measure.questionSeen / measure.questionTotal, measure.missed.join(" | ")).toBeGreaterThan(0.8);
+    expect(measure.missed).not.toContain("hóng ý kiến An.");
+    expect(measure.missed).not.toContain("An nói rõ hơn được không.");
+    expect(measure.addressTrapIgnored).toBe(measure.addressTrapTotal);
+  });
+
   it("là hàm thuần: hai lần đo cho cùng một kết quả", () => {
     expect(measureHumanChat()).toEqual(measure);
   });
@@ -72,6 +89,8 @@ describe("báo cáo self-play mang chỉ số nghe người", () => {
     expect(overall.humanDefendSeenRate.denominator).toBe(HUMAN_DEFENCES.length);
     expect(overall.humanClaimSeenRate.denominator).toBe(HUMAN_CLAIMS.length);
     expect(overall.humanTrapIgnoredRate.denominator).toBe(HUMAN_TRAPS.length);
+    expect(overall.humanQuestionSeenRate.denominator).toBe(HUMAN_QUESTIONS.length);
+    expect(overall.humanAddressTrapIgnoredRate.denominator).toBe(HUMAN_ADDRESS_TRAPS.length);
     expect(overall.humanAccuseSeenRate.value).toBeGreaterThan(0.8);
   });
 

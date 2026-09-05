@@ -12,6 +12,7 @@ import {
   wolfTallyProgress,
 } from "@/lib/wolf-action";
 import { CursedNote } from "./RoleViews";
+import { PHASE_ACTION_ATTR } from "@/lib/phase-action";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -184,7 +185,12 @@ export function NightPanel({ snapshot, onAction }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className={`card ${acted ? "opacity-80" : ""}`}>
+      <div
+        className={`card outline-none focus-visible:ring-2 focus-visible:ring-blood-500/60 ${acted ? "opacity-80" : ""}`}
+        // Mốc cho nút "Hành động đêm" trong tấm trượt chat; xem `phase-action.ts`.
+        {...{ [PHASE_ACTION_ATTR]: "" }}
+        tabIndex={-1}
+      >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.3em] text-mist/65">Lượt của bạn</p>

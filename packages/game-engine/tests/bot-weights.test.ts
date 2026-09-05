@@ -17,6 +17,7 @@ import {
   BOT_WEIGHTS_V14,
   BOT_WEIGHTS_V15,
   BOT_WEIGHTS_V16,
+  BOT_WEIGHTS_V17,
   DEFAULT_BOT_WEIGHTS,
   resolveWeights,
   validateWeights,
@@ -689,7 +690,7 @@ describe("v2 là cấu hình production", () => {
     return rates;
   }
 
-  it("mặc định trỏ tới v17", () => {
+  it("mặc định trỏ tới v18", () => {
     // Cùng cơ chế rollout mà docstring của `DEFAULT_BOT_WEIGHTS` mô tả: nâng
     // chính hằng số này lên bản mới để `session-registry.ts` (chỗ ván thật
     // dựng `BotRuntime`, không tự truyền `weights`) chạy bản mới mà không phải
@@ -698,9 +699,11 @@ describe("v2 là cấu hình production", () => {
     // v9 bật hành vi của Kẻ Báo Thù, v10 hạ `spareTrustMargin` về 0, v14 cho
     // Tiên Tri giấu kết quả khi bàn có người thật, v15 hạ ngưỡng bình một nấc
     // khi làng đã mỏng, v16 cho Sói cãi giả, v17 cho phiếu dính hơn trước
-    // người nói nhiều; v2-v4 vẫn tồn tại nguyên vẹn làm mốc so sánh.
-    expect(DEFAULT_BOT_WEIGHTS.version).toBe("17.0.0");
-    expect(weightsPreset("17.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    // người nói nhiều, v18 bỏ phần dính thêm đó trước người vừa có bằng chứng
+    // gỡ tội; v2-v4 vẫn tồn tại nguyên vẹn làm mốc so sánh.
+    expect(DEFAULT_BOT_WEIGHTS.version).toBe("18.0.0");
+    expect(weightsPreset("18.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    expect(weightsPreset("17.0.0")).toBe(BOT_WEIGHTS_V17);
     expect(weightsPreset("16.0.0")).toBe(BOT_WEIGHTS_V16);
     expect(weightsPreset("15.0.0")).toBe(BOT_WEIGHTS_V15);
     expect(weightsPreset("14.0.0")).toBe(BOT_WEIGHTS_V14);

@@ -11,7 +11,8 @@ import { GameEngine } from "../../engine";
 import { detectCoalitions } from "../analysis/coalition";
 import { BotRuntime } from "../BotRuntime";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
-import { judgeChainPosition } from "../conversation/chain-limits";
+import { judgeChainPosition, type ChainBlockReason } from "../conversation/chain-limits";
+import { witchPoisonThreshold } from "../roles/witch";
 import {
   speechSemanticFingerprint,
   speechTextFingerprint,
@@ -93,6 +94,38 @@ export interface SelfPlayInput {
   humanSeats?: number;
 }
 
+/** Vì sao phòng không cho phát một câu. `BUDGET` là hạn mức riêng của bot. */
+export type SpeechBlockReason = "BUDGET" | ChainBlockReason;
+
+/**
+ * Bảy số phận của một câu hỏi trực tiếp, RỜI NHAU và phủ kín.
+ *
+ * - `ANSWERED`: người được hỏi đã phát một câu đáp đúng message đó.
+ * - `NOT_PARSED`: người được hỏi đã đọc chat có câu đó mà parser không sinh
+ *   ra memory nào trỏ tới họ - bot không biết mình bị hỏi.
+ * - `BLOCKED_ROOM`: bot đã định đáp, nhưng phòng chặn (hạn mức, chuỗi, số
+ *   phản hồi). Xem `SPEECH_BLOCKED`.
+ * - `NO_TURN`: bot hiểu câu hỏi nhưng không còn lượt nói nào sau đó trong
+ *   vòng (hết hạn mức trước khi tới lượt, hoặc vòng hết lượt hội thoại).
+ * - `DECLINED_SPOKE_OTHER`: bot hiểu, có lượt, và chọn nói chuyện KHÁC.
+ * - `DECLINED_SILENT`: bot hiểu, có lượt, và chọn im - né theo tính cách
+ *   hoặc chiến thuật (`responseProbability`, khai vai ưu tiên, đã nói ý đó).
+ * - `UNDETERMINED`: người được hỏi không còn quan sát chat sau câu hỏi (đã
+ *   chết, hoặc ván kết thúc) nên không có bằng chứng để xếp vào đâu.
+ *
+ * Hai nhóm `DECLINED_*` là quyết định của planner (tất định, theo tính cách),
+ * KHÔNG phải lỗi. Harness không phân biệt được RNG-né với khai-vai-ưu-tiên mà
+ * không đụng vào RNG, nên nó dừng ở mức "bot đã có cơ hội và không chọn đáp".
+ */
+export type QuestionOutcome =
+  | "ANSWERED"
+  | "NOT_PARSED"
+  | "BLOCKED_ROOM"
+  | "NO_TURN"
+  | "DECLINED_SPOKE_OTHER"
+  | "DECLINED_SILENT"
+  | "UNDETERMINED";
+
 export type SelfPlayEvent =
   | { kind: "PHASE"; round: number; phase: Phase }
   | {
@@ -148,6 +181,60 @@ export type SelfPlayEvent =
        * Tri hay không mà không phải đoán lại từ `speech.kind`.
        */
       claimedRole: Role | null;
+    }
+  | {
+      /**
+       * Một ý định đã được lõi chốt nhưng CĂN PHÒNG không cho phát.
+       *
+       * Ba lý do, tất cả là luật của phòng chứ không phải của bot: hết hạn mức
+       * câu trong vòng, chuỗi đối đáp đã đủ sâu, câu được đáp đã nhận đủ phản
+       * hồi. Ghi lại để "im lặng" tách được khỏi "bị chặn" - trước đó hai thứ
+       * này trông y hệt nhau trong log.
+       */
+      kind: "SPEECH_BLOCKED";
+      round: number;
+      actorId: string;
+      speech: BotSpeechIntention["kind"];
+      replyToMessageId: string | null;
+      reason: SpeechBlockReason;
+    }
+  | {
+      /**
+       * Số phận của MỘT câu hỏi nhắm thẳng vào một người, chốt ở cuối vòng.
+       *
+       * Xem `QuestionOutcome`. Harness chỉ gán nguyên nhân khi có bằng chứng
+       * đọc được từ chính state/lịch của nó; không đủ bằng chứng thì
+       * `UNDETERMINED`, không đoán.
+       */
+      kind: "QUESTION_OUTCOME";
+      round: number;
+      messageId: string;
+      askerId: string;
+      targetId: string;
+      outcome: QuestionOutcome;
+    }
+  | {
+      /**
+       * Một đêm Phù Thuỷ CÒN bình độc mà không dùng.
+       *
+       * `topSuspectId`/`topSuspicion` là người cô ta nghi nhất theo belief của
+       * chính cô ta lúc đó; `threshold` là ngưỡng dùng bình đêm đó (đã tính
+       * chiết khấu làng mỏng). Tầng đo đối chiếu với vai thật để tách "giữ
+       * đúng" khỏi "bỏ lỡ": không có dòng này, mọi bình còn nguyên cuối ván đều
+       * bị đếm chung một rọ.
+       */
+      kind: "WITCH_HOLD";
+      round: number;
+      actorId: string;
+      topSuspectId: string | null;
+      topSuspicion: number;
+      threshold: number;
+      /**
+       * Có mục tiêu ĐÃ vượt ngưỡng nghi ngờ nhưng bị chặn vì tin tưởng còn cao
+       * (`witchPoisonTrustVeto`). Đây là trường hợp duy nhất mà "giữ bình" là
+       * một quyết định giữa hai tín hiệu mâu thuẫn, không phải thiếu bằng chứng.
+       */
+      vetoedByTrust: boolean;
     }
   | { kind: "NOMINATION"; round: number; accusedId: string | null }
   | { kind: "FINAL_VOTE"; round: number; voterId: string; guilty: boolean }
@@ -398,6 +485,72 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     (spokenThisRound.get(playerId) ?? 0) < weights.conversation.messagesPerBotPerRound;
 
   /**
+   * Sổ theo dõi câu hỏi trực tiếp của vòng hiện tại.
+   *
+   * CHỈ ĐỌC: mọi móc ghi vào sổ này đều đứng sau một lời gọi đã có sẵn
+   * (`observe`, `decideSpeech`, `emitSpeech`) và không rút RNG, không đổi
+   * state của bot. Cùng seed cho cùng ván - có hay không có sổ này.
+   *
+   * `recognized === null` nghĩa là người được hỏi CHƯA quan sát chat nào có
+   * câu đó, nên chưa nói được gì về parser.
+   */
+  interface PendingQuestion {
+    messageId: string;
+    askerId: string;
+    targetId: string;
+    round: number;
+    recognized: boolean | null;
+    /** Số lần `decideSpeech` của người được hỏi SAU khi câu đã hiện trong chat. */
+    turns: number;
+    blocked: SpeechBlockReason | null;
+    answered: boolean;
+    spokeOther: boolean;
+  }
+  const pendingQuestions = new Map<string, PendingQuestion>();
+  const chatHas = (messageId: string): boolean => chat.some((m) => m.id === messageId);
+
+  /** Sau mỗi `observe`: parser của người được hỏi có nhận ra câu hỏi không. */
+  const noteObserved = (playerId: string, context: BotDecisionContext): void => {
+    for (const question of pendingQuestions.values()) {
+      if (question.targetId !== playerId || question.recognized !== null) continue;
+      if (!context.visibleChat.some((m) => m.id === question.messageId)) continue;
+      const state = runtimes.get(playerId)!.state;
+      question.recognized = state.memories.some(
+        (memory) => memory.sourceId === question.messageId && memory.targetId === playerId,
+      );
+    }
+  };
+
+  /** Trước mỗi `decideSpeech`: người được hỏi có thêm một cơ hội đáp. */
+  const noteSpeechTurn = (playerId: string): void => {
+    for (const question of pendingQuestions.values()) {
+      if (question.targetId === playerId && chatHas(question.messageId)) question.turns += 1;
+    }
+  };
+
+  /** Chốt số phận mọi câu hỏi của vòng rồi xoá sổ. Xem `QuestionOutcome`. */
+  const settleQuestions = (): void => {
+    for (const question of pendingQuestions.values()) {
+      let outcome: QuestionOutcome;
+      if (question.answered) outcome = "ANSWERED";
+      else if (question.blocked !== null) outcome = "BLOCKED_ROOM";
+      else if (question.recognized === null) outcome = "UNDETERMINED";
+      else if (!question.recognized) outcome = "NOT_PARSED";
+      else if (question.turns === 0) outcome = "NO_TURN";
+      else outcome = question.spokeOther ? "DECLINED_SPOKE_OTHER" : "DECLINED_SILENT";
+      log.push({
+        kind: "QUESTION_OUTCOME",
+        round: question.round,
+        messageId: question.messageId,
+        askerId: question.askerId,
+        targetId: question.targetId,
+        outcome,
+      });
+    }
+    pendingQuestions.clear();
+  };
+
+  /**
    * Phát một câu, hoặc từ chối nó vì đã chạm một trong các trần.
    *
    * Từ chối vẫn GHI vào trí nhớ của BOT. Nếu không, con BOT sẽ thấy đúng cái
@@ -422,10 +575,24 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     );
     const depth = position.depth;
     const replies = position.parentReplies;
-    const blocked = !hasBudget(playerId) || position.blockedBy !== null;
+    const blockReason: SpeechBlockReason | null = !hasBudget(playerId)
+      ? "BUDGET"
+      : position.blockedBy;
 
-    if (blocked) {
+    if (blockReason !== null) {
       runtimes.get(playerId)!.recordSpeech(speech, round);
+      log.push({
+        kind: "SPEECH_BLOCKED",
+        round,
+        actorId: playerId,
+        speech: speech.kind,
+        replyToMessageId: speech.replyToMessageId ?? null,
+        reason: blockReason,
+      });
+      const asked = speech.replyToMessageId
+        ? pendingQuestions.get(speech.replyToMessageId)
+        : undefined;
+      if (asked && asked.targetId === playerId) asked.blocked = blockReason;
       return;
     }
 
@@ -513,6 +680,32 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       claimedRole: speech.claimedRole ?? null,
     });
 
+    // Sổ câu hỏi: câu này ĐÁP một câu hỏi đang chờ, hay là chuyện khác của
+    // chính người được hỏi? Chỉ tính khi câu hỏi đã hiện trong chat chung -
+    // một câu nói ra trước khi thấy câu hỏi không phải là "chọn nói việc khác".
+    for (const question of pendingQuestions.values()) {
+      if (question.targetId !== playerId || !chatHas(question.messageId)) continue;
+      if (speech.replyToMessageId === question.messageId) question.answered = true;
+      else question.spokeOther = true;
+    }
+    if (
+      (speech.kind === "QUESTION" || speech.kind === "ASK_EVIDENCE") &&
+      speech.targetId !== undefined &&
+      speech.targetId !== playerId
+    ) {
+      pendingQuestions.set(messageId, {
+        messageId,
+        askerId: playerId,
+        targetId: speech.targetId,
+        round,
+        recognized: null,
+        turns: 0,
+        blocked: null,
+        answered: false,
+        spokeOther: false,
+      });
+    }
+
     sink.push({ id: messageId, actorId: playerId, text, at: now });
   };
 
@@ -578,6 +771,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       auditor.checkKnowledge(context.knowledge, runtime.state, truth);
       runtime.observe(context);
       auditor.checkKnowledge(context.knowledge, runtime.state, truth);
+      noteObserved(player.id, context);
     }
   };
 
@@ -665,6 +859,48 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       1,
       Math.floor((config.voteSeconds * 1_000) / 2 / Math.max(1, engine.alivePlayers().length)),
     );
+
+  /**
+   * Phù Thuỷ còn bình độc mà đêm nay không dùng: ghi lại cô ta đang nghi ai
+   * nhất và ngưỡng là bao nhiêu. Chỉ đọc state của chính cô ta - đúng thứ mà
+   * trace cũng đọc - nên không có rò rỉ nào ở đây.
+   */
+  const recordWitchHold = (
+    witchId: string,
+    context: BotDecisionContext,
+    action: NightActionKind | null,
+  ): void => {
+    const night = context.knowledge.night;
+    if (!night || !night.legalActions.includes("POISON") || action === "POISON") return;
+    const state = runtimes.get(witchId)!.state;
+    const threshold = witchPoisonThreshold(context.knowledge, weights);
+    let topSuspectId: string | null = null;
+    let topSuspicion = 0;
+    let vetoedByTrust = false;
+    for (const targetId of [...night.legalTargets.POISON].sort()) {
+      if (targetId === witchId) continue;
+      const score = state.suspicion[targetId]?.score ?? 0;
+      if (topSuspectId === null || score > topSuspicion) {
+        topSuspectId = targetId;
+        topSuspicion = score;
+      }
+      if (
+        score >= threshold &&
+        (state.trust[targetId]?.score ?? 0) >= weights.roleThresholds.witchPoisonTrustVeto
+      ) {
+        vetoedByTrust = true;
+      }
+    }
+    log.push({
+      kind: "WITCH_HOLD",
+      round: engine.state.round,
+      actorId: witchId,
+      topSuspectId,
+      topSuspicion,
+      threshold,
+      vetoedByTrust,
+    });
+  };
   const recordDeaths = (deaths: ReadonlyArray<{ playerId: string; cause?: string }>): void => {
     for (const death of deaths) {
       log.push({
@@ -772,6 +1008,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
         const context = contextFor(witch.id);
         runtime.observe(context);
         const decision = runtime.decideNight(context);
+        recordWitchHold(witch.id, context, decision?.action ?? null);
         if (decision) {
           try {
             // Phù Thuỷ hôm nay không chạm nhánh dùng rng nào trong engine, nhưng
@@ -839,6 +1076,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       // không quyết định. Kiểm nó bằng cách so sánh chứ không bằng cách tin vào
       // chữ ký hàm - một `readonly` trong TypeScript biến mất lúc chạy.
       const sealed = JSON.stringify(vote.choice);
+      noteSpeechTurn(player.id);
       const speech = runtime.decideSpeech(context, vote);
       if (speech) {
         const text = renderIntentionText(speech, nameOf);
@@ -879,8 +1117,10 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
         const runtime = runtimes.get(player.id)!;
         const context = contextFor(player.id);
         runtime.observe(context);
+        noteObserved(player.id, context);
 
         const sealed = JSON.stringify(ballot.choice);
+        noteSpeechTurn(player.id);
         const speech = runtime.decideSpeech(context, ballot);
         if (!speech) continue;
         if (JSON.stringify(ballot.choice) !== sealed) {
@@ -912,8 +1152,13 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       const runtime = runtimes.get(player.id)!;
       const context = contextFor(player.id);
       runtime.observe(context);
+      noteObserved(player.id, context);
       castVote(player.id, runtime.decideVote(context), tick(secondPassStep));
     }
+    // Mọi người sống đã đọc hết chat của vòng: đủ bằng chứng để chốt số phận
+    // từng câu hỏi. Trigger chỉ sống một vòng (`triggerFreshnessRounds`), nên
+    // không câu nào còn được đáp ở vòng sau.
+    settleQuestions();
 
     const outcome = engine.resolveNomination(config.defenseSeconds * 1_000, tick(1_000));
     log.push({

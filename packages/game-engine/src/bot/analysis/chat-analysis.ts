@@ -223,6 +223,31 @@ function importanceTable(weights: BotWeights): Partial<Record<BotMemoryType, num
  */
 const QUESTION_WORDS = ["sao", "tại sao", "vì sao", "thế nào", "đâu", "gì", "nào", "ai"];
 
+/**
+ * Đuôi hỏi có/không ở CUỐI một mệnh đề: "An nói rõ hơn được không", "An là tt
+ * đúng ko". Chúng giữ đúng vai của dấu "?" mà người chat game hay bỏ - và chỉ
+ * được nhận ở cuối mệnh đề, vì "không" đứng giữa câu là phủ định.
+ *
+ * Dạng có dấu so trên `plain`; dạng không dấu chỉ nhận cụm HAI tiếng ("duoc
+ * khong", "phai ko"), vì một tiếng rời bỏ dấu đụng ngay vào tên người: "hả" →
+ * "ha" là tên Hà, và "toi nghi Ha" không phải một câu hỏi.
+ */
+const YES_NO_TAILS = [
+  "được không", "được ko", "được k", "đc không", "đc ko", "đc k", "dc ko", "dc k",
+  "phải không", "phải ko", "phải k",
+  "đúng không", "đúng ko", "đúng k",
+  "hả", "hở", "hử",
+];
+const YES_NO_TAILS_ASCII = ["duoc khong", "duoc ko", "duoc k", "dc khong", "phai khong", "phai ko", "dung khong", "dung ko"];
+
+/**
+ * Lời XIN ý kiến, nêu tên người được hỏi: "hóng ý kiến An", "xin ý kiến An".
+ * Cụm phải đủ hai tiếng trở lên; "ý kiến" một mình là nói VỀ ý kiến của ai đó
+ * ("ý kiến của An hay đấy") chứ chưa phải hỏi họ.
+ */
+const OPINION_REQUESTS = ["hóng ý kiến", "xin ý kiến", "hóng ý"];
+const OPINION_REQUESTS_ASCII = ["hong y kien", "xin y kien"];
+
 /** Tiểu từ gọi đáp: dấu hiệu rõ ràng nhất của việc nói VỚI ai đó. */
 const VOCATIVE_PARTICLES = ["ơi", "à", "ê", "này", "nhé", "nhá"];
 
@@ -236,6 +261,83 @@ function includesWord(text: string, word: string): boolean {
     text.endsWith(` ${word}`) ||
     text.includes(` ${word} `)
   );
+}
+
+/**
+ * Từ mở đầu một GIẢ ĐỊNH: "nếu An trả lời được không thì tính sau" không hỏi
+ * An. Chỉ xét ở đầu mệnh đề, sau khi bỏ "ok"/"ủa"; một mệnh đề khác trong
+ * cùng tin nhắn vẫn có thể là câu hỏi thật ("nếu An là dân, An nói rõ được không").
+ */
+const CONDITIONAL_OPENERS = ["nếu", "giả sử", "lỡ", "nhỡ", "ví dụ", "kể cả", "dù", "cứ cho là"];
+
+/** Đoạn trong ngoặc kép là lời TRÍCH, không phải lời nói với ai. Bỏ đi trước khi tìm dấu hiệu hỏi mới. */
+const QUOTED_SPAN = /["“”'‘’][^"“”'‘’]*["“”'‘’]/g;
+
+function stripQuoted(raw: string): string {
+  return raw.replace(QUOTED_SPAN, " ");
+}
+
+function clauseOf(text: string): Clause {
+  return { plain: plainForm(text), ascii: asciiForm(text) };
+}
+
+function opensConditional(clause: Clause): boolean {
+  const head = stripLeadingInterjections(clause);
+  return CONDITIONAL_OPENERS.some(
+    (word) =>
+      head.plain === word ||
+      head.plain.startsWith(`${word} `) ||
+      head.ascii === asciiForm(word) ||
+      head.ascii.startsWith(`${asciiForm(word)} `),
+  );
+}
+
+/**
+ * Phần đứng TRƯỚC một dấu hiệu hỏi mới có làm nó mất nghĩa hỏi không.
+ *
+ * Hai dấu hiệu mới (đuôi có/không, xin ý kiến) không có dấu "?" chống lưng,
+ * nên chúng chỉ được tin khi phần đầu mệnh đề không phủ định ("tôi không hóng
+ * ý kiến An", "An không phải sói đúng không" - bảo thủ: im) và không mở đầu
+ * bằng giả định. Dấu "?" và từ để hỏi giữ luật cũ: "An không phải sói à?"
+ * vẫn là câu hỏi.
+ */
+function headAllowsAsking(head: Clause): boolean {
+  if (head.plain.length === 0) return true;
+  return !hasNegation(head) && !opensConditional(head);
+}
+
+/** Có mệnh đề nào kết bằng một đuôi hỏi có/không không. Xem `YES_NO_TAILS`. */
+function endsWithYesNoTail(raw: string): boolean {
+  return stripQuoted(raw).split(CLAUSE_SEPARATORS).some((segment) => {
+    const clause = clauseOf(segment);
+    if (clause.plain.length === 0) return false;
+    const plainTail = YES_NO_TAILS.find((tail) => clause.plain === tail || clause.plain.endsWith(` ${tail}`));
+    if (plainTail !== undefined) {
+      return headAllowsAsking(clauseOf(clause.plain.slice(0, clause.plain.length - plainTail.length)));
+    }
+    const asciiTail = YES_NO_TAILS_ASCII.find((tail) => clause.ascii === tail || clause.ascii.endsWith(` ${tail}`));
+    if (asciiTail !== undefined) {
+      return headAllowsAsking(clauseOf(clause.ascii.slice(0, clause.ascii.length - asciiTail.length)));
+    }
+    return false;
+  });
+}
+
+/** Có mệnh đề nào XIN ý kiến (không phủ định, không giả định, không trích) không. */
+function requestsOpinion(raw: string): boolean {
+  return stripQuoted(raw).split(CLAUSE_SEPARATORS).some((segment) => {
+    const clause = clauseOf(segment);
+    if (clause.plain.length === 0) return false;
+    for (const phrase of OPINION_REQUESTS) {
+      const index = includesWord(clause.plain, phrase) ? clause.plain.indexOf(phrase) : -1;
+      if (index >= 0) return headAllowsAsking(clauseOf(clause.plain.slice(0, index)));
+    }
+    for (const phrase of OPINION_REQUESTS_ASCII) {
+      const index = includesWord(clause.ascii, phrase) ? clause.ascii.indexOf(phrase) : -1;
+      if (index >= 0) return headAllowsAsking(clauseOf(clause.ascii.slice(0, index)));
+    }
+    return false;
+  });
 }
 
 /**
@@ -262,8 +364,14 @@ function parseDirectAddress(
   // Người gửi tự nêu tên mình không phải là đang nói với chính mình.
   if (!target || target.id === actorId) return null;
 
+  // "đâu" vừa là từ để hỏi ("An đâu rồi") vừa là tiểu từ phủ định cuối câu
+  // ("tôi ko tin An đâu"). Trong một câu đã có phủ định thì nó là vế sau.
+  const negated = hasNegation(whole);
   const asking =
-    raw.includes("?") || QUESTION_WORDS.some((word) => includesWord(whole.plain, word));
+    raw.includes("?") ||
+    QUESTION_WORDS.some((word) => (word === "đâu" && negated ? false : includesWord(whole.plain, word))) ||
+    endsWithYesNoTail(raw) ||
+    requestsOpinion(raw);
   if (asking) return { type: "DIRECT_QUESTION", targetId: target.id, data: {} };
 
   const calling =

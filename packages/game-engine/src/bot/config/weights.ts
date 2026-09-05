@@ -507,6 +507,25 @@ export interface ConfidenceWeights {
   talkerHysteresisBonus: number;
   /** Số câu (message parser hiểu được) trong vòng để một người là "nói nhiều". */
   talkerHysteresisLines: number;
+  /**
+   * Hệ số nhân vào `talkerHysteresisBonus` khi mục tiêu đang bầu vừa nhận
+   * được bằng chứng GỠ TỘI mới trong vòng này (một `reason` weight âm, cùng
+   * vòng, trong `suspicion[target]`): họ khai một vai quyền lực, hay có người
+   * đứng ra bênh. Trong `[0, 1]`; `1` là bonus áp phẳng (v17), `0` là tắt hẳn
+   * bonus trước người vừa có lý do mới để được tha (v18).
+   *
+   * Vì sao cần: v17 đếm CÂU, không đọc NỘI DUNG. Đo bằng kịch bản có kiểm soát
+   * (`bot-persuasion.test.ts`): một người bị bầu nói ba câu có bằng chứng tốt
+   * làm điểm mình giảm ~1.4, nhưng bonus +2 làm lá phiếu dính hơn ~2 - tức
+   * nói có bằng chứng lại KHÓ thoát phiếu hơn im lặng. Bonus sinh ra để chống
+   * lật kèo vì nhiễu, không phải để phạt người bào chữa có căn cứ; khi đã có
+   * bằng chứng mới thì "đổi ý" không còn là nhiễu.
+   *
+   * Không đụng tới trường hợp bonus được thiết kế cho: ba câu "tôi là dân",
+   * ba câu phản công vô căn cứ - không có reason âm nào sinh ra, bonus giữ
+   * nguyên.
+   */
+  talkerHysteresisExculpatedScale: number;
   /** Phát bắn Thợ Săn phải chắc hơn một lá phiếu thường bấy nhiêu điểm. */
   hunterMargin: number;
   /** Biên tin tưởng cần có để THA một người cả làng vừa đưa ra xử. */
@@ -791,6 +810,9 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   // hoá. Một giá trị 1.5 ở đây không ném ở đâu cả, nó chỉ lặng lẽ làm sai.
   ["claim", "underFireFactor"],
   ["claim", "wolfBluffChance"],
+  // Hệ số nhân vào một bonus hysteresis: 1.5 sẽ dính HƠN đúng lúc có lý do
+  // để đổi ý, ngược hẳn ý nghĩa của trường.
+  ["confidence", "talkerHysteresisExculpatedScale"],
   // Cùng lý do: so THẲNG với `rng()` trong `decideChatClaim`.
   ["jester", "bluffChance"],
   // Cùng lý do: so THẲNG với `rng()` trong `roles/serial-killer.ts`.
@@ -1106,6 +1128,8 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     // Tắt ở v1..v16 (0); v17 bật. `talkerHysteresisLines` chỉ có nghĩa khi bật.
     talkerHysteresisBonus: 0,
     talkerHysteresisLines: 3,
+    // 1 ở v1..v17 (bonus áp phẳng); v18 hạ về 0. Vô nghĩa khi bonus là 0.
+    talkerHysteresisExculpatedScale: 1,
     hunterMargin: 20,
     spareTrustMargin: 15,
     jitterSpan: 6,
@@ -2105,6 +2129,32 @@ export const BOT_WEIGHTS_V17: BotWeights = Object.freeze({
 });
 
 /**
+ * Cấu hình v18 - bonus "nói nhiều" không áp lên người vừa có bằng chứng gỡ tội.
+ *
+ * MỘT ô đổi: `confidence.talkerHysteresisExculpatedScale` 1 -> 0.
+ *
+ * v17 cộng +2 hysteresis khi mục tiêu đang bầu đã nói >= 3 câu, để một cú lật
+ * vì nhiễu không xảy ra ngay sau khi người đó vừa bào chữa. Nhưng nó đếm câu
+ * chứ không đọc nội dung: kịch bản có kiểm soát (`tests/bot-persuasion.test.ts`)
+ * cho thấy người bị bầu nói ba câu CÓ bằng chứng (khai Bảo Vệ, được bênh) làm
+ * điểm mình giảm ~1.4 nhưng bị dính thêm +2 - nói có căn cứ lại khó thoát phiếu
+ * hơn im lặng. Ở v18 bonus bị nhân 0 khi `suspicion[target]` có một reason
+ * weight âm sinh trong vòng này; ba câu "tôi là dân" hay ba câu phản công vô
+ * căn cứ không sinh reason âm nào nên vẫn dính như v17.
+ *
+ * Không đổi ngưỡng, không đổi bonus, không đổi cách đếm câu.
+ */
+export const BOT_WEIGHTS_V18: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V17,
+  version: "18.0.0",
+
+  confidence: Object.freeze({
+    ...BOT_WEIGHTS_V17.confidence,
+    talkerHysteresisExculpatedScale: 0,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
@@ -2121,8 +2171,9 @@ export const BOT_WEIGHTS_V17: BotWeights = Object.freeze({
  * cho Tiên Tri giấu kết quả tới ngày 2 khi bàn có người thật; v15.0.0 hạ
  * ngưỡng bình độc/bình cứu/Nước thánh một nấc khi làng đã mỏng; v16.0.0 cho
  * Sói cãi nhau giả ở vòng 1-2 và bán đồng đội sớm hơn trước người thật;
- * v17.0.0 cho phiếu dính hơn trước mục tiêu đang nói nhiều.
+ * v17.0.0 cho phiếu dính hơn trước mục tiêu đang nói nhiều; v18.0.0 bỏ phần
+ * dính thêm đó trước người vừa có bằng chứng gỡ tội mới.
  * v1-v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset đích
  * danh, không bao giờ dựa vào hằng số này.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V17;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V18;
