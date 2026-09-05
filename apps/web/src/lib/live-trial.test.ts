@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { RoomSnapshot, TrialRecap, TrialView } from "@masoi/shared";
 import {
   EMPTY_TRIAL_STAGE_MEMORY,
+  accusedPortrait,
   actLabel,
   myVoteLabel,
   scaleTilt,
@@ -587,5 +588,36 @@ describe("stageOwnsCinematic: cảnh treo cổ thuộc về lớp phủ, không 
 
   it("NIGHT_KILL cũng vậy - sân khấu không có mặt trong đêm", () => {
     assert.equal(stageOwnsCinematic("NIGHT_KILL"), false);
+  });
+});
+
+describe("accusedPortrait: khuôn mặt đưa lên bục", () => {
+  it("có ảnh tự tải thì dùng ảnh đó, và đánh dấu là photo", () => {
+    // Cùng thứ tự ưu tiên với ô người chơi: ảnh riêng đi trước hình gán theo
+    // bảng. Bản đầu bỏ qua ảnh riêng, nên người có ảnh lên bục mang mặt lạ.
+    assert.deepEqual(accusedPortrait("https://cdn.example/a.webp", "/characters/hood.webp"), {
+      url: "https://cdn.example/a.webp",
+      kind: "photo",
+    });
+  });
+
+  it("không có ảnh riêng thì rơi về sheet của nhân vật", () => {
+    assert.deepEqual(accusedPortrait(null, "/characters/hood.webp"), {
+      url: "/characters/hood.webp",
+      kind: "sheet",
+    });
+    assert.deepEqual(accusedPortrait(undefined, "/characters/hood.webp"), {
+      url: "/characters/hood.webp",
+      kind: "sheet",
+    });
+  });
+
+  it("chuỗi rỗng không phải một bức ảnh", () => {
+    assert.deepEqual(accusedPortrait("", "/characters/hood.webp"), {
+      url: "/characters/hood.webp",
+      kind: "sheet",
+    });
+    assert.equal(accusedPortrait("", null), null);
+    assert.equal(accusedPortrait(null, undefined), null);
   });
 });

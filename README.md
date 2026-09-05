@@ -206,6 +206,14 @@ by EXIF, crops to a centred square, resizes to 256×256 and encodes WebP under
 The public URL and the endpoint are different hosts. Using the endpoint as the
 public base URL produces avatars that 403 in the browser.
 
+The public host must also answer `GET` with CORS headers
+(`Access-Control-Allow-Origin` for the web origin, or `*`). Plain `<img>`
+avatars load without it, but the 3D trial stage puts the accused's avatar on
+the dais as a WebGL texture, and browsers refuse to upload a cross-origin image
+into WebGL unless CORS allows it — the face silently falls back to the plain
+head. On R2: bucket **Settings → CORS policy**, allow your Vercel origin with
+method `GET`. MinIO from `npm run dev:infra` already allows it.
+
 #### MinIO for local development
 
 `npm run dev:infra` already starts MinIO and creates the bucket with public
