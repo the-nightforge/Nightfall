@@ -661,4 +661,192 @@ describe("conservative chat analysis", () => {
       expect(claims("kk tôi là tiên tri đây")).toHaveLength(1);
     });
   });
+
+  /**
+   * Alias lấy từ tờ đề xuất `reports/alias-proposal.md` (`npm run mine-aliases`).
+   * Mỗi alias một test, và mỗi alias chỉ được khớp NGAY SAU một cách tự xưng.
+   */
+  describe("alias vai từ log người chơi", () => {
+    function claims(text: string) {
+      return analyzeChat([message("m1", "a", text)], players).filter(
+        (item) => item.type === "ROLE_CLAIM" || item.type === "COUNTER_CLAIM",
+      );
+    }
+    const claimOf = (role: string) => [
+      expect.objectContaining({ type: "ROLE_CLAIM", data: { role } }),
+    ];
+
+    it("pt / phù thuỷ là Phù Thuỷ", () => {
+      for (const text of ["mình là pt nè", "t là pt", "toi la phu thuy"]) {
+        expect(claims(text), text).toEqual(claimOf("WITCH"));
+      }
+    });
+
+    it("lm / linh mục là Linh Mục", () => {
+      for (const text of ["mình là lm nha", "tôi là linh mục"]) {
+        expect(claims(text), text).toEqual(claimOf("PRIEST"));
+      }
+    });
+
+    it("ts / thợ săn là Thợ Săn", () => {
+      for (const text of ["tôi là ts nhé", "t là thợ săn", "tui la tho san"]) {
+        expect(claims(text), text).toEqual(claimOf("HUNTER"));
+      }
+    });
+
+    it("bd / bà đồng là Bà Đồng", () => {
+      for (const text of ["mình là bd", "tôi là bà đồng"]) {
+        expect(claims(text), text).toEqual(claimOf("MEDIUM"));
+      }
+    });
+
+    it("dl / dân đen là Dân Làng", () => {
+      for (const text of ["tôi là dl thôi", "t là dân đen", "mình là dân thường"]) {
+        expect(claims(text), text).toEqual(claimOf("VILLAGER"));
+      }
+    });
+
+    it("thầy bói là Tiên Tri", () => {
+      expect(claims("tôi là thầy bói")).toEqual(claimOf("SEER"));
+      expect(claims("t la thay boi ne")).toEqual(claimOf("SEER"));
+    });
+
+    it("hộ vệ / bảo kê là Bảo Vệ", () => {
+      for (const text of ["tôi là hộ vệ", "tôi là bảo kê của làng", "t la ho ve"]) {
+        expect(claims(text), text).toEqual(claimOf("GUARD"));
+      }
+    });
+
+    it("sát thủ là Sát Nhân", () => {
+      expect(claims("tôi là sát thủ")).toEqual(claimOf("SERIAL_KILLER"));
+    });
+
+    it("sw là Sói", () => {
+      expect(claims("tôi là sw, đừng treo tôi")).toEqual(claimOf("WEREWOLF"));
+    });
+
+    it("alias ngắn nằm giữa câu không thành lời khai", () => {
+      for (const text of [
+        "pt nào cũng được",
+        "ts đâu rồi",
+        "cho tôi hỏi lm là gì",
+        "bd với ts chưa lên tiếng",
+        "sw cắn ai tối qua",
+      ]) {
+        expect(claims(text), text).toEqual([]);
+      }
+    });
+
+    it("câu đùa với alias mới không thành lời khai", () => {
+      for (const text of [
+        "t mà là pt thì đã cứu Bình rồi",
+        "ai bảo t là ts",
+        "ước gì tôi là bà đồng",
+        "nếu mình là lm thì đã rảy Chi",
+        "t k phải pt nha",
+        "tôi hem phải thợ săn",
+        "mình hổng phải bd đâu",
+      ]) {
+        expect(claims(text), text).toEqual([]);
+      }
+    });
+  });
+
+  /**
+   * Cáo buộc và bênh vực theo cách người chơi thật gõ: không có "tôi", không
+   * có "là", nhiều khi không có dấu. Mỗi mẫu một test, kèm test phủ định.
+   */
+  describe("cáo buộc và bênh vực kiểu người thật", () => {
+    const substantive = (text: string, list = players) =>
+      analyzeChat([message("m1", "a", text)], list)
+        .filter((item) => item.type === "ACCUSE" || item.type === "DEFEND")
+        .map((item) => [item.type, item.targetId]);
+
+    it("nghi X (không có tôi) là cáo buộc X", () => {
+      for (const text of ["nghi Bình", "nghi Bình lắm", "t nghi Bình", "mình nghi Bình rồi", "nghi ngờ Bình"]) {
+        expect(substantive(text), text).toEqual([["ACCUSE", "b"]]);
+      }
+    });
+
+    it("nghi không dấu vẫn bị bỏ qua vì trùng với nghĩ", () => {
+      expect(substantive("nghi Binh")).toEqual([]);
+      expect(substantive("t nghi Binh")).toEqual([]);
+    });
+
+    it("vote X / treo X / chốt X là cáo buộc X", () => {
+      for (const text of ["vote Bình", "vote cho Bình đi", "treo Bình", "treo Binh di", "chốt Bình nhé", "vote Bình thôi"]) {
+        expect(substantive(text), text).toEqual([["ACCUSE", "b"]]);
+      }
+    });
+
+    it("X sói (không có là) là cáo buộc X", () => {
+      for (const text of ["Bình sói", "Bình sói chắc luôn", "Bình sói rồi", "thằng Bình sói 100%"]) {
+        expect(substantive(text), text).toEqual([["ACCUSE", "b"]]);
+      }
+    });
+
+    it("soi không dấu là động từ soi, không phải Sói", () => {
+      // "An soi Bình" = Tiên Tri An soi Bình. Không suy ra ai là Sói cả.
+      expect(substantive("Binh soi Chi")).toEqual([]);
+      expect(substantive("Bình soi Chi ra dân")).toEqual([]);
+    });
+
+    it("tin X / tha X / đừng vote X là bênh vực X", () => {
+      for (const text of ["tin Bình", "t tin Bình", "mình tin Bình mà", "tha Bình đi", "đừng vote Bình", "dung treo Binh"]) {
+        expect(substantive(text), text).toEqual([["DEFEND", "b"]]);
+      }
+    });
+
+    it("X dân / X sạch là bênh vực X", () => {
+      for (const text of ["Bình dân", "Bình dân chắc", "Bình sạch", "Bình sạch rồi"]) {
+        expect(substantive(text), text).toEqual([["DEFEND", "b"]]);
+      }
+    });
+
+    it("phủ định teencode giết cả mẫu mới", () => {
+      for (const text of [
+        "ko nghi Bình",
+        "k vote Bình",
+        "hok treo Bình",
+        "Bình ko sói",
+        "Bình hem sói đâu",
+        "t k tin Bình",
+        "Bình đếch phải dân",
+        "Bình éo sạch",
+      ]) {
+        expect(substantive(text), text).toEqual([]);
+      }
+    });
+
+    it("mẫu mới vẫn chỉ nhận ở đầu mệnh đề", () => {
+      // "ai vote Bình" là câu hỏi; "sao treo Bình" là thắc mắc.
+      for (const text of ["ai vote Bình", "sao lại treo Bình", "ai nghi Bình giơ tay"]) {
+        expect(substantive(text), text).toEqual([]);
+      }
+    });
+
+    it("tên trùng thì mẫu mới cũng bỏ qua", () => {
+      const twins: BotPlayerKnowledge[] = [
+        { id: "x", name: "Lê Bình", alive: true },
+        { id: "y", name: "Trần Bình", alive: true },
+        { id: "a", name: "An", alive: true },
+      ];
+      expect(substantive("vote Bình", twins)).toEqual([]);
+      expect(substantive("Bình sói", twins)).toEqual([]);
+    });
+
+    it("marker không dấu phải khớp trọn từ: tha ≠ thằng, tin ≠ tính", () => {
+      expect(substantive("thằng Bình sói")).toEqual([["ACCUSE", "b"]]);
+      expect(substantive("thang Binh la soi")).toEqual([["ACCUSE", "b"]]);
+      expect(substantive("tính Bình sao")).toEqual([]);
+    });
+
+    it("chắc/chào/chạy không phải phủ định dù chứa chả khi bỏ dấu", () => {
+      expect(substantive("Bình là sói chắc luôn")).toEqual([["ACCUSE", "b"]]);
+      expect(substantive("Binh la soi chac luon")).toEqual([["ACCUSE", "b"]]);
+      expect(substantive("Bình chả phải sói")).toEqual([]);
+      // "cha" không dấu là cha xứ/cha nội, không phải "chả".
+      expect(substantive("cha noi Binh la soi")).toEqual([["ACCUSE", "b"]]);
+    });
+  });
 });
