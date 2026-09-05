@@ -138,4 +138,18 @@ describe("Sói Pháp Sư", () => {
       /Sói Pháp Sư/,
     );
   });
+
+  it("ghi lại lượt check vào NightRecap sau khi khép đêm", () => {
+    const e = engineWith(roster);
+    e.submitNightAction("sorc", "SORCERER_CHECK", "seer");
+    e.resolveNight();
+    const night = e.state.nightHistory[0];
+    expect(night.sorcererChecks).toEqual([
+      {
+        sorcerer: { id: "sorc", name: "sorc" },
+        target: { id: "seer", name: "seer" },
+        isSeerLine: true,
+      },
+    ]);
+  });
 });

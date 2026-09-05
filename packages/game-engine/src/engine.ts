@@ -1434,6 +1434,13 @@ export class GameEngine {
           ? [{ detective, target1, target2, sameTeam: result.sameTeam }]
           : [];
       }),
+      sorcererChecks: Object.entries(st.night.sorcererResults).flatMap(([sorcererId, result]) => {
+        const sorcerer = recapPlayer(this.player(sorcererId));
+        const target = recapPlayer(this.player(result.targetId));
+        return sorcerer && target
+          ? [{ sorcerer, target, isSeerLine: result.isSeerLine }]
+          : [];
+      }),
       // `priest` vắng mặt ở đêm mới: Linh Mục đã bị xóa cứng nên không còn đêm
       // nào sinh ra mục này nữa. Đêm CŨ nạp lại vẫn giữ nguyên trường `priest`
       // của nó (dữ liệu nằm trong nightHistory), và các cái chết cũ với cause

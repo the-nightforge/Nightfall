@@ -377,6 +377,11 @@ export interface NightRecap {
     target2: RecapPlayer;
     sameTeam: boolean;
   }>;
+  sorcererChecks?: Array<{
+    sorcerer: RecapPlayer;
+    target: RecapPlayer;
+    isSeerLine: boolean;
+  }>;
   priest?: {
     priest: RecapPlayer;
     target: RecapPlayer;
