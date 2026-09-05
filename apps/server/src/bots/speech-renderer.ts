@@ -95,17 +95,30 @@ export async function renderBotSpeech(
   // cùng một catch sẽ khiến một cổng gãy trông y hệt một nhà cung cấp đang hỏng:
   // `fromTemplate` vẫn lên `true` như mọi khi, và một cổng gãy có thể chạy hàng
   // tuần không ai biết. Hai loại lỗi phải KHÔNG dùng chung một quan sát.
-  let chat: string | null | undefined;
-  try {
-    const attempt = await brain.renderDaySpeech(request);
-    chat = attempt.ok ? attempt.value?.chat : null;
-  } catch {
-    // Não ném lỗi ngoài dự kiến cũng chỉ là một lượt hỏng.
-    chat = null;
+  const first = await askProvider(brain, request);
+  if (first && passesGates(request, first)) {
+    return { text: first.slice(0, chatMaxLength), fromTemplate: false };
   }
 
-  if (chat && passesGates(request, chat)) {
-    return { text: chat.slice(0, chatMaxLength), fromTemplate: false };
+  // Trượt cổng thì hỏi lại ĐÚNG MỘT lần, mang theo chính câu vừa bị từ chối.
+  //
+  // Chỉ khi nhà cung cấp đã trả về một câu THẬT mà cổng không nhận: nhại lại
+  // chính mình, mở đầu như vài câu trước, hay nói sai lời khai. Nhà cung cấp
+  // hỏng (timeout, hết quota, JSON vỡ) thì không hỏi lại - gọi thêm vào đúng
+  // lúc nó đang hỏng chỉ đốt ngân sách. Lượt hỏi lại đi qua cùng `brain`, nên
+  // governor đếm nó như mọi lượt khác; không có ngân sách riêng và
+  // `BOT_AI_MAX_CALLS_PER_GAME` không đổi.
+  //
+  // Câu bị từ chối được gấp vào `recentOwnLines` và cách mở đầu của nó vào
+  // `avoidOpenings`: prompt lần hai vì thế nói rõ "đừng nói câu này, đừng mở
+  // đầu thế này", và cổng lần hai cũng so trên yêu cầu đã gấp - nhại lại chính
+  // câu bị từ chối vẫn trượt.
+  if (first) {
+    const retryRequest = withRejectedLine(request, first);
+    const second = await askProvider(brain, retryRequest);
+    if (second && passesGates(retryRequest, second)) {
+      return { text: second.slice(0, chatMaxLength), fromTemplate: false };
+    }
   }
 
   // Đường lui cũng phải theo đúng luật vừa dùng để từ chối nhà cung cấp.
@@ -124,6 +137,36 @@ export async function renderBotSpeech(
     return { text: null, fromTemplate: true };
   }
   return { text: template, fromTemplate: true };
+}
+
+/**
+ * Một lượt hỏi nhà cung cấp; `null` cho mọi kiểu hỏng.
+ *
+ * `try` chỉ bọc LỜI GỌI NHÀ CUNG CẤP, không bọc cổng chạy sau nó - xem chú
+ * thích ở `renderBotSpeech` về vì sao hai loại lỗi không được dùng chung một
+ * quan sát.
+ */
+async function askProvider(brain: BotBrain, request: SpeechRequest): Promise<string | null> {
+  try {
+    const attempt = await brain.renderDaySpeech(request);
+    return (attempt.ok ? attempt.value?.chat : null) || null;
+  } catch {
+    // Não ném lỗi ngoài dự kiến cũng chỉ là một lượt hỏng.
+    return null;
+  }
+}
+
+/** Yêu cầu mới cho lượt hỏi lại: câu bị từ chối vào cả hai danh sách "đừng". */
+function withRejectedLine(request: SpeechRequest, rejected: string): SpeechRequest {
+  const opening = openingOf(rejected);
+  return {
+    ...request,
+    recentOwnLines: [...request.recentOwnLines, rejected],
+    avoidOpenings:
+      opening !== null && !request.avoidOpenings.includes(opening)
+        ? [...request.avoidOpenings, opening]
+        : request.avoidOpenings,
+  };
 }
 
 /**
