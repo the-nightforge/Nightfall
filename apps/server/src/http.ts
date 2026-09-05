@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "./db";
 import { newToken, sha256 } from "./util";
 import {
+  computePlayerStats,
   isMatchOutcome,
   isPersonalWinCondition,
   isRole,
@@ -184,6 +185,36 @@ apiRouter.get("/players/me/matches", requirePlayer, async (req, res) => {
   } catch (err) {
     console.error("[api] Đọc lịch sử ván thất bại:", err);
     res.status(500).json({ error: "Không thể đọc lịch sử lúc này" });
+  }
+});
+
+/**
+ * Hồ sơ của người hỏi: tỉ lệ thắng, chuỗi, sống sót, theo phe và theo vai.
+ *
+ * Cùng câu truy vấn với lịch sử nhưng KHÔNG giới hạn 20 dòng: hồ sơ mà chỉ
+ * đếm 20 ván gần nhất thì tỉ lệ thắng đổi mỗi lần chơi thêm một ván, không
+ * phải vì chơi hay hơn mà vì một ván cũ vừa rơi khỏi cửa sổ. Chỉ lấy đúng
+ * những cột mà `toHistoryEntry` cần để đọc "ai thắng", không kéo `caseFile`
+ * - đó là cột nặng nhất của bảng và hồ sơ không dùng tới.
+ *
+ * Gộp bằng `computePlayerStats` của shared, trên chính các entry mà trang
+ * lịch sử nhận: một phép đọc "ván này thắng hay thua" cho cả hai nơi.
+ */
+apiRouter.get("/players/me/stats", requirePlayer, async (req, res) => {
+  const player = (req as PlayerRequest).player!;
+
+  try {
+    const rows = await prisma.$queryRaw<GameResultRow[]>`
+      SELECT "id", "roomCode", "winner", "round", "durationSec", "playerRoles", NULL AS "caseFile", "createdAt"
+      FROM "GameResult"
+      WHERE "playerRoles" @> ${JSON.stringify([{ id: player.id }])}::jsonb
+      ORDER BY "createdAt" DESC
+    `;
+
+    res.json({ stats: computePlayerStats(rows.map((row) => toHistoryEntry(row, player.id))) });
+  } catch (err) {
+    console.error("[api] Đọc hồ sơ người chơi thất bại:", err);
+    res.status(500).json({ error: "Không thể đọc hồ sơ lúc này" });
   }
 });
 
