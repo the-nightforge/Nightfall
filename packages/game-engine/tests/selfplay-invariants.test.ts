@@ -632,6 +632,34 @@ describe("batch tự chơi", () => {
     // Sáu ván 17 người tốn khoảng 6 giây, trên trần 5 giây mặc định của vitest.
   }, 30_000);
 
+  /*
+   * Harness phải chốt vai ĐỔI giống hệt server.
+   *
+   * `runSelfPlay` và `checkWinOrContinue` từng là hai bản chép tay của cùng một
+   * chuỗi, và chúng đã lệch: harness thiếu `settleDoppelganger`, nên trong 60/60
+   * ván preset 19/20 - ván nào cũng có người chết - Kẻ Song Trùng KHÔNG hoá vai
+   * lần nào. Lá bài là một Dân Làng đổi tên trong mọi ván tự chơi, và mọi số đo
+   * sức mạnh của nó đo một kỹ năng chưa từng chạy.
+   *
+   * Giờ cả hai gọi `settleAndCheckWin`. Phép kiểm này gác cái lỗ đó từ phía
+   * HÀNH VI: nó không quan tâm ai gọi hàm nào, chỉ hỏi lá bài có thật sự hoá vai
+   * trong một ván tự chơi hay không.
+   *
+   * Ngưỡng 3/5 rộng có chủ ý: đo ra 92% số ván có hoá vai, và vế còn lại là
+   * những ván Kẻ Song Trùng chết trước hoặc chính nó là người chết đầu tiên.
+   * Dưới bug thì con số là 0, nên khoảng cách tới ngưỡng rất xa.
+   *
+   * Năm ván 19 người tốn khoảng 7 giây; bản mười ván đã chạm trần 30 giây một
+   * lần khi chạy chung cả suite trên máy bận.
+   */
+  it("Kẻ Song Trùng hoá vai trong ván tự chơi, đúng như ở server", () => {
+    const games = Array.from({ length: 5 }, (_, i) =>
+      runSelfPlay({ seed: `doppel-${i}`, playerCount: 19, config: PRESET_DECKS[19] }),
+    );
+    const turned = games.filter((game) => !Object.values(game.roles).includes("DOPPELGANGER"));
+    expect(turned.length).toBeGreaterThanOrEqual(3);
+  }, 30_000);
+
   it("không ván nào rò rỉ vai", () => {
     const leaks = games.flatMap((game) =>
       game.violations.filter(

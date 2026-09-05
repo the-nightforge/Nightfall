@@ -2171,6 +2171,37 @@ export class GameEngine {
    * hai không tìm thấy gì. Một pha chạy lại sau khôi phục vì thế vô hại.
    */
   /**
+   * Chốt mọi lá ĐỔI VAI rồi hỏi ván đã xong chưa.
+   *
+   * Tồn tại vì THỨ TỰ, không phải vì gõ ít đi. Ba lời gọi này từng nằm chép tay
+   * ở hai nơi - `checkWinOrContinue` của server và `finished()` của harness
+   * self-play - và không có gì bắt hai bản khớp nhau. Chúng đã lệch: harness
+   * thiếu hẳn `settleDoppelganger`, nên trong MỌI ván tự chơi Kẻ Song Trùng
+   * không hoá vai lần nào và mọi số đo sức mạnh của nó đo một kỹ năng chưa từng
+   * chạy. Một bản sao thứ ba sẽ lệch theo cách khác.
+   *
+   * Thứ tự bên trong không tuỳ ý:
+   *
+   *  1. Kẻ Song Trùng trước, vì nó có thể hoá thành một con SÓI - và
+   *     `settleTraitor` hỏi "bầy còn con nào sống không", nên nó phải thấy bầy
+   *     ở trạng thái đã cập nhật.
+   *  2. Kẻ Phản Bội trước Kẻ Báo Thù, vì một Kẻ Phản Bội vừa thăng cấp làm đổi
+   *     câu trả lời của `checkWin`, mà `settleExecutioner` đọc thế cuộc để
+   *     quyết một Kẻ Báo Thù mất mục tiêu có hoá Thằng Hề hay không.
+   *
+   * Gọi ở đâu thì vẫn là quyết định của người gọi: đây phải là cửa duy nhất mà
+   * cả hai đường chết đi qua SAU khi chuỗi phản ứng Thợ Săn đã xử xong. Sớm hơn
+   * thì một lá sắp trúng đạn kịp đổi vai trong chính đợt chết đã hạ nó.
+   *
+   * Cả ba `settle*` đều TỰ CHẶN LẶP, nên gọi lại sau khôi phục là vô hại.
+   */
+  settleAndCheckWin(): Winner {
+    this.settleDoppelganger();
+    this.settleTraitor();
+    this.settleExecutioner();
+    return this.checkWin();
+  }
+  /**
    * Kẻ Song Trùng hoá thành vai của NGƯỜI CHẾT ĐẦU TIÊN.
    *
    * Gọi cùng chỗ với `settleTraitor`/`settleExecutioner` - cửa duy nhất mà cả

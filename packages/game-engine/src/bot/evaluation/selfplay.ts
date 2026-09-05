@@ -1037,26 +1037,14 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
 
   function finished(): boolean {
     /*
-     * Đứng NGAY TRƯỚC `checkWin`, đúng vị trí mà `checkWinOrContinue` bên
-     * server đặt nó: đợt chết và chuỗi Thợ Săn đi kèm đã xử xong, ván chưa
-     * được chốt. Hai chỗ chốt kết quả duy nhất của dự án, cùng một thứ tự -
-     * lệch nhau thì một Kẻ Báo Thù trong harness sẽ chơi theo một luật khác
-     * với một Kẻ Báo Thù trong phòng thật.
+     * Đứng NGAY TRƯỚC khi ván được chốt, đúng vị trí mà `checkWinOrContinue`
+     * bên server đặt nó: đợt chết và chuỗi Thợ Săn đi kèm đã xử xong.
      *
-     * `settleDoppelganger` từng THIẾU ở đây trong khi `checkWinOrContinue` bên
-     * server vẫn gọi. Hậu quả không phải một sai số nhỏ: đo 60 ván preset 19/20,
-     * ván nào cũng có người chết, và Kẻ Song Trùng KHÔNG hoá vai lần nào - lá
-     * bài là một Dân Làng đổi tên trong mọi ván tự chơi, nên mọi số đo sức mạnh
-     * của nó đều đo một kỹ năng chưa từng chạy.
-     *
-     * Nó đứng TRƯỚC hai lá kia vì nó có thể hoá thành một con Sói, và
-     * `settleTraitor` phải nhìn thấy bầy Sói ở trạng thái đã cập nhật khi hỏi
-     * "còn con nào sống không" - cùng thứ tự với server.
+     * Thứ tự bên trong `settleAndCheckWin` nằm ở engine chứ không chép lại ở
+     * đây - đó chính là chỗ hai bản chép tay đã lệch nhau một lần.
      */
-    engine.settleDoppelganger();
-    engine.settleTraitor();
-    engine.settleExecutioner();
-    const winner = engine.checkWin();
+    const winner = engine.settleAndCheckWin();
+
     if (!winner) return false;
     engine.finishGame(winner, tick(1_000));
     return true;

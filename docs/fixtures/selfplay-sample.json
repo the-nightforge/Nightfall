@@ -102,8 +102,8 @@
       "denominator": 12
     },
     "seerDiedNightTwoRate": {
-      "value": 0.16666666666666666,
-      "numerator": 2,
+      "value": 0.08333333333333333,
+      "numerator": 1,
       "denominator": 12
     },
     "seerClaimedRoundOneRate": {
