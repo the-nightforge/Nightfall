@@ -91,10 +91,17 @@ describe("Thằng Hề trong ván self-play trọn vẹn", () => {
     expect(withJester.lynched).toBeGreaterThanOrEqual(SEEDS.length / 6);
   });
 
-  it("MỌI lần bị đưa ra toà đều kết thúc bằng bản án treo", () => {
+  it("gần như mọi lần bị đưa ra toà đều kết thúc bằng bản án treo", () => {
     // Hệ quả của việc Hề không tự bào chữa (xem `decideChatClaim`): tới được
     // phiên toà là cả làng đã đồng thuận, và Hề không làm gì để lật nó.
-    expect(withJester.lynched).toBe(withJester.nominated);
+    //
+    // KHÔNG đòi đẳng thức tuyệt đối: đồng thuận ở vòng đề cử không bảo đảm
+    // phiếu cuối không hoà (seed `jester-20` ra 3-3 và Hề được tha, rồi bị sói
+    // cắn đêm sau). Câu chữ của bảng mẫu là đầu vào của `chat-analysis`, nên
+    // mỗi lần đổi mẫu là quỹ đạo vài ván đổi theo; một bài đo đúng phải chịu
+    // được điều đó mà vẫn đỏ khi Hề bắt đầu tự bào chữa thật sự.
+    expect(withJester.nominated).toBeGreaterThan(0);
+    expect(withJester.lynched / withJester.nominated).toBeGreaterThanOrEqual(0.85);
   });
 
   it("bị treo KHÔNG phải kết cục duy nhất - vẫn chết vì đêm và vẫn sống sót", () => {

@@ -2,11 +2,20 @@ import { describe, expect, it } from "vitest";
 import {
   deriveSpeechStyle,
   describeSpeechStyle,
+  openingOf,
   speechTextFingerprint,
 } from "@masoi/game-engine";
 import type { BotPersonality, BotSpeechIntention } from "@masoi/game-engine";
 import { renderBotSpeech, speechTemplate } from "../src/bots/speech-renderer";
-import { decided, failed, nothingToDo, type BotBrain, type SpeechRequest } from "../src/bots/types";
+import {
+  decided,
+  failed,
+  nothingToDo,
+  type Attempt,
+  type BotBrain,
+  type DaySpeechDecision,
+  type SpeechRequest,
+} from "../src/bots/types";
 
 const PERSONALITY: BotPersonality = {
   aggressiveness: 0.7,
@@ -378,6 +387,143 @@ describe("nhà cung cấp không được nhại lại chính BOT", () => {
       120,
     );
     expect(result.fromTemplate).toBe(false);
+    expect(result.text!.length).toBe(120);
+  });
+});
+
+/**
+ * Task B — nhà cung cấp cũng không được mở đầu y hệt vài câu vừa rồi.
+ *
+ * `avoidOpenings` đi vào prompt kèm lời dặn, nhưng lời dặn chỉ là đề nghị.
+ * Cổng ở đây so ba token mở đầu của câu trả về với các cách mở đầu gần đây,
+ * dùng đúng `openingOf` mà lõi ghi vào `BotSpeechRecord`.
+ */
+describe("nhà cung cấp không được mở đầu như vài câu vừa rồi", () => {
+  it("câu mở đầu trùng bị bỏ, và câu thay thế mở đầu khác", async () => {
+    const payload = request({}, { avoidOpenings: ["tôi nghi chi"], recentOwnLines: ["Tôi nghi Chi vì lá phiếu."] });
+    const result = await renderBotSpeech(payload, speaking("Tôi nghi Chi thật đấy, đổi phiếu sát giờ chót."));
+    expect(result.fromTemplate).toBe(true);
+    expect(result.text).not.toBeNull();
+    expect(openingOf(result.text!)).not.toBe("tôi nghi chi");
+  });
+
+  it("đệm ủa/hmm rồi mở đầu y hệt vẫn là trùng", async () => {
+    const payload = request({}, { avoidOpenings: ["tôi nghi chi"] });
+    const result = await renderBotSpeech(payload, speaking("Ủa, tôi nghi Chi mà."));
+    expect(result.fromTemplate).toBe(true);
+  });
+
+  it("mở đầu khác thì câu của nhà cung cấp vẫn được dùng", async () => {
+    const payload = request({}, { avoidOpenings: ["tôi nghi chi"] });
+    const line = "Chi đổi phiếu sát giờ chót, ai giải thích giúp tôi.";
+    const result = await renderBotSpeech(payload, speaking(line));
+    expect(result.text).toBe(line);
+    expect(result.fromTemplate).toBe(false);
+  });
+
+  it("bảng mẫu ở server cũng nhận avoidOpenings", () => {
+    const first = speechTemplate(request())!;
+    const opening = openingOf(first)!;
+    const next = speechTemplate(request({}, { avoidOpenings: [opening] }))!;
+    expect(openingOf(next)).not.toBe(opening);
+  });
+
+  it("chưa có cách mở đầu nào để tránh thì không chặn gì", async () => {
+    const result = await renderBotSpeech(request({}, { avoidOpenings: [] }), speaking("Tôi nghi Chi thật."));
+    expect(result.fromTemplate).toBe(false);
+  });
+});
+
+/**
+ * Task D — trượt cổng lần đầu thì hỏi lại nhà cung cấp ĐÚNG MỘT lần.
+ *
+ * Trước đây trượt cổng là rơi thẳng về bảng mẫu. Bảng mẫu tốt hơn rồi, nhưng
+ * một câu người thật vẫn hơn; và lần hỏi lại mang theo chính câu vừa bị từ
+ * chối trong `recentOwnLines` + cách mở đầu của nó trong `avoidOpenings`, nên
+ * mô hình biết vì sao bị từ chối. Lượt hỏi lại tính vào ngân sách như mọi
+ * lượt khác (governor đếm ở tầng não), không có ngân sách riêng.
+ */
+describe("hỏi lại nhà cung cấp một lần khi trượt cổng", () => {
+  const OWN = "Tôi thấy Chi rất đáng ngờ.";
+
+  function sequenced(replies: Array<() => Attempt<DaySpeechDecision>>) {
+    const seen: SpeechRequest[] = [];
+    const brain: BotBrain = {
+      name: "sequenced",
+      renderDaySpeech: async (request) => {
+        seen.push(request);
+        const next = replies[seen.length - 1] ?? replies[replies.length - 1]!;
+        return next();
+      },
+    };
+    return { brain, seen };
+  }
+
+  it("lần một nhại lại, lần hai câu mới → dùng câu mới, hai lượt gọi", async () => {
+    const fresh = "Chi đổi phiếu sát giờ chót, giải thích đi.";
+    const { brain, seen } = sequenced([() => decided({ chat: OWN }), () => decided({ chat: fresh })]);
+    const result = await renderBotSpeech(request({}, { recentOwnLines: [OWN] }), brain);
+    expect(result.text).toBe(fresh);
+    expect(result.fromTemplate).toBe(false);
+    expect(seen).toHaveLength(2);
+  });
+
+  it("lần hỏi lại mang theo câu vừa bị từ chối và cách mở đầu của nó", async () => {
+    const rejected = "Ủa, tôi nghi Chi thật mà.";
+    const { brain, seen } = sequenced([
+      () => decided({ chat: rejected }),
+      () => decided({ chat: "Chi giải thích vụ đổi phiếu đi." }),
+    ]);
+    await renderBotSpeech(request({}, { avoidOpenings: ["tôi nghi chi"] }), brain);
+    expect(seen).toHaveLength(2);
+    expect(seen[1]!.recentOwnLines).toContain(rejected);
+    expect(seen[1]!.avoidOpenings).toContain("tôi nghi chi");
+    // Yêu cầu gốc không bị sửa tại chỗ.
+    expect(seen[0]!.recentOwnLines).not.toContain(rejected);
+  });
+
+  it("trượt cả hai lần thì về bảng mẫu, và KHÔNG gọi lần ba", async () => {
+    const { brain, seen } = sequenced([() => decided({ chat: OWN })]);
+    const result = await renderBotSpeech(request({}, { recentOwnLines: [OWN] }), brain);
+    expect(result.fromTemplate).toBe(true);
+    expect(seen).toHaveLength(2);
+  });
+
+  it("nhà cung cấp hỏng ngay lần một thì KHÔNG hỏi lại", async () => {
+    // Hỏi lại chỉ có nghĩa khi cổng từ chối một câu thật. Nhà cung cấp hết
+    // quota hay timeout mà bị gọi thêm một lần là đốt ngân sách vào đúng lúc
+    // nó đang hỏng.
+    const { brain, seen } = sequenced([() => failed()]);
+    const result = await renderBotSpeech(request({}, { recentOwnLines: [OWN] }), brain);
+    expect(result.fromTemplate).toBe(true);
+    expect(seen).toHaveLength(1);
+  });
+
+  it("qua cổng ngay lần một thì chỉ một lượt gọi", async () => {
+    const { brain, seen } = sequenced([() => decided({ chat: "Chi im từ nãy giờ, lạ ghê." })]);
+    const result = await renderBotSpeech(request({}, { recentOwnLines: [OWN] }), brain);
+    expect(result.fromTemplate).toBe(false);
+    expect(seen).toHaveLength(1);
+  });
+
+  it("lời khai sai vai ở lần một, đúng vai ở lần hai → dùng lần hai", async () => {
+    const claim = request(
+      { kind: "CLAIM_ROLE", claimedRole: "SEER", topic: "ROLE_CLAIM", targetId: undefined },
+      { targetName: null },
+    );
+    const { brain, seen } = sequenced([
+      () => decided({ chat: "Tôi là Bảo Vệ." }),
+      () => decided({ chat: "Tôi là Tiên Tri, nói thật." }),
+    ]);
+    const result = await renderBotSpeech(claim, brain);
+    expect(result.text).toBe("Tôi là Tiên Tri, nói thật.");
+    expect(result.fromTemplate).toBe(false);
+    expect(seen).toHaveLength(2);
+  });
+
+  it("câu lần hai vẫn bị cắt theo chatMaxLength", async () => {
+    const { brain } = sequenced([() => decided({ chat: OWN }), () => decided({ chat: "x".repeat(500) })]);
+    const result = await renderBotSpeech(request({}, { recentOwnLines: [OWN] }), brain, 120);
     expect(result.text!.length).toBe(120);
   });
 });

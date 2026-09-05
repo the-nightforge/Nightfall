@@ -4,6 +4,8 @@ import { createBotBrainState } from "../src/bot/memory/memory-store";
 import { createBotPersonality } from "../src/bot/personality/personality";
 import { createSeededRng } from "../src/bot/rng";
 import {
+  RECENT_OPENING_WINDOW,
+  hasRecentOpening,
   hasRecentSemantic,
   hasReplied,
   markReplied,
@@ -210,5 +212,36 @@ describe("đọc lại lịch sử cho prompt", () => {
     recordSpeechIntention(brain, intention(), 1, DEFAULT_BOT_WEIGHTS);
     recordSpeechIntention(brain, intention({ targetId: "p2" }), 1, DEFAULT_BOT_WEIGHTS, "Tôi nghi Bình vì lá phiếu");
     expect(recentOpenings(brain, 5)).toEqual(["tôi nghi bình"]);
+  });
+
+  describe("hasRecentOpening", () => {
+    it("nhận ra cách mở đầu đã dùng trong cửa sổ", () => {
+      const brain = state();
+      recordSpeechIntention(brain, intention(), 1, DEFAULT_BOT_WEIGHTS, "Tôi nghi Bình vì lá phiếu");
+      expect(hasRecentOpening(brain, "tôi nghi bình")).toBe(true);
+      expect(hasRecentOpening(brain, "bình đáng ngờ")).toBe(false);
+    });
+
+    it("bản ghi chưa có văn bản không tính", () => {
+      const brain = state();
+      recordSpeechIntention(brain, intention(), 1, DEFAULT_BOT_WEIGHTS);
+      expect(hasRecentOpening(brain, "tôi nghi bình")).toBe(false);
+    });
+
+    it("chỉ nhìn đúng cửa sổ 5 lượt gần nhất", () => {
+      const brain = state();
+      recordSpeechIntention(brain, intention(), 1, DEFAULT_BOT_WEIGHTS, "Tôi nghi Bình vì lá phiếu");
+      for (let i = 0; i < RECENT_OPENING_WINDOW; i += 1) {
+        recordSpeechIntention(
+          brain,
+          intention({ targetId: `p${i}` }),
+          1,
+          DEFAULT_BOT_WEIGHTS,
+          `Câu số ${i} khác hẳn`,
+        );
+      }
+      expect(hasRecentOpening(brain, "tôi nghi bình")).toBe(false);
+      expect(RECENT_OPENING_WINDOW).toBe(5);
+    });
   });
 });

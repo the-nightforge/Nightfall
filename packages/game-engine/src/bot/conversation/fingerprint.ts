@@ -35,6 +35,21 @@ const LEADING_FILLERS = [
   "thôi",
   "kiểu",
   "thì",
+  // Teencode và tiếng cười mở đầu. Người chat đệm chúng trước gần như mọi câu,
+  // nên nếu chúng tính vào cách mở đầu thì "ủa, tôi nghi An" và "tôi nghi An"
+  // là hai opening khác nhau - và luật chống lặp mở đầu lách được bằng một
+  // tiếng "ủa".
+  "ủa",
+  "alo",
+  "ơ",
+  "ờm",
+  "kkk",
+  "kk",
+  "haha",
+  "hehe",
+  "hihi",
+  "haizz",
+  "haiz",
 ];
 
 /**

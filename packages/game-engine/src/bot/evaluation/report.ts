@@ -230,11 +230,12 @@ export function formatReportText(report: SelfPlayReport): string {
     `  Lặp sau chuẩn hoá        ${pct(m.normalizedRepetitionRate)}${flag(m.normalizedRepetitionRate, 0.1, "trên")}`,
     `  Lặp ý                    ${pct(m.semanticRepetitionRate)}${flag(m.semanticRepetitionRate, 0.15, "trên")}`,
     `  Lặp cách mở đầu          ${pct(m.repeatedOpeningRate)}${flag(m.repeatedOpeningRate, 0.25, "trên")}`,
+    `  Mở đầu khác nhau         ${pct(m.distinctOpeningRate)}${flag(m.distinctOpeningRate, 0.6, "dưới")}`,
     `  Nhắm mãi một người       ${pct(m.consecutiveSameTargetRate)}`,
     `  Có trả lời ai đó         ${pct(m.replyRate)}${flag(m.replyRate, 0.15, "dưới")}`,
     `  Đáp câu hỏi trực tiếp    ${pct(m.directQuestionResponseRate)}${flag(m.directQuestionResponseRate, 0.4, "dưới")}`,
     `  Im lặng                  ${pct(m.silenceRate)}`,
-    `  Dùng mẫu câu             ${pct(m.fallbackTemplateRate)}`,
+    `  Dùng mẫu câu             ${pct(m.fromTemplateRate)}`,
     `  Tin/BOT/ngày             ${m.messagesPerBotPerDay === null ? "n/a" : m.messagesPerBotPerDay.toFixed(2)}${
       (m.messagesPerBotPerDay ?? 0) > 3 ? "  ⚠ vượt hạn mức" : ""
     }`,
