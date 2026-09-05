@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildVersion, healthHttpStatus, redisConnectionHealthy } from "../src/health";
+import { buildVersion, healthHttpStatus, healthStatus, redisConnectionHealthy } from "../src/health";
 import { resolveBotAiMaxCallsPerGame, resolvePort, resolveTrustProxy } from "../src/config";
 
 describe("resolveTrustProxy", () => {
@@ -82,6 +82,15 @@ describe("healthHttpStatus", () => {
     expect(healthHttpStatus({ db: true, redis: true })).toBe(200);
     expect(healthHttpStatus({ db: false, redis: true })).toBe(503);
     expect(healthHttpStatus({ db: true, redis: false })).toBe(200);
+  });
+});
+
+describe("healthStatus", () => {
+  it("Redis chet la degraded chu khong phai down: van dang choi tren bo nho, restart moi la thu lam mat chung", () => {
+    expect(healthStatus({ db: true, redis: true })).toBe("ok");
+    expect(healthStatus({ db: true, redis: false })).toBe("degraded");
+    expect(healthStatus({ db: false, redis: true })).toBe("down");
+    expect(healthStatus({ db: false, redis: false })).toBe("down");
   });
 });
 

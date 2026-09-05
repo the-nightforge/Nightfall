@@ -27,6 +27,7 @@ import {
   updateAvatarPayload,
 } from "@masoi/shared";
 import { config } from "./config";
+import { reportError } from "./observability";
 import { GameError } from "@masoi/game-engine";
 import { roomService, RoomError, scheduleAbandonedRoomCheck } from "./rooms/service";
 import { getRoomSyncByPlayer } from "./rooms/index-helpers";
@@ -184,7 +185,11 @@ export function setupSocket(io: SocketServer): void {
 
     const handleError = (err: unknown, socketEvent: string): void => {
       const line = socketErrorLog(socketEvent, playerId, err);
-      if (line) console.error(JSON.stringify(line));
+      if (line) {
+        console.error(JSON.stringify(line));
+        // Cùng bộ lọc với log: chỉ lỗi lập trình mới tới Sentry, luật chơi thì không.
+        reportError(err, { socketEvent, playerId });
+      }
       socket.emit(SERVER_EVENTS.ERROR, { message: socketErrorMessage(err) });
     };
 
