@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   MAX_PLAYERS_PER_ROOM,
   ROLE_META,
+  applyDeck,
   validateRoomConfig,
   type Role,
   type RoomConfig,
@@ -244,6 +245,17 @@ export function LobbySettings({
   // Chaos bỏ qua chặn cân bằng, đúng như server.
   const copy = balanceCopy(balance, count, mode);
   const presetForCount = PRESET_DECKS[count];
+  /*
+   * Nút "Áp dụng đội hình chuẩn" đi theo BỘ BÀI, không đi theo thẻ cảnh báo.
+   *
+   * Bản cũ đặt nó bên trong thẻ cảnh báo cân bằng, nên nó chỉ có mặt khi engine
+   * có gì để phàn nàn - và biến mất đúng lúc host cần nó nhất: phòng 8 người áp
+   * preset 8, người thứ 9 vào, điểm vẫn 50 nên không cảnh báo, nhưng nút Bắt
+   * đầu xám với "Bộ bài cần 8 người, phòng đang có 9". Cùng chuyện với bộ bài
+   * mặc định ở bàn 11-14 người. Giờ nút có mặt hễ bộ bài khác preset của cỡ bàn
+   * hiện tại, ở một chỗ cố định ngay dưới thanh cân bằng.
+   */
+  const offerPreset = isHost && stage.rated && !!presetForCount && !isPresetDeck(config, count);
 
   return (
     <div className="space-y-3">
@@ -264,6 +276,19 @@ export function LobbySettings({
               {stage.pending}
             </p>
           )}
+          {offerPreset && (
+            <button
+              type="button"
+              // Chỉ thay BỘ BÀI. Preset mang sẵn `mode: "ranked"` và bộ giây gốc,
+              // nên gửi nguyên nó là kéo phòng Chaos về Ranked, tắt voice và tắt
+              // Phong thư sau cùng - đúng những thứ host vừa chỉnh một phút trước.
+              onClick={() => onUpdateConfig(applyDeck(config, presetForCount))}
+              className="btn-secondary w-full text-sm"
+              data-testid="apply-preset"
+            >
+              Áp dụng đội hình chuẩn cho {count} người
+            </button>
+          )}
           {stage.rated && copy.advice.length > 0 && (
             <div
               data-testid="balance-warning"
@@ -277,11 +302,6 @@ export function LobbySettings({
               <ul className="mt-1.5 list-disc space-y-1 pl-5 text-[13px] leading-relaxed text-mist/90">
                 {copy.advice.map((line, index) => <li key={index}>{line}</li>)}
               </ul>
-              {isHost && presetForCount && (
-                <button type="button" onClick={() => onUpdateConfig(presetForCount)} className="btn-secondary mt-3 w-full text-sm" data-testid="apply-preset">
-                  Áp dụng đội hình chuẩn
-                </button>
-              )}
               <TechnicalDetail lines={copy.technical} score={balance.score} />
             </div>
           )}
