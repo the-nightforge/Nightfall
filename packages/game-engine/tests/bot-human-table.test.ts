@@ -137,14 +137,13 @@ describe("preset v14", () => {
       ...BOT_WEIGHTS_V13.deceptionRisk,
       seerRevealRoundHuman: 2,
     });
-    expect(DEFAULT_BOT_WEIGHTS).toBe(BOT_WEIGHTS_V14);
   });
 
   it("v1..v13 giữ nhánh bàn-có-người TẮT (seerRevealRoundHuman = 0)", () => {
     // Điều kiện để mọi test tái lập khoá theo preset cũ còn đúng: dưới 0, cổng
     // thoát ngay ở phép so sánh đầu và không đọc tới `players` lần nào.
     for (const preset of Object.values(BOT_WEIGHTS_PRESETS)) {
-      if (preset === BOT_WEIGHTS_V14) continue;
+      if (Number(preset.version.split(".")[0]) >= 14) continue;
       expect(preset.deceptionRisk.seerRevealRoundHuman).toBe(0);
     }
   });

@@ -4,6 +4,7 @@ import { BotRuntime } from "../src/bot/BotRuntime";
 import { createSeededRng } from "../src/bot/rng";
 import { DEFAULT_ROOM_CONFIG, ROLE_META, ROLES, type Role, type RoomConfig } from "@masoi/shared";
 import type { BotDecisionContext } from "../src/bot/types";
+import { BOT_WEIGHTS_V15 } from "../src/bot/config/weights";
 
 /**
  * Các vai mở rộng phải chơi được bằng lõi deterministic.
@@ -341,6 +342,38 @@ describe("chiến lược đêm cho vai mở rộng", () => {
     runtime.observe(context);
 
     expect(runtime.decideNight(context)).toBeNull();
+  });
+
+  it("Linh Mục hạ ngưỡng Nước thánh một nấc khi làng đã mỏng (P2.2)", () => {
+    const threshold = BOT_WEIGHTS_V15.roleThresholds.priestSuspicion;
+    const discount = BOT_WEIGHTS_V15.roleThresholds.witchPoisonLosingDiscount;
+    const borderline = threshold - discount / 2;
+
+    const decide = (thin: boolean) => {
+      const engine = fullBoard();
+      if (thin) {
+        // 11 ghế: giết 6 -> 5 sống, dưới một nửa. Chừa Linh Mục và bị nghi.
+        const victims = engine.state.players
+          .filter((p) => p.role !== "PRIEST" && p.role !== "VILLAGER")
+          .slice(0, 6);
+        for (const victim of victims) victim.alive = false;
+      }
+      const priest = idOf(engine, "PRIEST");
+      const suspect = idOf(engine, "VILLAGER");
+      const context = contextFor(engine, priest);
+      const runtime = new BotRuntime({
+        playerId: priest,
+        rng: createSeededRng("thin-priest"),
+        playerIds: engine.state.players.map((p) => p.id),
+        weights: BOT_WEIGHTS_V15,
+      });
+      runtime.observe(context);
+      runtime.state.suspicion[suspect] = { score: borderline, reasons: [], lastUpdatedRound: 1 };
+      return runtime.decideNight(context);
+    };
+
+    expect(decide(false)).toBeNull();
+    expect(decide(true)?.action).toBe("HOLY_WATER");
   });
 
   it("cùng seed cho cùng quyết định ở mọi vai", () => {

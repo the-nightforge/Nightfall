@@ -177,3 +177,20 @@ export function isHumanTable(
 ): boolean {
   return countHumansAlive(knowledge) >= weights.deceptionRisk.humanTableThreshold;
 }
+
+/**
+ * Làng đã MỎNG: số người còn sống không quá `thinVillageShare` của cả bàn.
+ *
+ * Đếm trên `players` (cả người chết), tức đúng thứ một người chơi nhìn thấy
+ * trên bảng. Là một phép đếm, không rút số ngẫu nhiên - điều kiện để các
+ * chiến thuật đêm dùng nó mà không lệch chuỗi RNG của preset cũ.
+ */
+export function isThinVillage(
+  knowledge: Pick<BotKnowledgeView, "players">,
+  weights: BotWeights,
+): boolean {
+  const total = knowledge.players.length;
+  if (total === 0) return false;
+  const alive = knowledge.players.filter((player) => player.alive).length;
+  return alive <= total * weights.roleThresholds.thinVillageShare;
+}

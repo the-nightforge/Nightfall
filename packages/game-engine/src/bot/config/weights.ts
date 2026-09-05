@@ -486,6 +486,30 @@ export interface RoleThresholdWeights {
   /** Nước thánh có phản đòn, nên ngưỡng cao hơn cả bình độc. */
   priestSuspicion: number;
   priestTrustVeto: number;
+  /**
+   * Chiết khấu ngưỡng của kỹ năng dùng-một-lần khi LÀNG ĐÃ MỎNG
+   * (`isThinVillage`): `witchPoisonSuspicion` và `priestSuspicion` trừ đi
+   * bấy nhiêu. `0` TẮT - đúng ở v1..v14.
+   *
+   * Không ép xài: vẫn cần bằng chứng, chỉ là bằng chứng "vừa đủ" thì dùng
+   * thay vì ôm tới cuối. Một bình còn nguyên khi ván kết thúc có giá trị bằng
+   * 0, và nửa sau ván là lúc mỗi đêm mất một người nặng gấp đôi nửa đầu.
+   * Trên thang belief thật (p90 ≈ 1.8, p99 ≈ 8.6), một nấc là 1.
+   */
+  witchPoisonLosingDiscount: number;
+  /**
+   * Cùng ý với `witchPoisonLosingDiscount`, cho bình cứu: `witchHealTrust`
+   * trừ đi bấy nhiêu khi làng đã mỏng. Tách khoá vì hai thang khác nhau
+   * (trust 1.5 so với suspicion 5). `0` TẮT.
+   */
+  witchHealLosingDiscount: number;
+  /**
+   * Làng "mỏng" khi `sống <= tổng x thinVillageShare`. Trong `[0, 1]`.
+   *
+   * 0.5 = đã mất một nửa bàn. Chỉ có nghĩa khi một trong hai chiết khấu trên
+   * khác 0, nên giữ 0.5 ở mọi preset mà không đổi hành vi nào.
+   */
+  thinVillageShare: number;
   /** Thiên Thần chỉ có hai lượt cả ván nên ngưỡng cao hơn Bảo Vệ. */
   guardianAngelWorthACharge: number;
   guardianAngelHostilityBonus: number;
@@ -701,6 +725,7 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   ["recency", "profileDecayPerRound"],
   ["selfPreservation", "guardSuspicionPenalty"],
   ["deceptionRisk", "abstainPressureCeiling"],
+  ["roleThresholds", "thinVillageShare"],
   ["roleThresholds", "guardianAngelWorthACharge"],
   ["roleThresholds", "guardianAngelSuspicionPenalty"],
   ["personalityRange", "min"],
@@ -1018,6 +1043,10 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     witchPoisonTrustVeto: 50,
     priestSuspicion: 90,
     priestTrustVeto: 30,
+    // Tắt ở v1..v14 (0); v15 bật. `thinVillageShare` vô nghĩa khi chiết khấu 0.
+    witchPoisonLosingDiscount: 0,
+    witchHealLosingDiscount: 0,
+    thinVillageShare: 0.5,
     guardianAngelWorthACharge: 0.35,
     guardianAngelHostilityBonus: 80,
     guardianAngelSuspicionPenalty: 0.5,
@@ -1912,6 +1941,35 @@ export const BOT_WEIGHTS_V14: BotWeights = Object.freeze({
 });
 
 /**
+ * Cấu hình v15 - Phù Thuỷ và Linh Mục thôi ôm bình khi làng đã mỏng.
+ *
+ * HAI ô đổi: `roleThresholds.witchPoisonLosingDiscount` 0 -> 1 và
+ * `roleThresholds.witchHealLosingDiscount` 0 -> 0.5.
+ *
+ * Từ blind test: Phù Thuỷ bot giữ cả hai bình tới khi ván kết thúc trong phần
+ * lớn ván có người thật - ngưỡng 5 (p99 của thang belief) là đúng cho nửa
+ * đầu ván, nhưng ở nửa sau, khi mỗi đêm mất một người là mất một phần năm
+ * làng, một bình còn nguyên lúc GAME_OVER có giá trị bằng 0.
+ *
+ * Chiết khấu chỉ mở khi `sống <= tổng / 2` (`thinVillageShare`), và chỉ hạ
+ * ngưỡng một nấc: độc 5 -> 4, Nước thánh 8 -> 7, cứu 1.5 -> 1.0. Cả ba mức
+ * hạ đều còn nằm trên mốc chọn bừa theo bảng đo ở v5/v6 (độc ở 4: 25.5% so
+ * với ~23% bừa; Nước thánh ở 7: 33-36% so với ~29%) - và ở làng mỏng mốc
+ * chọn bừa còn cao hơn vì tỉ lệ Sói trên đầu người đã tăng. Không ép xài:
+ * nghi 0 vẫn giữ bình. Không rút RNG: `isThinVillage` là một phép đếm.
+ */
+export const BOT_WEIGHTS_V15: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V14,
+  version: "15.0.0",
+
+  roleThresholds: Object.freeze({
+    ...BOT_WEIGHTS_V14.roleThresholds,
+    witchPoisonLosingDiscount: 1,
+    witchHealLosingDiscount: 0.5,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
@@ -1925,8 +1983,9 @@ export const BOT_WEIGHTS_V14: BotWeights = Object.freeze({
  * phiên toà thôi kết án 100% bị cáo và để lời khai vai có sức nặng; v11.0.0
  * bật hai tín hiệu né tránh và bào chữa kém; v12.0.0 trừ sẵn tin cậy của
  * người đã từng khai láo; v13.0.0 cho hồ sơ nguội chậm hơn belief; v14.0.0
- * cho Tiên Tri giấu kết quả tới ngày 2 khi bàn có người thật.
+ * cho Tiên Tri giấu kết quả tới ngày 2 khi bàn có người thật; v15.0.0 hạ
+ * ngưỡng bình độc/bình cứu/Nước thánh một nấc khi làng đã mỏng.
  * v1-v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset đích
  * danh, không bao giờ dựa vào hằng số này.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V14;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V15;

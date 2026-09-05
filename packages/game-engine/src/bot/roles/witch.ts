@@ -1,5 +1,6 @@
 import type { Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import { isThinVillage } from "../knowledge";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
 
 /**
@@ -8,6 +9,11 @@ import { nightEvidence, type BotRoleStrategy } from "./strategy";
  * Tiêu một bình vì không nghĩ ra việc gì hay hơn là cách chắc chắn nhất để
  * không còn nó vào lúc thật sự cần. Vì vậy mặc định của Phù Thuỷ là SKIP, và
  * ba ngưỡng trong `roleThresholds` là điều kiện để phá lệ.
+ *
+ * Mặt trái của cùng lý lẽ đó: một bình còn nguyên khi ván kết thúc có giá trị
+ * bằng 0. Khi làng đã mỏng (`isThinVillage`), hai ngưỡng hạ một nấc
+ * (`witchPoisonLosingDiscount`, `witchHealLosingDiscount`) - vẫn cần bằng
+ * chứng, chỉ là bằng chứng vừa đủ thì dùng thay vì ôm tới cuối.
  */
 export function witchStrategy(
   _role: Role = "WITCH",
@@ -27,6 +33,12 @@ export function witchStrategy(
 
       const round = context.knowledge.round;
 
+      // Chiết khấu là 0 ở v1..v14, nên hai ngưỡng dưới đây bằng đúng bảng cũ.
+      const thin = isThinVillage(context.knowledge, weights);
+      const healTrust = tuning.witchHealTrust - (thin ? tuning.witchHealLosingDiscount : 0);
+      const poisonSuspicion =
+        tuning.witchPoisonSuspicion - (thin ? tuning.witchPoisonLosingDiscount : 0);
+
       // --- Bình cứu ---
       // Chỉ được chào HEAL khi engine xác nhận có nạn nhân và bình còn.
       if (night.legalActions.includes("HEAL") && night.wolfTarget) {
@@ -38,15 +50,15 @@ export function witchStrategy(
 
         probe?.candidate({
           targetId: victim,
-          score: trust - tuning.witchHealTrust,
+          score: trust - healTrust,
           terms: [
             { name: "victimTrust", value: trust },
-            { name: "healTrustThreshold", value: -tuning.witchHealTrust },
+            { name: "healTrustThreshold", value: -healTrust },
           ],
           evidenceIds: [],
         });
 
-        if (isSelf || (trust >= tuning.witchHealTrust && trust > suspicion)) {
+        if (isSelf || (trust >= healTrust && trust > suspicion)) {
           return {
             kind: "NIGHT_ACTION",
             action: "HEAL",
@@ -79,7 +91,7 @@ export function witchStrategy(
           }))
           .filter(
             (item) =>
-              item.suspicion >= tuning.witchPoisonSuspicion &&
+              item.suspicion >= poisonSuspicion &&
               item.trust < tuning.witchPoisonTrustVeto,
           )
           .sort(
@@ -107,7 +119,7 @@ export function witchStrategy(
       }
 
       probe?.fallback(
-        `không ai vượt ngưỡng độc ${tuning.witchPoisonSuspicion} và không có nạn nhân đáng cứu`,
+        `không ai vượt ngưỡng độc ${poisonSuspicion} và không có nạn nhân đáng cứu`,
       );
 
       if (!night.legalActions.includes("SKIP")) return null;

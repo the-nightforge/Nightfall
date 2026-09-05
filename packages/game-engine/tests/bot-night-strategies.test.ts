@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { strategyFor } from "../src/bot/roles/registry";
+import { BOT_WEIGHTS_V14, BOT_WEIGHTS_V15 } from "../src/bot/config/weights";
 import { createSeededRng } from "../src/bot/rng";
 import { createBotPersonality } from "../src/bot/personality/personality";
 import { createBotBrainState } from "../src/bot/memory/memory-store";
@@ -271,6 +272,97 @@ describe("Phù Thuỷ", () => {
     );
 
     expect(decision!.action).toBe("SKIP");
+  });
+});
+
+describe("P2.2 Phù Thuỷ đừng ôm bình khi làng đã mỏng", () => {
+  const poisonThreshold = BOT_WEIGHTS_V15.roleThresholds.witchPoisonSuspicion;
+  const discount = BOT_WEIGHTS_V15.roleThresholds.witchPoisonLosingDiscount;
+  // Vừa dưới ngưỡng thường, vừa trên ngưỡng đã chiết khấu.
+  const borderline = poisonThreshold - discount / 2;
+
+  /** 5 ghế; `dead` ghế đã chết. 3 chết = 2/5 sống = làng mỏng (<= 1/2). */
+  const table = (dead: readonly string[]) =>
+    PLAYERS.map((id) => ({ id, name: id.toUpperCase(), alive: !dead.includes(id) }));
+
+  const poisonNight = (dead: readonly string[]) =>
+    context(
+      {
+        legalActions: ["POISON", "SKIP"],
+        legalTargets: { ...emptyTargets(), POISON: ["a", "b"] },
+      },
+      { players: table(dead) },
+    );
+
+  const rngCalls = (): { rng: () => number; calls: () => number } => {
+    let n = 0;
+    const inner = createSeededRng("count");
+    return { rng: () => (n += 1, inner()), calls: () => n };
+  };
+
+  it("v15 là chiết khấu dương; v1..v14 là 0", () => {
+    expect(discount).toBeGreaterThan(0);
+    expect(BOT_WEIGHTS_V14.roleThresholds.witchPoisonLosingDiscount).toBe(0);
+    expect(BOT_WEIGHTS_V14.roleThresholds.witchHealLosingDiscount).toBe(0);
+    expect(BOT_WEIGHTS_V15.roleThresholds.thinVillageShare).toBe(0.5);
+  });
+
+  it("cùng một mức nghi lưng chừng: làng đông thì giữ bình, làng mỏng thì dùng", () => {
+    const state = stateFor();
+    state.suspicion.a = { score: borderline, reasons: [], lastUpdatedRound: 2 };
+    const witch = strategyFor("WITCH", BOT_WEIGHTS_V15);
+
+    const crowded = witch.decideNight(poisonNight([]), state, rng());
+    expect(crowded!.action).toBe("SKIP");
+
+    const thin = witch.decideNight(poisonNight(["b", "c", "d"]), state, rng());
+    expect(thin!.action).toBe("POISON");
+    expect(thin!.targetId).toBe("a");
+  });
+
+  it("làng mỏng vẫn cần bằng chứng: nghi 0 thì vẫn giữ bình", () => {
+    const witch = strategyFor("WITCH", BOT_WEIGHTS_V15);
+    const thin = witch.decideNight(poisonNight(["b", "c", "d"]), stateFor(), rng());
+    expect(thin!.action).toBe("SKIP");
+  });
+
+  it("v14 không chiết khấu: làng mỏng vẫn giữ bình ở mức lưng chừng", () => {
+    const state = stateFor();
+    state.suspicion.a = { score: borderline, reasons: [], lastUpdatedRound: 2 };
+    const witch = strategyFor("WITCH", BOT_WEIGHTS_V14);
+    expect(witch.decideNight(poisonNight(["b", "c", "d"]), state, rng())!.action).toBe("SKIP");
+  });
+
+  it("bình cứu cũng hạ ngưỡng tin cậy một nấc khi làng mỏng", () => {
+    const healThreshold = BOT_WEIGHTS_V15.roleThresholds.witchHealTrust;
+    const healDiscount = BOT_WEIGHTS_V15.roleThresholds.witchHealLosingDiscount;
+    expect(healDiscount).toBeGreaterThan(0);
+    const state = stateFor();
+    state.trust.c = { score: healThreshold - healDiscount / 2, reasons: [], lastUpdatedRound: 2 };
+    const witch = strategyFor("WITCH", BOT_WEIGHTS_V15);
+    const night = (dead: readonly string[]) =>
+      context(
+        {
+          legalActions: ["HEAL", "SKIP"],
+          legalTargets: emptyTargets(),
+          wolfTarget: "c",
+          wolvesLocked: true,
+        },
+        { players: table(dead) },
+      );
+
+    expect(witch.decideNight(night([]), state, rng())!.action).toBe("SKIP");
+    expect(witch.decideNight(night(["a", "b", "d"]), state, rng())!.action).toBe("HEAL");
+  });
+
+  it("không rút thêm một số ngẫu nhiên nào, ở cả hai preset", () => {
+    const state = stateFor();
+    state.suspicion.a = { score: borderline, reasons: [], lastUpdatedRound: 2 };
+    for (const weights of [BOT_WEIGHTS_V14, BOT_WEIGHTS_V15]) {
+      const counter = rngCalls();
+      strategyFor("WITCH", weights).decideNight(poisonNight(["b", "c", "d"]), state, counter.rng);
+      expect(counter.calls()).toBe(0);
+    }
   });
 });
 

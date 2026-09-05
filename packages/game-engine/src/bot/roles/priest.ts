@@ -1,5 +1,6 @@
 import type { Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import { isThinVillage } from "../knowledge";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
 
 /**
@@ -26,6 +27,12 @@ export function priestStrategy(
         return null;
       }
 
+      // Cùng chiết khấu làng-mỏng với bình độc của Phù Thuỷ (xem `witch.ts`):
+      // 0 ở v1..v14, nên ngưỡng bằng đúng bảng cũ ở các preset đó.
+      const threshold =
+        tuning.priestSuspicion -
+        (isThinVillage(context.knowledge, weights) ? tuning.witchPoisonLosingDiscount : 0);
+
       const ranked = night.legalTargets.HOLY_WATER.filter(
         (id) => id !== context.knowledge.botId,
       )
@@ -34,10 +41,10 @@ export function priestStrategy(
           const trust = state.trust[targetId]?.score ?? 0;
           probe?.candidate({
             targetId,
-            score: suspicion - tuning.priestSuspicion,
+            score: suspicion - threshold,
             terms: [
               { name: "suspicion", value: suspicion },
-              { name: "holyWaterThreshold", value: -tuning.priestSuspicion },
+              { name: "holyWaterThreshold", value: -threshold },
             ],
             evidenceIds: (state.suspicion[targetId]?.reasons ?? []).map((item) => item.id),
           });
@@ -45,7 +52,7 @@ export function priestStrategy(
         })
         .filter(
           (item) =>
-            item.suspicion >= tuning.priestSuspicion &&
+            item.suspicion >= threshold &&
             item.trust < tuning.priestTrustVeto,
         )
         .sort((a, b) => b.suspicion - a.suspicion || a.targetId.localeCompare(b.targetId));
@@ -53,7 +60,7 @@ export function priestStrategy(
       // Giữ bình. `null` ở đây là một quyết định, không phải một lượt hỏng.
       if (ranked.length === 0) {
         probe?.fallback(
-          `không ai vượt ngưỡng ${tuning.priestSuspicion} với trust dưới ${tuning.priestTrustVeto}`,
+          `không ai vượt ngưỡng ${threshold} với trust dưới ${tuning.priestTrustVeto}`,
         );
         return null;
       }
