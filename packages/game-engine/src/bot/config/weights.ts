@@ -403,6 +403,28 @@ export interface DeceptionRiskWeights {
    * Đặt `> 1` để tắt hoàn toàn.
    */
   bussingVoteShare: number;
+  /**
+   * Cùng ngưỡng ấy khi BÀN CÓ NGƯỜI THẬT (`isHumanTable`).
+   *
+   * Người thật dồn phiếu nhanh hơn bot: một cái tên được hai người nhắc là đã
+   * thành đa số trong vài giây, và một con Sói còn đứng che lúc đó là con Sói
+   * bị đọc ra đầu tiên. Bằng `bussingVoteShare` ở v1..v15 (không đổi gì);
+   * v16 hạ xuống 0.15 để Sói bán sớm hơn một nhịp trước người.
+   */
+  bussingVoteShareHuman: number;
+  /**
+   * Xác suất một con Sói mở một cuộc CÃI GIẢ với đồng bọn ở vòng 1-2, trước
+   * khi nhân `deceptionSkill`. Trong `[0, 1]`; `0` TẮT - đúng ở v1..v15.
+   *
+   * Hai con Sói bot không bao giờ đụng nhau, và người chơi đọc được điều đó
+   * sau hai ván. Cuộc cãi giả là một lá phiếu nhẹ vào đồng bọn khi CHƯA AI
+   * nghi một trong hai - lúc nó rẻ nhất - do một ghế hash chốt (không rút
+   * RNG, không thêm state; xem `fakeFightTarget`). Không phải bussing: bussing
+   * đi theo đám đông đã có, cãi giả tự mở màn khi chưa có đám đông nào.
+   */
+  fakeFightChance: number;
+  /** Vòng cuối cùng còn được cãi giả. Sau đó bầu đồng bọn chỉ còn là bussing. */
+  fakeFightUntilRound: number;
   /** Sói có `deceptionSkill` cao mới dám bán đồng đội. */
   bussingDeceptionScale: number;
   /**
@@ -725,6 +747,8 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   ["recency", "profileDecayPerRound"],
   ["selfPreservation", "guardSuspicionPenalty"],
   ["deceptionRisk", "abstainPressureCeiling"],
+  // So THẲNG với một số trong [0, 1) sinh từ hash trong `fakeFightTarget`.
+  ["deceptionRisk", "fakeFightChance"],
   ["roleThresholds", "thinVillageShare"],
   ["roleThresholds", "guardianAngelWorthACharge"],
   ["roleThresholds", "guardianAngelSuspicionPenalty"],
@@ -1012,6 +1036,11 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     // Phase 2 từng bit, nên chúng phải trung tính ở đây; v2 bật chúng lên.
     // `> 1` là cách tắt bussing mà không cần một cờ boolean riêng.
     bussingVoteShare: 2,
+    // Bằng `bussingVoteShare` ở v1..v15; v16 tách hai ngưỡng. Cãi giả tắt
+    // (chance 0) ở v1..v15, `fakeFightUntilRound` chỉ có nghĩa khi nó bật.
+    bussingVoteShareHuman: 2,
+    fakeFightChance: 0,
+    fakeFightUntilRound: 2,
     bussingDeceptionScale: 0,
     bussingJoinBonus: 0,
     seerRevealRound: 0,
@@ -1257,6 +1286,9 @@ export const BOT_WEIGHTS_V2: BotWeights = Object.freeze({
 
   deceptionRisk: Object.freeze({
     bussingVoteShare: 0.2,
+    bussingVoteShareHuman: 0.2,
+    fakeFightChance: 0,
+    fakeFightUntilRound: 2,
     bussingDeceptionScale: 3,
     bussingJoinBonus: 120,
     /**
@@ -1970,6 +2002,38 @@ export const BOT_WEIGHTS_V15: BotWeights = Object.freeze({
 });
 
 /**
+ * Cấu hình v16 - Sói diễn: cãi nhau giả ở vòng 1-2, bán đồng đội sớm hơn
+ * trước người thật.
+ *
+ * HAI ô đổi: `deceptionRisk.fakeFightChance` 0 -> 0.3 và
+ * `deceptionRisk.bussingVoteShareHuman` 0.2 -> 0.15.
+ *
+ * - Cãi giả: 0.3 x `deceptionSkill` (0.25..0.9) = 7-27% mỗi vòng cho đúng
+ *   một ghế trong bầy, và chỉ khi chưa ai bầu hay công kích con Sói nào. Giá
+ *   là một lá phiếu vào đồng bọn giữa lúc không ai khác bầu nó - gần như
+ *   không bao giờ đủ để đưa lên xử - đổi lấy một cặp Sói có lịch sử từng nghi
+ *   nhau. Số hạng `fakeFight` = 0.3 x `bussingJoinBonus` (36): đủ để thắng
+ *   `trustDamping` (-20) của một đồng bọn bị ghim trust 100 khi bàn còn phẳng,
+ *   không đủ để át một người đang bị cả bàn công kích (`hostility` x 20).
+ * - Bán mềm: chỉ đổi khi `isHumanTable`, tức self-play (toàn bot) không đo
+ *   được và cũng không bị ảnh hưởng.
+ *
+ * Self-play chỉ đo được vế cãi giả. Không rút RNG ở cả hai: cãi giả chốt bằng
+ * hash trên (bầy, vòng, deceptionSkill) nên hai lần hỏi trong cùng vòng cho
+ * cùng đáp án - con Sói không tự mâu thuẫn giữa lượt thảo luận và lượt bầu.
+ */
+export const BOT_WEIGHTS_V16: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V15,
+  version: "16.0.0",
+
+  deceptionRisk: Object.freeze({
+    ...BOT_WEIGHTS_V15.deceptionRisk,
+    fakeFightChance: 0.3,
+    bussingVoteShareHuman: 0.15,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
@@ -1984,8 +2048,9 @@ export const BOT_WEIGHTS_V15: BotWeights = Object.freeze({
  * bật hai tín hiệu né tránh và bào chữa kém; v12.0.0 trừ sẵn tin cậy của
  * người đã từng khai láo; v13.0.0 cho hồ sơ nguội chậm hơn belief; v14.0.0
  * cho Tiên Tri giấu kết quả tới ngày 2 khi bàn có người thật; v15.0.0 hạ
- * ngưỡng bình độc/bình cứu/Nước thánh một nấc khi làng đã mỏng.
+ * ngưỡng bình độc/bình cứu/Nước thánh một nấc khi làng đã mỏng; v16.0.0 cho
+ * Sói cãi nhau giả ở vòng 1-2 và bán đồng đội sớm hơn trước người thật.
  * v1-v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset đích
  * danh, không bao giờ dựa vào hằng số này.
  */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V15;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V16;
