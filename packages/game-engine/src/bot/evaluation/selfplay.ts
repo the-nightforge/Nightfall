@@ -89,6 +89,15 @@ export interface SelfPlayInput {
   events?: boolean;
   /** Cho BOT nói và nghe nhau. Mặc định BẬT. */
   speech?: boolean;
+  /**
+   * Chạy vòng speech DEFENSE thật sau `resolveNomination` ra TRIAL.
+   *
+   * `true` = đo mới (mọi bot sống được nói qua `decideDefense`, tối đa 2
+   * lượt/bot, rồi mới `beginFinalVote`); `false`/vắng mặt = hành vi cũ
+   * byte-for-byte (đi thẳng `resolveNomination` -> `beginFinalVote`,
+   * `trialDefense` null).
+   */
+  defense?: boolean;
   /** Thu trace mọi quyết định. Tốn bộ nhớ; mặc định tắt. */
   trace?: boolean;
   /** Xem `SelfPlayRecord.humanSeats`. Mặc định 0. */
@@ -715,6 +724,54 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   };
 
   /**
+   * Vòng speech DEFENSE: mọi bot CÒN SỐNG (kể cả bị cáo) được lên tiếng qua
+   * `observe` + `decideDefense` + `emitSpeech`, tối đa 2 lượt/bot.
+   *
+   * TASK-1 INLINE ORDERING — Task 2 tách lõi xếp lượt này thành
+   * `planDefenseSpeakers` dùng chung với `machine.ts`; khi tách, giữ nguyên
+   * thứ tự seed bên dưới để ván đo không đổi.
+   *
+   * Thứ tự gọi là: defense speeches -> `beginFinalVote` (chốt `endedAt`) ->
+   * observe -> `decideFinalVote`. Hàm này chỉ làm bước đầu; chỗ gọi phải
+   * `beginFinalVote` NGAY sau rồi `observeAll` để `ingestDefenseReview`
+   * (đòi `endedAt !== null`) thấy được window ở lần observe sau đó.
+   *
+   * Ngân sách vòng của ban ngày đã cạn sau thảo luận DAY (cùng `round`), nên
+   * mở sổ riêng cho DEFENSE bằng cách xoá `spokenThisRound`: trần chống spam
+   * ở đây là cap 2 lượt/bot của vòng này, vẫn đi qua mọi cổng còn lại của
+   * `emitSpeech` (chain-limits, scope). Không tick đồng hồ giả trong vòng:
+   * mọi câu mang `at` bằng mốc mở cửa sổ, nằm gọn trong
+   * `[startedAt, endedAt]` mà `ingestDefenseReview` lọc.
+   */
+  const runDefenseDiscussion = (): void => {
+    spokenThisRound.clear();
+    const order = engine.alivePlayers().map((player) => player.id);
+    const defenseRng = createSeededRng(`${input.seed}:defense:${engine.state.round}`);
+    for (let i = order.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(defenseRng() * (i + 1));
+      const swap = order[i]!;
+      order[i] = order[j]!;
+      order[j] = swap;
+    }
+    const spokenBy = new Map<string, number>();
+    for (let turn = 0; turn < 2; turn += 1) {
+      const turnChat: BotChatObservation[] = [];
+      for (const speakerId of order) {
+        if ((spokenBy.get(speakerId) ?? 0) >= 2) continue;
+        const runtime = runtimes.get(speakerId)!;
+        const context = contextFor(speakerId);
+        runtime.observe(context);
+        noteObserved(speakerId, context);
+        const defense = runtime.decideDefense(context);
+        spokenBy.set(speakerId, (spokenBy.get(speakerId) ?? 0) + 1);
+        emitSpeech(speakerId, defense.intention, turnChat);
+      }
+      if (turnChat.length === 0) break;
+      chat.push(...turnChat);
+    }
+  };
+
+  /**
    * Sự thật, chụp lại mỗi lần cần kiểm.
    *
    * CHỈ tầng kiểm bất biến đọc nó. Không đường nào đưa nó ngược vào một
@@ -768,12 +825,20 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   };
 
   const contextFor = (playerId: string): BotDecisionContext => ({
-    // Harness đi thẳng `resolveNomination` -> `beginFinalVote`, KHÔNG chạy pha
-    // DEFENSE, nên bị cáo chưa từng được mở miệng. Engine vẫn ghi một cửa sổ
-    // bào chữa (dài đúng một tick), và để nguyên thì mọi bị cáo đều bị chấm
-    // "im lặng" ở FINAL_VOTE - một tín hiệu mà harness tự bịa ra. Xoá cửa sổ
+    // Khi defense TẮT, harness đi thẳng `resolveNomination` -> `beginFinalVote`,
+    // KHÔNG chạy pha DEFENSE, nên bị cáo chưa từng được mở miệng. Engine vẫn ghi
+    // một cửa sổ bào chữa (dài đúng một tick), và để nguyên thì mọi bị cáo đều bị
+    // chấm "im lặng" ở FINAL_VOTE - một tín hiệu mà harness tự bịa ra. Xoá cửa sổ
     // để lõi thấy đúng điều đã xảy ra: không có lượt bào chữa nào.
-    knowledge: { ...engine.botKnowledgeFor(playerId), trialDefense: null },
+    //
+    // Khi defense BẬT (`defense: true`), vòng speech DEFENSE chạy thật trước
+    // `beginFinalVote`, nên giữ nguyên cửa sổ thật của engine để
+    // `ingestDefenseReview` chấm được lời trong window ở lần observe sau
+    // `beginFinalVote` (đòi `endedAt !== null`).
+    knowledge:
+      input.defense === true
+        ? { ...engine.botKnowledgeFor(playerId) }
+        : { ...engine.botKnowledgeFor(playerId), trialDefense: null },
     // Bản sao: runtime không được giữ tham chiếu sống vào lịch sử chung.
     visibleChat: chat.map((message) => ({ ...message })),
   });
@@ -1201,6 +1266,9 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     });
 
     if (outcome.kind === "TRIAL") {
+      if (input.defense === true && record.speech) {
+        runDefenseDiscussion();
+      }
       engine.beginFinalVote(config.finalVoteSeconds * 1_000, tick(1_000));
       observeAll();
 
@@ -1234,6 +1302,22 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     }
 
     if (finished()) break;
+  }
+
+  // Ván đo DEFENSE không chạy vai trung lập: preset đo đã tắt cả ba, lọt vào
+  // đây là leak cấu hình phải fail-fast thay vì cho ra số lẫn vai. Chỉ áp khi
+  // `defense: true` để hành vi cũ (test Hề/Sát Nhân/Báo Thù chạy không cờ)
+  // giữ nguyên byte-for-byte.
+  if (input.defense === true) {
+    for (const player of engine.state.players) {
+      if (
+        player.role === "JESTER" ||
+        player.role === "SERIAL_KILLER" ||
+        player.role === "EXECUTIONER"
+      ) {
+        throw new Error(`neutral leak trong van do: ${player.role} (${player.id})`);
+      }
+    }
   }
 
   if (engine.state.winner === null) {

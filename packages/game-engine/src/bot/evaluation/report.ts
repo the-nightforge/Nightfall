@@ -30,6 +30,11 @@ export interface SelfPlayBatchInput {
   maxRounds?: number;
   events?: boolean;
   speech?: boolean;
+  /**
+   * Bật vòng speech DEFENSE thật trong từng ván. Xem `SelfPlayInput.defense`.
+   * Vắng mặt/`false` = hành vi cũ (đi thẳng tới `beginFinalVote`).
+   */
+  defense?: boolean;
   /** Xem `SelfPlayRecord.humanSeats`. */
   humanSeats?: number;
   /** Chạy lại mọi ván lần thứ hai để bắt `REPLAY_DIVERGENCE`. Tốn gấp đôi. */
@@ -94,6 +99,7 @@ export function runBatch(input: SelfPlayBatchInput): SelfPlayGame[] {
       maxRounds: input.maxRounds,
       events: input.events,
       speech: input.speech,
+      defense: input.defense,
       humanSeats: input.humanSeats,
       // `false` chứ không phải `undefined` cho phần đuôi batch: `runSelfPlay`
       // đọc trường này bằng một phép kiểm chân trị, nên cả hai đều tắt - nhưng
@@ -110,6 +116,7 @@ export function runBatch(input: SelfPlayBatchInput): SelfPlayGame[] {
         maxRounds: input.maxRounds,
         events: input.events,
         speech: input.speech,
+        defense: input.defense,
         // `humanSeats` PHẢI đi theo: thiếu nó thì lần đối chứng chạy một bàn
         // toàn bot trong khi lần chính chạy bàn có cờ người thật, và mọi nhánh
         // `isHumanTable` (Tiên Tri giấu kết quả, Sói bán sớm) làm hai chuỗi
