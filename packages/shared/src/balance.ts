@@ -710,7 +710,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
    *
    * Hai lượt đồng ý với nhau trong sàn nhiễu (lệch lớn nhất 3.6 điểm ở n=17).
    * Cả bốn nằm trong hoặc sát dải 35-55: 18 ra 35.1 (sát sàn), 20 ra 34.5
-   * (dưới sàn đúng 0.5 - trong SE ~1.7 ở 600 ván, tức không phân biệt được
+    * (dưới sàn đúng 0.5 - trong SE ~1.9 ở 600 ván, tức không phân biệt được
    * với 35). KHÔNG đổi bộ bài theo hai ô sát sàn này, đúng tư thế đã dùng
    * với ô 58.0 vượt trần ở khối trên: ở dải này một nước đổi số Sói đáng 22
    * điểm, còn trải giữa các family đã 7-8 điểm (n=18: 31.2 tới 38.0) - không

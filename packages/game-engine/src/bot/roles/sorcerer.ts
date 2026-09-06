@@ -1,4 +1,4 @@
-import { roleTeam, type Role } from "@masoi/shared";
+import { isRole, roleTeam, type Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { sumTerms, type TraceTerm } from "../trace/trace";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
@@ -65,7 +65,7 @@ export function sorcererStrategy(
             (memory) =>
               memory.actorId === targetId &&
               (memory.type === "ROLE_CLAIM" || memory.type === "COUNTER_CLAIM") &&
-              SEER_LINE.has(String(memory.data.role)),
+              isRole(memory.data.role) && SEER_LINE.has(memory.data.role),
           );
           const terms: TraceTerm[] = [
             {

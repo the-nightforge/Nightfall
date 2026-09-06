@@ -582,3 +582,38 @@ git commit -m "feat(balance): chot ROLE_POWER SORCERER+ALPHA sau do self-play"
 1. **Spec coverage:** §2 xóa cứng → Task 1,2,4,6,7,8; guard VILLAGER → Task 4 Step 3; giữ cause → Task 3–4 (ghi rõ); §3 Sorcerer → Task 5–6; §4 Alpha → Task 5 (khiên trong SEE, wolfCount trong validate Task 2); §5 preset 1-sói/preset → Task 3 (+ fix ghế Dân tự động qua công thức villagers); đo lường → Task 9. Đủ.
 2. **Placeholder scan:** không TBD/TODO; mọi step có lệnh chạy + expected cụ thể; không có "tương tự Task N" mà thiếu code.
 3. **Type consistency:** `sorcererResults: Record<string, { targetId: string; isSeerLine: boolean }>` dùng nhất quán Task 5–6; `alphaShieldUsed: Record<string, boolean>` Task 5; `SORCERER_CHECK` trong zod enum (Task 2) = engine union (Task 5) = bot NightActionKind (Task 6) = NightPanel onAction (Task 7).
+
+---
+
+## Deploy notes (fix wave sau final review, 2026-09-06)
+
+(a) Ván đang chạy (in-flight) lúc deploy: đọc an toàn, KHÔNG cần chờ drain.
+- Vai đã xóa (PRIEST/MEDIUM) trong snapshot: `roleSchema`
+  (`apps/server/src/persistence/schema.ts:78`) rơi về `"VILLAGER"` (`.catch`),
+  phủ `players`, `personalWins`, `knownRoles`, `myClaim`. Guard VILLAGER của
+  engine giữ nguyên làm lớp dự phòng. Đính chính spec §6 ("guard VILLAGER
+  gánh"): guard một mình KHÔNG đủ — schema parse chạy trước constructor, nên
+  không có `.catch` thì phòng vào `quarantine` trước cả khi guard kịp chạy.
+- Lượt đêm cũ của bot (`HOLY_WATER`, `PRIEST_BLESS`): giữ làm dead literal
+  trong `previousNightActions` (cùng tiền lệ enum `cause` giữ
+  `"priest" / "priest_backfire"` cho lịch sử cũ); engine mới không bao giờ
+  sinh chúng nữa.
+- Key đêm cũ (`priestTarget`, `priestResults`, `mediumResults`,
+  `priestHolyWaterUsed`): tự lược vì `nightStateSchema` là `z.object` thường
+  (strip); key mới (`sorcererResults`, `alphaShieldUsed`) có `.default({})`
+  nên ảnh cũ vẫn đọc được.
+
+(b) Client cũ còn cache: gửi `HOLY_WATER` bị `nightActionTypeSchema`
+(`packages/shared/src/schemas.ts`, strict enum) từ chối — ĐÚNG như spec §6 đã
+chấp nhận (xóa cứng). Bảo user refresh; không migrate gì thêm.
+
+(c) Phòng custom cũ bật priest/medium trong DB: load KHÔNG còn chết — config
+đọc qua `storedRoomConfigSchema` (`roomConfigSchema.strip()`,
+`apps/server/src/persistence/schema.ts:95`) nên key lạ bị lược, phòng OPEN
+bình thường. Đính chính spec §6 ("`validateRoomConfig` vẫn pass"): phòng chưa
+từng tới được `validateRoomConfig`, vì strict parse ở tầng load đã ném trước.
+Sau load: config không `villagers` (đường tương thích) mở ván tiếp bình
+thường, ghế Linh Mục/Bà Đồng cũ tan vào Dân Làng; config CÓ `villagers` chốt
+số ghế theo bộ bài cũ có thể lệch số người lúc start ("Bộ bài cần N
+người...") — host chỉnh lại bộ bài một lần là xong. `updateConfigPayload`
+vẫn strict nên lần đổi config tiếp theo key lạ cũng không quay lại được.

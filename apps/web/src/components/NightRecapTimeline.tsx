@@ -1,5 +1,5 @@
 import { m } from "motion/react";
-import { deathCauseClause, type NightRecap, type RoomConfig } from "@masoi/shared";
+import { deathCauseClause, type NightRecap, type RecapPlayer, type RoomConfig } from "@masoi/shared";
 import { cursedTurnedText } from "@/lib/cursed";
 
 import { rolesInRecap, sorcererChecksOf } from "@/lib/night-recap-roles";
@@ -18,6 +18,9 @@ const ACTOR_STYLE: Record<string, string> = {
   // Đỏ thẫm ngả tím, cùng sắc mà màn hồi ức 3D dùng cho nếp nhà của Sát Nhân:
   // gần với Sói vì nó cũng giết, nhưng không phải sắc của bầy.
   "Sát Nhân": "bg-fuchsia-950/60 text-fuchsia-300",
+  // Chỉ còn để kể lại lịch sử đêm ghi trước bản xóa vai: engine mới không bao
+  // giờ sinh entry `priest` nữa, nhưng ván cũ vẫn mang nó trong nightHistory.
+  "Linh Mục": "bg-teal-900/50 text-teal-300",
 };
 
 /**
@@ -275,6 +278,29 @@ export function NightRecapTimeline({
                         )}
                       </Line>
                     )}
+                    {(() => {
+                      // Lịch sử đêm ghi trước bản xóa vai còn mang entry
+                      // `priest` (xem `NightRecap.priest` trong shared): đọc
+                      // phòng thủ qua cast như `sorcererChecksOf`, chỉ kể lại
+                      // chứ không suy thêm gì từ nó.
+                      const legacy = night as unknown as {
+                        priest?: {
+                          priest: RecapPlayer;
+                          target: RecapPlayer;
+                          isWolf: boolean;
+                        } | null;
+                      };
+                      const priest = legacy.priest ?? null;
+                      return priest ? (
+                        <Line actor="Linh Mục">
+                          {priest.priest.name} dùng Nước thánh lên{" "}
+                          <b className="text-white">{priest.target.name}</b>{" "}
+                          <Verdict tone={priest.isWolf ? "good" : "bad"}>
+                            {priest.isWolf ? "là Ma Sói" : "không phải Ma Sói"}
+                          </Verdict>
+                        </Line>
+                      ) : null;
+                    })()}
                     {(() => {
                       const turned = cursedTurnedText(night);
                       return turned ? <Line actor="Nguyền">{turned}</Line> : null;

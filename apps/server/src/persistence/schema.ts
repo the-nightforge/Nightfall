@@ -68,7 +68,14 @@ const oneOf = <T extends string>(values: readonly string[]): z.ZodType<T> =>
   z.custom<T>((value) => typeof value === "string" && values.includes(value));
 
 const gamePhaseSchema = oneOf<GamePhase>(PHASES.filter((phase) => phase !== "LOBBY"));
-const roleSchema = oneOf<Role>(ROLES);
+/**
+ * Vai lạ RƠI VỀ Dân Làng thay vì làm cả snapshot trượt schema: ván đang chạy
+ * lúc deploy bản xóa vai (Linh Mục/Bà Đồng) vẫn mang vai cũ trong `players`,
+ * `personalWins`, `knownRoles` và `myClaim`. Ném ở đây là đưa cả phòng vào
+ * `quarantine` trước cả khi guard VILLAGER của engine kịp chạy - guard đó giữ
+ * nguyên như một lớp dự phòng.
+ */
+const roleSchema = oneOf<Role>(ROLES).catch("VILLAGER");
 const teamSchema = oneOf<Team>(["wolves", "village", "neutral"]);
 const personalWinConditionSchema = oneOf<PersonalWin["condition"]>(PERSONAL_WIN_CONDITIONS);
 /**
@@ -77,6 +84,15 @@ const personalWinConditionSchema = oneOf<PersonalWin["condition"]>(PERSONAL_WIN_
  * và nó chỉ lộ ra lúc một ván THẬT kết thúc đúng kiểu đó.
  */
 const winnerSchema = z.union([oneOf<Exclude<Winner, null>>(WINNERS), z.null()]) as z.ZodType<Winner>;
+/**
+ * Config đọc từ SNAPSHOT nuốt key lạ thay vì trượt schema: phòng custom ghi
+ * trước bản xóa vai còn mang `priest`/`medium`, mà `roomConfigSchema` là
+ * `.strict()` - đúng cho payload socket, input sống phải bị từ chối thẳng.
+ * Strict ở tầng này là đưa cả phòng vào `quarantine` ngay lúc LOAD, trước cả
+ * khi `validateRoomConfig` kịp nhìn nó. Key lạ bị lược, và host chỉnh lại bộ
+ * bài ở lần mở ván tiếp theo nếu số ghế lệch.
+ */
+const storedRoomConfigSchema = roomConfigSchema.strip() as unknown as z.ZodType<RoomConfig>;
 
 /**
  * `null` là một lá phiếu THẬT ("không treo ai"), khác hẳn key vắng mặt ("chưa
@@ -158,7 +174,7 @@ export const gameStateSchema = z.object({
   phaseEndsAt: z.number().nullable(),
   phaseStartedAt: z.number(),
   players: z.array(enginePlayerSchema),
-  config: roomConfigSchema as unknown as z.ZodType<RoomConfig>,
+  config: storedRoomConfigSchema,
   winner: winnerSchema,
   night: nightStateSchema,
   votes: voteRecordSchema,
@@ -306,6 +322,13 @@ export const botBrainStateSchema = z.object({
         // Sói Pháp Sư soi dòng Tiên Tri; thay cặp Linh Mục/Bà Đồng đã xóa cứng.
         "SORCERER_CHECK",
         "SERIAL_KILL",
+        // CHẾT nhưng GIỮ: snapshot ghi khi Linh Mục còn sống mang hai tên này
+        // (tên cũ PRIEST_BLESS + tên thật HOLY_WATER), và xóa chúng là làm ván
+        // đang chạy trượt schema lúc khôi phục. Cùng tiền lệ với enum `cause`
+        // giữ "priest"/"priest_backfire" cho lịch sử cũ. Engine hiện tại không
+        // bao giờ SINH ra chúng nữa.
+        "HOLY_WATER",
+        "PRIEST_BLESS",
       ]),
       targetId: z.string().nullable(),
     }),
@@ -431,7 +454,7 @@ const persistedRoomSchema = z.object({
   hostId: z.string().nullable(),
   status: oneOf<RoomStatus>(["LOBBY", "IN_GAME"]),
   members: z.array(memberSchema),
-  config: roomConfigSchema as unknown as z.ZodType<RoomConfig>,
+  config: storedRoomConfigSchema,
   chatLog: z.array(chatMessageSchema),
   createdAt: z.number(),
   engineState: gameStateSchema.nullable(),
