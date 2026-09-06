@@ -21,15 +21,13 @@ function emptyNight(): NightState {
     healTonight: false,
     poisonTarget: null,
     witchSkipped: false,
-    priestSkipped: false,
     seerResults: {},
     wolfSecondaryTarget: null,
     wolfCubRageTonight: false,
     guardianAngelTarget: null,
-    priestTarget: null,
     detectiveTargets: null,
     detectiveResults: {},
-    priestResults: {},
+    sorcererResults: {},
   };
 }
 
@@ -54,7 +52,7 @@ function traitorState(over: Partial<GameState> = {}): GameState {
       { id: "wolf", name: "Sói", role: "WEREWOLF", alive: true, isBot: false },
       { id: "traitor", name: "Phản Bội", role: "TRAITOR", alive: true, isBot: false },
       { id: "seer", name: "Tiên Tri", role: "SEER", alive: true, isBot: false },
-      { id: "priest", name: "Linh Mục", role: "PRIEST", alive: true, isBot: false },
+      { id: "extra", name: "Dân Thêm", role: "VILLAGER", alive: true, isBot: false },
       { id: "witch", name: "Phù Thuỷ", role: "WITCH", alive: true, isBot: false },
       { id: "detective", name: "Thám Tử", role: "DETECTIVE", alive: true, isBot: false },
       { id: "villager", name: "Dân", role: "VILLAGER", alive: true, isBot: false },
@@ -73,7 +71,7 @@ function traitorState(over: Partial<GameState> = {}): GameState {
     hunterShots: [],
     guardianAngelPrevious: null,
     guardianAngelCharges: {},
-    priestHolyWaterUsed: {},
+    alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
     activeEvent: null,
@@ -135,14 +133,6 @@ describe("Kẻ Phản Bội", () => {
     const result = engine.state.night.seerResults["seer"];
     expect(result.isWolf).toBe(false);
     expect(result.team).toBe("village");
-  });
-
-  it("Nước thánh ném vào nó thì PHẢN VỆ - cùng câu trả lời với Tiên Tri", () => {
-    const engine = traitorEngine();
-    engine.submitNightAction("priest", "HOLY_WATER", "traitor");
-    engine.resolveNight(0, () => 0.5);
-    expect(playerOf(engine, "priest").alive).toBe(false);
-    expect(playerOf(engine, "traitor").alive).toBe(true);
   });
 
   it("con Sói cuối chết thì nó hoá Ma Sói", () => {

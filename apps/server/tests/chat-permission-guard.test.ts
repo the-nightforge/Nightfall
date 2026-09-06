@@ -236,6 +236,94 @@ describe("kênh người chết", () => {
   });
 });
 
+/*
+ * Sói Pháp Sư và Sói Alpha là bầy (isWolfPack): kênh Sói đêm phải mở cho
+ * chúng như Sói thường — gửi được, nhận được, và thấy nhau trong payload.
+ */
+describe("kênh phe Sói mở cho Sói Pháp Sư và Sói Alpha", () => {
+  function packRoom(): Room {
+    const state: GameState = {
+      ...GAME_STATE_SCAFFOLD,
+      phase: "NIGHT",
+      round: 1,
+      phaseEndsAt: null,
+      players: [
+        { id: "wolf", name: "Sói", role: "WEREWOLF", alive: true, isBot: false },
+        { id: "alpha", name: "Sói Alpha", role: "ALPHA_WOLF", alive: true, isBot: false },
+        { id: "sorc", name: "Sói Pháp Sư", role: "SORCERER", alive: true, isBot: false },
+        { id: "villager", name: "Dân", role: "VILLAGER", alive: true, isBot: false },
+        { id: "seer", name: "Tiên Tri", role: "SEER", alive: true, isBot: false },
+      ],
+      config: { ...DEFAULT_ROOM_CONFIG },
+      night: { ...NIGHT_SCAFFOLD },
+    };
+
+    return {
+      ...ROOM_SCAFFOLD,
+      code: "PACK",
+      hostId: "villager",
+      status: "IN_GAME",
+      members: state.players.map((player) => ({
+        playerId: player.id,
+        name: player.name,
+        ready: true,
+        connected: true,
+        isBot: false,
+      })),
+      config: { ...state.config },
+      engine: new GameEngine(state),
+      chatLog: [...messages],
+      createdAt: 0,
+    };
+  }
+
+  it("hai vai sói mới gửi vào cùng kênh với bầy", () => {
+    for (const id of ["wolf", "alpha", "sorc"]) {
+      expect(resolveChat(packRoom(), id)).toMatchObject({ ok: true, channel: "wolves" });
+    }
+    expect(resolveChat(packRoom(), "villager")).toEqual({
+      ok: false,
+      error: "Ban đêm bạn không thể trò chuyện",
+    });
+  });
+
+  it("tin sói tới tay cả bầy gồm hai vai mới", () => {
+    const resolved = resolveChat(packRoom(), "wolf");
+
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    expect(resolved.channel).toBe("wolves");
+    for (const id of ["wolf", "alpha", "sorc"]) {
+      expect(resolved.recipients).toContain(id);
+    }
+    for (const outsider of ["villager", "seer"]) {
+      expect(resolved.recipients).not.toContain(outsider);
+    }
+  });
+
+  it("Sói Pháp Sư đọc kênh Sói và thấy vai đồng bọn", () => {
+    const view = buildSnapshot(packRoom(), "sorc");
+    const roles = Object.fromEntries(view.players.map((p) => [p.id, p.role]));
+
+    expect(channelsOf(view.chatLog)).toEqual(["wolves"]);
+    expect(roles.wolf).toBe("WEREWOLF");
+    expect(roles.alpha).toBe("ALPHA_WOLF");
+    expect(roles.villager).toBeUndefined();
+    expect(roles.seer).toBeUndefined();
+  });
+
+  it("Sói Alpha đọc kênh Sói và thấy vai đồng bọn", () => {
+    const view = buildSnapshot(packRoom(), "alpha");
+    const roles = Object.fromEntries(view.players.map((p) => [p.id, p.role]));
+
+    expect(channelsOf(view.chatLog)).toEqual(["wolves"]);
+    expect(roles.wolf).toBe("WEREWOLF");
+    expect(roles.sorc).toBe("SORCERER");
+    expect(roles.villager).toBeUndefined();
+    expect(roles.seer).toBeUndefined();
+  });
+});
+
 describe("người ngoài phòng", () => {
   it("không gửi được và không đọc được dòng nào", () => {
     const current = room("DAY_DISCUSSION");

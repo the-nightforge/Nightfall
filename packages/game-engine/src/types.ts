@@ -101,21 +101,10 @@ export interface NightState {
       secondaryTeam?: Team;
     }
   >;
-  priestTarget: string | null;
-  /** Linh Mục đã chọn không dùng nước thánh đêm nay */
-  priestSkipped: boolean;
   detectiveTargets: { target1: string; target2: string } | null;
   detectiveResults: Record<string, { target1Id: string; target2Id: string; sameTeam: boolean }>;
-  priestResults: Record<string, { targetId: string; isWolf: boolean }>;
   /**
-   * Bà Đồng đã gọi hồn ai đêm nay và đọc ra vai gì.
-   *
-   * Optional vì state ghi trước bản này không có nó; constructor chuẩn hoá về
-   * `{}` đúng như `priestResults` ngay trên.
-   */
-  mediumResults?: Record<string, { targetId: string; role: Role }>;
-  /**
-   * Mục tiêu Sát Nhân đã chốt cho đêm nay; `null` là chưa chọn hoặc đã bỏ qua.
+    * Mục tiêu Sát Nhân đã chốt cho đêm nay; `null` là chưa chọn hoặc đã bỏ qua.
    *
    * Trạng thái RIÊNG, không dùng chung `wolfVotes` hay `killTarget`: Sát Nhân
    * không bầu với ai và không đi cùng nhịp khoá phiếu của bầy Sói. Dùng chung
@@ -130,10 +119,17 @@ export interface NightState {
    * Sát Nhân đã chủ động bỏ qua đêm nay.
    *
    * Cần một cờ riêng vì `serialKillerTarget === null` mang HAI nghĩa: chưa
-   * quyết, và quyết là không giết ai - đúng cặp trạng thái mà `priestSkipped`
+   * quyết, và quyết là không giết ai - đúng cặp trạng thái mà `witchSkipped`
    * tồn tại để phân biệt.
    */
   serialKillerSkipped?: boolean;
+  /**
+   * Kết quả soi dòng Tiên Tri của Sói Pháp Sư: sorcererId -> { targetId, isSeerLine }.
+   *
+   * `isSeerLine` true khi mục tiêu là SEER hoặc APPRENTICE_SEER. Chốt ngay lần
+   * nộp đầu mỗi đêm như SEE (kết quả về ngay nên "đổi ý" = soi lại).
+   */
+  sorcererResults: Record<string, { targetId: string; isSeerLine: boolean }>;
 }
 
 export interface DeathInfo {
@@ -251,9 +247,15 @@ export interface GameState {
   guardSecondPrevious?: string | null;
   guardianAngelPrevious: string | null;
   guardianAngelCharges: Record<string, number>;
-  priestHolyWaterUsed: Record<string, boolean>;
   apprenticeAwakened: boolean;
   wolfCubRageNextNight: boolean;
+  /**
+   * Khiên soi của Sói Alpha đã dùng chưa: alphaId -> true sau lần SEE đầu tiên.
+   *
+   * Lần SEE đầu lên Alpha trả về làng; từ lần hai hiện nguyên hình. Chỉ hook
+   * case SEE trực tiếp, không chặn Detective sameFaction.
+   */
+  alphaShieldUsed: Record<string, boolean>;
   healUsed: boolean;
   poisonUsed: boolean;
   lastNightDeaths: PublicDeath[];

@@ -1,4 +1,5 @@
 import type { ChatMessage, RoomSnapshot } from "@masoi/shared";
+import { isWolfPack } from "@masoi/shared";
 import { generateWarnings } from "@masoi/game-engine";
 import { getDiscussionSkipView } from "../game/discussion-skip";
 import { lastLetterViewFor } from "../game/last-letter";
@@ -79,18 +80,22 @@ export function resolveChat(room: Room, senderId: string):
 
   if (view.phase === "NIGHT") {
     const role = view.you?.role;
-    if (role === "WEREWOLF" || role === "WOLF_CUB") {
+    // Mọi vai trong bầy (Sói, Sói Con, Sói Pháp Sư, Sói Alpha) chung một kênh
+    // đêm — kiểm bằng isWolfPack để vai sói mới không bị câm lặng.
+    if (role !== undefined && isWolfPack(role)) {
       if (room.engine?.state.activeEvent?.id === "SILENT_NIGHT") {
         return { ok: false, error: "Đêm Tĩnh Lặng: Kênh chat phe Sói bị vô hiệu hóa" };
       }
       const recipients = room.members
-        .filter(
-          (m) =>
+        .filter((m) => {
+          const memberRole = room.engine!.snapshotFor(m.playerId).you?.role;
+          return (
             !m.isBot &&
-            (room.engine!.snapshotFor(m.playerId).you?.role === "WEREWOLF" ||
-             room.engine!.snapshotFor(m.playerId).you?.role === "WOLF_CUB") &&
-            room.engine!.snapshotFor(m.playerId).you?.alive,
-        )
+            memberRole !== undefined &&
+            isWolfPack(memberRole) &&
+            room.engine!.snapshotFor(m.playerId).you?.alive
+          );
+        })
         .map((m) => m.playerId);
       return { ok: true, channel: "wolves", recipients: [...recipients, ...deadSpectators(room)] };
     }
@@ -171,7 +176,7 @@ export function visibleChatLog(room: Room, viewerId: string): ChatMessage[] {
 
   if (view.phase === "NIGHT") {
     if (room.engine?.state.activeEvent?.id === "SILENT_NIGHT") return [];
-    return (view.you.role === "WEREWOLF" || view.you.role === "WOLF_CUB") ? messagesFor("wolves") : [];
+    return view.you.role !== undefined && isWolfPack(view.you.role) ? messagesFor("wolves") : [];
   }
 
   if (

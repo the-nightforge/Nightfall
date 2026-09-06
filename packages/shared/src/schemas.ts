@@ -35,10 +35,10 @@ export const roomConfigSchema = z
     apprenticeSeer: bool.optional(),
     detective: bool.optional(),
     guardianAngel: bool.optional(),
-    priest: bool.optional(),
+    sorcerer: bool.optional(),
+    alphaWolf: bool.optional(),
     mayor: bool.optional(),
     elder: bool.optional(),
-    medium: bool.optional(),
     doppelganger: bool.optional(),
     jester: bool.optional(),
     serialKiller: bool.optional(),
@@ -61,10 +61,10 @@ export const roomConfigSchema = z
  *
  * Gác luật "Sói phải ít hơn phe làng", và luật đó mô hình hoá SỨC SÁT THƯƠNG
  * BAN ĐÊM - bao nhiêu người chết mỗi đêm. Kẻ Phản Bội không giết ai nên không
- * nằm ở đây; xem `deckSeats`.
+ * nằm ở đây; xem `deckSeats`. Sói Alpha cắn cùng bầy nên vào đây.
  */
 export function deckWolfCount(config: RoomConfig): number {
-  return config.werewolves + (config.wolfCub ? 1 : 0);
+  return config.werewolves + (config.wolfCub ? 1 : 0) + (config.alphaWolf ? 1 : 0);
 }
 
 /**
@@ -83,10 +83,8 @@ export function deckSeats(config: RoomConfig): number {
     (config.apprenticeSeer ? 1 : 0) +
     (config.detective ? 1 : 0) +
     (config.guardianAngel ? 1 : 0) +
-    (config.priest ? 1 : 0) +
     (config.mayor ? 1 : 0) +
     (config.elder ? 1 : 0) +
-    (config.medium ? 1 : 0) +
     (config.doppelganger ? 1 : 0) +
     // Thằng Hề chiếm một ghế như mọi vai đặc biệt khác, dù nó không thuộc phe
     // làng: chỗ này đếm GHẾ ĐÃ BỊ LẤY, không đếm sức mạnh của phe nào.
@@ -110,7 +108,13 @@ export function deckSeats(config: RoomConfig): number {
    * đó là `checkWin` - hai câu hỏi khác nhau, hai phép đếm khác nhau.
    */
   const traitorSeats = config.traitor ? 1 : 0;
-  return deckWolfCount(config) + specials + traitorSeats;
+  /*
+   * Sói Pháp Sư chiếm một GHẾ nhưng KHÔNG vào `deckWolfCount`, cùng cặp với
+   * Kẻ Phản Bội: `deckWolfCount` gác luật "Sói phải ít hơn phe làng" và mô
+   * hình hoá SỨC SÁT THƯƠNG BAN ĐÊM, mà Sói Pháp Sư không cắn.
+   */
+  const sorcererSeats = config.sorcerer ? 1 : 0;
+  return deckWolfCount(config) + specials + traitorSeats + sorcererSeats;
 }
 
 /**
@@ -261,7 +265,7 @@ export const nightActionTypeSchema = z.enum([
   "SKIP",
   "DETECTIVE_CHECK",
   "GUARDIAN_PROTECT",
-  "HOLY_WATER",
+  "SORCERER_CHECK",
   // Hành động RIÊNG của Sát Nhân, không dùng chung "KILL" với bầy Sói: một mã
   // duy nhất cho hai kỹ năng sẽ buộc engine phân giải theo vai người gửi, và
   // đó đúng là chỗ để một phiếu cắn của Sói đi nhầm vào ô của Sát Nhân.

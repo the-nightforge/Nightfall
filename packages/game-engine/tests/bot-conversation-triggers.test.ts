@@ -32,7 +32,7 @@ function context(chat: BotChatObservation[], round = 1): BotDecisionContext {
       players: PLAYERS,
       knownRoles: {},
       seerResult: null,
-      mediumResult: null,
+      sorcererResult: null,
       night: null,
       trialAccusedId: null,
       canFinalVote: false,

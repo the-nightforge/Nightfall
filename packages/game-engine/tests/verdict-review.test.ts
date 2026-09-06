@@ -141,7 +141,7 @@ describe("BotRuntime chấm lại phán quyết", () => {
         knownRoles: { me: options.selfRole ?? "VILLAGER", ...knownRoles },
         revealRoleOnDeath: options.reveal ?? true,
         seerResult: null,
-        mediumResult: null,
+        sorcererResult: null,
         night: null,
         trialAccusedId: null,
         canFinalVote: false,

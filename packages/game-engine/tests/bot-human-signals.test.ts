@@ -67,7 +67,7 @@ function context(over: Partial<BotKnowledgeView> = {}, chat: BotChatObservation[
       players: PLAYERS.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
       knownRoles: { me: "VILLAGER" },
       seerResult: null,
-      mediumResult: null,
+      sorcererResult: null,
       neutralRolesInPlay: [],
       night: null,
       trialAccusedId: null,

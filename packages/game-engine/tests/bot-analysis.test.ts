@@ -691,21 +691,21 @@ describe("conservative chat analysis", () => {
       }
     });
 
-    it("lm / linh mục là Linh Mục", () => {
-      for (const text of ["mình là lm nha", "tôi là linh mục"]) {
-        expect(claims(text), text).toEqual(claimOf("PRIEST"));
+    it("pháp sư / sói pháp sư là Sói Pháp Sư (chỉ nghe-hiểu)", () => {
+      for (const text of ["mình là pháp sư", "tôi là sói pháp sư", "t là pháp sư"]) {
+        expect(claims(text), text).toEqual(claimOf("SORCERER"));
+      }
+    });
+
+    it("vai đã xóa (lm / linh mục / bd / bà đồng) không còn là lời khai", () => {
+      for (const text of ["mình là lm nha", "tôi là linh mục", "mình là bd", "tôi là bà đồng"]) {
+        expect(claims(text), text).toEqual([]);
       }
     });
 
     it("ts / thợ săn là Thợ Săn", () => {
       for (const text of ["tôi là ts nhé", "t là thợ săn", "tui la tho san"]) {
         expect(claims(text), text).toEqual(claimOf("HUNTER"));
-      }
-    });
-
-    it("bd / bà đồng là Bà Đồng", () => {
-      for (const text of ["mình là bd", "tôi là bà đồng"]) {
-        expect(claims(text), text).toEqual(claimOf("MEDIUM"));
       }
     });
 

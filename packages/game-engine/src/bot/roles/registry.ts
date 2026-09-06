@@ -5,10 +5,9 @@ import { executionerStrategy } from "./executioner";
 import { guardStrategy } from "./guard";
 import { guardianAngelStrategy } from "./guardian-angel";
 import { jesterStrategy } from "./jester";
-import { mediumStrategy } from "./medium";
-import { priestStrategy } from "./priest";
 import { seerStrategy } from "./seer";
 import { serialKillerStrategy } from "./serial-killer";
+import { sorcererStrategy } from "./sorcerer";
 import { traitorStrategy } from "./traitor";
 import { passiveStrategy, type BotRoleStrategy } from "./strategy";
 import { werewolfStrategy } from "./werewolf";
@@ -49,12 +48,14 @@ const REGISTRY: Partial<Record<Role, (role: Role, weights: BotWeights) => BotRol
   APPRENTICE_SEER: seerStrategy,
   GUARD: guardStrategy,
   GUARDIAN_ANGEL: guardianAngelStrategy,
-  MEDIUM: mediumStrategy,
+  SORCERER: sorcererStrategy,
+  // Sói Alpha cắn cùng bầy như Sói Con: nó không có lượt soi riêng, và cơ chế
+  // "lừa lượt soi đầu" nằm ở engine chứ không phải ở lựa chọn của nó.
+  ALPHA_WOLF: werewolfStrategy,
   // KHÔNG có entry cho Trưởng Lão: cả hai vế của lá đó là phản ứng của engine -
   // tấm đệm trước nhát cắn và cái bẫy dưới chân phe làng - nên nó không có nước
   // đi nào để chọn. `passiveStrategy` là đúng chứ không phải chỗ sót.
   DETECTIVE: detectiveStrategy,
-  PRIEST: priestStrategy,
   WITCH: witchStrategy,
   // Thằng Hề KHÔNG rơi về `passiveStrategy`, dù nó không có hành động đêm:
   // mặc định "không thiên vị" của strategy nền là chiến thuật của một Dân Làng,

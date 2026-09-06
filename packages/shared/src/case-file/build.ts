@@ -1,5 +1,5 @@
 import { isMatchOutcome } from "../phases";
-import { roleTeam } from "../roles";
+import { isRole, roleTeam } from "../roles";
 import type { RoomSnapshot } from "../snapshot";
 import { collectCandidates, quietMatchHighlight, selectHighlights, type CaseData } from "./highlights";
 import type { CaseFile, CaseFilePlayer, CaseLastLetter, CaseTimelineEntry } from "./types";
@@ -53,6 +53,16 @@ function buildCast(snapshot: RoomSnapshot): CaseFilePlayer[] {
   const out: CaseFilePlayer[] = [];
   for (const player of snapshot.players) {
     if (!player.role) continue;
+    /*
+     * Ván cũ đọc qua `isRole` fallback: cột Json giữ nguyên hình dạng của bản
+     * build đã ghi nó, nên một vai đã bị xóa cứng (Linh Mục, Bà Đồng) vẫn nằm
+     * nguyên trong lịch sử. Bỏ phần tử lạ thay vì đoán bừa - cùng cách
+     * `toHistoryEntry` phía server xử lý `playerRoles`, và cùng lý do: tra
+     * thẳng chuỗi lạ vào `ROLE_META` ra undefined rồi `.team` ném ngay giữa
+     * lúc render. (Guard về VILLAGER là việc của engine với ván ĐANG chạy;
+     * hồ sơ ván đã xong chỉ đọc nên loại khỏi cast.)
+     */
+    if (!isRole(player.role)) continue;
     out.push({
       id: player.id,
       name: player.name,

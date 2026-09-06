@@ -26,7 +26,7 @@ function knowledgeWithSeerResult(
     selfRole: "SEER",
     players: IDS.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
     knownRoles: { me: "SEER" },
-    mediumResult: null,
+    sorcererResult: null,
     seerResult: {
       targetId,
       targetName: targetId.toUpperCase(),

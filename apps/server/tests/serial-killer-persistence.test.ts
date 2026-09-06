@@ -186,11 +186,10 @@ describe("nước đi đêm của BOT sống qua khôi phục", () => {
     );
     state.previousNightActions.push({ round: 1, action: "SERIAL_KILL", targetId: "p4" });
     /*
-     * `HOLY_WATER` đi cùng: nó bị bỏ sót khỏi danh sách này từ đầu (danh sách
-     * giữ một tên chưa từng tồn tại là "PRIEST_BLESS"), nên một phòng có Linh
-     * Mục BOT đã ném Nước thánh sẽ trượt schema lúc khôi phục.
+     * `SORCERER_CHECK` đi cùng: lượt soi dòng Tiên Tri của Sói Pháp Sư cũng
+     * phải sống qua khôi phục như mọi nước đêm khác trong danh sách này.
      */
-    state.previousNightActions.push({ round: 2, action: "HOLY_WATER", targetId: "p3" });
+    state.previousNightActions.push({ round: 2, action: "SORCERER_CHECK", targetId: "p3" });
 
     expect(botBrainStateSchema.safeParse(state).success).toBe(true);
   });

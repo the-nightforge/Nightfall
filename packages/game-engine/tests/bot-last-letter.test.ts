@@ -37,7 +37,7 @@ function knowledge(overrides: Partial<BotKnowledgeView> = {}): BotKnowledgeView 
     players: PLAYERS,
     knownRoles: {},
     seerResult: null,
-    mediumResult: null,
+    sorcererResult: null,
     night: null,
     trialAccusedId: null,
     canFinalVote: false,

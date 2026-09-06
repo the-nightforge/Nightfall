@@ -9,7 +9,7 @@ interface Props {
 
 export function DayOfTruthModal({ snapshot, onClaim }: Props) {
   if (snapshot.activeEvent?.id !== "DAY_OF_TRUTH") return null;
-  const roles = ["WEREWOLF","SEER","GUARD","WITCH","HUNTER","VILLAGER","WOLF_CUB","DETECTIVE","PRIEST","MAYOR"];
+  const roles = ["WEREWOLF","SEER","GUARD","WITCH","HUNTER","VILLAGER","WOLF_CUB","DETECTIVE","MAYOR"];
   const myClaim = snapshot.dayOfTruthClaims?.[snapshot.you?.id ?? ""];
   const hasClaimed = myClaim !== undefined;
   const claimLabel = (claim: string | null | undefined) => {

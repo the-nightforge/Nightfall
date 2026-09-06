@@ -44,12 +44,10 @@ function createTestState(players: Partial<EnginePlayer>[]): GameState {
       healTonight: false,
       poisonTarget: null,
     witchSkipped: false,
-    priestSkipped: false,
     seerResults: {},
-      priestTarget: null,
       detectiveTargets: null,
       detectiveResults: {},
-      priestResults: {},
+      sorcererResults: {},
     },
     votes: {},
     voteMutations: [],
@@ -57,7 +55,7 @@ function createTestState(players: Partial<EnginePlayer>[]): GameState {
     guardPrevious: null,
     guardianAngelPrevious: null,
     guardianAngelCharges,
-    priestHolyWaterUsed: {},
+    alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
     healUsed: false,
@@ -94,7 +92,6 @@ describe("Extended Roles - Deck Building", () => {
       detective: true,
       guard: true,
       guardianAngel: true,
-      priest: true,
       witch: true,
       hunter: true,
       mayor: true,
@@ -109,7 +106,6 @@ describe("Extended Roles - Deck Building", () => {
     expect(deck).toContain("DETECTIVE");
     expect(deck).toContain("GUARD");
     expect(deck).toContain("GUARDIAN_ANGEL");
-    expect(deck).toContain("PRIEST");
     expect(deck).toContain("WITCH");
     expect(deck).toContain("HUNTER");
     expect(deck).toContain("MAYOR");
@@ -276,64 +272,6 @@ describe("Guardian Angel Role Actions", () => {
   });
 });
 
-describe("Priest Role Actions", () => {
-  it("kills werewolf when holy water used on wolf", () => {
-    const state = createTestState([
-      { id: "priest", role: "PRIEST" },
-      { id: "w1", role: "WEREWOLF" },
-      { id: "w2", role: "WEREWOLF" },
-      { id: "v1", role: "VILLAGER" },
-    ]);
-    const engine = new GameEngine(state);
-
-    engine.submitNightAction("priest", "HOLY_WATER", "w1");
-    // Bình chưa mất khi đêm còn mở.
-    expect(engine.snapshotFor("priest").nightInfo?.priestHolyWaterUsed).toBe(false);
-
-    const deaths = engine.resolveNight();
-    expect(engine.state.priestHolyWaterUsed["priest"]).toBe(true);
-    expect(deaths).toContainEqual({
-      playerId: "w1",
-      name: "Player 2",
-      cause: "priest",
-    });
-    expect(engine.player("w1")?.alive).toBe(false);
-    expect(engine.player("priest")?.alive).toBe(true);
-  });
-
-  it("backfires and kills priest when holy water used on villager", () => {
-    const state = createTestState([
-      { id: "priest", role: "PRIEST" },
-      { id: "w1", role: "WEREWOLF" },
-      { id: "v1", role: "VILLAGER" },
-    ]);
-    const engine = new GameEngine(state);
-
-    engine.submitNightAction("priest", "HOLY_WATER", "v1");
-    const deaths = engine.resolveNight();
-
-    expect(deaths).toContainEqual({
-      playerId: "priest",
-      name: "Player 1",
-      cause: "priest_backfire",
-    });
-    expect(engine.player("priest")?.alive).toBe(false);
-    expect(engine.player("v1")?.alive).toBe(true);
-  });
-
-  it("cannot use holy water twice", () => {
-    const state = createTestState([
-      { id: "priest", role: "PRIEST" },
-      { id: "w1", role: "WEREWOLF" },
-      { id: "v1", role: "VILLAGER" },
-    ]);
-    state.priestHolyWaterUsed["priest"] = true;
-    const engine = new GameEngine(state);
-
-    expect(() => engine.submitNightAction("priest", "HOLY_WATER", "w1")).toThrow();
-  });
-});
-
 describe("Apprentice Seer Mechanics", () => {
   it("cannot act while Seer is alive", () => {
     const state = createTestState([
@@ -406,12 +344,15 @@ describe("Wolf Cub Rage Mechanics", () => {
       { id: "wc", role: "WOLF_CUB" },
       { id: "v1", role: "VILLAGER" },
       { id: "v2", role: "VILLAGER" },
-      { id: "priest", role: "PRIEST" },
+      { id: "witch", role: "WITCH" },
     ]);
     const engine = new GameEngine(state);
 
-    // Priest kills wolf cub
-    engine.submitNightAction("priest", "HOLY_WATER", "wc");
+    // Witch poisons the wolf cub (after wolf votes lock so she may act).
+    // Wolves skip biting this night so the cub is the only death.
+    engine.submitNightAction("w1", "SKIP", null);
+    engine.lockWolves();
+    engine.submitNightAction("witch", "POISON", "wc");
     engine.resolveNight();
 
     expect(engine.state.wolfCubRageNextNight).toBe(true);
@@ -525,25 +466,6 @@ describe("Night Recap - đủ diễn biến vai trò mở rộng", () => {
 
     const night = engine.state.nightHistory[0];
     expect(night.guardianAngelTarget).toEqual({ id: "v1", name: "Player 2" });
-  });
-
-  it("ghi lại mục tiêu và kết quả Nước Thánh của Linh Mục", () => {
-    const state = createTestState([
-      { id: "priest", role: "PRIEST" },
-      { id: "w1", role: "WEREWOLF" },
-      { id: "w2", role: "WEREWOLF" },
-      { id: "v1", role: "VILLAGER" },
-    ]);
-    const engine = new GameEngine(state);
-    engine.submitNightAction("priest", "HOLY_WATER", "w1");
-    engine.resolveNight();
-
-    const night = engine.state.nightHistory[0];
-    expect(night.priest).toEqual({
-      priest: { id: "priest", name: "Player 1" },
-      target: { id: "w1", name: "Player 2" },
-      isWolf: true,
-    });
   });
 
   it("ghi lại 2 mục tiêu Thám Tử kiểm tra", () => {
@@ -685,42 +607,6 @@ describe("Đổi ý trong đêm không đốt mất lượt", () => {
 
     expect(deaths).toHaveLength(0);
     expect(engine.state.guardianAngelCharges["ga"]).toBe(1);
-  });
-
-  it("Linh Mục đổi mục tiêu chỉ tốn 1 bình, và bình theo mục tiêu cuối", () => {
-    const state = createTestState([
-      { id: "priest", role: "PRIEST" },
-      { id: "w1", role: "WEREWOLF" },
-      { id: "w2", role: "WEREWOLF" },
-      { id: "v1", role: "VILLAGER" },
-      { id: "v2", role: "VILLAGER" },
-    ]);
-    const engine = new GameEngine(state);
-
-    // Bấm nhầm vào dân (phản vệ giết Linh Mục) rồi sửa lại thành Sói.
-    engine.submitNightAction("priest", "HOLY_WATER", "v1");
-    engine.submitNightAction("priest", "HOLY_WATER", "w1");
-    engine.resolveNight();
-
-    expect(engine.player("priest")?.alive).toBe(true);
-    expect(engine.player("w1")?.alive).toBe(false);
-  });
-
-  it("Linh Mục bỏ qua sau khi đã chọn thì không ném bình", () => {
-    const state = createTestState([
-      { id: "priest", role: "PRIEST" },
-      { id: "w1", role: "WEREWOLF" },
-      { id: "w2", role: "WEREWOLF" },
-      { id: "v1", role: "VILLAGER" },
-    ]);
-    const engine = new GameEngine(state);
-
-    engine.submitNightAction("priest", "HOLY_WATER", "w1");
-    engine.submitNightAction("priest", "SKIP", null);
-    engine.resolveNight();
-
-    expect(engine.player("w1")?.alive).toBe(true);
-    expect(engine.state.priestHolyWaterUsed["priest"]).toBeFalsy();
   });
 
   it("Phù Thuỷ bỏ qua sau khi đã chọn thuốc thì không dùng thuốc", () => {

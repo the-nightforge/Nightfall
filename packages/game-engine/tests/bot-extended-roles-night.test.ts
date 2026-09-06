@@ -4,7 +4,6 @@ import { BotRuntime } from "../src/bot/BotRuntime";
 import { createSeededRng } from "../src/bot/rng";
 import { DEFAULT_ROOM_CONFIG, ROLE_META, ROLES, type Role, type RoomConfig } from "@masoi/shared";
 import type { BotDecisionContext } from "../src/bot/types";
-import { BOT_WEIGHTS_V15 } from "../src/bot/config/weights";
 
 /**
  * Các vai mở rộng phải chơi được bằng lõi deterministic.
@@ -24,7 +23,7 @@ const CONFIG: RoomConfig = {
   detective: true,
   guard: true,
   guardianAngel: true,
-  priest: true,
+  sorcerer: true,
   witch: true,
   hunter: false,
   mayor: true,
@@ -44,14 +43,16 @@ const ALWAYS_ACT: readonly Role[] = [
   "APPRENTICE_SEER",
   "DETECTIVE",
   "GUARD",
+  "SORCERER",
 ];
 
 /**
  * Vai có SỐ LƯỢT GIỚI HẠN cả ván. Giữ lượt khi chưa có lý do là hành vi đúng,
- * không phải bot hỏng - Linh Mục ném nhầm thì chính mình chết, Phù Thuỷ và
- * Thiên Thần chỉ có vài lượt. Chúng được kiểm bằng test riêng có điều kiện.
+ * không phải bot hỏng - Phù Thuỷ và Thiên Thần chỉ có vài lượt. Chúng được
+ * kiểm bằng test riêng có điều kiện. (Linh Mục - thành viên thứ ba của nhóm
+ * này - đã bị xóa cứng; Sói Pháp Sư soi MỖI ĐÊM nên thuộc nhóm trên.)
  */
-const LIMITED_CHARGE: readonly Role[] = ["WITCH", "GUARDIAN_ANGEL", "PRIEST"];
+const LIMITED_CHARGE: readonly Role[] = ["WITCH", "GUARDIAN_ANGEL"];
 
 function nightEngine(roles: readonly Role[]) {
   const engine = GameEngine.create(
@@ -75,7 +76,7 @@ function fullBoard() {
     "DETECTIVE",
     "GUARD",
     "GUARDIAN_ANGEL",
-    "PRIEST",
+    "SORCERER",
     "WITCH",
     "VILLAGER",
     "MAYOR",
@@ -154,13 +155,14 @@ describe("knowledge đêm cho vai mở rộng", () => {
     );
   });
 
-  it("Linh Mục đã dùng Nước thánh thì không còn được chào", () => {
+  it("Sói Pháp Sư được chào SORCERER_CHECK cùng phiếu cắn của bầy", () => {
     const engine = fullBoard();
-    const priest = idOf(engine, "PRIEST");
+    const sorcerer = idOf(engine, "SORCERER");
+    const night = engine.botKnowledgeFor(sorcerer).night!;
 
-    expect(engine.botKnowledgeFor(priest).night!.legalActions).toContain("HOLY_WATER");
-    engine.state.priestHolyWaterUsed[priest] = true;
-    expect(engine.botKnowledgeFor(priest).night!.legalActions).not.toContain("HOLY_WATER");
+    expect(night.legalActions).toContain("SORCERER_CHECK");
+    expect(night.legalTargets.SORCERER_CHECK.length).toBeGreaterThan(0);
+    expect(night.legalTargets.SORCERER_CHECK).not.toContain(sorcerer);
   });
 
   it("Tiên Tri Tập Sự chưa thức tỉnh thì không có thông tin đêm", () => {
@@ -317,63 +319,49 @@ describe("chiến lược đêm cho vai mở rộng", () => {
     expect(decision.targetId).not.toBe(decision.secondaryTargetId);
   });
 
-  it("Linh Mục ném Nước thánh vào người bị nghi nhất", () => {
+  it("Sói Pháp Sư soi người đang claim Tiên Tri trước", () => {
     const engine = fullBoard();
-    const priest = idOf(engine, "PRIEST");
-    const suspect = idOf(engine, "VILLAGER");
+    const sorcerer = idOf(engine, "SORCERER");
+    const seer = idOf(engine, "SEER");
 
-    const context = contextFor(engine, priest);
-    const runtime = runtimeFor(engine, priest);
+    const context = contextFor(engine, sorcerer);
+    const runtime = runtimeFor(engine, sorcerer);
     runtime.observe(context);
-    runtime.state.suspicion[suspect] = { score: 95, reasons: [], lastUpdatedRound: 1 };
+    runtime.state.seenEventIds.push("m-seer");
+    runtime.state.claims.push({
+      id: "ROLE_CLAIM:m-seer:",
+      sourceId: "m-seer",
+      round: 1,
+      phase: "DAY_DISCUSSION",
+      type: "ROLE_CLAIM",
+      actorId: seer,
+      importance: 8,
+      pinned: true,
+      data: { role: "SEER" },
+    });
+
+    const decision = runtime.decideNight(contextFor(engine, sorcerer))!;
+
+    expect(decision.action).toBe("SORCERER_CHECK");
+    expect(decision.targetId).toBe(seer);
+  });
+
+  it("Sói Pháp Sư không soi đồng bọn đã biết", () => {
+    const engine = fullBoard();
+    const sorcerer = idOf(engine, "SORCERER");
+    const context = contextFor(engine, sorcerer);
+    const runtime = runtimeFor(engine, sorcerer);
+    runtime.observe(context);
 
     const decision = runtime.decideNight(context)!;
 
-    expect(decision.action).toBe("HOLY_WATER");
-    expect(decision.targetId).toBe(suspect);
-  });
-
-  it("Linh Mục giữ bình khi chưa nghi ai đủ nặng", () => {
-    // Nước thánh trúng Dân thì chính Linh Mục chết. Dùng bừa là tự sát.
-    const engine = fullBoard();
-    const priest = idOf(engine, "PRIEST");
-    const context = contextFor(engine, priest);
-    const runtime = runtimeFor(engine, priest);
-    runtime.observe(context);
-
-    expect(runtime.decideNight(context)).toBeNull();
-  });
-
-  it("Linh Mục hạ ngưỡng Nước thánh một nấc khi làng đã mỏng (P2.2)", () => {
-    const threshold = BOT_WEIGHTS_V15.roleThresholds.priestSuspicion;
-    const discount = BOT_WEIGHTS_V15.roleThresholds.witchPoisonLosingDiscount;
-    const borderline = threshold - discount / 2;
-
-    const decide = (thin: boolean) => {
-      const engine = fullBoard();
-      if (thin) {
-        // 11 ghế: giết 6 -> 5 sống, dưới một nửa. Chừa Linh Mục và bị nghi.
-        const victims = engine.state.players
-          .filter((p) => p.role !== "PRIEST" && p.role !== "VILLAGER")
-          .slice(0, 6);
-        for (const victim of victims) victim.alive = false;
-      }
-      const priest = idOf(engine, "PRIEST");
-      const suspect = idOf(engine, "VILLAGER");
-      const context = contextFor(engine, priest);
-      const runtime = new BotRuntime({
-        playerId: priest,
-        rng: createSeededRng("thin-priest"),
-        playerIds: engine.state.players.map((p) => p.id),
-        weights: BOT_WEIGHTS_V15,
-      });
-      runtime.observe(context);
-      runtime.state.suspicion[suspect] = { score: borderline, reasons: [], lastUpdatedRound: 1 };
-      return runtime.decideNight(context);
-    };
-
-    expect(decide(false)).toBeNull();
-    expect(decide(true)?.action).toBe("HOLY_WATER");
+    expect(decision.action).toBe("SORCERER_CHECK");
+    expect(engine.state.players.find((p) => p.id === decision.targetId)?.role).not.toBe(
+      "WEREWOLF",
+    );
+    expect(engine.state.players.find((p) => p.id === decision.targetId)?.role).not.toBe(
+      "WOLF_CUB",
+    );
   });
 
   it("cùng seed cho cùng quyết định ở mọi vai", () => {

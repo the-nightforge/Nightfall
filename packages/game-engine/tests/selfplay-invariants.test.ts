@@ -45,6 +45,7 @@ function truth(over: Partial<GroundTruth> = {}): GroundTruth {
     activeEventId: over.activeEventId,
     shadowedSeerResults: over.shadowedSeerResults,
     roleChangedIds: over.roleChangedIds,
+    alphaShieldedSeerResults: over.alphaShieldedSeerResults,
   };
 }
 
@@ -62,9 +63,8 @@ function night(over: Partial<NightKnowledge> = {}): NightKnowledge {
       SKIP: [],
       DETECTIVE_CHECK: [],
       GUARDIAN_PROTECT: [],
-      HOLY_WATER: [],
       SERIAL_KILL: [],
-      MEDIUM_CHECK: [],
+      SORCERER_CHECK: [],
     },
     wolfTarget: null,
     guardPrevious: null,
@@ -89,7 +89,7 @@ function knowledge(over: Partial<BotKnowledgeView> = {}): BotKnowledgeView {
     players: PLAYERS.map((id) => ({ id, name: id, alive: true })),
     knownRoles: { me: "VILLAGER" },
     seerResult: null,
-    mediumResult: null,
+    sorcererResult: null,
     night: null,
     trialAccusedId: null,
     canFinalVote: false,
@@ -343,6 +343,56 @@ describe("từng bất biến đều bắt được lỗi cố ý", () => {
     ).toContain("SEER_RESULT_SCOPE");
   });
 
+  /*
+   * Khiên Alpha: lượt SEE đầu lên Sói Alpha bị ép về làng, ĐÚNG luật engine.
+   *
+   * Đo 1200 ván preset 19-20 (Task 9): ~20% số ván nổ SEER_RESULT_SCOPE "báo
+   * isWolf=false", toàn ở lượt soi trúng Alpha khi khiên còn nguyên. Auditor
+   * đối chiếu với `roleTeam` mà không biết khiên - cùng lớp báo động giả với
+   * Bóng Sói ngay trên, nên miễn trừ cũng đi đúng đường tập khóa cặp đó.
+   */
+  it("Sói Alpha: lượt SEE đầu bị khiên ép về làng được miễn trừ", () => {
+    expect(
+      idsFrom((a) =>
+        a.checkKnowledge(
+          knowledge({
+            botId: "seer",
+            selfRole: "SEER",
+            knownRoles: { seer: "SEER" },
+            seerResult: { targetId: "ally", targetName: "A", isWolf: false, team: "village" },
+          }),
+          state(),
+          truth({
+            roles: { ally: "ALPHA_WOLF" },
+            alphaShieldedSeerResults: new Set(["seer:ally"]),
+          }),
+        ),
+      ),
+    ).not.toContain("SEER_RESULT_SCOPE");
+  });
+
+  it("Sói Alpha: miễn trừ khiên chỉ áp cho ĐÚNG cặp đã ghi", () => {
+    // Không được biến miễn trừ thành công tắc tắt cả bất biến: cùng kết quả
+    // đó nhưng khóa cho cặp khác thì vẫn phải kêu.
+    expect(
+      idsFrom((a) =>
+        a.checkKnowledge(
+          knowledge({
+            botId: "seer",
+            selfRole: "SEER",
+            knownRoles: { seer: "SEER" },
+            seerResult: { targetId: "ally", targetName: "A", isWolf: false, team: "village" },
+          }),
+          state(),
+          truth({
+            roles: { ally: "ALPHA_WOLF" },
+            alphaShieldedSeerResults: new Set(["seer:someone-else"]),
+          }),
+        ),
+      ),
+    ).toContain("SEER_RESULT_SCOPE");
+  });
+
   it("ACTION_BY_DEAD: người chết được cấp lựa chọn phiếu", () => {
     expect(
       idsFrom((a) =>
@@ -410,18 +460,36 @@ describe("từng bất biến đều bắt được lỗi cố ý", () => {
   });
 
   /*
-   * Bà Đồng LẬT bất biến chứ không được miễn trừ: ba phép kiểm dưới khoá cả hai
-   * chiều. Bản đầu chỉ gỡ điều kiện đi, và khi đó một `MEDIUM_CHECK` nhắm người
-   * còn sống - đúng thứ engine từ chối - sẽ đi qua auditor mà không ai kêu.
+   * Mọi hành động đêm còn lại đều nhắm người SỐNG: ba phép kiểm dưới khoá cả
+   * hai chiều cho `SORCERER_CHECK` (kẻ thừa kế duy nhất từng có ngoại lệ là Bà
+   * Đồng, đã bị xóa cứng cùng MEDIUM_CHECK).
    */
-  it("MEDIUM_CHECK nhắm người ĐÃ CHẾT là hợp lệ", () => {
+  it("SORCERER_CHECK nhắm người còn sống là hợp lệ", () => {
     expect(
       idsFrom((a) =>
         a.checkNightAction(
           knowledge({ phase: "NIGHT" as Phase }),
           {
             kind: "NIGHT_ACTION",
-            action: "MEDIUM_CHECK",
+            action: "SORCERER_CHECK",
+            targetId: "seer",
+            confidence: 0.5,
+            evidence: [],
+          },
+          truth(),
+        ),
+      ),
+    ).not.toContain("DEAD_TARGET");
+  });
+
+  it("DEAD_TARGET: SORCERER_CHECK nhắm người đã chết", () => {
+    expect(
+      idsFrom((a) =>
+        a.checkNightAction(
+          knowledge({ phase: "NIGHT" as Phase }),
+          {
+            kind: "NIGHT_ACTION",
+            action: "SORCERER_CHECK",
             targetId: "seer",
             confidence: 0.5,
             evidence: [],
@@ -429,40 +497,22 @@ describe("từng bất biến đều bắt được lỗi cố ý", () => {
           truth({ alive: { seer: false } }),
         ),
       ),
-    ).not.toContain("DEAD_TARGET");
-  });
-
-  it("DEAD_TARGET: MEDIUM_CHECK nhắm người còn sống", () => {
-    expect(
-      idsFrom((a) =>
-        a.checkNightAction(
-          knowledge({ phase: "NIGHT" as Phase }),
-          {
-            kind: "NIGHT_ACTION",
-            action: "MEDIUM_CHECK",
-            targetId: "seer",
-            confidence: 0.5,
-            evidence: [],
-          },
-          truth(),
-        ),
-      ),
     ).toContain("DEAD_TARGET");
   });
 
-  it("DEAD_TARGET: engine chào một hồn còn sống cho Bà Đồng", () => {
+  it("DEAD_TARGET: engine chào mục tiêu đã chết cho Sói Pháp Sư", () => {
     expect(
       idsFrom((a) =>
         a.checkKnowledge(
           knowledge({
             phase: "NIGHT" as Phase,
             night: night({
-              legalActions: ["MEDIUM_CHECK"],
-              legalTargets: { ...night().legalTargets, MEDIUM_CHECK: ["seer"] },
+              legalActions: ["SORCERER_CHECK"],
+              legalTargets: { ...night().legalTargets, SORCERER_CHECK: ["seer"] },
             }),
           }),
           state(),
-          truth(),
+          truth({ alive: { seer: false } }),
         ),
       ),
     ).toContain("DEAD_TARGET");
@@ -616,15 +666,16 @@ describe("batch tự chơi", () => {
   });
 
   /*
-   * Bộ bài MẶC ĐỊNH của runner không có Bà Đồng, Trưởng Lão hay Kẻ Song Trùng,
-   * nên batch ngay trên chạy xanh suốt trong khi preset 17 vi phạm 9/10 ván.
-   * Preset thật là chỗ DUY NHẤT ba lá đó gặp nhau, và cũng là chỗ duy nhất một
-   * mục tiêu đêm hợp lệ lại là một người đã chết.
+   * Bộ bài MẶC ĐỊNH của runner không có Sói Pháp Sư, Trưởng Lão hay Kẻ Song
+   * Trùng, nên batch ngay trên chạy xanh suốt trong khi preset 17 vi phạm 9/10
+   * ván (ở thời còn Bà Đồng). Preset thật là chỗ DUY NHẤT các lá mở rộng gặp
+   * nhau, nên nó là hàng rào bắt lỗi tương tác vai mà bộ bài mặc định không
+   * thấy.
    *
    * Ít ván vì mỗi ván 17 người tốn hơn một giây: đây là hàng rào bắt một lớp
    * lỗi xảy ra ở gần như mọi ván, không phải một phép đo cân bằng.
    */
-  it("preset có Bà Đồng cũng không vi phạm bất biến", () => {
+  it("preset có Sói Pháp Sư cũng không vi phạm bất biến", () => {
     const found = Array.from({ length: 6 }, (_, i) =>
       runSelfPlay({ seed: `preset17-${i}`, playerCount: 17, config: PRESET_DECKS[17] }),
     ).flatMap((game) => game.violations.map((item) => `${item.seed} ${item.id}: ${item.actual}`));
@@ -693,12 +744,12 @@ describe("batch tự chơi", () => {
         detective: true,
         guard: true,
         guardianAngel: true,
-        priest: true,
+        sorcerer: true,
         witch: true,
         hunter: true,
         mayor: true,
         cursed: true,
-      } as SelfPlayRecord["config"],
+      },
       events: true,
       trace: true,
     });

@@ -12,4 +12,19 @@ describe("role-art", () => {
       assert.ok(path.startsWith("M") || path.startsWith("m"), `Path should start with M/m: ${role}`);
     }
   });
+
+  it("hard-deleted roles have no art left", () => {
+    assert.equal((ROLE_ICON_PATHS as Partial<Record<string, string>>)["PRIEST"], undefined);
+    assert.equal((ROLE_ICON_PATHS as Partial<Record<string, string>>)["MEDIUM"], undefined);
+  });
+
+  it("new wolves have hand-drawn art, no emoji", () => {
+    for (const role of ["SORCERER", "ALPHA_WOLF"] as Role[]) {
+      const path = ROLE_ICON_PATHS[role];
+      assert.ok(path.length > 20, `Path too short for role: ${role}`);
+      for (const ch of path) {
+        assert.ok(ch.codePointAt(0)! < 256, `Non-path char in art for ${role}`);
+      }
+    }
+  });
 });

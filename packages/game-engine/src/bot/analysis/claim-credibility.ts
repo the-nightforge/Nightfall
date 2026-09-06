@@ -1,4 +1,4 @@
-import { isPowerRole, type DayVoteRecap, type Role } from "@masoi/shared";
+import { isPowerRole, isRole, type DayVoteRecap, type Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { profileStrength, type BotEvidence, type BotMemory, type PlayerProfile } from "../types";
 
@@ -105,8 +105,10 @@ function normalise(claims: readonly BotMemory[]): NormalisedClaim[] {
   const found: NormalisedClaim[] = [];
   for (const memory of claims) {
     if (memory.type !== "ROLE_CLAIM" && memory.type !== "COUNTER_CLAIM") continue;
-    const role = memory.data.role as Role | undefined;
-    if (!role) continue;
+    const role = memory.data.role;
+    // Ván cũ/memory chép tay có thể mang vai đã bị xóa cứng (PRIEST/MEDIUM):
+    // `isPowerRole` tra thẳng ROLE_META nên phải guard, bỏ qua lặng lẽ.
+    if (!isRole(role)) continue;
     found.push({
       type: memory.type,
       claimantId: memory.actorId,

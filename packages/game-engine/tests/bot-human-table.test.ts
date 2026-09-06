@@ -48,7 +48,7 @@ function context(over: Partial<BotKnowledgeView> = {}): BotDecisionContext {
       dayOfTruthClaims: {},
       neutralRolesInPlay: [],
       activeEventId: null,
-      mediumResult: null,
+      sorcererResult: null,
       botId: "me",
       round: 1,
       phase: "DAY_DISCUSSION",
