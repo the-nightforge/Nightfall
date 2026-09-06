@@ -44,9 +44,9 @@ export function TrialPanel({ snapshot, onFinalVote, liveStage = false }: Props) 
   const dead = !snapshot.you?.alive;
   const isAccused = snapshot.you?.id === trial.accusedId;
   const isDefense = snapshot.phase === "DEFENSE";
-  // `canSpeak` do server tính (engine.trialViewFor): pha đúng, đúng bị cáo, và
-  // còn sống. Không tự ghép lại ba điều kiện đó ở đây - một bị cáo chết giữa
-  // pha vẫn là `isAccused` nhưng không còn được nói.
+  // `canSpeak` do server tính (engine.trialViewFor): pha đúng và còn sống.
+  // Không tự ghép lại hai điều kiện đó ở đây - một người chết giữa pha vẫn ở
+  // trong phòng nhưng không còn được nói.
   const myTurn = isDefense && trial.canSpeak;
   // Mẫu số là tổng phiếu ĐÃ BỎ hoặc ngưỡng kết án, lấy cái lớn hơn: chia cho
   // tổng phiếu thôi thì hai phiếu Treo trên hai phiếu đã bỏ trông như đã đủ án.
@@ -132,16 +132,25 @@ export function TrialPanel({ snapshot, onFinalVote, liveStage = false }: Props) 
           >
             <span>
               {myTurn ? (
-                <>
-                  <span aria-hidden="true" className="mr-1">
-                    🎙
-                  </span>
-                  Đến lượt bạn biện hộ
-                </>
+                isAccused ? (
+                  <>
+                    <span aria-hidden="true" className="mr-1">
+                      🎙
+                    </span>
+                    Đến lượt bạn biện hộ — mọi người còn sống đều được nói
+                  </>
+                ) : (
+                  <>
+                    <span aria-hidden="true" className="mr-1">
+                      🎙
+                    </span>
+                    Mọi người còn sống đều được nói — bạn cũng có thể lên tiếng
+                  </>
+                )
               ) : dead ? (
-                <>Bạn đã chết — chỉ {trial.accusedName} được nói lúc này</>
+                <>Bạn đã chết — mọi người còn sống đều được nói lúc này</>
               ) : (
-                <>Hãy lắng nghe — chỉ {trial.accusedName} được nói lúc này</>
+                <>Mọi người còn sống đều được nói — hãy lắng nghe và lên tiếng</>
               )}
             </span>
           </p>

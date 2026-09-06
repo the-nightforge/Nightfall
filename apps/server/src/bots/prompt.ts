@@ -242,7 +242,7 @@ function untrusted(tag: string, lines: string[]): string[] {
  */
 function defenseLines(defense: NonNullable<SpeechRequest["defense"]>): string[] {
   const shared = [
-    "Bạn đang ở lượt tự bào chữa trong phiên xử - chỉ mình bạn được nói lúc này.",
+    "Bạn đang ở lượt tự bào chữa trong phiên xử - mọi người còn sống đều được nói lúc này.",
     `Bạn vừa bị vote sơ bộ đưa ra treo cổ với ${defense.votesAgainstMe} phiếu.`,
     ...(defense.alsoAccused.length > 0
       ? [`Những người khác cũng đang bị nhắm tới: ${defense.alsoAccused.join(", ")}.`]

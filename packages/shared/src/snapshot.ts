@@ -289,7 +289,7 @@ export interface TrialView {
    * kiểm tra "đã bỏ phiếu chưa" phải đọc hasVoted chứ không dùng truthiness.
    */
   myVote: boolean | null;
-  /** Chỉ đúng trong DEFENSE, và chỉ với bị cáo. */
+  /** Chỉ đúng trong DEFENSE, với mọi người còn sống (thảo luận tự do). */
   canSpeak: boolean;
 }
 
