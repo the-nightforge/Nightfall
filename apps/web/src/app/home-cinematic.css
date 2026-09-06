@@ -129,7 +129,13 @@
 .home-dashboard dl { gap: 12px; }
 .home-dashboard dl > div { border-radius: 6px; background: #ffffff03; padding: 18px 14px; }
 .home-dashboard dl dt { color: var(--home-muted); font-size: .68em; }
-.home-dashboard dl dd:first-of-type { font-size: 2.2em; color: var(--home-cream); }
+/* line-height ĐI KÈM font-size, luôn luôn.
+ * Con số lớn mang sẵn `text-2xl` của Tailwind - tức line-height 2rem CỐ ĐỊNH
+ * theo px. Phóng riêng font-size lên 2.2em mà để nguyên hộp dòng 32px thì chữ
+ * tràn ra ngoài hộp và đè lên dòng chú thích ngay dưới ("57%" chồng "8
+ * thắng"). Lỗi này to dần theo bề ngang màn hình vì --home-scale là clamp
+ * theo vw: ở 1440px chữ 35px lệch 3px, ở 2560px chữ 45px lệch 13px. */
+.home-dashboard dl dd:first-of-type { font-size: 2.2em; line-height: 1.15; color: var(--home-cream); }
 .home-dashboard .card > div:first-child { margin-bottom: 22px; }
 .home-community .card > ol { max-height: 510px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #3c4d70 transparent; padding-inline: 8px; margin-inline: -8px; }
 .home-community .card > ol > li { padding-block: 13px; }
