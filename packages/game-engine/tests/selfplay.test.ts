@@ -147,6 +147,7 @@ describe("replay độc lập", () => {
     const { record } = runSelfPlay({ seed: "rec" });
     expect(Object.keys(record).sort()).toEqual([
       "config",
+      "defense",
       "events",
       "humanSeats",
       "maxRounds",

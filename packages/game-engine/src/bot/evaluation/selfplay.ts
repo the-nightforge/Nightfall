@@ -68,6 +68,14 @@ export interface SelfPlayRecord {
   events: boolean;
   speech: boolean;
   /**
+   * Vòng speech DEFENSE thật có chạy trong ván này không.
+   *
+   * Optional vì record cũ không có trường này; vắng mặt là `false` (hành vi
+   * cũ). `replayGame` đọc đúng trường này nên một ván defense-on chạy lại ra
+   * defense-on.
+   */
+  defense?: boolean;
+  /**
    * Số ghế đầu được gắn cờ `isBot: false` - vẫn do bot điều khiển.
    *
    * Tồn tại để self-play đo được các nhánh "bàn có người thật" (P2: Tiên Tri
@@ -247,6 +255,22 @@ export type SelfPlayEvent =
       vetoedByTrust: boolean;
     }
   | { kind: "NOMINATION"; round: number; accusedId: string | null }
+  | {
+      /**
+       * Cửa sổ DEFENSE của một phiên toà, chốt ngay sau `beginFinalVote`.
+       *
+       * Chỉ ghi khi harness bật `defense` — đường cũ không có event này nên
+       * ván cũ giữ nguyên byte-for-byte. `endedAt` luôn là số (khác null) vì
+       * `beginFinalVote` vừa chốt nó; test khoá thứ tự
+       * defense-speeches -> beginFinalVote -> observe -> decideFinalVote đọc
+       * trực tiếp ở đây thay vì suy từ sự có mặt của speech.
+       */
+      kind: "DEFENSE_WINDOW";
+      round: number;
+      accusedId: string;
+      startedAt: number;
+      endedAt: number;
+    }
   | { kind: "FINAL_VOTE"; round: number; voterId: string; guilty: boolean }
   | { kind: "HUNTER_SHOT"; round: number; hunterId: string; targetId: string | null }
   | { kind: "DEATH"; round: number; playerId: string; cause: string }
@@ -423,6 +447,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     maxRounds: input.maxRounds ?? MAX_ROUNDS,
     events,
     speech: input.speech ?? true,
+    defense: input.defense === true,
     humanSeats: input.humanSeats ?? 0,
   };
 
@@ -1266,10 +1291,23 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     });
 
     if (outcome.kind === "TRIAL") {
+      // `defense: true` mà `speech` tắt: vòng speech bỏ qua nhưng cửa sổ
+      // DEFENSE vẫn thật (không null) và ingest chấm window rỗng — chủ đích,
+      // để đo được riêng ảnh hưởng của "có cửa sổ" khỏi "có lời nói".
       if (input.defense === true && record.speech) {
         runDefenseDiscussion();
       }
       engine.beginFinalVote(config.finalVoteSeconds * 1_000, tick(1_000));
+      if (input.defense === true) {
+        const trial = engine.state.trial;
+        log.push({
+          kind: "DEFENSE_WINDOW",
+          round: engine.state.round,
+          accusedId: outcome.accusedId,
+          startedAt: trial?.defenseStartedAt ?? now,
+          endedAt: trial?.defenseEndedAt ?? now,
+        });
+      }
       observeAll();
 
       for (const voter of engine.finalVoters()) {
@@ -1428,6 +1466,7 @@ export function replayGame(record: SelfPlayRecord, weights?: BotWeights): SelfPl
     maxRounds: record.maxRounds,
     events: record.events,
     speech: record.speech,
+    defense: record.defense,
     humanSeats: record.humanSeats,
   });
 }
@@ -1443,6 +1482,7 @@ export function replayCommand(record: SelfPlayRecord): string {
   ];
   if (record.events) flags.push("--events");
   if (!record.speech) flags.push("--no-speech");
+  if (record.defense) flags.push("--defense");
   if ((record.humanSeats ?? 0) > 0) flags.push(`--humans ${record.humanSeats}`);
   return `npm run selfplay -- ${flags.join(" ")}`;
 }
