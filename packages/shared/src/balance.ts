@@ -690,6 +690,44 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
    * 54.7 / 66.0, trải 15 điểm. Cảnh báo ở khối trên vẫn nguyên giá trị - muốn
    * kết luận ở dải này thì chạy thêm SEED FAMILY, không phải thêm ván.
    */
+  /*
+   * ĐO LẠI 2026-09-06 (Task 9) sau khi 17-18 nhận Sói Pháp Sư, 19-20 nhận Sói
+   * Alpha - tức đúng bộ bài đang chạy. Hai lượt độc lập, speech BẬT cả hai:
+   *
+   * Lượt so cặp (lượt A3/B3, seed `power:<n>`, 300 ván mỗi nhánh - ghế gỡ ra
+   * thành Dân Làng) cho baseline:
+   *
+   *   n  | 17   | 18   | 19   | 20
+   *   %  | 45.3 | 35.9 | 38.7 | 33.7
+   *
+   * Lượt batch preset (`--preset`, 3 seed family t9a/t9b/t9c x 200 ván):
+   *
+   *   n  | t9a  | t9b  | t9c  | TB
+   *   17 | 38.2 | 45.0 | 42.0 | 41.7
+   *   18 | 36.2 | 38.0 | 31.2 | 35.1
+   *   19 | 40.5 | 43.0 | 39.5 | 41.0
+   *   20 | 34.0 | 36.0 | 33.5 | 34.5
+   *
+   * Hai lượt đồng ý với nhau trong sàn nhiễu (lệch lớn nhất 3.6 điểm ở n=17).
+   * Cả bốn nằm trong hoặc sát dải 35-55: 18 ra 35.1 (sát sàn), 20 ra 34.5
+   * (dưới sàn đúng 0.5 - trong SE ~1.7 ở 600 ván, tức không phân biệt được
+   * với 35). KHÔNG đổi bộ bài theo hai ô sát sàn này, đúng tư thế đã dùng
+   * với ô 58.0 vượt trần ở khối trên: ở dải này một nước đổi số Sói đáng 22
+   * điểm, còn trải giữa các family đã 7-8 điểm (n=18: 31.2 tới 38.0) - không
+   * có nước chỉnh nào mịn hơn nhiễu.
+   *
+   * Hai vết nhiễu trong lượt batch, ghi để lần sau khỏi đo lại:
+   *
+   * 1. Mọi batch 19/20 thoát mã 1 với ~40 `SEER_RESULT_SCOPE` "báo
+   *    isWolf=false" mỗi 200 ván. Báo động GIẢ: khiên Alpha ép lượt SEE đầu
+   *    về làng là đúng luật engine, còn auditor đối chiếu với `roleTeam` mà
+   *    không biết khiên. Tỉ lệ thắng không ảnh hưởng (bất biến chỉ kiểm sau
+   *    ván), và harness đã được dạy khiên ngay trong Task 9 này - batch kiểm
+   *    lại ra 0 vi phạm. Xem `GroundTruth.alphaShieldedSeerResults`.
+   * 2. Ba ván chạm trần vòng (17-t9a, 18-t9a, 18-t9c - mẫu số 199 thay vì
+   *    200): ván 8 vòng ở bàn lớn thỉnh thoảng không phân thắng được trong
+   *    20 vòng. Không đáng kể trên 2400 ván.
+   */
   16: preset({
     werewolves: 3,
     cursed: true,
