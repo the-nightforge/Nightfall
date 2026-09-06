@@ -13,6 +13,12 @@ import { detectCoalitions } from "../analysis/coalition";
 import { BotRuntime } from "../BotRuntime";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { judgeChainPosition, type ChainBlockReason } from "../conversation/chain-limits";
+import {
+  DEFENSE_MAX_SPEECHES_PER_BOT,
+  planDefenseCommentary,
+  planDefenseSpeakers,
+  shouldSpeakInDefense,
+} from "../decision/defense-scheduler";
 import { witchPoisonThreshold } from "../roles/witch";
 import {
   speechSemanticFingerprint,
@@ -100,8 +106,9 @@ export interface SelfPlayInput {
   /**
    * Chạy vòng speech DEFENSE thật sau `resolveNomination` ra TRIAL.
    *
-   * `true` = đo mới (mọi bot sống được nói qua `decideDefense`, tối đa 2
-   * lượt/bot, rồi mới `beginFinalVote`); `false`/vắng mặt = hành vi cũ
+   * `true` = đo mới (mọi bot sống được nói — bị cáo qua `decideDefense`,
+   * phi-bị-cáo qua phán quyết Treo/Tha sắp bỏ, bot chưa đủ tin thì im — tối
+   * đa 2 lượt/bot, rồi mới `beginFinalVote`); `false`/vắng mặt = hành vi cũ
    * byte-for-byte (đi thẳng `resolveNomination` -> `beginFinalVote`,
    * `trialDefense` null).
    */
@@ -749,12 +756,14 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   };
 
   /**
-   * Vòng speech DEFENSE: mọi bot CÒN SỐNG (kể cả bị cáo) được lên tiếng qua
-   * `observe` + `decideDefense` + `emitSpeech`, tối đa 2 lượt/bot.
+   * Vòng speech DEFENSE: mọi bot CÒN SỐNG (kể cả bị cáo) được lên tiếng, tối
+   * đa 2 lượt/bot, bot chưa đủ tin thì im.
    *
-   * TASK-1 INLINE ORDERING — Task 2 tách lõi xếp lượt này thành
-   * `planDefenseSpeakers` dùng chung với `machine.ts`; khi tách, giữ nguyên
-   * thứ tự seed bên dưới để ván đo không đổi.
+   * Thứ tự lượt dùng chung `planDefenseSpeakers` với phòng thật (cùng seed
+   * cho cùng thứ tự). Bị cáo + Hề đi qua `decideDefense` như cũ (Hề giữ
+   * INDIFFERENT/HUMOR); bot khác bàn về bị cáo theo đúng phán quyết Treo/Tha
+   * sắp bỏ (`decideFinalVote` + `planDefenseCommentary`), và im khi
+   * `confidence` bằng 0 (belief rỗng/trung tính).
    *
    * Thứ tự gọi là: defense speeches -> `beginFinalVote` (chốt `endedAt`) ->
    * observe -> `decideFinalVote`. Hàm này chỉ làm bước đầu; chỗ gọi phải
@@ -767,29 +776,51 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
    * `emitSpeech` (chain-limits, scope). Không tick đồng hồ giả trong vòng:
    * mọi câu mang `at` bằng mốc mở cửa sổ, nằm gọn trong
    * `[startedAt, endedAt]` mà `ingestDefenseReview` lọc.
+   *
+   * Ngữ nghĩa lượt được giữ: trong một lượt, các bot không thấy câu của nhau
+   * (chat chung chỉ nhận sau khi hết lượt), đúng như bản inline Task 1.
    */
   const runDefenseDiscussion = (): void => {
     spokenThisRound.clear();
-    const order = engine.alivePlayers().map((player) => player.id);
+    const accusedId = engine.state.trial?.accusedId;
+    if (!accusedId) return;
+    const aliveIds = engine.alivePlayers().map((player) => player.id);
     const defenseRng = createSeededRng(`${input.seed}:defense:${engine.state.round}`);
-    for (let i = order.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(defenseRng() * (i + 1));
-      const swap = order[i]!;
-      order[i] = order[j]!;
-      order[j] = swap;
-    }
+    const slots = planDefenseSpeakers(
+      aliveIds,
+      accusedId,
+      defenseRng,
+      DEFENSE_MAX_SPEECHES_PER_BOT,
+    );
+    const poolSize = aliveIds.includes(accusedId) ? aliveIds.length : aliveIds.length + 1;
     const spokenBy = new Map<string, number>();
-    for (let turn = 0; turn < 2; turn += 1) {
+    for (let turn = 0; turn < DEFENSE_MAX_SPEECHES_PER_BOT; turn += 1) {
       const turnChat: BotChatObservation[] = [];
-      for (const speakerId of order) {
-        if ((spokenBy.get(speakerId) ?? 0) >= 2) continue;
+      const turnSlots = slots.slice(turn * poolSize, (turn + 1) * poolSize);
+      for (const speakerId of turnSlots) {
+        if ((spokenBy.get(speakerId) ?? 0) >= DEFENSE_MAX_SPEECHES_PER_BOT) continue;
         const runtime = runtimes.get(speakerId)!;
         const context = contextFor(speakerId);
         runtime.observe(context);
         noteObserved(speakerId, context);
-        const defense = runtime.decideDefense(context);
-        spokenBy.set(speakerId, (spokenBy.get(speakerId) ?? 0) + 1);
-        emitSpeech(speakerId, defense.intention, turnChat);
+        if (speakerId === accusedId || context.knowledge.selfRole === "JESTER") {
+          const defense = runtime.decideDefense(context);
+          spokenBy.set(speakerId, (spokenBy.get(speakerId) ?? 0) + 1);
+          emitSpeech(speakerId, defense.intention, turnChat);
+        } else {
+          const verdict = runtime.decideFinalVote(context);
+          if (!shouldSpeakInDefense(verdict.confidence)) continue;
+          const speech = planDefenseCommentary({
+            context,
+            guilty: verdict.guilty,
+            accusedId,
+            confidence: verdict.confidence,
+            evidence: verdict.evidence,
+            style: runtime.style,
+          });
+          spokenBy.set(speakerId, (spokenBy.get(speakerId) ?? 0) + 1);
+          emitSpeech(speakerId, speech, turnChat);
+        }
       }
       if (turnChat.length === 0) break;
       chat.push(...turnChat);

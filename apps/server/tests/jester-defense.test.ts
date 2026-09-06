@@ -228,11 +228,17 @@ describe("Thằng Hề tự bào chữa", () => {
     // nghĩa nếu câu đó tình cờ rỗng, và im lặng cũng không phải hành vi đúng ở
     // đây - một bị cáo câm trông như màn hình hỏng.
     expect(text.length).toBeGreaterThan(0);
-    expect(broadcast.chats).toHaveLength(1);
+    // Scheduler đa bot (Task 2): bị cáo được tối đa 2 lượt/phiên thay vì đúng
+    // một như trước. Phòng này chỉ có một bot (chính bị cáo) nên mọi câu đều
+    // của nó, và mọi câu đều phải giữ đúng thái độ Hề.
+    expect(broadcast.chats.length).toBeLessThanOrEqual(2);
 
-    // Và nó phải đến từ đúng bể mẫu HUMOR, tức bể đã được đọc từng câu để bảo
-    // đảm không câu nào thanh minh, cầu xin hay lộ vai.
-    expect(HUMOR_LINES).toContain(text);
+    // Và chúng phải đến từ đúng bể mẫu HUMOR, tức bể đã được đọc từng câu để
+    // bảo đảm không câu nào thanh minh, cầu xin hay lộ vai.
+    for (const message of broadcast.chats) {
+      expect(message.playerId).toBe("p2");
+      expect(HUMOR_LINES).toContain(message.text);
+    }
 
     for (const begging of ["đừng treo", "không phải tôi", "phản đối", "oan", "tha cho"]) {
       expect(text.toLowerCase()).not.toContain(begging);
