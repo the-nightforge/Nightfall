@@ -135,22 +135,59 @@ export const ROLE_POWER: Record<Role, number> = {
    */
   TRAITOR: 3.5,
   /**
-   * 2, TẠM (chờ đo Task 9) - mirror Detective bên phe Sói.
+   * 4, ĐÃ ĐO - thay cho con số 2 tạm lúc dựng vai (mirror Detective là sai:
+   * số đo ra gấp đôi).
    *
-   * Sói Pháp Sư soi mỗi đêm để tìm dòng Tiên Tri, hẹp hơn Tiên Tri (chỉ trả
-   * lời "có phải dòng Tiên Tri không" thay vì phe đầy đủ), nên đặt ngang
-   * Detective - vai soi hẹp bên phe làng. Đo so cặp speech BẬT rồi chốt.
+   * So cặp trên đúng bộ seed, speech BẬT, 300 ván mỗi ô, gỡ lá này ra thì ghế
+   * đó thành Dân Làng (lượt A3, seed `power:<n>`):
+   *
+   *   n  | nguyên vẹn | Δ (đóng góp cho Sói, trung bình 2 mẫu)
+   *   17 |   45.3     |
+   *   18 |   35.9     |                Δ TB = +24.5 (SE ~2.9)
+   *
+   * (`role-power.ts` chỉ in Δ trung bình mỗi vai, không in từng ô - bảng trên
+   * giữ đúng những gì script nhả ra, không dựng lại số từng ô.)
+   *
+   * Cột "đo được" của script VỨT ĐI ở lượt này, và lý do đáng ghi: neo SEER đo
+   * ra +2.9 ở lượt A và -1.3 ở lượt B trên đúng 2 mẫu - trong sàn nhiễu
+   * (SE ~4.1 mỗi ô ở 300 ván) tức neo không phân biệt được với 0. Scale
+   * 4.5/0.029 nổ lên 155 ("đo được" 38.7), lượt B còn âm (-78.8). Hai mẫu preset
+   * không neo được thang nào; đây là cùng căn bệnh đã ghi ở bốn dòng 2-mẫu
+   * trong bảng trên.
+   *
+   * Quy đổi bằng thước TOÀN CỤC của bảng này thay vì neo lượt đo: tiền lệ
+   * TRAITOR dựng rằng một con Sói thay một ghế Dân đáng ~27 điểm cho 4.5 đơn
+   * vị, tức ~6 điểm mỗi đơn vị. 24.5/6 ≈ 4.1, làm tròn xuống 4.0 theo quy ước
+   * của bảng (đừng chép thẳng số đo).
+   *
+   * KHÔNG dùng thước bàn-lớn (~4.9 điểm/đơn vị từ "một con Sói ở cỡ này đáng
+   * tới 22 điểm", xem khối 16-20): thước đó cho ra 5.0, tức ngang một con Sói
+   * THƯỜNG biết cắn - trong khi lá này không cắn đêm nào. +24.5 gộp cả "thêm
+   * một miệng bầy" (đổi parity) lẫn tin tức soi, và phép đo TRAITOR đo đúng
+   * thứ gộp đó bằng cùng cấu trúc thêm-miệng-so-với-Dân - dùng cùng thước mới
+   * nhất quán.
    */
-  SORCERER: 2,
+  SORCERER: 4,
   /**
-   * 6, TẠM (chờ đo Task 9) - ngang Sói Con nhưng ổn định hơn.
+   * 4, ĐÃ ĐO - HẠ từ con số 6 tạm lúc dựng vai (ngang Sói Con là sai: premium
+   * của Sói Con là cơn phẫn nộ cắn đôi, đo bằng phép ĐỔI giữ nguyên số Sói;
+   * khiên miễn soi một lần không phải premium đó).
    *
-   * Sói Alpha cắn cùng bầy mỗi đêm như Sói thường, cộng thêm khiên miễn soi
-   * lần đầu. Đặt ngang Sói Con (lá mạnh nhất bộ bài) vì thêm một con cắn mà
-   * còn che được một lượt soi; không phụ thuộc cỡ bàn như cơn phẫn nộ của
-   * Sói Con nên con số này ít rủi ro hơn. Đo so cặp speech BẬT rồi chốt.
+   * Cùng lượt đo với Sói Pháp Sư (lượt B3, so cặp đúng seed, speech BẬT, 300
+   * ván mỗi ô, ghế gỡ ra thành Dân Làng):
+   *
+   *   n  | nguyên vẹn | Δ (đóng góp cho Sói, trung bình 2 mẫu)
+   *   19 |   38.7     |
+   *   20 |   33.7     |                Δ TB = +23.5 (SE ~2.9)
+   *
+   * Cùng thước toàn cục ~6 điểm/đơn vị: 23.5/6 ≈ 3.9, làm tròn lên 4.0. Lá này
+   * cắn cùng bầy mỗi đêm như Sói thường cộng khiên miễn soi lần đầu, và số đo
+   * (+23.5) so vừa khít với "một con Sói ở cỡ này đáng tới 22 điểm" - tức nó
+   * đáng ĐÚNG một con Sói, không hơn. 24.5 với 23.5 cách nhau 1.0, dưới một
+   * SE - Sói Pháp Sư và Sói Alpha trên bàn bot là hai lá ngang giá, nên cả hai
+   * cùng 4.0.
    */
-  ALPHA_WOLF: 6,
+  ALPHA_WOLF: 4,
   SEER: 5,
   /**
    * 1, hạ từ 2. Đo lại 2026-09-04 bằng SO CẶP trên đúng bộ seed, speech BẬT,
