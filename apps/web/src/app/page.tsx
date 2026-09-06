@@ -12,13 +12,14 @@ import { disconnectSocket } from "@/lib/socket";
 import { GIVE_UP_MESSAGE, WakeWatch, prewakeServer, wakeStatusText } from "@/lib/server-wake";
 import type { Identity } from "@/lib/identity";
 import { Backdrop } from "@/components/Backdrop";
-import { BrandMark, VillageScene } from "@/components/HomeHero";
+import { BrandMark } from "@/components/HomeHero";
 import { JoinCodeFromQuery } from "@/components/JoinCodeFromQuery";
 import { MatchHistoryPanel } from "@/components/MatchHistoryPanel";
 import { PlayerStatsCard } from "@/components/PlayerStatsCard";
 import { LeaderboardPanel } from "@/components/LeaderboardPanel";
 import { AssetCredits } from "@/components/AssetCredits";
 import { InstallPrompt } from "@/components/InstallPrompt";
+import "./home-cinematic.css";
 
 /** Hành động đang chạy, hoặc null khi rảnh. */
 /**
@@ -335,108 +336,39 @@ export default function Home() {
 
   return (
     <>
-      {/*
-        * Hai lớp nền chồng nhau chứ không phải một.
-        *
-        * Backdrop lo bầu trời đêm và vignette - đúng cái nền mà phòng chơi dùng,
-        * nên bước từ trang chủ vào phòng không đổi tông màu. VillageScene chồng
-        * lên đó trăng, sao, sương và hai dải làng. Cả hai đều `fixed` ở z-index
-        * âm: chúng không chiếm một pixel bố cục nào, nên trên điện thoại không
-        * có gì phải giấu đi để lấy chỗ cho ô nhập chữ.
-        */}
       <Backdrop mood="night" />
-      <VillageScene />
+      <div className="home-page">
+        <div className="home-cinema-art" aria-hidden="true" />
+        <header className="home-header">
+          <a href="#" className="home-brand" aria-label="Ma Sói Online — Trang chủ">
+            <BrandMark className="h-10 w-10" />
+            <span>MA SÓI <span className="home-brand-online">ONLINE</span></span>
+          </a>
+          <nav aria-label="Điều hướng trang chủ">
+            <a href="#cach-choi">Cách chơi</a>
+            <a href="#nhat-ky" className="home-journal-link">Thành tích</a>
+            <a className="home-nav-play" href="#vao-lang">Chơi ngay <span aria-hidden="true">↗</span></a>
+          </nav>
+        </header>
 
-      {/*
-        * Cột dọc trên điện thoại, hai cột từ lg.
-        *
-        * Không `justify-center` trên mobile: căn giữa một cột cao hơn màn hình
-        * thì đỉnh nó bị đẩy lên trên mép trên và logo biến mất. Bám mép trên,
-        * để phần thừa rơi xuống dưới - chỗ đó là làng, không phải nội dung.
-        *
-        * pt-24 dưới ngưỡng sm là để chừa trời cho mặt trăng. Trên màn 390 tiêu
-        * đề chạy gần hết bề ngang và góc trên phải là chỗ duy nhất còn trống
-        * cho trăng; pt-9 của bản trước đẩy chữ "ONLINE" đè thẳng lên đĩa trăng.
-        * 96px đủ để hai thứ rời nhau mà nút "Tạo phòng mới" vẫn nằm trong màn
-        * hình đầu tiên, không phải cuộn.
-        *
-        * Trên lg, `safe center` chứ không phải `center` trần, và pt-10 thay cho
-        * pt-0. Cột phải giờ mang hai thẻ, và trên màn 1366x768 tổng chiều cao
-        * của nó chạm sát mép: `justify-content: center` với nội dung cao hơn
-        * khung thì tràn ra CẢ HAI đầu, mà đầu trên của một trang thì không cuộn
-        * ngược lên được - thương hiệu biến mất không lấy lại được. `safe center`
-        * vẫn căn giữa khi còn chỗ và tự bám mép trên khi hết chỗ; trình duyệt
-        * không hiểu từ khoá này thì bỏ nguyên khai báo và rơi về flex-start,
-        * đúng bằng hành vi ta muốn ở trường hợp chật. pt-10 là để lúc đó chữ
-        * không dán thẳng vào mép trên.
-        */}
-      <main className="relative mx-auto flex min-h-[100svh] w-full flex-col items-center px-5 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-24 sm:px-6 sm:pt-12 lg:justify-center lg:px-8 lg:pt-10 lg:[justify-content:safe_center]">
-        {/*
-          * lg:row-span-2 trên panel form là thứ khâu hai cột lại với nhau.
-          *
-          * Panel cao hơn khối thương hiệu, và vì nó trải qua cả hai hàng nên
-          * chính nó quyết định chiều cao của lưới. Khối thương hiệu `self-start`
-          * bám mép TRÊN panel, dải chip `self-end` bám mép DƯỚI panel: hai cột
-          * dùng chung đúng hai đường cơ sở, thay vì mỗi bên trôi một kiểu.
-          *
-          * Bề rộng khoá bằng min(84vw, 108rem). Trần 1728px là con số đo được
-          * chứ không phải chọn bừa: ở 96rem trên màn 2560 cả cụm chỉ chiếm 60%
-          * bề ngang và đọc ra một hòn đảo nhỏ giữa màn hình; 108rem đưa nó lên
-          * ~68%, còn 84vw giữ cho màn 1280-1440 vẫn có lề tử tế. Phần bù còn
-          * lại nằm ở clamp() của cỡ chữ và bề rộng panel, không dồn hết vào
-          * việc kéo khung rộng thêm.
-          */}
-        <div className="flex w-full max-w-[34rem] flex-col gap-8 lg:grid lg:w-[min(84vw,108rem)] lg:max-w-none lg:grid-cols-[minmax(0,1fr)_clamp(25rem,24vw,33rem)] lg:gap-x-[clamp(3rem,6vw,7rem)] lg:gap-y-10">
-          <section className="lg:col-start-1 lg:row-start-1 lg:self-start">
-            <div className="flex items-center gap-4 sm:gap-5 lg:gap-6">
-              <BrandMark className="aspect-square w-[clamp(3.25rem,4.4vw,6.75rem)]" />
-              {/* Chuyển sắc bạc -> máu: ánh trăng rơi vào tên game rồi đọng
-                * lại thành màu máu ở cuối. Cùng hai nguồn sáng của cả cảnh. */}
-              <h1 className="font-display min-w-0 bg-gradient-to-br from-[#f6faff] via-[#a9c3ee] via-[58%] to-[#c81c34] bg-clip-text text-[clamp(2rem,5.6vw,7.25rem)] font-black leading-[0.94] tracking-tight text-transparent">
-                MA SÓI ONLINE
-              </h1>
-            </div>
-
-            <p className="font-display mt-6 max-w-[26ch] text-[clamp(1.25rem,1.75vw,2.45rem)] font-medium leading-[1.3] text-white/90 lg:mt-9 lg:max-w-[25ch]">
-              Đêm buông, cổng làng khép lại. Trong số những người ngồi quanh đống lửa, có kẻ không
-              phải người.
-            </p>
-
-            <p className="mt-4 max-w-[46ch] text-sm leading-relaxed text-mist/75 lg:mt-6 lg:max-w-[42ch] lg:text-[clamp(0.95rem,1.05vw,1.2rem)]">
-              Mỗi đêm Sói chọn một người. Mỗi ngày cả làng bỏ phiếu. Ai đọc được kẻ nói dối trước,
-              phe đó thắng.
-            </p>
-          </section>
-
-          {/*
-            * Cột phải là MỘT ô lưới chứa hai thẻ, không phải hai ô chồng nhau.
-            *
-            * Bản trước đặt panel form ở `row-start-1 row-span-2` rồi lại đặt
-            * lịch sử ở `row-start-2` cùng cột: hai thứ được xếp đè lên đúng
-            * một ô. Gộp vào một ô rồi để flex xếp dọc thì thứ tự đọc, khoảng
-            * cách và bề rộng chỉ còn một nguồn sự thật - và cả hai thẻ tự khớp
-            * đúng bề ngang của cột.
-            *
-            * gap-3.5 (14px) là cố ý ngắn: đủ để hai thẻ tách hẳn ra, chưa đủ
-            * để lịch sử trôi thành một khối rời rạc dưới chân trang.
-            */}
-          <div className="flex flex-col gap-3.5 lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:self-start">
-            {/* motion-safe: chỉ một lần fade + trượt lên khi vào trang. Tắt
-              * chuyển động thì panel hiện thẳng, không mất gì cả. */}
-            <section className="motion-safe:animate-riseIn">
-              <p className="mb-3.5 flex items-center gap-3 text-[0.68rem] font-bold uppercase tracking-[0.32em] text-mist/80">
-                <span
-                  aria-hidden="true"
-                  className="h-px w-8 bg-gradient-to-r from-transparent to-mist/45"
-                />
-                Bước vào ngôi làng
-              </p>
-
-              <div className="gate-panel p-6 sm:p-7 lg:p-[clamp(1.75rem,2vw,2.5rem)]">
-                {/* relative để nội dung nằm TRÊN hai lớp ánh sáng ::before và
-                  * ::after của panel - chúng là phần tử định vị nên mặc định vẽ
-                  * đè lên chữ trong luồng. */}
+        <main className="home-main">
+          <div className="home-hero">
+            <section className="home-intro" aria-labelledby="home-title">
+              <p className="home-eyebrow"><span className="home-status-dot" /> KHI ĐÊM XUỐNG, ĐỪNG TIN AI.</p>
+              <h1 id="home-title" aria-label="MA SÓI ONLINE"><span>MA</span><span>SÓI<span className="home-title-period">.</span></span></h1>
+              <p className="home-online">O N L I N E</p>
+              <p className="home-story">Giữa những người bạn.<br />Có một kẻ săn mồi.</p>
+              <p className="home-description">Ẩn giấu thân phận. Đọc vị lời nói dối.<br />Sống sót qua đêm — hoặc làm chủ bóng tối.</p>
+              <a className="home-discover" href="#cach-choi"><span aria-hidden="true">↓</span> Khám phá cách chơi</a>
+            </section>
+            <section id="vao-lang" className="home-entry" aria-labelledby="entry-heading">
+              <div className="gate-panel home-gate">
                 <div className="relative space-y-5">
+                  <div className="home-gate-heading">
+                    <span className="home-eyebrow">BẠN ĐÃ SẴN SÀNG?</span>
+                    <h2 id="entry-heading">Đêm nay, bạn là ai?</h2>
+                    <p>Nhập biệt danh và bước vào cuộc chơi.</p>
+                  </div>
                   <div>
                     <label
                       htmlFor="nickname"
@@ -454,7 +386,6 @@ export default function Home() {
                       onChange={(e) => setNickname(e.target.value)}
                     />
                   </div>
-
                   <div>
                     <button
                       className="gate-cta"
@@ -468,7 +399,7 @@ export default function Home() {
                           Đang mở phòng...
                         </>
                       ) : (
-                        "Tạo phòng mới"
+                        <>Tạo phòng mới <span aria-hidden="true">↗</span></>
                       )}
                     </button>
                     {createHint && (
@@ -476,12 +407,6 @@ export default function Home() {
                         {createHint}
                       </p>
                     )}
-                    {/*
-                      * Lối vào cho người mới: một phòng với bot, có thẻ hướng dẫn
-                      * theo từng pha. Hạng hai so với "Tạo phòng mới" - đây là
-                      * ván tập, không phải ván chính - nên là viền chứ không phải
-                      * nền đặc, và đứng ngay dưới CTA để không phải đi tìm.
-                      */}
                     <button
                       type="button"
                       className="gate-guide mt-2.5 w-full"
@@ -496,38 +421,24 @@ export default function Home() {
                         </>
                       ) : (
                         <>
-                          <span aria-hidden="true">🧭</span> {guideDone ? "Xem lại ván hướng dẫn" : "Chơi thử có hướng dẫn"}
+                          <span aria-hidden="true">▷</span> {guideDone ? "Xem lại ván hướng dẫn" : "Chơi thử có hướng dẫn"}
                         </>
                       )}
                     </button>
                     <p id="guide-hint" className="mt-1.5 text-xs text-mist/80">
                       {guideDone
                         ? "Bạn đã đi hết một ván hướng dẫn. Vẫn mở lại được nếu muốn ôn - ván thật thì dùng “Tạo phòng mới”."
-                        : "Một ván với 7 bot, luật thật, kèm lời nhắc ngắn ở mỗi pha. Ẩn được bất cứ lúc nào."}
+                        : "Lần đầu chơi? Thử một ván với 7 bot và hướng dẫn từng bước."}
                     </p>
                   </div>
-
                   <div className="flex items-center gap-3" aria-hidden="true">
                     <span className="h-px flex-1 bg-white/10" />
                     <span className="text-[0.68rem] uppercase tracking-[0.18em] text-mist/85">
-                      hoặc đã có mã phòng
+                      THAM GIA CÙNG BẠN BÈ
                     </span>
                     <span className="h-px flex-1 bg-white/10" />
                   </div>
-
                   <div>
-                    {/*
-                      * Người rót `?code=` vào ô ngay bên dưới. Không vẽ gì cả.
-                      *
-                      * Đặt ngay cạnh ô nhập chứ không ở đầu trang: nó chỉ tồn tại
-                      * vì cái input này, và đọc tới đây là thấy ngay ai chạm vào
-                      * `joinCode`.
-                      *
-                      * `fallback={null}` không phải là bỏ trống cho xong - nó là
-                      * bản sao chính xác của một component render null, nên
-                      * boundary này không có gì để nhấp nháy lúc hydrate và không
-                      * có bản giao diện thứ hai nào phải giữ cho khớp.
-                      */}
                     <Suspense fallback={null}>
                       <JoinCodeFromQuery onCode={setJoinCode} />
                     </Suspense>
@@ -572,12 +483,6 @@ export default function Home() {
                       </p>
                     )}
                   </div>
-
-                  {/* Dấu chấm than là bắt buộc, không phải trang trí: một khối
-                    * đỏ nhạt là màu, và màu một mình thì người mù màu đọc ra
-                    * đúng bằng một dòng chữ bình thường. */}
-                  {/* Trạng thái, không phải lỗi: màu trung tính, có vòng quay
-                    * để biết là vẫn đang chờ chứ không phải kẹt. */}
                   {wakingSince !== null && busy && (
                     <p
                       role="status"
@@ -590,7 +495,6 @@ export default function Home() {
                       <span>{wakeStatusText(wakingElapsed)}</span>
                     </p>
                   )}
-
                   {error && (
                     <p
                       role="alert"
@@ -605,13 +509,9 @@ export default function Home() {
                       <span>{error}</span>
                     </p>
                   )}
-
                   <p className="border-t border-white/[0.07] pt-4 text-xs leading-relaxed text-mist/75">
                     Tối thiểu 8 người mỗi ván - thiếu thì thêm bot ngay trong phòng chờ.
                   </p>
-
-                  {/* Nhạt hơn hẳn CTA và không có nền: đây là việc người ta làm
-                    * một lần trong đời chứ không phải hành động chính. */}
                   {hasIdentity && (
                     <button
                       className="w-full rounded-lg py-1 text-center text-xs text-mist/75 underline-offset-4 transition hover:text-white hover:underline"
@@ -623,68 +523,34 @@ export default function Home() {
                 </div>
               </div>
             </section>
-
-            {/*
-              * Lịch sử ván: thẻ riêng, ngay dưới thẻ vào phòng.
-              *
-              * Tách hẳn ra `.card` chứ không nối thêm vào `.gate-panel`: nền,
-              * bo góc và luồng sáng của hai lớp này khác nhau rõ, nên không ai
-              * đọc nhầm danh sách ván là phần tiếp theo của ô nhập mã phòng.
-              *
-              * Tự ẩn hoàn toàn khi chưa đăng nhập hoặc chưa có ván nào, nên
-              * người mới vào không thấy một khung rỗng nói rằng họ chưa làm gì -
-              * và `gap` của flex cũng không chừa chỗ cho một thẻ không tồn tại.
-              */}
-            {/* Hồ sơ đứng trên lịch sử: con số tổng trước, từng ván sau. Cùng
-              * quy tắc tự ẩn với thẻ lịch sử. */}
-            <PlayerStatsCard />
-            <MatchHistoryPanel />
-            {/* Bảng xếp hạng đứng SAU lịch sử của chính mình: việc của mình
-              * trước, việc của làng sau. Hiện cả khi chưa đăng nhập. */}
-            <LeaderboardPanel />
-
-            {/*
-              * Lời mời cài app: thẻ cuối cùng của cột, sau lịch sử ván.
-              *
-              * Đặt ở trang chủ chứ không ở layout là có chủ ý. Trong phòng chơi
-              * mọi pixel đều đang thuộc về một ván đang chạy, và thứ duy nhất
-              * một lời mời cài đặt làm được ở đó là chen vào giữa. Đây cũng là
-              * nơi duy nhất người ta còn đang cân nhắc "chơi cái này lâu dài
-              * không" - đúng lúc để hỏi.
-              *
-              * Tự ẩn hoàn toàn khi đã cài, đã đóng, hoặc khi trình duyệt không
-              * cho cài; xem `lib/pwa-install.ts`.
-              */}
-            <InstallPrompt />
           </div>
 
-          {/*
-            * Ba mục giới thiệu, gom thành chip.
-            *
-            * Nằm SAU panel trong DOM vì thứ tự đọc đúng là thương hiệu -> form
-            * -> thông tin phụ; trên desktop grid mới đặt nó về lại cột trái.
-            * Bản cũ trải chúng thành ba cột chữ nhỏ vắt ngang chân trang, đúng
-            * hình dạng của một cái footer.
-            */}
-          <ul className="flex flex-wrap gap-2.5 lg:col-start-1 lg:row-start-2 lg:gap-3 lg:self-end">
-            {[
-              [`${MIN_PLAYERS_TO_START} - ${MAX_PLAYERS_PER_ROOM} người`, "#9db2d5"],
-              ["Chơi được với bot", "#e0a35c"],
-              ["Chat riêng theo phe", "#f04760"],
-            ].map(([label, dot]) => (
-              <li key={label} className="gate-chip">
-                <span
-                  aria-hidden="true"
-                  className="h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ background: dot, boxShadow: `0 0 8px 1px ${dot}80` }}
-                />
-                {label}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </main>
-      <AssetCredits />
+          <div className="home-feature-strip" aria-label="Thông tin trò chơi">
+            <div><span className="home-feature-icon" aria-hidden="true">◎</span><p><strong>{MIN_PLAYERS_TO_START}–{MAX_PLAYERS_PER_ROOM} người chơi</strong><span>Một bàn chơi. Vô vàn nghi ngờ.</span></p></div>
+            <div><span className="home-feature-icon" aria-hidden="true">◈</span><p><strong>Mỗi vai, một bí mật</strong><span>Phe Dân Làng, Ma Sói và Trung Lập.</span></p></div>
+            <div><span className="home-feature-icon" aria-hidden="true">♧</span><p><strong>Luôn có người cùng chơi</strong><span>Rủ bạn bè hoặc đấu trí cùng bot.</span></p></div>
+          </div>
+          <section id="nhat-ky" className="home-journal" aria-labelledby="journal-heading">
+            <div className="home-section-heading"><div><p className="home-eyebrow">SAU NHỮNG ĐÊM DÀI</p><h2 id="journal-heading">Dấu ấn trong làng</h2></div></div>
+            <div className="home-dashboard">
+              <div className="home-personal"><PlayerStatsCard /><MatchHistoryPanel /></div>
+              <div className="home-community"><LeaderboardPanel /></div>
+            </div>
+          </section>
+
+          <section id="cach-choi" className="home-howto" aria-labelledby="howto-heading">
+            <div className="home-section-heading"><div><p className="home-eyebrow">LUẬT CHƠI</p><h2 id="howto-heading">Dễ chơi. Khó tin nhau.</h2></div></div>
+            <ol className="home-steps">
+              <li><span className="home-step-number">01 /</span><div><h3>Nhận vai, giữ bí mật</h3><p>Bạn là Dân Làng, Ma Sói hay một vai đặc biệt? Chỉ bạn biết sự thật.</p></div></li>
+              <li><span className="home-step-number">02 /</span><div><h3>Đêm hành động, ngày suy luận</h3><p>Dùng năng lực trong đêm. Khi trời sáng, cùng cả làng tìm ra kẻ nói dối.</p></div></li>
+              <li><span className="home-step-number">03 /</span><div><h3>Bỏ phiếu, định số phận</h3><p>Thuyết phục mọi người, chọn người bị treo và đưa phe mình đến chiến thắng.</p></div></li>
+            </ol>
+          </section>
+          <div className="home-install"><InstallPrompt /></div>
+        </main>
+        <div className="home-footer"><span>MA SÓI ONLINE</span><p>Đừng tin tất cả những gì bạn nghe khi đêm xuống.</p><a href="#vao-lang">Hẹn gặp trong làng <span aria-hidden="true">↗</span></a></div>
+        <AssetCredits />
+      </div>
     </>
   );
 }
