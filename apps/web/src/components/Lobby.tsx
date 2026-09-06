@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   MAX_PLAYERS_PER_ROOM,
   ROLE_META,
@@ -25,6 +25,7 @@ import {
   type StartBlock,
 } from "@/lib/lobby-summary";
 import { lastLetterToggle } from "@/lib/last-letter";
+import { useDockHeight } from "@/lib/useDockHeight";
 import { ROLE_ICON_PATHS } from "@/lib/role-art";
 import { BalanceMeter } from "./BalanceMeter";
 import { LobbyActivity } from "./LobbyActivity";
@@ -96,7 +97,8 @@ export function Lobby({
   onReady,
   onStart,
   onAddBot,
-}: Omit<Props, "onUpdateConfig">) {
+  onUpdateConfig,
+}: Props) {
   const { config, count, mode, isHost, balance, stage } = lobbyModel(snapshot, identity);
   const me = snapshot.players.find((p) => p.id === identity.playerId);
   const myReady = me?.ready ?? false;
@@ -124,6 +126,15 @@ export function Lobby({
    */
   const visibleRoles = activeRoles.slice(0, 4);
 
+  /*
+   * Thanh hành động dính đáy trên điện thoại tự khai báo chiều cao của nó.
+   *
+   * Xem `useDockHeight`: trang chừa đệm đáy theo con số này, còn nút chat nổi
+   * và dock voice nhấc mình lên khỏi nó. Không có gì phải đồng bộ bằng tay.
+   */
+  const dockRef = useRef<HTMLDivElement>(null);
+  useDockHeight(dockRef);
+
   // Cùng bộ đầu vào và cùng thứ tự ưu tiên mà `RoomService.start` dùng -
   // startBlock chỉ gói lại chứ không đổi luật nào.
   const configError = validateRoomConfig(config, count);
@@ -134,6 +145,44 @@ export function Lobby({
     mode,
     unreadyNames: unreadyGuests.map((player) => player.name),
   });
+
+  /*
+   * Lối thoát cho hai lý do chặn mà bộ bài gây ra, ĐẶT NGAY DƯỚI NÚT.
+   *
+   * "Bộ bài cần 8 người, phòng đang có 10" và "Đội hình chưa đủ cân bằng" đều
+   * sửa được bằng đúng một cú bấm - áp preset của cỡ bàn hiện tại - nhưng cái
+   * nút làm việc đó nằm trong lớp phủ "Luật và vai trò", sau một cú bấm nữa và
+   * một cuộn nữa. Host nhìn thấy một nút xám, một dòng đỏ, và không có gì để
+   * bấm: đó là một ngõ cụt, và nó xảy ra ở đúng tình huống thường gặp nhất -
+   * mở phòng 8 người rồi thêm bot cho vui.
+   *
+   * Cùng một hành động với nút trong lớp phủ, cùng `applyDeck` nên cũng chỉ
+   * thay BỘ BÀI: Chaos, voice, Phong thư và bộ giây của phòng giữ nguyên.
+   */
+  /*
+   * "Thêm bot" đứng ở một trong hai chỗ, tuỳ nó có phải LỐI THOÁT hay không.
+   *
+   * Khối ghim dưới nút Bắt đầu chỉ chứa ba thứ: nút, lý do đang chặn, và cách
+   * sửa đúng lý do đó. Phòng chưa đủ người thì cách sửa chính là thêm bot, nên
+   * nó ở đó. Phòng đã đủ người thì nó là một hành động phụ - và mỗi pixel của
+   * khối ghim là một pixel lấy khỏi phần tóm tắt cuộn được ngay trên nó: ở
+   * 1280x800, với cả nút áp preset đang hiện, phần tóm tắt chỉ còn 135px và
+   * dòng diễn biến biến mất hẳn. Cho nó xuống cuối phần cuộn được thì tóm tắt
+   * lấy lại 52px, mà lối vào vẫn nằm ngay dưới bộ bài - đúng chỗ host đang đọc
+   * khi họ nghĩ tới chuyện thêm người.
+   */
+  const canAddBot = isHost && count < MAX_PLAYERS_PER_ROOM;
+  const addBotIsTheFix = block?.kind === "need-players";
+
+  const presetForCount = PRESET_DECKS[count];
+  const fixDeck =
+    isHost &&
+    stage.rated &&
+    !!presetForCount &&
+    !onPreset &&
+    (block?.kind === "config" || block?.kind === "balance")
+      ? () => onUpdateConfig(applyDeck(config, presetForCount))
+      : null;
 
   return (
     <section className="lobby-command-panel">
@@ -188,9 +237,13 @@ export function Lobby({
       <div className="mt-3 border-t border-white/[0.08] pt-3">
         <LobbyActivity snapshot={snapshot} />
       </div>
+
+      {/* Đủ người rồi thì "Thêm bot" xuống ĐÂY, trong phần cuộn được. Lý do ở
+        * chỗ khai `addBotIsTheFix`. */}
+      {canAddBot && !addBotIsTheFix && <AddBotButton onAddBot={onAddBot} />}
       </div>
 
-      <div className="lobby-primary-action mt-3">
+      <div ref={dockRef} className="lobby-primary-action mt-3">
         {isHost ? (
           <button className="btn-cta w-full" onClick={onStart} disabled={block !== null}>
             <span aria-hidden="true">◐</span>
@@ -206,19 +259,25 @@ export function Lobby({
             {myReady ? "Đã sẵn sàng" : "Sẵn sàng"}
           </button>
         )}
-        <BlockReason block={block} isHost={isHost} />
+        <BlockReason block={block} isHost={isHost} onFixDeck={fixDeck} count={count} />
+        {/* Phòng chưa đủ người thì "Thêm bot" chính là cách sửa lý do đang
+          * chặn, nên nó ở lại trong khối GHIM cùng nút Bắt đầu. */}
+        {canAddBot && addBotIsTheFix && <AddBotButton onAddBot={onAddBot} />}
       </div>
-      {isHost && count < MAX_PLAYERS_PER_ROOM && (
-        <button
-          type="button"
-          className="btn-tertiary lobby-add-bot mx-auto mt-2 flex min-h-11"
-          onClick={onAddBot}
-          disabled={count >= MAX_PLAYERS_PER_ROOM}
-        >
-          + Thêm bot để chơi thử
-        </button>
-      )}
     </section>
+  );
+}
+
+/** Một nút, hai chỗ đứng - xem `addBotIsTheFix` trong `Lobby`. */
+function AddBotButton({ onAddBot }: { onAddBot: () => void }) {
+  return (
+    <button
+      type="button"
+      className="btn-tertiary lobby-add-bot mx-auto mt-2 flex min-h-11"
+      onClick={onAddBot}
+    >
+      + Thêm bot để chơi thử
+    </button>
   );
 }
 
@@ -399,11 +458,22 @@ function Disclosure({
  * câu trả lời, và hai thứ đó cách nhau 10px. Lời rủ gửi mã phòng cho bạn bè đã
  * nằm ở `LobbyHeader` cùng thanh tiến độ, nên ở đây không nhắc lại.
  */
-function BlockReason({ block, isHost }: { block: StartBlock; isHost: boolean }) {
+function BlockReason({
+  block,
+  isHost,
+  onFixDeck,
+  count,
+}: {
+  block: StartBlock;
+  isHost: boolean;
+  /** Áp preset của cỡ bàn hiện tại; null khi không phải lối thoát đúng. */
+  onFixDeck: (() => void) | null;
+  count: number;
+}) {
   if (!block) return null;
   if (block.kind === "need-players") {
     return (
-      <p className="mt-2.5 text-center text-sm text-mist/85" data-testid="start-block">
+      <p className="lobby-block-reason text-center text-sm text-mist/85" data-testid="start-block">
         Cần thêm <b className="text-white">{block.missing}</b> người để bắt đầu.
       </p>
     );
@@ -416,24 +486,31 @@ function BlockReason({ block, isHost }: { block: StartBlock; isHost: boolean }) 
    * lỗi đỏ chép nguyên văn cảnh báo của engine. Câu ở đây nói ra cả hai lối
    * thoát mà server chấp nhận.
    */
-  if (block.kind === "balance") {
+  if (block.kind === "balance" || block.kind === "config") {
     return (
-      <p className="mt-2.5 text-center text-sm text-blood-400" data-testid="start-block">
-        Đội hình chưa đủ cân bằng để bắt đầu Ranked. Hãy sửa bộ bài hoặc chuyển sang Chaos.
-      </p>
-    );
-  }
-  if (block.kind === "config") {
-    return (
-      <p className="mt-2.5 text-center text-sm text-blood-400" data-testid="start-block">
-        {block.message}
-      </p>
+      <>
+        <p className="lobby-block-reason text-center text-sm text-blood-400" data-testid="start-block">
+          {block.kind === "balance"
+            ? "Đội hình chưa đủ cân bằng để bắt đầu Ranked. Hãy sửa bộ bài hoặc chuyển sang Chaos."
+            : block.message}
+        </p>
+        {onFixDeck && (
+          <button
+            type="button"
+            className="btn-secondary lobby-fix-deck w-full text-sm"
+            data-testid="fix-deck"
+            onClick={onFixDeck}
+          >
+            Áp dụng đội hình chuẩn cho {count} người
+          </button>
+        )}
+      </>
     );
   }
   // Khách không cần đọc danh sách người chưa sẵn sàng: họ không bấm bắt đầu.
   if (!isHost) return null;
   return (
-    <p className="mt-2.5 text-center text-sm text-amber-200" data-testid="start-block">
+    <p className="lobby-block-reason text-center text-sm text-amber-200" data-testid="start-block">
       Chờ {block.names.join(", ")} bấm sẵn sàng.
     </p>
   );

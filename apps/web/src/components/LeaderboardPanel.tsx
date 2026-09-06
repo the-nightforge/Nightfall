@@ -50,7 +50,11 @@ export function LeaderboardPanel() {
           một bàn là có tên đầu tiên.
         </p>
       ) : (
-        <ol className="divide-y divide-white/[0.06]">
+        <ol
+          className="divide-y divide-white/[0.06]"
+          tabIndex={0}
+          aria-label="Thứ hạng người chơi"
+        >
           {view.entries.map((entry) => (
             <Row key={entry.playerId} entry={entry} mine={entry.playerId === meId} />
           ))}

@@ -424,7 +424,15 @@ export function ChatBox({
         </div>
       )}
 
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      {/*
+        * overflow-hidden: khung tin nhắn bên trong vẫn còn `p-2.5`, và đệm KHÔNG
+        * co theo flex - nên khi cột chat bị bóp xuống sát sàn (1024x768 và
+        * 1280x800 ở phòng chờ) nó cao 20px trong một khung cao 1px và tràn
+        * xuống đè lên ô nhập: "Chưa có tin nhắn nào" in chồng lên "Gửi vào
+        * Kênh phòng chờ". Cắt ở đây thì mọi bề cao đều ra một khung chat đúng
+        * hình, chỉ ít chỗ hơn.
+        */}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {/*
           * overscroll-contain: trên điện thoại khung này nằm trong một tấm trượt
           * đè lên trang phòng. Thiếu nó thì vuốt tới đáy danh sách rồi vuốt tiếp
@@ -441,8 +449,11 @@ export function ChatBox({
             items.length === 0 ? "grid place-content-center" : "space-y-1.5"
           }`}
         >
+          {/* py-3 chứ không py-6: ở phòng chờ trên màn cao 768px khung tin nhắn
+            * chỉ còn khoảng 5.5rem, và 48px đệm dọc là đủ để đẩy dòng thứ hai
+            * ra ngoài mép. */}
           {items.length === 0 && (
-            <div className="px-4 py-6 text-center">
+            <div className="px-4 py-3 text-center">
               {/*
                 * /55 chứ không phải /35.
                 *

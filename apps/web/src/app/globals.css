@@ -361,6 +361,24 @@ summary:focus-visible,
 }
 
 /*
+ * Thanh đầu trang phòng, ở những màn hẹp nhất.
+ *
+ * Hàng này phải chứa "Rời phòng", mã phòng, hai nút mời và nút âm thanh - và
+ * nó đã được chỉnh vừa khít 390px. Ở 360px (Galaxy A, iPhone SE xoay dọc) nó
+ * thiếu đúng 22px, nên "Mã QR" rơi xuống một hàng thứ hai và thanh cao gấp
+ * đôi, ngay phía trên sân người chơi.
+ *
+ * Bớt đệm ngang và giãn chữ của mã phòng thay vì giấu một cái nhãn đi: cả bốn
+ * nút vẫn còn nguyên chữ của chúng, chỉ đứng sát nhau hơn - và vùng chạm 36px
+ * theo chiều cao thì không đổi.
+ */
+@media (max-width: 380px) {
+  .room-topbar { gap: 0.375rem; }
+  .room-topbar button { padding-inline: 0.5rem; }
+  .room-topbar .font-mono { letter-spacing: 0.06em; }
+}
+
+/*
  * Phòng chờ mới: một sân khấu làng đêm, không phải ba cột dashboard.
  * Những surface dưới đây dùng một lớp nền mỏng và gần như không blur để ảnh
  * tĩnh phía sau còn đọc được mà GPU điện thoại không phải compositing nặng.
@@ -508,14 +526,17 @@ summary:focus-visible,
  * hỏi thẳng cái khung đang chứa nó, nên nó đúng ở mọi bề ngang - kể cả những
  * bề ngang chưa ai nghĩ tới.
  *
- * 6rem là ô hẹp nhất còn chứa vừa chân dung 4rem cộng một tên hai chữ - và nó
- * cũng đúng là con số giữ được BA cột ở màn 390px, đúng bằng bản cũ chốt cứng.
- * Nhích lên 6.5rem là mất một cột ở đó.
+ * 5.5rem là ô hẹp nhất còn chứa vừa chân dung 4rem cộng một tên hai chữ. Con
+ * số cũ là 6rem, đủ cho BA cột ở màn 390px nhưng thiếu đúng 13px ở 360px
+ * (Galaxy A, iPhone SE) - ở đó sân tụt xuống HAI cột và mỗi ô phình ra gần
+ * 150px, tức là cuộn hết hai màn hình mới xem đủ một phòng tám người. 5.5rem
+ * giữ ba cột ở cả hai bề ngang đó, và không đổi gì ở 390 trở lên (bốn cột vẫn
+ * cần 383px, vẫn không vừa).
  */
 .lobby-player-grid {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
   gap: 0.65rem;
 }
 
@@ -719,6 +740,13 @@ button.lobby-player-tile:active {
   }
 }
 
+/* Lề của hai thứ đứng dưới nút CTA. Chúng là class thật chứ không phải
+ * `data-testid`: ba khối media dưới đây chỉnh lề và chiều cao của chúng, và
+ * một cái móc CSS treo vào tên test là thứ sẽ đứt lặng lẽ vào ngày ai đó đổi
+ * tên test. */
+.lobby-block-reason { margin-top: 0.625rem; }
+.lobby-fix-deck { margin-top: 0.5rem; }
+
 .lobby-role-chip {
   display: inline-flex;
   min-width: 0;
@@ -908,6 +936,28 @@ button.lobby-player-tile:active {
 }
 
 /*
+ * Bàn rộng thì ghế to ra, không phải nhiều ghế bé hơn.
+ *
+ * `auto-fit` chia bao nhiêu cột là do sàn `minmax` quyết, nên ở sân rộng 890px
+ * của desktop lớn sàn 6rem cho ra bảy cột mà mỗi ô chỉ dùng 108px cho một chân
+ * dung 72px - phần thừa rơi hết vào lề trong ô. Nới sàn lên 7rem thì vẫn đúng
+ * bảy cột ở bề ngang đó, nhưng chân dung và tên được to theo, và hai hàng người
+ * chiếm đủ chỗ để cái sân đọc ra là có người ngồi.
+ *
+ * Chỉ từ 1536px, và mốc đó phải đo bằng bề ngang THẬT của sân chứ không bằng
+ * cảm giác "màn hình lớn": ở 1280px sân rộng khoảng 740px, sàn 6rem cho ra sáu
+ * cột - vừa đúng mười người cộng một ô trống thành hai hàng - còn sàn 7rem chỉ
+ * còn năm, tức ba hàng và một thanh cuộn cho một phòng chưa đầy một nửa. Từ
+ * 1536px trở lên trang đã chạm trần 1440px nên sân rộng khoảng 855px, và ở bề
+ * ngang đó 7rem vẫn giữ nguyên số hàng.
+ */
+@media (min-width: 1536px) {
+  .lobby-player-grid { grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: 1rem; }
+  .lobby-player-tile, .lobby-empty-tile { min-height: 10.25rem; }
+  .lobby-player-avatar, .lobby-empty-avatar { width: 5.25rem; height: 5.25rem; }
+}
+
+/*
  * Từ lg sân người chơi cao ĐÚNG BẰNG cột của nó.
  *
  * Không phải để lấp chỗ trống: một cái thẻ dừng ở giữa màn hình trong khi
@@ -918,22 +968,59 @@ button.lobby-player-tile:active {
  */
 @media (min-width: 1024px) {
   .lobby-player-board { flex: 1 1 auto; }
+
+  /*
+   * ...và người chơi ngồi GIỮA cái sân đó, không dán lên mép trên.
+   *
+   * Bảng cao bằng cột là đúng, nhưng mười người trong một cái sân cao 900px
+   * thì hai hàng ảnh nằm sát đầu bảng còn hơn 400px phía dưới trống trơn - ở
+   * 1920x1080 nó chiếm quá nửa chiều cao của khu nhìn chính. Dồn lưới vào
+   * giữa thì cùng bấy nhiêu chỗ trống chia đều trên/dưới và đọc ra như khoảng
+   * thở quanh một cái bàn.
+   *
+   * `safe`: khi phòng đông tới mức lưới cao hơn khung, `center` thường cắt
+   * mất hàng ĐẦU ở mép trên và không cuộn tới được. Từ khoá này bảo trình
+   * duyệt tự bỏ căn giữa đúng lúc đó và quay về `start`.
+   */
+  .lobby-player-scroll > .lobby-player-grid {
+    min-height: 100%;
+    align-content: safe center;
+  }
 }
 
+/*
+ * Dưới lg, nút Bắt đầu là một THANH DÍNH ĐÁY MÀN HÌNH, không phải một tấm nổi
+ * lơ lửng cách đáy 88px.
+ *
+ * Bản cũ neo nó ở `bottom: 5.5rem` để chừa chỗ cho nút chat nổi bên dưới, và
+ * cái giá là một dải 88px giữa thanh và mép màn hình mà trang vẫn cuộn qua:
+ * trên iPhone người ta nhìn thấy nửa dưới của một ô người chơi và một mẩu dòng
+ * "Và còn 9 vị trí trong làng" trôi qua bên dưới thanh, lại còn bị nút Chat đè
+ * lên một nửa. Ba lớp nổi chồng nhau ở cùng một góc màn hình.
+ *
+ * Giờ chỉ còn một mép: thanh dán vào đáy, nút chat và dock voice nhấc lên NGỒI
+ * TRÊN nó. Chiều cao của thanh do chính nó khai báo (`useDockHeight` ->
+ * `--lobby-dock-h`), nên đệm đáy của trang và chỗ đứng của hai nút kia luôn
+ * khớp với thanh - kể cả khi câu chặn xuống dòng thành hai hàng, thứ mà hằng
+ * số `11rem` cũ đoán trượt ở iPad 768x1024 và để thanh phủ mất nút "Luật và
+ * vai trò".
+ */
 @media (max-width: 1023px) {
+  /* Đệm đáy = thanh + hàng nút nổi ngồi trên nó. Thiếu vế thứ hai thì nút Chat
+   * đúng là không đè lên thanh nữa, nhưng nó đè lên "Luật và vai trò" - thứ
+   * cuối cùng của mạch đọc, và là chỗ mà cuộn hết trang sẽ dừng lại. */
   .lobby-page {
-    padding-bottom: calc(11rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(var(--lobby-dock-h, 9rem) + 4.5rem);
   }
 
   .lobby-primary-action {
     position: fixed;
     z-index: 25;
-    bottom: calc(5.5rem + env(safe-area-inset-bottom));
-    left: 50%;
-    width: min(calc(100% - 1.5rem), 42rem);
+    inset: auto 0 0;
     margin: 0;
-    padding: 0.65rem 0.45rem;
-    border-radius: 1rem;
+    padding: 0.7rem max(0.75rem, env(safe-area-inset-left)) calc(0.7rem + env(safe-area-inset-bottom))
+      max(0.75rem, env(safe-area-inset-right));
+    border-radius: 1.15rem 1.15rem 0 0;
     /*
      * Nền ĐẶC, không phải mờ 86%.
      *
@@ -943,11 +1030,89 @@ button.lobby-player-tile:active {
      * một lỗi vẽ. Một đường viền mảnh cho tấm một cái mép để mắt biết nó là
      * một thứ nằm TRÊN trang chứ không phải một mảng của trang.
      */
-    border: 1px solid rgba(157, 178, 213, 0.16);
+    border-top: 1px solid rgba(157, 178, 213, 0.16);
     background: rgba(9, 14, 26, 0.985);
-    box-shadow: 0 -14px 34px -20px rgba(0, 0, 0, 0.95), 0 8px 24px -12px rgba(0, 0, 0, 0.8);
-    transform: translateX(-50%);
+    box-shadow: 0 -18px 40px -22px rgba(0, 0, 0, 0.95);
   }
+
+  /* Nội dung của thanh vẫn theo bề ngang của trang chứ không trải ra 100% trên
+   * iPad: một cái nút dài 1000px không đọc ra là một cái nút. */
+  .lobby-primary-action > * {
+    margin-inline: auto;
+    max-width: 42rem;
+  }
+
+  /*
+   * Nút chat nổi và dock voice ngồi TRÊN thanh, không cạnh nó.
+   *
+   * `[data-lobby-dock]` chỉ có mặt khi thanh đang được dựng, nên các pha khác
+   * của ván - nơi không có thanh nào - giữ nguyên `bottom-4` của chúng.
+   */
+  [data-lobby-dock] [data-mobile-chat-fab],
+  [data-lobby-dock] [data-voice-dock] {
+    bottom: calc(var(--lobby-dock-h, 9rem) + 0.75rem);
+    margin-bottom: 0;
+  }
+}
+
+/*
+ * Màn thấp: thanh phải nhỏ lại, vì nó đo bằng phần trăm màn hình chứ không
+ * bằng pixel.
+ *
+ * Ở cỡ mặc định, thanh đầy đủ - nút CTA, dòng lý do chặn và nút áp preset -
+ * cao khoảng 250px. Trên một máy 640px chiều cao (Galaxy A, iPhone SE) đó là
+ * hai phần năm màn hình dành cho ba dòng, trong khi cái người ta vào phòng để
+ * nhìn là danh sách người chơi. Bóp đệm và chiều cao nút lại còn khoảng 190px;
+ * vùng chạm của cả hai nút vẫn trên 44px.
+ */
+@media (max-width: 1023px) and (max-height: 700px) {
+  .lobby-primary-action {
+    padding-top: 0.5rem;
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  }
+
+  .lobby-primary-action .btn-cta {
+    min-height: 3rem;
+    padding-block: 0.6rem;
+  }
+
+  .lobby-primary-action .lobby-fix-deck {
+    min-height: 2.75rem;
+    margin-top: 0.4rem;
+  }
+
+  .lobby-primary-action .lobby-block-reason {
+    margin-top: 0.4rem;
+  }
+}
+
+/*
+ * Điện thoại nằm ngang: 390px chiều cao cho cả một phòng chờ.
+ *
+ * Ở bề cao đó, ba thứ cố định - thanh đầu trang, đầu bảng người chơi và thanh
+ * hành động - cộng lại đã ăn hết màn hình, và cái còn lại đúng một dải avatar
+ * bị cắt ngang. Không có bố cục nào cứu được chuyện đó; thứ cứu được là bắt
+ * từng thứ trong ba cái kia trả lại vài chục pixel.
+ *
+ * Cái nào trả: chữ trang trí trả trước (dòng "PHÒNG MA SÓI", cỡ tiêu đề cảnh,
+ * mặt trăng), rồi tới chân dung - nhỏ đi một nấc thì vẫn nhận ra ai là ai, mà
+ * mỗi hàng ghế rẻ đi 40px. Sĩ số, dấu sẵn sàng và nút Bắt đầu không đổi: đó là
+ * ba thứ người ta mở phòng chờ ra để nhìn.
+ */
+@media (max-width: 1023px) and (max-height: 560px) {
+  .lobby-board-head { padding-bottom: 0.55rem; margin-bottom: 0.6rem; }
+  .lobby-board-head .lobby-kicker { display: none; }
+  .lobby-board-heading { gap: 0.6rem; }
+  .lobby-board-heading h1 { font-size: 1.05rem; }
+  .lobby-board-meta { margin-top: 0.4rem; }
+  .lobby-room-moon { width: 1.9rem; height: 1.9rem; }
+  .lobby-room-moon svg { width: 1.1rem; height: 1.1rem; }
+
+  .lobby-player-tile, .lobby-empty-tile { min-height: 7.4rem; padding-top: 0.6rem; }
+  .lobby-player-avatar, .lobby-empty-avatar { width: 3.25rem; height: 3.25rem; }
+
+  .lobby-primary-action .btn-cta { min-height: 2.6rem; padding-block: 0.45rem; }
+  .lobby-primary-action .lobby-fix-deck { min-height: 2.4rem; }
 }
 
 @media (min-width: 640px) {
