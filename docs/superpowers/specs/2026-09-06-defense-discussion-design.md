@@ -34,7 +34,7 @@ lời bị cáo. Kết quả: DEFENSE là độc thoại, không phải thảo l
 ## 3. Bot nói: scheduler đa người (thay accused-only một phát)
 
 - Thay `scheduleDefenseBot` (machine.ts) accused-only bằng vòng lập lịch cho MỌI bot sống:
-  mỗi bot tối đa 1–2 lượt/DEFENSE, thứ tự ngẫu nhiên (seeded), nội dung tái dùng
+  mỗi bot tối đa 2 lượt/DEFENSE (0 cũng hợp lệ — bot chưa đủ tin thì im), thứ tự ngẫu nhiên (seeded), nội dung tái dùng
   `speech-planner` (`planSpeech`) với trigger ưu tiên nhắc tới bị cáo (buộc tội/bênh vực
   theo belief riêng của từng bot: sói lái Tha cho đồng bọn / Treo cho dân, dân theo
   suspicion/trust, Hề giữ INDIFERRENT/HUMOR như luật cũ của `defense-decision`).
