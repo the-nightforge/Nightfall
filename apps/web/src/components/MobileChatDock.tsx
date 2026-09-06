@@ -336,12 +336,19 @@ export function MobileChatDock({
           aria-label={
             unread > 0 ? `Mở khung chat, ${unread} tin nhắn chưa đọc` : "Mở khung chat"
           }
-          className={`fixed bottom-4 left-4 z-40 inline-flex items-center gap-2 rounded-full px-4 py-3 font-semibold shadow-lg shadow-black/50 transition ${
+          /* data-mobile-chat-fab: ở phòng chờ thanh "Bắt đầu trò chơi" dính đáy
+           * màn hình, và nút này phải ngồi TRÊN nó - CSS tìm nó qua dấu này
+           * (xem `.lobby-primary-action` trong globals.css).
+           *
+           * Lề an toàn đi bằng class chứ không bằng `style`: `env()` trong
+           * thuộc tính style của React bị một số trình duyệt bỏ qua, và một quy
+           * tắc inline thì không quy tắc nào của stylesheet đè lên được. */
+          data-mobile-chat-fab=""
+          className={`fixed bottom-4 left-4 z-40 mb-[env(safe-area-inset-bottom)] inline-flex items-center gap-2 rounded-full px-4 py-3 font-semibold shadow-lg shadow-black/50 transition ${
             highlighted
               ? "bg-blood-500 text-white"
               : "border border-night-600 bg-night-800/95 text-mist backdrop-blur"
           }`}
-          style={{ marginBottom: "env(safe-area-inset-bottom)" }}
         >
           <span aria-hidden="true">💬</span>
           <span className="text-sm">Chat</span>

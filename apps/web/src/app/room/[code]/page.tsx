@@ -185,6 +185,10 @@ export default function RoomPage() {
               room.emit("room:start");
             }}
             onAddBot={() => room.emit("room:add-bot")}
+            /* Cùng sự kiện mà lớp phủ "Luật và vai trò" gửi: thẻ điều khiển chỉ
+             * dùng nó cho đúng một việc - áp preset để gỡ lý do đang chặn nút
+             * Bắt đầu (xem `BlockReason`). */
+            onUpdateConfig={(config) => room.emit("room:update-config", { config })}
           />
         );
       case "ROLE_REVEAL":
@@ -338,7 +342,7 @@ export default function RoomPage() {
             : "md:max-w-3xl lg:max-w-[1600px] lg:px-4 xl:px-6"
         }`}
       >
-        <header className="flex shrink-0 items-center justify-between gap-2">
+        <header className="room-topbar flex shrink-0 items-center justify-between gap-2">
           {/*
             * MỘT chỗ rời phòng cho mỗi pha - không bao giờ hai.
             *
@@ -454,9 +458,14 @@ export default function RoomPage() {
           *     đẩy khung chat lòi ra ngoài khung nhìn. Nó co được mà nút Bắt
           *     đầu vẫn nguyên chỗ là nhờ `.lobby-command-summary` bên trong -
           *     xem `Lobby`.
-          *   - `minmax(9.5rem,1fr)` cho chat: phần còn lại rơi HẾT vào đây, và
-          *     9.5rem là chiều cao thật của đầu khung cộng ô nhập - dưới mốc đó
-          *     khung chat không còn là một khung chat nữa.
+          *   - `minmax(15rem,1fr)` cho chat: phần còn lại rơi HẾT vào đây. Sàn
+          *     cũ là 9.5rem - đúng bằng đầu khung cộng ô nhập và KHÔNG chừa một
+          *     pixel nào cho tin nhắn. Ở 1024x768 lẫn 1280x800 lưới đưa chat
+          *     xuống đúng cái sàn đó, nên khung tin nhắn còn 1px: khung rỗng
+          *     tràn ra đè lên ô nhập, còn phòng có người nói thì không đọc được
+          *     câu nào. 15rem để lại khoảng 5.5rem cho tin nhắn - vừa đủ lời
+          *     mời chào của khung rỗng, hoặc hai bong bóng ngắn - và chỗ đó lấy
+          *     từ thẻ điều khiển, vốn đã tự cuộn được.
           *   - `auto` cho nút "Luật và vai trò": nó chỉ cao bằng chính nó.
           *
           * Nhờ thứ tự đó, nút Bắt đầu - nằm ở hàng đầu - không bao giờ bị một
@@ -465,7 +474,7 @@ export default function RoomPage() {
         <div
           className={`mt-3 grid gap-3 lg:min-h-0 lg:flex-1 ${
             isLobby
-              ? "lg:grid-cols-[minmax(0,1.85fr)_minmax(21rem,1fr)] lg:grid-rows-[minmax(0,auto)_minmax(9.5rem,1fr)_auto] lg:gap-x-5"
+              ? "lg:grid-cols-[minmax(0,1.85fr)_minmax(21rem,1fr)] lg:grid-rows-[minmax(0,auto)_minmax(15rem,1fr)_auto] lg:gap-x-5"
               : "lg:my-auto lg:max-h-[68rem] lg:grid-cols-[14rem_minmax(0,1fr)_17.5rem] xl:grid-cols-[15rem_minmax(0,1fr)_23rem] xl:gap-4"
           }`}
         >
