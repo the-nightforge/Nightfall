@@ -12,11 +12,15 @@ import {
   presentChannels,
 } from "@/lib/chat-channels";
 import { usePhaseMarkers } from "@/lib/use-phase-markers";
+import { mentionNamesFor, quickPhrasesFor } from "@/lib/quick-phrases";
 import { useLiveTrial } from "@/lib/useLiveTrial";
 import { useRoomSocket } from "@/lib/useRoomSocket";
 import { VoiceControl } from "@/components/VoiceControl";
+import { RulesDrawer } from "@/components/RulesDrawer";
 import { VoiceProvider } from "@/components/VoiceProvider";
 import { useGameAudio } from "@/lib/useGameAudio";
+import { useAttention } from "@/lib/useAttention";
+import { requestAttentionPermission } from "@/lib/attention";
 import { moodFor } from "@/lib/mood";
 import { Backdrop } from "@/components/Backdrop";
 import { PhaseBanner } from "@/components/PhaseBanner";
@@ -57,6 +61,7 @@ export default function RoomPage() {
   const room = useRoomSocket(code);
   const snapshot = room.snapshot;
   useGameAudio(snapshot);
+  useAttention(snapshot);
   /*
    * "Phiên toà sống" đọc TỪNG snapshot, kể cả những pha không có phiên toà nào.
    *
@@ -167,8 +172,18 @@ export default function RoomPage() {
           <Lobby
             snapshot={snapshot}
             identity={getIdentity()!}
-            onReady={(ready) => room.emit("room:set-ready", { ready })}
-            onStart={() => room.emit("room:start")}
+            /* Xin quyền thông báo ngay trong cử chỉ bấm nút, vì Safari chỉ
+             * nhận yêu cầu từ một cử chỉ người dùng. Hỏi ở đây chứ không lúc
+             * vào phòng: người vừa mở trang chưa có lý do gì để đồng ý, còn
+             * người bấm "Sẵn sàng" đã quyết định ở lại một ván 20 phút. */
+            onReady={(ready) => {
+              if (ready) requestAttentionPermission();
+              room.emit("room:set-ready", { ready });
+            }}
+            onStart={() => {
+              requestAttentionPermission();
+              room.emit("room:start");
+            }}
             onAddBot={() => room.emit("room:add-bot")}
           />
         );
@@ -252,6 +267,11 @@ export default function RoomPage() {
   const channels = presentChannels(snapshot, room.messages);
   const markers = usePhaseMarkers(snapshot);
   const chatEmpty = chatEmptyHint(snapshot);
+  // Ba thứ chat cần từ snapshot, tính một lần cho cả cột chat desktop lẫn tấm
+  // trượt điện thoại - hai bên phải gợi ý cùng một danh sách tên.
+  const mentionNames = useMemo(() => mentionNamesFor(snapshot), [snapshot]);
+  const quickPhrases = useMemo(() => quickPhrasesFor(snapshot, composer.channel), [snapshot, composer.channel]);
+  const meName = snapshot?.you?.name;
 
   return (
     <VoiceProvider snapshot={snapshot}>
@@ -365,6 +385,11 @@ export default function RoomPage() {
               * cho bạn bè chép, còn trong ván nó chỉ là chỗ tra lại.
               */}
             <RoomInvite code={code} size={isLobby ? "lg" : "sm"} />
+            {/* Chỉ trong ván: phòng chờ đã có "Luật và vai trò" ở thanh điều
+              * khiển, còn màn kết thúc thì lật hết bài rồi, không còn gì để tra. */}
+            {snapshot && !isLobby && snapshot.phase !== "GAME_OVER" && (
+              <RulesDrawer snapshot={snapshot} />
+            )}
             <SoundControl />
             {/*
               * Điều kiện là `snapshot &&`, không phải chỉ `!connected`.
@@ -651,6 +676,9 @@ export default function RoomPage() {
                 emptyHint={chatEmpty}
                 draft={chatDraft}
                 onDraftChange={setChatDraft}
+                mentionNames={mentionNames}
+                meName={meName}
+                quickPhrases={quickPhrases}
               />
             </div>
           </div>
@@ -705,6 +733,9 @@ export default function RoomPage() {
         selfId={snapshot?.you?.id ?? null}
         snapshot={snapshot}
         title={heading.title}
+        mentionNames={mentionNames}
+        meName={meName}
+        quickPhrases={quickPhrases}
       />
     </VoiceProvider>
   );

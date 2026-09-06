@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "./db";
 import { newToken, sha256 } from "./util";
 import {
+  computePlayerStats,
   isMatchOutcome,
   isPersonalWinCondition,
   isRole,
@@ -13,10 +14,11 @@ import {
 import { redis } from "./redis";
 import { config } from "./config";
 import { allowAction } from "./rate-limit";
-import { buildVersion, healthHttpStatus, redisConnectionHealthy } from "./health";
+import { buildVersion, healthHttpStatus, healthStatus, redisConnectionHealthy } from "./health";
 import { speechStats } from "./bots/speech-stats";
 import { avatarRouter } from "./avatar/routes";
-import { requirePlayer, type PlayerRequest } from "./auth";
+import { optionalPlayer, requirePlayer, type PlayerRequest } from "./auth";
+import { leaderboardView } from "./leaderboard";
 
 export const apiRouter = Router();
 apiRouter.use(avatarRouter);
@@ -188,6 +190,54 @@ apiRouter.get("/players/me/matches", requirePlayer, async (req, res) => {
 });
 
 /**
+ * Hồ sơ của người hỏi: tỉ lệ thắng, chuỗi, sống sót, theo phe và theo vai.
+ *
+ * Cùng câu truy vấn với lịch sử nhưng KHÔNG giới hạn 20 dòng: hồ sơ mà chỉ
+ * đếm 20 ván gần nhất thì tỉ lệ thắng đổi mỗi lần chơi thêm một ván, không
+ * phải vì chơi hay hơn mà vì một ván cũ vừa rơi khỏi cửa sổ. Chỉ lấy đúng
+ * những cột mà `toHistoryEntry` cần để đọc "ai thắng", không kéo `caseFile`
+ * - đó là cột nặng nhất của bảng và hồ sơ không dùng tới.
+ *
+ * Gộp bằng `computePlayerStats` của shared, trên chính các entry mà trang
+ * lịch sử nhận: một phép đọc "ván này thắng hay thua" cho cả hai nơi.
+ */
+apiRouter.get("/players/me/stats", requirePlayer, async (req, res) => {
+  const player = (req as PlayerRequest).player!;
+
+  try {
+    const rows = await prisma.$queryRaw<GameResultRow[]>`
+      SELECT "id", "roomCode", "winner", "round", "durationSec", "playerRoles", NULL AS "caseFile", "createdAt"
+      FROM "GameResult"
+      WHERE "playerRoles" @> ${JSON.stringify([{ id: player.id }])}::jsonb
+      ORDER BY "createdAt" DESC
+    `;
+
+    res.json({ stats: computePlayerStats(rows.map((row) => toHistoryEntry(row, player.id))) });
+  } catch (err) {
+    console.error("[api] Đọc hồ sơ người chơi thất bại:", err);
+    res.status(500).json({ error: "Không thể đọc hồ sơ lúc này" });
+  }
+});
+
+/**
+ * Bảng xếp hạng 30 ngày. CÔNG KHAI: ai cũng xem được, không cần phiên.
+ *
+ * Bearer là tuỳ chọn: có thì đáp thêm dòng "của bạn" và số ván đã tính, để
+ * trang chủ nói "còn N ván nữa"; không có, hoặc token hỏng, thì vẫn trả bảng
+ * chứ không 401 - một token cũ trong localStorage không được làm mất bảng
+ * xếp hạng của người đang xem. Luật tính điểm và cache: xem `leaderboard.ts`.
+ */
+apiRouter.get("/leaderboard", optionalPlayer, async (req, res) => {
+  const viewerId = (req as PlayerRequest).player?.id ?? null;
+  try {
+    res.json(await leaderboardView(viewerId));
+  } catch (err) {
+    console.error("[api] Dựng bảng xếp hạng thất bại:", err);
+    res.status(500).json({ error: "Không thể đọc bảng xếp hạng lúc này" });
+  }
+});
+
+/**
  * Log chat của MỘT ván đã kết thúc.
  *
  * Quyền đọc: đúng một câu hỏi - "id của người hỏi có nằm trong `playerRoles`
@@ -272,6 +322,7 @@ apiRouter.get("/health", async (_req, res) => {
   const health = { db: dbOk, redis: redisOk };
   res.status(healthHttpStatus(health)).json({
     ok: dbOk,
+    status: healthStatus(health),
     ...health,
     version: buildVersion(process.env),
     startedAt: new Date(STARTED_AT).toISOString(),

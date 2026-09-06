@@ -1,4 +1,5 @@
 import { ROLE_META, type Role } from "@masoi/shared";
+import { fnv1a32, type BotSpeechKind } from "@masoi/game-engine";
 import type { SpeechRequest } from "./types";
 
 export interface GeminiSchema {
@@ -63,22 +64,104 @@ function roleName(role: Role | undefined): string {
   return role ? ROLE_META[role].name : "dân làng";
 }
 
+/**
+ * Cách nói gợi ý cho từng ý định — thứ mô hình thật sự bắt chước.
+ *
+ * Ván thật với hai người chơi cho thấy hai con BOT liên tiếp nói gần như một
+ * câu: "Mình đang nghi X nhất, ông nói rõ căn cứ đi, đừng né." Không phải vì
+ * chúng nghe nhau. Vì `intentLine` là MỘT chuỗi cố định cho mỗi ý định, nằm ở
+ * dòng đầu prompt, và mô hình diễn đạt lại chính nó — giữ nguyên cả văn phong
+ * chỉnh chu lẫn cụm "đang nghi". Bảng này chữa cả ba mặt của việc đó:
+ *
+ * 1. **Nhiều cách cho một ý.** Chọn theo `(bot, vòng, lượt nói)`, nên hai BOT
+ *    cùng ý định trong cùng một vòng nhận hai câu khác nhau. Cơ chế chống lặp
+ *    cũ chỉ soi câu ĐÃ PHÁT của chính một BOT, nên nó không bao giờ thấy được
+ *    kiểu trùng này.
+ * 2. **Viết bằng đúng giọng muốn nhận lại.** Teencode, chữ thường, không dấu
+ *    chấm cuối. Một dòng lệnh trang trọng dạy ra một câu chat trang trọng, dù
+ *    phần dưới prompt có bao nhiêu ví dụ đời thường đi nữa.
+ * 3. **Nằm trong vốn từ mà `chat-analysis` đọc được.** Đây là mặt dễ bỏ sót
+ *    nhất: "đang nghi" là dạng parser KHÔNG hiểu, nên mỗi lời tố sinh ra từ
+ *    câu lệnh cũ đều vô hình với các BOT khác. Có test khoá điều này — mỗi câu
+ *    gợi ý buộc tội phải đọc ra đúng một `ACCUSE`, và mỗi câu của loại không
+ *    mang bằng chứng phải đọc ra RỖNG.
+ *
+ * NGƯỢC luật của `VOICE_EXAMPLES` ở trên, và ngược có chủ đích: khối ví dụ kia
+ * bị CẤM chứa dấu hiệu parser ("tôi là", "tôi nghi", "đừng treo") vì nó không
+ * gắn với ý định nào - một câu khai lọt ra từ đó là một nước đi lõi chưa từng
+ * quyết. Bảng này thì gắn chặt với ý định đang chốt, nên nó BẮT BUỘC phải
+ * chứa đúng những dấu hiệu ấy: đó là cách lời tố của BOT đến được tai BOT khác.
+ *
+ * Chỗ trống: `{who}` người đang được nói tới, `{author}` người đang được trả
+ * lời, `{role}` vai đang khai. Không thêm khoá thứ tư mà không sửa `fillSlots`.
+ */
+export const VOICE_HINTS: Readonly<Record<BotSpeechKind, readonly string[]>> = Object.freeze({
+  ACCUSE: ["t nghi {who}", "vote {who} đi", "nghi {who} nhất", "treo {who} thôi", "{who} lạ lắm, nghi {who}"],
+  QUESTION: ["{who} nghĩ sao", "ê {who} nói gì đi", "sao {who} im thế", "{who} thấy ai lạ ko"],
+  WITHHOLD: ["chưa rõ ai, t hóng thêm", "t chưa chốt được", "khoan đã, chưa đủ"],
+  REPLY: ["ừ {author} nói cũng có ý", "để t trả lời {author}", "{author} ơi, ý t khác"],
+  AGREE: ["ừ chuẩn r", "t theo {author}", "đúng, t cũng thấy vậy"],
+  DISAGREE: ["t ko nghĩ vậy", "khoan, ko hẳn đâu", "t thấy khác {author}"],
+  CHALLENGE: ["{who} nói rõ ra đi", "căn cứ đâu {who}", "{who} trả lời thẳng đi"],
+  DEFEND: ["t tin {who}", "tha {who} đi", "đừng treo {who}", "{who} dân mà"],
+  ASK_EVIDENCE: ["{author} có gì ko", "dựa vào đâu vậy {author}", "{author} đưa căn cứ đi"],
+  CHANGE_MIND: ["đổi ý r, t nghi {who}", "thôi t quay xe, nghi {who}", "t đổi phiếu, vote {who}"],
+  REACTION: ["ơ", "haha ok", "thôi xong", "ừ hmm"],
+  HUMOR: ["kk căng phết", "haha bàn này gắt thật", "=))"],
+  // Cổng `claimSurvivesRoundTrip` đọc lại câu bằng chính `analyzeChat`, nên
+  // dạng phải khai được. "t là"/"mình là"/"nhận" đều được parser nhận, nên
+  // lời khai KHÔNG cần viết trang trọng để qua cổng.
+  CLAIM_ROLE: ["t là {role}", "mình là {role} nè", "nhận {role} đây", "tôi là {role}"],
+  // Dài hơn hẳn phần còn lại, và đó là giới hạn của PARSER chứ không phải một
+  // lựa chọn về giọng: `parseCounterClaim` chỉ nhận đúng cặp mẫu "không thể
+  // là ... tôi mới là ...". Nới được mẫu đó thì rút ngắn được mấy câu này.
+  COUNTER_CLAIM: [
+    "{who} không thể là {role}, tôi mới là {role}",
+    "{who} không thể là {role} được, tôi mới là {role}",
+    "khoan, {who} không thể là {role}, tôi mới là {role}",
+  ],
+});
+
+function fillSlots(hint: string, who: string, author: string, role: string): string {
+  return hint.replace(/\{who\}/g, who).replace(/\{author\}/g, author).replace(/\{role\}/g, role);
+}
+
+/**
+ * Câu gợi ý của ĐÚNG lượt nói này, chỗ trống đã thay.
+ *
+ * Băm chứ không rút RNG: `fnv1a32` không tiêu một giá trị nào của dòng số, nên
+ * thêm hàm này không làm lệch replay theo seed của bất kỳ ván nào đang chạy.
+ * Khoá gồm `seq` để một BOT nói ba lượt liền không lặp lại một khuôn câu, và
+ * gồm `speaker.id` để hai BOT cùng ý định trong cùng một vòng tách nhau ra.
+ */
+export function voiceHintFor(request: SpeechRequest): string {
+  const list = VOICE_HINTS[request.intention.kind];
+  const key = `${request.speaker.id}|${request.round}|${request.seq}|${request.intention.kind}`;
+  const hint = list[fnv1a32(key) % list.length]!;
+  return fillSlots(
+    hint,
+    request.targetName ?? "người đó",
+    request.replyTo?.actorName ?? request.targetName ?? "người đó",
+    roleName(request.intention.claimedRole),
+  );
+}
+
 function intentLine(request: SpeechRequest): string {
   const who = request.targetName ?? "một người";
   const author = request.replyTo?.actorName ?? who;
 
   switch (request.intention.kind) {
     case "ACCUSE":
-      return `Bạn đang nghi ${who} và muốn nói ra điều đó.`;
+      return `Bạn nghi ${who}. Nói ra.`;
     case "QUESTION":
       // Không giả định đã có lịch sử để hỏi về: ý định này xuất hiện nhiều nhất
       // ở vòng thảo luận đầu, khi chưa ai bỏ phiếu. Lúc đó câu hỏi phải là câu
       // dò, không phải câu chất vấn về một sự kiện chưa xảy ra.
-      return `Bạn để ý ${who} và muốn hỏi họ một câu để nghe họ nói.`;
+      return `Bạn để ý ${who}. Hỏi một câu cho họ nói.`;
     case "WITHHOLD":
-      return "Bạn chưa đủ căn cứ để chỉ đích danh ai, và muốn nói vậy.";
+      return "Bạn chưa đủ căn cứ chỉ ai. Nói đúng vậy thôi.";
     case "REPLY":
-      return `Bạn muốn trả lời ${author} về câu họ vừa nói.`;
+      return `Bạn trả lời ${author} về câu họ vừa nói.`;
     case "AGREE":
       return `Bạn đồng tình với ${author} về chuyện ${who}.`;
     case "DISAGREE":
@@ -93,21 +176,24 @@ function intentLine(request: SpeechRequest): string {
         ? "Bạn đang bị dồn tới mức phải tự bào chữa. Hãy phản bác lại việc mình bị nghi ngờ."
         : `Bạn không đồng tình với ${author} về chuyện ${who}.`;
     case "CHALLENGE":
-      return `Bạn muốn chất vấn ${author}, buộc họ nói rõ ra.`;
+      return `Bạn chất vấn ${author}, ép họ nói rõ.`;
     case "DEFEND":
-      return `Bạn muốn bênh ${who}, cho rằng treo họ là sai.`;
+      return `Bạn bênh ${who}: treo họ là sai.`;
     case "ASK_EVIDENCE":
-      return `Bạn muốn ${author} đưa ra căn cứ cho điều họ vừa nói.`;
+      return `Bạn đòi ${author} đưa căn cứ cho câu họ vừa nói.`;
     case "CHANGE_MIND":
       return `Bạn công khai đổi ý: giờ bạn nghi ${who}.`;
     case "REACTION":
-      return "Bạn chỉ muốn buông một câu phản ứng rất ngắn, không lập luận gì.";
+      return "Bạn buông một câu phản ứng rất ngắn, không lập luận gì.";
     case "HUMOR":
-      return "Bạn muốn pha một câu cho nhẹ không khí, không nêu tên ai và không kết luận gì.";
+      return "Bạn pha một câu cho nhẹ không khí, không nêu tên ai, không kết luận gì.";
     case "CLAIM_ROLE":
       return [
         `Bạn công khai nhận mình là ${roleName(request.intention.claimedRole)}.`,
-        "Câu đầu tiên PHẢI là đúng dạng \"Tôi là <vai>.\" rồi mới nói thêm.",
+        // Cổng `claimSurvivesRoundTrip` đọc lại bằng `analyzeChat`, và parser
+        // nhận cả "t là"/"mình là"/"nhận". Nói rõ ba dạng đó thay vì bắt đúng
+        // một dạng trang trọng: cùng một ràng buộc, mà không ép giọng.
+        'Câu đầu PHẢI là một lời nhận vai rõ ràng: "tôi là <vai>", "t là <vai>" hoặc "nhận <vai>".',
       ].join(" ");
     case "COUNTER_CLAIM":
       return [
@@ -210,6 +296,10 @@ export function buildDaySpeechPrompt(request: SpeechRequest): PromptSpec {
     ].join("\n"),
     user: [
       intentLine(request),
+      // Ngay dưới câu lệnh, vì đây là chỗ mô hình bắt giọng. "cỡ này" chứ không
+      // phải "y hệt": câu gợi ý cho nhịp và độ dài, còn nội dung phải bám bằng
+      // chứng bên dưới - chép nguyên văn thì mất luôn phần lý do.
+      `Nói cỡ này: "${voiceHintFor(request)}"`,
       "",
       // Chỉ khác rỗng ở lượt tự bào chữa (pha DEFENSE). Số phiếu và danh sách
       // người cũng bị nhắm đã công khai ở pha này - KHÔNG phải vai thật, thứ

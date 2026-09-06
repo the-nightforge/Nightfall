@@ -5,6 +5,8 @@ import { GHOST_AUTHOR_ID, type ChatMessage } from "@masoi/shared";
 import { getIdentity } from "@/lib/identity";
 import { canSendMessage } from "@/lib/chat-draft";
 import { insertEmoji } from "@/lib/chat-emoji";
+import { applyMention, mentionCandidates, mentionQueryAt, mentionsName } from "@/lib/chat-mention";
+import { applyQuickPhrase, type QuickPhrase } from "@/lib/quick-phrases";
 import {
   CHAT_CHANNEL_META,
   channelMeta,
@@ -142,6 +144,12 @@ interface Props {
    * ngay dưới cái đầu kia.
    */
   heading?: ChatHeading;
+  /** Tên gợi ý sau "@"; rỗng hoặc thiếu thì không có popover nhắc tên. */
+  mentionNames?: string[];
+  /** Tên của chính người xem, để tô sáng tin nhắn gọi mình. */
+  meName?: string;
+  /** Hàng chip trên ô nhập; rỗng hoặc thiếu thì không có hàng nào. */
+  quickPhrases?: QuickPhrase[];
 }
 
 /** Đúng bằng maxLength của ô nhập bên dưới - server cũng cắt ở mốc này. */
@@ -163,10 +171,22 @@ export function ChatBox({
   autoFocus,
   onEmojiOpenChange,
   heading,
+  mentionNames,
+  meName,
+  quickPhrases,
 }: Props) {
   const [ownText, setOwnText] = useState("");
   const text = draft ?? ownText;
   const setText = onDraftChange ?? setOwnText;
+  /*
+   * Con trỏ trong ô nhập, theo dõi riêng vì popover nhắc tên đọc nó: "@" ở
+   * đâu so với con trỏ mới quyết định có đang gõ tên hay không. Cập nhật ở
+   * mọi đường con trỏ đổi - gõ, bấm, phím mũi tên - chứ không chỉ onChange.
+   */
+  const [caret, setCaret] = useState(0);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  /** Vị trí "@" mà người dùng đã bấm Escape để bỏ; gõ "@" khác thì mở lại. */
+  const [mentionDismissedAt, setMentionDismissedAt] = useState<number | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const meId = getIdentity()?.playerId;
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -195,6 +215,24 @@ export function ChatBox({
     },
     [onEmojiOpenChange],
   );
+
+  const mention = composer.canSend ? mentionQueryAt(text, caret) : null;
+  const candidates = useMemo(
+    () => (mention && mentionNames?.length ? mentionCandidates(mention.query, mentionNames) : []),
+    [mention, mentionNames],
+  );
+  const mentionOpen = mention !== null && candidates.length > 0 && mentionDismissedAt !== mention.start;
+  const activeIndex = Math.min(mentionIndex, Math.max(0, candidates.length - 1));
+
+  useEffect(() => {
+    setMentionIndex(0);
+  }, [mention?.query]);
+
+  // Popover nhắc tên là một lớp trong, như bảng biểu tượng: tấm trượt trên
+  // điện thoại phải biết để Escape đóng lớp này trước, không cuốn cả khung đi.
+  useEffect(() => {
+    onEmojiOpenChange?.(emojiOpen || mentionOpen);
+  }, [emojiOpen, mentionOpen, onEmojiOpenChange]);
 
   const tabs = channels ?? [];
   const multiChannel = tabs.length > 1;
@@ -285,6 +323,34 @@ export function ChatBox({
       el.setSelectionRange(next.caret, next.caret);
     });
   };
+
+  /** Ghi text mới và đặt con trỏ sau khi React đã ghi value xuống DOM. */
+  const writeWithCaret = (next: { text: string; caret: number }) => {
+    const el = ownInputRef.current;
+    setText(next.text);
+    setCaret(next.caret);
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      el.setSelectionRange(next.caret, next.caret);
+    });
+  };
+
+  const chooseMention = (name: string) => {
+    if (!mention) return;
+    const next = applyMention(text, mention, name, MAX_MESSAGE_LENGTH);
+    if (!next) return;
+    writeWithCaret(next);
+  };
+
+  const insertPhrase = (phrase: QuickPhrase) => {
+    const next = applyQuickPhrase(text, phrase.text, MAX_MESSAGE_LENGTH);
+    if (!next) return;
+    setMentionDismissedAt(null);
+    writeWithCaret(next);
+  };
+
+  const syncCaret = (el: HTMLInputElement) => setCaret(el.selectionStart ?? el.value.length);
 
   const destination = composer.channel ? CHAT_CHANNEL_META[composer.channel] : null;
 
@@ -421,6 +487,10 @@ export function ChatBox({
             // người chơi sẽ tưởng có một người tên "Một linh hồn" trong phòng.
             const ghost = message.playerId === GHOST_AUTHOR_ID;
             const meta = channelMeta(message.channel);
+            // Câu gọi đích danh mình nổi lên khỏi dòng chat: đó là câu người
+            // ta đang chờ mình trả lời, và trong 60 giây thảo luận thì bỏ lỡ
+            // nó là bị nghi thêm một nấc.
+            const callsMe = !mine && !ghost && !!meName && mentionsName(message.text, meName);
             return (
               <div key={item.key} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                 <div
@@ -429,8 +499,11 @@ export function ChatBox({
                       ? "border-violet-500/30 bg-violet-900/25 italic"
                       : mine
                         ? "bg-indigo-500/15 border-indigo-500/25"
-                        : CHANNEL_STYLE[message.channel] ?? DEFAULT_CHANNEL_STYLE
+                        : callsMe
+                          ? "border-amber-400/55 bg-amber-900/20"
+                          : CHANNEL_STYLE[message.channel] ?? DEFAULT_CHANNEL_STYLE
                   }`}
+                  data-calls-me={callsMe ? "true" : undefined}
                 >
                   <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
                     {/*
@@ -535,6 +608,24 @@ export function ChatBox({
           </p>
         )}
 
+        {composer.canSend && quickPhrases && quickPhrases.length > 0 && (
+          <div
+            className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none]"
+            role="group"
+            aria-label="Câu nhanh"
+          >
+            {quickPhrases.map((phrase) => (
+              <button
+                key={phrase.label}
+                type="button"
+                className="shrink-0 rounded-full border border-white/12 bg-white/[0.05] px-2.5 py-1 text-xs font-semibold text-mist transition hover:bg-white/10 hover:text-white"
+                onClick={() => insertPhrase(phrase)}
+              >
+                {phrase.label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex gap-2">
           {/*
             * Icon nằm chồng lên ô nhập chứ không đứng cạnh: đặt cạnh thì nó ăn
@@ -552,6 +643,35 @@ export function ChatBox({
               * thì ở lại: nó là dấu hiệu KHÔNG PHẢI MÀU cho một ô không gõ
               * được, và ô lúc đó cũng chẳng có nút biểu tượng để tranh chỗ.
               */}
+            {mentionOpen && (
+              <ul
+                id="chat-mention-list"
+                role="listbox"
+                aria-label="Gợi ý tên"
+                className="absolute bottom-full left-0 z-30 mb-2 max-h-56 w-64 max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-xl border border-night-600 bg-night-900/95 p-1 shadow-[0_12px_32px_-12px_rgba(0,0,0,0.9)] backdrop-blur-md"
+              >
+                {candidates.map((name, index) => (
+                  <li
+                    key={name}
+                    id={`chat-mention-${index}`}
+                    role="option"
+                    aria-selected={index === activeIndex}
+                    className={`cursor-pointer rounded-lg px-3 py-2 text-sm ${
+                      index === activeIndex ? "bg-indigo-500/25 text-white" : "text-mist"
+                    }`}
+                    // pointerdown chứ không click: click đến sau blur của ô nhập,
+                    // và blur là lúc một số trình duyệt đã dọn selection.
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      chooseMention(name);
+                    }}
+                    onPointerEnter={() => setMentionIndex(index)}
+                  >
+                    @{name}
+                  </li>
+                ))}
+              </ul>
+            )}
             {!composer.canSend && (
               <LockIcon className="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-mist/55" />
             )}
@@ -618,13 +738,42 @@ export function ChatBox({
               value={text}
               maxLength={MAX_MESSAGE_LENGTH}
               placeholder={composer.placeholder}
-              onChange={(e) => setText(e.target.value)}
+              aria-autocomplete={mentionNames?.length ? "list" : undefined}
+              aria-expanded={mentionNames?.length ? mentionOpen : undefined}
+              aria-controls={mentionOpen ? "chat-mention-list" : undefined}
+              aria-activedescendant={mentionOpen ? `chat-mention-${activeIndex}` : undefined}
+              onChange={(e) => {
+                setText(e.target.value);
+                syncCaret(e.target);
+              }}
+              onSelect={(e) => syncCaret(e.currentTarget)}
+              onKeyUp={(e) => syncCaret(e.currentTarget)}
+              onClick={(e) => syncCaret(e.currentTarget)}
               /*
                * `e.repeat` chặn phím Enter bị giữ: nó bắn ra hàng chục lần
                * keydown mỗi giây, và tuy ô đã bị xoá sau lần gửi đầu, chặn ngay
                * ở đây rẻ hơn là dựa vào thứ tự cập nhật state.
                */
               onKeyDown={(e) => {
+                if (mentionOpen) {
+                  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                    e.preventDefault();
+                    const step = e.key === "ArrowDown" ? 1 : -1;
+                    setMentionIndex((activeIndex + step + candidates.length) % candidates.length);
+                    return;
+                  }
+                  if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    chooseMention(candidates[activeIndex]!);
+                    return;
+                  }
+                  if (e.key === "Escape") {
+                    // Không stopPropagation: tấm trượt trên điện thoại nghe cùng
+                    // phím này ở document và tự nhường vì biết lớp trong đang mở.
+                    setMentionDismissedAt(mention!.start);
+                    return;
+                  }
+                }
                 if (e.key === "Enter" && !e.repeat) submit();
               }}
             />

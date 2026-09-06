@@ -72,6 +72,124 @@ jobs:
       - name: Lint
         run: npm run lint
 
+  # Ván khói thật: 8 socket chơi trọn một ván tới GAME_OVER, rồi kịch bản khôi
+  # phục SIGKILL server giữa ván và kiểm ván sống lại từ Redis. Cả hai cần
+  # Postgres + Redis thật - unit test không thay được, vì bug đã gặp nhiều lần
+  # nằm ở khớp nối (persist, resume, auth socket) chứ không ở từng hàm.
+  #
+  # Chạy song song với `verify` để không cộng dồn thời gian; deploy-production
+  # chờ cả ba (xem bên dưới).
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: masoi
+          POSTGRES_PASSWORD: masoi
+          POSTGRES_DB: masoi
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U masoi"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://masoi:masoi@localhost:5432/masoi
+      REDIS_URL: redis://localhost:6379
+      # Bot chơi ngẫu nhiên: CI không có khoá nhà cung cấp và cũng không nên có.
+      BOT_AI_ENABLED: "false"
+      CORS_ORIGIN: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Build server
+        run: npm run build:shared && npm run build:engine && npm run build:server
+
+      - name: Migrate database
+        run: npm run db:migrate
+
+      - name: Start server
+        # Chạy đúng artefact production (dist/), không phải tsx - cùng thứ mà
+        # Dockerfile.server đóng gói. Log ra file để bước "Server log" in lại
+        # khi ván khói đỏ; không có nó thì chỉ thấy "Timeout chờ phase".
+        run: |
+          PORT=4100 node apps/server/dist/index.js > server.log 2>&1 &
+          echo $! > server.pid
+          for i in $(seq 1 30); do
+            if curl --silent --fail http://localhost:4100/api/health > /dev/null; then
+              echo "server sẵn sàng sau ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "server không lên sau 30s"; cat server.log; exit 1
+
+      - name: Smoke game (8 sockets → GAME_OVER)
+        run: npm run test:e2e
+        env:
+          SERVER_URL: http://localhost:4100
+
+      - name: Crash recovery (SIGKILL giữa ván)
+        # Kịch bản này tự spawn và tự giết server của nó ở cổng 4155; server
+        # 4100 ở trên không dính dáng.
+        run: npm run test:e2e:recovery
+
+      - name: Server log
+        if: failure()
+        run: cat server.log || true
+
+      - name: Stop server
+        if: always()
+        run: kill "$(cat server.pid)" 2>/dev/null || true
+
+  # Render build image này từ Dockerfile.server và KHÔNG chạy qua CI, nên một
+  # Dockerfile hỏng chỉ lộ ra ở Render - sau khi Vercel đã ship frontend mới.
+  # Frontend đọc trường mà backend mới phải cấp; web mới + server cũ là kiểu
+  # hỏng lặng lẽ nhất của repo này. Build thử ở đây để chặn nó trước deploy.
+  docker-server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build Dockerfile.server
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.server
+          push: false
+          build-args: GIT_COMMIT=${{ github.sha }}
+          # Cache layer npm ci giữa các lần chạy; build sạch mất ~4 phút, có
+          # cache thì ~1 phút khi package-lock không đổi.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # Vercel Hobby chỉ cho deploy commit mà git author là chủ account. Commit của
   # người khác không "fail" - deployment vào thẳng trạng thái BLOCKED, bỏ qua
   # build, và `vercel deploy` không coi BLOCKED là trạng thái kết thúc nên nó
@@ -134,7 +252,10 @@ jobs:
           echo "Preview: $url" >> "$GITHUB_STEP_SUMMARY"
 
   deploy-production:
-    needs: verify
+    # Chờ cả ván khói lẫn build Docker: Vercel ship web trong khi Render không
+    # build nổi image mới là kiểu hỏng lặng lẽ đã ghi ở docker-server. Preview
+    # thì chỉ cần verify - đó là tiện ích cho PR, không phải cổng ra production.
+    needs: [verify, e2e, docker-server]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15

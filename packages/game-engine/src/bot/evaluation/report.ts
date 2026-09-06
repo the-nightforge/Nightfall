@@ -277,6 +277,7 @@ export function formatReportText(report: SelfPlayReport): string {
     `  Câu bị phòng chặn        hạn mức ${m.speechBlockedByRoom.BUDGET} · chuỗi ${m.speechBlockedByRoom.CHAIN_DEPTH} · đủ phản hồi ${m.speechBlockedByRoom.REPLIES_PER_MESSAGE}`,
     `  Im lặng                  ${pct(m.silenceRate)}`,
     `  Dùng mẫu câu             ${pct(m.fromTemplateRate)}`,
+    `  Giọng chat               ${pct(m.casualToneRate)}${flag(m.casualToneRate, 0.7, "dưới")}`,
     `  Tin/BOT/ngày             ${m.messagesPerBotPerDay === null ? "n/a" : m.messagesPerBotPerDay.toFixed(2)}${
       (m.messagesPerBotPerDay ?? 0) > 3 ? "  ⚠ vượt hạn mức" : ""
     }`,

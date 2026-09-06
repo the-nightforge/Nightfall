@@ -1,3 +1,5 @@
+// PHẢI là import đầu tiên - xem instrument.ts.
+import "./instrument";
 import http from "http";
 import express from "express";
 import cors from "cors";
@@ -13,6 +15,8 @@ import { createLiveKitAdmin } from "./voice/livekit";
 import { setVoiceAdmin } from "./voice/service";
 import { initObjectStorage } from "./storage";
 import { apiErrorFallback } from "./error-middleware";
+import { securityHeaders } from "./security";
+import { attachExpressErrorReporter, flushObservability, observabilityEnabled } from "./observability";
 
 async function main(): Promise<void> {
   const corsOrigin = config.corsOrigin === "*" ? true : config.corsOrigin.split(",");
@@ -21,6 +25,8 @@ async function main(): Promise<void> {
   // Rate limit của /api/players khoá theo req.ip, mà sau proxy của Render thì
   // req.ip là IP load balancer nếu không khai báo - cả thiên hạ chung một rổ.
   app.set("trust proxy", config.trustProxy);
+  // Trước cors: header an toàn phải có mặt cả trên phản hồi preflight.
+  app.use(securityHeaders());
   app.use(cors({ origin: corsOrigin }));
   app.use(express.json());
 
@@ -33,6 +39,10 @@ async function main(): Promise<void> {
   }
 
   app.use("/api", apiRouter);
+
+  // Sentry ghi nhận rồi next(err) tiếp; apiErrorFallback bên dưới vẫn là bên
+  // quyết định người gọi thấy gì. Không có SENTRY_DSN thì dòng này là no-op.
+  attachExpressErrorReporter(app);
 
   // Xem apiErrorFallback trong error-middleware.ts để biết vì sao lưới này
   // cần thiết và vì sao nó được tách ra module riêng.
@@ -61,6 +71,7 @@ async function main(): Promise<void> {
 
   const redisOk = await pingRedis();
   console.log(`[server] Redis: ${redisOk ? "OK" : "KHÔNG kết nối được - kiểm tra docker compose"}`);
+  console.log(`[server] Sentry: ${observabilityEnabled() ? "bật" : "tắt (không có SENTRY_DSN)"}`);
   // Không log key hay bất kỳ phần nào của nó - chỉ nêu tên bộ não đang dùng.
   console.log(`[server] Bot AI: ${botBrain().name === "random" ? "chạy ngẫu nhiên (random)" : `chuỗi ${botBrain().name}`}`);
 
@@ -77,7 +88,7 @@ async function main(): Promise<void> {
     forceExit.unref();
     io.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    await Promise.allSettled([prisma.$disconnect(), redis.quit()]);
+    await Promise.allSettled([prisma.$disconnect(), redis.quit(), flushObservability()]);
     clearTimeout(forceExit);
     process.exit(0);
   };

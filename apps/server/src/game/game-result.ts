@@ -2,6 +2,7 @@ import { buildCaseFile } from "@masoi/shared";
 import type { CaseFile } from "@masoi/shared";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../db";
+import { invalidateLeaderboard } from "../leaderboard";
 import { buildSnapshot } from "../rooms/snapshot";
 import type { Room } from "../rooms/store";
 import { MAX_ARCHIVED_MESSAGES } from "./match-chat";
@@ -137,6 +138,9 @@ export async function writeGameResultOnce(room: Room): Promise<void> {
       },
     });
     room.resultWritten = true;
+    // Ván vừa ghi có thể đổi ngôi trên bảng xếp hạng; đừng bắt người vừa
+    // thắng chờ hết một phút cache mới thấy mình lên.
+    invalidateLeaderboard();
   } catch (error) {
     if (isUniqueViolation(error)) {
       // Một process khác đã ghi đúng ván này. Đó là thành công, không phải lỗi.

@@ -1,6 +1,9 @@
 import {
   MAX_PLAYERS_PER_ROOM,
   SERVER_EVENTS,
+  deckSize,
+  sameDeck,
+  validateDeckShape,
   validateRoomConfig,
   type RoomConfig,
 } from "@masoi/shared";
@@ -33,6 +36,17 @@ import { allRequiredPlayersReady, roomEntryError } from "./rules";
 import { withPlayerRoomLock } from "./player-room-lock";
 
 export class RoomError extends Error {}
+
+/**
+ * Từ cỡ này trở lên thì chấm cân bằng mới có nghĩa.
+ *
+ * Con số 6 có từ khi `MIN_PLAYERS_TO_START` còn là 6 và ở lại vì nó vẫn đúng:
+ * dưới đó `calculateBalanceScore` không có preset cùng cỡ để so, nên nó rơi về
+ * công thức dự phòng và cho ra một con số không nói về bộ bài nào cả. Cả
+ * `updateConfig` lẫn `start` đều đọc hằng số này - hai chỗ chấm cùng một thứ
+ * bằng cùng một thước thì phải cùng một ngưỡng.
+ */
+const BALANCE_MIN_SIZE = 6;
 
 /**
  * Hai cấu hình này có thật sự khác nhau không.
@@ -363,26 +377,57 @@ export const roomService = {
     // bằng. Đứng SAU hai lối lỗi trên nên thông báo lỗi giữ nguyên. Cảnh báo
     // cân bằng vẫn tới được sảnh chờ vì snapshot mang sẵn `balanceWarning`.
     if (sameRoomConfig(room.config, config)) return;
-    // Balance check before basic validation so BALANCE_UNSTABLE is surfaced for ranked mode (only when lobby has enough players)
-    if (room.members.length >= 6) {
-      const balance = generateWarnings(config, room.members.length);
-      if (balance.blocking && (config.mode ?? "ranked") === "ranked") {
-        throw new RoomError("BALANCE_UNSTABLE: " + balance.warnings.join("; "));
-      }
-    }
-    // Chỉ chặn cấu hình vô lý; điều kiện đủ người kiểm tra chặt lúc bắt đầu
-    const totalSpecial =
-      config.werewolves +
-      (config.seer ? 1 : 0) +
-      (config.guard ? 1 : 0) +
-      (config.witch ? 1 : 0) +
-      (config.hunter ? 1 : 0) +
-      (config.cursed ? 1 : 0);
-    if (room.members.length >= 6) {
-      const err = validateRoomConfig(config, room.members.length);
+    /*
+     * Hai cổng dưới đây chỉ gác BỘ BÀI, không gác cả cấu hình.
+     *
+     * Một bộ bài đã được nhận vào phòng có thể thành lệch mà không ai đổi nó:
+     * phòng 10 người áp preset 10, người thứ 11 vào, điểm rơi xuống 38 và
+     * thiếu một ghế. `start` vẫn chặn - đúng - nhưng bản cũ còn chấm cân bằng
+     * cho MỌI lượt đổi cấu hình, nên từ lúc đó host gạt Phong thư sau cùng,
+     * đổi giây thảo luận hay bật voice đều bị từ chối bằng BALANCE_UNSTABLE.
+     * Những công tắc ấy không làm bộ bài lệch thêm chút nào, và lỗi lại hiện ở
+     * cột chính chứ không ở lớp phủ thiết lập đang mở: với host, công tắc chỉ
+     * đơn giản là không ăn.
+     *
+     * Chuyển Chaos -> Ranked với bộ bài lệch cũng đi qua: hệ quả của nó là nút
+     * Bắt đầu xám đi kèm thẻ cảnh báo đỏ và nút "Áp dụng đội hình chuẩn" -
+     * đúng chỗ để nói bộ bài lệch, thay vì một công tắc chế độ không gạt được.
+     */
+    if (!sameDeck(room.config, config)) {
+      /*
+       * Chấm BỘ BÀI, không chấm sĩ số phòng - và đó là cả sửa lỗi lẫn lý do.
+       *
+       * Bản cũ gọi `validateRoomConfig(config, room.members.length)`, tức đòi
+       * bộ bài khớp ĐÚNG số người đang ngồi ở mỗi lượt đổi. Nhưng bảng xếp bài
+       * đổi đúng MỘT lá mỗi cú bấm, nên trạng thái ngay sau cú bấm luôn lệch
+       * một người và luôn bị đá về: ô Dân Làng, ô Ma Sói và mọi công tắc vai
+       * đều "không ăn" ở phòng từ 8 người. Ở phòng 6-7 người còn tệ hơn - cổng
+       * `>= 6` không khớp `MIN_PLAYERS_TO_START` (8), nên host nhận lại câu
+       * "Cần ít nhất 8 người để bắt đầu" cho một thao tác chẳng liên quan.
+       *
+       * Phép so bằng ấy là điều kiện BẮT ĐẦU ván, và nó vẫn nguyên vẹn ở đúng
+       * chỗ đó: `RoomService.start`, cộng thẻ chặn dưới nút Bắt đầu.
+       */
+      const err = validateDeckShape(config);
       if (err) throw new RoomError(err);
-    } else if (totalSpecial >= MAX_PLAYERS_PER_ROOM - 1) {
-      throw new RoomError("Cấu hình vai trò không hợp lệ");
+      /*
+       * Cân bằng chấm theo cỡ bàn mà BỘ BÀI đòi, không theo sĩ số hiện tại.
+       *
+       * `calculateBalanceScore` so bộ bài với `PRESET_DECKS[playerCount]`, nên
+       * đưa sĩ số vào là chấm một bộ bài 12 người bằng thước của bàn 8 và ra
+       * một con số không nói về bộ bài nào cả. Cấu hình đường tương thích
+       * (chưa khai `villagers`) không có cỡ riêng nên vẫn chấm theo sĩ số.
+       *
+       * Ngưỡng 6 giữ nguyên và cố ý bằng đúng ngưỡng trong `start`: hai chỗ
+       * chấm cùng một thứ bằng cùng một thước, chỉ khác thời điểm.
+       */
+      const sized = deckSize(config) ?? room.members.length;
+      if (sized >= BALANCE_MIN_SIZE) {
+        const balance = generateWarnings(config, sized);
+        if (balance.blocking && (config.mode ?? "ranked") === "ranked") {
+          throw new RoomError("BALANCE_UNSTABLE: " + balance.warnings.join("; "));
+        }
+      }
     }
     const voiceTurnedOff = room.config.voice === true && config.voice !== true;
     room.config = config;
@@ -415,7 +460,7 @@ export const roomService = {
     const room = getRoom(roomCode)!;
     assertHost(room, hostId);
     if (room.status !== "LOBBY") throw new RoomError("Trận đấu đang diễn ra");
-    if (room.members.length >= 6) {
+    if (room.members.length >= BALANCE_MIN_SIZE) {
       const balance = generateWarnings(room.config, room.members.length);
       if (balance.blocking && (room.config.mode ?? "ranked") === "ranked") {
         throw new RoomError("BALANCE_UNSTABLE: " + balance.warnings.join("; "));

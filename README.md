@@ -62,7 +62,12 @@ The interesting parts are not the CRUD. They are:
 | 📜 | **Full night recap** at game over: every role action, every death, and why |
 | 💬 | **Full chat reveal** at game over — the wolves' den and the dead's channel open up once roles are public |
 | 🗂️ | **Case file** at game over: 3-5 turning points picked from authoritative match data, with a shareable 9:16 card |
+| 📊 | **Player profile** on the home page: games, win rate, current and best streak, survival rate, best roles, and a per-team and per-role breakdown, computed over the player's whole history with the same win rule as the match list |
+| 🏆 | **30-day leaderboard** on the home page, public: a win is 10 points, a personal win 5, surviving to the end 2; only matches with at least 4 humans count, and 3 such matches are needed to appear. Cached 60 s server-side and refreshed the moment a match is stored |
 | 🕘 | **Match history** on the home page: your recent games, your role in each, the final roster, and the turning points that decided them |
+| 🔔 | **Turn attention** — when the tab is in the background, the tab title, a short vibration and (if granted) a system notification call the player back for their night action, an open ballot, their own trial, a death or the end of the match. Capability-gated, no toggle: the title always works, the other two degrade silently |
+| ❓ | **Rules lookup mid-match** — a `?` button in the room header opens a read-only drawer with the current phase and what to do in it, your own role and goal, the running event in chaos rooms, and the full deck. Same copy as the lobby and the role card, never a second wording |
+| 💬 | **Chat that types faster than you** — `@` opens an accent-insensitive name picker (arrow keys, Enter, Tab, tap), messages that address you are highlighted, and a phase-aware row of quick phrases inserts a sentence into the draft without sending it. Bots read `@An` as `An`; nothing changed server-side |
 | 📥 | **Installable PWA** — add to home screen, and a cached offline page instead of the browser's error screen when a navigation fails |
 | ✉️ | **Last letter** (optional add-on): write a sealed note of at most 100 characters during the day; it opens only when its writer dies |
 
@@ -152,6 +157,16 @@ All server configuration is environment-driven. [`.env.example`](.env.example) a
 | `SIGNUP_RATE_LIMIT_COUNT` | `10` | Guest registrations per IP per window |
 | `SIGNUP_RATE_LIMIT_WINDOW_MS` | `60000` | Signup rate-limit window |
 | `TRUST_PROXY` | `1` | Proxy hops to trust. Keep `1` behind Render; set `0` when self-hosting with the port exposed directly, where `X-Forwarded-For` is client-controlled |
+
+### Error reporting (optional)
+
+Both halves stay silent unless a DSN is present, so local development and CI never talk to Sentry.
+
+| Variable | Where | Description |
+|---|---|---|
+| `SENTRY_DSN` | Render | Backend. Only programming errors are sent — rule violations (`RoomError`, `GameError`) and stale-client `ZodError`s are filtered by the same rule as the server log. No tracing, no IPs, no payloads, no chat. |
+| `NEXT_PUBLIC_SENTRY_DSN` | Vercel | Frontend. Render errors caught by `error.tsx` plus uncaught exceptions. No tracing and **no session replay** — replay records the screen, which in a hidden-role game must never leave the device. The CSP `connect-src` is widened to the DSN's ingest host at build time. |
+| `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` | Vercel | Optional. When all three are set, `next build` uploads source maps so stack traces are readable; otherwise the upload is skipped and the build is unchanged. |
 
 ### Voice chat (optional)
 
@@ -443,10 +458,12 @@ Operational details — keys, TTLs, log lines, deploy checklist, when to bump
 |---|---|---|---|---|
 | `POST` | `/api/players` | `{ nickname }` | `{ playerId, token, nickname }` | Guest registration. The client keeps the token; the server stores only its SHA-256. Rate-limited per IP. |
 | `GET` | `/api/players/me/matches` | — | `{ matches: MatchHistoryEntry[] }` | The caller's 20 most recent finished matches, each with its stored case file when one exists. Requires `Authorization: Bearer <token>`; answers `401` without a valid one. Matched by player id inside the stored roster, so games recorded before ids were stored do not appear. |
+| `GET` | `/api/players/me/stats` | — | `{ stats: PlayerStats }` | The caller's aggregated profile over every stored match they appear in (no 20-row cap, `caseFile` not fetched). Bearer auth; `401` without a valid token. Aggregation is `computePlayerStats` in `@masoi/shared`, fed the same `MatchHistoryEntry` rows the match list uses. |
+| `GET` | `/api/leaderboard` | — | `LeaderboardView` | Public. Optional Bearer adds the caller's own row (even outside the top 20) and how many counted matches they have. A bad token still returns the board. Scoring lives in `@masoi/shared` (`buildLeaderboard`); the server only loads the 30-day window, resolves which ids are humans via the Player table, and caches the result for 60 s. |
 | `GET` | `/api/players/me/matches/:matchId/chat` | — | `{ messages: MatchChatEntry[] }` | The full stored transcript of one finished match, every channel included. Bearer auth, and the authorisation is a condition of the SQL itself: the caller's id must appear in that match's stored roster, otherwise `404` — the same `404` whether the match exists or not. No further per-channel filtering, because `GAME_OVER` already opened the whole log to everyone in the room. |
 | `PUT` | `/api/players/me/avatar` | `multipart/form-data`, field `file` | `{ avatarUrl }` | Bearer auth. ≤ 5 MB. Format is decided by magic bytes (JPEG/PNG/WebP), never by the client-declared MIME type. The server auto-rotates by EXIF, crops to a centred square, resizes to 256×256 and encodes WebP under 200 KB. `503` when object storage is not configured. |
 | `DELETE` | `/api/players/me/avatar` | — | `204` | Bearer auth. Clears the avatar and deletes the stored object. Succeeds even when object storage is not configured — the database is the source of truth for "has an avatar". |
-| `GET` | `/api/health` | — | `{ ok, db, redis, version, startedAt }` | `503` when PostgreSQL is down. Redis trouble reports `redis: false` but still returns `200`, since in-memory rooms remain playable. |
+| `GET` | `/api/health` | — | `{ ok, status, db, redis, version, startedAt }` | `503` when PostgreSQL is down. Redis trouble reports `status: "degraded"`, `redis: false` and still returns `200` — deliberately: Render restarts the service when this URL goes red, and a restart while Redis is down is exactly the moment in-memory rooms cannot be recovered. `status` is `ok`, `degraded` or `down`. |
 
 `version` is the first 7 characters of the running commit (from `RENDER_GIT_COMMIT`), or `dev` outside a deploy environment — compare it against `git rev-parse --short HEAD` to confirm what is actually live.
 
@@ -575,7 +592,7 @@ Container start runs `prisma migrate deploy` before opening the port. Note the r
 
 </details>
 
-CI runs build → test → lint on every push and pull request, and deploys previews to Vercel. Render Free instances sleep when idle, so the first request after a quiet period is slow. A backend restart no longer drops the match: the room is rebuilt from its Redis snapshot and resumed — see [Crash recovery](#crash-recovery).
+CI runs three jobs in parallel on every push and pull request: `verify` (build → test → lint), `e2e` (a real eight-socket match to `GAME_OVER` plus the SIGKILL recovery scenario, against Postgres and Redis service containers) and `docker-server` (a build of `Dockerfile.server`, the image Render deploys). Pull requests get a Vercel preview after `verify`; the production deploy waits for all three, so a broken Dockerfile can no longer ship a new frontend against a backend that will never build. Render Free instances sleep when idle, so the first request after a quiet period is slow. Two things soften that: the home page fires `GET /api/health` on load so the server starts waking while the player is still typing a nickname, and after three seconds without an answer it says so under the button instead of spinning silently (giving up at 90 s). `.github/workflows/keep-alive.yml` also pings the health URL every 10 minutes; disable it in Actions if the Render account runs any other Free service, since 750 h/month covers exactly one. A backend restart no longer drops the match: the room is rebuilt from its Redis snapshot and resumed — see [Crash recovery](#crash-recovery).
 
 ## Security model
 
@@ -589,6 +606,7 @@ CI runs build → test → lint on every push and pull request, and deploys prev
 - Voice speaking rights are granted after joining, never encoded in a token, so an old token cannot restore a dead player's mic.
 - A kicked player is recorded on the room and refused on re-entry. Without that the kick only removed them from the member list once, and the next `join` — a page refresh — put them straight back into the lobby they were just removed from.
 - Guest signup is rate-limited per IP. This one matters more than it looks: every socket rate limit is keyed by `playerId`, so unlimited free `playerId`s would have made all of them decorative.
+- Security headers on both origins. The API runs [helmet](https://helmetjs.github.io/) (HSTS for a year, `nosniff`, a default-deny CSP that only matters if a route ever returns HTML). The frontend sends a Content-Security-Policy built in [`apps/web/src/lib/security-headers.ts`](apps/web/src/lib/security-headers.ts): scripts and styles only from its own origin (inline allowed, because Next hydration and the PWA install hook are inline), `connect-src` limited to the API, LiveKit Cloud and the Sentry ingest host, `frame-ancestors 'none'`, and a Permissions-Policy that allows the microphone (voice chat) and denies camera, geolocation and payment. Self-hosting LiveKit means adding its origin to `CSP_CONNECT_SRC_EXTRA` at build time.
 
 ## Known limitations
 

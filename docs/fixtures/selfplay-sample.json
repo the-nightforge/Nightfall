@@ -276,6 +276,11 @@
       "numerator": 126,
       "denominator": 126
     },
+    "casualToneRate": {
+      "value": 0,
+      "numerator": 0,
+      "denominator": 126
+    },
     "claimsPerGame": 0,
     "counterClaimRate": {
       "value": 0,

@@ -3,8 +3,32 @@ export interface DependencyHealth {
   redis: boolean;
 }
 
+/**
+ * 503 CHỈ khi Postgres chết, dù Redis chết cũng là chuyện nghiêm trọng.
+ *
+ * Render dùng chính URL này làm health check và KHỞI ĐỘNG LẠI dịch vụ khi nó
+ * đỏ liên tiếp. Ván đang chơi sống trong bộ nhớ và được khôi phục sau restart
+ * từ snapshot trong Redis - tức là đúng lúc Redis chết thì restart là cách
+ * chắc chắn nhất để mất sạch mọi ván đang chạy, thay vì để chúng chơi nốt trên
+ * bộ nhớ. Vì thế Redis chết là "degraded" (xem `healthStatus`), không phải 503.
+ *
+ * Postgres chết thì khác: không tạo được người chơi, không xác thực được socket
+ * mới, không lưu được kết quả - restart không làm mất thêm gì.
+ */
 export function healthHttpStatus(health: DependencyHealth): 200 | 503 {
   return health.db ? 200 : 503;
+}
+
+export type HealthStatus = "ok" | "degraded" | "down";
+
+/**
+ * Một chữ cho người nhìn dashboard: `ok` đủ cả, `degraded` chơi được nhưng
+ * không khôi phục được sau restart (Redis chết), `down` không chơi được.
+ */
+export function healthStatus(health: DependencyHealth): HealthStatus {
+  if (!health.db) return "down";
+  if (!health.redis) return "degraded";
+  return "ok";
 }
 
 export function redisConnectionHealthy(status: string): boolean {
