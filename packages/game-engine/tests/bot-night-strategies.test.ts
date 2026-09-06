@@ -27,9 +27,8 @@ function emptyTargets(): NightKnowledge["legalTargets"] {
     SKIP: [],
     DETECTIVE_CHECK: [],
     GUARDIAN_PROTECT: [],
-    HOLY_WATER: [],
     SERIAL_KILL: [],
-    MEDIUM_CHECK: [],
+    SORCERER_CHECK: [],
   };
 }
 
@@ -51,7 +50,7 @@ function context(
       players: PLAYERS.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
       knownRoles: {},
       seerResult: null,
-      mediumResult: null,
+      sorcererResult: null,
       night: {
         bonusSecondTargetFor: null,
         canAct: true,

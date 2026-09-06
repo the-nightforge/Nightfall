@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { m } from "motion/react";
-import { ROLE_META, TEAM_LABELS, type Role, type RoomSnapshot, type Team } from "@masoi/shared";
+import { isWolfPack, ROLE_META, TEAM_LABELS, type Role, type RoomSnapshot, type Team } from "@masoi/shared";
 import { myCursedNote } from "@/lib/cursed";
 import { roleGoal } from "@/lib/role-goal";
 import { ROLE_ICON_PATHS } from "@/lib/role-art";
@@ -258,12 +258,12 @@ export function RoleRevealView({ snapshot }: { snapshot: RoomSnapshot }) {
             cho người ngồi cạnh xem, và đừng chụp lại gửi vào nhóm chat.
           </p>
           <CursedNote snapshot={snapshot} />
-          {role === "WEREWOLF" && (
+          {role && isWolfPack(role) && (
             <div className="card">
               <p className="mb-2 text-sm font-semibold text-blood-400">Đồng bọn của bạn:</p>
               {(() => {
                 const mates = snapshot.players.filter(
-                  (p) => p.id !== snapshot.you?.id && p.role === "WEREWOLF",
+                  (p) => p.id !== snapshot.you?.id && p.role && isWolfPack(p.role),
                 );
                 return mates.length > 0 ? (
                   <ul className="space-y-1 text-sm">

@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { DEFAULT_ROOM_CONFIG, type NightRecap, type RoomConfig } from "@masoi/shared";
-import { priestSpentRound, rolesInRecap } from "./night-recap-roles";
+import { rolesInRecap, sorcererChecksOf } from "./night-recap-roles";
 
 const p = (id: string, name: string) => ({ id, name });
 
@@ -17,45 +17,55 @@ function night(over: Partial<NightRecap> = {}): NightRecap {
   };
 }
 
+/** Đêm mà Sói Pháp Sư đã kiểm tra — engine chưa ghi trường này vào recap,
+ *  nên test bơm qua cast thay vì qua kiểu NightRecap. */
+function nightWithSorcererCheck() {
+  return night({
+    sorcererChecks: [
+      { sorcerer: p("s", "Sói"), target: p("t", "Tiên"), isSeerLine: true },
+    ],
+  } as unknown as Partial<NightRecap>);
+}
+
 function config(over: Partial<RoomConfig> = {}): RoomConfig {
   return { ...DEFAULT_ROOM_CONFIG, ...over };
 }
 
 test("vai đã bật trong cấu hình thì được kể dù cả ván không hành động lần nào", () => {
-  const roles = rolesInRecap([night(), night({ round: 2 })], config({ guardianAngel: true, priest: true }));
+  const roles = rolesInRecap([night(), night({ round: 2 })], config({ guardianAngel: true, sorcerer: true }));
   assert.equal(roles.guardianAngel, true);
-  assert.equal(roles.priest, true);
+  assert.equal(roles.sorcerer, true);
 });
 
 test("vai không có trong ván thì không được kể", () => {
   const roles = rolesInRecap(
     [night()],
-    config({ guard: false, witch: false, seer: false, guardianAngel: false, priest: false }),
+    config({ guard: false, witch: false, seer: false, guardianAngel: false, sorcerer: false }),
   );
   assert.equal(roles.guard, false);
   assert.equal(roles.witch, false);
   assert.equal(roles.seer, false);
   assert.equal(roles.guardianAngel, false);
-  assert.equal(roles.priest, false);
+  assert.equal(roles.sorcerer, false);
 });
 
 test("có dữ liệu trong lịch sử thì kể, kể cả khi cờ cấu hình thiếu", () => {
   // Server cũ deploy lệch: gửi hành động nhưng thiếu cờ vai mở rộng.
-  const legacy = config({ guardianAngel: undefined, priest: undefined, detective: undefined });
+  const legacy = config({ guardianAngel: undefined, sorcerer: undefined, detective: undefined });
   const roles = rolesInRecap(
     [
       night({
         guardianAngelTarget: p("a", "An"),
-        priest: { priest: p("m", "Mục"), target: p("s", "Sói"), isWolf: true },
         detectiveChecks: [
           { detective: p("d", "Dò"), target1: p("x", "X"), target2: p("y", "Y"), sameTeam: true },
         ],
-      }),
+      } as Partial<NightRecap>),
+      nightWithSorcererCheck(),
     ],
     legacy,
   );
   assert.equal(roles.guardianAngel, true);
-  assert.equal(roles.priest, true);
+  assert.equal(roles.sorcerer, true);
   assert.equal(roles.detective, true);
 });
 
@@ -78,19 +88,13 @@ test("Phù Thuỷ tính là có hành động khi đã đốt bình cứu, khôn
   assert.equal(roles.witch, true);
 });
 
-test("Nước thánh chưa dùng thì không có đêm nào để chỉ tới", () => {
-  const nights = [night(), night({ round: 2 })];
-  assert.equal(priestSpentRound(nights, 0), null);
-  assert.equal(priestSpentRound(nights, 1), null);
+test("đêm không có kiểm tra Pháp Sư thì không có gì để kể", () => {
+  assert.deepEqual(sorcererChecksOf(night()), []);
 });
 
-test("Nước thánh đã dùng ở đêm trước thì trả về đúng đêm đó", () => {
-  const nights = [
-    night({ round: 1 }),
-    night({ round: 2, priest: { priest: p("m", "Mục"), target: p("s", "Sói"), isWolf: true } }),
-    night({ round: 3 }),
-  ];
-  // Đêm dùng bình KHÔNG tự tính là "đã dùng từ trước".
-  assert.equal(priestSpentRound(nights, 1), null);
-  assert.equal(priestSpentRound(nights, 2), 2);
+test("đêm có kiểm tra Pháp Sư thì đọc ra đúng mục tiêu và kết quả", () => {
+  const checks = sorcererChecksOf(nightWithSorcererCheck());
+  assert.equal(checks.length, 1);
+  assert.equal(checks[0].target.name, "Tiên");
+  assert.equal(checks[0].isSeerLine, true);
 });

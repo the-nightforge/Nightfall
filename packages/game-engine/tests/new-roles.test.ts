@@ -4,12 +4,14 @@ import type { EnginePlayer, GameState, NightState } from "../src/types";
 import { DEFAULT_ROOM_CONFIG, type Role } from "@masoi/shared";
 
 /**
- * Trưởng Lão, Bà Đồng và Kẻ Song Trùng.
+ * Trưởng Lão và Kẻ Song Trùng.
  *
- * Ba lá thêm vào để bàn 17-20 người bớt dân thường. Hai lá đầu là cơ chế mới
- * hoàn toàn; lá thứ ba là lần thứ TƯ của một khuôn đã có (Nguyền Rủa, Phản Bội,
+ * Hai lá thêm vào để bàn 17-20 người bớt dân thường. Lá đầu là cơ chế mới
+ * hoàn toàn; lá thứ hai là lần thứ TƯ của một khuôn đã có (Nguyền Rủa, Phản Bội,
  * Báo Thù đều đổi `role` giữa ván), nên phần lớn test ở đây hỏi đúng một câu:
  * khuôn đó có còn đúng khi vai mới đi qua nó không.
+ *
+ * (Bà Đồng đã bị xóa cứng khỏi engine cùng Linh Mục — xem plan Sorcerer+Alpha.)
  */
 
 function emptyNight(): NightState {
@@ -22,16 +24,13 @@ function emptyNight(): NightState {
     healTonight: false,
     poisonTarget: null,
     witchSkipped: false,
-    priestSkipped: false,
     seerResults: {},
     wolfSecondaryTarget: null,
     wolfCubRageTonight: false,
     guardianAngelTarget: null,
-    priestTarget: null,
     detectiveTargets: null,
     detectiveResults: {},
-    priestResults: {},
-    mediumResults: {},
+    sorcererResults: {},
   };
 }
 
@@ -67,7 +66,7 @@ function stateWith(players: Array<[string, Role, boolean?]>): GameState {
     hunterShots: [],
     guardianAngelPrevious: null,
     guardianAngelCharges: {},
-    priestHolyWaterUsed: {},
+    alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
     activeEvent: null,
@@ -210,53 +209,20 @@ describe("Trưởng Lão", () => {
   });
 });
 
-describe("Bà Đồng", () => {
-  const roster: Array<[string, Role, boolean?]> = [
-    ["wolf", "WEREWOLF"],
-    ["medium", "MEDIUM"],
-    ["seer", "SEER"],
-    ["ghost", "WITCH", false],
-    ["v1", "VILLAGER"],
-  ];
-
-  it("đọc ra VAI THẬT của người đã khuất, không phải phe", () => {
-    const e = engineWith(roster);
-    e.submitNightAction("medium", "MEDIUM_CHECK", "ghost");
-    expect(e.state.night.mediumResults?.medium).toEqual({ targetId: "ghost", role: "WITCH" });
-    expect(e.snapshotFor("medium").nightInfo?.mediumResult?.role).toBe("WITCH");
-  });
-
-  it("không gọi hồn người còn sống", () => {
-    const e = engineWith(roster);
-    expect(() => e.submitNightAction("medium", "MEDIUM_CHECK", "v1")).toThrow(/đã chết/);
-  });
-
-  it("một lượt mỗi đêm, chốt ngay tại lần nộp đầu", () => {
-    const e = engineWith([...roster, ["ghost2", "HUNTER", false]]);
-    e.submitNightAction("medium", "MEDIUM_CHECK", "ghost");
-    expect(() => e.submitNightAction("medium", "MEDIUM_CHECK", "ghost2")).toThrow(/đã gọi hồn/);
-  });
-
-  it("chỉ Bà Đồng mới gọi hồn được", () => {
-    const e = engineWith(roster);
-    expect(() => e.submitNightAction("seer", "MEDIUM_CHECK", "ghost")).toThrow(/Bà Đồng/);
-  });
-
-  it("nghĩa địa trống thì bot không được chào hành động nào", () => {
+describe("Ván cũ mang vai đã xóa", () => {
+  it("role lạ nạp lại thành Dân Làng và ghi log, ván vẫn chạy", () => {
     const e = engineWith([
       ["wolf", "WEREWOLF"],
-      ["medium", "MEDIUM"],
+      ["old", "PRIEST" as unknown as Role],
+      ["older", "MEDIUM" as unknown as Role],
       ["v1", "VILLAGER"],
-      ["v2", "VILLAGER"],
     ]);
-    const night = e.botKnowledgeFor("medium").night;
-    expect(night?.legalActions ?? []).not.toContain("MEDIUM_CHECK");
-  });
-
-  it("kết quả của Bà Đồng KHÔNG rò sang người khác", () => {
-    const e = engineWith(roster);
-    e.submitNightAction("medium", "MEDIUM_CHECK", "ghost");
-    expect(e.snapshotFor("seer").nightInfo?.mediumResult ?? null).toBeNull();
+    expect(roleOf(e, "old")).toBe("VILLAGER");
+    expect(roleOf(e, "older")).toBe("VILLAGER");
+    expect(e.state.log.some((line) => line.includes("không còn tồn tại"))).toBe(true);
+    // Người bị chuyển vai hành xử đúng như Dân: không có lượt đêm nào.
+    expect(e.snapshotFor("old").nightInfo).toBeNull();
+    expect(() => e.submitNightAction("wolf", "KILL", "v1")).not.toThrow();
   });
 });
 

@@ -1,4 +1,4 @@
-import type { NightRecap, RoomConfig } from "@masoi/shared";
+import type { NightRecap, RecapPlayer, RoomConfig } from "@masoi/shared";
 
 /**
  * Vai nào ĐƯỢC KỂ trong dòng thời gian các đêm.
@@ -7,7 +7,8 @@ import type { NightRecap, RoomConfig } from "@masoi/shared";
  * logic có thể sai theo cách test bắt được, còn JSX thì không.
  *
  * Bản cũ trộn hai quy tắc vào một chỗ: Bảo Vệ / Tiên Tri / Phù Thuỷ LUÔN có
- * dòng, còn Thiên Thần / Thám Tử / Linh Mục chỉ hiện khi đêm đó có hành động.
+ * dòng, còn Thiên Thần / Thám Tử / Sói Pháp Sư chỉ hiện khi đêm đó có hành
+ * động.
  * Cả hai đều sai, theo hai hướng ngược nhau - ván không bật Bảo Vệ vẫn in "Bảo
  * Vệ: không hành động", còn đêm Thiên Thần ngồi im thì vai đó biến mất hẳn, và
  * người đọc không phân biệt được "không có vai này" với "có nhưng không dùng".
@@ -20,8 +21,33 @@ export interface RecapRoles {
   seer: boolean;
   detective: boolean;
   witch: boolean;
-  priest: boolean;
+  sorcerer: boolean;
   serialKiller: boolean;
+}
+
+/**
+ * Một lượt kiểm tra dòng Tiên Tri của Sói Pháp Sư trong một đêm đã chốt.
+ *
+ * Engine hiện chưa ghi lượt này vào `NightRecap` (nó chỉ phát `sorcererResult`
+ * trực tiếp cho chính Sói Pháp Sư trong đêm), nên kiểu khai ở đây thay vì ở
+ * `@masoi/shared`: khi engine bắt đầu ghi `sorcererChecks` vào recap thì hàm
+ * `sorcererChecksOf` bên dưới đọc thẳng mà không phải sửa web.
+ */
+export interface SorcererCheck {
+  sorcerer: RecapPlayer;
+  target: RecapPlayer;
+  isSeerLine: boolean;
+}
+
+/**
+ * Các lượt kiểm tra Pháp Sư của một đêm, rỗng khi đêm đó không có.
+ *
+ * Đọc phòng thủ qua cast: recap ghi trước khi engine biết tới vai này không có
+ * trường đó, và tra thẳng một key lạ vào kiểu `NightRecap` là lỗi biên dịch.
+ */
+export function sorcererChecksOf(night: NightRecap): SorcererCheck[] {
+  const raw = night as unknown as { sorcererChecks?: SorcererCheck[] };
+  return Array.isArray(raw.sorcererChecks) ? raw.sorcererChecks : [];
 }
 
 /**
@@ -29,8 +55,8 @@ export interface RecapRoles {
  *
  * Hai vế nối bằng HOẶC chứ không phải chỉ đọc `config`: các cờ vai mở rộng đều
  * không bắt buộc, nên server cũ deploy lệch với web mới có thể gửi hành động
- * của Linh Mục mà thiếu cờ `priest`. Ẩn mất một dòng CÓ dữ liệu thật là hỏng
- * nặng hơn thừa một dòng "không hành động".
+ * của Sói Pháp Sư mà thiếu cờ `sorcerer`. Ẩn mất một dòng CÓ dữ liệu thật là
+ * hỏng nặng hơn thừa một dòng "không hành động".
  */
 export function rolesInRecap(nights: NightRecap[], config?: RoomConfig): RecapRoles {
   const seen = (has: (night: NightRecap) => boolean) => nights.some(has);
@@ -49,24 +75,9 @@ export function rolesInRecap(nights: NightRecap[], config?: RoomConfig): RecapRo
       config?.witch,
       (night) => night.witch.usedHeal || night.witch.poisonTarget != null,
     ),
-    priest: inPlay(config?.priest, (night) => night.priest != null),
+    sorcerer: inPlay(config?.sorcerer, (night) => sorcererChecksOf(night).length > 0),
     // Cùng quy tắc với mọi vai khác: kể về một vai khi ván CÓ vai đó. Vế lịch
     // sử là lưới an toàn cho trường hợp server cũ gửi hành động mà thiếu cờ.
     serialKiller: inPlay(config?.serialKiller, (night) => night.serialKillerTarget != null),
   };
-}
-
-/**
- * Đêm mà Linh Mục đã đổ Nước thánh, tính TRƯỚC đêm đang vẽ. `null` là chưa dùng.
- *
- * Linh Mục chỉ có MỘT bình cả ván, nên "không hành động" là câu trả lời sai cho
- * một đêm im lặng: im vì còn giữ bình và im vì đã dùng hết là hai chuyện khác
- * hẳn nhau. Suy ra từ chính lịch sử đêm, không nhắc lại luật số bình ở đây -
- * luật đó nằm trong engine và chỉ nên có một bản.
- */
-export function priestSpentRound(nights: NightRecap[], index: number): number | null {
-  for (let i = 0; i < index && i < nights.length; i += 1) {
-    if (nights[i].priest) return nights[i].round;
-  }
-  return null;
 }

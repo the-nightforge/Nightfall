@@ -11,11 +11,12 @@ describe("canActAtNight", () => {
     expect(canActAtNight("APPRENTICE_SEER", true)).toBe(true);
   });
 
-  it("recognizes new night roles Detective, Guardian Angel, Priest, Wolf Cub", () => {
+  it("recognizes new night roles Detective, Guardian Angel, Sorcerer, Wolf Cub, Alpha Wolf", () => {
     expect(canActAtNight("DETECTIVE")).toBe(true);
     expect(canActAtNight("GUARDIAN_ANGEL")).toBe(true);
-    expect(canActAtNight("PRIEST")).toBe(true);
+    expect(canActAtNight("SORCERER")).toBe(true);
     expect(canActAtNight("WOLF_CUB")).toBe(true);
+    expect(canActAtNight("ALPHA_WOLF")).toBe(true);
   });
 
   it("keeps Villager and Mayor asleep", () => {

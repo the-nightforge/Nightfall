@@ -26,15 +26,13 @@ function emptyNight(): NightState {
     healTonight: false,
     poisonTarget: null,
     witchSkipped: false,
-    priestSkipped: false,
     seerResults: {},
     wolfSecondaryTarget: null,
     wolfCubRageTonight: false,
     guardianAngelTarget: null,
-    priestTarget: null,
     detectiveTargets: null,
     detectiveResults: {},
-    priestResults: {},
+    sorcererResults: {},
     serialKillerTarget: null,
     serialKillerSkipped: false,
   };
@@ -88,7 +86,7 @@ function killerState(over: Partial<GameState> = {}, seats: Seat[] = DEFAULT_SEAT
     hunterShots: [],
     guardianAngelPrevious: null,
     guardianAngelCharges: {},
-    priestHolyWaterUsed: {},
+    alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
     activeEvent: null,
@@ -383,30 +381,6 @@ describe("Sát Nhân - tương tác", () => {
 
     expect(alive(e, "killer")).toBe(false);
     expect(causeOf(e, "killer")).toBe("poison");
-  });
-
-  it("Linh Mục ném Nước thánh vào Sát Nhân thì chính Linh Mục chết", () => {
-    const seats: Seat[] = [
-      { id: "wolf", name: "Sói", role: "WEREWOLF" },
-      { id: "killer", name: "Sát", role: "SERIAL_KILLER" },
-      { id: "priest", name: "Linh Mục", role: "PRIEST" },
-      { id: "seer", name: "Tiên Tri", role: "SEER" },
-      { id: "villager", name: "Dân", role: "VILLAGER" },
-      { id: "villager2", name: "Dân 2", role: "VILLAGER" },
-    ];
-    const e = engineWith({}, seats);
-    e.submitNightAction("priest", "HOLY_WATER", "killer");
-    lockWolves(e);
-    e.resolveNight();
-
-    /*
-     * Nước thánh phản vệ với MỌI mục tiêu không phải Sói, và Sát Nhân là một
-     * trong số đó. Đây là chỗ dễ sai nhất của cả vai: "kẻ giết người" không
-     * đồng nghĩa với "Ma Sói", và luật Nước thánh so theo PHE.
-     */
-    expect(alive(e, "killer")).toBe(true);
-    expect(alive(e, "priest")).toBe(false);
-    expect(causeOf(e, "priest")).toBe("priest_backfire");
   });
 
   it("Sát Nhân giết Kẻ Nguyền Rủa: chết thật, KHÔNG hoá Sói", () => {

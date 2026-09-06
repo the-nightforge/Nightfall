@@ -90,7 +90,10 @@ export interface RoomConfig {
   apprenticeSeer?: boolean;
   detective?: boolean;
   guardianAngel?: boolean;
-  priest?: boolean;
+  /** Sói Pháp Sư. Optional như mọi vai thêm sau. */
+  sorcerer?: boolean;
+  /** Sói Alpha. Cắn được nên vào wolfCount (xem validateRoomConfig). */
+  alphaWolf?: boolean;
   mayor?: boolean;
   /**
    * Thằng Hề - vai TRUNG LẬP, tối đa một lá mỗi ván.
@@ -142,8 +145,6 @@ export interface RoomConfig {
   lastLetter?: boolean;
   /** Trưởng Lão. Optional vì snapshot ghi trước bản này không có nó. */
   elder?: boolean;
-  /** Bà Đồng. Optional vì snapshot ghi trước bản này không có nó. */
-  medium?: boolean;
   /** Kẻ Song Trùng. Optional vì snapshot ghi trước bản này không có nó. */
   doppelganger?: boolean;
   /**

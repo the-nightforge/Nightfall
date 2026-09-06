@@ -39,21 +39,17 @@ function knowledgeFixture(phase: GamePhase = "VOTING") {
       healTonight: true,
       poisonTarget: "wolf-b",
       witchSkipped: false,
-      // Linh Mục đã chọn mục tiêu ở dưới, nên "đã bỏ qua" phải là false - fixture
-      // này chỉ có giá trị khi mọi trường khớp nhau như một đêm có thật.
-      priestSkipped: false,
       seerResults: { witch: { targetId: "wolf-b", isWolf: true } },
       // Bí mật của các vai mở rộng. Fixture này cố tình nhồi giá trị THẬT vào
       // mọi trường bí mật để các assert "không lộ" ở dưới có thứ để lộ.
       wolfSecondaryTarget: "villager",
       wolfCubRageTonight: true,
       guardianAngelTarget: "witch",
-      priestTarget: "wolf-a",
       detectiveTargets: { target1: "wolf-a", target2: "witch" },
       detectiveResults: {
         witch: { target1Id: "wolf-a", target2Id: "witch", sameTeam: false },
       },
-      priestResults: { witch: { targetId: "wolf-a", isWolf: true } },
+      sorcererResults: {},
     },
     votes: {},
     voteMutations: [],
@@ -72,7 +68,7 @@ function knowledgeFixture(phase: GamePhase = "VOTING") {
     // rộng để assert "không lộ" có thứ để lộ.
     guardianAngelPrevious: "villager",
     guardianAngelCharges: { villager: 1 },
-    priestHolyWaterUsed: { witch: true },
+    alphaShieldUsed: {},
     apprenticeAwakened: true,
     wolfCubRageNextNight: true,
     activeEvent: null,
@@ -302,11 +298,11 @@ describe("bot knowledge security boundary", () => {
         "publicVoteHistory",
         "round",
         "seerResult",
-        // Kết quả gọi hồn của CHÍNH bot này, `null` với mọi vai khác - engine
-        // lọc theo chủ sở hữu đúng như `seerResult` ngay trên. Nó nói vai của
-        // một người ĐÃ CHẾT, nên kể cả khi có giá trị thì nó cũng không lộ vai
-        // của ai đang sống.
-        "mediumResult",
+        // Kết quả soi dòng Tiên Tri của CHÍNH con Sói Pháp Sư này, `null` với
+        // mọi vai khác - engine lọc theo chủ sở hữu đúng như `seerResult` ngay
+        // trên. Nó nói mục tiêu có thuộc dòng Tiên Tri không, không nói vai cụ
+        // thể của ai đang sống.
+        "sorcererResult",
         // Vai TRUNG LẬP có trong bộ bài. Công khai y như `activeEventId`: cấu
         // hình phòng đi xuống mọi client trong `RoomSnapshot.config`. Nó nói
         // vai nào CÓ THỂ có mặt, không nói ai đang cầm lá nào.

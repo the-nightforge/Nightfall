@@ -9,10 +9,14 @@ import {
 } from "@masoi/shared";
 import { PRESET_DECKS } from "./balance";
 import {
+  CONFIG_KEY,
   deckCounts,
   deckStage,
   isPresetDeck,
+  NEUTRAL_ROLES,
   startBlock,
+  VILLAGE_ROLES,
+  WOLF_SPECIAL_ROLES,
   type StartBlockInput,
 } from "./lobby-summary";
 
@@ -33,7 +37,8 @@ function config(patch: Partial<RoomConfig> = {}): RoomConfig {
     apprenticeSeer: false,
     detective: false,
     guardianAngel: false,
-    priest: false,
+    sorcerer: false,
+    alphaWolf: false,
     mayor: false,
     ...patch,
   };
@@ -50,6 +55,12 @@ describe("deckCounts", () => {
     assert.equal(counts.wolves, 3);
     assert.equal(counts.specials, 1);
     assert.equal(counts.villagers, 5);
+  });
+
+  it("Sói Pháp Sư và Sói Alpha tính vào phe Sói chứ không phải vào chức năng của làng", () => {
+    const counts = deckCounts(config({ werewolves: 1, sorcerer: true, alphaWolf: true }), 8);
+    assert.equal(counts.wolves, 3);
+    assert.equal(counts.specials, 0);
   });
 
   it("Thằng Hề chiếm một ghế: bớt một Dân Làng chứ không thêm một Dân Làng", () => {
@@ -72,6 +83,25 @@ describe("deckCounts", () => {
       3,
     );
     assert.equal(counts.villagers, 0);
+  });
+});
+
+describe("role lists", () => {
+  it("sảnh chờ không còn Linh Mục hay Bà Đồng", () => {
+    assert.ok(!VILLAGE_ROLES.includes("PRIEST" as never));
+    assert.ok(!VILLAGE_ROLES.includes("MEDIUM" as never));
+    assert.equal(CONFIG_KEY["PRIEST"], undefined);
+    assert.equal(CONFIG_KEY["MEDIUM"], undefined);
+  });
+
+  it("Sói Pháp Sư và Sói Alpha là sói đặc biệt có công tắc sảnh chờ", () => {
+    assert.ok(WOLF_SPECIAL_ROLES.includes("SORCERER"));
+    assert.ok(WOLF_SPECIAL_ROLES.includes("ALPHA_WOLF"));
+    assert.equal(CONFIG_KEY["SORCERER"], "sorcerer");
+    assert.equal(CONFIG_KEY["ALPHA_WOLF"], "alphaWolf");
+    assert.ok(!VILLAGE_ROLES.includes("SORCERER" as never));
+    assert.ok(!VILLAGE_ROLES.includes("ALPHA_WOLF" as never));
+    assert.ok(!NEUTRAL_ROLES.includes("SORCERER" as never));
   });
 });
 

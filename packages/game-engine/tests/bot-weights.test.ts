@@ -63,9 +63,8 @@ function emptyNight(over: Partial<NightKnowledge> = {}): NightKnowledge {
       SKIP: [],
       DETECTIVE_CHECK: [],
       GUARDIAN_PROTECT: [],
-      HOLY_WATER: [],
       SERIAL_KILL: [],
-      MEDIUM_CHECK: [],
+      SORCERER_CHECK: [],
     },
     wolfTarget: null,
     guardPrevious: null,
@@ -90,7 +89,7 @@ function knowledge(over: Partial<BotKnowledgeView> = {}): BotKnowledgeView {
     players: PLAYERS.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
     knownRoles: { me: "VILLAGER" },
     seerResult: null,
-    mediumResult: null,
+    sorcererResult: null,
     night: null,
     trialAccusedId: null,
     canFinalVote: false,
@@ -467,32 +466,6 @@ describe("trọng số được nối vào quyết định", () => {
     expect(
       act(resolveWeights({ roleThresholds: { witchPoisonSuspicion: 10 } }))!.action,
     ).toBe("POISON");
-  });
-
-  it("roleThresholds.priestSuspicion đổi ngưỡng ném Nước thánh", () => {
-    const state = stateFor();
-    state.seenEventIds.push("src1");
-    state.suspicion.a = { score: 60, reasons: [evidence()], lastUpdatedRound: 1 };
-
-    const act = (weights?: BotWeights) =>
-      strategyFor("PRIEST", weights).decideNight(
-        context({
-          selfRole: "PRIEST",
-          phase: "NIGHT",
-          night: emptyNight({
-            legalActions: ["HOLY_WATER"],
-            legalTargets: { ...emptyNight().legalTargets, HOLY_WATER: ["a", "b"] },
-          }),
-        }),
-        state,
-        createSeededRng("p"),
-      );
-
-    // Tường minh cả hai vế, cùng lý do như hai bài trên.
-    expect(act(resolveWeights({ roleThresholds: { priestSuspicion: 95 } }))).toBeNull();
-    expect(act(resolveWeights({ roleThresholds: { priestSuspicion: 10 } }))!.action).toBe(
-      "HOLY_WATER",
-    );
   });
 
   it("nightConfidence là đầu ra thuần, không đổi mục tiêu", () => {
@@ -1005,21 +978,6 @@ describe("nhóm trọng số claim", () => {
     expect(BOT_WEIGHTS_V7.jester.bluffFromRound).toBeLessThan(
       BOT_WEIGHTS_V7.claim.wolfBluffFromRound,
     );
-  });
-
-  it("v6 giữ Nước thánh khó hơn bình độc, đúng vì nó có phản đòn", () => {
-    // Không phải một con số đẹp: ném trượt thì chính Linh Mục chết còn mục tiêu
-    // vẫn sống, nên ngưỡng của nó PHẢI cao hơn bình độc - thứ chỉ mất một
-    // người. Quan hệ này là điều `roles/priest.ts` tuyên bố, và nó dễ bị phá vỡ
-    // âm thầm ở lần hiệu chỉnh sau nếu không có ai kiểm.
-    expect(BOT_WEIGHTS_V6.roleThresholds.priestSuspicion).toBeGreaterThan(
-      BOT_WEIGHTS_V6.roleThresholds.witchPoisonSuspicion,
-    );
-    // Nhưng vẫn phải nằm trong tầm với của thang thật, nếu không thì nó chỉ đổi
-    // từ "không bao giờ ném" sang "không bao giờ ném".
-    expect(BOT_WEIGHTS_V6.roleThresholds.priestSuspicion).toBeLessThan(8.6);
-    // v5 vẫn giữ nguyên: nó là mốc so sánh, không phải một bản bị sửa lại.
-    expect(BOT_WEIGHTS_V5.roleThresholds.priestSuspicion).toBe(95);
   });
 
   it("v5 đưa ba ngưỡng của Phù Thuỷ và Thợ Săn vào tầm với của thang belief", () => {

@@ -75,7 +75,7 @@ function context(over: Partial<BotKnowledgeView> = {}): BotDecisionContext {
       players: players(),
       knownRoles: { me: "WEREWOLF", ally: "WEREWOLF" },
       seerResult: null,
-      mediumResult: null,
+      sorcererResult: null,
       night: null,
       trialAccusedId: null,
       canFinalVote: false,

@@ -539,12 +539,9 @@ export interface RoleThresholdWeights {
   witchPoisonSuspicion: number;
   /** Trên mức này thì dù nghi tới đâu cũng không độc. */
   witchPoisonTrustVeto: number;
-  /** Nước thánh có phản đòn, nên ngưỡng cao hơn cả bình độc. */
-  priestSuspicion: number;
-  priestTrustVeto: number;
   /**
    * Chiết khấu ngưỡng của kỹ năng dùng-một-lần khi LÀNG ĐÃ MỎNG
-   * (`isThinVillage`): `witchPoisonSuspicion` và `priestSuspicion` trừ đi
+   * (`isThinVillage`): `witchPoisonSuspicion` trừ đi
    * bấy nhiêu. `0` TẮT - đúng ở v1..v14.
    *
    * Không ép xài: vẫn cần bằng chứng, chỉ là bằng chứng "vừa đủ" thì dùng
@@ -598,7 +595,6 @@ export interface NightConfidenceWeights {
   witchHeal: number;
   witchPoison: number;
   witchSkip: number;
-  priest: number;
   /** Confidence mặc định của một evidence do nước đi đêm sinh ra. */
   nightEvidence: number;
 }
@@ -798,7 +794,6 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   ["nightConfidence", "witchHeal"],
   ["nightConfidence", "witchPoison"],
   ["nightConfidence", "witchSkip"],
-  ["nightConfidence", "priest"],
   ["nightConfidence", "nightEvidence"],
   // Bốn cái dưới đây được so THẲNG với `rng()`. Một giá trị 1.5 biến "đôi khi
   // trả lời" thành "luôn trả lời" mà không có lỗi nào để lần theo.
@@ -1139,8 +1134,6 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     witchHealTrust: 40,
     witchPoisonSuspicion: 85,
     witchPoisonTrustVeto: 50,
-    priestSuspicion: 90,
-    priestTrustVeto: 30,
     // Tắt ở v1..v14 (0); v15 bật. `thinVillageShare` vô nghĩa khi chiết khấu 0.
     witchPoisonLosingDiscount: 0,
     witchHealLosingDiscount: 0,
@@ -1165,7 +1158,6 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     witchHeal: 0.8,
     witchPoison: 0.75,
     witchSkip: 0.5,
-    priest: 0.8,
     nightEvidence: 0.5,
   }),
 
@@ -1347,10 +1339,9 @@ export const BOT_WEIGHTS_V2: BotWeights = Object.freeze({
 
   roleThresholds: Object.freeze({
     ...BOT_WEIGHTS_V1.roleThresholds,
-    // 95 nghĩa là "chỉ Sói do Tiên Tri xác nhận". Hai bình dùng một lần cả ván
-    // nên đây đúng là điều kiện để tiêu chúng.
+    // 95 nghĩa là "chỉ Sói do Tiên Tri xác nhận". Bình độc dùng một lần cả ván
+    // nên đây đúng là điều kiện để tiêu nó.
     witchPoisonSuspicion: 95,
-    priestSuspicion: 95,
   }),
 
   deceptionRisk: Object.freeze({
@@ -1583,6 +1574,9 @@ export const BOT_WEIGHTS_V5: BotWeights = Object.freeze({
 /**
  * v6 — ngưỡng Nước thánh của Linh Mục, cùng lỗi thang đo với v5.
  *
+ * LƯU Ý Task 6: Linh Mục đã bị xóa cứng (vai + strategy + hai ngưỡng). Toàn bộ
+ * số đo dưới đây giữ lại làm lịch sử hiệu chỉnh, không còn khóa nào trỏ tới.
+ *
  * `priestSuspicion: 95` là ngưỡng CUỐI CÙNG còn sót lại của nhóm mà v2 để lại
  * trên thang giấy, và nó hỏng theo đúng kiểu: Linh Mục không soi, nên không
  * bao giờ có mục tiêu bị ghim 100, nên bình Nước thánh chưa từng được ném
@@ -1620,14 +1614,8 @@ export const BOT_WEIGHTS_V6: BotWeights = Object.freeze({
 
   roleThresholds: Object.freeze({
     ...BOT_WEIGHTS_V5.roleThresholds,
-    priestSuspicion: 8,
-    /**
-     * Đưa về cùng thang với `witchPoisonTrustVeto`. Đo được: KHÔNG đổi kết quả
-     * nào trên 1000 ván - cùng lý do như bên Phù Thuỷ, một mục tiêu vừa đủ
-     * đáng ngờ để bị ném vừa có trust ≥ 2 là trường hợp chưa từng xảy ra. Sửa
-     * vì ở mức 30 nó là một chốt chặn không bao giờ chặn.
-     */
-    priestTrustVeto: 2,
+    // Linh Mục đã bị xóa cứng ở Task 6 (vai + `roles/priest.ts` + hai ngưỡng
+    // này). V6 từ đây chỉ còn là mốc số cho bình độc của Phù Thuỷ.
   }),
 });
 

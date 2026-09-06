@@ -102,6 +102,23 @@ export interface GroundTruth {
    */
   shadowedSeerResults?: ReadonlySet<string>;
   /**
+   * Lượt SEE đã bị khiên Alpha ép về làng, khoá `"${ownerId}:${targetId}"`.
+   *
+   * Cùng lớp với `shadowedSeerResults` ngay trên: engine thi hành đúng luật
+   * của nó (lượt SEE đầu lên Sói Alpha luôn ra làng, xem `alphaShieldUsed`
+   * trong `engine.ts`), còn auditor đối chiếu với `roleTeam` nên tố cáo oan -
+   * đo được ~40 báo động giả mỗi 200 ván preset 19-20. Miễn trừ này CHỈ tắt
+   * phép so sánh với sự thật cho đúng cặp đã bị khiên, và câu hỏi "ai được
+   * phép cầm kết quả này" không có ngoại lệ nào - cùng ranh giới với Bóng Sói.
+   *
+   * ponytail cùng loại đã ghi ở `roleChangedIds`: miễn trừ theo cặp nên nó
+   * cũng tha luôn một lượt soi LẶP lên cùng cặp mà engine trả sai (lẽ ra sau
+   * khi khiên vỡ phải ra Sói). Mất đúng một lượt soi sai, chỉ trong bộ bài có
+   * Sói Alpha. Harness chỉ khoá đúng lượt SEE đã thật sự rút khiên (xem hook
+   * trong `selfplay.ts`), nên không có bản ghi chép tay nào để trôi lệch.
+   */
+  alphaShieldedSeerResults?: ReadonlySet<string>;
+  /**
    * Những người đã bị GHI ĐÈ vai giữa ván: Kẻ Nguyền Rủa hoá Sói, Kẻ Phản Bội
    * thăng cấp khi bầy sạch, Kẻ Song Trùng hoá theo người chết đầu tiên.
    *
@@ -326,6 +343,9 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
         const seerResultMayLie =
           truth.activeEventId === "WOLF_SHADOW" ||
           (truth.shadowedSeerResults?.has(`${self}:${result.targetId}`) ?? false) ||
+          // Khiên Alpha ép lượt SEE đầu về làng - engine làm đúng luật của nó,
+          // không phải nói dối. Chỉ đúng cặp đã bị khiên, xem `GroundTruth`.
+          (truth.alphaShieldedSeerResults?.has(`${self}:${result.targetId}`) ?? false) ||
           // Sự thật đã dịch chỗ dưới chân kết quả này, xem `roleChangedIds`.
           (truth.roleChangedIds?.has(result.targetId) ?? false);
         if (!seerResultMayLie && result.isWolf !== seerReadsAsWolf(truth.roles[result.targetId])) {
@@ -386,12 +406,9 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
         });
       }
       for (const [action, targets] of Object.entries(knowledge.night?.legalTargets ?? {})) {
-        /*
-         * Bà Đồng gọi hồn NGƯỜI ĐÃ CHẾT, nên với đúng mã này bất biến bị LẬT
-         * chứ không bị gỡ - cùng tinh thần với `seerReadsAsWolf`: một mục tiêu
-         * còn sống trong danh sách gọi hồn cũng là một lỗi, và phải kêu.
-         */
-        const mustBeAlive = action !== "MEDIUM_CHECK";
+        // Mọi hành động đêm còn lại đều nhắm người SỐNG (Bà Đồng - ngoại lệ duy
+        // nhất nhắm người chết - đã bị xóa cứng cùng MEDIUM_CHECK).
+        const mustBeAlive = true;
         for (const targetId of targets) {
           if (Boolean(truth.alive[targetId]) === mustBeAlive) continue;
           auditor.report("DEAD_TARGET", {
@@ -459,9 +476,9 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
         });
       }
 
-      // Lật cho Bà Đồng, xem khối cùng tên ở `checkTurn`. `MEDIUM_CHECK` không
-      // bao giờ có mục tiêu thứ hai, nên lật cả hai ô là vô hại.
-      const targetMustBeAlive = intention.action !== "MEDIUM_CHECK";
+      // Mọi hành động đêm còn lại đều nhắm người SỐNG (Bà Đồng - ngoại lệ duy
+      // nhất - đã bị xóa cứng cùng MEDIUM_CHECK).
+      const targetMustBeAlive = true;
       for (const targetId of [intention.targetId, intention.secondaryTargetId]) {
         if (!targetId) continue;
         if (Boolean(truth.alive[targetId]) !== targetMustBeAlive) {

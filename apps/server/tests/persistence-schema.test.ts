@@ -52,7 +52,6 @@ function validEnvelope() {
 describe("schema snapshot phòng", () => {
   it("nhận envelope hợp lệ", () => {
     const parsed = roomEnvelopeSchema.safeParse(validEnvelope());
-    if (!parsed.success) console.error(parsed.error.issues);
     expect(parsed.success).toBe(true);
   });
 
@@ -79,10 +78,83 @@ describe("schema snapshot phòng", () => {
     expect(roomEnvelopeSchema.safeParse(bad).success).toBe(false);
   });
 
-  it("từ chối vai không có thật", () => {
-    const bad = validEnvelope();
-    bad.room.engineState.players[0]!.role = "BÁC SĨ" as never;
-    expect(roomEnvelopeSchema.safeParse(bad).success).toBe(false);
+  it("vai đã xóa cứng (PRIEST/MEDIUM) rơi về VILLAGER thay vì trượt schema", () => {
+    const input = validEnvelope();
+    input.room.engineState.players[0]!.role = "PRIEST" as never;
+    input.room.engineState.players[1]!.role = "MEDIUM" as never;
+    input.room.engineState.personalWins = [
+      { playerId: "p1", name: "N1", role: "PRIEST", condition: "JESTER_LYNCHED", round: 2 },
+    ] as never;
+
+    const parsed = roomEnvelopeSchema.parse(input);
+
+    expect(parsed.room.engineState!.players[0]!.role).toBe("VILLAGER");
+    expect(parsed.room.engineState!.players[1]!.role).toBe("VILLAGER");
+    expect(parsed.room.engineState!.personalWins).toEqual([
+      { playerId: "p1", name: "N1", role: "VILLAGER", condition: "JESTER_LYNCHED", round: 2 },
+    ]);
+  });
+
+  it("brain mang vai cũ và lượt đêm cũ (HOLY_WATER/PRIEST_BLESS) vẫn đọc được", () => {
+    const input = validEnvelope();
+    input.room.botSession.brains = {
+      p4: {
+        lastDecayRound: 1,
+        state: {
+          playerId: "p4",
+          personality: {
+            aggressiveness: 0.5, talkativeness: 0.5, riskTolerance: 0.5,
+            deceptionSkill: 0.5, analyticalSkill: 0.5, loyalty: 0.5, stubbornness: 0.5,
+          },
+          suspicion: {},
+          trust: {},
+          knownInformation: { knownRoles: { p1: "MEDIUM" }, seerResults: [] },
+          claims: [],
+          myClaim: { role: "PRIEST", round: 2 },
+          memories: [],
+          relationships: {},
+          currentTheory: null,
+          currentTargets: [],
+          confidence: 0.4,
+          previousVotes: [],
+          previousNightActions: [
+            { round: 1, action: "HOLY_WATER", targetId: "p2" },
+            { round: 2, action: "PRIEST_BLESS", targetId: null },
+          ],
+          speechMemory: [],
+          speechSequence: 0,
+          repliedMessageIds: [],
+          seenEventIds: [],
+          appliedClaimEvidenceIds: [],
+        },
+      },
+    } as never;
+
+    const parsed = roomEnvelopeSchema.parse(input);
+    const brain = parsed.room.botSession!.brains["p4"]!.state;
+
+    expect(brain.knownInformation.knownRoles).toEqual({ p1: "VILLAGER" });
+    expect(brain.myClaim).toEqual({ role: "VILLAGER", round: 2 });
+    expect(brain.previousNightActions).toEqual([
+      { round: 1, action: "HOLY_WATER", targetId: "p2" },
+      { round: 2, action: "PRIEST_BLESS", targetId: null },
+    ]);
+  });
+
+  it("config cũ mang key priest/medium vẫn đọc được, key lạ bị lược", () => {
+    const input = validEnvelope();
+    const legacyConfig = { ...input.room.config, priest: true, medium: true };
+    input.room.config = legacyConfig as never;
+    input.room.engineState.config = { ...legacyConfig } as never;
+
+    const parsed = roomEnvelopeSchema.parse(input);
+
+    expect("priest" in parsed.room.config).toBe(false);
+    expect("medium" in parsed.room.config).toBe(false);
+    expect("priest" in parsed.room.engineState!.config).toBe(false);
+    expect("medium" in parsed.room.engineState!.config).toBe(false);
+    // Key thật còn nguyên: lược key lạ chứ không thay cả config.
+    expect(parsed.room.config.seer).toBe((input.room.config as { seer: boolean }).seer);
   });
 
   it("từ chối bước chờ mang tên lạ", () => {
@@ -150,7 +222,6 @@ describe("schema snapshot phòng", () => {
     } as never;
 
     const parsed = roomEnvelopeSchema.safeParse(input);
-    if (!parsed.success) console.error(parsed.error.issues);
     expect(parsed.success).toBe(true);
   });
 
@@ -185,5 +256,16 @@ describe("tương thích ngược với ảnh chụp của bản cũ", () => {
     delete (envelope.room as Record<string, unknown>).kickedPlayerIds;
 
     expect(roomEnvelopeSchema.safeParse(envelope).success).toBe(true);
+  });
+
+  it("thiếu sorcererResults và alphaShieldUsed (ảnh bản cũ) vẫn đọc được", () => {
+    const envelope = validEnvelope();
+    const night = envelope.room.engineState.night as unknown as Record<string, unknown>;
+    delete night.sorcererResults;
+    delete (envelope.room.engineState as unknown as Record<string, unknown>).alphaShieldUsed;
+
+    const parsed = roomEnvelopeSchema.safeParse(envelope);
+    if (!parsed.success) console.error(parsed.error.issues);
+    expect(parsed.success).toBe(true);
   });
 });

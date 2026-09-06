@@ -51,16 +51,50 @@ describe("balance", () => {
      * mà là đổi cả thế cân bằng. Hạ vế làng theo số đo vì thế làm lộ ra rằng
      * hai vế chưa từng nằm chung một thang.
      *
-     * Ghi đích danh kèm bằng chứng, KHÔNG vặn một con số cho vừa ngưỡng - đúng
-     * cách ngoại lệ trước đã được xử. Nó chỉ tan khi vế SÓI được đo lại trên
-     * cùng một thang, và đó là việc chưa ai làm.
-     */
-    const KNOWN_FALSE_ALARM = new Set([20]);
+      * Ghi đích danh kèm bằng chứng, KHÔNG vặn một con số cho vừa ngưỡng - đúng
+      * cách ngoại lệ trước đã được xử. Nó chỉ tan khi vế SÓI được đo lại trên
+      * cùng một thang, và đó là việc chưa ai làm.
+      *
+      * MỞ RỘNG 2026-09-06 (Task 9): đo xong, SORCERER = 4 và ALPHA_WOLF = 4,
+      * cả bốn preset 17-20 cùng kêu ở phép so này - cùng một nguyên nhân đã
+      * chẩn đoán (vế làng đo bằng "đóng góp so với Dân Làng" trên bàn bot,
+      * vế Sói 4x5=20 chưa từng qua phép đo đó):
+      *
+      *   preset | làng  | Sói | chênh
+      *   17     | 17    | 19  | -2
+      *   18     | 20.5  | 24  | -3.5
+      *   19     | 21    | 24  | -3
+      *   20     | 18    | 24  | -6
+      *
+      * Trong khi cả bốn đo ra 34.5-41.7% cho phe làng (600 ván preset + 300
+      * ván baseline so cặp, speech bật) - tức vẫn là báo động giả, và vẫn
+      * xử đúng cách cũ: ghi đích danh, không vặn số.
+      *
+      * Hai điều lộ ra khi vòng lặp này FINALLY chạy qua được preset 18 (trước
+      * đây nó chết ở 18 nên 19-20 chưa từng được kiểm):
+      *
+      * 1. Preset 17 từng im HOÀN TOÀN (17 so với 17) - nhưng đó là nhờ con số
+      *    2 TẠM của Sói Pháp Sư, không phải nhờ bộ bài cân bằng tuyệt đối.
+      *    Số đo chốt 4 thì nó kêu. Giữ im bằng cách neo lại 2 là vặn số cho
+      *    vừa ngưỡng - điều khối này cấm.
+      * 2. Kỳ vọng cũ cho preset 20 ("18.5 so với 20") đã THIU từ lúc Sói Alpha
+      *    vào bộ bài (thực tế SÓI = 26, LÀNG = 18): nó chỉ chưa đỏ vì vòng lặp
+      *    chưa bao giờ tới được đó. Bài học: một vòng lặp assert-ngừng-khi-đỏ
+      *    che được cả những kỳ vọng thiu đằng sau điểm đỏ đầu tiên.
+      */
+    // Vẫn khoá chặt: đúng MỘT cảnh báo mỗi preset, và đúng cảnh báo đã được
+    // chẩn đoán (bảng chênh trong khối chú thích ngay trên).
+    const KNOWN_FALSE_ALARM: Record<number, string> = {
+      17: "Sức mạnh phe làng (17) thấp hơn phe Sói (19)",
+      18: "Sức mạnh phe làng (20.5) thấp hơn phe Sói (24)",
+      19: "Sức mạnh phe làng (21) thấp hơn phe Sói (24)",
+      20: "Sức mạnh phe làng (18) thấp hơn phe Sói (24)",
+    };
     for (const [count, deck] of Object.entries(PRESET_DECKS)) {
       const warnings = absolute(deck, Number(count));
-      if (KNOWN_FALSE_ALARM.has(Number(count))) {
-        // Vẫn khoá chặt: đúng MỘT cảnh báo, và đúng cảnh báo đã được chẩn đoán.
-        expect(warnings).toEqual(["Sức mạnh phe làng (18.5) thấp hơn phe Sói (20)"]);
+      const diagnosed = KNOWN_FALSE_ALARM[Number(count)];
+      if (diagnosed !== undefined) {
+        expect(warnings).toEqual([diagnosed]);
         continue;
       }
       expect(absolute(deck, Number(count)), `preset ${count}`).toEqual([]);

@@ -1,8 +1,8 @@
 import { m } from "motion/react";
-import { deathCauseClause, type NightRecap, type RoomConfig } from "@masoi/shared";
+import { deathCauseClause, type NightRecap, type RecapPlayer, type RoomConfig } from "@masoi/shared";
 import { cursedTurnedText } from "@/lib/cursed";
 
-import { priestSpentRound, rolesInRecap } from "@/lib/night-recap-roles";
+import { rolesInRecap, sorcererChecksOf } from "@/lib/night-recap-roles";
 import { listItemMotion } from "@/lib/motion";
 
 /** Màu chip theo vai, dùng đúng bảng màu phe đang dùng ở mọi chỗ khác. */
@@ -14,10 +14,13 @@ const ACTOR_STYLE: Record<string, string> = {
   Nguyền: "bg-amber-900/50 text-amber-300",
   "Thiên Thần": "bg-cyan-900/50 text-cyan-300",
   "Thám Tử": "bg-violet-900/50 text-violet-300",
-  "Linh Mục": "bg-rose-900/50 text-rose-300",
+  "Sói Pháp Sư": "bg-violet-950/60 text-violet-300",
   // Đỏ thẫm ngả tím, cùng sắc mà màn hồi ức 3D dùng cho nếp nhà của Sát Nhân:
   // gần với Sói vì nó cũng giết, nhưng không phải sắc của bầy.
   "Sát Nhân": "bg-fuchsia-950/60 text-fuchsia-300",
+  // Chỉ còn để kể lại lịch sử đêm ghi trước bản xóa vai: engine mới không bao
+  // giờ sinh entry `priest` nữa, nhưng ván cũ vẫn mang nó trong nightHistory.
+  "Linh Mục": "bg-teal-900/50 text-teal-300",
 };
 
 /**
@@ -51,8 +54,7 @@ function Verdict({ tone, children }: { tone: "good" | "bad" | "warn"; children: 
  * dùng bình độc" - hai lần phủ định nối bằng dấu phẩy, đọc như một biên bản
  * kiểm kho. Ngồi im giờ là một câu: "không sử dụng Bình Cứu hoặc Bình Độc."
  *
- * Tên hai bình viết hoa như tên riêng của vật phẩm, cùng cách "Nước thánh" của
- * Linh Mục được viết ở dòng ngay dưới.
+ * Tên hai bình viết hoa như tên riêng của vật phẩm.
  */
 function WitchLine({ witch }: { witch: NightRecap["witch"] }) {
   const heal = witch.usedHeal ? (
@@ -142,7 +144,7 @@ export function NightRecapTimeline({
         <ol className="relative space-y-3 border-l border-night-600/70 pl-4">
           {nights.map((night, index) => {
             const died = night.deaths.length > 0;
-            const holyWaterSpentAt = priestSpentRound(nights, index);
+            const sorcererChecks = sorcererChecksOf(night);
             return (
               <m.li
                 key={night.round}
@@ -248,25 +250,21 @@ export function NightRecapTimeline({
                         <WitchLine witch={night.witch} />
                       </Line>
                     )}
-                    {roles.priest &&
-                      (night.priest ? (
-                        <Line actor="Linh Mục">
-                          {night.priest.priest.name} dùng Nước thánh lên{" "}
-                          <b className="text-white">{night.priest.target.name}</b>{" "}
-                          <Verdict tone={night.priest.isWolf ? "bad" : "good"}>
-                            {night.priest.isWolf
-                              ? "là Ma Sói, đã bị thanh tẩy"
-                              : "không phải Ma Sói, Nước thánh phản vệ"}
-                          </Verdict>
-                        </Line>
+                    {roles.sorcerer &&
+                      (sorcererChecks.length > 0 ? (
+                        sorcererChecks.map((check) => (
+                          <Line key={`${check.sorcerer.id}-${check.target.id}`} actor="Sói Pháp Sư">
+                            {check.sorcerer.name} kiểm tra{" "}
+                            <b className="text-white">{check.target.name}</b>{" "}
+                            <Verdict tone={check.isSeerLine ? "bad" : "good"}>
+                              {check.isSeerLine
+                                ? "thuộc dòng Tiên Tri"
+                                : "không thuộc dòng Tiên Tri"}
+                            </Verdict>
+                          </Line>
+                        ))
                       ) : (
-                        // Chỉ có MỘT bình cả ván, nên "không hành động" trả lời
-                        // sai câu hỏi người đọc đang hỏi: còn bình hay hết rồi.
-                        <Line actor="Linh Mục">
-                          {holyWaterSpentAt === null
-                            ? "chưa dùng Nước thánh."
-                            : `đã dùng Nước thánh ở Đêm ${holyWaterSpentAt}.`}
-                        </Line>
+                        <Line actor="Sói Pháp Sư">không kiểm tra ai.</Line>
                       ))}
                     {roles.serialKiller && (
                       <Line actor="Sát Nhân">
@@ -280,6 +278,29 @@ export function NightRecapTimeline({
                         )}
                       </Line>
                     )}
+                    {(() => {
+                      // Lịch sử đêm ghi trước bản xóa vai còn mang entry
+                      // `priest` (xem `NightRecap.priest` trong shared): đọc
+                      // phòng thủ qua cast như `sorcererChecksOf`, chỉ kể lại
+                      // chứ không suy thêm gì từ nó.
+                      const legacy = night as unknown as {
+                        priest?: {
+                          priest: RecapPlayer;
+                          target: RecapPlayer;
+                          isWolf: boolean;
+                        } | null;
+                      };
+                      const priest = legacy.priest ?? null;
+                      return priest ? (
+                        <Line actor="Linh Mục">
+                          {priest.priest.name} dùng Nước thánh lên{" "}
+                          <b className="text-white">{priest.target.name}</b>{" "}
+                          <Verdict tone={priest.isWolf ? "good" : "bad"}>
+                            {priest.isWolf ? "là Ma Sói" : "không phải Ma Sói"}
+                          </Verdict>
+                        </Line>
+                      ) : null;
+                    })()}
                     {(() => {
                       const turned = cursedTurnedText(night);
                       return turned ? <Line actor="Nguyền">{turned}</Line> : null;

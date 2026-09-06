@@ -27,7 +27,7 @@ export const GAME_STATE_SCAFFOLD: GameState = {
   guardPrevious: null,
   guardianAngelPrevious: null,
   guardianAngelCharges: {},
-  priestHolyWaterUsed: {},
+  alphaShieldUsed: {},
   apprenticeAwakened: false,
   wolfCubRageNextNight: false,
   healUsed: false,

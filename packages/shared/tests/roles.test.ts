@@ -1,21 +1,22 @@
 import { describe, it, expect } from "vitest";
-import { ROLES, ROLE_META, roleTeam, ROLE_ORDER_FOR_NIGHT } from "../src/roles";
+import { ROLES, ROLE_META, roleTeam, isWolfPack, ROLE_ORDER_FOR_NIGHT } from "../src/roles";
 import { DEFAULT_ROOM_CONFIG, RoomMode } from "../src/phases";
 import { GameEventId } from "../src/events";
 import { GameEventView, RoomSnapshot, NightActionView } from "../src/snapshot";
 import { gameActionPayload, roomConfigSchema, validateRoomConfig } from "../src/schemas";
 
 describe("Shared Roles", () => {
-  it("includes all 14 roles with valid meta", () => {
+  it("includes all 15 roles with valid meta", () => {
     const expected = [
       "WEREWOLF",
       "WOLF_CUB",
+      "SORCERER",
+      "ALPHA_WOLF",
       "SEER",
       "APPRENTICE_SEER",
       "DETECTIVE",
       "GUARD",
       "GUARDIAN_ANGEL",
-      "PRIEST",
       "WITCH",
       "HUNTER",
       "MAYOR",
@@ -34,15 +35,23 @@ describe("Shared Roles", () => {
     }
   });
 
+  it("hard-deletes PRIEST/MEDIUM (no deprecated entries)", () => {
+    expect(ROLES).not.toContain("PRIEST");
+    expect(ROLES).not.toContain("MEDIUM");
+    expect((ROLE_META as Record<string, unknown>)["PRIEST"]).toBeUndefined();
+    expect((ROLE_META as Record<string, unknown>)["MEDIUM"]).toBeUndefined();
+  });
+
   it("assigns correct teams to all roles", () => {
     expect(roleTeam("WEREWOLF")).toBe("wolves");
     expect(roleTeam("WOLF_CUB")).toBe("wolves");
+    expect(roleTeam("SORCERER")).toBe("wolves");
+    expect(roleTeam("ALPHA_WOLF")).toBe("wolves");
     expect(roleTeam("SEER")).toBe("village");
     expect(roleTeam("APPRENTICE_SEER")).toBe("village");
     expect(roleTeam("DETECTIVE")).toBe("village");
     expect(roleTeam("GUARD")).toBe("village");
     expect(roleTeam("GUARDIAN_ANGEL")).toBe("village");
-    expect(roleTeam("PRIEST")).toBe("village");
     expect(roleTeam("WITCH")).toBe("village");
     expect(roleTeam("HUNTER")).toBe("village");
     expect(roleTeam("MAYOR")).toBe("village");
@@ -53,27 +62,41 @@ describe("Shared Roles", () => {
     expect(roleTeam("JESTER")).toBe("neutral");
   });
 
+  it("distinguishes wolf pack from wolf faction", () => {
+    // Bầy Sói: thức dậy cùng nhau, biết mặt đồng bọn.
+    expect(isWolfPack("WEREWOLF")).toBe(true);
+    expect(isWolfPack("WOLF_CUB")).toBe(true);
+    expect(isWolfPack("SORCERER")).toBe(true);
+    expect(isWolfPack("ALPHA_WOLF")).toBe(true);
+    // Không trong bầy: Kẻ Phản Bội thắng cùng phe Sói nhưng không biết Sói là ai.
+    expect(isWolfPack("TRAITOR")).toBe(false);
+    expect(isWolfPack("SEER")).toBe(false);
+    expect(isWolfPack("VILLAGER")).toBe(false);
+  });
+
   it("orders night roles correctly in ROLE_ORDER_FOR_NIGHT", () => {
     // Expected order:
     // Guard: 0
     // Guardian Angel: 0.5
     // Seer: 1
     // Apprentice Seer: 1
+    // Sorcerer: 1
     // Detective: 1.5
     // Werewolf: 2
     // Wolf Cub: 2
+    // Alpha Wolf: 2
     // Serial Killer: 2.2
-    // Priest: 2.5
     // Witch: 3
     expect(ROLE_META.GUARD.nightOrder).toBe(0);
     expect(ROLE_META.GUARDIAN_ANGEL.nightOrder).toBe(0.5);
     expect(ROLE_META.SEER.nightOrder).toBe(1);
     expect(ROLE_META.APPRENTICE_SEER.nightOrder).toBe(1);
+    expect(ROLE_META.SORCERER.nightOrder).toBe(1);
     expect(ROLE_META.DETECTIVE.nightOrder).toBe(1.5);
     expect(ROLE_META.WEREWOLF.nightOrder).toBe(2);
     expect(ROLE_META.WOLF_CUB.nightOrder).toBe(2);
+    expect(ROLE_META.ALPHA_WOLF.nightOrder).toBe(2);
     expect(ROLE_META.SERIAL_KILLER.nightOrder).toBe(2.2);
-    expect(ROLE_META.PRIEST.nightOrder).toBe(2.5);
     expect(ROLE_META.WITCH.nightOrder).toBe(3);
 
     expect(ROLE_ORDER_FOR_NIGHT).toEqual([
@@ -81,14 +104,15 @@ describe("Shared Roles", () => {
       "GUARDIAN_ANGEL",
       "SEER",
       "APPRENTICE_SEER",
-      // Bà Đồng cùng nightOrder 1 với hai vai soi: cả ba chỉ ĐỌC, không đổi gì
-      // trong đêm, nên thứ tự giữa chúng không quan sát được từ bên ngoài.
-      "MEDIUM",
+      // Sói Pháp Sư cùng nightOrder 1 với hai vai soi: cả ba chỉ ĐỌC, không đổi
+      // gì trong đêm, nên thứ tự giữa chúng không quan sát được từ bên ngoài.
+      "SORCERER",
       "DETECTIVE",
       "WEREWOLF",
       "WOLF_CUB",
+      // Sói Alpha cùng nightOrder 2 với bầy, đứng sau Sói Con theo thứ tự đọc đêm.
+      "ALPHA_WOLF",
       "SERIAL_KILLER",
-      "PRIEST",
       "WITCH",
     ]);
   });
@@ -124,7 +148,7 @@ describe("Shared Game Events", () => {
 });
 
 describe("Shared Schemas and Payloads", () => {
-  it("validates gameActionPayload for detective, priest, guardian angel", () => {
+  it("validates gameActionPayload for detective, sorcerer, guardian angel", () => {
     // Detective action with targetId and secondary target or targetId1 & targetId2
     const detectiveAction = gameActionPayload.parse({
       type: "DETECTIVE_CHECK",
@@ -140,11 +164,11 @@ describe("Shared Schemas and Payloads", () => {
     });
     expect(guardianAction.type).toBe("GUARDIAN_PROTECT");
 
-    // Priest action
-    const priestAction = gameActionPayload.parse({
-      type: "HOLY_WATER",
+    // Sorcerer action
+    const sorcererAction = gameActionPayload.parse({
+      type: "SORCERER_CHECK",
       targetId: "p2",
     });
-    expect(priestAction.type).toBe("HOLY_WATER");
+    expect(sorcererAction.type).toBe("SORCERER_CHECK");
   });
 });

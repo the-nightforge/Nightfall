@@ -1,4 +1,4 @@
-import { ROLE_META } from "@masoi/shared";
+import { isRole, ROLE_META } from "@masoi/shared";
 import { fnv1a32 } from "../hash";
 import {
   BOT_SPEECH_TONES,
@@ -1440,13 +1440,15 @@ function evidenceClause(summary: string | undefined, leading: boolean): string {
  */
 export function fillSpeechTemplate(template: string, request: SpeechTemplateRequest): string {
   const first = request.intention.evidence[0];
+  // Ván cũ (log/self-play record của bản build trước) có thể mang một vai đã bị
+  // xóa cứng (PRIEST/MEDIUM): tra thẳng vào ROLE_META thì nổ cả dòng chat, nên
+  // rơi về "dân làng" khi chuỗi đó không còn là vai hợp lệ.
+  const claimed = request.intention.claimedRole;
   return template
     .replace(/\{target\}/g, request.targetName ?? "người đó")
     .replace(/\{author\}/g, request.replyToName ?? request.targetName ?? "bạn")
     .replace(/\{evidence\}/g, evidenceClause(first?.summary, template.startsWith("{evidence}")))
-    .replaceAll("{role}", request.intention.claimedRole
-      ? ROLE_META[request.intention.claimedRole].name
-      : "dân làng");
+    .replaceAll("{role}", claimed && isRole(claimed) ? ROLE_META[claimed].name : "dân làng");
 }
 
 // ---------------------------------------------------------------------------

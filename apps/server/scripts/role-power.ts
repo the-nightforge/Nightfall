@@ -33,10 +33,10 @@ const TOGGLES: ReadonlyArray<[Role, keyof RoomConfig]> = [
   ["APPRENTICE_SEER", "apprenticeSeer"],
   ["DETECTIVE", "detective"],
   ["GUARDIAN_ANGEL", "guardianAngel"],
-  ["PRIEST", "priest"],
   ["MAYOR", "mayor"],
   ["ELDER", "elder"],
-  ["MEDIUM", "medium"],
+  ["SORCERER", "sorcerer"],
+  ["ALPHA_WOLF", "alphaWolf"],
   ["DOPPELGANGER", "doppelganger"],
 ];
 
@@ -136,9 +136,10 @@ function main(): void {
         ...(preset.villagers === undefined ? {} : { villagers: preset.villagers + 1 }),
       } as RoomConfig;
       const delta = base - villageWinRate(playerCount, without, games, seedBase);
-      // Sói Con nằm phe Sói: gỡ nó ra thì phe làng KHOẺ lên, nên dấu phải lật để
-      // "delta" ở mọi dòng đều đọc là "đóng góp cho phe sở hữu nó".
-      const owned = role === "WOLF_CUB" ? -delta : delta;
+      // Sói Con, Sói Pháp Sư và Sói Alpha nằm phe Sói: gỡ chúng ra thì phe làng
+      // KHOẺ lên, nên dấu phải lật để "delta" ở mọi dòng đều đọc là "đóng góp
+      // cho phe sở hữu nó".
+      const owned = role === "WOLF_CUB" || role === "SORCERER" || role === "ALPHA_WOLF" ? -delta : delta;
       deltas.set(role, [...(deltas.get(role) ?? []), owned]);
     }
     process.stderr.write(`làng thắng ${(base * 100).toFixed(1)}%
@@ -153,13 +154,14 @@ function main(): void {
     process.stdout.write(`  ${String(count).padStart(2)} người  ${(rate * 100).toFixed(1).padStart(5)}%  ${bar}\n`);
   }
 
-  // Neo vào vai LÀNG mạnh nhất, không phải vai mạnh nhất nói chung: Sói Con
-  // thuộc phe kia, và một thang dựng trên nó sẽ nén toàn bộ bảng vai làng.
+  // Neo vào vai LÀNG mạnh nhất, không phải vai mạnh nhất nói chung: Sói Con,
+  // Sói Pháp Sư và Sói Alpha thuộc phe kia, và một thang dựng trên chúng sẽ
+  // nén toàn bộ bảng vai làng.
   // Bảng cũ chỉ có nghĩa ở TỈ LỆ giữa các vai (điểm cân bằng dựng trên hiệu số),
   // nên giữ nguyên một điểm neo là cách đổi thang mà không phá mọi ngưỡng đã hiệu chỉnh.
   const entries = [...deltas.entries()].map(([role, xs]) => [role, mean(xs)] as const);
   const anchor = entries
-    .filter(([role]) => role !== "WOLF_CUB")
+    .filter(([role]) => role !== "WOLF_CUB" && role !== "SORCERER" && role !== "ALPHA_WOLF")
     .reduce((best, cur) => (cur[1] > best[1] ? cur : best));
   const villager = ROLE_POWER.VILLAGER;
   const scale = (ROLE_POWER[anchor[0]] - villager) / anchor[1];

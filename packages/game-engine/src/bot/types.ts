@@ -87,9 +87,8 @@ export type EvidenceKind =
    * BOT có bằng chứng RIÊNG rằng một lời khai là dối: người còn sống đang nhận
    * một vai mà bot biết chắc thuộc về người khác.
    *
-   * Hai nguồn, cùng một loại suy luận - Bà Đồng đọc vai thật của một cái xác,
-   * và Tiên Tri Tập Sự được chỉ mặt Tiên Tri từ đêm 1. Cùng hạng với kết quả
-   * soi vì gốc đều là sự thật do engine cấp, nhưng nhẹ hơn hẳn: xem
+   * Nguồn là Tiên Tri Tập Sự được chỉ mặt Tiên Tri từ đêm 1. Cùng hạng với kết
+   * quả soi vì gốc đều là sự thật do engine cấp, nhưng nhẹ hơn hẳn: xem
    * `privateInfo.provenFalseClaim`.
    */
   | "PROVEN_FALSE_CLAIM"
@@ -364,9 +363,8 @@ export type NightActionKind =
   | "SKIP"
   | "DETECTIVE_CHECK"
   | "GUARDIAN_PROTECT"
-  | "HOLY_WATER"
-  | "SERIAL_KILL"
-  | "MEDIUM_CHECK";
+  | "SORCERER_CHECK"
+  | "SERIAL_KILL";
 
 /**
  * Thông tin ban đêm của ĐÚNG một vai.
@@ -471,14 +469,16 @@ export interface BotKnowledgeView {
    */
   seerResult: { targetId: string; targetName: string; isWolf: boolean; team: Team } | null;
   /**
-   * Vai THẬT của người đã khuất mà Bà Đồng gọi hồn đêm qua.
+   * Mục tiêu mà Sói Pháp Sư vừa soi có thuộc dòng Tiên Tri (Tiên Tri, Tiên Tri
+   * Tập Sự) không.
    *
-   * Mang `role` chứ không phải `team` như `seerResult`: đó là cả điểm khác biệt
-   * của lá bài. Đổi lại nó nói về một cái xác, nên tự nó không chỉ ra mối nguy
-   * nào đang sống - giá trị nằm ở chỗ đối chiếu ngược với lời khai của người
-   * còn sống, xem `applyPrivateInformation`.
+   * Chỉ chính con Sói đó thấy, `null` với mọi vai khác và khi đêm nay chưa soi.
+   * Engine lọc theo chủ sở hữu đúng như `seerResult` ngay trên. Lõi ghi nó
+   * thành một bản soi có cờ `seerLine` trong `knownInformation.seerResults` -
+   * không có `isWolf`, nên mọi chỗ đọc kết quả soi của Tiên Tri đều bỏ qua nó
+   * (xem `applyPrivateInformation`).
    */
-  mediumResult: { targetId: string; targetName: string; role: Role } | null;
+  sorcererResult: { targetId: string; targetName: string; isSeerLine: boolean } | null;
   /**
    * Vai TRUNG LẬP có trong bộ bài của ván này.
    *
