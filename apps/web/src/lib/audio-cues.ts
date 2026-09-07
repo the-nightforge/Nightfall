@@ -64,7 +64,7 @@ function myTurnStarted(prev: RoomSnapshot, next: RoomSnapshot): boolean {
   return (
     started(prev.night?.canAct, next.night?.canAct) ||
     started(prev.hunterShot?.canAct, next.hunterShot?.canAct) ||
-    // Bị cáo được trao lượt nói độc quyền cũng là tới lượt mình.
+    // Ai đó được trao quyền nói trong DEFENSE cũng là tới lượt mình.
     started(prev.trial?.canSpeak, next.trial?.canSpeak)
   );
 }

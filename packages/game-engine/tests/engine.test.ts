@@ -1551,14 +1551,14 @@ describe("Phiên toà: biện hộ và bỏ phiếu xác nhận", () => {
     expect(e.snapshotFor("p2").openBallots).toEqual([]);
   });
 
-  it("snapshot chỉ cho bị cáo nói và chỉ cho người khác bỏ phiếu", () => {
+  it("snapshot cho mọi người sống nói ở DEFENSE và chỉ cho người khác bỏ phiếu", () => {
     const e = makeEngine(6);
     nominate(e, "p2");
 
     const accusedInDefense = e.snapshotFor("p2").trialInfo!;
     expect(accusedInDefense.canSpeak).toBe(true);
     expect(accusedInDefense.canVote).toBe(false);
-    expect(e.snapshotFor("p1").trialInfo!.canSpeak).toBe(false);
+    expect(e.snapshotFor("p1").trialInfo!.canSpeak).toBe(true);
     // Số phiếu sơ bộ phải còn hiện trong lúc biện hộ.
     expect(e.snapshotFor("p1").votesRevealed).toBe(true);
     expect(e.snapshotFor("p1").players.find((p) => p.id === "p2")!.voteCount).toBe(5);
@@ -1575,6 +1575,19 @@ describe("Phiên toà: biện hộ và bỏ phiếu xác nhận", () => {
     expect(voted.myVote).toBe(false);
     expect(voted.canVote).toBe(false);
     expect(voted.innocentVotes).toBe(1);
+  });
+
+  it("DEFENSE thảo luận tự do: mọi người sống đều canSpeak, người chết không", () => {
+    const e = makeEngine(6);
+    nominate(e, "p2");
+
+    // Bị cáo nói được như cũ.
+    expect(e.snapshotFor("p2").trialInfo!.canSpeak).toBe(true);
+    // Người sống phi-bị-cáo cũng nói được tới hết defenseSeconds.
+    expect(e.snapshotFor("p1").trialInfo!.canSpeak).toBe(true);
+    // Người chết cách ly như cũ.
+    e.player("p3")!.alive = false;
+    expect(e.snapshotFor("p3").trialInfo!.canSpeak).toBe(false);
   });
 
   it("trialInfo biến mất và lastTrial xuất hiện sau khi xử xong", () => {

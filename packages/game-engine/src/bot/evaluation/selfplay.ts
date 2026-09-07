@@ -13,6 +13,12 @@ import { detectCoalitions } from "../analysis/coalition";
 import { BotRuntime } from "../BotRuntime";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { judgeChainPosition, type ChainBlockReason } from "../conversation/chain-limits";
+import {
+  DEFENSE_MAX_SPEECHES_PER_BOT,
+  planDefenseCommentary,
+  planDefenseSpeakers,
+  shouldSpeakInDefense,
+} from "../decision/defense-scheduler";
 import { witchPoisonThreshold } from "../roles/witch";
 import {
   speechSemanticFingerprint,
@@ -68,6 +74,14 @@ export interface SelfPlayRecord {
   events: boolean;
   speech: boolean;
   /**
+   * Vòng speech DEFENSE thật có chạy trong ván này không.
+   *
+   * Optional vì record cũ không có trường này; vắng mặt là `false` (hành vi
+   * cũ). `replayGame` đọc đúng trường này nên một ván defense-on chạy lại ra
+   * defense-on.
+   */
+  defense?: boolean;
+  /**
    * Số ghế đầu được gắn cờ `isBot: false` - vẫn do bot điều khiển.
    *
    * Tồn tại để self-play đo được các nhánh "bàn có người thật" (P2: Tiên Tri
@@ -89,6 +103,16 @@ export interface SelfPlayInput {
   events?: boolean;
   /** Cho BOT nói và nghe nhau. Mặc định BẬT. */
   speech?: boolean;
+  /**
+   * Chạy vòng speech DEFENSE thật sau `resolveNomination` ra TRIAL.
+   *
+   * `true` = đo mới (mọi bot sống được nói — bị cáo qua `decideDefense`,
+   * phi-bị-cáo qua phán quyết Treo/Tha sắp bỏ, bot chưa đủ tin thì im — tối
+   * đa 2 lượt/bot, rồi mới `beginFinalVote`); `false`/vắng mặt = hành vi cũ
+   * byte-for-byte (đi thẳng `resolveNomination` -> `beginFinalVote`,
+   * `trialDefense` null).
+   */
+  defense?: boolean;
   /** Thu trace mọi quyết định. Tốn bộ nhớ; mặc định tắt. */
   trace?: boolean;
   /** Xem `SelfPlayRecord.humanSeats`. Mặc định 0. */
@@ -238,6 +262,22 @@ export type SelfPlayEvent =
       vetoedByTrust: boolean;
     }
   | { kind: "NOMINATION"; round: number; accusedId: string | null }
+  | {
+      /**
+       * Cửa sổ DEFENSE của một phiên toà, chốt ngay sau `beginFinalVote`.
+       *
+       * Chỉ ghi khi harness bật `defense` — đường cũ không có event này nên
+       * ván cũ giữ nguyên byte-for-byte. `endedAt` luôn là số (khác null) vì
+       * `beginFinalVote` vừa chốt nó; test khoá thứ tự
+       * defense-speeches -> beginFinalVote -> observe -> decideFinalVote đọc
+       * trực tiếp ở đây thay vì suy từ sự có mặt của speech.
+       */
+      kind: "DEFENSE_WINDOW";
+      round: number;
+      accusedId: string;
+      startedAt: number;
+      endedAt: number;
+    }
   | { kind: "FINAL_VOTE"; round: number; voterId: string; guilty: boolean }
   | { kind: "HUNTER_SHOT"; round: number; hunterId: string; targetId: string | null }
   | { kind: "DEATH"; round: number; playerId: string; cause: string }
@@ -414,6 +454,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     maxRounds: input.maxRounds ?? MAX_ROUNDS,
     events,
     speech: input.speech ?? true,
+    defense: input.defense === true,
     humanSeats: input.humanSeats ?? 0,
   };
 
@@ -715,6 +756,78 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   };
 
   /**
+   * Vòng speech DEFENSE: mọi bot CÒN SỐNG (kể cả bị cáo) được lên tiếng, tối
+   * đa 2 lượt/bot, bot chưa đủ tin thì im.
+   *
+   * Thứ tự lượt dùng chung `planDefenseSpeakers` với phòng thật (cùng seed
+   * cho cùng thứ tự). Bị cáo + Hề đi qua `decideDefense` như cũ (Hề giữ
+   * INDIFFERENT/HUMOR); bot khác bàn về bị cáo theo đúng phán quyết Treo/Tha
+   * sắp bỏ (`decideFinalVote` + `planDefenseCommentary`), và im khi
+   * `confidence` bằng 0 (belief rỗng/trung tính).
+   *
+   * Thứ tự gọi là: defense speeches -> `beginFinalVote` (chốt `endedAt`) ->
+   * observe -> `decideFinalVote`. Hàm này chỉ làm bước đầu; chỗ gọi phải
+   * `beginFinalVote` NGAY sau rồi `observeAll` để `ingestDefenseReview`
+   * (đòi `endedAt !== null`) thấy được window ở lần observe sau đó.
+   *
+   * Ngân sách vòng của ban ngày đã cạn sau thảo luận DAY (cùng `round`), nên
+   * mở sổ riêng cho DEFENSE bằng cách xoá `spokenThisRound`: trần chống spam
+   * ở đây là cap 2 lượt/bot của vòng này, vẫn đi qua mọi cổng còn lại của
+   * `emitSpeech` (chain-limits, scope). Không tick đồng hồ giả trong vòng:
+   * mọi câu mang `at` bằng mốc mở cửa sổ, nằm gọn trong
+   * `[startedAt, endedAt]` mà `ingestDefenseReview` lọc.
+   *
+   * Ngữ nghĩa lượt được giữ: trong một lượt, các bot không thấy câu của nhau
+   * (chat chung chỉ nhận sau khi hết lượt), đúng như bản inline Task 1.
+   */
+  const runDefenseDiscussion = (): void => {
+    spokenThisRound.clear();
+    const accusedId = engine.state.trial?.accusedId;
+    if (!accusedId) return;
+    const aliveIds = engine.alivePlayers().map((player) => player.id);
+    const defenseRng = createSeededRng(`${input.seed}:defense:${engine.state.round}`);
+    const slots = planDefenseSpeakers(
+      aliveIds,
+      accusedId,
+      defenseRng,
+      DEFENSE_MAX_SPEECHES_PER_BOT,
+    );
+    const poolSize = aliveIds.includes(accusedId) ? aliveIds.length : aliveIds.length + 1;
+    const spokenBy = new Map<string, number>();
+    for (let turn = 0; turn < DEFENSE_MAX_SPEECHES_PER_BOT; turn += 1) {
+      const turnChat: BotChatObservation[] = [];
+      const turnSlots = slots.slice(turn * poolSize, (turn + 1) * poolSize);
+      for (const speakerId of turnSlots) {
+        if ((spokenBy.get(speakerId) ?? 0) >= DEFENSE_MAX_SPEECHES_PER_BOT) continue;
+        const runtime = runtimes.get(speakerId)!;
+        const context = contextFor(speakerId);
+        runtime.observe(context);
+        noteObserved(speakerId, context);
+        if (speakerId === accusedId || context.knowledge.selfRole === "JESTER") {
+          const defense = runtime.decideDefense(context);
+          spokenBy.set(speakerId, (spokenBy.get(speakerId) ?? 0) + 1);
+          emitSpeech(speakerId, defense.intention, turnChat);
+        } else {
+          const verdict = runtime.decideFinalVote(context);
+          if (!shouldSpeakInDefense(verdict.confidence)) continue;
+          const speech = planDefenseCommentary({
+            context,
+            guilty: verdict.guilty,
+            accusedId,
+            confidence: verdict.confidence,
+            evidence: verdict.evidence,
+            style: runtime.style,
+          });
+          spokenBy.set(speakerId, (spokenBy.get(speakerId) ?? 0) + 1);
+          emitSpeech(speakerId, speech, turnChat);
+        }
+      }
+      if (turnChat.length === 0) break;
+      chat.push(...turnChat);
+    }
+  };
+
+  /**
    * Sự thật, chụp lại mỗi lần cần kiểm.
    *
    * CHỈ tầng kiểm bất biến đọc nó. Không đường nào đưa nó ngược vào một
@@ -768,12 +881,20 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   };
 
   const contextFor = (playerId: string): BotDecisionContext => ({
-    // Harness đi thẳng `resolveNomination` -> `beginFinalVote`, KHÔNG chạy pha
-    // DEFENSE, nên bị cáo chưa từng được mở miệng. Engine vẫn ghi một cửa sổ
-    // bào chữa (dài đúng một tick), và để nguyên thì mọi bị cáo đều bị chấm
-    // "im lặng" ở FINAL_VOTE - một tín hiệu mà harness tự bịa ra. Xoá cửa sổ
+    // Khi defense TẮT, harness đi thẳng `resolveNomination` -> `beginFinalVote`,
+    // KHÔNG chạy pha DEFENSE, nên bị cáo chưa từng được mở miệng. Engine vẫn ghi
+    // một cửa sổ bào chữa (dài đúng một tick), và để nguyên thì mọi bị cáo đều bị
+    // chấm "im lặng" ở FINAL_VOTE - một tín hiệu mà harness tự bịa ra. Xoá cửa sổ
     // để lõi thấy đúng điều đã xảy ra: không có lượt bào chữa nào.
-    knowledge: { ...engine.botKnowledgeFor(playerId), trialDefense: null },
+    //
+    // Khi defense BẬT (`defense: true`), vòng speech DEFENSE chạy thật trước
+    // `beginFinalVote`, nên giữ nguyên cửa sổ thật của engine để
+    // `ingestDefenseReview` chấm được lời trong window ở lần observe sau
+    // `beginFinalVote` (đòi `endedAt !== null`).
+    knowledge:
+      input.defense === true
+        ? { ...engine.botKnowledgeFor(playerId) }
+        : { ...engine.botKnowledgeFor(playerId), trialDefense: null },
     // Bản sao: runtime không được giữ tham chiếu sống vào lịch sử chung.
     visibleChat: chat.map((message) => ({ ...message })),
   });
@@ -1201,7 +1322,23 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     });
 
     if (outcome.kind === "TRIAL") {
+      // `defense: true` mà `speech` tắt: vòng speech bỏ qua nhưng cửa sổ
+      // DEFENSE vẫn thật (không null) và ingest chấm window rỗng — chủ đích,
+      // để đo được riêng ảnh hưởng của "có cửa sổ" khỏi "có lời nói".
+      if (input.defense === true && record.speech) {
+        runDefenseDiscussion();
+      }
       engine.beginFinalVote(config.finalVoteSeconds * 1_000, tick(1_000));
+      if (input.defense === true) {
+        const trial = engine.state.trial;
+        log.push({
+          kind: "DEFENSE_WINDOW",
+          round: engine.state.round,
+          accusedId: outcome.accusedId,
+          startedAt: trial?.defenseStartedAt ?? now,
+          endedAt: trial?.defenseEndedAt ?? now,
+        });
+      }
       observeAll();
 
       for (const voter of engine.finalVoters()) {
@@ -1234,6 +1371,22 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     }
 
     if (finished()) break;
+  }
+
+  // Ván đo DEFENSE không chạy vai trung lập: preset đo đã tắt cả ba, lọt vào
+  // đây là leak cấu hình phải fail-fast thay vì cho ra số lẫn vai. Chỉ áp khi
+  // `defense: true` để hành vi cũ (test Hề/Sát Nhân/Báo Thù chạy không cờ)
+  // giữ nguyên byte-for-byte.
+  if (input.defense === true) {
+    for (const player of engine.state.players) {
+      if (
+        player.role === "JESTER" ||
+        player.role === "SERIAL_KILLER" ||
+        player.role === "EXECUTIONER"
+      ) {
+        throw new Error(`neutral leak trong van do: ${player.role} (${player.id})`);
+      }
+    }
   }
 
   if (engine.state.winner === null) {
@@ -1344,6 +1497,7 @@ export function replayGame(record: SelfPlayRecord, weights?: BotWeights): SelfPl
     maxRounds: record.maxRounds,
     events: record.events,
     speech: record.speech,
+    defense: record.defense,
     humanSeats: record.humanSeats,
   });
 }
@@ -1359,6 +1513,7 @@ export function replayCommand(record: SelfPlayRecord): string {
   ];
   if (record.events) flags.push("--events");
   if (!record.speech) flags.push("--no-speech");
+  if (record.defense) flags.push("--defense");
   if ((record.humanSeats ?? 0) > 0) flags.push(`--humans ${record.humanSeats}`);
   return `npm run selfplay -- ${flags.join(" ")}`;
 }

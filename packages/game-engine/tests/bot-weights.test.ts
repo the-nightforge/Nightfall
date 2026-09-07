@@ -18,6 +18,8 @@ import {
   BOT_WEIGHTS_V15,
   BOT_WEIGHTS_V16,
   BOT_WEIGHTS_V17,
+  BOT_WEIGHTS_V18,
+  BOT_WEIGHTS_V19,
   DEFAULT_BOT_WEIGHTS,
   resolveWeights,
   validateWeights,
@@ -1000,5 +1002,64 @@ describe("nhóm trọng số claim", () => {
     expect(
       validateWeights({ ...BOT_WEIGHTS_V4, claim: { ...BOT_WEIGHTS_V4.claim, underFireFactor: 1.5 } }).join(" "),
     ).toContain("claim.underFireFactor");
+  });
+});
+
+/**
+ * Dân làng bỏ phiếu trắng khi thật sự CHƯA CÓ DỮ KIỆN NÀO.
+ *
+ * Trước v19, cổng `abstainHelpsMyTeam` trong `selectVote` yêu cầu `selfIsWolf`,
+ * nên dân làng không bao giờ được chọn "Không treo ai" - kể cả khi ứng viên
+ * dẫn đầu có `evidence` RỖNG và chỉ dẫn đầu nhờ jitter. Bàn nhìn thấy điều đó
+ * là "bot bịa cáo buộc ngay vòng đầu".
+ *
+ * Cổng mới hẹp hơn hẳn cổng của Sói: chỉ mở khi bằng chứng RỖNG (không phải
+ * "dưới ngưỡng"), và chỉ khi làng còn đủ đông. Điểm dưới ngưỡng mà vẫn có lý
+ * do thật thì vẫn nêu tên - nếu không sẽ rơi lại đúng vòng lặp chết mà
+ * `decideFinalVote` đã ghi: không ai bị treo -> không có lịch sử phiếu ->
+ * không sinh bằng chứng -> không ai bị treo.
+ */
+describe("dân làng bỏ phiếu trắng khi chưa có dữ kiện", () => {
+  const villagerChoice = (weights: BotWeights): PublicVoteChoice =>
+    // Bảng belief rỗng: mọi ứng viên chỉ khác nhau ở jitter - đúng tình huống
+    // "chưa ai nói gì về ai".
+    selectVote(context(), stateFor(), createSeededRng("v"), weights).choice;
+
+  it("v18 và mọi preset cũ giữ nguyên hành vi: luôn nêu tên", () => {
+    for (const preset of [BOT_WEIGHTS_V1, BOT_WEIGHTS_V17, BOT_WEIGHTS_V18]) {
+      expect(preset.aggression.villageAbstainPressureCeiling).toBe(0);
+      expect(villagerChoice(preset).type).toBe("PLAYER");
+    }
+  });
+
+  it("mở trần thì dân làng bỏ trắng thay vì bịa một cái tên", () => {
+    expect(villagerChoice(BOT_WEIGHTS_V19).type).toBe("NO_ELIMINATION");
+  });
+
+  // `updateBelief` ghim nghi ngờ lên NGƯỜI THỰC HIỆN hành vi (`actorId`), nên
+  // một lời cáo buộc của "b" làm chính "b" bị nghi - không phải "a".
+  it("có bằng chứng thật thì vẫn nêu tên, dù trần đang mở", () => {
+    const brain = stateFor();
+    brain.seenEventIds.push("src1");
+    applyEvidence(
+      brain,
+      evidence({ actorId: "b", targetId: "a", weight: 60, confidence: 0.9 }),
+      BOT_WEIGHTS_V19,
+    );
+    const choice = selectVote(context(), brain, createSeededRng("v"), BOT_WEIGHTS_V19).choice;
+    expect(choice).toEqual({ type: "PLAYER", targetId: "b" });
+  });
+
+  it("làng đã mỏng thì thôi bỏ trắng: không treo ai mỗi ngày là thua chắc", () => {
+    // 2/4 đã chết -> pressure 0.5, trên trần -> buộc nêu tên dù bằng chứng rỗng.
+    const thin = context({
+      players: PLAYERS.map((id, index) => ({ id, name: id.toUpperCase(), alive: index < 2 })),
+      legalVoteChoices: [
+        { type: "PLAYER", targetId: "a" },
+        { type: "NO_ELIMINATION" },
+      ] as PublicVoteChoice[],
+    });
+    const choice = selectVote(thin, stateFor(), createSeededRng("v"), BOT_WEIGHTS_V19).choice;
+    expect(choice.type).toBe("PLAYER");
   });
 });

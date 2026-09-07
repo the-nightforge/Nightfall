@@ -2489,7 +2489,7 @@ export class GameEngine {
         myVote === undefined,
       hasVoted: myVote !== undefined,
       myVote: myVote ?? null,
-      canSpeak: st.phase === "DEFENSE" && viewerId === trial.accusedId && viewer?.alive === true,
+      canSpeak: st.phase === "DEFENSE" && viewer?.alive === true,
     };
   }
 

@@ -946,11 +946,11 @@ export class BotRuntime {
    * Chấm lượt bào chữa của bị cáo, đúng một lần mỗi phiên toà, SAU khi lượt
    * đó đã khép (`trialDefense.endedAt` khác `null`).
    *
-   * Các bot không được đánh thức trong pha DEFENSE - chỉ bị cáo mới được - nên
-   * lời bào chữa được đọc lại ở FINAL_VOTE từ `visibleChat`, lọc theo cửa sổ
-   * thời gian mà engine công bố. Không có cửa sổ (harness self-play, record
-   * cũ) thì không chấm gì: sự vắng mặt của dữ liệu chính là cái cổng, y như
-   * `ingestVerdictReviews`.
+   * Lời trong cửa sổ DEFENSE (mọi người sống đều được nói) được đọc lại ở
+   * FINAL_VOTE từ `visibleChat`, lọc theo cửa sổ thời gian mà engine công bố
+   * và theo người còn sống (người chết đã bị `visibleChat` loại ở thượng
+   * nguồn). Không có cửa sổ (harness self-play, record cũ) thì không chấm gì:
+   * sự vắng mặt của dữ liệu chính là cái cổng, y như `ingestVerdictReviews`.
    *
    * Parse lại bằng `analyzeChat` chứ không lục `memories`: hàm đó thuần, rẻ,
    * và `memories` có thể đã bị cắt ngân sách. Kết quả parse ở đây KHÔNG ghi
@@ -970,9 +970,12 @@ export class BotRuntime {
     if (!this.state.seenEventIds.includes(sourceId)) return;
     this.state.seenEventIds.push(marker);
 
+    const aliveIds = new Set(
+      knowledge.players.filter((player) => player.alive).map((player) => player.id),
+    );
     const said = context.visibleChat.filter(
       (message) =>
-        message.actorId === accusedId &&
+        aliveIds.has(message.actorId) &&
         message.at >= window.startedAt &&
         message.at <= (window.endedAt as number),
     );

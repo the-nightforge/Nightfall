@@ -22,8 +22,12 @@ import { buildBotDecisionContext } from "../bots/context";
 import { renderBotSpeech, speechTemplate } from "../bots/speech-renderer";
 import {
   describeSpeechStyle,
+  planDefenseCommentary,
+  planDefenseSpeakers,
   recentOpenings,
   recentSpeechSourceIds,
+  shouldSpeakInDefense,
+  DEFENSE_MAX_SPEECHES_PER_BOT,
 } from "@masoi/game-engine";
 import type { SpeechRequest } from "../bots/types";
 import { engineVote } from "../bots/targets";
@@ -958,13 +962,19 @@ export function scheduleDayBots(room: Room): void {
 }
 
 /**
- * Bot bị cáo tự bào chữa. Tối đa một lượt gọi mỗi ngày, và chỉ khi bị cáo là
- * bot: người thật tự gõ trong khung chat.
+ * Thảo luận DEFENSE đa bot: mọi bot CÒN SỐNG (gồm bị cáo) đều có thể nói,
+ * mỗi bot tối đa 2 lượt/phiên, bot chưa đủ tin thì im.
+ *
+ * Thứ tự lượt dùng chung `planDefenseSpeakers` với harness đo (seeded); nội
+   * dung giữ nguyên tính cách từng vai: bị cáo + Hề đi qua `decideDefense` cũ
+   * (Hề giữ INDIFFERENT/HUMOR, không claim), bot khác bàn về bị cáo theo đúng
+ * phán quyết Treo/Tha mà nó sắp bỏ (`decideFinalVote`).
+ *
+ * Cổng hiển thị `trial.canSpeak` KHÔNG đụng ở đây (Task 4 mở): scheduler chỉ
+ * cần còn sống + còn trong DEFENSE, quyền chat thật do `resolveChat` quyết
+ * (đã mở cho mọi người sống).
  */
 function scheduleDefenseBot(room: Room, accusedId: string): void {
-  const member = room.members.find((m) => m.playerId === accusedId && m.isBot);
-  if (!member) return;
-
   const scheduledEngine = room.engine;
   if (!scheduledEngine) return;
   const scheduledRound = scheduledEngine.state.round;
@@ -975,80 +985,134 @@ function scheduleDefenseBot(room: Room, accusedId: string): void {
     scheduledEngine.state.round === scheduledRound &&
     scheduledEngine.state.trial?.accusedId === accusedId;
 
-  const view = buildSnapshot(room, member.playerId);
-  if (!view.trial?.canSpeak) return;
+  const aliveBotIds = room.members
+    .filter((member) => member.isBot)
+    .filter(
+      (member) =>
+        scheduledEngine.state.players.find((p) => p.id === member.playerId)?.alive === true,
+    )
+    .map((member) => member.playerId);
+  if (aliveBotIds.length === 0) return;
 
-  void (async () => {
-    try {
-      const runtime = botSessionFor(room).runtimeFor(member.playerId);
-      const context = buildBotDecisionContext(room, member.playerId);
-      runtime.observe(context);
+  const session = botSessionFor(room);
+  const orderRng = session.rngFor("__room__", `defense:${scheduledRound}`);
+  const slots = planDefenseSpeakers(
+    aliveBotIds,
+    accusedId,
+    orderRng,
+    DEFENSE_MAX_SPEECHES_PER_BOT,
+  );
+  const spoken = new Map<string, number>();
 
-      /*
-       * TOÀN BỘ lượt bào chữa do lõi quyết, kể cả đường lui.
-       *
-       * Bản trước gọi `decideDefenseClaim` rồi tự dựng một ý định DISAGREE khi
-       * lõi trả `null`. Đường lui viết ở đây trông vô hại - hình dạng của nó cố
-       * định - nhưng nó là một quyết định gameplay đặt ở tầng IO, và tầng này
-       * KHÔNG nhìn thấy vai. Hệ quả: mọi bị cáo đều được dựng thành một người
-       * đang cố sống, kể cả Thằng Hề, vai mà sống chính là thua.
-       *
-       * `stance` đi cùng ý định và được chuyển thẳng xuống prompt: tầng diễn
-       * đạt không được phép tự đoán bị cáo này muốn gì.
-       */
-      const { intention: speech, stance } = runtime.decideDefense(context);
+  for (const speakerId of slots) {
+    if ((spoken.get(speakerId) ?? 0) >= DEFENSE_MAX_SPEECHES_PER_BOT) continue;
+    const member = room.members.find((m) => m.playerId === speakerId);
+    if (!member) continue;
 
-      // Số phiếu và danh sách đồng-bị-nhắm đã công khai ở pha DEFENSE (đúng dữ
-      // liệu `RoomSnapshot.players[].voteCount` cũ từng đọc) - khác hẳn vai
-      // thật, thứ `roleContext` từng đưa vào prompt và đã bị bỏ hẳn.
-      const votesAgainstMe = context.knowledge.currentVoteCounts.players[member.playerId] ?? 0;
-      const alsoAccused = context.knowledge.players
-        .filter(
-          (p) =>
-            p.alive &&
-            p.id !== member.playerId &&
-            (context.knowledge.currentVoteCounts.players[p.id] ?? 0) > 0,
-        )
-        .map((p) => p.name);
+    void (async () => {
+      try {
+        if (!stillDefending()) return;
+        if (!isBotControlled(member)) return;
+        if (
+          scheduledEngine.state.players.find((p) => p.id === member.playerId)?.alive !== true
+        ) {
+          return;
+        }
 
-      const request: SpeechRequest = {
-        ...toSpeechRequest(room, member, context, speech),
-        defense: { votesAgainstMe, alsoAccused, stance },
-      };
+        const runtime = session.runtimeFor(member.playerId);
+        const context = buildBotDecisionContext(room, member.playerId);
+        runtime.observe(context);
 
-      // Cùng một hàm với mọi lời nói khác: cổng CLAIM_INTEGRITY và bảng mẫu dự
-      // phòng áp dụng ở đây y hệt ban ngày. Không còn `randomBrain.decideDefense`
-      // ("não chắc chắn trả lời được") - bảng mẫu tất định của `renderBotSpeech`
-      // đã phủ đúng chỗ trống đó, kể cả khi mọi nhà cung cấp hỏng.
-      const rendered = await renderBotSpeech(request);
+        const isAccused = member.playerId === accusedId;
+        const isJester = context.knowledge.selfRole === "JESTER";
+        let speech: BotSpeechIntention;
+        let defense: SpeechRequest["defense"];
 
-      // Kết quả về muộn không được lọt sang pha sau.
-      if (!stillDefending()) return;
-      if (!rendered.text) return;
+        if (isAccused || isJester) {
+          /*
+           * TOÀN BỘ lượt bào chữa do lõi quyết, kể cả đường lui.
+           *
+           * (Giữ nguyên chú thích cũ: đường lui DISAGREE cứng từng nằm ở tầng
+           * IO và dựng mọi bị cáo thành người muốn sống, kể cả Thằng Hề. Giờ
+           * nó sống trong lõi nên Hề giữ đúng thái độ INDIFERENT/HUMOR.)
+           *
+           * `stance` đi cùng ý định và được chuyển thẳng xuống prompt: tầng
+           * diễn đạt không được phép tự đoán bị cáo này muốn gì.
+           */
+          const decided = runtime.decideDefense(context);
+          speech = decided.intention;
 
-      const resolved = resolveChat(room, member.playerId);
-      if (!resolved.ok) return;
-      const message = {
-        id: newId(),
-        channel: resolved.channel,
-        playerId: member.playerId,
-        playerName: member.name,
-        text: rendered.text,
-        at: Date.now(),
-      };
-      pushChat(room, message);
-      emitToPlayers(resolved.recipients, SERVER_EVENTS.CHAT_NEW, message);
-      void persistRoom(room);
+          // Số phiếu và danh sách đồng-bị-nhắm đã công khai ở pha DEFENSE
+          // (đúng dữ liệu `RoomSnapshot.players[].voteCount` cũ từng đọc) -
+          // khác hẳn vai thật, thứ `roleContext` từng đưa vào prompt và đã bị
+          // bỏ hẳn.
+          const votesAgainstMe =
+            context.knowledge.currentVoteCounts.players[member.playerId] ?? 0;
+          const alsoAccused = context.knowledge.players
+            .filter(
+              (p) =>
+                p.alive &&
+                p.id !== member.playerId &&
+                (context.knowledge.currentVoteCounts.players[p.id] ?? 0) > 0,
+            )
+            .map((p) => p.name);
+          defense = { votesAgainstMe, alsoAccused, stance: decided.stance };
+        } else {
+          // Bot phi-bị-cáo: bàn theo đúng phán quyết sắp bỏ; chưa đủ tin thì im.
+          const verdict = runtime.decideFinalVote(context);
+          if (!shouldSpeakInDefense(verdict.confidence)) return;
+          speech = planDefenseCommentary({
+            context,
+            guilty: verdict.guilty,
+            accusedId,
+            confidence: verdict.confidence,
+            evidence: verdict.evidence,
+            style: runtime.style,
+          });
+          defense = null;
+        }
 
-      // Vào sổ SAU khi câu đã thật sự nằm trong log, không sớm hơn (cùng lý do
-      // discussion-scheduler.ts ghi ở đây). Nếu speech là một claim, việc này
-      // chốt `state.myClaim` - thiếu bước này, bị cáo có thể bị hỏi khai lần
-      // hai ở một phiên xử sau trong cùng ván.
-      runtime.recordSpeech(speech, context.knowledge.round, rendered.text);
-    } catch {
-      /* não bot lỗi (mạng, JSON hỏng,...) không được kéo sập cả tiến trình */
-    }
-  })();
+        const request: SpeechRequest = {
+          ...toSpeechRequest(room, member, context, speech),
+          defense,
+        };
+
+        // Cùng một hàm với mọi lời nói khác: cổng CLAIM_INTEGRITY và bảng mẫu
+        // dự phòng áp dụng ở đây y hệt ban ngày. Không còn
+        // `randomBrain.decideDefense` ("não chắc chắn trả lời được") - bảng mẫu
+        // tất định của `renderBotSpeech` đã phủ đúng chỗ trống đó, kể cả khi
+        // mọi nhà cung cấp hỏng.
+        const rendered = await renderBotSpeech(request);
+
+        // Kết quả về muộn không được lọt sang pha sau.
+        if (!stillDefending()) return;
+        if (!rendered.text) return;
+
+        const resolved = resolveChat(room, member.playerId);
+        if (!resolved.ok) return;
+        const message = {
+          id: newId(),
+          channel: resolved.channel,
+          playerId: member.playerId,
+          playerName: member.name,
+          text: rendered.text,
+          at: Date.now(),
+        };
+        pushChat(room, message);
+        emitToPlayers(resolved.recipients, SERVER_EVENTS.CHAT_NEW, message);
+        void persistRoom(room);
+        spoken.set(speakerId, (spoken.get(speakerId) ?? 0) + 1);
+
+        // Vào sổ SAU khi câu đã thật sự nằm trong log, không sớm hơn (cùng lý
+        // do discussion-scheduler.ts ghi ở đây). Nếu speech là một claim, việc
+        // này chốt `state.myClaim` - thiếu bước này, bị cáo có thể bị hỏi khai
+        // lần hai ở một phiên xử sau trong cùng ván.
+        runtime.recordSpeech(speech, context.knowledge.round, rendered.text);
+      } catch {
+        /* não bot lỗi (mạng, JSON hỏng,...) không được kéo sập cả tiến trình */
+      }
+    })();
+  }
 }
 
 /**

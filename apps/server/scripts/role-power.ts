@@ -55,6 +55,11 @@ function villageWinRate(
     // chế độ mà bộ chấm cân bằng gác - vốn không có sự kiện nào.
     events: false,
     /*
+     * DEFENSE thảo luận tự do BẬT: mọi bot sống được nói trước bỏ phiếu
+     * (Task 5 đo dưới luật mới; xem `SelfPlayInput.defense`).
+     */
+    defense: true,
+    /*
      * BẬT, dù nó chạy chậm hơn nhiều.
      *
      * Bản cũ tắt với lý do "lời nói không đổi quyết định". Vế đó đúng cho CHÍNH

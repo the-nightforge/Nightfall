@@ -359,7 +359,12 @@ export function TrialStage({ view, beats, beatsId, onBeatsConsumed, snapshot }: 
         </div>
 
         {view.act === "DEFENSE" && (
-          <SpeakStatus view={view} speaking={speaking} dead={!snapshot.you?.alive} />
+          <SpeakStatus
+            view={view}
+            speaking={speaking}
+            dead={!snapshot.you?.alive}
+            isAccused={snapshot.you?.id === view.accusedId}
+          />
         )}
 
         {view.act !== "DEFENSE" && <Tally view={view} />}
@@ -396,10 +401,12 @@ function SpeakStatus({
   view,
   speaking,
   dead,
+  isAccused,
 }: {
   view: TrialStageView;
   speaking: boolean;
   dead: boolean;
+  isAccused: boolean;
 }) {
   const mine = view.canSpeak;
   return (
@@ -414,12 +421,14 @@ function SpeakStatus({
       <span aria-hidden="true">{mine ? "🎙" : speaking ? "🔊" : "👂"}</span>
       <span>
         {mine
-          ? "Đến lượt bạn biện hộ"
+          ? isAccused
+            ? "Đến lượt bạn biện hộ — mọi người còn sống đều được nói"
+            : "Mọi người còn sống đều được nói — bạn cũng có thể lên tiếng"
           : dead
-            ? `Bạn đã chết — chỉ ${view.accusedName} được nói lúc này`
+            ? "Bạn đã chết — mọi người còn sống đều được nói lúc này"
             : speaking
               ? `${view.accusedName} đang nói`
-              : `Hãy lắng nghe — chỉ ${view.accusedName} được nói lúc này`}
+              : "Mọi người còn sống đều được nói — hãy lắng nghe và lên tiếng"}
       </span>
     </p>
   );
