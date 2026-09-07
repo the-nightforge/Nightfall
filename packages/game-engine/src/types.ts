@@ -138,7 +138,11 @@ export interface NightState {
    * với `seerResults`.
    */
   trackerTargets: Record<string, string>;
-  /** Kết quả theo dõi, khoá theo id NGƯỜI THEO DÕI. Tính ở `resolveNight` (Task 3). */
+  /**
+   * Kết quả theo dõi, khoá theo id NGƯỜI THEO DÕI. Tính ở `resolveNight`, SAU
+   * khi mọi người đã nộp lượt - không tính được lúc submit vì lượt của mục
+   * tiêu (vd. Sói bỏ phiếu) có thể tới sau lượt TRACK.
+   */
   trackerResults: Record<string, { targetId: string; acted: boolean }>;
 }
 

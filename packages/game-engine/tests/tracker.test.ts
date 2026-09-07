@@ -72,3 +72,55 @@ describe("luật của lượt TRACK", () => {
     expect(() => engine.submitNightAction("v1", "TRACK", "w1")).toThrow(/Kẻ Theo Dõi/);
   });
 });
+
+describe("kết quả theo dõi ở bình minh", () => {
+  it("Sói bỏ phiếu cắn đọc ra ĐÃ ra tay", () => {
+    const engine = trackerGame();
+    engine.submitNightAction("t1", "TRACK", "w1");
+    engine.submitNightAction("w1", "KILL", "v1");
+    engine.resolveNight(Date.now(), () => 0);
+    expect(engine.state.night.trackerResults.t1).toEqual({ targetId: "w1", acted: true });
+  });
+
+  it("Dân Làng không có lượt đêm đọc ra KHÔNG ra tay", () => {
+    const engine = trackerGame();
+    engine.submitNightAction("t1", "TRACK", "v1");
+    engine.submitNightAction("w1", "KILL", "s1");
+    engine.resolveNight(Date.now(), () => 0);
+    expect(engine.state.night.trackerResults.t1.acted).toBe(false);
+  });
+
+  it("Tiên Tri có soi cũng đọc ra ĐÃ ra tay - đây là manh mối, không phải bằng chứng", () => {
+    const engine = trackerGame();
+    engine.submitNightAction("t1", "TRACK", "s1");
+    engine.submitNightAction("s1", "SEE", "w1");
+    engine.submitNightAction("w1", "KILL", "v1");
+    engine.resolveNight(Date.now(), () => 0);
+    expect(engine.state.night.trackerResults.t1.acted).toBe(true);
+  });
+
+  it("Sói bỏ phiếu KHÔNG CẮN đọc ra không ra tay", () => {
+    // Nước gỡ có thật của phe Sói; xem cảnh báo "trần" ở mục 7 của spec.
+    // Bỏ phiếu không cắn đi qua "SKIP", không phải "KILL" với target null.
+    const engine = trackerGame();
+    engine.submitNightAction("t1", "TRACK", "w1");
+    engine.submitNightAction("w1", "SKIP", null);
+    engine.resolveNight(Date.now(), () => 0);
+    expect(engine.state.night.trackerResults.t1.acted).toBe(false);
+  });
+
+  it("mục tiêu chết ngay đêm đó vẫn báo thật", () => {
+    // Kẻ Theo Dõi canh người đó suốt đêm; kết quả không phụ thuộc việc họ
+    // sống tới sáng.
+    const engine = trackerGame();
+    engine.state.players[3].role = "WITCH";
+    engine.submitNightAction("t1", "TRACK", "w1");
+    engine.submitNightAction("w1", "KILL", "s1");
+    // Phù Thuỷ chỉ hành động sau khi bầy Sói đã khoá phiếu.
+    engine.lockWolves(() => 0);
+    engine.submitNightAction("v1", "POISON", "w1");
+    engine.resolveNight(Date.now(), () => 0);
+    expect(engine.state.players[1].alive).toBe(false);
+    expect(engine.state.night.trackerResults.t1.acted).toBe(true);
+  });
+});

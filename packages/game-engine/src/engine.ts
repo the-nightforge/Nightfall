@@ -229,6 +229,31 @@ function emptyNight(wolfCubRageTonight = false): GameState["night"] {
 }
 
 /**
+ * "Ra tay" = có nộp một hành động đêm CÓ MỤC TIÊU.
+ *
+ * `SKIP`, Phù Thuỷ bỏ qua cả hai bình, Sát Nhân bỏ lượt, và Sói bỏ phiếu `null`
+ * đều KHÔNG tính. Mọi hành động đã để lại dấu trong `NightState`, nên hàm này
+ * chỉ tra chứ không cần thêm state ghi chép nào.
+ */
+function didActTonight(st: GameState, playerId: string): boolean {
+  const n = st.night;
+  // Sói: bỏ phiếu một mục tiêu là ra tay; `null` (không cắn) thì không.
+  if (n.wolfVotes[playerId] != null) return true;
+  if (n.seerResults[playerId] !== undefined) return true;
+  if (n.sorcererResults[playerId] !== undefined) return true;
+  if (n.detectiveResults[playerId] !== undefined) return true;
+  if (n.trackerTargets[playerId] !== undefined) return true;
+
+  // Vai một-người-một-ghế: ánh xạ vai -> người rồi mới đọc ô của vai đó.
+  const player = st.players.find((p) => p.id === playerId);
+  if (!player) return false;
+  if (player.role === "GUARD") return n.guardTarget !== null;
+  if (player.role === "WITCH") return n.healTonight || n.poisonTarget !== null;
+  if (player.role === "SERIAL_KILLER") return (n.serialKillerTarget ?? null) !== null;
+  return false;
+}
+
+/**
  * Engine thuần, không phụ thuộc socket/DB.
  * Server giữ quyền sở hữu trạng thái; client chỉ nhận view đã làm sạch.
  */
@@ -1493,6 +1518,13 @@ export class GameEngine {
         st.night.serialKillerTarget ? this.player(st.night.serialKillerTarget) : undefined,
       ),
     };
+
+    // Tính SAU khi mọi người đã nộp, TRƯỚC khi ai bị đánh dấu chết: một con Sói
+    // bỏ phiếu cắn rồi trúng Bình Độc vẫn là đã ra tay.
+    for (const [trackerId, targetId] of Object.entries(st.night.trackerTargets)) {
+      st.night.trackerResults[trackerId] = { targetId, acted: didActTonight(st, targetId) };
+    }
+
     st.nightHistory.push(recap);
 
     st.phase = "NIGHT_RESULT";
