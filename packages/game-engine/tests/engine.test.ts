@@ -108,6 +108,8 @@ function makeHunterEngine(phase: GameState["phase"] = "NIGHT") {
       detectiveTargets: null,
       detectiveResults: {},
       sorcererResults: {},
+      trackerTargets: {},
+      trackerResults: {},
     },
     votes: {},
     guardPrevious: null,

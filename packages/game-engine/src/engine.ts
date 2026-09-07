@@ -223,6 +223,8 @@ function emptyNight(wolfCubRageTonight = false): GameState["night"] {
     sorcererResults: {},
     serialKillerTarget: null,
     serialKillerSkipped: false,
+    trackerTargets: {},
+    trackerResults: {},
   };
 }
 
@@ -254,6 +256,10 @@ export class GameEngine {
     this.state.night.detectiveTargets ??= null;
     this.state.night.detectiveResults ??= {};
     this.state.night.sorcererResults ??= {};
+    // State lưu trước khi có Kẻ Theo Dõi không có hai trường dưới, cùng lý do
+    // với `sorcererResults` ngay trên.
+    this.state.night.trackerTargets ??= {};
+    this.state.night.trackerResults ??= {};
     this.state.alphaShieldUsed ??= {};
     // State lưu trước khi có Sát Nhân không có ba trường dưới. Mặc định an toàn
     // là "role tắt, đêm nay chưa ra tay": không ván cũ nào bỗng dưng mọc thêm
@@ -679,7 +685,8 @@ export class GameEngine {
       | "DETECTIVE_CHECK"
       | "GUARDIAN_PROTECT"
       | "SERIAL_KILL"
-      | "SORCERER_CHECK",
+      | "SORCERER_CHECK"
+      | "TRACK",
     targetId: string | null,
     secondaryTargetId?: string | null,
     rng: () => number = Math.random,
@@ -915,6 +922,18 @@ export class GameEngine {
         }
         // Charge trừ lúc khép đêm chứ không phải lúc bấm, xem `resolveNight`.
         st.night.guardianAngelTarget = targetId;
+        break;
+      }
+      case "TRACK": {
+        if (p.role !== "TRACKER") throw new GameError("Chỉ Kẻ Theo Dõi mới được theo dõi");
+        if (!targetId || !target) throw new GameError("Hãy chọn một người để theo dõi");
+        // Gương theo Tiên Tri và Bảo Vệ. Thêm nữa: "đêm nay tôi có ra tay
+        // không" là thứ chính chủ đã biết, nên tự nhắm là nước phí trắng.
+        if (targetId === playerId) {
+          throw new GameError("Kẻ Theo Dõi không thể theo dõi chính mình");
+        }
+        // CỐ Ý không cấm lặp mục tiêu hai đêm liền - xem plan Task 2.
+        st.night.trackerTargets[playerId] = targetId;
         break;
       }
       case "DETECTIVE_CHECK": {
@@ -2890,6 +2909,7 @@ export class GameEngine {
       GUARDIAN_PROTECT: [],
       SERIAL_KILL: [],
       SORCERER_CHECK: [],
+      TRACK: [],
     };
 
     // Tiên Tri Tập Sự soi y hệt Tiên Tri, nhưng chỉ SAU khi thức tỉnh.
@@ -2958,6 +2978,13 @@ export class GameEngine {
       const guardedBefore = this.guardedLastNight();
       legalTargets.GUARD = alive
         .filter((player) => player.id !== viewer.id && !guardedBefore.includes(player.id))
+        .map((player) => player.id);
+    } else if (viewer.role === "TRACKER") {
+      // Không tự theo dõi; theo dõi lại người đêm trước CHO PHÉP - xem hàng
+      // rào cùng tên ở `submitNightAction`.
+      legalActions.push("TRACK");
+      legalTargets.TRACK = alive
+        .filter((player) => player.id !== viewer.id)
         .map((player) => player.id);
     } else if (isWitch && st.night.wolvesLocked) {
       // Phù Thuỷ đi SAU bầy Sói: trước khi khoá phiếu, engine từ chối MỌI hành
@@ -3094,6 +3121,7 @@ export class GameEngine {
     if (viewer.role === "GUARD") return st.night.guardTarget === null;
     if (viewer.role === "DETECTIVE") return st.night.detectiveResults[viewer.id] === undefined;
     if (viewer.role === "GUARDIAN_ANGEL") return st.night.guardianAngelTarget === null;
+    if (viewer.role === "TRACKER") return st.night.trackerTargets[viewer.id] === undefined;
     if (viewer.role === "SERIAL_KILLER") {
       return st.night.serialKillerTarget === null && st.night.serialKillerSkipped !== true;
     }

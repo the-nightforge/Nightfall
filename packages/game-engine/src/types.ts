@@ -130,6 +130,16 @@ export interface NightState {
    * nộp đầu mỗi đêm như SEE (kết quả về ngay nên "đổi ý" = soi lại).
    */
   sorcererResults: Record<string, { targetId: string; isSeerLine: boolean }>;
+  /**
+   * Mục tiêu theo dõi đêm nay, khoá theo id NGƯỜI THEO DÕI.
+   *
+   * `Record` chứ không phải một ô đơn như `guardianAngelTarget`: DOPPELGANGER
+   * sao chép được vai, nên hai Kẻ Theo Dõi là tình huống có thật. Cùng khuôn
+   * với `seerResults`.
+   */
+  trackerTargets: Record<string, string>;
+  /** Kết quả theo dõi, khoá theo id NGƯỜI THEO DÕI. Tính ở `resolveNight` (Task 3). */
+  trackerResults: Record<string, { targetId: string; acted: boolean }>;
 }
 
 export interface DeathInfo {

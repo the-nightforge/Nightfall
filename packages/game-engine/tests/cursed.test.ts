@@ -27,6 +27,8 @@ function emptyNight(): NightState {
     detectiveTargets: null,
     detectiveResults: {},
     sorcererResults: {},
+    trackerTargets: {},
+    trackerResults: {},
   };
 }
 

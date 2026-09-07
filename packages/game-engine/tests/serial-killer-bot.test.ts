@@ -39,6 +39,7 @@ function nightKnowledge(over: Partial<NightKnowledge> = {}): NightKnowledge {
       GUARDIAN_PROTECT: [],
       SERIAL_KILL: ["trusted", "suspect", "quiet"],
       SORCERER_CHECK: [],
+      TRACK: [],
     },
     wolfTarget: null,
     guardPrevious: null,

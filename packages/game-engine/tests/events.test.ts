@@ -48,6 +48,8 @@ function createTestState(players: Partial<EnginePlayer>[], overrides?: Partial<G
       detectiveTargets: null,
       detectiveResults: {},
       sorcererResults: {},
+      trackerTargets: {},
+      trackerResults: {},
     },
     votes: {},
     voteMutations: [],

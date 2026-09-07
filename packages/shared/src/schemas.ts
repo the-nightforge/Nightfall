@@ -272,6 +272,8 @@ export const nightActionTypeSchema = z.enum([
   // duy nhất cho hai kỹ năng sẽ buộc engine phân giải theo vai người gửi, và
   // đó đúng là chỗ để một phiếu cắn của Sói đi nhầm vào ô của Sát Nhân.
   "SERIAL_KILL",
+  // Kẻ Theo Dõi chọn mục tiêu; kết quả (có ra tay hay không) tính ở resolveNight.
+  "TRACK",
 ]);
 export const gameActionPayload = z
   .object({

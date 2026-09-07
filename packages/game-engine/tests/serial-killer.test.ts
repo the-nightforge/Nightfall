@@ -33,6 +33,8 @@ function emptyNight(): NightState {
     detectiveTargets: null,
     detectiveResults: {},
     sorcererResults: {},
+    trackerTargets: {},
+    trackerResults: {},
     serialKillerTarget: null,
     serialKillerSkipped: false,
   };

@@ -50,6 +50,8 @@ function knowledgeFixture(phase: GamePhase = "VOTING") {
         witch: { target1Id: "wolf-a", target2Id: "witch", sameTeam: false },
       },
       sorcererResults: {},
+      trackerTargets: {},
+      trackerResults: {},
     },
     votes: {},
     voteMutations: [],

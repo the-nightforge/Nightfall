@@ -364,7 +364,8 @@ export type NightActionKind =
   | "DETECTIVE_CHECK"
   | "GUARDIAN_PROTECT"
   | "SORCERER_CHECK"
-  | "SERIAL_KILL";
+  | "SERIAL_KILL"
+  | "TRACK";
 
 /**
  * Thông tin ban đêm của ĐÚNG một vai.
