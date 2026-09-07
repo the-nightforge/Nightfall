@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import { GameEngine } from "@masoi/game-engine";
-import { PERSISTENCE_VERSION, roomEnvelopeSchema } from "../src/persistence/schema";
+import { PERSISTENCE_VERSION, gameStateSchema, roomEnvelopeSchema } from "../src/persistence/schema";
 import { ROOM_SCAFFOLD } from "./helpers/room";
 
 function engineState() {
@@ -267,5 +267,32 @@ describe("tương thích ngược với ảnh chụp của bản cũ", () => {
     const parsed = roomEnvelopeSchema.safeParse(envelope);
     if (!parsed.success) console.error(parsed.error.issues);
     expect(parsed.success).toBe(true);
+  });
+});
+
+describe("Sổ Tang sống sót qua một vòng lưu-khôi phục", () => {
+  /**
+   * `serialize` ghi trọn `engine.getState()`, nhưng `z.object()` STRIP mọi khoá
+   * lạ khi đọc lại. Một trường state không được khai báo ở schema vì thế biến
+   * mất lặng lẽ - không lỗi, không log - và sau một lần restart giữa ván, vai
+   * mà Sổ Tang đã công khai lại ẩn đi với cả người thật lẫn bot.
+   */
+  it("giữ lại người được xướng tên", () => {
+    const state = engineState();
+    state.obituaryRevealedId = "p2";
+
+    const parsed = gameStateSchema.parse(JSON.parse(JSON.stringify(state)));
+
+    expect(parsed.obituaryRevealedId).toBe("p2");
+  });
+
+  it("ảnh chụp của bản cũ không có trường này vẫn đọc được", () => {
+    // Bắt buộc một trường thêm sau là làm mọi snapshot đã ghi trước bản này
+    // trượt schema rồi rơi vào quarantine - tức giết sạch ván đang chạy lúc
+    // deploy. Cùng lý do với `kickedPlayerIds`/`startedAt`.
+    const raw = JSON.parse(JSON.stringify(engineState()));
+    delete raw.obituaryRevealedId;
+
+    expect(() => gameStateSchema.parse(raw)).not.toThrow();
   });
 });

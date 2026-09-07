@@ -138,6 +138,14 @@ export const GAME_EVENTS: Record<GameEventId, GameEventDefinition> = {
     beneficiary: "wolves",
     power: 3,
   },
+  OBITUARY: {
+    id: "OBITUARY",
+    name: "Sổ Tang",
+    description: "Công khai VAI của một người đã chết, bốc ngẫu nhiên.",
+    targetPhase: "DAY",
+    beneficiary: "village",
+    power: 2,
+  },
   MORNING_REPORT: {
     id: "MORNING_REPORT",
     name: "Bản Tin Bình Minh",
@@ -312,6 +320,19 @@ export function selectEvent(
 
     if (event.id === "BLOOD_MOON") {
       if (state.bloodMoonUsed || state.bloodMoonArmed) return false;
+    }
+
+    if (event.id === "OBITUARY") {
+      /*
+       * Hai thế cờ làm sổ tang rỗng nghĩa, cả hai chặn ở khâu BỐC:
+       *
+       * 1. Chưa ai chết - không có gì để đọc.
+       * 2. `revealRoleOnDeath` bật - luật phòng đã công khai vai của mọi người
+       *    chết, nên bản sổ tang chỉ đọc lại thứ cả bàn đang nhìn thấy. Cùng
+       *    loại rỗng nghĩa với Bản Tin Bình Minh trên một đêm không ai chết.
+       */
+      if (state.config.revealRoleOnDeath === true) return false;
+      if (!state.players.some((p) => !p.alive)) return false;
     }
 
     if (event.id === "MORNING_REPORT") {

@@ -69,4 +69,5 @@ export type GameEventId =
   | "MORNING_REPORT"
   | "DEAD_CAN_SPEAK"
   | "SECRET_BALLOT"
-  | "VIGILANT_NIGHT";
+  | "VIGILANT_NIGHT"
+  | "OBITUARY";
