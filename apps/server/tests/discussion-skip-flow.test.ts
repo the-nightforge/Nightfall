@@ -101,8 +101,9 @@ describe("skip discussion flow", () => {
     expect(submitDiscussionSkip(room, "human2", true)).toBeNull();
     expect(room.engine!.getState().phase).toBe("VOTING");
     expect(storeMocks.clearRoomTimers).toHaveBeenCalledWith(room.code);
-    // Ba mốc quyết định của con bot duy nhất, cộng hạn chót đóng pha bỏ phiếu.
-    expect(storeMocks.setRoomTimer).toHaveBeenCalledTimes(4);
+    // Hai mốc quyết định của con bot duy nhất (một lá phiếu, một lần đổi ý -
+    // xem `VOTE_CHECKPOINTS`), cộng hạn chót đóng pha bỏ phiếu.
+    expect(storeMocks.setRoomTimer).toHaveBeenCalledTimes(3);
   });
 
   it("không giảm ngưỡng khi một người thật mất kết nối và từ chối bot", () => {

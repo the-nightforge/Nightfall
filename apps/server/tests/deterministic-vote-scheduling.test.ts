@@ -146,6 +146,10 @@ async function runWholeVotingWindow(room: Room): Promise<void> {
 describe("scheduleVoteBots", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    // Gốc thời gian 0: scaffold đặt phaseStartedAt 0 / phaseEndsAt 30_000, nên
+    // `phaseEndsAt - Date.now()` chỉ có nghĩa khi đồng hồ bắt đầu từ 0 - đúng
+    // như production, nơi `setPhase` đặt `phaseEndsAt = now + duration`.
+    vi.setSystemTime(0);
     brainControl.renderDaySpeech.mockReset();
     runtimeControl.observe.mockReset();
     runtimeControl.decideVote.mockReset();
@@ -200,17 +204,17 @@ describe("scheduleVoteBots", () => {
     expect(room.engine!.voteTally().noElimination).toBe(1);
   });
 
-  it("hỏi lại lõi ở đúng ba mốc, tất cả nằm trong khung bỏ phiếu", async () => {
+  it("hỏi lại lõi ở đúng hai mốc, tất cả nằm trong khung bỏ phiếu", async () => {
     const room = votingRoom();
     runtimeControl.decideVote.mockReturnValue(vote("c"));
 
     scheduleVoteBots(room);
     await runWholeVotingWindow(room);
 
-    // Ba mốc: sớm để bảng phiếu có gì đó cho người thật đọc, giữa để soi lại,
-    // và sát giờ để chốt.
-    expect(runtimeControl.decideVote).toHaveBeenCalledTimes(3);
-    expect(runtimeControl.observe).toHaveBeenCalledTimes(3);
+    // Hai mốc: sớm để bảng phiếu có gì đó cho người thật đọc, và sát giờ để
+    // chốt sau khi đã nghe gần hết cuộc bàn. Một lá phiếu, một lần đổi ý.
+    expect(runtimeControl.decideVote).toHaveBeenCalledTimes(2);
+    expect(runtimeControl.observe).toHaveBeenCalledTimes(2);
   });
 
   it("mốc luôn nằm trong khung và không mốc nào rơi vào lúc pha vừa mở", async () => {
@@ -218,12 +222,12 @@ describe("scheduleVoteBots", () => {
     runtimeControl.decideVote.mockReturnValue(vote("c"));
 
     scheduleVoteBots(room);
-    // rng trả 0 nên mốc là 12%, 52%, 84% khung: không mốc nào ở t=0.
+    // rng trả 0 nên mốc là 12% và 84% khung: không mốc nào ở t=0.
     await vi.advanceTimersByTimeAsync(0);
     expect(runtimeControl.decideVote).not.toHaveBeenCalled();
 
     await runWholeVotingWindow(room);
-    expect(runtimeControl.decideVote).toHaveBeenCalledTimes(3);
+    expect(runtimeControl.decideVote).toHaveBeenCalledTimes(2);
   });
 
   it("bỏ qua mốc khi pha đã đổi, không nộp phiếu muộn", async () => {
@@ -253,6 +257,10 @@ describe("scheduleVoteBots", () => {
 describe("ghế bị bỏ giữa ván", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    // Gốc thời gian 0: scaffold đặt phaseStartedAt 0 / phaseEndsAt 30_000, nên
+    // `phaseEndsAt - Date.now()` chỉ có nghĩa khi đồng hồ bắt đầu từ 0 - đúng
+    // như production, nơi `setPhase` đặt `phaseEndsAt = now + duration`.
+    vi.setSystemTime(0);
     runtimeControl.observe.mockReset();
     runtimeControl.decideVote.mockReset();
     runtimeControl.rngValues = [0, 0, 0];
@@ -303,5 +311,69 @@ describe("ghế bị bỏ giữa ván", () => {
     await runWholeVotingWindow(room);
 
     expect(room.engine!.state.votes.b).toBeUndefined();
+  });
+});
+
+/**
+ * Hai luật của lá phiếu bot: không đổi ở 5 giây chót, và không quá 3 lá.
+ *
+ * Cả hai đều là luật về ĐƯỜNG ĐI của phiếu chứ không về chất lượng quyết định,
+ * nên chúng thuộc file này.
+ */
+describe("trần đổi phiếu của bot", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    runtimeControl.observe.mockReset();
+    runtimeControl.decideVote.mockReset();
+    runtimeControl.rngValues = [0, 0, 0];
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("không hỏi lõi trong 5 giây cuối khung", async () => {
+    const room = votingRoom();
+    runtimeControl.decideVote.mockReturnValue(vote("c"));
+
+    scheduleVoteBots(room);
+
+    // Khung 30s; 5 giây chót là từ giây 25 trở đi.
+    await vi.advanceTimersByTimeAsync(25_000);
+    const truocKhiKhoa = runtimeControl.decideVote.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(runtimeControl.decideVote.mock.calls.length).toBe(truocKhiKhoa);
+  });
+
+  it("vẫn giữ đủ hai mốc, chỉ dồn vào phần khung được phép", async () => {
+    const room = votingRoom();
+    runtimeControl.decideVote.mockReturnValue(vote("c"));
+
+    scheduleVoteBots(room);
+    await vi.advanceTimersByTimeAsync(25_000);
+
+    expect(runtimeControl.decideVote).toHaveBeenCalledTimes(2);
+  });
+
+  it("không nộp quá hai lá trong một vòng dù lịch bị cấp hai lần", async () => {
+    const room = votingRoom();
+    // Xen kẽ để mỗi lần nộp đều là một thay đổi thật - lá trùng bị engine nuốt.
+    runtimeControl.decideVote
+      .mockReturnValueOnce(vote("b"))
+      .mockReturnValueOnce(vote("c"))
+      .mockReturnValueOnce(vote("b"))
+      .mockReturnValueOnce(vote("c"))
+      .mockReturnValueOnce(vote("b"))
+      .mockReturnValueOnce(vote("c"));
+
+    // Đường resume: server sống lại giữa pha và cấp lại trọn bộ mốc.
+    scheduleVoteBots(room);
+    scheduleVoteBots(room);
+    await runWholeVotingWindow(room);
+
+    const cuaBot = room.engine!.state.voteMutations.filter((item) => item.voterId === "bot");
+    expect(cuaBot.length).toBeLessThanOrEqual(2);
   });
 });
