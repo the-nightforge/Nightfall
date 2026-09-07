@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { ROLES, ROLE_META, roleTeam, isWolfPack, ROLE_ORDER_FOR_NIGHT } from "../src/roles";
+import { ROLES, ROLE_META, roleTeam, isWolfPack, ROLE_ORDER_FOR_NIGHT, isRole } from "../src/roles";
 import { DEFAULT_ROOM_CONFIG, RoomMode } from "../src/phases";
 import { GameEventId } from "../src/events";
 import { GameEventView, RoomSnapshot, NightActionView } from "../src/snapshot";
 import { gameActionPayload, roomConfigSchema, validateRoomConfig } from "../src/schemas";
+import { ROLE_POWER } from "../src/balance";
 
 describe("Shared Roles", () => {
   it("includes all 15 roles with valid meta", () => {
@@ -86,6 +87,7 @@ describe("Shared Roles", () => {
     // Wolf Cub: 2
     // Alpha Wolf: 2
     // Serial Killer: 2.2
+    // Tracker: 3
     // Witch: 3
     expect(ROLE_META.GUARD.nightOrder).toBe(0);
     expect(ROLE_META.GUARDIAN_ANGEL.nightOrder).toBe(0.5);
@@ -97,6 +99,7 @@ describe("Shared Roles", () => {
     expect(ROLE_META.WOLF_CUB.nightOrder).toBe(2);
     expect(ROLE_META.ALPHA_WOLF.nightOrder).toBe(2);
     expect(ROLE_META.SERIAL_KILLER.nightOrder).toBe(2.2);
+    expect(ROLE_META.TRACKER.nightOrder).toBe(3);
     expect(ROLE_META.WITCH.nightOrder).toBe(3);
 
     expect(ROLE_ORDER_FOR_NIGHT).toEqual([
@@ -113,6 +116,11 @@ describe("Shared Roles", () => {
       // Sói Alpha cùng nightOrder 2 với bầy, đứng sau Sói Con theo thứ tự đọc đêm.
       "ALPHA_WOLF",
       "SERIAL_KILLER",
+      // Kẻ Theo Dõi cùng nightOrder 3 với Phù Thuỷ: cả hai chỉ đọc/tác động sau
+      // khi mọi đòn đêm đã khoá, và Kẻ Theo Dõi đứng trước vì nó được khai báo
+      // trước trong ROLE_META (thứ tự giữa chúng không quan sát được từ bên
+      // ngoài, cùng lý do với cụm nightOrder 1 ở trên).
+      "TRACKER",
       "WITCH",
     ]);
   });
@@ -170,5 +178,18 @@ describe("Shared Schemas and Payloads", () => {
       targetId: "p2",
     });
     expect(sorcererAction.type).toBe("SORCERER_CHECK");
+  });
+});
+
+describe("Kẻ Theo Dõi", () => {
+  it("là một vai phe làng có lượt đêm", () => {
+    expect(isRole("TRACKER")).toBe(true);
+    expect(ROLE_META.TRACKER.team).toBe("village");
+    // Đọc kết quả của cả đêm nên phải thức sau mọi người ra tay.
+    expect(ROLE_META.TRACKER.nightOrder).toBe(3);
+  });
+
+  it("có giá tạm bằng Thám Tử - cùng hạng lá thông tin", () => {
+    expect(ROLE_POWER.TRACKER).toBe(ROLE_POWER.DETECTIVE);
   });
 });

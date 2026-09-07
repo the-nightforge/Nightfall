@@ -35,6 +35,7 @@ export const roomConfigSchema = z
     apprenticeSeer: bool.optional(),
     detective: bool.optional(),
     guardianAngel: bool.optional(),
+    tracker: bool.optional(),
     sorcerer: bool.optional(),
     alphaWolf: bool.optional(),
     mayor: bool.optional(),
@@ -83,6 +84,7 @@ export function deckSeats(config: RoomConfig): number {
     (config.apprenticeSeer ? 1 : 0) +
     (config.detective ? 1 : 0) +
     (config.guardianAngel ? 1 : 0) +
+    (config.tracker ? 1 : 0) +
     (config.mayor ? 1 : 0) +
     (config.elder ? 1 : 0) +
     (config.doppelganger ? 1 : 0) +

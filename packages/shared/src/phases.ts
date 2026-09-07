@@ -90,6 +90,8 @@ export interface RoomConfig {
   apprenticeSeer?: boolean;
   detective?: boolean;
   guardianAngel?: boolean;
+  /** Kẻ Theo Dõi. Optional như mọi vai thêm sau. */
+  tracker?: boolean;
   /** Sói Pháp Sư. Optional như mọi vai thêm sau. */
   sorcerer?: boolean;
   /** Sói Alpha. Cắn được nên vào wolfCount (xem validateRoomConfig). */

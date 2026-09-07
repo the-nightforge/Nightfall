@@ -232,6 +232,8 @@ export const ROLE_POWER: Record<Role, number> = {
   DETECTIVE: 2,
   GUARD: 2.5,
   GUARDIAN_ANGEL: 1.5,
+  /** TẠM 2, ngang DETECTIVE (cùng hạng lá thông tin). Chốt lại sau sweep. */
+  TRACKER: 2,
   WITCH: 3,
   /**
    * 0.5 - HẠ TỪ 1.5 sau khi làm lại kỹ năng và đo lại ở 1000 ván/nhánh.
@@ -890,6 +892,7 @@ export function specialRoleList(config: RoomConfig): Role[] {
   if (config.detective) roles.push("DETECTIVE");
   if (config.guard) roles.push("GUARD");
   if (config.guardianAngel) roles.push("GUARDIAN_ANGEL");
+  if (config.tracker) roles.push("TRACKER");
   if (config.witch) roles.push("WITCH");
   if (config.hunter) roles.push("HUNTER");
   if (config.mayor) roles.push("MAYOR");
