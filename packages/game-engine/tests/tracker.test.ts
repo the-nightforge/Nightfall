@@ -123,4 +123,17 @@ describe("kết quả theo dõi ở bình minh", () => {
     expect(engine.state.players[1].alive).toBe(false);
     expect(engine.state.night.trackerResults.t1.acted).toBe(true);
   });
+
+  it("Thiên Thần Hộ Mệnh có bảo vệ cũng đọc ra ĐÃ ra tay", () => {
+    // GUARDIAN_ANGEL không nộp vào bất kỳ `Record` chung nào (khác Sói, Tiên
+    // Tri, ...) - `didActTonight` phải tra riêng `guardianAngelTarget` qua
+    // ánh xạ vai, giống hệt cách `nightInfo` đọc "acted" cho chính người này.
+    const engine = trackerGame();
+    engine.state.players[3].role = "GUARDIAN_ANGEL";
+    engine.submitNightAction("t1", "TRACK", "v1");
+    engine.submitNightAction("v1", "GUARDIAN_PROTECT", "v2");
+    engine.submitNightAction("w1", "KILL", "s1");
+    engine.resolveNight(Date.now(), () => 0);
+    expect(engine.state.night.trackerResults.t1).toEqual({ targetId: "v1", acted: true });
+  });
 });

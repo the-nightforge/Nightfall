@@ -248,6 +248,7 @@ function didActTonight(st: GameState, playerId: string): boolean {
   const player = st.players.find((p) => p.id === playerId);
   if (!player) return false;
   if (player.role === "GUARD") return n.guardTarget !== null;
+  if (player.role === "GUARDIAN_ANGEL") return n.guardianAngelTarget !== null;
   if (player.role === "WITCH") return n.healTonight || n.poisonTarget !== null;
   if (player.role === "SERIAL_KILLER") return (n.serialKillerTarget ?? null) !== null;
   return false;
@@ -1386,6 +1387,20 @@ export class GameEngine {
       }
     }
 
+    /*
+     * Tính NGAY TẠI ĐÂY: mọi hành động đêm đã để dấu trong `NightState` từ lúc
+     * nộp (xem mục 2 ở trên), nên thời điểm tính không phụ thuộc gì thêm - chỉ
+     * cần đứng TRƯỚC khi ai đó bị đánh dấu chết (`p.alive = false` ở dưới) và
+     * TRƯỚC khi Kẻ Nguyền Rủa hoá Sói. Một con Sói bỏ phiếu cắn rồi trúng Bình
+     * Độc, hay một mục tiêu chết ngay đêm đó, vẫn đọc ra ĐÃ ra tay - Kẻ Theo
+     * Dõi canh người đó suốt đêm, không phải tới sáng mới xem còn sống hay
+     * không. Và vai được tra đúng như lúc đêm diễn ra, trước khi Kẻ Nguyền Rủa
+     * kịp đổi phe.
+     */
+    for (const [trackerId, targetId] of Object.entries(st.night.trackerTargets)) {
+      st.night.trackerResults[trackerId] = { targetId, acted: didActTonight(st, targetId) };
+    }
+
     // Cập nhật trạng thái
     if (st.night.guardianAngelTarget) {
       // Trừ charge ở đây, không ở `submitNightAction`: cùng lý do với bình cứu
@@ -1518,12 +1533,6 @@ export class GameEngine {
         st.night.serialKillerTarget ? this.player(st.night.serialKillerTarget) : undefined,
       ),
     };
-
-    // Tính SAU khi mọi người đã nộp, TRƯỚC khi ai bị đánh dấu chết: một con Sói
-    // bỏ phiếu cắn rồi trúng Bình Độc vẫn là đã ra tay.
-    for (const [trackerId, targetId] of Object.entries(st.night.trackerTargets)) {
-      st.night.trackerResults[trackerId] = { targetId, acted: didActTonight(st, targetId) };
-    }
 
     st.nightHistory.push(recap);
 
