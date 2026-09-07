@@ -466,7 +466,9 @@ describe("Event Modifiers in GameEngine", () => {
   it("migrate cứng xóa SHROUDED_ECLIPSE", () => {
     expect((GAME_EVENTS as any)["SHROUDED_ECLIPSE"]).toBeUndefined();
     expect(GAME_EVENTS["WOLF_SHADOW"]).toBeDefined();
-    expect(Object.keys(GAME_EVENTS)).toHaveLength(17);
+    // Đếm cứng để một lần thêm nhầm SHROUDED_ECLIPSE trở lại bị bắt ngay; cộng
+    // một mỗi khi thêm sự kiện mới (18 = 17 cũ + Sổ Tang).
+    expect(Object.keys(GAME_EVENTS)).toHaveLength(18);
   });
 });
 
@@ -608,6 +610,35 @@ describe("Bộ chọn sự kiện cân theo độ nghiêng", () => {
     const state = chaosState();
     state.nightHistory = [];
     expect(reachable(state, "DAY")).not.toContain("MORNING_REPORT");
+  });
+
+  /**
+   * Sổ Tang công khai vai của MỘT người đã chết.
+   *
+   * Giá trị của nó là thông tin kiểm chứng được - khác hẳn claim không xác thực
+   * mà Ngày Sự Thật cho. Nhưng nó rỗng nghĩa ở đúng hai thế cờ, và cả hai đều
+   * phải chặn ở khâu bốc chứ không phải ở khâu dựng câu.
+   */
+  function withDead(deadCount: number, revealRoleOnDeath?: boolean): GameState {
+    const state = chaosState();
+    for (let i = 0; i < deadCount; i++) state.players[i].alive = false;
+    if (revealRoleOnDeath !== undefined) state.config.revealRoleOnDeath = revealRoleOnDeath;
+    return state;
+  }
+
+  it("Sổ Tang bốc được khi đã có người chết", () => {
+    expect(reachable(withDead(1), "DAY")).toContain("OBITUARY");
+  });
+
+  it("Sổ Tang bị chặn khi chưa ai chết", () => {
+    expect(reachable(withDead(0), "DAY")).not.toContain("OBITUARY");
+  });
+
+  it("Sổ Tang bị chặn khi luật đã tự công khai vai người chết", () => {
+    // `revealRoleOnDeath` lộ sẵn mọi vai người chết cho cả bàn, nên bản sổ tang
+    // chỉ đọc lại thứ ai cũng đang nhìn thấy - cùng loại rỗng nghĩa với Bản Tin
+    // Bình Minh trên một đêm không ai chết.
+    expect(reachable(withDead(2, true), "DAY")).not.toContain("OBITUARY");
   });
 
   it("Bóng Sói bị chặn khi không còn ai soi, y như Đêm Không Trăng", () => {
@@ -1110,5 +1141,57 @@ describe("Trăng Máu xuyên đúng khiên đang chắn mục tiêu Sói", () =>
     expect(deaths.map((d) => d.playerId)).not.toContain("v1");
     expect(engine.state.bloodMoonArmed).toBe(false);
     expect(engine.state.bloodMoonUsed).toBe(true);
+  });
+});
+
+describe("Sổ Tang công khai vai một người đã chết", () => {
+  function engineWithDead(): GameEngine {
+    const state = createTestState([
+      { id: "w1", role: "WEREWOLF", alive: false, name: "Sói Chết" },
+      { id: "seer", role: "SEER", alive: true, name: "Tiên Tri" },
+      { id: "v1", role: "VILLAGER", alive: true, name: "Dân" },
+      { id: "bot", role: "VILLAGER", alive: true, name: "Bot" },
+    ]);
+    state.config.mode = "chaos";
+    return new GameEngine(state);
+  }
+
+  const fire = (engine: GameEngine): string =>
+    engine.startDay(30_000, Date.now(), () => 0, {
+      ...GAME_EVENTS.OBITUARY,
+      round: 2,
+    } as GameEventView)!.announcement!;
+
+  it("gọi đúng tên và vai của người đã chết", () => {
+    const text = fire(engineWithDead());
+    expect(text).toContain("Sói Chết");
+    expect(text).toContain("Sói");
+  });
+
+  it("vai lộ ra tới được knownRoles của BOT, không chỉ nằm trong câu chữ", () => {
+    /*
+     * Bot KHÔNG đọc `announcement` - không một dòng nào trong `src/bot/` chạm
+     * tới trường đó. Một sự kiện thuần thông báo vì thế vô hình với mọi bot ở
+     * bàn, và mọi phép đo self-play sẽ nói nó đáng 0 điểm bất kể nó đáng bao
+     * nhiêu với người thật. Kênh đúng là `knownRoles`, cùng kênh mà
+     * `revealRoleOnDeath` dùng.
+     */
+    const engine = engineWithDead();
+    fire(engine);
+
+    expect(engine.botKnowledgeFor("bot").knownRoles.w1).toBe("WEREWOLF");
+    // Người còn sống thì không lộ gì thêm.
+    expect(engine.botKnowledgeFor("bot").knownRoles.seer).toBeUndefined();
+  });
+
+  it("người thật thấy đúng thứ BOT thấy", () => {
+    // `botKnowledgeFor` có chú thích bắt buộc khớp `snapshotFor`: một thứ chỉ
+    // một bên nhìn thấy sẽ đo ra sai lệch có hệ thống.
+    const engine = engineWithDead();
+    fire(engine);
+
+    const view = engine.snapshotFor("v1");
+    expect(view.players.find((p) => p.id === "w1")?.role).toBe("WEREWOLF");
+    expect(view.players.find((p) => p.id === "seer")?.role).toBeUndefined();
   });
 });

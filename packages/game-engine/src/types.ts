@@ -310,6 +310,14 @@ export interface GameState {
    * gián tiếp: cả sự kiện dựa vào việc không ai biết lời nhắn từ đâu ra.
    */
   deadCanSpeakChosenId: string | null;
+  /**
+   * Người được Sổ Tang xướng tên, `null`/vắng nghĩa là sự kiện chưa nổ.
+   *
+   * Ô riêng chứ không suy từ `eventHistory`: sự kiện chỉ ghi lại rằng nó đã nổ,
+   * còn NGƯỜI nào được bốc thì chỉ lần bốc đó biết - và `snapshotFor` cùng
+   * `botKnowledgeFor` đều phải đọc lại được nó ở mọi lần dựng view sau đó.
+   */
+  obituaryRevealedId?: string | null;
   howlBonusDay: number | null;
   dayOfTruthClaims: Record<string, string | null>;
   /**

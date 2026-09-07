@@ -63,6 +63,8 @@ const EVENT_GLYPHS: Record<GameEventId, EventGlyphName> = {
   BLOOD_MOON: "moon",
   WOLF_SHADOW: "paw",
   MORNING_REPORT: "report",
+  // Cùng hình với Bản Tin Bình Minh: cả hai đều là một bản tin đọc cho cả bàn.
+  OBITUARY: "report",
   DEAD_CAN_SPEAK: "ghost",
 };
 

@@ -615,6 +615,27 @@ export class GameEngine {
         announcement = `Đêm ${lastNight.round}: ${clauses.join("; ")}.`;
       }
       activeEvent = { ...event, announcement };
+    } else if (event?.id === "OBITUARY") {
+      /*
+       * Bốc MỘT người đã chết và công khai vai của họ.
+       *
+       * Bốc bằng `rng` được truyền vào chứ không phải `Math.random`: mọi thứ
+       * trong engine phải phát lại được từ seed, và `replayGame` của harness
+       * đo lường dựa vào đúng tính chất đó.
+       *
+       * `selectEvent` đã đòi có người chết, nhưng `customEvent` đi vòng qua nó
+       * (test dùng chính đường đó), nên nhánh rỗng vẫn phải trả lời tử tế.
+       */
+      const dead = this.state.players.filter((p) => !p.alive);
+      const chosen = dead[Math.floor(rng() * dead.length)];
+      let announcement: string;
+      if (!chosen) {
+        announcement = `Sổ Tang: chưa có ai để ghi.`;
+      } else {
+        this.state.obituaryRevealedId = chosen.id;
+        announcement = `Sổ Tang: ${chosen.name} là ${ROLE_META[chosen.role].name}.`;
+      }
+      activeEvent = { ...event, announcement };
     } else if (event?.id === "DEAD_CAN_SPEAK") {
       const announcement = `Tiếng Vọng Người Chết: một linh hồn có thể gửi lời nhắn ${DEAD_MESSAGE_MAX_LENGTH} ký tự ẩn danh.`;
       activeEvent = { ...event, announcement };
@@ -2519,7 +2540,8 @@ export class GameEngine {
       alive: p.alive,
       isBot: p.isBot,
       role:
-        revealAll || (revealDead && !p.alive)
+        // Sổ Tang lộ đúng MỘT người, và lộ cho cả bàn - xem `obituaryRevealedId`.
+        revealAll || (revealDead && !p.alive) || p.id === st.obituaryRevealedId
           ? p.role
           : viewerIsWolf && p.id !== viewerId && isWolfPack(p.role)
             ? p.role
@@ -2738,6 +2760,18 @@ export class GameEngine {
         if (!player.alive) knownRoles[player.id] = player.role;
       }
     }
+    /*
+     * Sổ Tang đi qua ĐÚNG kênh này, không chỉ qua `announcement`.
+     *
+     * Không một dòng nào trong `src/bot/` đọc `announcement`, nên một sự kiện
+     * thuần thông báo là vô hình với mọi BOT ở bàn - và self-play sẽ đo nó ra 0
+     * điểm bất kể nó đáng bao nhiêu với người thật.
+     */
+    const obituaryId = st.obituaryRevealedId;
+    if (obituaryId) {
+      const revealed = st.players.find((player) => player.id === obituaryId);
+      if (revealed) knownRoles[revealed.id] = revealed.role;
+    }
 
     const seerResultEntry = st.night.seerResults[botId];
     const seerResult = seerResultEntry
@@ -2774,6 +2808,7 @@ export class GameEngine {
       players: st.players.map(({ id, name, alive, isBot }) => ({ id, name, alive, isBot })),
       knownRoles,
       revealRoleOnDeath: st.config.revealRoleOnDeath === true,
+      obituaryRevealedId: st.obituaryRevealedId ?? null,
       seerResult,
       sorcererResult,
       // Suy từ CHÍNH bộ bài mà `assignRoles` chia, không phải một danh sách

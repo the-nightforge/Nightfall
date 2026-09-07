@@ -230,6 +230,16 @@ export const gameStateSchema = z.object({
   bloodMoonUsed: z.boolean(),
   deadCanSpeakUsed: z.boolean(),
   deadCanSpeakChosenId: z.string().nullable(),
+  /**
+   * Người bị Sổ Tang xướng tên. Thiếu dòng này thì `z.object()` STRIP nó khi
+   * đọc lại, và sau một lần restart giữa ván vai đã công khai lại ẩn đi - không
+   * lỗi, không log, chỉ là thông tin bốc hơi.
+   *
+   * OPTIONAL vì cùng lý do với mọi trường thêm sau ở file này: bắt buộc nó là
+   * làm mọi ảnh chụp ghi trước bản này trượt schema rồi rơi vào `quarantine`,
+   * tức giết sạch các ván đang chạy ngay lúc deploy.
+   */
+  obituaryRevealedId: z.string().nullable().optional(),
   howlBonusDay: z.number().nullable(),
   dayOfTruthClaims: z.record(z.string(), z.string().nullable()),
   /**

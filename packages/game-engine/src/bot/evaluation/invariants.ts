@@ -20,6 +20,8 @@ export type InvariantId =
   | "ROLE_LEAK"
   /** Vai người chết lộ cho người còn sống trước `GAME_OVER`. */
   | "DEAD_ROLE_REVEALED"
+  /** Sự kiện Sổ Tang xướng tên một người CÒN SỐNG - tức lộ vai người đang chơi. */
+  | "OBITUARY_LIVING"
   /** Sói biết đồng bọn sai luật, hoặc Sói đã chết vẫn giữ liên lạc với bầy. */
   | "WOLF_ALLY_SCOPE"
   /** Ai đó thấy kết quả soi không phải của mình. */
@@ -210,6 +212,19 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
    * đã mang `config`, và một tham số thứ hai là một chỗ nữa để quên truyền.
    */
   const deadRolesPublic = record.config.revealRoleOnDeath === true;
+  /**
+   * Người mà sự kiện Sổ Tang đã xướng tên, nhớ lại từ `checkKnowledge`.
+   *
+   * `checkTrace` chỉ nhận `trace` và `truth`, mà `TraceKnowledgeSnapshot` là
+   * một tập con hẹp được serialize ra JSONL (có fixture khoá định dạng) - nống
+   * nó ra chỉ để phục vụ bộ kiểm tra là đổi một giao diện dữ liệu vì lý do sai.
+   *
+   * Thứ tự gọi làm điều này an toàn: knowledge được dựng trước, rồi mới tới
+   * quyết định và trace của chính knowledge đó. Nếu một đường nào đó gọi
+   * `checkTrace` mà chưa từng gọi `checkKnowledge`, miễn trừ vắng mặt và bộ
+   * kiểm tra báo THỪA chứ không bỏ sót - đúng chiều hỏng cần có.
+   */
+  let obituaryNamedId: string | null = null;
   const violations: InvariantViolation[] = [];
   const recent: string[] = [];
   /** Một vi phạm lặp lại mỗi vòng sẽ nhấn chìm báo cáo; ghi mỗi loại một lần / người. */
@@ -241,6 +256,7 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
     },
 
     checkKnowledge(knowledge, state, truth) {
+      if (knowledge.obituaryRevealedId) obituaryNamedId = knowledge.obituaryRevealedId;
       const self = knowledge.botId;
       const selfIsWolf = isWolfTeam(truth.roles[self]);
       /*
@@ -262,6 +278,12 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
         // người SỐNG vẫn bị gác nguyên như cũ - đó mới là thứ invariant này tồn
         // tại để bảo vệ, và một bài đo luật không được phép nới nó ra.
         const deadRoleIsPublic = deadRolesPublic && !truth.alive[otherId];
+        // Sự kiện Sổ Tang xướng tên ĐÚNG MỘT người đã chết, và xướng cho cả
+        // bàn - xem `GAME_EVENTS.OBITUARY`. Miễn trừ hẹp đúng bằng một id, và
+        // vẫn đòi người đó phải CHẾT: nếu engine xướng tên người còn sống thì
+        // `OBITUARY_LIVING` dưới kia bắt, và ROLE_LEAK ở đây vẫn bắt tiếp.
+        const namedByObituary =
+          knowledge.obituaryRevealedId === otherId && !truth.alive[otherId];
 
         // Luật duy nhất cho phép biết vai người khác: cùng phe Sói. Kiểm theo
         // PHE chứ không theo mã vai - Sói Con và Kẻ Nguyền Rủa đã hoá Sói đều
@@ -269,6 +291,7 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
         // những cấu hình vai mà nó cần bảo vệ nhất.
         if (
           !deadRoleIsPublic &&
+          !namedByObituary &&
           !knowsAsApprentice(otherId) &&
           (!selfIsWolf || !isWolfTeam(truth.roles[otherId]))
         ) {
@@ -300,6 +323,23 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
         }
       }
 
+      /*
+       * Sổ Tang chỉ được xướng tên NGƯỜI ĐÃ CHẾT.
+       *
+       * Bộ kiểm tra này tồn tại để miễn trừ ở trên không biến thành con dấu
+       * đóng sẵn: nó đọc id do engine cấp, nên phải có một chỗ đối chiếu id đó
+       * với sự thật. Xướng tên người còn sống là lộ vai một người đang chơi.
+       */
+      const namedId = knowledge.obituaryRevealedId;
+      if (namedId && truth.alive[namedId]) {
+        auditor.report("OBITUARY_LIVING", {
+          ...at,
+          playerId: namedId,
+          expected: `Sổ Tang chỉ được xướng tên người đã chết`,
+          actual: `xướng tên ${namedId} khi người này còn sống`,
+        });
+      }
+
       // --- Vai người chết ẩn tới GAME_OVER ---
       // Trừ khi biến thể `revealRoleOnDeath` đang bật, và khi đó chính cái ẩn
       // này là thứ đang được đo.
@@ -312,6 +352,8 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
           // Tập Sự đã biết Tiên Tri từ khi ông ta còn sống; quên đi lúc ông ta
           // chết là bịa ra một luật không có, và đó đúng là lúc nó thừa kế.
           if (knowsAsApprentice(otherId)) continue;
+          // Người được Sổ Tang xướng tên: một kênh công khai có thật.
+          if (knowledge.obituaryRevealedId === otherId) continue;
           auditor.report("DEAD_ROLE_REVEALED", {
             ...at,
             expected: `vai của người chết ${otherId} phải ẩn tới GAME_OVER`,
@@ -511,6 +553,8 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
         if (otherId === trace.botId) continue;
         if (selfIsWolf && isWolfTeam(truth.roles[otherId])) continue;
         if (traceIsApprentice && truth.roles[otherId] === "SEER") continue;
+        // Sổ Tang: miễn trừ đúng một id, và vẫn đòi người đó đã chết.
+        if (otherId === obituaryNamedId && !truth.alive[otherId]) continue;
         auditor.report("ROLE_LEAK", {
           ...at,
           expected: `trace của ${trace.botId} không được chứa vai của ${otherId}`,

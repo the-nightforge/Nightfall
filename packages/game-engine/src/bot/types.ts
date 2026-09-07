@@ -463,6 +463,15 @@ export interface BotKnowledgeView {
    */
   revealRoleOnDeath?: boolean;
   /**
+   * Người bị Sổ Tang xướng tên, `null` khi sự kiện chưa nổ.
+   *
+   * Cùng lý do tồn tại với `revealRoleOnDeath` ngay trên: nó nói VÌ SAO một vai
+   * trong `knownRoles` là hợp lệ. `checkKnowledge` trong `invariants.ts` đọc nó
+   * để phân biệt một kênh công khai có thật với một lần rò rỉ, và vẫn bắt lỗi
+   * nếu engine xướng tên một người CÒN SỐNG.
+   */
+  obituaryRevealedId?: string | null;
+  /**
    * Kết quả soi gần nhất. `team` là câu trả lời đầy đủ, `isWolf` là hệ quả của
    * nó - lõi phải đọc `team` khi cần phân biệt "phe làng" với "phe trung lập",
    * vì `isWolf === false` chỉ nói được "không phải Sói".

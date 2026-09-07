@@ -312,6 +312,12 @@ describe("bot knowledge security boundary", () => {
         // hữu, nên trường có mặt mà giá trị thì không. Với một Dân Làng (đúng
         // fixture này) nó luôn `null`, nên FORBIDDEN_KEYS vẫn không bị vi phạm.
         "executionerTargetId",
+        // Người bị sự kiện Sổ Tang xướng tên, `null` khi sự kiện chưa nổ. CÔNG
+        // KHAI theo đúng nghĩa: câu thông báo đã đọc tên và vai người đó cho cả
+        // phòng, và `snapshotFor` lộ đúng vai ấy cho người thật. Trường này chỉ
+        // nói VÌ SAO một vai trong `knownRoles` là hợp lệ - cùng vai trò với
+        // `revealRoleOnDeath`.
+        "obituaryRevealedId",
         "selfRole",
       ].sort(),
     );
