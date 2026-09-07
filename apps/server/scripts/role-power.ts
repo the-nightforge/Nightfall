@@ -20,6 +20,11 @@ import { PRESET_DECKS, ROLE_POWER, type Role, type RoomConfig } from "@masoi/sha
  * trị thật của nó trên bàn người.
  *
  * Chạy: npx tsx apps/server/scripts/role-power.ts [--games N] [--only N]...
+ *
+ * `--json` in ra số THÔ thay cho bảng chữ, để nhiều shard CI gộp lại được -
+ * xem `role-power-merge.ts`. Hai cột "đo được"/"đang dùng" của bảng chữ dựng
+ * trên vai làng mạnh nhất của CHÍNH lượt chạy, nên chúng vô nghĩa ở một shard
+ * chỉ quét vài preset; JSON cố ý không mang chúng.
  */
 
 /** Các vai bật/tắt được, cùng khoá cấu hình của chúng. */
@@ -111,8 +116,12 @@ function main(): void {
     argv.flatMap((arg, i) => (arg === "--role" ? [argv[i + 1]] : [])),
   );
 
+  const asJson = argv.includes("--json");
+
   const deltas = new Map<Role, number[]>();
   const baselines: Array<[number, number]> = [];
+  /** Số thô cho `--json`: mỗi (preset, vai) một dòng, chưa gộp gì. */
+  const rawDeltas: Array<{ role: Role; playerCount: number; delta: number }> = [];
 
   for (const [countRaw, preset] of Object.entries(PRESET_DECKS)) {
     const playerCount = Number(countRaw);
@@ -146,9 +155,31 @@ function main(): void {
       // cho phe sở hữu nó".
       const owned = role === "WOLF_CUB" || role === "SORCERER" || role === "ALPHA_WOLF" ? -delta : delta;
       deltas.set(role, [...(deltas.get(role) ?? []), owned]);
+      rawDeltas.push({ role, playerCount, delta: owned });
     }
     process.stderr.write(`làng thắng ${(base * 100).toFixed(1)}%
 `);
+  }
+
+  if (asJson) {
+    // stdout CHỈ có JSON: bước gộp parse trọn luồng, một dòng chữ lẫn vào là
+    // hỏng cả bảng. Tiến độ vẫn ra stderr như thường.
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          games,
+          presets: baselines.map(([playerCount, villageWinRate]) => ({
+            playerCount,
+            villageWinRate,
+          })),
+          deltas: rawDeltas,
+        },
+        null,
+        2,
+      )}
+`,
+    );
+    return;
   }
 
   const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length;
