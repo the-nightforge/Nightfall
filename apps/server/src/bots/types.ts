@@ -12,7 +12,7 @@ import type { SpeechSource } from "./speech-stats";
  * Ba mã cuối đến từ các vai mở rộng (Thám Tử, Thiên Thần Hộ Mệnh, Sói Pháp
  * Sư), và `SERIAL_KILL` từ Sát Nhân - một mã RIÊNG, không dùng lại `KILL` của bầy Sói:
  * hai kỹ năng khác luật, khác nhịp và khác trạng thái, nên một mã dùng chung sẽ
- * buộc engine phân giải theo vai người gửi.
+ * buộc engine phân giải theo vai người gửi. `TRACK` từ Kẻ Theo Dõi.
  */
 export type NightActionType =
   | "KILL"
@@ -24,7 +24,8 @@ export type NightActionType =
   | "DETECTIVE_CHECK"
   | "GUARDIAN_PROTECT"
   | "SORCERER_CHECK"
-  | "SERIAL_KILL";
+  | "SERIAL_KILL"
+  | "TRACK";
 
 export interface NightDecision {
   action: NightActionType;

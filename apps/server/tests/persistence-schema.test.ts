@@ -296,3 +296,32 @@ describe("Sổ Tang sống sót qua một vòng lưu-khôi phục", () => {
     expect(() => gameStateSchema.parse(raw)).not.toThrow();
   });
 });
+
+describe("trackerTargets/trackerResults của Kẻ Theo Dõi", () => {
+  it("ảnh chụp của bản cũ (chưa có Kẻ Theo Dõi) vẫn đọc được", () => {
+    // Cùng bẫy với `sorcererResults`: bắt buộc hai trường này ở INPUT là làm
+    // mọi ván đang chạy lúc deploy trượt schema rồi rơi vào quarantine.
+    const raw = JSON.parse(JSON.stringify(engineState()));
+    delete raw.night.trackerTargets;
+    delete raw.night.trackerResults;
+
+    const parsed = gameStateSchema.parse(raw);
+
+    expect(parsed.night.trackerTargets).toEqual({});
+    expect(parsed.night.trackerResults).toEqual({});
+  });
+
+  it("giữ nguyên mục tiêu và kết quả theo dõi khi ảnh chụp có", () => {
+    // `z.object()` thường (không `.strict()`) STRIP mọi khoá không khai báo -
+    // nếu chỉ thêm `.optional()` mà quên khai kiểu, dữ liệu Kẻ Theo Dõi của
+    // một ván đang chạy sẽ mất lặng lẽ sau một lần khôi phục.
+    const state = engineState();
+    state.night.trackerTargets = { p1: "p2" };
+    state.night.trackerResults = { p1: { targetId: "p2", acted: true } };
+
+    const parsed = gameStateSchema.parse(JSON.parse(JSON.stringify(state)));
+
+    expect(parsed.night.trackerTargets).toEqual({ p1: "p2" });
+    expect(parsed.night.trackerResults).toEqual({ p1: { targetId: "p2", acted: true } });
+  });
+});

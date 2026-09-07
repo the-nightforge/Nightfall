@@ -164,6 +164,12 @@ const nightStateSchema = z.object({
   // `null`/`false`, đúng trạng thái mà một ván không có Sát Nhân đang ở.
   serialKillerTarget: z.string().nullable().optional(),
   serialKillerSkipped: z.boolean().optional(),
+  // `.default({})` như `sorcererResults` ở trên, cùng lý do: ảnh ghi trước khi
+  // có Kẻ Theo Dõi thiếu hai key này, và bắt buộc chúng ở INPUT là giết mọi
+  // ván đang chạy ngay lúc deploy. Output vẫn required nên `_stateBackward`
+  // không vỡ; engine tự chuẩn hoá thêm bằng `??=` khi đọc.
+  trackerTargets: z.record(z.string(), z.string()).default({}),
+  trackerResults: z.record(z.string(), z.object({ targetId: z.string(), acted: z.boolean() })).default({}),
 });
 
 const publicDeathSchema = z.object({ playerId: z.string(), name: z.string() });
