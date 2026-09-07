@@ -97,7 +97,7 @@ export function LastLetterComposer({ snapshot, onSave }: Props) {
         )}
       </div>
 
-      <p className="mt-1 text-xs leading-relaxed text-mist/70">
+      <p className="mt-1 text-xs leading-relaxed text-mist/85">
         Chỉ được mở nếu bạn chết. Bạn có thể sửa lại vào ngày sau nếu còn sống.
       </p>
 
@@ -113,7 +113,7 @@ export function LastLetterComposer({ snapshot, onSave }: Props) {
       />
 
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <span className={`text-[11px] ${counter.over ? "text-blood-400" : "text-mist/65"}`}>
+        <span className={`text-[11px] ${counter.over ? "text-blood-400" : "text-mist/85"}`}>
           {counter.label}
         </span>
         <div className="flex gap-2">

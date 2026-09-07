@@ -71,8 +71,8 @@ export function NightPanel({ snapshot, onAction }: Props) {
   if (!snapshot.you?.alive) {
     return (
       <div className="card py-8 text-center">
-        <p className="text-xs uppercase tracking-[0.3em] text-mist/65">Bạn đã chết</p>
-        <h3 className="mt-2 font-display text-3xl font-bold text-mist/70">Khán đài</h3>
+        <p className="text-xs uppercase tracking-[0.3em] text-mist/85">Bạn đã chết</p>
+        <h3 className="mt-2 font-display text-3xl font-bold text-mist/85">Khán đài</h3>
         <p className="mx-auto mt-2 max-w-xs text-sm text-mist-strong">
           Bạn xem được mọi kênh chat, kể cả kênh của Sói - nhưng chỉ nói được với
           những người đã chết.
@@ -88,7 +88,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
   if (!meta || !canActAtNight(role, apprenticeAwakened)) {
     return (
       <div className="card py-8 text-center">
-        <p className="text-xs uppercase tracking-[0.3em] text-mist/65">Đêm thứ {snapshot.round}</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-mist/85">Đêm thứ {snapshot.round}</p>
         <h3 className="mt-2 font-display text-3xl font-bold text-indigo-200">Bạn ngủ say</h3>
         {role === "APPRENTICE_SEER" && !apprenticeAwakened && (
           <p className="mx-auto mt-2 max-w-xs text-sm text-amber-300">
@@ -200,7 +200,7 @@ export function NightPanel({ snapshot, onAction }: Props) {
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-[0.3em] text-mist/65">Lượt của bạn</p>
+            <p className="text-xs uppercase tracking-[0.3em] text-mist/85">Lượt của bạn</p>
             <h3
               className={`font-display text-2xl font-bold ${
                 meta.team === "wolves" ? "text-blood-400" : "text-indigo-200"
@@ -239,20 +239,20 @@ export function NightPanel({ snapshot, onAction }: Props) {
                   🩸 {night?.wolfCubRageTonight ? "Phẫn nộ Sói Con" : "Cuộc Săn Đẫm Máu"}: Chọn thêm 1 mục tiêu phụ!
                 </p>
                 <div className="mt-1 flex gap-1.5 text-xs">
-                  <span className={`rounded px-2 py-1 ${selected ? "bg-blood-600 text-white" : "bg-night-800 text-mist/65"}`}>
+                  <span className={`rounded px-2 py-1 ${selected ? "bg-blood-600 text-white" : "bg-night-800 text-mist/85"}`}>
                     Chính: {selected ? nameOf(selected) : "chưa chọn"}
                   </span>
-                  <span className={`rounded px-2 py-1 ${wolfSecondary ? "bg-blood-600 text-white" : "bg-night-800 text-mist/65"}`}>
+                  <span className={`rounded px-2 py-1 ${wolfSecondary ? "bg-blood-600 text-white" : "bg-night-800 text-mist/85"}`}>
                     Phụ: {wolfSecondary ? nameOf(wolfSecondary) : "chưa chọn"}
                   </span>
                   {wolfSecondary && (
-                    <button className="text-mist/65 hover:text-white" onClick={() => setWolfSecondary(null)}>
+                    <button className="text-mist/85 hover:text-white" onClick={() => setWolfSecondary(null)}>
                       ✕
                     </button>
                   )}
                 </div>
                 {snapshot.activeEvent?.id === "BLOODY_HUNT" && (
-                  <p className="mt-1 text-[11px] text-mist/65">Mục tiêu phụ chỉ có 50% tỉ lệ thành công.</p>
+                  <p className="mt-1 text-[11px] text-mist/85">Mục tiêu phụ chỉ có 50% tỉ lệ thành công.</p>
                 )}
               </div>
             )}
@@ -444,14 +444,14 @@ export function NightPanel({ snapshot, onAction }: Props) {
                     🌫️ Màn Sương Tan: bạn được soi 2 người!
                   </p>
                   <div className="mt-1 flex gap-1.5 text-xs">
-                    <span className={`rounded px-2 py-1 ${selected ? "bg-sky-600 text-white" : "bg-night-800 text-mist/65"}`}>
+                    <span className={`rounded px-2 py-1 ${selected ? "bg-sky-600 text-white" : "bg-night-800 text-mist/85"}`}>
                       Người 1: {selected ? nameOf(selected) : "chưa chọn"}
                     </span>
-                    <span className={`rounded px-2 py-1 ${seerSecondary ? "bg-sky-600 text-white" : "bg-night-800 text-mist/65"}`}>
+                    <span className={`rounded px-2 py-1 ${seerSecondary ? "bg-sky-600 text-white" : "bg-night-800 text-mist/85"}`}>
                       Người 2: {seerSecondary ? nameOf(seerSecondary) : "chưa chọn"}
                     </span>
                     {seerSecondary && (
-                      <button className="text-mist/65 hover:text-white" onClick={() => setSeerSecondary(null)}>
+                      <button className="text-mist/85 hover:text-white" onClick={() => setSeerSecondary(null)}>
                         ✕
                       </button>
                     )}
@@ -511,10 +511,10 @@ export function NightPanel({ snapshot, onAction }: Props) {
               </div>
             )}
             <div className="mb-2 flex gap-2 text-xs">
-              <span className={`rounded px-2 py-1 ${detectiveTarget1 ? "bg-indigo-900/60 text-indigo-200 border border-indigo-500/40" : "bg-night-800 text-mist/65"}`}>
+              <span className={`rounded px-2 py-1 ${detectiveTarget1 ? "bg-indigo-900/60 text-indigo-200 border border-indigo-500/40" : "bg-night-800 text-mist/85"}`}>
                 Mục tiêu 1: {detectiveTarget1 ? nameOf(detectiveTarget1) : "chưa chọn"}
               </span>
-              <span className={`rounded px-2 py-1 ${detectiveTarget2 ? "bg-indigo-900/60 text-indigo-200 border border-indigo-500/40" : "bg-night-800 text-mist/65"}`}>
+              <span className={`rounded px-2 py-1 ${detectiveTarget2 ? "bg-indigo-900/60 text-indigo-200 border border-indigo-500/40" : "bg-night-800 text-mist/85"}`}>
                 Mục tiêu 2: {detectiveTarget2 ? nameOf(detectiveTarget2) : "chưa chọn"}
               </span>
             </div>
@@ -544,11 +544,11 @@ export function NightPanel({ snapshot, onAction }: Props) {
         {role === "GUARDIAN_ANGEL" && (
           <>
             <div className="mb-2 flex items-center justify-between gap-2 text-sm">
-              <span className="text-mist/80">
+              <span className="text-mist/85">
                 Lượt khiên còn lại: <b className="text-amber-300">{night?.guardianAngelCharges ?? 2}/2</b>
               </span>
               {night?.guardianAngelPrevious && (
-                <span className="text-xs text-mist/65">
+                <span className="text-xs text-mist/85">
                   Đêm trước: <b>{nameOf(night.guardianAngelPrevious)}</b>
                 </span>
               )}
@@ -646,14 +646,14 @@ export function NightPanel({ snapshot, onAction }: Props) {
                     🛡️ Đêm Cảnh Giác: bạn được che 2 người!
                   </p>
                   <div className="mt-1 flex gap-1.5 text-xs">
-                    <span className={`rounded px-2 py-1 ${selected ? "bg-emerald-600 text-white" : "bg-night-800 text-mist/65"}`}>
+                    <span className={`rounded px-2 py-1 ${selected ? "bg-emerald-600 text-white" : "bg-night-800 text-mist/85"}`}>
                       Người 1: {selected ? nameOf(selected) : "chưa chọn"}
                     </span>
-                    <span className={`rounded px-2 py-1 ${guardSecondary ? "bg-emerald-600 text-white" : "bg-night-800 text-mist/65"}`}>
+                    <span className={`rounded px-2 py-1 ${guardSecondary ? "bg-emerald-600 text-white" : "bg-night-800 text-mist/85"}`}>
                       Người 2: {guardSecondary ? nameOf(guardSecondary) : "chưa chọn"}
                     </span>
                     {guardSecondary && (
-                      <button className="text-mist/65 hover:text-white" onClick={() => setGuardSecondary(null)}>
+                      <button className="text-mist/85 hover:text-white" onClick={() => setGuardSecondary(null)}>
                         ✕
                       </button>
                     )}
@@ -757,12 +757,12 @@ export function NightPanel({ snapshot, onAction }: Props) {
           <div className="space-y-3">
             <div className="flex gap-2 text-sm">
               <span
-                className={`rounded px-2 py-1 ${night?.healUsed ? "bg-night-700 text-mist/60 line-through" : "bg-emerald-900/50 text-emerald-300"}`}
+                className={`rounded px-2 py-1 ${night?.healUsed ? "bg-night-700 text-mist/85 line-through" : "bg-emerald-900/50 text-emerald-300"}`}
               >
                 Bình cứu: {night?.healUsed ? "đã dùng" : "còn"}
               </span>
               <span
-                className={`rounded px-2 py-1 ${night?.poisonUsed ? "bg-night-700 text-mist/60 line-through" : "bg-blood-600/30 text-blood-400"}`}
+                className={`rounded px-2 py-1 ${night?.poisonUsed ? "bg-night-700 text-mist/85 line-through" : "bg-blood-600/30 text-blood-400"}`}
               >
                 Bình độc: {night?.poisonUsed ? "đã dùng" : "còn"}
               </span>

@@ -157,7 +157,7 @@ export function LobbyPlayerGrid({ snapshot, isHost, onKick }: Props) {
                       ? "text-amber-200"
                       : ready
                         ? "text-emerald-300"
-                        : "text-mist/70"
+                        : "text-mist/85"
                 }`}
               >
                 {offline
@@ -208,7 +208,7 @@ export function LobbyPlayerGrid({ snapshot, isHost, onKick }: Props) {
                   <path d="M12 3v18M3 12h18" />
                 </svg>
               </span>
-              <span className="mt-3 block text-center text-xs font-semibold leading-snug text-mist/65">
+              <span className="mt-3 block text-center text-xs font-semibold leading-snug text-mist/85">
                 Đang chờ...
               </span>
             </div>
@@ -219,7 +219,7 @@ export function LobbyPlayerGrid({ snapshot, isHost, onKick }: Props) {
       </div>
 
       {freeSeats > emptySlots && (
-        <p className="mt-3 shrink-0 text-center text-[13px] text-mist/65">
+        <p className="mt-3 shrink-0 text-center text-[13px] text-mist/85">
           Và còn {freeSeats - emptySlots} vị trí trong làng
         </p>
       )}
@@ -255,7 +255,7 @@ export function LobbyPlayerGrid({ snapshot, isHost, onKick }: Props) {
                 <h3 id="lobby-player-sheet-title" className="truncate text-base font-bold text-white">
                   {selected.name}
                 </h3>
-                <p className="text-sm text-mist/70">
+                <p className="text-sm text-mist/85">
                   {selected.isBot
                     ? "Bot đang trực trong phòng"
                     : selected.connected === false

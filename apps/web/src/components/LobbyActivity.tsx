@@ -38,7 +38,7 @@ export function LobbyActivity({ snapshot }: { snapshot: RoomSnapshot }) {
         </span>
         <div className="min-w-0">
           <p className="text-sm font-bold text-mist-bright">{waiting}</p>
-          <p className="mt-0.5 text-[13px] leading-relaxed text-mist/80">
+          <p className="mt-0.5 text-[13px] leading-relaxed text-mist/85">
             {activity[0] ?? "Trăng đang lên sau rặng cây. Hãy gọi những dân làng còn lại."}
           </p>
         </div>

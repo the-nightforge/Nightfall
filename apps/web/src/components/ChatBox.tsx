@@ -16,6 +16,7 @@ import {
   type ChatHeading,
 } from "@/lib/chat-channels";
 import { buildChatTimeline, isNearBottom, type PhaseMarker } from "@/lib/chat-timeline";
+import { ChannelGlyph } from "./ChannelGlyph";
 import { EmojiPicker } from "./EmojiPicker";
 
 /**
@@ -413,9 +414,10 @@ export function ChatBox({
                 }`}
               >
                 {tab !== ALL_CHANNELS && (
-                  <span aria-hidden="true" className="mr-1">
-                    {CHAT_CHANNEL_META[tab].icon}
-                  </span>
+                  <ChannelGlyph
+                    name={CHAT_CHANNEL_META[tab].glyph}
+                    className="mr-1 inline-block h-3.5 w-3.5 align-[-0.15em]"
+                  />
                 )}
                 {label}
               </button>
@@ -546,21 +548,31 @@ export function ChatBox({
                           CHANNEL_TAG_STYLE[message.channel] ?? CHANNEL_TAG_STYLE.lobby
                         }`}
                       >
-                        <span aria-hidden="true" className="mr-1">
-                          {ghost ? "👻" : meta.icon}
-                        </span>
+                        <ChannelGlyph
+                          name={ghost ? "ghost" : meta.glyph}
+                          className="mr-1 inline-block h-3.5 w-3.5 align-[-0.15em]"
+                        />
                         {meta.label}
                       </span>
                     ) : (
+                      /*
+                        * `role="img"` + `aria-label` ở lớp BỌC, không ở <svg>.
+                        *
+                        * Đây là lần duy nhất cái hình đứng MỘT MÌNH - khung chỉ
+                        * có một kênh nên nhãn chữ đã lược đi - nên nó là hình có
+                        * nghĩa và phải có tên đọc được. `ChannelGlyph` tự gắn
+                        * `aria-hidden` cho <svg> bên trong, đúng như mọi chỗ
+                        * khác nó đi kèm chữ.
+                        */
                       <span
                         role="img"
-                        className={`text-xs leading-none ${
+                        className={`leading-none ${
                           message.channel === "wolves" ? "text-blood-400" : "text-mist-strong"
                         }`}
                         title={meta.label}
                         aria-label={meta.label}
                       >
-                        {ghost ? "👻" : meta.icon}
+                        <ChannelGlyph name={ghost ? "ghost" : meta.glyph} className="h-3.5 w-3.5" />
                       </span>
                     )}
                   </div>
@@ -606,7 +618,7 @@ export function ChatBox({
             * duy nhất phân biệt kênh làng với hang Sói.
             */
           <p className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[13px] text-mist-strong">
-            <span aria-hidden="true">{destination.icon}</span>
+            <ChannelGlyph name={destination.glyph} className="h-3.5 w-3.5 shrink-0" />
             Gửi vào <b className="font-semibold text-mist-bright">{destination.longLabel}</b>
           </p>
         ) : (
@@ -714,7 +726,7 @@ export function ChatBox({
                 */
               className={`input placeholder:text-sm ${
                 composer.canSend
-                  ? "pl-3 pr-11 placeholder:text-mist/75"
+                  ? "pl-3 pr-11 placeholder:text-mist/85"
                   : /*
                      * Ô bị khoá thì gợi ý phải SÁNG HƠN, không mờ đi.
                      *

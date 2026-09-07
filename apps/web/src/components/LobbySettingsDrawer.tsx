@@ -64,11 +64,11 @@ export function LobbySettingsDrawer({ snapshot, identity, onUpdateConfig }: Prop
           {/* Hai câu khác nhau vì hai quyền khác nhau: khách mở ra để ĐỌC đội
             * hình chủ phòng đã chọn, và nói trước điều đó thì họ không bấm vào
             * với kỳ vọng chỉnh được. */}
-          <span className="mt-0.5 block truncate text-[13px] text-mist/70">
+          <span className="mt-0.5 block truncate text-[13px] text-mist/85">
             {isHost ? "Thiết lập ván, bộ bài và cài đặt nâng cao" : "Xem đội hình và luật của phòng"}
           </span>
         </span>
-        <span aria-hidden="true" className="shrink-0 text-lg text-mist/80">
+        <span aria-hidden="true" className="shrink-0 text-lg text-mist/85">
           ⚙
         </span>
       </button>

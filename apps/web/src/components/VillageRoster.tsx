@@ -89,7 +89,7 @@ export function VillageRoster({ entries, accent, layout }: Props) {
           <p className="mt-0.5 truncate text-[12px] text-mist-strong">
             {entry.roleLabel} · {entry.teamLabel}
           </p>
-          <p className="truncate text-[11px] text-mist/70">{entry.statusLabel}</p>
+          <p className="truncate text-[11px] text-mist/85">{entry.statusLabel}</p>
         </li>
       ))}
     </ul>

@@ -91,7 +91,7 @@ export function EmojiPicker({ open, onOpenChange, onPick, inputRef }: Props) {
         >
           {EMOJI_GROUPS.map((group) => (
             <div key={group.label} className="mb-1.5 last:mb-0">
-              <p className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-mist/60">
+              <p className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-mist/85">
                 {group.label}
               </p>
               <div className="grid grid-cols-6 gap-0.5">
@@ -125,7 +125,7 @@ export function EmojiPicker({ open, onOpenChange, onPick, inputRef }: Props) {
           if (!next) inputRef.current?.focus({ preventScroll: true });
         }}
         className={`absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-lg leading-none transition ${
-          open ? "bg-night-700 text-white" : "text-mist/70 hover:bg-night-700 hover:text-white"
+          open ? "bg-night-700 text-white" : "text-mist/85 hover:bg-night-700 hover:text-white"
         }`}
       >
         <span aria-hidden="true">🙂</span>

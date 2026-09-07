@@ -34,7 +34,7 @@ export function DeadWhisperPanel({ snapshot, onSend }: Props) {
   return (
     <div className="card border-violet-500/30 bg-violet-950/20">
       <h4 className="font-bold text-violet-200">Tiếng Vọng Người Chết</h4>
-      <p className="text-xs text-mist/60">
+      <p className="text-xs text-mist/85">
         Bạn được gửi một lời nhắn ẩn danh tới cả làng. Chỉ một lần, và không ai biết là bạn.
       </p>
       <div className="mt-2 flex gap-2">
@@ -51,7 +51,7 @@ export function DeadWhisperPanel({ snapshot, onSend }: Props) {
           Gửi
         </button>
       </div>
-      <p className="mt-1 text-right text-[11px] text-mist/65">
+      <p className="mt-1 text-right text-[11px] text-mist/85">
         {text.length}/{DEAD_MESSAGE_MAX_LENGTH}
       </p>
     </div>

@@ -1,3 +1,4 @@
+import type { EventGlyphName } from "@/lib/event-art";
 import { WolfMark } from "./WolfMark";
 
 /**
@@ -12,19 +13,15 @@ import { WolfMark } from "./WolfMark";
  * mảnh: chúng nằm ở nền với độ mờ 15-25%, nên chi tiết nhỏ chỉ thành nhiễu.
  * Đổi màu bằng class `text-*` của Tailwind như mọi chỗ khác.
  */
-export type EventGlyphName =
-  | "silence"
-  | "flag"
-  | "blood"
-  | "paw"
-  | "shield"
-  | "wolf"
-  | "eye"
-  | "scales"
-  | "report"
-  | "ghost"
-  | "moon"
-  | "clock";
+/*
+ * Danh sách tên sống ở `lib/event-art.ts`, không ở đây.
+ *
+ * Bảng tra sự kiện -> tên hình phải nằm trong một module thuần (chuyển cảnh
+ * import nó từ `node --test`), nên union đi cùng bảng đó. File này chỉ nhập lại
+ * và vẽ. Re-export để `EventEnvironment` và các file khác vẫn lấy tên từ nơi
+ * chúng lấy hình - một import thay vì hai.
+ */
+export type { EventGlyphName };
 
 const PATHS: Record<Exclude<EventGlyphName, "wolf">, string> = {
   // Loa bị gạch chéo.

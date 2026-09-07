@@ -428,7 +428,7 @@ function StepPanel({
                   <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-mist-strong">
                     {letter.text}
                   </p>
-                  <p className="mt-0.5 text-[11px] text-mist/65">
+                  <p className="mt-0.5 text-[11px] text-mist/85">
                     Niêm phong ở vòng {letter.sealedRound}
                   </p>
                 </li>

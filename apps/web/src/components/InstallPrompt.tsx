@@ -248,7 +248,7 @@ export function InstallPrompt({ className }: { className?: string }) {
         type="button"
         onClick={dismiss}
         aria-label="Đóng lời mời cài ứng dụng"
-        className="-mr-1 -mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-lg text-mist/70 transition hover:bg-white/5 hover:text-mist-bright focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mist-bright"
+        className="-mr-1 -mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-lg text-mist/85 transition hover:bg-white/5 hover:text-mist-bright focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mist-bright"
       >
         <svg
           viewBox="0 0 24 24"

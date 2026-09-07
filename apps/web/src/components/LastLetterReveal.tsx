@@ -70,7 +70,7 @@ export function LastLetterReveal({ snapshot }: { snapshot: RoomSnapshot | null }
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
           <h4 className="font-display text-lg font-bold text-amber-200">{card.title}</h4>
           {remaining > 0 && (
-            <span className="text-xs text-mist/70">còn {remaining} phong thư nữa</span>
+            <span className="text-xs text-mist/85">còn {remaining} phong thư nữa</span>
           )}
         </div>
 
@@ -81,7 +81,7 @@ export function LastLetterReveal({ snapshot }: { snapshot: RoomSnapshot | null }
 
         {/* Vòng niêm phong, KHÔNG phải vai trò: lá thư nói người này đã nghĩ gì
           * lúc còn sống, chứ không lật bài giúp ai. */}
-        <p className="mt-2 text-xs text-mist/65">{card.sealedLabel}</p>
+        <p className="mt-2 text-xs text-mist/85">{card.sealedLabel}</p>
 
         <button
           className="btn-secondary mt-3 w-full sm:w-auto"

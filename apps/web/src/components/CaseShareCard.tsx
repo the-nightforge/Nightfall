@@ -552,14 +552,14 @@ function CardPreview({
           background: `radial-gradient(340px 200px at 50% 12%, ${OUTCOME_GLOW[model.winner]}, transparent 70%)`,
         }}
       >
-        <p className="text-center text-[8px] font-semibold uppercase tracking-[0.3em] text-mist/70">
+        <p className="text-center text-[8px] font-semibold uppercase tracking-[0.3em] text-mist/85">
           Hồ sơ vụ án
         </p>
         <p className={`text-center text-[13px] font-bold ${accent}`}>{model.caseId}</p>
         <p className="mt-2 text-center font-display text-[20px] font-extrabold leading-tight text-white">
           {model.headline}
         </p>
-        <p className="text-center text-[9px] text-mist/70">{model.subline}</p>
+        <p className="text-center text-[9px] text-mist/85">{model.subline}</p>
         <div className={`mx-auto mt-2 h-px w-12 ${OUTCOME_RULE[model.winner]}`} />
 
         <ul className="mt-3 space-y-2">
@@ -571,7 +571,7 @@ function CardPreview({
               <p className="font-display text-[11px] font-bold leading-snug text-white">
                 {line.title}
               </p>
-              <p className="break-words text-[8px] leading-snug text-mist/75">{line.text}</p>
+              <p className="break-words text-[8px] leading-snug text-mist/85">{line.text}</p>
             </li>
           ))}
         </ul>
@@ -579,7 +579,7 @@ function CardPreview({
 
         <div className="bg-night-800 px-4 py-2.5 text-center">
           <p className="font-display text-[11px] font-bold text-white">{model.cta}</p>
-          <p className="break-all text-[8px] text-mist/70">{model.url}</p>
+          <p className="break-all text-[8px] text-mist/85">{model.url}</p>
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import type { GameEventId, GameEventView, Phase, RoomSnapshot } from "@masoi/shared";
-import { eventIcon } from "./event-art";
+import { eventGlyph, type EventGlyphName } from "./event-art";
 import { WEBGL_KINDS } from "./cinematic-webgl";
 
 /**
@@ -82,8 +82,12 @@ export interface Cinematic {
    * không thì là mô tả. Đã cắt ngắn - xem `EVENT_DETAIL_MAX`.
    */
   detail: string | null;
-  /** Ký hiệu sự kiện. Cạnh pha không có sự kiện nào nên là null. */
-  icon: string | null;
+  /**
+   * TÊN hình của sự kiện, không phải hình. Cạnh pha không có sự kiện nào nên là
+   * null. `CinematicOverlay` đưa tên này cho `<EventGlyph>`; module này thuần
+   * nên nó không vẽ được gì và cũng không cần.
+   */
+  glyph: EventGlyphName | null;
 }
 
 /**
@@ -259,7 +263,7 @@ function build(kind: CinematicKind, key: string, event?: GameEventView): Cinemat
     // announcement trước description: nó là thứ VỪA xảy ra ("Kết quả Thám Tử:
     // ..."), còn description chỉ nhắc lại luật chung của sự kiện.
     detail: event ? shortDetail(event.announcement ?? event.description) : null,
-    icon: event ? eventIcon(event.id) : null,
+    glyph: event ? eventGlyph(event.id) : null,
   };
 }
 

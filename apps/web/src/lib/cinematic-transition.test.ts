@@ -217,19 +217,26 @@ describe("cinematicFor: chữ trên màn hình", () => {
     assert.equal(titles.size, family.length, "mỗi sự kiện phải có một tiêu đề riêng");
   });
 
-  it("cạnh pha không có sự kiện thì tiêu đề chính là nhãn cảnh, không kèm icon", () => {
+  it("cạnh pha không có sự kiện thì tiêu đề chính là nhãn cảnh, không kèm ký hiệu", () => {
     const played = cinematicFor(snap({ phase: "NIGHT" }), snap({ phase: "NIGHT_RESULT" }));
     assert.equal(played?.title, played?.label);
-    assert.equal(played?.icon, null);
+    assert.equal(played?.glyph, null);
     assert.equal(played?.detail, null);
   });
 
-  it("sự kiện mang theo ký hiệu của chính nó", () => {
+  /*
+   * Khẳng định TÊN hình, không phải một emoji.
+   *
+   * Đây chính là cái chốt giữ cho emoji không quay lại: `glyph` là một union
+   * hẹp, nên một chuỗi "👻" lọt vào `event-art.ts` lần nữa là lỗi biên dịch chứ
+   * không phải một dòng test đỏ mà ai đó sửa cho hết đỏ.
+   */
+  it("sự kiện mang theo TÊN ký hiệu của chính nó, không phải một emoji", () => {
     const played = cinematicFor(
       snap({ phase: "NIGHT", activeEvent: null }),
       snap({ phase: "NIGHT", activeEvent: event("DEAD_CAN_SPEAK") }),
     );
-    assert.equal(played?.icon, "👻");
+    assert.equal(played?.glyph, "ghost");
   });
 
   it("announcement được ưu tiên hơn description: đó là chuyện VỪA xảy ra", () => {

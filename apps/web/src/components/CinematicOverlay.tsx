@@ -21,6 +21,7 @@ import { useModalFocus } from "@/lib/useModalFocus";
 import { CinematicCanvas } from "./CinematicCanvas";
 import { KillScene } from "./KillScene";
 import { VillageSilhouette } from "./VillageSilhouette";
+import { EventGlyph } from "./EventGlyph";
 import { WolfMark } from "./WolfMark";
 
 /**
@@ -377,10 +378,11 @@ export function CinematicOverlay({ snapshot }: { snapshot: RoomSnapshot | null }
           <div className="cine-caption max-w-md text-center">
             {eyebrow && (
               <p className="cine-eyebrow text-xs font-bold uppercase tracking-[0.2em] text-white/70">
-                {playing.icon && (
-                  <span className="mr-1.5" aria-hidden="true">
-                    {playing.icon}
-                  </span>
+                {playing.glyph && (
+                  <EventGlyph
+                    name={playing.glyph}
+                    className="mr-1.5 inline-block h-3.5 w-3.5 align-[-0.1em]"
+                  />
                 )}
                 {eyebrow}
               </p>

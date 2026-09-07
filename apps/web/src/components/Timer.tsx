@@ -70,7 +70,7 @@ export function Timer({ endsAt, compact = false }: { endsAt: number | null; comp
         }
         className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 font-mono text-[13px] font-bold tabular-nums ring-1 ${
           endsAt === null
-            ? "text-mist/70 ring-white/10"
+            ? "text-mist/85 ring-white/10"
             : danger
               ? "bg-blood-600/20 text-blood-400 ring-blood-500/50 timer-danger-pulse"
               : warning
@@ -131,7 +131,7 @@ export function Timer({ endsAt, compact = false }: { endsAt: number | null; comp
         aria-hidden="true"
         className={`absolute inset-0 grid place-items-center font-mono text-[13px] font-bold tabular-nums lg:text-[15px] ${
           endsAt === null
-            ? "text-mist/70"
+            ? "text-mist/85"
             : danger
               ? "text-blood-400 timer-danger-pulse"
               : warning

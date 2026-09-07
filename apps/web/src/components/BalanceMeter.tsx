@@ -30,7 +30,7 @@ export function BalanceMeter({ score }: Props) {
     // này trôi hẳn ra khỏi cụm chữ mà nó đang giải thích.
     <div data-testid="balance-meter">
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <span className="text-xs font-bold uppercase tracking-[0.18em] text-mist/80">
+        <span className="text-xs font-bold uppercase tracking-[0.18em] text-mist/85">
           Cân bằng
         </span>
         <span className={`text-sm font-bold ${labelClass}`} data-testid="balance-label">
@@ -64,7 +64,7 @@ export function BalanceMeter({ score }: Props) {
           <span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-white" aria-hidden="true" />
         </div>
       </div>
-      <div className="mt-1.5 flex justify-between text-[11px] text-mist/75">
+      <div className="mt-1.5 flex justify-between text-[11px] text-mist/85">
         <span>0 Sói mạnh</span>
         <span>50</span>
         <span>Dân mạnh 100</span>

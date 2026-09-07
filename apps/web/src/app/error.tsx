@@ -33,7 +33,7 @@ export default function RoomError({
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col items-center justify-center gap-4 px-4 text-center">
       <h1 className="font-display text-2xl font-bold text-white">Ván bị gián đoạn</h1>
-      <p className="text-sm text-mist/70">
+      <p className="text-sm text-mist/85">
         Giao diện gặp lỗi ngoài dự tính. Ván trên máy chủ vẫn đang chạy — thử vào lại,
         bạn sẽ trở về đúng pha hiện tại.
       </p>

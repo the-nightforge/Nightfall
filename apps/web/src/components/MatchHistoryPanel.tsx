@@ -63,7 +63,7 @@ export function MatchHistoryPanel() {
   if (outcome.kind === "anonymous") return null;
   if (outcome.kind === "error") {
     return (
-      <p className="text-xs text-mist/60">
+      <p className="text-xs text-mist/85">
         Không tải được lịch sử ván. Thử tải lại trang.
       </p>
     );
@@ -274,7 +274,7 @@ function MatchRow({ match }: { match: MatchHistoryEntry }) {
                   {momentLabel(highlight.round, highlight.phase)}
                 </span>{" "}
                 <span className="font-semibold text-white/90">{highlight.title}</span>
-                <span className="block text-mist/70">{highlight.description}</span>
+                <span className="block text-mist/85">{highlight.description}</span>
               </li>
             ))}
           </ol>

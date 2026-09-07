@@ -50,6 +50,61 @@ async function createPlayer(nickname: string, signal: AbortSignal): Promise<Crea
   return { ok: true, identity: data as Identity };
 }
 
+/**
+ * Ba dấu hiệu của dải giới thiệu trên trang chủ.
+ *
+ * Trước đây là ba ký tự hình học rời: ◎ ◈ ♧. Chúng không phải emoji, nhưng mắc
+ * đúng một bệnh với emoji - chúng là KÝ TỰ, nên hình dáng do font của máy người
+ * đọc quyết định. ♧ (U+2667) đặc biệt hay thiếu: font hệ thống nào không có nó
+ * thì trình duyệt đi mượn một font khác, và ba dấu hiệu đứng cạnh nhau bỗng lệch
+ * hẳn nét và trọng lượng; máy nào không mượn được thì ra ô vuông trống.
+ *
+ * Ba hình dưới đây còn nói đúng nội dung của ba ô thay vì chỉ là hoa văn: một
+ * bàn chơi có người ngồi quanh, một chiếc mặt nạ, hai bóng người. Cùng lưới 24 /
+ * stroke 2 với `MessageCircleIcon` của `ChatBox`, nên cả web dùng chung một bộ
+ * nét mà không thêm dependency nào.
+ *
+ * Vẫn `aria-hidden`: mỗi ô đã có sẵn tiêu đề và câu mô tả bằng chữ ngay cạnh,
+ * nên đọc thêm tên hình chỉ làm trình đọc màn hình dài dòng.
+ */
+function HomeFeatureIcon({ name }: { name: "table" | "mask" | "company" }) {
+  return (
+    <span className="home-feature-icon" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {name === "table" && (
+          // Bàn tròn và bốn chỗ ngồi quanh nó.
+          <>
+            <circle cx="12" cy="12" r="4.5" />
+            <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" />
+          </>
+        )}
+        {name === "mask" && (
+          // Mặt nạ sân khấu: vòm trên và hai khe mắt.
+          <>
+            <path d="M4 5h16v7a8 8 0 0 1-16 0V5Z" />
+            <path d="M8.5 10h2M13.5 10h2" />
+          </>
+        )}
+        {name === "company" && (
+          // Hai bóng người, một đứng trước một đứng sau.
+          <>
+            <circle cx="9" cy="8" r="3.5" />
+            <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+            <path d="M16 5.2a3.5 3.5 0 0 1 0 5.6M17.5 14.4a6.5 6.5 0 0 1 4 5.6" />
+          </>
+        )}
+      </svg>
+    </span>
+  );
+}
+
 export default function Home() {
   const router = useRouter();
   const [nickname, setNickname] = useState("");
@@ -403,7 +458,7 @@ export default function Home() {
                       )}
                     </button>
                     {createHint && (
-                      <p id="create-hint" className="mt-2 text-xs text-mist/80">
+                      <p id="create-hint" className="mt-2 text-xs text-mist/85">
                         {createHint}
                       </p>
                     )}
@@ -425,7 +480,7 @@ export default function Home() {
                         </>
                       )}
                     </button>
-                    <p id="guide-hint" className="mt-1.5 text-xs text-mist/80">
+                    <p id="guide-hint" className="mt-1.5 text-xs text-mist/85">
                       {guideDone
                         ? "Bạn đã đi hết một ván hướng dẫn. Vẫn mở lại được nếu muốn ôn - ván thật thì dùng “Tạo phòng mới”."
                         : "Lần đầu chơi? Thử một ván với 7 bot và hướng dẫn từng bước."}
@@ -478,7 +533,7 @@ export default function Home() {
                       </button>
                     </div>
                     {joinHint && (
-                      <p id="join-hint" className="mt-2 text-xs text-mist/80">
+                      <p id="join-hint" className="mt-2 text-xs text-mist/85">
                         {joinHint}
                       </p>
                     )}
@@ -509,12 +564,12 @@ export default function Home() {
                       <span>{error}</span>
                     </p>
                   )}
-                  <p className="border-t border-white/[0.07] pt-4 text-xs leading-relaxed text-mist/75">
+                  <p className="border-t border-white/[0.07] pt-4 text-xs leading-relaxed text-mist/85">
                     Tối thiểu 8 người mỗi ván - thiếu thì thêm bot ngay trong phòng chờ.
                   </p>
                   {hasIdentity && (
                     <button
-                      className="w-full rounded-lg py-1 text-center text-xs text-mist/75 underline-offset-4 transition hover:text-white hover:underline"
+                      className="w-full rounded-lg py-1 text-center text-xs text-mist/85 underline-offset-4 transition hover:text-white hover:underline"
                       onClick={handleLogout}
                     >
                       Xoá phiên đăng nhập trên thiết bị này
@@ -526,9 +581,9 @@ export default function Home() {
           </div>
 
           <div className="home-feature-strip" aria-label="Thông tin trò chơi">
-            <div><span className="home-feature-icon" aria-hidden="true">◎</span><p><strong>{MIN_PLAYERS_TO_START}–{MAX_PLAYERS_PER_ROOM} người chơi</strong><span>Một bàn chơi. Vô vàn nghi ngờ.</span></p></div>
-            <div><span className="home-feature-icon" aria-hidden="true">◈</span><p><strong>Mỗi vai, một bí mật</strong><span>Phe Dân Làng, Ma Sói và Trung Lập.</span></p></div>
-            <div><span className="home-feature-icon" aria-hidden="true">♧</span><p><strong>Luôn có người cùng chơi</strong><span>Rủ bạn bè hoặc đấu trí cùng bot.</span></p></div>
+            <div><HomeFeatureIcon name="table" /><p><strong>{MIN_PLAYERS_TO_START}–{MAX_PLAYERS_PER_ROOM} người chơi</strong><span>Một bàn chơi. Vô vàn nghi ngờ.</span></p></div>
+            <div><HomeFeatureIcon name="mask" /><p><strong>Mỗi vai, một bí mật</strong><span>Phe Dân Làng, Ma Sói và Trung Lập.</span></p></div>
+            <div><HomeFeatureIcon name="company" /><p><strong>Luôn có người cùng chơi</strong><span>Rủ bạn bè hoặc đấu trí cùng bot.</span></p></div>
           </div>
           <section id="nhat-ky" className="home-journal" aria-labelledby="journal-heading">
             <div className="home-section-heading"><div><p className="home-eyebrow">SAU NHỮNG ĐÊM DÀI</p><h2 id="journal-heading">Dấu ấn trong làng</h2></div></div>

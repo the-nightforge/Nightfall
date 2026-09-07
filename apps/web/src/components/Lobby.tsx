@@ -224,11 +224,11 @@ export function Lobby({
           );
         })}
         {activeRoles.length > visibleRoles.length && (
-          <span className="lobby-role-chip text-mist/75">+{activeRoles.length - visibleRoles.length}</span>
+          <span className="lobby-role-chip text-mist/85">+{activeRoles.length - visibleRoles.length}</span>
         )}
       </div>
 
-      <p className="mt-2.5 text-[13px] leading-relaxed text-mist/70">
+      <p className="mt-2.5 text-[13px] leading-relaxed text-mist/85">
         {stage.rated
           ? `${onPreset ? "Đội hình chuẩn" : "Đội hình tuỳ chỉnh"} cho ${count} người.`
           : stage.summary}
@@ -400,13 +400,13 @@ function TechnicalDetail({ lines, score }: { lines: string[]; score: number }) {
   if (lines.length === 0) return null;
   return (
     <details className="group mt-2">
-      <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs text-mist/75 transition hover:text-white">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs text-mist/85 transition hover:text-white">
         <span aria-hidden="true" className="transition group-open:rotate-90">
           ▸
         </span>
         Chi tiết kỹ thuật
       </summary>
-      <ul className="mt-1.5 space-y-0.5 pl-4 text-[11px] leading-snug text-mist/70">
+      <ul className="mt-1.5 space-y-0.5 pl-4 text-[11px] leading-snug text-mist/85">
         <li>Điểm cân bằng: {score}/100 (cân là 45-55)</li>
         {lines.map((line, index) => (
           <li key={index}>{line}</li>
@@ -437,11 +437,11 @@ function Disclosure({
       <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-3 transition hover:bg-white/[0.04] hover:text-white">
         <span>
           <span className="text-[15px] font-bold text-white">{summary}</span>
-          <span className="mt-0.5 block text-[13px] text-mist/70">{hint}</span>
+          <span className="mt-0.5 block text-[13px] text-mist/85">{hint}</span>
         </span>
         <span
           aria-hidden="true"
-          className="shrink-0 text-lg text-mist/80 transition group-open:rotate-180"
+          className="shrink-0 text-lg text-mist/85 transition group-open:rotate-180"
         >
           ▾
         </span>
@@ -561,7 +561,7 @@ function ModeToggle({
           className={`flex-1 rounded-lg border px-3 py-2 text-sm font-bold transition ${
             mode === option.id
               ? option.on
-              : "border-transparent text-mist/80 hover:bg-white/[0.06] hover:text-white"
+              : "border-transparent text-mist/85 hover:bg-white/[0.06] hover:text-white"
           } ${isHost ? "cursor-pointer" : "cursor-default"}`}
         >
           <span className="block">{option.label}</span>
@@ -610,11 +610,11 @@ function AddonConfig({
           onChange={(e) => onSave({ ...config, lastLetter: e.target.checked })}
         />
       </label>
-      <p className="text-sm text-mist/80">
+      <p className="text-sm text-mist/85">
         Người chơi có thể để lại một thông điệp bí mật, chỉ được mở sau khi họ chết.
       </p>
       {!letter.canToggle && (
-        <p className="text-xs text-mist/60">
+        <p className="text-xs text-mist/85">
           {snapshot.phase === "LOBBY"
             ? "Chỉ chủ phòng đổi được add-on."
             : "Không đổi được add-on khi trận đã bắt đầu."}
@@ -648,7 +648,7 @@ function VoiceConfig({
           onChange={(e) => onSave({ ...config, voice: e.target.checked })}
         />
       </label>
-      <p className="text-sm text-mist/80">
+      <p className="text-sm text-mist/85">
         Chỉ dùng được ban ngày. Ban đêm và phe Sói vẫn nhắn bằng chữ.
       </p>
       {on && (
@@ -697,7 +697,7 @@ function TimingConfig({
           <label key={key} className="flex h-full flex-col gap-1 text-sm">
             <span className="text-mist/90">
               {label}{" "}
-              <span className="whitespace-nowrap text-mist/70">
+              <span className="whitespace-nowrap text-mist/85">
                 ({min}-{max}s)
               </span>
             </span>
