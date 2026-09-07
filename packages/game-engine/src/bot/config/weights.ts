@@ -620,6 +620,7 @@ export interface NightConfidenceWeights {
   witchSkip: number;
   /** Confidence mặc định của một evidence do nước đi đêm sinh ra. */
   nightEvidence: number;
+  tracker: number;
 }
 
 /** Mọi trait được rút i.i.d. từ `[min, max]`. */
@@ -819,6 +820,7 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   ["nightConfidence", "witchPoison"],
   ["nightConfidence", "witchSkip"],
   ["nightConfidence", "nightEvidence"],
+  ["nightConfidence", "tracker"],
   // Bốn cái dưới đây được so THẲNG với `rng()`. Một giá trị 1.5 biến "đôi khi
   // trả lời" thành "luôn trả lời" mà không có lỗi nào để lần theo.
   ["conversation", "directReplyFloor"],
@@ -1189,6 +1191,7 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     witchPoison: 0.75,
     witchSkip: 0.5,
     nightEvidence: 0.5,
+    tracker: 0.7,
   }),
 
   personalityRange: Object.freeze({ min: 0.25, max: 0.9 }),
