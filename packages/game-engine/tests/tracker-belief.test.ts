@@ -79,6 +79,27 @@ describe("kết quả theo dõi đi vào bảng belief", () => {
     expect(state.suspicion.a.score).toBeLessThan(before);
   });
 
+  it("áp lại cùng một kết quả trong cùng vòng là idempotent", () => {
+    /*
+     * `observe()` chạy nhiều lần một vòng và `knowledge.trackerResult` đứng
+     * yên suốt vòng đó, nên không có gì tự nhiên chặn `updateBelief` cộng dồn
+     * mỗi lần gọi lại. Bài test này bắt đúng lỗi đó: gọi ba lần với cùng một
+     * `knowledge`, điểm phải như gọi một lần.
+     */
+    const state = createBotBrainState("me", createBotPersonality(createSeededRng("p")), ["me", "a"]);
+    const k = knowledge({
+      selfRole: "TRACKER",
+      trackerResult: { targetId: "a", acted: true },
+    });
+    applyPrivateInformation(state, k);
+    const once = state.suspicion.a.score;
+    applyPrivateInformation(state, k);
+    applyPrivateInformation(state, k);
+
+    expect(state.suspicion.a.score).toBe(once);
+    expect(state.suspicion.a.reasons).toHaveLength(1);
+  });
+
   it("NGUỘI ĐI, khác kết quả soi", () => {
     /*
      * Kết quả soi là sự thật về PHE - đúng mãi mãi, nên được miễn decay. Kết

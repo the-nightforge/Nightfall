@@ -304,33 +304,45 @@ export function applyPrivateInformation(
    * một đêm. Vì vậy nó đi qua `applyEvidence` như mọi tín hiệu hành vi khác,
    * không được `pinScore` hay liệt vào `PERMANENT_KINDS`: một Bảo Vệ chăm chỉ
    * đêm nay không được mang nghi ngờ đó suốt ván.
+   *
+   * Nhưng chính vì không có `pinScore` để ghim, nhánh này thiếu mất tấm khiên
+   * chống cộng dồn mà seer/ally có sẵn: `knowledge.trackerResult` đứng yên
+   * suốt cả vòng còn `observe()` thì chạy nhiều lần một vòng, và
+   * `updateBelief` LUÔN cộng thêm delta chứ không đè. Không chặn thì một kết
+   * quả theo dõi duy nhất bị cộng lại mỗi lần observe, y hệt bug đã gặp ở
+   * `ingestVerdictReviews` - nên chặn bằng đúng cách đó: một marker theo
+   * (vòng, mục tiêu), kiểm tra và ghi trước khi áp bằng chứng.
    */
   const tracked = knowledge.trackerResult;
   if (tracked) {
-    const sourceId = `tracker:${round}:${tracked.targetId}`;
-    ensureSource(state, sourceId);
-    applyEvidence(
-      state,
-      evidenceFor(
-        {
-          id: sourceId,
-          kind: tracked.acted ? "TRACKED_ACTIVE" : "TRACKED_IDLE",
-          sourceId,
-          actorId: tracked.targetId,
-          weight: tracked.acted
-            ? weights.evidence.TRACKED_ACTIVE.weight
-            : weights.evidence.TRACKED_IDLE.weight,
-          confidence: tracked.acted
-            ? weights.evidence.TRACKED_ACTIVE.confidence
-            : weights.evidence.TRACKED_IDLE.confidence,
-          summary: tracked.acted
-            ? `${tracked.targetId} có ra tay đêm qua`
-            : `${tracked.targetId} không ra tay đêm qua`,
-        },
-        round,
-      ),
-      weights,
-    );
+    const marker = `tracker-applied:${round}:${tracked.targetId}`;
+    if (!state.seenEventIds.includes(marker)) {
+      state.seenEventIds.push(marker);
+      const sourceId = `tracker:${round}:${tracked.targetId}`;
+      ensureSource(state, sourceId);
+      applyEvidence(
+        state,
+        evidenceFor(
+          {
+            id: sourceId,
+            kind: tracked.acted ? "TRACKED_ACTIVE" : "TRACKED_IDLE",
+            sourceId,
+            actorId: tracked.targetId,
+            weight: tracked.acted
+              ? weights.evidence.TRACKED_ACTIVE.weight
+              : weights.evidence.TRACKED_IDLE.weight,
+            confidence: tracked.acted
+              ? weights.evidence.TRACKED_ACTIVE.confidence
+              : weights.evidence.TRACKED_IDLE.confidence,
+            summary: tracked.acted
+              ? `${tracked.targetId} có ra tay đêm qua`
+              : `${tracked.targetId} không ra tay đêm qua`,
+          },
+          round,
+        ),
+        weights,
+      );
+    }
   }
 
   /*
