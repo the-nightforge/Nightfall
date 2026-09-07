@@ -488,6 +488,29 @@ export interface AggressionWeights {
   thresholdBase: number;
   aggressivenessSpan: number;
   riskSpan: number;
+  /**
+   * Tỉ lệ người đã chết mà DƯỚI đó phe làng được bỏ phiếu trắng khi ứng viên
+   * dẫn đầu KHÔNG CÓ BẰNG CHỨNG NÀO. `0` TẮT - v1..v18.
+   *
+   * Anh em với `deceptionRisk.abstainPressureCeiling` nhưng hẹp hơn hai bậc,
+   * và sự hẹp đó là toàn bộ lý do ô này an toàn:
+   *
+   * 1. Cổng của Sói mở khi `score < threshold` HOẶC bằng chứng rỗng; cổng này
+   *    chỉ mở khi RỖNG. Một ứng viên có lý do thật mà chưa đủ nặng vẫn bị nêu
+   *    tên. Nếu nới ra "dưới ngưỡng", phần lớn vòng sớm sẽ không treo ai và ta
+   *    rơi vào đúng vòng lặp chết đã ghi ở `decideFinalVote`: không ai bị kết
+   *    án -> không có lịch sử phiếu -> không sinh bằng chứng -> không ai bị
+   *    kết án. Harness ở Task 9 đo vòng lặp đó là làng thua 30/30.
+   * 2. Nó chỉ mở khi làng còn đủ đông. Xem chú thích của
+   *    `abstainPressureCeiling`: không treo ai là một ngày mất trắng, và cái
+   *    giá đó tăng theo mỗi người đã chết.
+   *
+   * Vì sao vẫn đáng mở: một BOT nêu tên khi bảng belief RỖNG không phải là một
+   * nước cờ, nó là một cáo buộc do jitter sinh ra. Bàn đọc được điều đó, và
+   * một lá phiếu vô căn cứ cũng đầu độc chính `vote-analysis` của các BOT khác
+   * - chúng học từ lịch sử phiếu.
+   */
+  villageAbstainPressureCeiling: number;
 }
 
 export interface ConfidenceWeights {
@@ -777,6 +800,7 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   ["recency", "profileDecayPerRound"],
   ["selfPreservation", "guardSuspicionPenalty"],
   ["deceptionRisk", "abstainPressureCeiling"],
+  ["aggression", "villageAbstainPressureCeiling"],
   // So THẲNG với một số trong [0, 1) sinh từ hash trong `fakeFightTarget`.
   ["deceptionRisk", "fakeFightChance"],
   ["roleThresholds", "thinVillageShare"],
@@ -1115,6 +1139,8 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     thresholdBase: 58,
     aggressivenessSpan: 6,
     riskSpan: 4,
+    // Tắt ở v1..v18; v19 bật. Xem `villageAbstainPressureCeiling`.
+    villageAbstainPressureCeiling: 0,
   }),
 
   confidence: Object.freeze({
@@ -1320,6 +1346,10 @@ export const BOT_WEIGHTS_V2: BotWeights = Object.freeze({
   }),
 
   aggression: Object.freeze({
+    // Spread chứ không khai lại cả khối: v2 chỉ muốn đổi BA ô dưới đây, và một
+    // khối khai trọn sẽ âm thầm nuốt mọi ô `aggression` thêm vào về sau (ô đó
+    // thành `undefined` ở v2..v18 mà không preset nào báo lỗi).
+    ...BOT_WEIGHTS_V1.aggression,
     // Ngưỡng phải nằm trong tầm với của thang belief thật, nếu không thì nhánh
     // "đủ căn cứ để đề cử" không bao giờ chạy và mọi lá phiếu chỉ là jitter.
     thresholdBase: 6,
@@ -2139,6 +2169,57 @@ export const BOT_WEIGHTS_V18: BotWeights = Object.freeze({
   confidence: Object.freeze({
     ...BOT_WEIGHTS_V17.confidence,
     talkerHysteresisExculpatedScale: 0,
+  }),
+});
+
+/**
+ * Cấu hình v19 - dân làng thôi bịa cáo buộc khi bảng belief còn trống.
+ *
+ * MỘT ô đổi: `aggression.villageAbstainPressureCeiling` 0 -> 0.25.
+ *
+ * KHÔNG PHẢI mặc định. `DEFAULT_BOT_WEIGHTS` vẫn là v18, và chú thích dưới đây
+ * là lý do - đo trước, đổi sau.
+ *
+ * Vấn đề nó sửa là có thật: nhánh "không treo ai" trong `selectVote` bị khoá
+ * sau `selfIsWolf`, còn trần của Sói về 0 từ v2, nên trước v19 KHÔNG BOT NÀO
+ * bỏ phiếu trắng trong bất kỳ tình huống nào. Một BOT có bảng belief hoàn toàn
+ * rỗng vẫn nêu tên người dẫn đầu, mà người dẫn đầu khi mọi điểm bằng nhau là
+ * do jitter chọn. Bàn đọc ra điều đó ngay vòng 1.
+ *
+ * CÁI GIÁ, đo trên 300 ván, 8 người, bộ bài chuẩn, seed `abstain-bench`:
+ *
+ * | | v18 | v19 |
+ * |---|---|---|
+ * | làng thắng | 48.7% (146/300) | 36.3% (109/300) |
+ * | voteAccuracy làng | 45.0% | 38.8% |
+ * | tổng phiếu làng | 3837 | 3468 |
+ *
+ * -12.3 điểm, khoảng 4 sigma - không phải nhiễu. 369 lá phiếu biến thành phiếu
+ * trắng, và độ chính xác của số phiếu CÒN LẠI cũng tụt: đúng vòng lặp chết mà
+ * `decideFinalVote` đã ghi. Không ai bị treo ở vòng 1 nghĩa là không có lịch sử
+ * phiếu, nghĩa là `vote-analysis` không có gì để đọc ở vòng 2.
+ *
+ * Hạ trần KHÔNG làm nó rẻ hơn: 0.25, 0.2 và 0.15 cho ra ba kết quả GIỐNG HỆT
+ * nhau (36.3% / 38.8% / 3468). Ở bàn 8 người mọi lá phiếu trắng đều rơi vào lúc
+ * 0-1 người chết, nên knob này gần như nhị phân - hoặc dân làng được bỏ trắng ở
+ * vòng bầu đầu, hoặc không. Giữ 0.25 vì nó phát biểu rõ nhất ("tới một phần tư
+ * bàn đã chết") và cùng thang với `abstainPressureCeiling` của Sói.
+ *
+ * Vậy dùng khi nào: khi ưu tiên là bàn có NGƯỜI THẬT và cái đang mua là sự
+ * đáng tin của lời BOT nói, chứ không phải win-rate trong harness toàn bot.
+ * Số đo trên là bàn 8 bot; nó không đo được cái giá của một cáo buộc vô căn cứ
+ * trước mặt người chơi.
+ *
+ * Điều KHÔNG đổi, và đó là bài học đắt nhất của v2 được giữ lại: bằng chứng
+ * mỏng-nhưng-có-thật vẫn phải ra một cái tên. Chỉ RỖNG mới được bỏ trắng.
+ */
+export const BOT_WEIGHTS_V19: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V18,
+  version: "19.0.0",
+
+  aggression: Object.freeze({
+    ...BOT_WEIGHTS_V18.aggression,
+    villageAbstainPressureCeiling: 0.25,
   }),
 });
 

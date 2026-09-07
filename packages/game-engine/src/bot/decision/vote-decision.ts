@@ -424,6 +424,16 @@ export function selectVote(
   const abstainHelpsMyTeam =
     selfIsWolf && pressure < weights.deceptionRisk.abstainPressureCeiling;
 
+  // Phe làng có cổng RIÊNG và hẹp hơn: chỉ khi ứng viên dẫn đầu không mang nổi
+  // một mẩu bằng chứng nào. "Dưới ngưỡng" KHÔNG mở cổng này - xem
+  // `villageAbstainPressureCeiling` cho lý do đầy đủ. Nêu tên một người mà
+  // bảng belief hoàn toàn trống không phải một nước cờ mỏng, nó là jitter được
+  // đọc thành cáo buộc, và nó đầu độc `vote-analysis` của cả bàn.
+  const villageAbstains =
+    !selfIsWolf &&
+    winner.evidence.length === 0 &&
+    pressure < weights.aggression.villageAbstainPressureCeiling;
+
   // Cuộc cãi giả CỐ Ý không có bằng chứng - đồng bọn bị ghim suspicion 0 nên
   // không có lý do nào để mang - và nó phải ra tới lá phiếu, nếu không lời
   // "tôi thấy anh hơi lạ" chưa bao giờ được nói. `fightTarget` chỉ khác null
@@ -432,9 +442,10 @@ export function selectVote(
   const isFakeFight = winner.targetId === fightTarget;
 
   if (
-    abstainHelpsMyTeam &&
-    !isFakeFight &&
-    (winner.score < threshold || winner.evidence.length === 0)
+    villageAbstains ||
+    (abstainHelpsMyTeam &&
+      !isFakeFight &&
+      (winner.score < threshold || winner.evidence.length === 0))
   ) {
     probe?.fallback(
       winner.evidence.length === 0
