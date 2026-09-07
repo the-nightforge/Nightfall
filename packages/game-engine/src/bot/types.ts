@@ -70,7 +70,14 @@ export type PublicEvidenceKind =
    * là suy đoán từ dữ liệu công khai và decay như mọi tín hiệu hành vi khác.
    */
   | "AVOIDANCE"
-  | "DEFENSE_QUALITY";
+  | "DEFENSE_QUALITY"
+  /**
+   * Kết quả của Kẻ Theo Dõi. Là sự thật do engine cấp, NHƯNG chỉ về một hành vi
+   * trong MỘT đêm - không nói người đó thuộc phe nào. Vì vậy nó nằm ở nhóm
+   * nguội đi cùng mọi tín hiệu hành vi khác, không ở nhóm `SEER_RESULT_*`.
+   */
+  | "TRACKED_ACTIVE"
+  | "TRACKED_IDLE";
 
 export type EvidenceKind =
   | PublicEvidenceKind

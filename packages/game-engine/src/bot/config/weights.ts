@@ -1009,6 +1009,10 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     // một bit nào của các preset cũ. v11 bật chúng; xem chú thích ở đó.
     AVOIDANCE: { weight: 0, confidence: 0.4 },
     DEFENSE_QUALITY: { weight: 0, confidence: 0.45 },
+    // Nhẹ hơn mọi tín hiệu đã được sự thật kiểm chứng khác: "có ra tay" không
+    // nói người đó thuộc phe nào.
+    TRACKED_ACTIVE: { weight: 12, confidence: 0.8 },
+    TRACKED_IDLE: { weight: -8, confidence: 0.8 },
   }),
 
   memoryImportance: Object.freeze({

@@ -298,6 +298,42 @@ export function applyPrivateInformation(
   }
 
   /*
+   * KẺ THEO DÕI: có ra tay đêm qua hay không.
+   *
+   * Khác kết quả soi - đây KHÔNG phải sự thật về phe, chỉ là một hành vi trong
+   * một đêm. Vì vậy nó đi qua `applyEvidence` như mọi tín hiệu hành vi khác,
+   * không được `pinScore` hay liệt vào `PERMANENT_KINDS`: một Bảo Vệ chăm chỉ
+   * đêm nay không được mang nghi ngờ đó suốt ván.
+   */
+  const tracked = knowledge.trackerResult;
+  if (tracked) {
+    const sourceId = `tracker:${round}:${tracked.targetId}`;
+    ensureSource(state, sourceId);
+    applyEvidence(
+      state,
+      evidenceFor(
+        {
+          id: sourceId,
+          kind: tracked.acted ? "TRACKED_ACTIVE" : "TRACKED_IDLE",
+          sourceId,
+          actorId: tracked.targetId,
+          weight: tracked.acted
+            ? weights.evidence.TRACKED_ACTIVE.weight
+            : weights.evidence.TRACKED_IDLE.weight,
+          confidence: tracked.acted
+            ? weights.evidence.TRACKED_ACTIVE.confidence
+            : weights.evidence.TRACKED_IDLE.confidence,
+          summary: tracked.acted
+            ? `${tracked.targetId} có ra tay đêm qua`
+            : `${tracked.targetId} không ra tay đêm qua`,
+        },
+        round,
+      ),
+      weights,
+    );
+  }
+
+  /*
    * SÓI PHÁP SƯ: mục tiêu thuộc dòng Tiên Tri là kẻ phải cắn trước.
    *
    * Không đi vào suspicion (thang đó đo "giống Sói", mà mục tiêu gần như chắc
