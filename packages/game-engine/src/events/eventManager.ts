@@ -314,6 +314,23 @@ export function selectEvent(
       if (state.bloodMoonUsed || state.bloodMoonArmed) return false;
     }
 
+    if (event.id === "MORNING_REPORT") {
+      /*
+       * Bản tin bán NGUYÊN NHÂN của những cái chết đêm qua. Một đêm không ai
+       * chết thì nó chỉ đọc lại "không ai thiệt mạng" - điều cả phòng đã nhìn
+       * suốt NIGHT_RESULT - mà vẫn tiêu 2 điểm nghiêng và đốt suất
+       * một-lần-mỗi-ván của sự kiện.
+       *
+       * Đọc ĐÚNG nguồn mà bản tin sẽ đọc (`nightHistory.at(-1)` trong
+       * `startDay`): `resolveNight` đẩy đêm vừa xong vào đó TRƯỚC khi
+       * `startDay` chọn sự kiện, nên hàng rào này và câu bản tin luôn nhìn cùng
+       * một đêm. Nhánh "không có dữ liệu đêm trước" cũng rỗng nghĩa y hệt, nên
+       * cùng một hàng rào chặn cả hai.
+       */
+      const lastNight = state.nightHistory.at(-1);
+      if (!lastNight || lastNight.deaths.length === 0) return false;
+    }
+
     if (event.id === "DEAD_CAN_SPEAK") {
       if (state.deadCanSpeakUsed) return false;
       const hasDead = state.players.some((p) => !p.alive);

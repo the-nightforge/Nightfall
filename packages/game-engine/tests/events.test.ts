@@ -551,6 +551,65 @@ describe("Bộ chọn sự kiện cân theo độ nghiêng", () => {
     expect(ids).toContain("HOWL_OF_THE_PACK");
   });
 
+  /**
+   * Bản Tin Bình Minh chỉ đáng nổ khi nó có gì để nói.
+   *
+   * Giá trị của nó nằm ở NGUYÊN NHÂN từng cái chết - `nightHistory` chỉ lộ ra
+   * client lúc GAME_OVER nên giữa ván đó là bí mật thật. Một đêm không ai chết
+   * thì bản tin chỉ đọc lại "không ai thiệt mạng", điều mà cả phòng đã nhìn
+   * thấy suốt NIGHT_RESULT. Đổi 2 điểm nghiêng lấy một dòng chữ ai cũng biết,
+   * và đốt luôn suất một-lần-mỗi-ván của sự kiện.
+   */
+  function afterNightWith(deathCount: number): GameState {
+    const state = chaosState();
+    state.nightHistory = [
+      {
+        round: 1,
+        deaths: Array.from({ length: deathCount }, (_, i) => ({
+          player: { id: `d${i}`, name: `Nan nhan ${i}`, role: "VILLAGER" },
+          cause: "wolf",
+        })),
+      },
+    ] as never;
+    return state;
+  }
+
+  it("Bản Tin Bình Minh bốc được khi đêm trước có người chết", () => {
+    expect(reachable(afterNightWith(1), "DAY")).toContain("MORNING_REPORT");
+  });
+
+  it("Bản Tin Bình Minh bị chặn khi đêm trước không ai chết", () => {
+    expect(reachable(afterNightWith(0), "DAY")).not.toContain("MORNING_REPORT");
+  });
+
+  it("bị chặn thì buổi sáng đó bốc sự kiện khác, không bỏ trống suất", () => {
+    /*
+     * Hàng rào precondition nằm trong BỘ LỌC dựng `eligibleEvents`, chạy TRƯỚC
+     * lượt bốc - nên một sự kiện không thoả điều kiện không bao giờ được bốc
+     * rồi bị vứt, để lại một buổi sáng trống. Nó đơn giản là không có mặt
+     * trong nhóm, và lượt bốc rơi vào những sự kiện còn lại.
+     *
+     * Bài này khoá đúng tính chất đó: cùng một thế cờ, chặn Bản Tin không được
+     * làm nghèo đi số sự kiện còn bốc được.
+     */
+    const coNguoiChet = reachable(afterNightWith(1), "DAY");
+    const khongAiChet = reachable(afterNightWith(0), "DAY");
+
+    expect(khongAiChet.length).toBeGreaterThan(0);
+    // Mất ĐÚNG Bản Tin, không mất gì thêm.
+    expect(new Set(khongAiChet)).toEqual(
+      new Set(coNguoiChet.filter((id) => id !== "MORNING_REPORT")),
+    );
+  });
+
+  it("Bản Tin Bình Minh bị chặn khi chưa có đêm nào để kể", () => {
+    // Nhánh "không có dữ liệu đêm trước" cũng rỗng nghĩa y như đêm không ai
+    // chết, nên cùng một hàng rào chặn cả hai.
+    const state = chaosState();
+    state.nightHistory = [];
+    expect(reachable(state, "DAY")).not.toContain("MORNING_REPORT");
+  });
+
   it("Bóng Sói bị chặn khi không còn ai soi, y như Đêm Không Trăng", () => {
     // Cả ba sự kiện soi cùng một hàng rào: không còn Tiên Tri thì Bóng Sói chỉ
     // là một slot đêm bị đốt cộng 3 điểm nghiêng khống cho phe Sói.
