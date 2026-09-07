@@ -137,7 +137,10 @@ export function buildBotKnowledgeView(input: BotKnowledgeInput): BotKnowledgeVie
     obituaryRevealedId: input.obituaryRevealedId ?? null,
     seerResult: input.seerResult ? { ...input.seerResult } : null,
     sorcererResult: input.sorcererResult ? { ...input.sorcererResult } : null,
-    trackerResult: input.trackerResult ?? null,
+    // Sao chép nông, không trả thẳng tham chiếu input - cùng lý do với
+    // seerResult/sorcererResult ngay trên: input đến từ `night.trackerResults`
+    // sống bên engine.
+    trackerResult: input.trackerResult ? { ...input.trackerResult } : null,
     neutralRolesInPlay: [...input.neutralRolesInPlay],
     executionerTargetId: input.executionerTargetId,
     night: input.night ? copyNightKnowledge(input.night) : null,

@@ -2695,7 +2695,13 @@ export class GameEngine {
         st.phase === "NIGHT" && viewer && viewer.alive && this.hasNightAction(viewer.role)
           ? this.nightInfoFor(viewer, seerResult, detectiveResult, sorcererResult)
           : null,
-      trackerResult: st.night.trackerResults[viewerId] ?? null,
+      // Bản sao nông, không phải tham chiếu sống vào `night.trackerResults` -
+      // nếu người nhận view lỡ sửa object này thì state thật của engine không
+      // bị hỏng theo (giống cách seerResult/detectiveResult/sorcererResult
+      // dựng object mới ở trên thay vì trả thẳng entry).
+      trackerResult: st.night.trackerResults[viewerId]
+        ? { ...st.night.trackerResults[viewerId] }
+        : null,
       hunterShotInfo:
         st.phase === "HUNTER_SHOT" && st.hunterReaction
           ? (() => {
@@ -2879,8 +2885,11 @@ export class GameEngine {
       seerResult,
       sorcererResult,
       // Gương `seerResult` ngay trên: entry ghi theo botId nên chỉ chính Kẻ
-      // Theo Dõi mới có - không cần thêm cổng theo vai.
-      trackerResult: st.night.trackerResults[botId] ?? null,
+      // Theo Dõi mới có - không cần thêm cổng theo vai. Sao chép nông để
+      // tránh trả thẳng tham chiếu sống vào `night.trackerResults`.
+      trackerResult: st.night.trackerResults[botId]
+        ? { ...st.night.trackerResults[botId] }
+        : null,
       // Suy từ CHÍNH bộ bài mà `assignRoles` chia, không phải một danh sách
       // chép tay: bật thêm một vai trung lập sau này là nó tự vào đây.
       neutralRolesInPlay: neutralRolesFor(st.config),

@@ -159,4 +159,29 @@ describe("kết quả theo dõi là riêng tư", () => {
     expect(engine.botKnowledgeFor("t1").trackerResult?.acted).toBe(true);
     expect(engine.botKnowledgeFor("s1").trackerResult).toBeNull();
   });
+
+  it("sửa object trả về không được làm hỏng state thật của engine", () => {
+    // `trackerResult` phải là bản sao, không phải tham chiếu sống vào
+    // `night.trackerResults` - nếu không, một consumer lỡ sửa object nhận
+    // được (ví dụ chiến thuật BOT ở Task 6, đọc BotKnowledgeView trong cùng
+    // process, không qua serialize) sẽ âm thầm làm hỏng state đêm dùng chung,
+    // và mọi view khác của cùng đêm đó sẽ thấy dữ liệu hỏng theo.
+    const engine = trackerGame();
+    engine.submitNightAction("t1", "TRACK", "w1");
+    engine.submitNightAction("w1", "KILL", "v1");
+    engine.resolveNight(Date.now(), () => 0);
+
+    const view1 = engine.snapshotFor("t1").trackerResult;
+    expect(view1).toEqual({ targetId: "w1", acted: true });
+    view1!.acted = false;
+    view1!.targetId = "s1";
+
+    expect(engine.state.night.trackerResults.t1).toEqual({ targetId: "w1", acted: true });
+    expect(engine.snapshotFor("t1").trackerResult).toEqual({ targetId: "w1", acted: true });
+
+    const botView = engine.botKnowledgeFor("t1").trackerResult;
+    botView!.acted = false;
+    expect(engine.state.night.trackerResults.t1.acted).toBe(true);
+    expect(engine.botKnowledgeFor("t1").trackerResult?.acted).toBe(true);
+  });
 });
