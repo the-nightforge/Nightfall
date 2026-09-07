@@ -68,7 +68,7 @@ export function PlayerStatsCard() {
                 <RoleGlyph role={r.role} team={roleTeam(r.role)} />
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold text-white">{ROLE_META[r.role].name}</span>
-                  <span className="block text-xs text-mist/75">
+                  <span className="block text-xs text-mist/85">
                     {r.wins}/{r.games} thắng · {formatPercent(r.wins / r.games)}
                   </span>
                 </span>
@@ -101,7 +101,7 @@ export function PlayerStatsCard() {
               <li key={r.role} className="flex items-center gap-2.5 py-1.5 text-sm">
                 <RoleGlyph role={r.role} team={roleTeam(r.role)} />
                 <span className="flex-1 text-white">{ROLE_META[r.role].name}</span>
-                <span className="text-mist/80">
+                <span className="text-mist/85">
                   {r.wins}/{r.games} · {formatPercent(r.wins / r.games)}
                 </span>
               </li>
@@ -116,9 +116,9 @@ export function PlayerStatsCard() {
 function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
-      <dt className="text-[11px] font-semibold uppercase tracking-wide text-mist/70">{label}</dt>
+      <dt className="text-[11px] font-semibold uppercase tracking-wide text-mist/85">{label}</dt>
       <dd className="mt-0.5 font-display text-2xl font-bold text-white">{value}</dd>
-      {hint && <dd className="text-xs text-mist/70">{hint}</dd>}
+      {hint && <dd className="text-xs text-mist/85">{hint}</dd>}
     </div>
   );
 }

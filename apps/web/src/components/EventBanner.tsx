@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import type { GameEventView } from "@masoi/shared";
-import { eventIcon } from "@/lib/event-art";
+import { eventGlyph } from "@/lib/event-art";
+import { EventGlyph } from "./EventGlyph";
 
 interface Props {
   event: GameEventView | null | undefined;
@@ -74,10 +75,14 @@ export function EventBanner({ event }: Props) {
           <m.span
             animate={event.power >= 4 ? { scale: [1, 1.1, 1], rotate: [0, -3, 3, 0] } : undefined}
             transition={event.power >= 4 ? { duration: 0.6, ease: "easeInOut", repeat: 1 } : undefined}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 text-xl motion-reduce:animate-none"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 motion-reduce:animate-none"
             aria-hidden="true"
           >
-            {eventIcon(event.id)}
+            {/* SVG chứ không phải emoji: `text-amber-300` ở lớp bọc chỉ tô được
+              * một hình dùng `currentColor`, còn emoji thì giữ nguyên màu của
+              * font hệ thống và đứng lệch hẳn khỏi bảng màu hổ phách của cả
+              * thanh này. */}
+            <EventGlyph name={eventGlyph(event.id)} className="h-5 w-5" />
           </m.span>
           <span className="min-w-0 flex-1">
             <span className="flex flex-wrap items-center gap-2">
@@ -104,7 +109,7 @@ export function EventBanner({ event }: Props) {
 
         {expanded && (
           <div className="px-4 pb-3 pl-[3.25rem]">
-            <p className="text-xs text-mist/80">{event.description}</p>
+            <p className="text-xs text-mist/85">{event.description}</p>
             {event.announcement && (
               <p className="mt-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm font-bold text-amber-100">
                 {event.announcement}

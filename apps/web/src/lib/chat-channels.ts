@@ -9,6 +9,20 @@ import { ROLE_META, type ChatChannel, type RoomSnapshot } from "@masoi/shared";
  */
 export type ChatChannelId = ChatChannel;
 
+/**
+ * Tên hình của kênh, không phải bản thân cái hình.
+ *
+ * Union khai ở đây chứ không ở `ChannelGlyph.tsx` vì file này là module thuần -
+ * `chat-draft.test.ts` và bạn bè chạy nó trong `node --test` không có DOM lẫn
+ * JSX, nên nó không được phép import ngược một file `.tsx` chỉ để lấy một cái
+ * tên. Cùng lý do với `event-art.ts` bên cạnh.
+ *
+ * "ghost" không thuộc kênh nào: nó là dấu riêng cho tin nhắn của người đã chết,
+ * `ChatBox` chọn nó thay cho hình của kênh. "chat" là hình dự phòng cho một id
+ * kênh mà bản build này chưa biết - xem `channelMeta` phía dưới.
+ */
+export type ChannelGlyphName = "house" | "sun" | "wolf" | "skull" | "ghost" | "chat";
+
 export interface ChatChannelMeta {
   /** Nhãn đứng một mình được, dùng cho tab và cho nhãn trên từng tin nhắn. */
   label: string;
@@ -25,7 +39,8 @@ export interface ChatChannelMeta {
   audience: string;
   /** Gợi ý trong ô nhập khi kênh này là ĐÍCH GỬI. */
   placeholder: string;
-  icon: string;
+  /** Tên hình cho `<ChannelGlyph>` - KHÔNG phải emoji, xem `ChannelGlyph.tsx`. */
+  glyph: ChannelGlyphName;
 }
 
 /**
@@ -43,28 +58,28 @@ export const CHAT_CHANNEL_META: Record<ChatChannelId, ChatChannelMeta> = {
     longLabel: "Kênh phòng chờ",
     audience: "Cả phòng nhìn thấy",
     placeholder: "Chat với cả phòng…",
-    icon: "🏠",
+    glyph: "house",
   },
   day: {
     label: "Làng",
     longLabel: "Kênh làng",
     audience: "Chỉ người còn sống nhìn thấy",
     placeholder: "Chat với người còn sống…",
-    icon: "☀️",
+    glyph: "sun",
   },
   wolves: {
     label: "Sói",
     longLabel: "Kênh phe Sói",
     audience: "Chỉ phe Sói nhìn thấy",
     placeholder: "Chat với đồng đội Sói…",
-    icon: "🐺",
+    glyph: "wolf",
   },
   dead: {
     label: "Người chết",
     longLabel: "Kênh người chết",
     audience: "Chỉ người đã chết nhìn thấy",
     placeholder: "Chat với những người đã chết…",
-    icon: "💀",
+    glyph: "skull",
   },
 };
 
@@ -86,7 +101,7 @@ export function channelMeta(channel: string): ChatChannelMeta {
       longLabel: channel,
       audience: "",
       placeholder: "Nhập tin nhắn…",
-      icon: "💬",
+      glyph: "chat",
     }
   );
 }

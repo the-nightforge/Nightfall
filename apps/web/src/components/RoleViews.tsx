@@ -54,7 +54,7 @@ const TEAM_SKIN: Record<Team, { card: string; halo: string; fill: string; label:
 export function RoleCard({ role }: { role: Role | undefined }) {
   if (!role) {
     return (
-      <div className="card text-center text-mist/70">Đang chờ server chia vai trò...</div>
+      <div className="card text-center text-mist/85">Đang chờ server chia vai trò...</div>
     );
   }
   const meta = ROLE_META[role];
@@ -88,7 +88,7 @@ export function RoleCard({ role }: { role: Role | undefined }) {
 function Line({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <p className="rounded-lg border border-white/[0.06] bg-night-900/50 px-3 py-2 text-sm text-mist/85">
-      <span className="mr-1.5 text-[11px] font-bold uppercase tracking-wider text-mist/70">
+      <span className="mr-1.5 text-[11px] font-bold uppercase tracking-wider text-mist/85">
         {label}
       </span>
       {children}
@@ -219,7 +219,7 @@ export function RoleRevealView({ snapshot }: { snapshot: RoomSnapshot }) {
               🌙
             </div>
             <p className="mt-3 font-semibold text-white">Nhấn giữ để xem, thả ra để úp lại</p>
-            <p className="text-sm text-mist/70">Không ai khác được nhìn thấy</p>
+            <p className="text-sm text-mist/85">Không ai khác được nhìn thấy</p>
           </button>
           {/*
             * Úp thẻ phải úp cho CẢ trình đọc màn hình, không chỉ cho mắt.
@@ -271,12 +271,12 @@ export function RoleRevealView({ snapshot }: { snapshot: RoomSnapshot }) {
                       <li key={p.id} className="flex items-center gap-2">
                         <span className="inline-block h-2 w-2 rounded-full bg-blood-500" />
                         {p.name}
-                        {!p.alive && <span className="text-mist/65">(đã chết)</span>}
+                        {!p.alive && <span className="text-mist/85">(đã chết)</span>}
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-sm text-mist/70">Bạn là Ma Sói duy nhất.</p>
+                  <p className="text-sm text-mist/85">Bạn là Ma Sói duy nhất.</p>
                 );
               })()}
             </div>

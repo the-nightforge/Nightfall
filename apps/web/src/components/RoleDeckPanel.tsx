@@ -112,7 +112,7 @@ export function RoleDeckPanel({ snapshot, isHost, onUpdateConfig }: Props) {
 
   return (
     <div>
-      <p className="mb-3 text-xs text-mist/70">
+      <p className="mb-3 text-xs text-mist/85">
         {isHost ? "Bấm để bật/tắt từng vai." : "Chủ phòng quyết định bộ bài này."}
       </p>
 
@@ -316,7 +316,7 @@ function RoleCard({
 
       <span
         className={`mt-1.5 text-xs font-bold uppercase tracking-wide ${
-          enabled ? TONE.text[tone] : "text-mist/65"
+          enabled ? TONE.text[tone] : "text-mist/85"
         }`}
       >
         {meta.name}
@@ -328,7 +328,7 @@ function RoleCard({
         * thứ host cần đọc để quyết bật hay tắt. Thẻ cùng hàng vẫn cao bằng nhau
         * vì ô lưới tự kéo giãn, nên bỏ trần không làm hàng lệch.
         */}
-      <span className="mt-1 min-h-[32px] px-1 text-center text-[11px] leading-snug text-mist/60">
+      <span className="mt-1 min-h-[32px] px-1 text-center text-[11px] leading-snug text-mist/85">
         {meta.description}
       </span>
 
@@ -358,7 +358,7 @@ function RoleCard({
       ) : (
         <span className="mt-auto flex items-center gap-1 pt-1.5 text-[11px] font-bold">
           <span className={`h-1.5 w-1.5 rounded-full ${enabled ? TONE.dot[tone] : "bg-mist/30"}`} aria-hidden="true" />
-          <span className={enabled ? "text-white" : "text-mist/60"}>
+          <span className={enabled ? "text-white" : "text-mist/85"}>
             {count > 0 ? `×${count}` : role === "VILLAGER" ? "lấp chỗ" : "—"}
           </span>
         </span>

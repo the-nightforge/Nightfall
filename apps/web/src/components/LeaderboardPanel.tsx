@@ -41,11 +41,11 @@ export function LeaderboardPanel() {
         <h2 id="leaderboard-heading" className="font-display text-base font-bold text-white sm:text-lg">
           Bảng xếp hạng {view.windowDays} ngày
         </h2>
-        <span className="shrink-0 text-xs text-mist/70">Top {view.entries.length || "…"}</span>
+        <span className="shrink-0 text-xs text-mist/85">Top {view.entries.length || "…"}</span>
       </div>
 
       {view.entries.length === 0 ? (
-        <p className="text-sm text-mist/80">
+        <p className="text-sm text-mist/85">
           Chưa ai đủ {view.minGames} ván với {view.minHumans} người thật trong {view.windowDays} ngày qua. Rủ bạn bè vào
           một bàn là có tên đầu tiên.
         </p>
@@ -66,7 +66,7 @@ export function LeaderboardPanel() {
           {standing}
         </p>
       )}
-      <p className="mt-2 text-xs text-mist/60">{pointsRule(view)}</p>
+      <p className="mt-2 text-xs text-mist/85">{pointsRule(view)}</p>
     </section>
   );
 }
@@ -80,14 +80,32 @@ function Row({ entry, mine }: { entry: LeaderboardEntry; mine: boolean }) {
     >
       <span
         className={`w-6 shrink-0 text-center font-display text-base font-bold ${
-          top ? "text-amber-300" : "text-mist/70"
+          top ? "text-amber-300" : "text-mist/85"
         }`}
       >
         {entry.rank}
       </span>
       {entry.avatarUrl ? (
+        /*
+          * `loading="lazy"`: bảng xếp hạng nằm trong mục "Dấu ấn trong làng" ở
+          * NỬA DƯỚI trang chủ, và danh sách của nó cuộn riêng tới hơn năm chục
+          * hàng (`.home-community .card > ol` cao tối đa 510px). Không có thuộc
+          * tính này thì mọi ảnh đại diện trong danh sách đều tải ngay ở lần vẽ
+          * đầu, tranh băng thông với chính cái màn hình mà người ta đang nhìn -
+          * ô nhập tên và nút tạo phòng ở đầu trang.
+          *
+          * Chỉ ở ĐÂY, không ở `CharacterPortrait`: chân dung trong phòng chờ và
+          * trong ván là nội dung CHÍNH của màn hình đó, hoãn chúng lại là đổi
+          * một khoảng trắng lấy vài kilobyte.
+          */
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={entry.avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full border border-white/10 object-cover" />
+        <img
+          src={entry.avatarUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="h-8 w-8 shrink-0 rounded-full border border-white/10 object-cover"
+        />
       ) : (
         <span
           aria-hidden="true"
@@ -102,13 +120,13 @@ function Row({ entry, mine }: { entry: LeaderboardEntry; mine: boolean }) {
           {entry.nickname}
           {mine && <span className="ml-1.5 text-xs font-normal text-indigo-200">(bạn)</span>}
         </span>
-        <span className="block text-xs text-mist/70">
+        <span className="block text-xs text-mist/85">
           {entry.wins}/{entry.games} thắng · {formatPercent(entry.winRate)}
         </span>
       </span>
       <span className="shrink-0 font-display text-lg font-bold text-white">
         {entry.points}
-        <span className="ml-1 text-xs font-normal text-mist/60">đ</span>
+        <span className="ml-1 text-xs font-normal text-mist/85">đ</span>
       </span>
     </li>
   );

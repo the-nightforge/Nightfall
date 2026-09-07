@@ -1,7 +1,8 @@
 "use client";
 
 import type { RoomSnapshot } from "@masoi/shared";
-import { eventIcon } from "@/lib/event-art";
+import { eventGlyph } from "@/lib/event-art";
+import { EventGlyph } from "./EventGlyph";
 
 interface Props {
   snapshot: RoomSnapshot | null;
@@ -55,7 +56,10 @@ export function RightMetaPanel({ snapshot }: Props) {
         <div className="min-w-0">
           <p className="text-xs font-bold uppercase tracking-widest text-amber-300/90">Sự kiện</p>
           <p className="truncate text-sm font-semibold text-amber-200">
-            <span className="mr-1" aria-hidden="true">{eventIcon(snapshot.activeEvent.id)}</span>
+            <EventGlyph
+              name={eventGlyph(snapshot.activeEvent.id)}
+              className="mr-1 inline-block h-4 w-4 align-[-0.15em]"
+            />
             {snapshot.activeEvent.name}
           </p>
           <p className="text-[13px] leading-snug text-mist-strong">

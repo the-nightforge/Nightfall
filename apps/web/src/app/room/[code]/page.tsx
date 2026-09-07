@@ -161,7 +161,7 @@ export default function RoomPage() {
   const content = useMemo(() => {
     if (!snapshot) {
       return (
-        <div className="card animate-pulseSlow text-center text-mist/60">
+        <div className="card animate-pulseSlow text-center text-mist/85">
           Đang kết nối vào phòng <b className="text-white">{code}</b>...
         </div>
       );
@@ -363,8 +363,12 @@ export default function RoomPage() {
             <button
               /* Có nền mờ vì nút này đứng ngay trên mặt trăng của phông nền:
                * chữ trần ở đó chìm vào vùng sáng nhất của cả trang. Cùng độ
-               * cao với cụm mã phòng bên phải để cả hàng đọc ra là MỘT thanh. */
-              className="btn-tertiary-danger min-h-9 shrink-0 whitespace-nowrap bg-night-900/55 backdrop-blur-sm"
+               * cao với cụm mã phòng bên phải để cả hàng đọc ra là MỘT thanh.
+               *
+               * Chiều cao 44px đến từ `.room-topbar button` trong globals.css,
+               * không viết lại ở đây: cả hàng phải cao BẰNG NHAU, và bốn nút
+               * trong hàng đến từ bốn file khác nhau. */
+              className="btn-tertiary-danger shrink-0 whitespace-nowrap bg-night-900/55 backdrop-blur-sm"
               onClick={leaveRoom}
             >
               <span aria-hidden="true">←</span> Rời phòng

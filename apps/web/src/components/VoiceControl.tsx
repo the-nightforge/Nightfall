@@ -299,9 +299,15 @@ export function VoiceControl({
             <button
               type="button"
               onClick={prompt.onClick}
-              className={`inline-flex h-12 items-center rounded-full px-4 text-sm font-semibold shadow-lg shadow-black/40 transition ${promptTone}`}
+              className={`inline-flex h-12 items-center gap-1.5 rounded-full px-4 text-sm font-semibold shadow-lg shadow-black/40 transition ${promptTone}`}
             >
-              🎙️ {prompt.text}
+              {/* `MicIcon` ngay trên file này, không phải emoji cái micro như trước:
+                * nút mic thật ở ngay cạnh đã dùng hình đó, nên hai thứ nói về
+                * cùng một cái mic mà vẽ bằng hai bộ nét khác nhau. Emoji cũng
+                * không nhận `currentColor` nên nó không đổi màu theo
+                * `promptTone`. */}
+              <MicIcon slashed={false} />
+              {prompt.text}
             </button>
           )}
         </div>
@@ -323,7 +329,7 @@ export function VoiceControl({
             <p className="truncate text-sm font-semibold text-mist-strong">
               {micOpen ? "Đang nói" : micMode === "ptt" ? "Giữ để nói" : "Mic đang tắt"}
             </p>
-            <p className="truncate text-xs text-mist/65">
+            <p className="truncate text-xs text-mist/85">
               {micMode === "ptt" ? "Giữ nút mic để phát" : "Chạm nút mic để bật/tắt"}
             </p>
           </div>
@@ -332,13 +338,15 @@ export function VoiceControl({
       )}
 
       {prompt && (
-        <button type="button" className="btn-primary w-full" onClick={prompt.onClick}>
-          🎙️ {prompt.text}
+        <button type="button" className="btn-primary w-full gap-1.5" onClick={prompt.onClick}>
+          {/* Cùng lý do với bản ở dock ngay trên: một bộ nét cho cả web. */}
+          <MicIcon slashed={false} />
+          {prompt.text}
         </button>
       )}
 
       {hint && (
-        <p className={`text-xs ${micError ? "text-blood-400" : "text-mist/65"}`}>{hint}</p>
+        <p className={`text-xs ${micError ? "text-blood-400" : "text-mist/85"}`}>{hint}</p>
       )}
     </div>
   );

@@ -112,7 +112,11 @@
 .home-feature-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 28px 0; border-block: 1px solid rgba(157, 182, 224, 0.18); background: linear-gradient(90deg, rgba(17, 26, 46, 0.45), rgba(7, 11, 20, 0.6), rgba(17, 26, 46, 0.45)); }
 .home-feature-strip > div { display: flex; align-items: center; justify-content: center; gap: 20px; padding: 4px 20px; border-right: 1px solid var(--home-line); }
 .home-feature-strip > div:last-child { border-right: 0; }
-.home-feature-icon { font-size: 2.2em; line-height: 1; color: var(--home-gold); }
+/* Vẫn điều khiển cỡ bằng `font-size` dù bên trong đã là <svg> chứ không còn là
+ * ký tự ◎ ◈ ♧: hình con đo bằng `1em`, nên hai luật `font-size` sẵn có (2.2em ở
+ * đây, 28px ở breakpoint hẹp phía dưới) tiếp tục là chỗ duy nhất định cỡ. */
+.home-feature-icon { display: inline-flex; font-size: 2.2em; line-height: 1; color: var(--home-gold); }
+.home-feature-icon svg { width: 1em; height: 1em; }
 .home-feature-strip p { display: flex; flex-direction: column; gap: 7px; }
 .home-feature-strip strong { font-size: .88em; font-weight: 600; }
 .home-feature-strip p > span { color: var(--home-muted); font-size: .72em; }

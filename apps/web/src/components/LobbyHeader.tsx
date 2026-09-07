@@ -54,7 +54,7 @@ export function LobbyHeader({ snapshot }: Props) {
           * một hàng lấy khỏi lưới người chơi. */}
         <p className="shrink-0 text-right leading-none">
           <strong className="font-display text-2xl font-semibold text-amber-100">{count}</strong>
-          <span className="text-sm text-mist/70"> / {MAX_PLAYERS_PER_ROOM}</span>
+          <span className="text-sm text-mist/85"> / {MAX_PLAYERS_PER_ROOM}</span>
         </p>
       </div>
 

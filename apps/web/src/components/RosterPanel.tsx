@@ -399,7 +399,7 @@ export function RosterPanel({ snapshot, lobby }: Props) {
           >
             {/* Hai dòng chữ này KHÔNG mờ theo nhịp chờ nữa - xem chú thích ở
               * `.lobby-slot-waiting` trong globals.css. */}
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-night-800/70 text-sm font-bold text-mist/80 sm:h-10 sm:w-10">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-night-800/70 text-sm font-bold text-mist/85 sm:h-10 sm:w-10">
               {count + i + 1}
             </span>
             <span className="text-sm text-mist-strong/80">Đang chờ người vào...</span>
@@ -447,7 +447,7 @@ function ReadyDot({ ready }: { ready: boolean }) {
       className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
         ready
           ? "bg-emerald-600 text-white"
-          : "bg-white/[0.08] text-mist/75 ring-1 ring-white/15"
+          : "bg-white/[0.08] text-mist/85 ring-1 ring-white/15"
       }`}
       aria-label={ready ? "Sẵn sàng" : "Chưa sẵn sàng"}
       title={ready ? "Sẵn sàng" : "Chưa sẵn sàng"}

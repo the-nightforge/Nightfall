@@ -369,13 +369,59 @@ summary:focus-visible,
  * đôi, ngay phía trên sân người chơi.
  *
  * Bớt đệm ngang và giãn chữ của mã phòng thay vì giấu một cái nhãn đi: cả bốn
- * nút vẫn còn nguyên chữ của chúng, chỉ đứng sát nhau hơn - và vùng chạm 36px
- * theo chiều cao thì không đổi.
+ * nút vẫn còn nguyên chữ của chúng, chỉ đứng sát nhau hơn.
  */
 @media (max-width: 380px) {
   .room-topbar { gap: 0.375rem; }
   .room-topbar button { padding-inline: 0.5rem; }
   .room-topbar .font-mono { letter-spacing: 0.06em; }
+}
+
+/*
+ * Sàn 44px cho MỌI nút trong thanh đầu trang, khai báo đúng một lần.
+ *
+ * Hàng này gom bốn thứ đến từ bốn file khác nhau - nút rời phòng của
+ * `room/[code]/page.tsx`, cụm mã phòng/Mời/QR của `RoomInvite`, `RulesDrawer` và
+ * `SoundControl` - và mỗi file trước đây tự khai `min-h-9` (36px) của nó. Bốn
+ * bản sao của cùng một con số là bốn chỗ để nó lệch đi; đặt ở đây thì cả hàng
+ * lên 44px cùng lúc và không file nào phải biết về ba file kia.
+ *
+ * Chỉ ép chiều CAO. Chiều cao là thứ thanh này có thừa (nó chỉ có một hàng),
+ * còn chiều ngang thì ở 360px đã đếm từng pixel - xem chú thích @media ngay
+ * trên. Hai nút vuông biểu tượng tự lo bề ngang của chúng bằng vùng chạm nới
+ * rộng, không bằng cách phình ra và đẩy "Mã QR" xuống hàng thứ hai.
+ */
+.room-topbar button {
+  min-height: 2.75rem;
+}
+
+/*
+ * Hai nút vuông biểu tượng: hình 36px, vùng chạm 44px.
+ *
+ * `RulesDrawer` và `SoundControl` là hai ô vuông chỉ có một ký hiệu, nên bề
+ * ngang của chúng không đến từ chữ mà do chính chúng đặt ra. Cho chúng nở thật
+ * ra 44px thì hàng dài thêm 16px, và ở 360px chừng đó đủ để đẩy "Mã QR" xuống
+ * hàng thứ hai - đúng cái lỗi mà @media phía trên vừa dập.
+ *
+ * Nên phần nở ra là `::after` vô hình: nó không chiếm chỗ trong flex, hàng vẫn
+ * đúng bề ngang cũ tới từng pixel, mà ngón tay vẫn có 44x44.
+ *
+ * 4px mỗi bên cộng với 36px hình là 44px chẵn, và 4+4 vừa đúng khe 8px giữa hai
+ * nút: chúng đến từ `gap-2` của cụm bọc trong `room/[code]/page.tsx`, cụm đó
+ * KHÔNG nằm dưới @media thu hẹp phía trên (luật ấy chỉ chạm gap của chính
+ * `.room-topbar`), nên 8px này đúng ở mọi bề ngang màn hình. Hai vùng chạm kề
+ * sát nhau chứ không đè lên nhau. Nới quá 4px là bắt đầu cướp cú chạm của nút
+ * bên cạnh.
+ */
+.room-topbar-icon {
+  position: relative;
+}
+
+.room-topbar-icon::after {
+  position: absolute;
+  content: "";
+  inset-block: 0;
+  inset-inline: -0.25rem;
 }
 
 /*
@@ -640,12 +686,50 @@ button.lobby-player-tile:active {
   transition: background-color var(--dur-base) var(--ease-out-soft), box-shadow var(--dur-base) var(--ease-out-soft);
 }
 
+/*
+ * Vùng chạm 44px, hình vẽ vẫn 26px.
+ *
+ * Cái đĩa nhìn thấy được là 1.65rem = 26.4px, dưới hẳn sàn 44pt của iOS. Phóng
+ * to cái đĩa thì nó át luôn cái ảnh 64px nó đang dán lên - ba huy hiệu quanh một
+ * ảnh đã là quá nhiều (xem chú thích ngay trên), nên thứ phải lớn lên là vùng
+ * BẤM chứ không phải thứ nhìn thấy.
+ *
+ * -0.55rem = 8.8px mỗi bên: 26.4 + 8.8*2 = 44px chẵn. Ô lưới hẹp nhất là 5.5rem
+ * = 88px trừ 0.7rem đệm ngang, ảnh 64px đứng giữa, nên mép phải của vùng chạm
+ * lấn khoảng 2.4px sang khe `gap: 0.65rem` (10.4px) - vẫn còn 8px trống trước ô
+ * bên cạnh, đúng khoảng cách tối thiểu giữa hai vùng chạm. Nó KHÔNG chiếm chỗ
+ * trong lưới vì `position: absolute`, nên `lobby-player-grid` không xê dịch.
+ *
+ * Nút này chỉ mọc trên ô của chính người xem, và ô đó không bao giờ là
+ * `button.lobby-player-tile` (`canManage` loại chính mình), nên vùng chạm nới
+ * rộng này không cướp cú chạm của một nút nào khác.
+ */
+.lobby-avatar-edit::after {
+  position: absolute;
+  content: "";
+  inset: -0.55rem;
+  border-radius: 50%;
+}
+
 .lobby-avatar-edit:hover,
 .lobby-avatar-edit[aria-expanded="true"] {
   background: #26365a;
   box-shadow: 0 0 0 1px rgba(196, 214, 245, 0.7);
 }
 
+/*
+ * Vương miện và dấu trạng thái KHÔNG có vùng chạm nới rộng - cố ý.
+ *
+ * Cả hai là `<span aria-hidden>` thuần trang trí, không bấm được: sàn 44pt chỉ
+ * nói về thứ người ta CHẠM. Thứ chúng phải đạt là ngưỡng tương phản phi-văn-bản
+ * 3:1, và chúng đã vượt xa (đo trên nền đĩa của chính chúng): vương miện
+ * 11.89:1, dấu chờ 5.85:1, "sẵn sàng" 4.66:1, "mất kết nối" 4.74:1.
+ *
+ * Đừng thêm `::after` vùng chạm vào đây. Chúng nằm ĐÈ lên ô người chơi, mà ô đó
+ * là `button.lobby-player-tile` thật khi người xem là chủ phòng - một lớp phủ
+ * 44px vô hình ở đấy chỉ tạo ra một mảng chết nuốt mất cú chạm của chính cái nút
+ * đang bọc nó.
+ */
 .lobby-status-mark {
   position: absolute;
   right: -0.1rem;
@@ -1313,10 +1397,13 @@ button.lobby-player-tile:active {
    * mảnh + nền gần trong suốt ở đây đủ để mắt thấy một vùng bấm mà vẫn nhẹ hơn
    * hẳn nút "Chia sẻ kết quả" đứng ngay trên chúng.
    *
-   * min-height 2.5rem = 40px: đúng sàn vùng chạm mà cả màn này phải giữ.
+   * min-height 2.75rem = 44px: sàn vùng chạm của iOS, không phải 40px như bản
+   * trước. 40px "gần đủ" là loại số dễ sống sót lâu nhất vì không ai bấm trượt
+   * đủ nhiều để đi báo lỗi - nhưng "Tải ảnh" và "Sao chép tóm tắt" đứng cạnh
+   * nhau ở cuối màn kết thúc, đúng lúc người chơi đang cầm điện thoại một tay.
    */
   .btn-ghost {
-    @apply inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border
+    @apply inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border
       border-white/[0.12] bg-white/[0.03] px-3 py-2 text-sm font-semibold text-mist-strong
       transition hover:border-white/25 hover:bg-white/[0.08] hover:text-white
       active:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50
@@ -1672,7 +1759,7 @@ button.lobby-player-tile:active {
   @apply border-amber-300/60 bg-amber-400/[0.14];
 }
 .gate-guide:disabled {
-  @apply cursor-not-allowed border-white/10 bg-white/[0.03] text-mist/60;
+  @apply cursor-not-allowed border-white/10 bg-white/[0.03] text-mist/85;
 }
 
 .gate-cta {
@@ -1727,7 +1814,7 @@ button.lobby-player-tile:active {
   /* Nút tắt vẫn phải ĐỌC được: người dùng cần biết nó ghi gì thì mới hiểu dòng
    * hướng dẫn ngay bên dưới đang nói về cái gì. Dấu hiệu "đang tắt" nằm ở nền
    * chìm và con trỏ, không nằm ở việc làm mờ chữ. */
-  @apply border-night-700 bg-night-900/60 text-mist/75;
+  @apply border-night-700 bg-night-900/60 text-mist/85;
 }
 
 /* Ô nhập của trang chủ. text-base là bắt buộc chứ không phải thẩm mỹ: Safari
@@ -1742,7 +1829,7 @@ button.lobby-player-tile:active {
  */
 .gate-input {
   @apply w-full rounded-xl border border-night-600 bg-night-900/70 px-3.5 text-white
-    transition placeholder:text-mist/70;
+    transition placeholder:text-mist/85;
   padding-block: clamp(0.75rem, 0.85vw, 1rem);
   font-size: clamp(1rem, 1.02vw, 1.15rem);
 }

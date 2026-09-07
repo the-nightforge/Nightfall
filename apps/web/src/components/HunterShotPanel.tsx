@@ -18,7 +18,7 @@ export function HunterShotPanel({ snapshot, onShoot }: Props) {
 
   if (!reaction) {
     return (
-      <div className="card text-center text-mist/70">
+      <div className="card text-center text-mist/85">
         Đang đồng bộ lượt phản kích của Thợ Săn…
       </div>
     );
@@ -31,8 +31,8 @@ export function HunterShotPanel({ snapshot, onShoot }: Props) {
       return (
         <div className="card text-center">
           <p className="text-3xl">🎯</p>
-          <p className="mt-2 font-semibold text-mist/70">Đang xử lý phản kích…</p>
-          <p className="mt-1 text-sm text-mist/65">Vui lòng chờ.</p>
+          <p className="mt-2 font-semibold text-mist/85">Đang xử lý phản kích…</p>
+          <p className="mt-1 text-sm text-mist/85">Vui lòng chờ.</p>
         </div>
       );
     }
@@ -41,7 +41,7 @@ export function HunterShotPanel({ snapshot, onShoot }: Props) {
       <div className="card text-center">
         <p className="text-3xl">🔫</p>
         <p className="mt-2 font-semibold text-amber-200">{outcome}</p>
-        <p className="mt-1 text-sm text-mist/60">Đang xử lý kết quả…</p>
+        <p className="mt-1 text-sm text-mist/85">Đang xử lý kết quả…</p>
       </div>
     );
   }
@@ -50,8 +50,8 @@ export function HunterShotPanel({ snapshot, onShoot }: Props) {
     return (
       <div className="card text-center">
         <p className="text-3xl">🎯</p>
-        <p className="mt-2 font-semibold text-mist/70">Đang chờ xử lý lượt đặc biệt…</p>
-        <p className="mt-1 text-sm text-mist/65">Vui lòng chờ giây lát.</p>
+        <p className="mt-2 font-semibold text-mist/85">Đang chờ xử lý lượt đặc biệt…</p>
+        <p className="mt-1 text-sm text-mist/85">Vui lòng chờ giây lát.</p>
       </div>
     );
   }
@@ -79,7 +79,7 @@ export function HunterShotPanel({ snapshot, onShoot }: Props) {
       <div className="mb-3 text-center">
         <p className="text-3xl">🔫</p>
         <h2 className="mt-1 font-bold text-amber-200">Lượt phản kích của bạn</h2>
-        <p className="text-sm text-mist/70">
+        <p className="text-sm text-mist/85">
           Chọn một người còn sống để bắn, hoặc chủ động không bắn ai.
         </p>
       </div>

@@ -21,7 +21,7 @@ export function DayOfTruthModal({ snapshot, onClaim }: Props) {
   return (
     <div className="card border-amber-500/30 bg-amber-950/20">
       <h4 className="font-bold text-amber-200">Ngày Sự Thật — Chọn vai bạn muốn nhận</h4>
-      <p className="text-xs text-mist/60">Có thể nhận đúng hoặc bluff, hệ thống không xác thực.</p>
+      <p className="text-xs text-mist/85">Có thể nhận đúng hoặc bluff, hệ thống không xác thực.</p>
       {hasClaimed && (
         <p className="mt-1 text-xs text-emerald-300">Bạn đã nhận: <b>{claimLabel(myClaim)}</b> (có thể đổi lại)</p>
       )}
@@ -32,7 +32,7 @@ export function DayOfTruthModal({ snapshot, onClaim }: Props) {
             <button key={r} onClick={() => onClaim(r)} className={`rounded px-2 py-1 text-xs font-semibold transition ${myClaim===r ? "bg-amber-500 text-white" : "bg-white/10 text-white hover:bg-white/15"}`}>{label}</button>
           );
         })}
-        <button onClick={() => onClaim(null)} className={`rounded border px-2 py-1 text-xs ${myClaim===null ? "border-amber-500 bg-amber-500/20 text-amber-200" : "border-white/20 text-mist/70 hover:bg-white/5"}`}>Không tiết lộ</button>
+        <button onClick={() => onClaim(null)} className={`rounded border px-2 py-1 text-xs ${myClaim===null ? "border-amber-500 bg-amber-500/20 text-amber-200" : "border-white/20 text-mist/85 hover:bg-white/5"}`}>Không tiết lộ</button>
       </div>
     </div>
   );

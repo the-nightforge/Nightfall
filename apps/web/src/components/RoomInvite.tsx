@@ -169,18 +169,20 @@ export function RoomInvite({ code, size = "sm" }: { code: string; size?: "sm" | 
           * phòng, ba nút mời và nút âm thanh. Ô mã phòng đã tự nói nó là gì
           * bằng phông monospace và giãn chữ, còn trình đọc màn hình thì đọc
           * `aria-label` của nút chứ không đọc nhãn này. */}
-        <span className="hidden text-xs text-mist/80 sm:inline">Mã phòng:</span>
+        <span className="hidden text-xs text-mist/85 sm:inline">Mã phòng:</span>
         <button
           /* Cỡ `lg` chỉ bung ra TỪ lg, vì nó chỉ có chỗ từ đó.
            *
            * Cụm này nằm trong thanh đầu trang cùng "Rời phòng" và nút âm thanh;
            * ở 390px mà mã phòng đã 20px thì "Mã QR" bị đẩy xuống một hàng thứ
            * hai và thanh đầu trang cao gấp đôi - hai lần chiều cao đó lấy thẳng
-           * từ sân người chơi. Dưới lg nó dùng đúng hình của cỡ sm. */
-          className={`rounded-lg border border-night-600 bg-night-800 font-mono font-bold tracking-widest text-white transition hover:border-mist/40 hover:bg-night-700 active:bg-night-800 ${
-            large
-              ? "min-h-9 px-3 py-1 text-sm lg:min-h-11 lg:px-4 lg:py-1.5 lg:text-xl"
-              : "min-h-9 px-3 py-1 text-sm"
+           * từ sân người chơi. Dưới lg nó dùng đúng hình của cỡ sm.
+           *
+           * `min-h-11` (44px) là sàn vùng chạm, không còn `min-h-9` (36px):
+           * nút này bấm được - nó chép mã phòng - nên nó phải chạm được. Ở
+           * cỡ lg chỉ còn chữ và đệm là to lên. */
+          className={`min-h-11 rounded-lg border border-night-600 bg-night-800 font-mono font-bold tracking-widest text-white transition hover:border-mist/40 hover:bg-night-700 active:bg-night-800 ${
+            large ? "px-3 py-1 text-sm lg:px-4 lg:py-1.5 lg:text-xl" : "px-3 py-1 text-sm"
           }`}
           onClick={() => void copy(code, "copied-code")}
           title="Bấm để sao chép mã phòng"
@@ -190,9 +192,7 @@ export function RoomInvite({ code, size = "sm" }: { code: string; size?: "sm" | 
         </button>
 
         <button
-          className={`btn-secondary px-3 py-1 text-sm ${
-            large ? "min-h-9 lg:min-h-11" : "min-h-9"
-          }`}
+          className="btn-secondary min-h-11 px-3 py-1 text-sm"
           onClick={() => void handleInvite()}
           disabled={!payload}
           aria-label="Mời bạn bè"
@@ -213,9 +213,7 @@ export function RoomInvite({ code, size = "sm" }: { code: string; size?: "sm" | 
 
         <button
           ref={qrButtonRef}
-          className={`btn-secondary px-3 py-1 text-sm ${
-            large ? "min-h-9 lg:min-h-11" : "min-h-9"
-          }`}
+          className="btn-secondary min-h-11 px-3 py-1 text-sm"
           onClick={() => setQrOpen(true)}
           disabled={!payload}
           aria-haspopup="dialog"
@@ -282,7 +280,7 @@ function InviteStatus({
   return (
     <>
       <p
-        className={`text-xs text-mist/75 ${align === "right" ? "text-right" : "text-center"}`}
+        className={`text-xs text-mist/85 ${align === "right" ? "text-right" : "text-center"}`}
         role="status"
         aria-live="polite"
       >
@@ -291,7 +289,7 @@ function InviteStatus({
 
       {manualText !== null && (
         <div className={align === "right" ? "w-full max-w-xs" : "mt-2 w-full"}>
-          <label htmlFor="invite-manual" className="mb-1 block text-left text-xs text-mist/70">
+          <label htmlFor="invite-manual" className="mb-1 block text-left text-xs text-mist/85">
             Chép thủ công:
           </label>
           <textarea
@@ -396,7 +394,7 @@ function QrModal({
           </svg>
         </div>
 
-        <p className="mt-3 text-xs text-mist/70">Hoặc nhập mã phòng</p>
+        <p className="mt-3 text-xs text-mist/85">Hoặc nhập mã phòng</p>
         <p className="font-mono text-2xl font-bold tracking-[0.3em] text-white">{payload.code}</p>
 
         {/* break-all: link production dài hơn bề ngang màn 390, và một dòng

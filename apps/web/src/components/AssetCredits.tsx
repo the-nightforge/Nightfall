@@ -10,14 +10,14 @@
  */
 export function AssetCredits() {
   return (
-    <footer className="mx-auto max-w-6xl px-4 pb-8 text-center text-[11px] leading-relaxed text-mist/65">
+    <footer className="mx-auto max-w-6xl px-4 pb-8 text-center text-[11px] leading-relaxed text-mist/85">
       <p>
         Chân dung nhân vật by{" "}
         <a
           href="https://studio-nik.itch.io"
           target="_blank"
           rel="noreferrer noopener"
-          className="underline decoration-mist/20 underline-offset-2 hover:text-mist/60"
+          className="underline decoration-mist/20 underline-offset-2 hover:text-mist-bright"
         >
           Studio Nik
         </a>{" "}
@@ -26,7 +26,7 @@ export function AssetCredits() {
           href="https://game-icons.net"
           target="_blank"
           rel="noreferrer noopener"
-          className="underline decoration-mist/20 underline-offset-2 hover:text-mist/60"
+          className="underline decoration-mist/20 underline-offset-2 hover:text-mist-bright"
         >
           game-icons.net
         </a>{" "}

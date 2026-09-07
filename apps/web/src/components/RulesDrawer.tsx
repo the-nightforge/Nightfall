@@ -51,7 +51,11 @@ export function RulesDrawer({ snapshot }: Props) {
       <button
         ref={triggerRef}
         type="button"
-        className="rules-trigger inline-flex min-h-9 w-9 items-center justify-center rounded-lg border border-night-600 bg-night-800 text-sm font-bold text-mist"
+        /* Hình vẫn là ô vuông 36px, vùng chạm là 44px và do
+         * `.room-topbar-icon` lo bằng một `::after` vô hình: nở thật bề ngang
+         * ra 44 thì hàng đầu trang dài thêm và "Mã QR" rơi xuống hàng hai ở
+         * 360px. Chiều cao 44px đến từ `.room-topbar button`. */
+        className="rules-trigger room-topbar-icon inline-flex w-9 items-center justify-center rounded-lg border border-night-600 bg-night-800 text-sm font-bold text-mist"
         aria-label="Luật và vai trò"
         title="Luật và vai trò"
         aria-haspopup="dialog"
@@ -120,10 +124,10 @@ export function RulesDrawer({ snapshot }: Props) {
                         </span>
                       </p>
                       <p className="mt-1 text-sm text-mist/90">{rules.myRole.description}</p>
-                      <p className="mt-1.5 text-sm text-mist/75">
+                      <p className="mt-1.5 text-sm text-mist/85">
                         <span className="font-semibold text-mist">Mục tiêu:</span> {rules.myRole.goal}
                       </p>
-                      <p className="mt-1 text-xs text-mist/60">
+                      <p className="mt-1 text-xs text-mist/85">
                         {rules.myRole.actsAtNight ? "Có hành động ban đêm." : "Không có hành động ban đêm."}
                       </p>
                       {rules.myRole.note && (
@@ -166,7 +170,7 @@ export function RulesDrawer({ snapshot }: Props) {
                             </span>
                           )}
                         </p>
-                        <p className="text-sm text-mist/80">{card.description}</p>
+                        <p className="text-sm text-mist/85">{card.description}</p>
                       </div>
                     </li>
                   ))}
