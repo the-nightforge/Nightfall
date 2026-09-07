@@ -22,11 +22,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # TẠM THỜI tới 01/10/2026: hết quota 2000 phút Actions -> chạy trên self-hosted
+  # runner `wsl-local` (0 phút). Revert: thay toàn bộ `[self-hosted, Linux]`
+  # thành `ubuntu-latest` rồi xóa comment này.
   # Lọc path MỘT lần để job nặng (e2e, docker) chỉ chạy khi backend/docker đổi.
   # Commit chỉ sửa apps/web/** sẽ skip 2 job này -> tiết kiệm ~10-20 phút Actions/run.
   # Chạy tay (workflow_dispatch) thì luôn chạy đủ để kiểm toàn diện.
   changes:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux]
     outputs:
       server: ${{ steps.filter.outputs.server }}
       docker: ${{ steps.filter.outputs.docker }}
@@ -54,7 +57,7 @@ jobs:
               - 'package-lock.json'
 
   verify:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux]
 
     env:
       # `prisma generate` chỉ đọc schema, không kết nối. Nhưng datasource khai
@@ -125,7 +128,7 @@ jobs:
     # Chỉ chạy khi backend đổi. Sửa mỗi apps/web/** thì skip -> tiết kiệm phút.
     # Chạy tay luôn chạy để kiểm toàn diện.
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.server == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux]
     timeout-minutes: 25
 
     services:
@@ -217,7 +220,7 @@ jobs:
   docker-server:
     needs: changes
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.docker == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux]
     timeout-minutes: 20
 
     steps:
@@ -254,7 +257,7 @@ jobs:
   deploy-preview:
     needs: verify
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux]
     # Build của project này mất ~35s và Vercel cắt mọi build ở 45 phút, nên bất
     # cứ thứ gì vượt mốc dưới đây là hỏng chứ không phải chậm. Không có dòng này
     # thì job treo đủ 6 tiếng theo mặc định của GitHub.
@@ -306,7 +309,7 @@ jobs:
     # kiểm result từng job). Không dùng `always()` thì deploy bị skip theo.
     needs: [verify, e2e, docker-server]
     if: always() && github.event_name == 'push' && needs.verify.result == 'success' && (needs.e2e.result == 'success' || needs.e2e.result == 'skipped') && (needs.docker-server.result == 'success' || needs.docker-server.result == 'skipped')
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux]
     timeout-minutes: 15
 
     env:
