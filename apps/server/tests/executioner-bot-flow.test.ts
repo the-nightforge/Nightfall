@@ -129,7 +129,10 @@ describe("lá phiếu của BOT Kẻ Báo Thù đi qua scheduler thật", () => 
   it("dồn phiếu vào MỤC TIÊU của mình", () => {
     const room = executionerRoom("EXB01");
     room.engine!.state.round = 2;
-    room.engine!.setPhase("VOTING", 30_000, 2_000);
+    // KHÔNG ghim `now`: `scheduleVoteBots` đo cửa sổ còn lại bằng
+    // `phaseEndsAt - Date.now()`, nên một pha mở ở mốc 2_000 giả nằm hoàn toàn
+    // trong quá khứ và không mốc nào được xếp.
+    room.engine!.setPhase("VOTING", 30_000);
 
     machine.scheduleVoteBots(room);
     drainTimers();
@@ -146,11 +149,18 @@ describe("lá phiếu của BOT Kẻ Báo Thù đi qua scheduler thật", () => 
      */
     const room = executionerRoom("EXB02", { turned: true });
     room.engine!.state.round = 2;
-    room.engine!.setPhase("VOTING", 30_000, 2_000);
+    // KHÔNG ghim `now`: `scheduleVoteBots` đo cửa sổ còn lại bằng
+    // `phaseEndsAt - Date.now()`, nên một pha mở ở mốc 2_000 giả nằm hoàn toàn
+    // trong quá khứ và không mốc nào được xếp.
+    room.engine!.setPhase("VOTING", 30_000);
 
     machine.scheduleVoteBots(room);
     drainTimers();
 
+    // Đòi CÓ một lá phiếu rồi mới xét nó bầu ai: `not.toBe("p4")` một mình
+    // cũng xanh khi bot không bỏ phiếu nào, và khi đó bài test không còn nói
+    // gì về việc Kẻ Báo Thù đã thôi săn mục tiêu cũ.
+    expect(room.engine!.state.votes.p2).toBeDefined();
     expect(room.engine!.state.votes.p2).not.toBe("p4");
   });
 });

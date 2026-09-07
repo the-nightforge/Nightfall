@@ -1197,17 +1197,55 @@ function nominationBallotFor(room: Room, botId: string): PlannedVote | undefined
 }
 
 /**
- * Ba mốc quyết định trong khung bỏ phiếu, dạng [đầu khung, biên độ].
+ * Hai mốc quyết định trong khung bỏ phiếu, dạng [đầu khung, biên độ].
  *
- * Bot bỏ phiếu sớm để bảng phiếu có thứ cho người thật đọc và phản ứng, soi lại
- * khi bảng đã đông, rồi chốt sát giờ. Một mốc duy nhất thì phiếu bot hoặc quá
- * sớm để biết gì, hoặc quá muộn để ai kịp phản ứng.
+ * MỘT lá phiếu và MỘT lần đổi ý, không hơn. Mốc sớm để bảng phiếu có gì đó cho
+ * người thật đọc và phản ứng; mốc muộn để bot chốt lại sau khi đã nghe gần hết
+ * cuộc bàn.
+ *
+ * Mốc giữa (0.52) bị bỏ: giữ nó thì bot có hai lần đổi ý. Bỏ mốc GIỮA chứ
+ * không bỏ mốc cuối - một con bot chốt phiếu ở giữa pha rồi ngồi im trong khi
+ * nửa sau cuộc bàn lật hết mọi thứ là con bot điếc, và mốc cuối vốn đã bị
+ * `VOTE_LOCKOUT_MS` kéo ra khỏi vùng cấm.
  */
 const VOTE_CHECKPOINTS: ReadonlyArray<readonly [number, number]> = [
   [0.12, 0.12],
-  [0.52, 0.08],
   [0.84, 0.08],
 ];
+
+/**
+ * Khoảng cuối pha mà BOT không được đụng vào lá phiếu nữa.
+ *
+ * Người thật đọc bảng phiếu để quyết định lá cuối của mình. Một con bot lật
+ * phiếu ở giây chót đổi kết quả sau khi người ta đã hết thời gian phản ứng -
+ * không phải một nước cờ hay, chỉ là một cái bẫy do lịch hẹn sinh ra.
+ *
+ * Hằng số chứ không phải cấu hình: chưa phòng nào cần con số khác. Mở ra
+ * `RoomConfig` khi có phòng thật cần.
+ */
+const VOTE_LOCKOUT_MS = 5_000;
+
+/**
+ * Trần số lá một BOT được nộp trong MỘT vòng đề cử.
+ *
+ * Hai lá = lá đầu + một lần đổi ý, khớp đúng hai mốc ở `VOTE_CHECKPOINTS`. Trần
+ * này không thừa dù lịch chỉ có hai mốc: `rescheduleBots` trong `resume.ts` cấp
+ * lại trọn bộ mốc khi server sống lại giữa pha, nên một bot đã nộp đủ hai lá
+ * trước khi tiến trình chết có thể được cấp thêm hai mốc nữa.
+ *
+ * Đếm từ `voteMutations` của engine chứ không từ một bộ đếm riêng: đó là state
+ * được persist, nên con số sống sót qua đúng cái restart đang cần chặn.
+ */
+const MAX_BALLOTS_PER_ROUND = 2;
+
+/** Số lá BOT đã nộp trong vòng đề cử đang chạy. */
+function ballotsCastThisRound(room: Room, playerId: string): number {
+  const st = room.engine?.state;
+  if (!st) return 0;
+  return st.voteMutations.filter(
+    (item) => item.round === st.round && item.voterId === playerId,
+  ).length;
+}
 
 /**
  * Xếp lịch bỏ phiếu cho bot.
@@ -1219,7 +1257,26 @@ const VOTE_CHECKPOINTS: ReadonlyArray<readonly [number, number]> = [
  */
 export function scheduleVoteBots(room: Room): void {
   const session = botSessionFor(room);
-  const window = room.config.voteSeconds * 1_000;
+
+  /*
+   * Mốc rải trên phần khung CÒN LẠI và ĐƯỢC PHÉP, không phải trên trọn
+   * `voteSeconds`.
+   *
+   * Hai lý do, cả hai đều là lỗi thật:
+   * - `resume.ts` gọi hàm này khi server sống lại giữa pha. Tính theo trọn
+   *   khung thì mốc rơi ra ngoài pha, và chú thích "trong đúng cửa sổ CÒN LẠI"
+   *   ở đó là một lời hứa suông.
+   * - 5 giây chót bị khoá (xem `VOTE_LOCKOUT_MS`). Ở `voteSeconds` mặc định 30,
+   *   mốc thứ ba cũ rơi vào giây 25.2-27.6 - tức nằm gọn trong vùng cấm.
+   *
+   * RẢI LẠI chứ không cắt cụt bằng `min(delay, ...)`: cắt cụt dồn mọi bot có
+   * mốc rơi vào vùng cấm về đúng một mili giây, và cả phòng lật phiếu trong
+   * một nhịp. Rải lại giữ nguyên nhịp hai mốc và jitter đã gieo.
+   */
+  const now = Date.now();
+  const remaining = (room.engine?.state.phaseEndsAt ?? now) - now;
+  const window = remaining - VOTE_LOCKOUT_MS;
+  if (window <= 0) return;
 
   for (const member of room.members) {
     if (!isBotControlled(member)) continue;
@@ -1234,6 +1291,12 @@ export function scheduleVoteBots(room: Room): void {
         try {
           if (!room.engine || room.engine.state.phase !== "VOTING") return;
           if (!isBotControlled(member)) return;
+
+          // Lịch hẹn không phải một bảo đảm: timer bắn trễ khi máy tải nặng,
+          // và `resume.ts` có thể vừa cấp thêm một bộ mốc. Hai luật được chốt
+          // ở ĐÚNG chỗ lá phiếu rời đi, không chỉ ở chỗ xếp lịch.
+          if ((room.engine.state.phaseEndsAt ?? 0) - Date.now() < VOTE_LOCKOUT_MS) return;
+          if (ballotsCastThisRound(room, member.playerId) >= MAX_BALLOTS_PER_ROUND) return;
 
           const vote = deterministicVote(room, member.playerId);
           if (!vote) return;
