@@ -256,6 +256,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
       }));
     })(),
     night: gameView?.nightInfo ?? null,
+    trackerResult: gameView?.trackerResult ?? null,
     hunterShot: gameView?.hunterShotInfo ?? null,
     trial: gameView?.trialInfo ?? null,
     lastTrial: gameView?.lastTrial ?? null,

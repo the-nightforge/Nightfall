@@ -137,3 +137,26 @@ describe("kết quả theo dõi ở bình minh", () => {
     expect(engine.state.night.trackerResults.t1).toEqual({ targetId: "v1", acted: true });
   });
 });
+
+describe("kết quả theo dõi là riêng tư", () => {
+  it("chỉ chủ nhân thấy kết quả của mình", () => {
+    const engine = trackerGame();
+    engine.submitNightAction("t1", "TRACK", "w1");
+    engine.submitNightAction("w1", "KILL", "v1");
+    engine.resolveNight(Date.now(), () => 0);
+
+    expect(engine.snapshotFor("t1").trackerResult).toEqual({ targetId: "w1", acted: true });
+    expect(engine.snapshotFor("s1").trackerResult).toBeNull();
+    expect(engine.snapshotFor("w1").trackerResult).toBeNull();
+  });
+
+  it("BOT đọc được kết quả của chính nó", () => {
+    const engine = trackerGame();
+    engine.submitNightAction("t1", "TRACK", "w1");
+    engine.submitNightAction("w1", "KILL", "v1");
+    engine.resolveNight(Date.now(), () => 0);
+
+    expect(engine.botKnowledgeFor("t1").trackerResult?.acted).toBe(true);
+    expect(engine.botKnowledgeFor("s1").trackerResult).toBeNull();
+  });
+});

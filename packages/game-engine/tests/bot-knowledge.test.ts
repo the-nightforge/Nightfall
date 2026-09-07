@@ -305,6 +305,10 @@ describe("bot knowledge security boundary", () => {
         // trên. Nó nói mục tiêu có thuộc dòng Tiên Tri không, không nói vai cụ
         // thể của ai đang sống.
         "sorcererResult",
+        // Kết quả theo dõi của CHÍNH bot này, `null` với mọi vai khác - engine
+        // lọc theo chủ sở hữu đúng như `seerResult`. Trường có mặt mà giá trị
+        // thì không.
+        "trackerResult",
         // Vai TRUNG LẬP có trong bộ bài. Công khai y như `activeEventId`: cấu
         // hình phòng đi xuống mọi client trong `RoomSnapshot.config`. Nó nói
         // vai nào CÓ THỂ có mặt, không nói ai đang cầm lá nào.

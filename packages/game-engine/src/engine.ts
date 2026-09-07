@@ -117,6 +117,12 @@ export interface PlayerGameView {
   }[];
   nightInfo: NightInfoView | null;
   /**
+   * Kết quả theo dõi gần nhất của Kẻ Theo Dõi, riêng cho viewer này. Đứng
+   * NGOÀI `nightInfo` vì phải còn đọc được sau khi pha rời NIGHT, lúc
+   * `nightInfo` đã null - xem `RoomSnapshot.trackerResult`.
+   */
+  trackerResult: { targetId: string; acted: boolean } | null;
+  /**
    * Đã gửi phiếu hay chưa. Cần cờ riêng vì myVote === null có hai nghĩa:
    * chưa vote, hoặc đã chọn "Không treo ai".
    */
@@ -2689,6 +2695,7 @@ export class GameEngine {
         st.phase === "NIGHT" && viewer && viewer.alive && this.hasNightAction(viewer.role)
           ? this.nightInfoFor(viewer, seerResult, detectiveResult, sorcererResult)
           : null,
+      trackerResult: st.night.trackerResults[viewerId] ?? null,
       hunterShotInfo:
         st.phase === "HUNTER_SHOT" && st.hunterReaction
           ? (() => {
@@ -2871,6 +2878,9 @@ export class GameEngine {
       obituaryRevealedId: st.obituaryRevealedId ?? null,
       seerResult,
       sorcererResult,
+      // Gương `seerResult` ngay trên: entry ghi theo botId nên chỉ chính Kẻ
+      // Theo Dõi mới có - không cần thêm cổng theo vai.
+      trackerResult: st.night.trackerResults[botId] ?? null,
       // Suy từ CHÍNH bộ bài mà `assignRoles` chia, không phải một danh sách
       // chép tay: bật thêm một vai trung lập sau này là nó tự vào đây.
       neutralRolesInPlay: neutralRolesFor(st.config),

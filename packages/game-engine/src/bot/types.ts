@@ -490,6 +490,13 @@ export interface BotKnowledgeView {
    */
   sorcererResult: { targetId: string; targetName: string; isSeerLine: boolean } | null;
   /**
+   * Kết quả theo dõi gần nhất của CHÍNH bot này khi nó là Kẻ Theo Dõi; `null`
+   * với mọi vai khác. Engine lọc theo chủ sở hữu đúng như `seerResult`.
+   *
+   * Optional vì `BotKnowledgeView` được dựng lại từ record self-play cũ.
+   */
+  trackerResult?: { targetId: string; acted: boolean } | null;
+  /**
    * Vai TRUNG LẬP có trong bộ bài của ván này.
    *
    * CÔNG KHAI, không phải một rò rỉ: cấu hình phòng đi xuống mọi client trong

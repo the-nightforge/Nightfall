@@ -428,6 +428,17 @@ export interface RoomSnapshot {
   } | null;
   players: PlayerView[];
   night: NightActionView | null;
+  /**
+   * Kết quả theo dõi gần nhất của Kẻ Theo Dõi, tính riêng cho người nhận
+   * snapshot này. `null` với mọi người khác, kể cả mục tiêu bị theo dõi - biết
+   * ai đang bị dõi đã là một rò rỉ.
+   *
+   * Đứng NGOÀI `night`: `night` về `null` khi pha rời NIGHT, nhưng kết quả này
+   * phải còn đọc được ở NIGHT_RESULT trở đi, khi bình minh vừa tính xong.
+   *
+   * Optional vì web và server deploy rời nhau, giống `executioner`.
+   */
+  trackerResult?: { targetId: string; acted: boolean } | null;
   hunterShot: HunterShotView | null;
   /** Phiên toà đang diễn ra; chỉ có dữ liệu trong DEFENSE và FINAL_VOTE. */
   trial: TrialView | null;
