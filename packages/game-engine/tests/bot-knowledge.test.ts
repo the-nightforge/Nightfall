@@ -44,12 +44,13 @@ function knowledgeFixture(phase: GamePhase = "VOTING") {
       // mọi trường bí mật để các assert "không lộ" ở dưới có thứ để lộ.
       wolfSecondaryTarget: "villager",
       wolfCubRageTonight: true,
-      guardianAngelTarget: "witch",
       detectiveTargets: { target1: "wolf-a", target2: "witch" },
       detectiveResults: {
         witch: { target1Id: "wolf-a", target2Id: "witch", sameTeam: false },
       },
       sorcererResults: {},
+      trackerTargets: {},
+      trackerResults: {},
     },
     votes: {},
     voteMutations: [],
@@ -66,8 +67,6 @@ function knowledgeFixture(phase: GamePhase = "VOTING") {
     hunterShots: [],
     // Cùng lý do với `night` ở trên: nhồi giá trị thật vào state của các vai mở
     // rộng để assert "không lộ" có thứ để lộ.
-    guardianAngelPrevious: "villager",
-    guardianAngelCharges: { villager: 1 },
     alphaShieldUsed: {},
     apprenticeAwakened: true,
     wolfCubRageNextNight: true,
@@ -303,6 +302,10 @@ describe("bot knowledge security boundary", () => {
         // trên. Nó nói mục tiêu có thuộc dòng Tiên Tri không, không nói vai cụ
         // thể của ai đang sống.
         "sorcererResult",
+        // Kết quả theo dõi của CHÍNH bot này, `null` với mọi vai khác - engine
+        // lọc theo chủ sở hữu đúng như `seerResult`. Trường có mặt mà giá trị
+        // thì không.
+        "trackerResult",
         // Vai TRUNG LẬP có trong bộ bài. Công khai y như `activeEventId`: cấu
         // hình phòng đi xuống mọi client trong `RoomSnapshot.config`. Nó nói
         // vai nào CÓ THỂ có mặt, không nói ai đang cầm lá nào.

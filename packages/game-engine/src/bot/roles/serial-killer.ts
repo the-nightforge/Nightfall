@@ -37,7 +37,7 @@ import { nightEvidence, type BotRoleStrategy } from "./strategy";
 /**
  * Người mà chính Sát Nhân đã ra tay ĐÊM TRƯỚC và vẫn còn sống.
  *
- * Chỉ xảy ra khi nhát dao bị chặn (khiên của Bảo Vệ / Thiên Thần, hoặc bình cứu
+ * Chỉ xảy ra khi nhát dao bị chặn (khiên của Bảo Vệ hoặc bình cứu
  * của Phù Thuỷ). Khi đó Sát Nhân là người DUY NHẤT trên bàn biết rằng người kia
  * vừa được che chắn - và chỉ tay vào họ ngay hôm sau là tự khai ra rằng mình
  * biết một chuyện không ai biết.

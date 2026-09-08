@@ -51,4 +51,9 @@ describe("role-power --json", () => {
     expect(merged.presets).toEqual(report.presets);
     expect(merged.roles.map((row) => row.role)).toEqual(["SEER"]);
   }, 60_000);
+
+  it("sweep đo được Kẻ Theo Dõi", () => {
+    const report = runJson(["--json", "--games", "1", "--only", "13", "--role", "TRACKER"]);
+    expect(report.deltas.map((item) => item.role)).toEqual(["TRACKER"]);
+  }, 60_000);
 });

@@ -3,12 +3,12 @@ import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { detectiveStrategy } from "./detective";
 import { executionerStrategy } from "./executioner";
 import { guardStrategy } from "./guard";
-import { guardianAngelStrategy } from "./guardian-angel";
 import { jesterStrategy } from "./jester";
 import { seerStrategy } from "./seer";
 import { serialKillerStrategy } from "./serial-killer";
 import { sorcererStrategy } from "./sorcerer";
 import { traitorStrategy } from "./traitor";
+import { trackerStrategy } from "./tracker";
 import { passiveStrategy, type BotRoleStrategy } from "./strategy";
 import { werewolfStrategy } from "./werewolf";
 import { witchStrategy } from "./witch";
@@ -47,7 +47,6 @@ const REGISTRY: Partial<Record<Role, (role: Role, weights: BotWeights) => BotRol
   // trả `night: null` nên strategy này không bao giờ được hỏi.
   APPRENTICE_SEER: seerStrategy,
   GUARD: guardStrategy,
-  GUARDIAN_ANGEL: guardianAngelStrategy,
   SORCERER: sorcererStrategy,
   // Sói Alpha cắn cùng bầy như Sói Con: nó không có lượt soi riêng, và cơ chế
   // "lừa lượt soi đầu" nằm ở engine chứ không phải ở lựa chọn của nó.
@@ -66,6 +65,9 @@ const REGISTRY: Partial<Record<Role, (role: Role, weights: BotWeights) => BotRol
   // về `passiveStrategy` thì lượt đêm của cả vai này mất trắng mọi ván - engine
   // vẫn chào một `SERIAL_KILL` hợp lệ, và không ai nhận.
   SERIAL_KILLER: serialKillerStrategy,
+  // Kẻ Theo Dõi có hành động đêm thật (TRACK) nên cũng bắt buộc phải có entry:
+  // xem `roles/tracker.ts`.
+  TRACKER: trackerStrategy,
   /*
    * Kẻ Báo Thù cũng KHÔNG rơi về `passiveStrategy`, cùng lý do với Thằng Hề:
    * nó không có hành động đêm, nhưng chiến thuật nền là chiến thuật của một

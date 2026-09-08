@@ -211,11 +211,14 @@ function accentFor(role: Role): VillageAccent {
   if (ROLE_META[role].team === "neutral") return "jester";
   switch (role) {
     case "GUARD":
-    case "GUARDIAN_ANGEL":
       return "guard";
     case "SEER":
     case "APPRENTICE_SEER":
     case "DETECTIVE":
+    // Kẻ Theo Dõi thay chỗ Thiên Thần Hộ Mệnh đã xoá cứng: nó soi thông tin
+    // đêm (ai có ra tay hay không) chứ không che chắn ai, nên cùng nhóm với
+    // Tiên Tri/Thám Tử, không phải nhóm "guard".
+    case "TRACKER":
       return "seer";
     case "WITCH":
       return "witch";

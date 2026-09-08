@@ -40,18 +40,18 @@ const SHARDS: ReadonlyArray<{ id: string; args: readonly string[] }> = [
   { id: "04", args: ["--only", "16"] },
 
   { id: "05", args: ["--only", "17", "--role", "SEER", "--role", "GUARD", "--role", "WITCH", "--role", "HUNTER", "--role", "CURSED", "--role", "WOLF_CUB", "--role", "APPRENTICE_SEER"] },
-  { id: "06", args: ["--only", "17", "--role", "DETECTIVE", "--role", "GUARDIAN_ANGEL", "--role", "MAYOR", "--role", "ELDER", "--role", "SORCERER", "--role", "ALPHA_WOLF", "--role", "DOPPELGANGER"] },
+  { id: "06", args: ["--only", "17", "--role", "DETECTIVE", "--role", "TRACKER", "--role", "MAYOR", "--role", "ELDER", "--role", "SORCERER", "--role", "ALPHA_WOLF", "--role", "DOPPELGANGER"] },
 
   { id: "07", args: ["--only", "18", "--role", "SEER", "--role", "GUARD", "--role", "WITCH", "--role", "HUNTER", "--role", "CURSED", "--role", "WOLF_CUB", "--role", "APPRENTICE_SEER"] },
-  { id: "08", args: ["--only", "18", "--role", "DETECTIVE", "--role", "GUARDIAN_ANGEL", "--role", "MAYOR", "--role", "ELDER", "--role", "SORCERER", "--role", "ALPHA_WOLF", "--role", "DOPPELGANGER"] },
+  { id: "08", args: ["--only", "18", "--role", "DETECTIVE", "--role", "TRACKER", "--role", "MAYOR", "--role", "ELDER", "--role", "SORCERER", "--role", "ALPHA_WOLF", "--role", "DOPPELGANGER"] },
 
   { id: "09", args: ["--only", "19", "--role", "SEER", "--role", "GUARD", "--role", "WITCH", "--role", "HUNTER", "--role", "CURSED"] },
-  { id: "10", args: ["--only", "19", "--role", "WOLF_CUB", "--role", "APPRENTICE_SEER", "--role", "DETECTIVE", "--role", "GUARDIAN_ANGEL", "--role", "MAYOR"] },
+  { id: "10", args: ["--only", "19", "--role", "WOLF_CUB", "--role", "APPRENTICE_SEER", "--role", "DETECTIVE", "--role", "TRACKER", "--role", "MAYOR"] },
   { id: "11", args: ["--only", "19", "--role", "ELDER", "--role", "SORCERER", "--role", "ALPHA_WOLF", "--role", "DOPPELGANGER"] },
 
   { id: "12", args: ["--only", "20", "--role", "SEER", "--role", "GUARD", "--role", "WITCH", "--role", "HUNTER"] },
   { id: "13", args: ["--only", "20", "--role", "CURSED", "--role", "WOLF_CUB", "--role", "APPRENTICE_SEER"] },
-  { id: "14", args: ["--only", "20", "--role", "DETECTIVE", "--role", "GUARDIAN_ANGEL", "--role", "MAYOR", "--role", "ELDER"] },
+  { id: "14", args: ["--only", "20", "--role", "DETECTIVE", "--role", "TRACKER", "--role", "MAYOR", "--role", "ELDER"] },
   { id: "15", args: ["--only", "20", "--role", "SORCERER", "--role", "ALPHA_WOLF", "--role", "DOPPELGANGER"] },
 ];
 

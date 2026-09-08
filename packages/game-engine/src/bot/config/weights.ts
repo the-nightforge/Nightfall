@@ -586,17 +586,6 @@ export interface RoleThresholdWeights {
    * khác 0, nên giữ 0.5 ở mọi preset mà không đổi hành vi nào.
    */
   thinVillageShare: number;
-  /** Thiên Thần chỉ có hai lượt cả ván nên ngưỡng cao hơn Bảo Vệ. */
-  guardianAngelWorthACharge: number;
-  guardianAngelHostilityBonus: number;
-  /**
-   * Trường RIÊNG dù trùng giá trị với `selfPreservation.guardSuspicionPenalty`.
-   *
-   * Hai vai đỡ đòn theo hai kinh tế khác nhau: Bảo Vệ đỡ mỗi đêm, Thiên Thần
-   * chỉ có hai lượt. Dùng chung một khoá sẽ khiến việc hiệu chỉnh Bảo Vệ ở
-   * Task 8 lặng lẽ dịch cả Thiên Thần.
-   */
-  guardianAngelSuspicionPenalty: number;
   /** Giá trị thông tin cao nhất nằm ở giữa, không ở hai đầu. */
   seerMostInformativeSuspicion: number;
   seerUncertaintySlope: number;
@@ -614,12 +603,12 @@ export interface NightConfidenceWeights {
   seer: number;
   detective: number;
   guard: number;
-  guardianAngel: number;
   witchHeal: number;
   witchPoison: number;
   witchSkip: number;
   /** Confidence mặc định của một evidence do nước đi đêm sinh ra. */
   nightEvidence: number;
+  tracker: number;
 }
 
 /** Mọi trait được rút i.i.d. từ `[min, max]`. */
@@ -804,8 +793,6 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   // So THẲNG với một số trong [0, 1) sinh từ hash trong `fakeFightTarget`.
   ["deceptionRisk", "fakeFightChance"],
   ["roleThresholds", "thinVillageShare"],
-  ["roleThresholds", "guardianAngelWorthACharge"],
-  ["roleThresholds", "guardianAngelSuspicionPenalty"],
   ["personalityRange", "min"],
   ["personalityRange", "max"],
   // `nightConfidence` được gán THẲNG vào `BotNightIntention.confidence` mà không
@@ -814,11 +801,11 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   ["nightConfidence", "seer"],
   ["nightConfidence", "detective"],
   ["nightConfidence", "guard"],
-  ["nightConfidence", "guardianAngel"],
   ["nightConfidence", "witchHeal"],
   ["nightConfidence", "witchPoison"],
   ["nightConfidence", "witchSkip"],
   ["nightConfidence", "nightEvidence"],
+  ["nightConfidence", "tracker"],
   // Bốn cái dưới đây được so THẲNG với `rng()`. Một giá trị 1.5 biến "đôi khi
   // trả lời" thành "luôn trả lời" mà không có lỗi nào để lần theo.
   ["conversation", "directReplyFloor"],
@@ -1009,6 +996,10 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     // một bit nào của các preset cũ. v11 bật chúng; xem chú thích ở đó.
     AVOIDANCE: { weight: 0, confidence: 0.4 },
     DEFENSE_QUALITY: { weight: 0, confidence: 0.45 },
+    // Nhẹ hơn mọi tín hiệu đã được sự thật kiểm chứng khác: "có ra tay" không
+    // nói người đó thuộc phe nào.
+    TRACKED_ACTIVE: { weight: 12, confidence: 0.8 },
+    TRACKED_IDLE: { weight: -8, confidence: 0.8 },
   }),
 
   memoryImportance: Object.freeze({
@@ -1164,9 +1155,6 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     witchPoisonLosingDiscount: 0,
     witchHealLosingDiscount: 0,
     thinVillageShare: 0.5,
-    guardianAngelWorthACharge: 0.35,
-    guardianAngelHostilityBonus: 80,
-    guardianAngelSuspicionPenalty: 0.5,
     seerMostInformativeSuspicion: 50,
     seerUncertaintySlope: 2,
     wolfClaimedPowerScore: 100,
@@ -1180,11 +1168,11 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     seer: 0.7,
     detective: 0.65,
     guard: 0.6,
-    guardianAngel: 0.6,
     witchHeal: 0.8,
     witchPoison: 0.75,
     witchSkip: 0.5,
     nightEvidence: 0.5,
+    tracker: 0.7,
   }),
 
   personalityRange: Object.freeze({ min: 0.25, max: 0.9 }),

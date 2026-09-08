@@ -25,8 +25,6 @@ export const GAME_STATE_SCAFFOLD: GameState = {
   voteMutations: [],
   dayVoteHistory: [],
   guardPrevious: null,
-  guardianAngelPrevious: null,
-  guardianAngelCharges: {},
   alphaShieldUsed: {},
   apprenticeAwakened: false,
   wolfCubRageNextNight: false,

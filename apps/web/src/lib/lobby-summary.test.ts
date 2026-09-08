@@ -36,7 +36,7 @@ function config(patch: Partial<RoomConfig> = {}): RoomConfig {
     wolfCub: false,
     apprenticeSeer: false,
     detective: false,
-    guardianAngel: false,
+    tracker: false,
     sorcerer: false,
     alphaWolf: false,
     mayor: false,

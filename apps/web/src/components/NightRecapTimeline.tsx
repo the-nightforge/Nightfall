@@ -185,6 +185,9 @@ export function NightRecapTimeline({
                         )}
                       </Line>
                     )}
+                    {/* Vai đã bị xoá cứng; khối này CHỈ còn chạy cho recap của
+                        ván đã xong - `roles.guardianAngel` nay chỉ bật theo dữ
+                        liệu lịch sử, không còn theo cờ cấu hình. */}
                     {roles.guardianAngel && (
                       <Line actor="Thiên Thần">
                         {night.guardianAngelTarget ? (

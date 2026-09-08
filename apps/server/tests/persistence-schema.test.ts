@@ -296,3 +296,49 @@ describe("Sổ Tang sống sót qua một vòng lưu-khôi phục", () => {
     expect(() => gameStateSchema.parse(raw)).not.toThrow();
   });
 });
+
+describe("trackerTargets/trackerResults của Kẻ Theo Dõi", () => {
+  it("ảnh chụp của bản cũ (chưa có Kẻ Theo Dõi) vẫn đọc được", () => {
+    // Cùng bẫy với `sorcererResults`: bắt buộc hai trường này ở INPUT là làm
+    // mọi ván đang chạy lúc deploy trượt schema rồi rơi vào quarantine.
+    const raw = JSON.parse(JSON.stringify(engineState()));
+    delete raw.night.trackerTargets;
+    delete raw.night.trackerResults;
+
+    const parsed = gameStateSchema.parse(raw);
+
+    expect(parsed.night.trackerTargets).toEqual({});
+    expect(parsed.night.trackerResults).toEqual({});
+  });
+
+  it("giữ nguyên mục tiêu và kết quả theo dõi khi ảnh chụp có", () => {
+    // `z.object()` thường (không `.strict()`) STRIP mọi khoá không khai báo -
+    // nếu chỉ thêm `.optional()` mà quên khai kiểu, dữ liệu Kẻ Theo Dõi của
+    // một ván đang chạy sẽ mất lặng lẽ sau một lần khôi phục.
+    const state = engineState();
+    state.night.trackerTargets = { p1: "p2" };
+    state.night.trackerResults = { p1: { targetId: "p2", acted: true } };
+
+    const parsed = gameStateSchema.parse(JSON.parse(JSON.stringify(state)));
+
+    expect(parsed.night.trackerTargets).toEqual({ p1: "p2" });
+    expect(parsed.night.trackerResults).toEqual({ p1: { targetId: "p2", acted: true } });
+  });
+
+  it("snapshot cũ còn Thiên Thần vẫn khôi phục được, không mất trường nào", () => {
+    // Ván đang chạy trên Redis lúc deploy bản xoá cứng Thiên Thần Hộ Mệnh vẫn
+    // mang ba trường này. `z.object()` thường STRIP khoá lạ, nên bỏ chúng khỏi
+    // schema không ném lỗi - nó lặng lẽ xoá dữ liệu của những ván ấy. Vì thế
+    // phép kiểm ở đây là GIỮ ĐƯỢC, không phải "không ném".
+    const raw = JSON.parse(JSON.stringify(engineState()));
+    raw.guardianAngelCharges = { p1: 2 };
+    raw.guardianAngelPrevious = "p2";
+    raw.night.guardianAngelTarget = "p3";
+
+    const parsed = gameStateSchema.parse(raw) as unknown as Record<string, unknown>;
+
+    expect((parsed as { guardianAngelCharges?: unknown }).guardianAngelCharges).toEqual({ p1: 2 });
+    expect((parsed as { guardianAngelPrevious?: unknown }).guardianAngelPrevious).toBe("p2");
+    expect((parsed.night as { guardianAngelTarget?: unknown }).guardianAngelTarget).toBe("p3");
+  });
+});

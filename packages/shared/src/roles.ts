@@ -9,7 +9,7 @@ export const ROLES = [
   "APPRENTICE_SEER",
   "DETECTIVE",
   "GUARD",
-  "GUARDIAN_ANGEL",
+  "TRACKER",
   "WITCH",
   "ELDER",
   "DOPPELGANGER",
@@ -153,14 +153,16 @@ export const ROLE_META: Record<Role, RoleMeta> = {
     team: "village",
     nightOrder: 0,
   },
-  GUARDIAN_ANGEL: {
-    id: "GUARDIAN_ANGEL",
-    name: "Thiên Thần Hộ Mệnh",
-    // Cùng lý do với Bảo Vệ ngay trên: khiên chặn cả nhát dao của Sát Nhân.
+  TRACKER: {
+    id: "TRACKER",
+    name: "Kẻ Theo Dõi",
     description:
-      "Tối đa 2 lần cả ván, chọn 1 người để bảo vệ khỏi đòn giết ban đêm (không lặp 2 đêm liền).",
+      "Mỗi đêm chọn một người; sáng hôm sau biết người đó có ra tay đêm qua hay không (không biết nhắm ai).",
     team: "village",
-    nightOrder: 0.5,
+    // 3 vì nó ĐỌC kết quả của cả đêm: phải đứng sau mọi người ra tay. Về cơ chế
+    // thứ tự không đổi kết quả (tính ở `resolveNight`), nhưng trình tự đêm ở UI
+    // phải đọc đúng nghĩa.
+    nightOrder: 3,
   },
   DOPPELGANGER: {
     id: "DOPPELGANGER",

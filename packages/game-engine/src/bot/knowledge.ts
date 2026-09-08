@@ -96,6 +96,8 @@ export interface BotKnowledgeInput {
   obituaryRevealedId?: string | null;
   seerResult: BotKnowledgeView["seerResult"];
   sorcererResult: BotKnowledgeView["sorcererResult"];
+  /** Đã lọc ở engine theo đúng chủ nhân; xem `BotKnowledgeView.trackerResult`. */
+  trackerResult?: BotKnowledgeView["trackerResult"];
   /** Suy từ chính cấu hình phòng; xem `BotKnowledgeView.neutralRolesInPlay`. */
   neutralRolesInPlay: BotKnowledgeView["neutralRolesInPlay"];
   /** Đã lọc ở engine theo đúng chủ nhân; xem `BotKnowledgeView.executionerTargetId`. */
@@ -135,6 +137,10 @@ export function buildBotKnowledgeView(input: BotKnowledgeInput): BotKnowledgeVie
     obituaryRevealedId: input.obituaryRevealedId ?? null,
     seerResult: input.seerResult ? { ...input.seerResult } : null,
     sorcererResult: input.sorcererResult ? { ...input.sorcererResult } : null,
+    // Sao chép nông, không trả thẳng tham chiếu input - cùng lý do với
+    // seerResult/sorcererResult ngay trên: input đến từ `night.trackerResults`
+    // sống bên engine.
+    trackerResult: input.trackerResult ? { ...input.trackerResult } : null,
     neutralRolesInPlay: [...input.neutralRolesInPlay],
     executionerTargetId: input.executionerTargetId,
     night: input.night ? copyNightKnowledge(input.night) : null,

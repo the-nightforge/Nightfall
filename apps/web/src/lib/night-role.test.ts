@@ -10,7 +10,7 @@ describe("night-role canActAtNight", () => {
     expectAct("APPRENTICE_SEER", false); // unawakened
     expectAct("APPRENTICE_SEER", true, true); // awakened
     expectAct("GUARD", true);
-    expectAct("GUARDIAN_ANGEL", true);
+    expectAct("TRACKER", true);
     expectAct("DETECTIVE", true);
     expectAct("SORCERER", true);
     expectAct("ALPHA_WOLF", true);

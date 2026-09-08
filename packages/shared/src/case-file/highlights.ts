@@ -410,6 +410,9 @@ function nightHighlights(data: CaseData): CaseCandidate[] {
     // nên hai vai dùng chung một `eventKey` theo người được cứu: một đêm cả hai
     // cùng chắn một người là MỘT lần cứu, không phải hai điểm ngoặt chiếm hai
     // suất trong hồ sơ.
+    //
+    // Nhánh Thiên Thần GIỮ dù vai đã bị xoá cứng, cùng lý do với nhánh Linh Mục
+    // bên dưới: hồ sơ vụ án dựng lại từ `nightHistory` của những ván ĐÃ XONG.
     const shields = [
       {
         type: "GUARD_SAVE",

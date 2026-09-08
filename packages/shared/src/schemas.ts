@@ -34,7 +34,7 @@ export const roomConfigSchema = z
     traitor: bool.optional(),
     apprenticeSeer: bool.optional(),
     detective: bool.optional(),
-    guardianAngel: bool.optional(),
+    tracker: bool.optional(),
     sorcerer: bool.optional(),
     alphaWolf: bool.optional(),
     mayor: bool.optional(),
@@ -82,7 +82,7 @@ export function deckSeats(config: RoomConfig): number {
     (config.cursed ? 1 : 0) +
     (config.apprenticeSeer ? 1 : 0) +
     (config.detective ? 1 : 0) +
-    (config.guardianAngel ? 1 : 0) +
+    (config.tracker ? 1 : 0) +
     (config.mayor ? 1 : 0) +
     (config.elder ? 1 : 0) +
     (config.doppelganger ? 1 : 0) +
@@ -264,12 +264,13 @@ export const nightActionTypeSchema = z.enum([
   "POISON",
   "SKIP",
   "DETECTIVE_CHECK",
-  "GUARDIAN_PROTECT",
   "SORCERER_CHECK",
   // Hành động RIÊNG của Sát Nhân, không dùng chung "KILL" với bầy Sói: một mã
   // duy nhất cho hai kỹ năng sẽ buộc engine phân giải theo vai người gửi, và
   // đó đúng là chỗ để một phiếu cắn của Sói đi nhầm vào ô của Sát Nhân.
   "SERIAL_KILL",
+  // Kẻ Theo Dõi chọn mục tiêu; kết quả (có ra tay hay không) tính ở resolveNight.
+  "TRACK",
 ]);
 export const gameActionPayload = z
   .object({

@@ -18,6 +18,12 @@ describe("role-art", () => {
     assert.equal((ROLE_ICON_PATHS as Partial<Record<string, string>>)["MEDIUM"], undefined);
   });
 
+  it("Kẻ Theo Dõi có biểu tượng riêng, không còn mượn Thám Tử", () => {
+    // Task 1 để lại nhãn TẠM mượn nguyên hình Thám Tử; Task 8 phải đóng nó lại
+    // bằng một glyph riêng, không phải chuỗi path giống hệt.
+    assert.notEqual(ROLE_ICON_PATHS.TRACKER, ROLE_ICON_PATHS.DETECTIVE);
+  });
+
   it("new wolves have hand-drawn art, no emoji", () => {
     for (const role of ["SORCERER", "ALPHA_WOLF"] as Role[]) {
       const path = ROLE_ICON_PATHS[role];

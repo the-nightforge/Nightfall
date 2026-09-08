@@ -24,10 +24,11 @@ function emptyNight(): NightState {
     seerResults: {},
     wolfSecondaryTarget: null,
     wolfCubRageTonight: false,
-    guardianAngelTarget: null,
     detectiveTargets: null,
     detectiveResults: {},
     sorcererResults: {},
+    trackerTargets: {},
+    trackerResults: {},
   };
 }
 
@@ -69,8 +70,6 @@ function traitorState(over: Partial<GameState> = {}): GameState {
     lastEliminated: null,
     hunterReaction: null,
     hunterShots: [],
-    guardianAngelPrevious: null,
-    guardianAngelCharges: {},
     alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,

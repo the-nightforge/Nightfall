@@ -70,7 +70,14 @@ export type PublicEvidenceKind =
    * là suy đoán từ dữ liệu công khai và decay như mọi tín hiệu hành vi khác.
    */
   | "AVOIDANCE"
-  | "DEFENSE_QUALITY";
+  | "DEFENSE_QUALITY"
+  /**
+   * Kết quả của Kẻ Theo Dõi. Là sự thật do engine cấp, NHƯNG chỉ về một hành vi
+   * trong MỘT đêm - không nói người đó thuộc phe nào. Vì vậy nó nằm ở nhóm
+   * nguội đi cùng mọi tín hiệu hành vi khác, không ở nhóm `SEER_RESULT_*`.
+   */
+  | "TRACKED_ACTIVE"
+  | "TRACKED_IDLE";
 
 export type EvidenceKind =
   | PublicEvidenceKind
@@ -362,9 +369,9 @@ export type NightActionKind =
   | "POISON"
   | "SKIP"
   | "DETECTIVE_CHECK"
-  | "GUARDIAN_PROTECT"
   | "SORCERER_CHECK"
-  | "SERIAL_KILL";
+  | "SERIAL_KILL"
+  | "TRACK";
 
 /**
  * Thông tin ban đêm của ĐÚNG một vai.
@@ -488,6 +495,13 @@ export interface BotKnowledgeView {
    * (xem `applyPrivateInformation`).
    */
   sorcererResult: { targetId: string; targetName: string; isSeerLine: boolean } | null;
+  /**
+   * Kết quả theo dõi gần nhất của CHÍNH bot này khi nó là Kẻ Theo Dõi; `null`
+   * với mọi vai khác. Engine lọc theo chủ sở hữu đúng như `seerResult`.
+   *
+   * Optional vì `BotKnowledgeView` được dựng lại từ record self-play cũ.
+   */
+  trackerResult?: { targetId: string; acted: boolean } | null;
   /**
    * Vai TRUNG LẬP có trong bộ bài của ván này.
    *

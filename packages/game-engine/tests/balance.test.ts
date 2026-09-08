@@ -61,10 +61,13 @@ describe("balance", () => {
       * vế Sói 4x5=20 chưa từng qua phép đo đó):
       *
       *   preset | làng  | Sói | chênh
-      *   17     | 17    | 19  | -2
-      *   18     | 20.5  | 24  | -3.5
-      *   19     | 21    | 24  | -3
-      *   20     | 18    | 24  | -6
+      *   17     | 17.5  | 19  | -1.5
+      *   18     | 21    | 24  | -3
+      *   19     | 21.5  | 24  | -2.5
+      *   20     | 18.5  | 24  | -5.5
+      *
+      * Vế làng nhích +0.5 ở cả bốn từ 2026-09-07: ghế Thiên Thần Hộ Mệnh (1.5)
+      * thành Kẻ Theo Dõi (2 TẠM). Chênh thu lại nửa điểm, chẩn đoán không đổi.
       *
       * Trong khi cả bốn đo ra 34.5-41.7% cho phe làng (600 ván preset + 300
       * ván baseline so cặp, speech bật) - tức vẫn là báo động giả, và vẫn
@@ -85,10 +88,10 @@ describe("balance", () => {
     // Vẫn khoá chặt: đúng MỘT cảnh báo mỗi preset, và đúng cảnh báo đã được
     // chẩn đoán (bảng chênh trong khối chú thích ngay trên).
     const KNOWN_FALSE_ALARM: Record<number, string> = {
-      17: "Sức mạnh phe làng (17) thấp hơn phe Sói (19)",
-      18: "Sức mạnh phe làng (20.5) thấp hơn phe Sói (24)",
-      19: "Sức mạnh phe làng (21) thấp hơn phe Sói (24)",
-      20: "Sức mạnh phe làng (18) thấp hơn phe Sói (24)",
+      17: "Sức mạnh phe làng (17.5) thấp hơn phe Sói (19)",
+      18: "Sức mạnh phe làng (21) thấp hơn phe Sói (24)",
+      19: "Sức mạnh phe làng (21.5) thấp hơn phe Sói (24)",
+      20: "Sức mạnh phe làng (18.5) thấp hơn phe Sói (24)",
     };
     for (const [count, deck] of Object.entries(PRESET_DECKS)) {
       const warnings = absolute(deck, Number(count));
@@ -185,7 +188,7 @@ describe("balance", () => {
         wolfCub: false,
         apprenticeSeer: false,
         detective: false,
-        guardianAngel: false,
+        tracker: false,
         priest: false,
         mayor: false,
       } as any,

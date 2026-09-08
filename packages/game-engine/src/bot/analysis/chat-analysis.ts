@@ -42,8 +42,6 @@ export function asciiForm(text: string): string {
 export const ROLE_PHRASES: ReadonlyArray<readonly [string, Role]> = [
   ["kẻ nguyền rủa", "CURSED"],
   ["tiên tri tập sự", "APPRENTICE_SEER"],
-  ["thiên thần hộ mệnh", "GUARDIAN_ANGEL"],
-  ["thiên thần", "GUARDIAN_ANGEL"],
   ["thằng hề", "JESTER"],
   // Từ tờ đề xuất `reports/alias-proposal.md`: cách người chơi thật gọi vai.
   // "thầy bói" đứng trước "tiên tri" chỉ vì cùng vai, không đụng cụm nào.
@@ -77,6 +75,11 @@ export const ROLE_PHRASES: ReadonlyArray<readonly [string, Role]> = [
   // và nó không đụng cụm nào khác trong bảng - cùng quy ước với "phản bội".
   ["kẻ song trùng", "DOPPELGANGER"],
   ["song trùng", "DOPPELGANGER"],
+  // "theo dõi" không kèm "kẻ" vẫn là cách gọi tự nhiên trong câu khai, và
+  // không đụng cụm nào khác trong bảng - cùng quy ước với "phản bội"/"song
+  // trùng" ở trên.
+  ["kẻ theo dõi", "TRACKER"],
+  ["theo dõi", "TRACKER"],
   ["thị trưởng", "MAYOR"],
   ["sói con", "WOLF_CUB"],
   // Trước "sói" để "sói alpha" không bị khớp thành "sói" thường - cùng lý do

@@ -140,10 +140,6 @@ export interface NightActionView {
   myWolfVote?: string | null;
   /** Với Bảo Vệ: mục tiêu đêm trước, không được đỡ lại */
   guardPrevious?: string | null;
-  /** Với Thiên Thần Hộ Mệnh: số lượt khiên còn lại (tối đa 2) */
-  guardianAngelCharges?: number;
-  /** Với Thiên Thần Hộ Mệnh: mục tiêu đêm trước, không được đỡ lại */
-  guardianAngelPrevious?: string | null;
   /** Với Tiên Tri: kết quả soi gần nhất */
   seerResult?: {
     targetId: string;
@@ -370,6 +366,12 @@ export interface NightRecap {
    * Linh Mục, Sói Con), thêm sau bản gốc nên không bắt buộc - lịch sử đêm cũ
    * không có role này thì thiếu trường tương ứng.
    */
+  /**
+   * GIỮ dù Thiên Thần Hộ Mệnh đã bị xoá cứng, đúng như `priest` ngay dưới:
+   * `nightHistory` của ván đã xong nằm trong hồ sơ vụ án và ván đang chạy lúc
+   * deploy vẫn mang trường này. Engine KHÔNG còn sinh ra nó; bỏ kiểu đi chỉ làm
+   * chỗ đọc lịch sử phải cast bừa.
+   */
   guardianAngelTarget?: RecapPlayer | null;
   detectiveChecks?: Array<{
     detective: RecapPlayer;
@@ -428,6 +430,17 @@ export interface RoomSnapshot {
   } | null;
   players: PlayerView[];
   night: NightActionView | null;
+  /**
+   * Kết quả theo dõi gần nhất của Kẻ Theo Dõi, tính riêng cho người nhận
+   * snapshot này. `null` với mọi người khác, kể cả mục tiêu bị theo dõi - biết
+   * ai đang bị dõi đã là một rò rỉ.
+   *
+   * Đứng NGOÀI `night`: `night` về `null` khi pha rời NIGHT, nhưng kết quả này
+   * phải còn đọc được ở NIGHT_RESULT trở đi, khi bình minh vừa tính xong.
+   *
+   * Optional vì web và server deploy rời nhau, giống `executioner`.
+   */
+  trackerResult?: { targetId: string; acted: boolean } | null;
   hunterShot: HunterShotView | null;
   /** Phiên toà đang diễn ra; chỉ có dữ liệu trong DEFENSE và FINAL_VOTE. */
   trial: TrialView | null;

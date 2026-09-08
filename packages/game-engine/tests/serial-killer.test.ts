@@ -29,10 +29,11 @@ function emptyNight(): NightState {
     seerResults: {},
     wolfSecondaryTarget: null,
     wolfCubRageTonight: false,
-    guardianAngelTarget: null,
     detectiveTargets: null,
     detectiveResults: {},
     sorcererResults: {},
+    trackerTargets: {},
+    trackerResults: {},
     serialKillerTarget: null,
     serialKillerSkipped: false,
   };
@@ -84,8 +85,6 @@ function killerState(over: Partial<GameState> = {}, seats: Seat[] = DEFAULT_SEAT
     lastEliminated: null,
     hunterReaction: null,
     hunterShots: [],
-    guardianAngelPrevious: null,
-    guardianAngelCharges: {},
     alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
@@ -232,25 +231,6 @@ describe("Sát Nhân - tương tác", () => {
     lockWolves(e);
     e.resolveNight();
     expect(alive(e, "villager")).toBe(true);
-  });
-
-  it("Thiên Thần Hộ Mệnh cũng chặn được", () => {
-    const seats: Seat[] = [
-      { id: "wolf", name: "Sói", role: "WEREWOLF" },
-      { id: "killer", name: "Sát", role: "SERIAL_KILLER" },
-      { id: "angel", name: "Thiên Thần", role: "GUARDIAN_ANGEL" },
-      { id: "seer", name: "Tiên Tri", role: "SEER" },
-      { id: "villager", name: "Dân", role: "VILLAGER" },
-      { id: "villager2", name: "Dân 2", role: "VILLAGER" },
-    ];
-    const e = engineWith({ guardianAngelCharges: { angel: 2 } }, seats);
-    e.submitNightAction("angel", "GUARDIAN_PROTECT", "villager");
-    e.submitNightAction("killer", "SERIAL_KILL", "villager");
-    lockWolves(e);
-    e.resolveNight();
-    expect(alive(e, "villager")).toBe(true);
-    // Lượt khiên vẫn bị tiêu: nó đã đỡ một đòn thật.
-    expect(e.state.guardianAngelCharges.angel).toBe(1);
   });
 
   it("bình cứu chặn CẢ đòn Sói lẫn nhát dao khi cùng nhắm một người", () => {

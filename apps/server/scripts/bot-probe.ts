@@ -1,10 +1,17 @@
 /**
- * Script thử tay: gọi Gemini một lần với ván giả để kiểm tra key và prompt.
- * Không nằm trong `npm test` vì cần API key thật (và tiêu tốn quota free-tier).
- * Chạy: npm run bot:probe (cần GEMINI_API_KEY trong apps/server/.env)
+ * Script thử tay: gọi chuỗi nhà cung cấp một lần với ván giả để kiểm tra key và
+ * prompt. Không nằm trong `npm test` vì cần API key thật (và tiêu tốn quota).
+ * Chạy: npm run bot:probe (cần key trong apps/server/.env)
  */
 import path from "node:path";
 import dotenv from "dotenv";
+import {
+  DEFAULT_BOT_WEIGHTS,
+  createBotPersonality,
+  createSeededRng,
+  deriveSpeechStyle,
+  describeSpeechStyle,
+} from "@masoi/game-engine";
 import type { SpeechRequest } from "../src/bots/types";
 
 // Script được chạy từ thư mục gốc repo (npm run bot:probe), nhưng key nằm ở
@@ -19,15 +26,24 @@ dotenv.config({ path: path.resolve(__dirname, "../.env"), override: true });
 /**
  * Ý định giả đã "chốt" sẵn, đúng hình dạng mà lõi deterministic phát ra. Probe
  * chỉ kiểm tra khâu diễn đạt: nhà cung cấp không còn chọn mục tiêu nữa.
+ *
+ * Phong cách dẫn xuất từ personality thật (gieo seed cố định) - đúng đường
+ * `BotRuntime` đi, thay vì chuỗi nhãn cứng `personalityStyle` đã bị bỏ khỏi
+ * `SpeechRequest`.
  */
+const personality = createBotPersonality(createSeededRng("bot-probe"), DEFAULT_BOT_WEIGHTS);
+const style = deriveSpeechStyle(personality);
+
 const request: SpeechRequest = {
   roomCode: "PROBE",
   speaker: { id: "w", name: "Hải" },
-  personalityStyle: "điềm tĩnh, ít lời",
+  style,
+  styleDescription: describeSpeechStyle(style),
   intention: {
     kind: "ACCUSE",
     targetId: "v",
     confidence: 0.72,
+    tone: "FIRM",
     evidence: [
       {
         id: "2:nomination:5:LATE_SWITCH",
@@ -46,7 +62,19 @@ const request: SpeechRequest = {
     { sourceId: "2:nomination:5", summary: "đổi phiếu sang Sang khi chỉ còn vài giây" },
   ],
   targetName: "Vân",
+  replyTo: null,
+  recentOwnLines: [],
+  chatWindow: [],
+  avoidOpenings: [],
   recentSpeechSourceIds: [],
+  seq: 1,
+  round: 2,
+  players: [
+    { id: "w", name: "Hải", alive: true },
+    { id: "v", name: "Vân", alive: true },
+    { id: "s", name: "Sang", alive: true },
+  ],
+  defense: null,
 };
 
 async function main() {

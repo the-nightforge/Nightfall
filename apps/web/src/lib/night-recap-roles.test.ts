@@ -32,26 +32,28 @@ function config(over: Partial<RoomConfig> = {}): RoomConfig {
 }
 
 test("vai đã bật trong cấu hình thì được kể dù cả ván không hành động lần nào", () => {
-  const roles = rolesInRecap([night(), night({ round: 2 })], config({ guardianAngel: true, sorcerer: true }));
-  assert.equal(roles.guardianAngel, true);
+  const roles = rolesInRecap([night(), night({ round: 2 })], config({ detective: true, sorcerer: true }));
+  assert.equal(roles.detective, true);
   assert.equal(roles.sorcerer, true);
 });
 
 test("vai không có trong ván thì không được kể", () => {
   const roles = rolesInRecap(
     [night()],
-    config({ guard: false, witch: false, seer: false, guardianAngel: false, sorcerer: false }),
+    config({ guard: false, witch: false, seer: false, detective: false, sorcerer: false }),
   );
   assert.equal(roles.guard, false);
   assert.equal(roles.witch, false);
   assert.equal(roles.seer, false);
-  assert.equal(roles.guardianAngel, false);
+  assert.equal(roles.detective, false);
   assert.equal(roles.sorcerer, false);
+  // Thiên Thần Hộ Mệnh chỉ còn vế lịch sử: không cờ, không dữ liệu thì không kể.
+  assert.equal(roles.guardianAngel, false);
 });
 
 test("có dữ liệu trong lịch sử thì kể, kể cả khi cờ cấu hình thiếu", () => {
   // Server cũ deploy lệch: gửi hành động nhưng thiếu cờ vai mở rộng.
-  const legacy = config({ guardianAngel: undefined, sorcerer: undefined, detective: undefined });
+  const legacy = config({ sorcerer: undefined, detective: undefined });
   const roles = rolesInRecap(
     [
       night({
@@ -64,6 +66,7 @@ test("có dữ liệu trong lịch sử thì kể, kể cả khi cờ cấu hìn
     ],
     legacy,
   );
+  // Thiên Thần Hộ Mệnh đã bị xoá cứng: recap của ván ĐÃ XONG vẫn phải kể được.
   assert.equal(roles.guardianAngel, true);
   assert.equal(roles.sorcerer, true);
   assert.equal(roles.detective, true);

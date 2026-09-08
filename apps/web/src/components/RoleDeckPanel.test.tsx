@@ -42,7 +42,7 @@ const PACKED: RoomConfig = {
   cursed: true,
   apprenticeSeer: true,
   detective: true,
-  guardianAngel: true,
+  tracker: true,
   mayor: true,
   elder: true,
   doppelganger: true,

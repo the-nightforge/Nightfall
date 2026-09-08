@@ -14,13 +14,6 @@ function createTestState(players: Partial<EnginePlayer>[], overrides?: Partial<G
     cursedTurned: p.cursedTurned ?? false,
   }));
 
-  const guardianAngelCharges: Record<string, number> = {};
-  for (const p of fullPlayers) {
-    if (p.role === "GUARDIAN_ANGEL") {
-      guardianAngelCharges[p.id] = 2;
-    }
-  }
-
   return {
     deadCanSpeakChosenId: null,
     phase: "NIGHT",
@@ -40,7 +33,6 @@ function createTestState(players: Partial<EnginePlayer>[], overrides?: Partial<G
       wolfCubRageTonight: false,
       wolvesLocked: false,
       guardTarget: null,
-      guardianAngelTarget: null,
       healTonight: false,
       poisonTarget: null,
     witchSkipped: false,
@@ -48,13 +40,13 @@ function createTestState(players: Partial<EnginePlayer>[], overrides?: Partial<G
       detectiveTargets: null,
       detectiveResults: {},
       sorcererResults: {},
+      trackerTargets: {},
+      trackerResults: {},
     },
     votes: {},
     voteMutations: [],
     dayVoteHistory: [],
     guardPrevious: null,
-    guardianAngelPrevious: null,
-    guardianAngelCharges,
     alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
@@ -1109,18 +1101,22 @@ describe("Trăng Máu xuyên đúng khiên đang chắn mục tiêu Sói", () =>
     expect(engine.state.log.some((line) => line.includes("Trăng Máu xuyên"))).toBe(false);
   });
 
-  it("xuyên khiên của Thiên Thần Hộ Mệnh chứ không chỉ của Bảo Vệ", () => {
-    // Bảo Vệ che v1 (vào Set trước), Thiên Thần che v2, Sói cắn v2. Bản cũ luôn
+  it("xuyên khiên thứ HAI chứ không chỉ khiên vào Set trước", () => {
+    // Khiên che v1 vào Set trước, khiên che v2 vào sau, Sói cắn v2. Bản cũ luôn
     // gỡ phần tử đầu Set nên v2 sống; giờ phải chết.
+    //
+    // Khiên thứ hai đặt THẲNG vào `night.guardSecondTarget` chứ không đi qua
+    // một lượt hành động: từ khi Thiên Thần Hộ Mệnh bị xoá cứng, nguồn khiên
+    // thứ hai duy nhất là Đêm Cảnh Giác - và chồng hai sự kiện lên một đêm sẽ
+    // biến bài này thành bài kiểm tra máy sự kiện thay vì luật xuyên khiên.
     const engine = armed([
       { id: "w1", role: "WEREWOLF", alive: true },
       { id: "v1", role: "VILLAGER", alive: true },
       { id: "v2", role: "VILLAGER", alive: true },
       { id: "guard", role: "GUARD", alive: true },
-      { id: "ga", role: "GUARDIAN_ANGEL", alive: true },
     ]);
     engine.submitNightAction("guard", "GUARD", "v1");
-    engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v2");
+    engine.state.night.guardSecondTarget = "v2";
     engine.submitNightAction("w1", "KILL", "v2");
     const deaths = engine.resolveNight(Date.now(), () => 0.1);
 

@@ -33,6 +33,7 @@ const ID = {
   witch: "pl_Wc2VbT",
   hunter: "pl_Hn5JtL",
   villager: "pl_Vl8RdN",
+  tracker: "pl_Tr4NkM",
 } as const;
 
 const CAST: CaseFilePlayer[] = [
@@ -42,6 +43,7 @@ const CAST: CaseFilePlayer[] = [
   { id: ID.witch, name: "Mười", role: "WITCH", originRole: "WITCH", team: "village", alive: false, isBot: true },
   { id: ID.hunter, name: "Hai", role: "HUNTER", originRole: "HUNTER", team: "village", alive: false, isBot: false },
   { id: ID.villager, name: "Ba", role: "VILLAGER", originRole: "VILLAGER", team: "village", alive: true, isBot: true },
+  { id: ID.tracker, name: "Bốn", role: "TRACKER", originRole: "TRACKER", team: "village", alive: true, isBot: false },
 ];
 
 function snapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
@@ -224,6 +226,9 @@ describe("buildVillageMemory · làng", () => {
     assert.equal(by(ID.witch).accent, "witch");
     assert.equal(by(ID.hunter).accent, "hunter");
     assert.equal(by(ID.villager).accent, "villager");
+    // Kẻ Theo Dõi thay chỗ Thiên Thần Hộ Mệnh đã xoá cứng - cùng nhóm "soi
+    // thông tin đêm" với Tiên Tri/Thám Tử, không rơi về mặc định Dân Làng.
+    assert.equal(by(ID.tracker).accent, "seer");
     // Không chỉ có màu: mỗi nhà mang nhãn vai và nhãn phe bằng chữ.
     assert.equal(by(ID.wolf).roleLabel, "Ma Sói");
     assert.equal(by(ID.guard).teamLabel, "Dân Làng");

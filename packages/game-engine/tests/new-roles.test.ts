@@ -27,10 +27,11 @@ function emptyNight(): NightState {
     seerResults: {},
     wolfSecondaryTarget: null,
     wolfCubRageTonight: false,
-    guardianAngelTarget: null,
     detectiveTargets: null,
     detectiveResults: {},
     sorcererResults: {},
+    trackerTargets: {},
+    trackerResults: {},
   };
 }
 
@@ -64,8 +65,6 @@ function stateWith(players: Array<[string, Role, boolean?]>): GameState {
     lastEliminated: null,
     hunterReaction: null,
     hunterShots: [],
-    guardianAngelPrevious: null,
-    guardianAngelCharges: {},
     alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,

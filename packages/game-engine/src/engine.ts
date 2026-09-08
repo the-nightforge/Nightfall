@@ -76,8 +76,6 @@ export interface NightInfoView {
   wolfVotesRequired?: number;
   myWolfVote?: string | null;
   guardPrevious?: string | null;
-  guardianAngelCharges?: number;
-  guardianAngelPrevious?: string | null;
   seerResult: SeerResultView | null;
   apprenticeAwakened?: boolean;
   detectiveResult?: DetectiveResultView | null;
@@ -116,6 +114,12 @@ export interface PlayerGameView {
     voteCount: number;
   }[];
   nightInfo: NightInfoView | null;
+  /**
+   * Kết quả theo dõi gần nhất của Kẻ Theo Dõi, riêng cho viewer này. Đứng
+   * NGOÀI `nightInfo` vì phải còn đọc được sau khi pha rời NIGHT, lúc
+   * `nightInfo` đã null - xem `RoomSnapshot.trackerResult`.
+   */
+  trackerResult: { targetId: string; acted: boolean } | null;
   /**
    * Đã gửi phiếu hay chưa. Cần cờ riêng vì myVote === null có hai nghĩa:
    * chưa vote, hoặc đã chọn "Không treo ai".
@@ -213,7 +217,6 @@ function emptyNight(wolfCubRageTonight = false): GameState["night"] {
     wolvesLocked: false,
     guardTarget: null,
     guardSecondTarget: null,
-    guardianAngelTarget: null,
     healTonight: false,
     poisonTarget: null,
     witchSkipped: false,
@@ -223,7 +226,34 @@ function emptyNight(wolfCubRageTonight = false): GameState["night"] {
     sorcererResults: {},
     serialKillerTarget: null,
     serialKillerSkipped: false,
+    trackerTargets: {},
+    trackerResults: {},
   };
+}
+
+/**
+ * "Ra tay" = có nộp một hành động đêm CÓ MỤC TIÊU.
+ *
+ * `SKIP`, Phù Thuỷ bỏ qua cả hai bình, Sát Nhân bỏ lượt, và Sói bỏ phiếu `null`
+ * đều KHÔNG tính. Mọi hành động đã để lại dấu trong `NightState`, nên hàm này
+ * chỉ tra chứ không cần thêm state ghi chép nào.
+ */
+function didActTonight(st: GameState, playerId: string): boolean {
+  const n = st.night;
+  // Sói: bỏ phiếu một mục tiêu là ra tay; `null` (không cắn) thì không.
+  if (n.wolfVotes[playerId] != null) return true;
+  if (n.seerResults[playerId] !== undefined) return true;
+  if (n.sorcererResults[playerId] !== undefined) return true;
+  if (n.detectiveResults[playerId] !== undefined) return true;
+  if (n.trackerTargets[playerId] !== undefined) return true;
+
+  // Vai một-người-một-ghế: ánh xạ vai -> người rồi mới đọc ô của vai đó.
+  const player = st.players.find((p) => p.id === playerId);
+  if (!player) return false;
+  if (player.role === "GUARD") return n.guardTarget !== null;
+  if (player.role === "WITCH") return n.healTonight || n.poisonTarget !== null;
+  if (player.role === "SERIAL_KILLER") return (n.serialKillerTarget ?? null) !== null;
+  return false;
 }
 
 /**
@@ -250,18 +280,19 @@ export class GameEngine {
     this.state.night.wolvesLocked ??= false;
     this.state.night.witchSkipped ??= false;
     this.state.night.guardSecondTarget ??= null;
-    this.state.night.guardianAngelTarget ??= null;
     this.state.night.detectiveTargets ??= null;
     this.state.night.detectiveResults ??= {};
     this.state.night.sorcererResults ??= {};
+    // State lưu trước khi có Kẻ Theo Dõi không có hai trường dưới, cùng lý do
+    // với `sorcererResults` ngay trên.
+    this.state.night.trackerTargets ??= {};
+    this.state.night.trackerResults ??= {};
     this.state.alphaShieldUsed ??= {};
     // State lưu trước khi có Sát Nhân không có ba trường dưới. Mặc định an toàn
     // là "role tắt, đêm nay chưa ra tay": không ván cũ nào bỗng dưng mọc thêm
     // một nhát dao.
     this.state.night.serialKillerTarget ??= null;
     this.state.night.serialKillerSkipped ??= false;
-    this.state.guardianAngelPrevious ??= null;
-    this.state.guardianAngelCharges ??= {};
     this.state.apprenticeAwakened ??= false;
     this.state.wolfCubRageNextNight ??= false;
     this.state.activeEvent ??= null;
@@ -312,9 +343,6 @@ export class GameEngine {
       player.cursedTurned ??= false;
       player.executionerTurned ??= false;
       player.doppelgangerTurned ??= false;
-      if (player.role === "GUARDIAN_ANGEL" && this.state.guardianAngelCharges[player.id] === undefined) {
-        this.state.guardianAngelCharges[player.id] = 2;
-      }
     }
   }
 
@@ -350,12 +378,6 @@ export class GameEngine {
       players.map((p) => ({ id: p.id, role: roles[p.id] })),
       rng,
     );
-    const guardianAngelCharges: Record<string, number> = {};
-    for (const p of players) {
-      if (roles[p.id] === "GUARDIAN_ANGEL") {
-        guardianAngelCharges[p.id] = 2;
-      }
-    }
     const state: GameState = {
       phase: "ROLE_REVEAL",
       round: 0,
@@ -377,8 +399,6 @@ export class GameEngine {
       dayVoteHistory: [],
       guardPrevious: null,
       guardSecondPrevious: null,
-      guardianAngelPrevious: null,
-      guardianAngelCharges,
       apprenticeAwakened: false,
       wolfCubRageNextNight: false,
       alphaShieldUsed: {},
@@ -677,9 +697,9 @@ export class GameEngine {
       | "POISON"
       | "SKIP"
       | "DETECTIVE_CHECK"
-      | "GUARDIAN_PROTECT"
       | "SERIAL_KILL"
-      | "SORCERER_CHECK",
+      | "SORCERER_CHECK"
+      | "TRACK",
     targetId: string | null,
     secondaryTargetId?: string | null,
     rng: () => number = Math.random,
@@ -889,32 +909,16 @@ export class GameEngine {
         st.night.guardSecondTarget = guardSecondId;
         break;
       }
-      case "GUARDIAN_PROTECT": {
-        if (p.role !== "GUARDIAN_ANGEL") throw new GameError("Chỉ Thiên Thần Hộ Mệnh mới được bảo vệ");
-        if (!targetId || !target) throw new GameError("Hãy chọn một người để bảo vệ");
-        /*
-         * Không tự đỡ, gương theo Bảo Vệ ngay trên.
-         *
-         * Trước đây đây là vai DUY NHẤT tự nhắm được mình: Bảo Vệ và Tiên Tri
-         * đều loại chính mình, còn vai này thì không - không có lý do
-         * nào được viết ra, không có test, README cũng không nói. Nó là chỗ sót.
-         *
-         * Và nó không vô hại: hai lượt, không mất phí mỗi đêm, nên với một Thiên
-         * Thần đã lộ mặt thì tự đỡ là nước đi trội tuyệt đối. Vai bảo vệ LÀNG khi
-         * ấy thành vai tự bảo toàn, đúng thứ mà luật của Bảo Vệ sinh ra để chặn.
-         * "Chỉ có 2 lượt nên tự đỡ đã tự mang chi phí" không cứu được lập luận:
-         * Bảo Vệ cũng đánh đổi đúng một lượt như thế mỗi đêm mà vẫn bị cấm.
-         */
+      case "TRACK": {
+        if (p.role !== "TRACKER") throw new GameError("Chỉ Kẻ Theo Dõi mới được theo dõi");
+        if (!targetId || !target) throw new GameError("Hãy chọn một người để theo dõi");
+        // Gương theo Tiên Tri và Bảo Vệ. Thêm nữa: "đêm nay tôi có ra tay
+        // không" là thứ chính chủ đã biết, nên tự nhắm là nước phí trắng.
         if (targetId === playerId) {
-          throw new GameError("Thiên Thần Hộ Mệnh không thể tự bảo vệ mình");
+          throw new GameError("Kẻ Theo Dõi không thể theo dõi chính mình");
         }
-        const charges = st.guardianAngelCharges[playerId] ?? 2;
-        if (charges <= 0) throw new GameError("Thiên Thần Hộ Mệnh đã hết lượt bảo vệ");
-        if (targetId === st.guardianAngelPrevious) {
-          throw new GameError("Không thể bảo vệ cùng một người hai đêm liên tiếp");
-        }
-        // Charge trừ lúc khép đêm chứ không phải lúc bấm, xem `resolveNight`.
-        st.night.guardianAngelTarget = targetId;
+        // CỐ Ý không cấm lặp mục tiêu hai đêm liền - xem plan Task 2.
+        st.night.trackerTargets[playerId] = targetId;
         break;
       }
       case "DETECTIVE_CHECK": {
@@ -1181,7 +1185,6 @@ export class GameEngine {
     const guardedIds = new Set<string>();
     if (st.night.guardTarget) guardedIds.add(st.night.guardTarget);
     if (st.night.guardSecondTarget) guardedIds.add(st.night.guardSecondTarget);
-    if (st.night.guardianAngelTarget) guardedIds.add(st.night.guardianAngelTarget);
     /*
      * Trăng Máu: nạp từ đêm trước thì đêm nay 20% xuyên MỘT khiên.
      *
@@ -1342,19 +1345,23 @@ export class GameEngine {
       }
     }
 
-    // Cập nhật trạng thái
-    if (st.night.guardianAngelTarget) {
-      // Trừ charge ở đây, không ở `submitNightAction`: cùng lý do với bình cứu
-      // của Phù Thuỷ - tài nguyên chỉ mất khi đêm đã khép lại, để một cú bấm
-      // nhầm còn sửa được.
-      const angel = this.alivePlayers().find((p) => p.role === "GUARDIAN_ANGEL");
-      if (angel) {
-        st.guardianAngelCharges[angel.id] = (st.guardianAngelCharges[angel.id] ?? 2) - 1;
-      }
+    /*
+     * Tính NGAY TẠI ĐÂY: mọi hành động đêm đã để dấu trong `NightState` từ lúc
+     * nộp (xem mục 2 ở trên), nên thời điểm tính không phụ thuộc gì thêm - chỉ
+     * cần đứng TRƯỚC khi ai đó bị đánh dấu chết (`p.alive = false` ở dưới) và
+     * TRƯỚC khi Kẻ Nguyền Rủa hoá Sói. Một con Sói bỏ phiếu cắn rồi trúng Bình
+     * Độc, hay một mục tiêu chết ngay đêm đó, vẫn đọc ra ĐÃ ra tay - Kẻ Theo
+     * Dõi canh người đó suốt đêm, không phải tới sáng mới xem còn sống hay
+     * không. Và vai được tra đúng như lúc đêm diễn ra, trước khi Kẻ Nguyền Rủa
+     * kịp đổi phe.
+     */
+    for (const [trackerId, targetId] of Object.entries(st.night.trackerTargets)) {
+      st.night.trackerResults[trackerId] = { targetId, acted: didActTonight(st, targetId) };
     }
+
+    // Cập nhật trạng thái
     st.guardPrevious = st.night.guardTarget;
     st.guardSecondPrevious = st.night.guardSecondTarget ?? null;
-    st.guardianAngelPrevious = st.night.guardianAngelTarget;
     // Bình Độc của Phù Thuỷ là nguồn chết ĐÊM duy nhất do chính phe làng gây ra,
     // nên nó là nguồn duy nhất ở đây kích được cái bẫy của Trưởng Lão. Nhát cắn
     // và nhát dao thì không: xem `elderKilledByVillage`.
@@ -1443,9 +1450,6 @@ export class GameEngine {
         cause: death.cause,
       })),
       cursedTurned: recapPlayer(cursedTurned ?? undefined),
-      guardianAngelTarget: recapPlayer(
-        st.night.guardianAngelTarget ? this.player(st.night.guardianAngelTarget) : undefined,
-      ),
       detectiveChecks: Object.entries(st.night.detectiveResults).flatMap(([detectiveId, result]) => {
         const detective = recapPlayer(this.player(detectiveId));
         const target1 = recapPlayer(this.player(result.target1Id));
@@ -1474,6 +1478,7 @@ export class GameEngine {
         st.night.serialKillerTarget ? this.player(st.night.serialKillerTarget) : undefined,
       ),
     };
+
     st.nightHistory.push(recap);
 
     st.phase = "NIGHT_RESULT";
@@ -2419,8 +2424,6 @@ export class GameEngine {
       acted = st.night.seerResults[viewer.id] !== undefined;
     } else if (viewer.role === "GUARD") {
       acted = st.night.guardTarget !== null;
-    } else if (viewer.role === "GUARDIAN_ANGEL") {
-      acted = st.night.guardianAngelTarget !== null;
     } else if (viewer.role === "DETECTIVE") {
       acted = st.night.detectiveResults[viewer.id] !== undefined;
     } else if (viewer.role === "SERIAL_KILLER") {
@@ -2450,10 +2453,6 @@ export class GameEngine {
       wolfVotesRequired: isWolf ? this.aliveWolves().length : undefined,
       myWolfVote: isWolf ? st.night.wolfVotes[viewer.id] ?? null : undefined,
       guardPrevious: viewer.role === "GUARD" ? st.guardPrevious : undefined,
-      guardianAngelCharges:
-        viewer.role === "GUARDIAN_ANGEL" ? st.guardianAngelCharges[viewer.id] ?? 2 : undefined,
-      guardianAngelPrevious:
-        viewer.role === "GUARDIAN_ANGEL" ? st.guardianAngelPrevious : undefined,
       seerResult,
       apprenticeAwakened: viewer.role === "APPRENTICE_SEER" ? st.apprenticeAwakened : undefined,
       detectiveResult,
@@ -2629,6 +2628,13 @@ export class GameEngine {
         st.phase === "NIGHT" && viewer && viewer.alive && this.hasNightAction(viewer.role)
           ? this.nightInfoFor(viewer, seerResult, detectiveResult, sorcererResult)
           : null,
+      // Bản sao nông, không phải tham chiếu sống vào `night.trackerResults` -
+      // nếu người nhận view lỡ sửa object này thì state thật của engine không
+      // bị hỏng theo (giống cách seerResult/detectiveResult/sorcererResult
+      // dựng object mới ở trên thay vì trả thẳng entry).
+      trackerResult: st.night.trackerResults[viewerId]
+        ? { ...st.night.trackerResults[viewerId] }
+        : null,
       hunterShotInfo:
         st.phase === "HUNTER_SHOT" && st.hunterReaction
           ? (() => {
@@ -2811,6 +2817,12 @@ export class GameEngine {
       obituaryRevealedId: st.obituaryRevealedId ?? null,
       seerResult,
       sorcererResult,
+      // Gương `seerResult` ngay trên: entry ghi theo botId nên chỉ chính Kẻ
+      // Theo Dõi mới có - không cần thêm cổng theo vai. Sao chép nông để
+      // tránh trả thẳng tham chiếu sống vào `night.trackerResults`.
+      trackerResult: st.night.trackerResults[botId]
+        ? { ...st.night.trackerResults[botId] }
+        : null,
       // Suy từ CHÍNH bộ bài mà `assignRoles` chia, không phải một danh sách
       // chép tay: bật thêm một vai trung lập sau này là nó tự vào đây.
       neutralRolesInPlay: neutralRolesFor(st.config),
@@ -2887,9 +2899,9 @@ export class GameEngine {
       POISON: [],
       SKIP: [],
       DETECTIVE_CHECK: [],
-      GUARDIAN_PROTECT: [],
       SERIAL_KILL: [],
       SORCERER_CHECK: [],
+      TRACK: [],
     };
 
     // Tiên Tri Tập Sự soi y hệt Tiên Tri, nhưng chỉ SAU khi thức tỉnh.
@@ -2929,17 +2941,6 @@ export class GameEngine {
         legalActions.push("DETECTIVE_CHECK");
         legalTargets.DETECTIVE_CHECK = targets;
       }
-    } else if (viewer.role === "GUARDIAN_ANGEL") {
-      // Hai lượt cả ván, không đỡ lại đúng người đêm trước, và không tự đỡ -
-      // xem hàng rào cùng tên ở `submitNightAction`.
-      const charges = st.guardianAngelCharges[viewer.id] ?? 2;
-      const targets = alive
-        .filter((player) => player.id !== st.guardianAngelPrevious && player.id !== viewer.id)
-        .map((player) => player.id);
-      if (charges > 0 && targets.length > 0) {
-        legalActions.push("GUARDIAN_PROTECT");
-        legalTargets.GUARDIAN_PROTECT = targets;
-      }
     } else if (viewer.role === "SERIAL_KILLER") {
       // Một mình, mỗi đêm, và không bị nhịp khoá phiếu của bầy Sói chi phối -
       // nên nhánh này không hỏi `wolvesLocked` như Phù Thuỷ. Bỏ qua rồi thì
@@ -2958,6 +2959,13 @@ export class GameEngine {
       const guardedBefore = this.guardedLastNight();
       legalTargets.GUARD = alive
         .filter((player) => player.id !== viewer.id && !guardedBefore.includes(player.id))
+        .map((player) => player.id);
+    } else if (viewer.role === "TRACKER") {
+      // Không tự theo dõi; theo dõi lại người đêm trước CHO PHÉP - xem hàng
+      // rào cùng tên ở `submitNightAction`.
+      legalActions.push("TRACK");
+      legalTargets.TRACK = alive
+        .filter((player) => player.id !== viewer.id)
         .map((player) => player.id);
     } else if (isWitch && st.night.wolvesLocked) {
       // Phù Thuỷ đi SAU bầy Sói: trước khi khoá phiếu, engine từ chối MỌI hành
@@ -2979,14 +2987,7 @@ export class GameEngine {
       legalTargets,
       wolfTarget:
         (isWolf || isWitch) && st.night.wolvesLocked ? st.night.killTarget : null,
-      // Mỗi vai chỉ thấy mốc "đêm trước" của CHÍNH kỹ năng mình; Bảo Vệ và
-      // Thiên Thần có hai bộ đếm riêng và không được nhìn thấy của nhau.
-      guardPrevious:
-        viewer.role === "GUARD"
-          ? st.guardPrevious
-          : viewer.role === "GUARDIAN_ANGEL"
-            ? st.guardianAngelPrevious
-            : null,
+      guardPrevious: viewer.role === "GUARD" ? st.guardPrevious : null,
       healUsed: isWitch ? st.healUsed : false,
       poisonUsed: isWitch ? st.poisonUsed : false,
       wolvesLocked: st.night.wolvesLocked,
@@ -3093,7 +3094,7 @@ export class GameEngine {
     }
     if (viewer.role === "GUARD") return st.night.guardTarget === null;
     if (viewer.role === "DETECTIVE") return st.night.detectiveResults[viewer.id] === undefined;
-    if (viewer.role === "GUARDIAN_ANGEL") return st.night.guardianAngelTarget === null;
+    if (viewer.role === "TRACKER") return st.night.trackerTargets[viewer.id] === undefined;
     if (viewer.role === "SERIAL_KILLER") {
       return st.night.serialKillerTarget === null && st.night.serialKillerSkipped !== true;
     }
