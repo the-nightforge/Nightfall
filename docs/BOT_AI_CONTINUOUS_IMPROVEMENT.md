@@ -314,3 +314,114 @@ consumer trong decision → bench thật để sau khi nối.)
 claimant, distancing, sacrifice) trên dữ liệu personality + assessment có sẵn,
 giữ tất định không kênh chat;wolfSideGain của v21 là chỗ bật counterfactual
 cho nhánh Sói.
+
+---
+
+## 13. PR 5 — Báo cáo thực hiện (spec §41)
+
+**Changed files:**
+
+- `packages/game-engine/src/bot/roles/wolf-team-plan.ts` (MỚI) —
+  `planWolfTeam()` trả `WolfTeamPlan` đúng shape §14: `primaryKillTarget` /
+  `backupKillTarget` (threat ranking — được làng tin = nguy hiểm, đang bị nghi =
+  để làng tự treo), `discussionLeader` (đồng bọn ít bị incomingHostility nhất,
+  hoà hash chốt), `claimant` (tái dùng `wolfBluffSeat` hash Phase 3),
+  `sacrificeCandidate` (đang bị dồn phiếu công khai), `distancingPlayers`
+  (rỗng khi không ai bị dồn — §17 distancing chỉ có nghĩa khi có người cần giữ
+  khoảng cách)
+- `packages/game-engine/src/index.ts` — export
+- Tests: `tests/bot-wolf-team-plan.test.ts` (8)
+
+**Thiết kế "team-private" trên kiến trúc không kênh chat:** các BotRuntime
+riêng biệt không truyền tin cho nhau. Plan là hàm THUẦN mà mọi con Sói tự tính
+ra cùng đáp án từ đúng dữ liệu cả bầy cùng thấy (roster qua `knownRoles` chỉ
+Sói có, phiếu công khai, social graph, hash FNV) — mô hình đã pin ở Phase 3.
+§14 được bảo đảm về kiến trúc: non-wolf không có pack trong `knownRoles` →
+nhận plan rỗng (test pin). §15: plan là khung chung, cá thể (jitter,
+personality) vẫn nằm ở `werewolfStrategy`. Một bug thật được test bắt: ranking
+leader từng loại chính mình → mỗi con tính leader khác nhau → bầy lệch nhau;
+đã sửa để ranking trên toàn pack.
+
+**Behavior changed:** KHÔNG với runtime/decision — `planWolfTeam` là module
+mới, chưa có consumer; nhánh Sói của v21 vẫn `wolfSideGain = 0`. Đổi hành vi
+Sói (nối plan vào `werewolfStrategy.decideNight` + counterfactual
+`wolfSideGain > 0`) là bước kế tiếp, phải đi kèm bench riêng.
+
+**Tests:** engine **92 file / 4.716 pass** (+8), server 1.095 pass, lint xanh.
+Chốt: threat "được tin > bị nghi"; kill target không bao giờ là đồng bọn;
+§14 non-wolf → plan rỗng; claimant đồng bộ giữa hai góc nhìn khác nhau; 
+sacrifice = đang dồn phiếu; distancing rỗng khi không cần; leader đồng bộ;
+tất định JSON-equal.
+
+**Benchmark:** self-play `--seed pr5-verify --games 30 --preset --weights
+21.0.0 --verify-replay` — 0 divergence, 0 knowledge violation.
+
+**Known limitations:**
+
+- Plan chưa có consumer — slot kill/claimant/sacrifice hiện chỉ là dữ liệu
+  đúng; nối vào `werewolfStrategy` + bật `wolfSideGain` cần bench riêng.
+- `discussionLeader` mới dùng hostility; §16 (đề xuất dùng personality cho
+  role assignment) chưa nối — làm cùng bước consumer.
+- Threat formula copy ngắn có chú thích trỏ nguồn (werewolf.ts giữ private);
+  khi consumer thật cắm vào, cân nhắc export chung.
+
+**Tiếp theo (PR 7):** trajectory export (§22) — dump observation-per-bot đã
+lọc + candidates + selectedAction + reward ra JSONL từ self-play, phục vụ
+PR 8 (HybridPolicy alpha/beta trên seam `PolicyModel`).
+
+---
+
+## 14. PR 5b — Báo cáo thực hiện (spec §41)
+
+**Changed files:**
+
+- `packages/game-engine/src/bot/config/weights.ts` — preset **22.0.0**
+  (một ô đổi so v21: `counterfactual.wolfSideGain` 0 → 5); preset 21 giữ nguyên
+  làm mốc A/B
+- `packages/game-engine/src/bot/config/presets.ts` — đăng ký 22.0.0
+- `packages/game-engine/src/bot/roles/wolf-team-plan.ts` — threat formula nâng
+  thành `wolfThreatScore()` EXPORT (nguồn duy nhất, có đủ nhánh claim
+  `wolfClaimedPowerScore` mà bản copy PR 5 thiếu)
+- `packages/game-engine/src/bot/roles/werewolf.ts` — xoá `threatScore` local,
+  dùng nguồn chung; `planWolfTeam` chưa nối trực tiếp vào `decideNight` (xem
+  limitations)
+- `packages/game-engine/src/bot/planning/counterfactual.ts` — nhánh Sói có
+  expectedOutcome thật: `teamValue = wolfSideGain × P(không-Sói) × pressure`,
+  `survivalValue = −cost × P(Sói) × pressure` (phiếu vào đồng bọn P=1 là phạt
+  tối đa), `informationValue = 0`
+- Tests: `tests/bot-counterfactual.test.ts` (+2 → 10)
+
+**Behavior changed:** CÓ với nhánh Sói khi chạy `--weights 22.0.0` — bảng điểm
+phiếu Sói giờ có counterfactual. v21 trở xuống byte-identical hành vi cũ.
+
+**Tests:** engine **92 file / 4.718 pass** (+2), server 1.095 pass, lint xanh.
+Chốt: v22 wolfSideGain=5; v21 vẫn 0; Sói v22 — phiếu người thường
+teamValue>0/survival<0, phiếu đồng bọn teamValue=0 + survival phạt nặng hơn;
+10 test counterfactual tổng.
+
+**Benchmark** (2×1.000 ván `--preset`, paired seeds `pr5b-bench{,2}`):
+
+| Metric | V21 | V22 | Δ |
+|---|---|---|---|
+| Sói thắng | 44,5% | 44,4% | z≈0 — nhiễu |
+| wolfSelfSabotage | 16,05% | 15,77% | −0,3 điểm (hướng đúng, trong nhiễu) |
+| villageVoteAccuracy | 48,95% | 49,00% | ≈ không đổi |
+| violations | 0 | 0 | — |
+
+Replay V22: 30 ván `--verify-replay` — 0 divergence, 0 knowledge violation.
+
+**Kết luận:** v22 KHÔNG làm Sói mạnh lên có ý nghĩa (z≈0), nhưng cũng KHÔNG
+phá gì — wolf counterfactual đúng semantics (phạt phiếu đồng bọn, thưởng phiếu
+làng đúng lúc) và WolfSelfSabotage nghiêng đúng hướng. Giữ v18 default như cũ;
+v22 là preset hợp lệ cho phòng thí nghiệm tiếp theo (PR 8 HybridPolicy).
+
+**Known limitations:**
+
+- `planWolfTeam` chưa được consumer nào đọc trực tiếp trong runtime — các slot
+  (leader/claimant/sacrifice) vẫn chỉ là dữ liệu đúng. Nó là bước kiến trúc;
+  dùng nó đòi hỏi thay đổi strategy với bench riêng, và wolf side đã đủ tốt qua
+  counterfactual nên chưa có lý do đo được để nối ngay ("Do not replace working
+  components without measurable reason" — §2).
+- `wolfThreatScore` bỏ `context` tham số cũ của `threatScore` (không dùng).
+
+**Tiếp theo (PR 7):** trajectory export (§22).

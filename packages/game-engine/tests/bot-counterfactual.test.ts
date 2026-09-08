@@ -10,7 +10,7 @@ import { sumTerms, createDecisionProbe } from "../src/bot/trace/trace";
 import { BotRuntime } from "../src/bot/BotRuntime";
 import { createSeededRng } from "../src/bot/rng";
 import type { BotKnowledgeView, BotPersonality } from "../src/bot/types";
-import { BOT_WEIGHTS_V18, BOT_WEIGHTS_V21 } from "../src/bot/config/weights";
+import { BOT_WEIGHTS_V18, BOT_WEIGHTS_V21, BOT_WEIGHTS_V22 } from "../src/bot/config/weights";
 import { weightsPreset } from "../src/bot/config/presets";
 
 /**
@@ -195,6 +195,39 @@ describe("expectedOutcomeFor (PR3 — counterfactual một bước)", () => {
     const baseEval = base.evaluate("b", { context: { knowledge: ctx, visibleChat: [] }, state: bot.state, rng: createSeededRng("x"), frame });
     const wrappedEval = wrapper.evaluate("b", { context: { knowledge: ctx, visibleChat: [] }, state: bot.state, rng: createSeededRng("x"), frame });
     expect(wrappedEval).toEqual(baseEval);
+  });
+
+  it("nhánh Sói ở v22 (wolfSideGain > 0): teamValue thưởng bỏ phiếu người không-Sói, survival phạt bỏ phiếu đồng bọn", () => {
+    const { bot, ctx } = seeded("WEREWOLF");
+    bot.state.seenEventIds.push("1:nomination:d");
+    // d = đồng bọn Sói đã lộ trong knownRoles → P(wolf)=1; b = người thường.
+    const ctxWithPack = {
+      ...ctx,
+      knownRoles: { me: "WEREWOLF" as const, d: "WEREWOLF" as const },
+      players: [...ctx.players, { id: "d", name: "D", alive: true }],
+    };
+    const frame = deriveVoteScoringFrame({ knowledge: ctxWithPack, visibleChat: [] }, bot.state, BOT_WEIGHTS_V22);
+    const beliefs = projectRoleBeliefs({
+      knowledge: ctxWithPack,
+      state: bot.state,
+      roleComposition: DECK_8,
+    });
+
+    const villagerOutcome = expectedOutcomeFor("b", { context: { knowledge: ctxWithPack, visibleChat: [] }, state: bot.state, rng: createSeededRng("x"), frame }, beliefs);
+    // Bỏ phiếu người không-Sói khi làng còn mỏng: lợi cho Sói (teamValue > 0).
+    expect(villagerOutcome.teamValue).toBeGreaterThan(0);
+    expect(villagerOutcome.survivalValue).toBeLessThan(0);
+
+    const mateOutcome = expectedOutcomeFor("d", { context: { knowledge: ctxWithPack, visibleChat: [] }, state: bot.state, rng: createSeededRng("x"), frame }, beliefs);
+    // Bỏ phiếu đồng bọn (P(wolf)=1): teamValue = 0, survival phạt tối đa.
+    expect(mateOutcome.teamValue).toBe(0);
+    expect(mateOutcome.survivalValue).toBeLessThan(villagerOutcome.survivalValue);
+  });
+
+  it("preset 22.0.0 đăng ký đúng, wolfSideGain = 5; v21 vẫn 0", () => {
+    expect(weightsPreset("22.0.0").version).toBe("22.0.0");
+    expect(BOT_WEIGHTS_V22.counterfactual?.wolfSideGain).toBe(5);
+    expect(BOT_WEIGHTS_V21.counterfactual?.wolfSideGain).toBe(0);
   });
 
   it("planner bọc: term named survivalValue/informationValue/teamValue, Σterms === score", () => {

@@ -61,8 +61,7 @@ export function expectedOutcomeFor(
   const innocentProbability = 1 - wolfProbability;
 
   const selfIsWolf = wolfSideIsWolf(ctx);
-  const gain = selfIsWolf ? tuning.wolfSideGain : 1;
-  if (gain === 0) {
+  if (selfIsWolf && tuning.wolfSideGain === 0) {
     return { teamValue: 0, survivalValue: 0, informationValue: 0, wolfProbability };
   }
 
@@ -72,6 +71,26 @@ export function expectedOutcomeFor(
   const total = players.length;
   const alive = players.filter((player) => player.alive).length;
   const pressure = total === 0 ? 0 : clampUnit(1 - alive / total);
+
+  /*
+   * Nhánh Sói (v22): hai bên của một lá phiếu, đo bằng xác suất đã ghim.
+   *
+   * - teamValue: bỏ phiếu người KHÔNG phải Sói (innocentProb) khi làng còn
+   *   đông-thêm-được là tiến — mỗi ghế làng bớt đưa Sói gần hoà số hơn.
+   * - survivalValue: phiếu vào người có P(wolf) cao là RỦI RO — tệ nhất là vào
+   *   ĐỒNG BỌN (P=1 qua KNOWN_ALLY ghim), phạt tối đa cùng thang
+   *   `mislynchSurvivalCost` của nhánh làng.
+   * - informationValue = 0: "mất nguồn dữ liệu làng" không phải lợi ích mà Sói
+   *   nên được thưởng trực tiếp — đó là tác dụng phụ, để phiếu nói thay.
+   */
+  if (selfIsWolf) {
+    return {
+      teamValue: tuning.wolfSideGain * innocentProbability * pressure,
+      survivalValue: -tuning.mislynchSurvivalCost * wolfProbability * pressure,
+      informationValue: 0,
+      wolfProbability,
+    };
+  }
 
   // Team value: treo trúng Sói là một ghế Sói bớt — giá trị ròng dương, scaled
   // theo xác suất; phần "nhầm người được làng tin" đã nằm trong survivalValue.

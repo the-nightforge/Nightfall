@@ -2333,6 +2333,34 @@ export const BOT_WEIGHTS_V21: BotWeights = Object.freeze({
 });
 
 /**
+ * Cấu hình v22 - counterfactual cho NHÁNH SÓI (PR 5b, CONTINUE §14-§17).
+ *
+ * MỘT ô đổi so v21: `counterfactual.wolfSideGain` 0 → 5.
+ *
+ * Nhánh Sói giờ có expectedOutcome thật, đo bằng bảng belief PR 1 (đồng bọn
+ * ghim P=1 qua KNOWN_ALLY, người thường theo scalar — mọi số đều từ knowledge
+ * view mà Sói hợp pháp thấy):
+ *
+ * - `teamValue = wolfSideGain × P(người không-Sói) × pressure`: bỏ phiếu người
+ *   làng khi làng còn đông-thêm-được đưa Sói gần hoà số hơn.
+ * - `survivalValue = −mislynchSurvivalCost × P(Sói) × pressure`: phiếu vào
+ *   người có P(wolf) cao là rủi ro bộc lộ; tệ nhất là vào ĐỒNG BỌN (P=1).
+ * - `informationValue = 0`: mất nguồn dữ liệu làng là tác dụng phụ, không phải
+ *   lợi ích Sói được thưởng trực tiếp.
+ *
+ * KHÔNG mặc định — bench v22 so v21 trước, kỷ luật v19.
+ */
+export const BOT_WEIGHTS_V22: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V21,
+  version: "22.0.0",
+
+  counterfactual: Object.freeze({
+    ...BOT_WEIGHTS_V21.counterfactual!,
+    wolfSideGain: 5,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
