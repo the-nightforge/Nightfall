@@ -665,7 +665,7 @@ describe("v2 là cấu hình production", () => {
     return rates;
   }
 
-  it("mặc định trỏ tới v18", () => {
+  it("mặc định trỏ tới v21", () => {
     // Cùng cơ chế rollout mà docstring của `DEFAULT_BOT_WEIGHTS` mô tả: nâng
     // chính hằng số này lên bản mới để `session-registry.ts` (chỗ ván thật
     // dựng `BotRuntime`, không tự truyền `weights`) chạy bản mới mà không phải
@@ -675,9 +675,13 @@ describe("v2 là cấu hình production", () => {
     // Tiên Tri giấu kết quả khi bàn có người thật, v15 hạ ngưỡng bình một nấc
     // khi làng đã mỏng, v16 cho Sói cãi giả, v17 cho phiếu dính hơn trước
     // người nói nhiều, v18 bỏ phần dính thêm đó trước người vừa có bằng chứng
-    // gỡ tội; v2-v4 vẫn tồn tại nguyên vẹn làm mốc so sánh.
-    expect(DEFAULT_BOT_WEIGHTS.version).toBe("18.0.0");
-    expect(weightsPreset("18.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    // gỡ tội; v21 (CONTINUE PR 3) bật counterfactual một bước cho phiếu nhánh
+    // làng sau protocol 5×1.000: villageWR +2,06 (z=2,06), voteAccuracy +4,02
+    // (z=14,35), không batch nào tụt quá −2,7; v2-v4 vẫn tồn tại nguyên vẹn
+    // làm mốc so sánh.
+    expect(DEFAULT_BOT_WEIGHTS.version).toBe("21.0.0");
+    expect(weightsPreset("21.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    expect(weightsPreset("18.0.0")).toBe(BOT_WEIGHTS_V18);
     expect(weightsPreset("17.0.0")).toBe(BOT_WEIGHTS_V17);
     expect(weightsPreset("16.0.0")).toBe(BOT_WEIGHTS_V16);
     expect(weightsPreset("15.0.0")).toBe(BOT_WEIGHTS_V15);

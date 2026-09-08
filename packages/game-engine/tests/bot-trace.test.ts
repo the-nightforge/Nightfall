@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { PublicVoteChoice, Role } from "@masoi/shared";
 import { BotRuntime } from "../src/bot/BotRuntime";
+import type { BotRuntimeOptions } from "../src/bot/BotRuntime";
+import { BOT_WEIGHTS_V18 } from "../src/bot/config/weights";
 import { createSeededRng } from "../src/bot/rng";
 import { createTraceCollector, sumTerms } from "../src/bot/trace/trace";
 import type { BotDecisionTrace } from "../src/bot/trace/trace";
@@ -92,12 +94,15 @@ function evidence(over: Partial<BotEvidence> = {}): BotEvidence {
   };
 }
 
-function runtimeWithTrace(over: { seed?: string; suspicion?: Record<string, number> } = {}) {
+function runtimeWithTrace(
+  over: { seed?: string; suspicion?: Record<string, number>; weights?: BotRuntimeOptions["weights"] } = {},
+) {
   const trace = createTraceCollector();
   const runtime = new BotRuntime({
     playerId: "me",
     rng: createSeededRng(over.seed ?? "trace"),
     playerIds: PLAYERS,
+    weights: over.weights,
     trace,
   });
   for (const [id, score] of Object.entries(over.suspicion ?? {})) {
@@ -176,7 +181,9 @@ describe("nội dung trace", () => {
    * thể sai mà hành vi vẫn đúng.
    */
   it("nêu đủ và đúng tên các số hạng của một lá phiếu", () => {
-    const { runtime, trace } = runtimeWithTrace({ suspicion: { a: 90 } });
+    // Runtime DÙNG DEFAULT (v21+ có counterfactual). Test này kiểm đúng bộ term
+    // của ImmediateUtilityPlanner thuần, nên pin về v18 thay vì default.
+    const { runtime, trace } = runtimeWithTrace({ suspicion: { a: 90 }, weights: BOT_WEIGHTS_V18 });
     const ctx = context();
     runtime.observe(ctx);
     runtime.decideVote(ctx);

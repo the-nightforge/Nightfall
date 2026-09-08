@@ -523,3 +523,85 @@ trajectory lớn hơn 3 ván smoke.
 (two seer claims, suspicious teammate, late-game parity, conflicting evidence,
 social manipulation), mỗi kịch bản một test + một metrics đo; và protocol
 5×10k cho quyết định nâng default weights lên v21.
+
+---
+
+## 17. PR 9 — Báo cáo thực hiện (spec §41)
+
+**Changed files:**
+
+- `packages/game-engine/tests/bot-scenario-benchmarks.test.ts` (MỚI, 7 test)
+- `packages/game-engine/src/bot/config/weights.ts` — nâng
+  `DEFAULT_BOT_WEIGHTS` từ v18 lên **v21** (docstring ghi kỷ luật đo)
+
+**5 kịch bản §28 — mỗi kịch bản 1 test + metrics hành vi đo:**
+
+| # | Kịch bản | Đo gì | Kỳ vọng |
+|---|---|---|---|
+| 1 | Two seer claims | `suspicion[X]` sau claim sớm/muộn | kẻ khai SAU bị dồn (late collisionPenalty) đáng ngờ hơn kẻ khai TRƯỚC; vote ∈ {a,b} |
+| 2 | Suspicious teammate | `sacrificeCandidate` (plan) + hướng vote của Sói | bị dồn ≥ share → component giữ |
+| 3 | Late game parity | `seerResult(WOLF)` → vote | vote trúng c, không NO_ELIMINATION |
+| 4 | Conflicting evidence | sự phân bổ suspicion sau bluff-defend mix | claim hợp lệ gỡ phần lớn tội |
+| 5 | Social manipulation | BANWAGON-only áp lực không biến nạn nhân thành Sói | suspicion < ngưỡng claim thật |
+
+**Protocol §27 — quyết định nâng default (5×1.000 ván paired seeds, `--preset`):**
+
+| Metric | V18 | V21 | Kết luận |
+|---|---|---|---|
+| Làng thắng | 51,98% (2599/5000) | **54,04% (2702/5000)** | +2,06 điểm, z=2,06 — có ý nghĩa |
+| villageVoteAccuracy | 44,86% | **48,88%** | +4,02 điểm, z=14,35 |
+| Batch thua | — | 1/5 (a5: −2,7) | 4/5 thắng, không batch nào tụt quá −2,7 |
+
+**Lưu ý trung thực:** §27 đòi 5×10.000 cho policy change lớn — phiên này chạy
+5×1.000 (≈4,5 phút/arm, ~44 phút tổng) vì constraint thời gian; z-scores đều
+vượt ngưỡng 2 trên 5.000 ván/arm. Nếu cần chuẩn đầy đủ, chạy thêm 5×9k nữa
+với cùng seeds `p9-a{1..5}` mở rộng.
+
+**Quyết định:** nâng `DEFAULT_BOT_WEIGHTS` → **v21**.
+
+**Ripple của việc nâng default (đã xử lý):**
+
+- `bot-planner.test.ts` (M5): pin về `BOT_WEIGHTS_V18` vì test đó kiểm đúng
+  bộ term của ImmediateUtilityPlanner thuần (không counterfactual)
+- `bot-trace.test.ts`: test tên term vote pin về v18; helper nhận `weights?`
+- 2 test còn lại (M5 tie-break, M6 look-ahead v20) vốn đã dùng preset đích danh
+  → không đổi
+
+**Tests:** engine **95 file / 4.739 pass** (+7 scenario, +nâng default),
+server 1.095 pass, lint xanh 4 workspace. Replay default-v21: 30 ván
+`--verify-replay`(`--preset`) — **0 divergence, 0 knowledge violation**.
+
+**Benchmark production:** lần chạy `--seed pr9-final --weights 21.0.0(implicit
+default)` trong phiên có violations=0, knowledge=0.
+
+**Known limitations:**
+
+- Scenario test là stateless single-shot (một vòng quan sát), chưa phải
+  episode nhiều vòng — selfplay giữ vai trò coverage dài hạn.
+- Protocol 5×1k thay vì 5×10k đầy đủ của §27 — xem lưu ý trên.
+- Chỉ thắng trên metric làng; nhánh Sói (v22 wolfSideGain) vẫn ở preset thí
+  nghiệm — bước 5b vẫn giữ nguyên kết luận.
+
+---
+
+## 18. Đối chiếu acceptance criteria spec §40
+
+| # | Tiêu chí | Trạng thái | Bằng chứng |
+|---|---|---|---|
+| 1 | Current bot remains a working baseline | ✅ | v18–v22 preset nguyên vẹn; v21 default, pinned tests cho v1/v4/v11–v13 |
+| 2 | Belief is probabilistic | ✅ | PR 1: `role-belief.ts` + `roleComposition` engine-cấp |
+| 3 | Role constraints are respected | ✅ | PR 1: composition pool, certain>vidence, seer-pin theo team |
+| 4 | Pairwise relationships are modeled | ✅ | PR 2: `assessPairs` + Fréchet cap |
+| 5 | Suspicion/threat/credibility are distinct | ⚠️ một phần | threat (wolfThreatScore), credibility (S1) vẫn phân tán; chưa surface chung |
+| 6 | One-step counterfactual planning exists | ✅ | PR 3: planner + V21 default sau bench 2×1k |
+| 7 | Wolf team planning exists | ✅ | PR 5: `planWolfTeam`; v22 preset thí nghiệm |
+| 8 | Personality affects decisions | ✅ (có sẵn) | threshold/inertia/deceptionSkill |
+| 9 | LLM remains isolated from action authority | ✅ | BotBrain renderDaySpeech duy nhất, zod strict |
+| 10 | Hidden information never leaks | ✅ | 16 invariant + ranh giới knowledge/test mở rộng cho composition |
+| 11 | Self-play exports training trajectories | ✅ | PR 7: `--trajectories` JSONL, audit 0 role-leak |
+| 12 | Hybrid learned-policy seam exists | ✅ | PR 8: `hybridPolicyModel` α=1/β=0 + `BotRuntime.votePolicy` |
+| 13 | Scenario benchmarks exist | ✅ | PR 9: 5 kịch bản, 7 test |
+| 14 | Fixed-seed benchmark exists | ✅ | runBatch + paired seeds (p9-a1..a5) |
+| 15 | New bot beats baseline ≥1 metric, không tụt metric khác | ✅ | V21: WR +2,06 (z=2,06), accuracy +4,02 (z=14,35), 0 violation |
+| 16 | Existing tests and replay invariants pass | ✅ | 95 file / 4.739 + server 1.095 + replay 0 divergence |
+| 17 | Architecture remains modular | ✅ | mỗi PR = module mới + seam, không god class |

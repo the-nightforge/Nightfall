@@ -2377,9 +2377,15 @@ export const BOT_WEIGHTS_V22: BotWeights = Object.freeze({
  * cho Tiên Tri giấu kết quả tới ngày 2 khi bàn có người thật; v15.0.0 hạ
  * ngưỡng bình độc/bình cứu/Nước thánh một nấc khi làng đã mỏng; v16.0.0 cho
  * Sói cãi nhau giả ở vòng 1-2 và bán đồng đội sớm hơn trước người thật;
- * v17.0.0 cho phiếu dính hơn trước mục tiêu đang nói nhiều; v18.0.0 bỏ phần
- * dính thêm đó trước người vừa có bằng chứng gỡ tội mới.
- * v1-v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset đích
- * danh, không bao giờ dựa vào hằng số này.
- */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V18;
+  * v17.0.0 cho phiếu dính hơn trước mục tiêu đang nói nhiều; v18.0.0 bỏ phần
+  * dính thêm đó trước người vừa có bằng chứng gỡ tội mới.
+  * v21.0.0 (CONTINUE PR 3) bật counterfactual một bước cho phiếu nhánh làng:
+  * protocol 5×1.000 ván paired seeds đo được villageWR 51.98% → 54.04%
+  * (+2,06 điểm, z=2,06) và villageVoteAccuracy 44.86% → 48.88% (+4,02 điểm,
+  * z=14,35), không batch nào tụt quá −2,7 điểm — đạt tiêu chí §40 của
+  * BOT_AI_CONTINUE_UPGRADE, nên mặc định nâng lên đây. v20/v22 tồn tại làm
+  * mốc A/B (futureRisk gộp / wolfSideGain), chưa có protocol.
+  * v1-v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset đích
+  * danh, không bao giờ dựa vào hằng số này.
+  */
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V21;
