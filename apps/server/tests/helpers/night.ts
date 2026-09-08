@@ -19,6 +19,8 @@ export const NIGHT_SCAFFOLD: NightState = {
   witchSkipped: false,
   seerResults: {},
   sorcererResults: {},
+  trackerTargets: {},
+  trackerResults: {},
   detectiveTargets: null,
   detectiveResults: {},
 };
