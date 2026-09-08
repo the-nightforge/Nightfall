@@ -173,6 +173,24 @@ function neutralRolesFor(config: RoomConfig): Role[] {
 }
 
 /**
+ * Vai → số ghế trong bộ bài, đếm từ ĐÚNG công thức mà `assignRoles` chia
+ * (`specialRoleList` + Dân Làng lấp chỗ trống), không phải một bảng chép tay.
+ *
+ * CÔNG KHAI: chỉ đọc `config` (đi xuống mọi client trong `RoomSnapshot.config`)
+ * và sĩ số. Cho biết bộ bài có những vai nào, mỗi vai mấy ghế — không nói ai
+ * cầm lá nào. Lớp belief xác suất của bot dùng nó làm prior (xem
+ * `role-belief.ts`), nên một preset đổi bộ bài là prior tự theo.
+ */
+function roleCompositionFor(config: RoomConfig, playerCount: number): Record<string, number> {
+  const special = specialRoleList(config);
+  const composition: Record<string, number> = {};
+  for (const role of special) composition[role] = (composition[role] ?? 0) + 1;
+  const villagers = Math.max(0, playerCount - special.length);
+  composition.VILLAGER = (composition.VILLAGER ?? 0) + villagers;
+  return composition;
+}
+
+/**
  * Bốc mục tiêu cho mọi Kẻ Báo Thù trong bộ bài vừa chia.
  *
  * Bốn tính chất, và cả bốn đều là luật chứ không phải chi tiết cài đặt:
@@ -2826,6 +2844,9 @@ export class GameEngine {
       // Suy từ CHÍNH bộ bài mà `assignRoles` chia, không phải một danh sách
       // chép tay: bật thêm một vai trung lập sau này là nó tự vào đây.
       neutralRolesInPlay: neutralRolesFor(st.config),
+      // Cùng nguồn công khai với dòng ngay trên, nhưng kèm SỐ GHẾ cho mỗi vai:
+      // prior của lớp belief xác suất (xem `role-belief.ts`).
+      roleComposition: roleCompositionFor(st.config, st.players.length),
       // Nhiệm vụ RIÊNG của chính con BOT này, không bao giờ của ai khác - cùng
       // cổng với `executionerViewFor` dành cho người thật, và cùng một bảng
       // nguồn. Một BOT khác đọc `undefined` ở đây, kể cả BOT ngồi cạnh.

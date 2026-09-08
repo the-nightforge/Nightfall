@@ -257,7 +257,16 @@ describe("Phase 1 · bí mật vai tới GAME_OVER", () => {
     const e = engineAtVoting();
     const villager = e.state.players.find((p) => p.role === "VILLAGER")!;
 
-    expect(roleCodesIn(e.botKnowledgeFor(villager.id))).toEqual(["VILLAGER"]);
+    // `roleComposition` là bộ bài CÔNG KHAI (RoomSnapshot.config đi xuống mọi
+    // client), nên tên vai của nó không phải một rò rỉ — loại khỏi payload
+    // trước khi đếm, cùng bảo chứng với bản cũ cho mọi phần còn lại.
+    const { roleComposition: _public, ...privateView } = e.botKnowledgeFor(villager.id);
+    expect(roleCodesIn(privateView)).toEqual(["VILLAGER"]);
+    // Composition đúng là bộ bài công khai: nói số ghế, không nói ai cầm lá.
+    const total = Object.values(
+      e.botKnowledgeFor(villager.id).roleComposition ?? {},
+    ).reduce((sum, count) => sum + count, 0);
+    expect(total).toBe(e.state.players.length);
   });
 });
 

@@ -32,6 +32,7 @@ import {
   type BotLastLetterIntention,
 } from "./decision/last-letter-decision";
 import { selectVote } from "./decision/vote-decision";
+import type { PolicyModel } from "./policy/policy-model";
 import {
   decideFinalVote,
   decideHunterShot,
@@ -101,6 +102,16 @@ export interface BotRuntimeOptions {
    * chơi, vì runtime tưởng vòng này chưa decay lần nào.
    */
   lastDecayRound?: number;
+  /**
+   * Policy thay heuristic mặc định của lượt VOTE (PR 8 §24): HybridPolicy
+   * alpha/beta hoặc một learned model sau này. CẤU HÌNH chứ không phải STATE:
+   * không vào `serialize()` (function không serialisable được), và một room
+   * khôi phục sau restart dựng runtime mới không policy → rơi về heuristic —
+   * đúng hành vi an toàn.
+   *
+   * Bỏ trống = heuristic thuần, hành vi production hiện hành.
+   */
+  votePolicy?: PolicyModel;
 }
 
 interface MemoryDraft {
@@ -191,6 +202,8 @@ export class BotRuntime {
 
   private readonly rng: BotRng;
   private readonly trace: BotTraceSink | undefined;
+  /** Policy lượt VOTE; `undefined` = heuristic thuần. Xem `BotRuntimeOptions.votePolicy`. */
+  private readonly votePolicy: PolicyModel | undefined;
   /**
    * Belief trước và sau lần `observe` gần nhất.
    *
@@ -210,6 +223,7 @@ export class BotRuntime {
   constructor(options: BotRuntimeOptions) {
     this.rng = options.rng;
     this.trace = options.trace;
+    this.votePolicy = options.votePolicy;
     this.weights = options.weights ?? DEFAULT_BOT_WEIGHTS;
 
     // Kiểm ngay tại constructor, không phải ở vòng 7 của ván thứ 214. Một NaN
@@ -337,7 +351,7 @@ export class BotRuntime {
   /** Chốt phiếu deterministic từ belief hiện tại. */
   decideVote(context: BotDecisionContext): BotVoteIntention {
     const run = this.beginTracedDecision();
-    const vote = selectVote(context, this.state, run.rng, this.weights, run.probe);
+    const vote = selectVote(context, this.state, run.rng, this.weights, run.probe, this.votePolicy);
     run.finish(context, "VOTE", vote.choice.type === "PLAYER" ? vote.choice.targetId : null, {
       PLAYER: "bầu",
       NO_ELIMINATION: "không treo ai",

@@ -6,7 +6,9 @@ import {
   DEFAULT_BOT_WEIGHTS,
   buildReport,
   formatReportText,
+  gameToTrajectories,
   runBatch,
+  serializeTrajectory,
   serializeTraces,
   traceFileName,
   weightsPreset,
@@ -42,6 +44,8 @@ interface Options {
   verifyReplay: boolean;
   out: string | null;
   quiet: boolean;
+  /** Thư mục ghi trajectory JSONL (§22); `null` = tắt. Xem `writeTrajectories`. */
+  trajectories: string | null;
   /** Dùng bộ bài chuẩn của số người đó thay cho bộ bài mặc định của runner. */
   preset: boolean;
   /** Thư mục nhận JSONL trace. `null` là TẮT, và tắt là mặc định. */
@@ -77,6 +81,7 @@ function usage(): string {
     "  --verify-replay     Chạy lại mỗi ván để bắt REPLAY_DIVERGENCE (chậm gấp đôi)",
     "  --out <đường dẫn>   Ghi JSON ra file",
     "  --traces <thư mục>  Ghi trace quyết định ra JSONL, mỗi ván một file (mặc định: tắt)",
+    "  --trajectories <dir> Ghi trajectory train (§22) ra JSONL, một file chung (mặc định: tắt)",
     `  --trace-games <số>  Số ván đầu được ghi trace (mặc định: ${DEFAULT_TRACE_GAMES})`,
     "  --quiet             Chỉ in JSON, không in bản tóm tắt",
     "",
@@ -101,6 +106,7 @@ function parseArgs(argv: readonly string[]): Options {
     preset: false,
     traces: null,
     traceGames: DEFAULT_TRACE_GAMES,
+    trajectories: null,
   };
 
   const number = (raw: string | undefined, flag: string): number => {
@@ -155,6 +161,9 @@ function parseArgs(argv: readonly string[]): Options {
       case "--traces":
         options.traces = argv[++i] ?? null;
         break;
+      case "--trajectories":
+        options.trajectories = argv[++i] ?? null;
+        break;
       case "--trace-games":
         options.traceGames = number(argv[++i], flag);
         break;
@@ -208,6 +217,32 @@ function writeTraces(directory: string, games: readonly SelfPlayGame[]): string[
   return written;
 }
 
+/**
+ * Ghi trajectory (§22) ra MỘT file JSONL chung — mỗi dòng một quyết định.
+ *
+ * Một file chung thay vì mỗi ván một file như trace: trajectory là DỮ LIỆU
+ * TRAIN, consumer (PR 8) đọc theo luồng chứ không mở từng ván để debug. Chỉ
+ * những ván CÓ trace mới sinh line — ván ngoài trần không có gì để ghi, và
+ * `gameToTrajectories` trả rỗng cho chúng.
+ */
+function writeTrajectories(directory: string, games: readonly SelfPlayGame[]): number {
+  const root = resolve(directory);
+  mkdirSync(root, { recursive: true });
+  const target = join(root, "trajectories.jsonl");
+
+  let count = 0;
+  const handle = writeFileSync.bind(null, target, "", "utf8");
+  handle();
+
+  for (const game of games) {
+    const lines = gameToTrajectories(game).map(serializeTrajectory);
+    if (lines.length === 0) continue;
+    writeFileSync(target, `${lines.join("\n")}\n`, { flag: "a", encoding: "utf8" });
+    count += lines.length;
+  }
+  return count;
+}
+
 /** Commit hiện tại, hoặc `null`. Không bao giờ làm hỏng cả lần chạy. */
 function currentCommit(): string | null {
   try {
@@ -235,11 +270,15 @@ function main(): void {
     // theo số người, nên một batch 15 người mặc định KHÔNG đo bộ bài mà ván 15
     // người thật sự chia. `--preset` là cách hỏi đúng câu hỏi đó.
     config: options.preset ? presetDeck(options.players) : undefined,
-    // Không `--traces` thì 0, và 0 nghĩa là `runSelfPlay` không dựng collector,
-    // không bọc RNG, không cấp phát một object trace nào. Buộc trần vào sự có
-    // mặt của thư mục ĐÍCH chứ không vào `--trace-games`, để không có cách nào
-    // trả giá bộ nhớ cho một tập trace rồi vứt đi vì quên chỗ ghi.
-    traceGames: options.traces === null ? 0 : Math.min(options.traceGames, options.games),
+    // Không `--traces`/`--trajectories` thì 0, và 0 nghĩa là `runSelfPlay`
+    // không dựng collector, không bọc RNG, không cấp phát một object trace nào.
+    // Buộc trần vào sự có mặt của thư mục ĐÍCH chứ không vào `--trace-games`,
+    // để không có cách nào trả giá bộ nhớ cho một tập trace rồi vứt đi vì quên
+    // chỗ ghi.
+    traceGames:
+      options.traces === null && options.trajectories === null
+        ? 0
+        : Math.min(options.traceGames, options.games),
   };
 
   const startedAt = performance.now();
@@ -272,6 +311,15 @@ function main(): void {
       // In lệnh đọc kèm một file có thật: một đường dẫn không có lệnh đi cùng
       // là một thư mục người ta ghi ra rồi không bao giờ mở.
       if (files[0]) process.stdout.write(`Đọc:  npm run trace-view -- ${files[0]}\n`);
+    }
+  }
+
+  if (options.trajectories !== null) {
+    const written = writeTrajectories(options.trajectories, games);
+    if (!options.quiet) {
+      process.stdout.write(
+        `\nĐã ghi trajectory ${written} dòng vào ${resolve(options.trajectories)}\n`,
+      );
     }
   }
 

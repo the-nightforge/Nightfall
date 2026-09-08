@@ -752,6 +752,27 @@ export interface LookAheadWeights {
   wolfMislynchGain: number;
 }
 
+export interface CounterfactualWeights {
+  /**
+   * Nhánh làng — teamValue: thưởng tối đa khi treo trúng phe Sói, nhân với
+   * P(Sói) của mục tiêu (projection PR 1). `0` TẮT số hạng.
+   */
+  teamValueGain: number;
+  /**
+   * Nhánh làng — survivalValue: phạt khi treo nhầm, nhân P(vô tội) x áp lực
+   * sĩ số. Cùng dạng `futureRisk` của v20 nhưng TÁCH thành phần riêng để
+   * explainability; bật v21 thì term `futureRisk` của v20 không còn.
+   */
+  mislynchSurvivalCost: number;
+  /**
+   * Nhánh làng — informationValue: phạt khi mất một nguồn dữ liệu còn sống
+   * (người có evidence reasons trong belief), nhân độ khan hiếm bằng chứng.
+   */
+  evidenceLossCost: number;
+  /** Nhánh Sói — hệ số cho cả ba thành phần. `0` = Sói giữ bảng v18. */
+  wolfSideGain: number;
+}
+
 export interface BotWeights {
   /** Semver. Đổi giá trị bất kỳ là phải đổi version. */
   readonly version: string;
@@ -783,6 +804,12 @@ export interface BotWeights {
    * không có nhóm này: vắng mặt = tắt, và `voteFutureRisk` trả 0.
    */
   readonly lookAhead?: LookAheadWeights;
+  /**
+   * Counterfactual có cấu trúc (spec CONTINUE §10). OPTIONAL; khi có mặt thì
+   * planner counterfactual thay planner look-ahead v20 — ba term named
+   * `survivalValue/informationValue/teamValue` thay term `futureRisk` gộp.
+   */
+  readonly counterfactual?: CounterfactualWeights;
 }
 
 /** Cho phép ghi đè từng nhánh mà không phải khai lại cả cây. */
@@ -2241,6 +2268,11 @@ export const BOT_WEIGHTS_V19: BotWeights = Object.freeze({
  *
  * MỘT nhóm mới: `lookAhead` (v18 KHÔNG có nhóm này nên byte-identical).
  *
+ * BỊ THAY BỞI v21: khi preset khai nhóm `counterfactual`, planner
+ * counterfactual (ba term named, dùng belief xác suất PR 1) THAY planner này —
+ * chỉ một lớp counterfactual tại một thời điểm, nếu chồng nhau là đếm đôi.
+ * v20 giữ nguyên làm mốc A/B của term `futureRisk` gộp.
+ *
  * Số hạng `futureRisk` trả lời câu hỏi mà bảng điểm myopic bỏ sót (spec
  * BOT_AI_UPGRADE §12): "treo người này, nếu họ vô tội, pha sau làng trả giá
  * bao nhiêu?". Hai thành phần:
@@ -2270,6 +2302,65 @@ export const BOT_WEIGHTS_V20: BotWeights = Object.freeze({
 });
 
 /**
+ * Cấu hình v21 - counterfactual một bước CÓ CẤU TRÚC (CONTINUE §10/§11/§35).
+ *
+ * NÂNG CẤP v20: thay term `futureRisk` gộp bằng ba thành phần named, mỗi thành
+ * phần một câu trả lời riêng:
+ *
+ * - `teamValue` (MỚI so v20): giá trị kỳ vọng ròng của một án treo —
+ *   `teamValueGain × P(Sói)` trừ phần "treo nhầm người được làng tin". Đúng
+ *   hình dạng §11: predicted outcome → next-phase evaluation, dùng XÁC SUẤT
+ *   từ projection PR 1 chứ không dùng raw suspicion.
+ * - `survivalValue` (= v20 mislynchPressureScale, đổi tên): mất một GHẾ khi
+ *   làng đã mỏng thì càng đắt.
+ * - `informationValue` (= v20 mislynchScarcityScale, mở rộng): mất một NGUỒN
+ *   DỮ LIỆU (người có evidence reasons) khi làng khan bằng chứng.
+ *
+ * Sói vẫn `wolfSideGain = 0` — byte-identical với v18, nhánh Sói là PR 5.
+ *
+ * KHÔNG mặc định cho tới khi bench ≥1.000 ván không tụt (kỷ luật v19/v20).
+ */
+export const BOT_WEIGHTS_V21: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V18,
+  version: "21.0.0",
+
+  counterfactual: Object.freeze({
+    teamValueGain: 5,
+    mislynchSurvivalCost: 6,
+    evidenceLossCost: 4,
+    wolfSideGain: 0,
+  }),
+});
+
+/**
+ * Cấu hình v22 - counterfactual cho NHÁNH SÓI (PR 5b, CONTINUE §14-§17).
+ *
+ * MỘT ô đổi so v21: `counterfactual.wolfSideGain` 0 → 5.
+ *
+ * Nhánh Sói giờ có expectedOutcome thật, đo bằng bảng belief PR 1 (đồng bọn
+ * ghim P=1 qua KNOWN_ALLY, người thường theo scalar — mọi số đều từ knowledge
+ * view mà Sói hợp pháp thấy):
+ *
+ * - `teamValue = wolfSideGain × P(người không-Sói) × pressure`: bỏ phiếu người
+ *   làng khi làng còn đông-thêm-được đưa Sói gần hoà số hơn.
+ * - `survivalValue = −mislynchSurvivalCost × P(Sói) × pressure`: phiếu vào
+ *   người có P(wolf) cao là rủi ro bộc lộ; tệ nhất là vào ĐỒNG BỌN (P=1).
+ * - `informationValue = 0`: mất nguồn dữ liệu làng là tác dụng phụ, không phải
+ *   lợi ích Sói được thưởng trực tiếp.
+ *
+ * KHÔNG mặc định — bench v22 so v21 trước, kỷ luật v19.
+ */
+export const BOT_WEIGHTS_V22: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V21,
+  version: "22.0.0",
+
+  counterfactual: Object.freeze({
+    ...BOT_WEIGHTS_V21.counterfactual!,
+    wolfSideGain: 5,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
@@ -2286,9 +2377,15 @@ export const BOT_WEIGHTS_V20: BotWeights = Object.freeze({
  * cho Tiên Tri giấu kết quả tới ngày 2 khi bàn có người thật; v15.0.0 hạ
  * ngưỡng bình độc/bình cứu/Nước thánh một nấc khi làng đã mỏng; v16.0.0 cho
  * Sói cãi nhau giả ở vòng 1-2 và bán đồng đội sớm hơn trước người thật;
- * v17.0.0 cho phiếu dính hơn trước mục tiêu đang nói nhiều; v18.0.0 bỏ phần
- * dính thêm đó trước người vừa có bằng chứng gỡ tội mới.
- * v1-v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset đích
- * danh, không bao giờ dựa vào hằng số này.
- */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V18;
+  * v17.0.0 cho phiếu dính hơn trước mục tiêu đang nói nhiều; v18.0.0 bỏ phần
+  * dính thêm đó trước người vừa có bằng chứng gỡ tội mới.
+  * v21.0.0 (CONTINUE PR 3) bật counterfactual một bước cho phiếu nhánh làng:
+  * protocol 5×1.000 ván paired seeds đo được villageWR 51.98% → 54.04%
+  * (+2,06 điểm, z=2,06) và villageVoteAccuracy 44.86% → 48.88% (+4,02 điểm,
+  * z=14,35), không batch nào tụt quá −2,7 điểm — đạt tiêu chí §40 của
+  * BOT_AI_CONTINUE_UPGRADE, nên mặc định nâng lên đây. v20/v22 tồn tại làm
+  * mốc A/B (futureRisk gộp / wolfSideGain), chưa có protocol.
+  * v1-v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset đích
+  * danh, không bao giờ dựa vào hằng số này.
+  */
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V21;

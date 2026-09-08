@@ -5,7 +5,7 @@ import { BotRuntime } from "../src/bot/BotRuntime";
 import { createSeededRng } from "../src/bot/rng";
 import { createDecisionProbe } from "../src/bot/trace/trace";
 import type { BotDecisionContext, BotPersonality } from "../src/bot/types";
-import { DEFAULT_BOT_WEIGHTS } from "../src/bot/config/weights";
+import { BOT_WEIGHTS_V18 } from "../src/bot/config/weights";
 
 /**
  * Characterization cho seam `StrategicPlanner` (spec §12): planner hiện hành là
@@ -70,7 +70,7 @@ function makeRuntime() {
     rng: createSeededRng("planner"),
     playerIds: ["me", "b", "c", "d"],
     personality: BALANCED,
-    weights: DEFAULT_BOT_WEIGHTS,
+    weights: BOT_WEIGHTS_V18,
   });
   const reasons = (id: string, weight: number) => [
     {
@@ -101,7 +101,7 @@ describe("ImmediateUtilityPlanner (seam StrategicPlanner)", () => {
     // Đường production: chọn phiếu qua selectVote, ghi lại bảng điểm qua probe.
     const probe = createDecisionProbe();
     const voteRng = createSeededRng("planner-vote");
-    const intention = selectVote(ctx, bot.state, voteRng, DEFAULT_BOT_WEIGHTS, probe);
+    const intention = selectVote(ctx, bot.state, voteRng, BOT_WEIGHTS_V18, probe);
     const recorded = new Map(
       probe.candidates.map((item) => [item.targetId, { score: item.score, terms: item.terms }]),
     );
@@ -137,7 +137,7 @@ describe("ImmediateUtilityPlanner (seam StrategicPlanner)", () => {
     );
     // Jitter giống nhau cho cùng thứ tự rút; hai người hoà belief phải được
     // tách bằng chính jitter, và selectVote với cùng seed phải chọn cùng người.
-    const intention = selectVote(ctx, bot.state, createSeededRng("planner-tie"), DEFAULT_BOT_WEIGHTS);
+    const intention = selectVote(ctx, bot.state, createSeededRng("planner-tie"), BOT_WEIGHTS_V18);
     const best = Math.max(...scores);
     const expected = ["b", "c", "d"].filter((_, index) => scores[index] === best);
     expect(expected).toContain(
@@ -145,3 +145,5 @@ describe("ImmediateUtilityPlanner (seam StrategicPlanner)", () => {
     );
   });
 });
+
+

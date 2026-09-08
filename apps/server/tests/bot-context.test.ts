@@ -81,13 +81,30 @@ function secretRoleRoom(): Room {
 }
 
 describe("bot decision context", () => {
+  /**
+   * Chuỗi JSON của context ĐÃ LOẠI `roleComposition` — bộ bài công khai
+   * (`RoomSnapshot.config` đi xuống mọi client), được phép nhắc tên vai.
+   * Mọi phần khác của context vẫn không được nhắc vai nào ngoài vai đã lộ.
+   */
+  function privateJson(context: ReturnType<typeof buildBotDecisionContext>): string {
+    const { roleComposition: _public, ...knowledge } = context.knowledge;
+    return JSON.stringify({ ...context, knowledge });
+  }
+
   it("combines only engine knowledge and visible chat", () => {
     const context = buildBotDecisionContext(secretRoleRoom(), "villager-bot");
 
     expect(context.visibleChat.map((item) => item.id)).toEqual(["day-1"]);
-    expect(JSON.stringify(context)).not.toContain("WITCH");
-    expect(JSON.stringify(context)).not.toContain("SEER");
-    expect(JSON.stringify(context)).not.toContain("WEREWOLF");
+    expect(privateJson(context)).not.toContain("WITCH");
+    expect(privateJson(context)).not.toContain("SEER");
+    expect(privateJson(context)).not.toContain("WEREWOLF");
+    expect(context.knowledge.roleComposition).toEqual({
+      WEREWOLF: 2,
+      SEER: 1,
+      GUARD: 1,
+      WITCH: 1,
+      VILLAGER: 0,
+    });
     expect(context.knowledge.players.map((player) => player.id)).toContain("dead-seer");
     expect(context.knowledge.knownRoles).not.toHaveProperty("dead-seer");
     expect(context.knowledge.knownRoles).toEqual({ "villager-bot": "VILLAGER" });
@@ -100,8 +117,8 @@ describe("bot decision context", () => {
     // visibleChatLog nên BOT không được đọc nhiều hơn người thật.
     expect(context.visibleChat.map((item) => item.id)).toEqual(["day-1"]);
     expect(context.knowledge.knownRoles).toEqual({ "wolf-a": "WEREWOLF", "wolf-b": "WEREWOLF" });
-    expect(JSON.stringify(context)).not.toContain("WITCH");
-    expect(JSON.stringify(context)).not.toContain("SEER");
+    expect(privateJson(context)).not.toContain("WITCH");
+    expect(privateJson(context)).not.toContain("SEER");
   });
 
   it("opens the wolf channel to a wolf bot only at night", () => {

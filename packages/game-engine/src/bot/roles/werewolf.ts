@@ -12,6 +12,7 @@ import { wolfBluffSeat } from "../decision/claim-decision";
 import { fnv1a32 } from "../hash";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
 import { rankNightTargets } from "./night-scoring";
+import { wolfThreatScore } from "./wolf-team-plan";
 
 /** Vai thuộc bầy mà `knownRoles` của một con Sói còn sống liệt kê. */
 function isPackRole(role: Role | undefined): boolean {
@@ -94,6 +95,7 @@ export function fakeFightTarget(
 
 /** Vai có thể lật ngược ván đấu nếu sống thêm một đêm. */
 const POWER_ROLES = new Set(["SEER", "WITCH", "GUARD", "HUNTER"]);
+void POWER_ROLES;
 
 /**
  * Sói chọn nạn nhân theo mức NGUY HIỂM với phe Sói, không theo mức đáng ngờ.
@@ -102,42 +104,10 @@ const POWER_ROLES = new Set(["SEER", "WITCH", "GUARD", "HUNTER"]);
  * Sói", mà Sói thì đã biết ai là Sói rồi. Cắn người đang bị cả làng nghi là
  * lãng phí gấp đôi - làng sẽ tự treo người đó vào hôm sau, còn Sói thì mất một
  * đêm để giết một người vô hại với mình.
+ *
+ * PR 5b: công thức sống ở `wolf-team-plan.ts::wolfThreatScore` — nguồn DUY
+ * NHẤT cho cả lượt cắn lẫn team plan, không còn hai bảng tự trôi.
  */
-function threatScore(
-  state: BotBrainState,
-  context: BotDecisionContext,
-  targetId: string,
-  weights: BotWeights,
-): { score: number; reason: string } {
-  const tuning = weights.roleThresholds;
-  const claim = state.claims.find(
-    (memory) =>
-      memory.actorId === targetId &&
-      memory.type === "ROLE_CLAIM" &&
-      POWER_ROLES.has(String(memory.data.role)),
-  );
-  if (claim) {
-    return {
-      score: tuning.wolfClaimedPowerScore,
-      reason: `tự nhận là ${String(claim.data.role)} nên phải chết trước`,
-    };
-  }
-
-  // Người nói nhiều và được người khác đi theo là người lái được cuộc bỏ phiếu.
-  const influence = incomingHostilityOf(state, targetId);
-  const suspicion = state.suspicion[targetId]?.score ?? 0;
-  const trust = state.trust[targetId]?.score ?? 0;
-
-  return {
-    // Trừ suspicion: làng đang nghi sẵn thì để làng tự xử.
-    score:
-      tuning.wolfThreatBase +
-      trust * tuning.wolfTrustWeight +
-      influence * tuning.wolfHostilityWeight -
-      suspicion * tuning.wolfSuspicionDiscount,
-    reason: "được làng tin nên nguy hiểm với phe Sói",
-  };
-}
 
 /**
  * `role` là tham số vì Sói Con dùng ĐÚNG chiến lược này: nó cắn cùng bầy, và
@@ -172,10 +142,10 @@ export function werewolfStrategy(
         return null;
       }
 
-      // `threatScore` thuần và không rút RNG, nên tính sẵn một lần cho từng
+      // `wolfThreatScore` thuần và không rút RNG, nên tính sẵn một lần cho từng
       // ứng viên: bảng term cần `score`, còn evidence cần `reason` của người thắng.
       const threatByTarget = new Map(
-        candidates.map((targetId) => [targetId, threatScore(state, context, targetId, weights)]),
+        candidates.map((targetId) => [targetId, wolfThreatScore(state, targetId, weights)]),
       );
       const scored = rankNightTargets(candidates, {
         weights,

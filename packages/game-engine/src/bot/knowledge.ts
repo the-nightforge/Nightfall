@@ -100,6 +100,8 @@ export interface BotKnowledgeInput {
   trackerResult?: BotKnowledgeView["trackerResult"];
   /** Suy từ chính cấu hình phòng; xem `BotKnowledgeView.neutralRolesInPlay`. */
   neutralRolesInPlay: BotKnowledgeView["neutralRolesInPlay"];
+  /** Suy từ chính cấu hình phòng; xem `BotKnowledgeView.roleComposition`. */
+  roleComposition?: BotKnowledgeView["roleComposition"];
   /** Đã lọc ở engine theo đúng chủ nhân; xem `BotKnowledgeView.executionerTargetId`. */
   executionerTargetId: string | null;
   /** Engine đã quyết định vai này có được thấy gì; ở đây chỉ sao chép. */
@@ -142,6 +144,7 @@ export function buildBotKnowledgeView(input: BotKnowledgeInput): BotKnowledgeVie
     // sống bên engine.
     trackerResult: input.trackerResult ? { ...input.trackerResult } : null,
     neutralRolesInPlay: [...input.neutralRolesInPlay],
+    roleComposition: input.roleComposition ? { ...input.roleComposition } : undefined,
     executionerTargetId: input.executionerTargetId,
     night: input.night ? copyNightKnowledge(input.night) : null,
     trialAccusedId: input.trialAccusedId,
