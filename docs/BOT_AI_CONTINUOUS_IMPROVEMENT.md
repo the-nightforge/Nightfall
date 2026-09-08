@@ -151,3 +151,60 @@ nhiễu ±3 giữa các batch 30 ván (46.7–53.3%), khớp các lần đo trư
 **Tiếp theo (PR 2):** nâng `SocialEdge`/`possibleWolfPairScore` thành
 `P(cả hai là Sói)` — pairwise reasoning §34, dùng `roleComposition` để chuẩn
 hoá theo số ghế, không đụng decision.
+
+---
+
+## 10. PR 2 — Báo cáo thực hiện (spec §41)
+
+**Changed files:**
+
+- `packages/game-engine/src/bot/belief/pair-assessment.ts` (MỚI) —
+  `assessPairs()` trả `PlayerPairAssessment[]` đúng shape spec §8
+  (`wolfPairScore` joint xác suất, `allyScore`, `conflictScore`, `evidence`),
+  dựng trên projection PR 1 + social graph Phase 2, không tính gì mới
+- `packages/game-engine/src/index.ts` — export module
+- Tests: `tests/bot-pair-assessment.test.ts` (8)
+
+**Behavior changed:** KHÔNG — view thuần, không state mới, không đụng decision,
+không knob mới. `DEFAULT_BOT_WEIGHTS` vẫn v18.
+
+**Công thức (đúng ràng buộc §34):**
+
+```text
+joint = min( min(pA, pB), pA × pB × (1 + compatibility) )
+```
+
+- `pA, pB` = P(wolf-team) từng người từ projection PR 1
+- `compatibility` = `possibleWolfPairScore` (chiết khấu samples sẵn)
+- Không quan sát → joint = tích độc lập; hợp lực bão hoà → tiến gần
+  min(pA, pB) nhưng **không bao giờ vượt** (chặn trên Fréchet) — pairwise không
+  thể đè bằng chứng cá nhân
+- Thù địch không kéo joint xuống dưới tích độc lập ("đang cãi nhau" ≠ "cả hai
+  trong sạch")
+- `allyScore/conflictScore` chiết khấu cùng `priorStrength`; evidence gom hai
+  chiều cạnh, dedup theo id, sort ổn định, cap `limits.edgeReasons`
+
+**Tests:** engine **89 file / 4.689 pass** (+8 mới), server **1.095 pass**,
+lint xanh. 8 test chốt: tích độc lập khi trống cạnh; hợp lực nâng joint;
+thù địch không nâng; Fréchet; certain đè quan hệ (2 Sói lộ → 1, 1 người
+clear → 0); cặp chuẩn hoá a<b chỉ người sống (n(n−1)/2 cặp); evidence 2 chiều
+sort dedup; tất định JSON-equal.
+
+**Benchmark:** self-play `--seed pr2-final --games 30 --preset --verify-replay`
+— 0 divergence, 0 knowledge violation. (View-only, bench thật khi PR sau nối
+decision.)
+
+**Known limitations:**
+
+- `allyScore/conflictScore` dùng mix cố định (support+alignment / hostility) —
+  chưa qua `weights.social` mix riêng; khi có consumer sẽ thêm weight group.
+- Chưa tính "shared targets" (cùng nhắm một người) — social graph chưa ghi
+  chiều này; sẽ bổ sung khi PR discussion-strategy (PR 4) cần.
+- Joint chỉ chặn Fréchet trên, chưa dùng ràng buộc SỐ GHẾ Sói toàn ván
+  (composition) để trừ pairwise hai cặp chồng nhau — đó là tầng Bayesian
+  mà spec §8 khuyến cáo chưa cần.
+
+**Tiếp theo (PR 3):** mở rộng counterfactual planner — từ `futureRisk` phiếu
+làng (M6/v20) thành expectedOutcome đủ thành phần (§10: immediateValue,
+survivalValue, informationValue, teamValue, futureRisk) cho nhánh Sói và cho
+decision đêm, chạy trên seam `StrategicPlanner` của M5.
