@@ -1,7 +1,7 @@
 import type { Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
-import { sumTerms, type TraceTerm } from "../trace/trace";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
+import { rankNightTargets } from "./night-scoring";
 import { informationValue } from "./uncertainty";
 
 /**
@@ -36,20 +36,17 @@ export function detectiveStrategy(
         return null;
       }
 
-      const ranked = candidates
-        .map((targetId) => {
-          const terms: TraceTerm[] = [
-            {
-              name: "informationValue",
-              value: informationValue(state.suspicion[targetId]?.score ?? 0, weights),
-            },
-            { name: "jitter", value: (rng() - 0.5) * weights.confidence.jitterSpan },
-          ];
-          const score = sumTerms(terms);
-          probe?.candidate({ targetId, score, terms, evidenceIds: [] });
-          return { targetId, score };
-        })
-        .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));
+      const ranked = rankNightTargets(candidates, {
+        weights,
+        rng,
+        probe,
+        termsFor: (targetId) => [
+          {
+            name: "informationValue",
+            value: informationValue(state.suspicion[targetId]?.score ?? 0, weights),
+          },
+        ],
+      });
 
       return {
         kind: "NIGHT_ACTION",

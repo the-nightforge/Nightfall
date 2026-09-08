@@ -4,7 +4,14 @@ import { incomingHostilityOf, possibleWolfPairScore } from "../analysis/social-a
 import { MAX_BELIEF_SCORE } from "../belief/evidence";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { isHumanTable } from "../knowledge";
-import { strategyFor } from "../roles/registry";
+import type {
+  ActionEvaluation,
+  StrategicPlanner,
+  StrategyContext,
+} from "../planning/planner";
+import { immediateUtilityPlanner } from "../planning/planner";
+import type { PolicyModel } from "../policy/policy-model";
+import { heuristicPolicyModel } from "../policy/policy-model";import { strategyFor } from "../roles/registry";
 import { fakeFightTarget } from "../roles/werewolf";
 import { sumTerms, type DecisionProbe, type TraceTerm } from "../trace/trace";
 import type {
@@ -218,41 +225,45 @@ function noEliminationIntention(confidence: number): BotVoteIntention {
 }
 
 /**
- * Chấm điểm mọi lựa chọn hợp lệ rồi trả về một ý định có bằng chứng thật.
+ * Chấm điểm MỘT ứng viên phiếu — scorer mà `ImmediateUtilityPlanner` bọc lại.
  *
- * Hàm này thuần: cùng context, cùng state và cùng RNG thì cùng kết quả. Nó
- * không bao giờ nhận `GameState` hay `Room`, và không bao giờ bịa ra một mục
- * tiêu không nằm trong `legalVoteChoices` mà engine đã cấp.
+ * Tách khỏi vòng lặp của `selectVote` để seam `StrategicPlanner` có một hàm
+ * thuần để trỏ vào: cùng một bảng term, cùng lệ rút jitter (MỘT số cho mỗi ứng
+ * viên), cùng thứ tự cộng. Hàm KHÔNG quyết định winner, không biết ngưỡng hay
+ * hysteresis — mọi thứ sau bảng điểm vẫn thuộc `selectVote`.
+ *
+ * Các đại lượng dùng chung cả bảng (bias của vai, `fightTarget`, `bussingShare`)
+ * được tính sẵn trong `selectVote` rồi bó vào closure: planner không cần biết
+ * chúng tồn tại.
  */
-export function selectVote(
+/**
+ * Khung dữ liệu dùng-chung-cả-bảng mà `scoreVoteCandidate` cần. Tính MỘT lần
+ * cho cả lượt chấm (`deriveVoteScoringFrame`) thay vì mỗi ứng viên một lần.
+ */
+export interface VoteScoringFrame {
+  weights: BotWeights;
+  aliveIds: string[];
+  roleBias: Record<string, number>;
+  /** Ứng viên Sói cùng số hạng wolf tương ứng (bussing / cãi giả / bảo vệ). */
+  wolfBranches: Map<string, TraceTerm>;
+  /** Cãi giả vòng này; cổng "không treo khi bằng chứng mỏng" cần nó. */
+  fightTarget: string | null;
+}
+
+export function deriveVoteScoringFrame(
   context: BotDecisionContext,
   state: BotBrainState,
-  rng: BotRng,
-  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
-  probe?: DecisionProbe,
-): BotVoteIntention {
+  weights: BotWeights,
+): VoteScoringFrame {
   const knowledge = context.knowledge;
   const personality = state.personality;
   const selfIsWolf =
     knowledge.knownRoles[state.playerId] === "WEREWOLF" ||
     knowledge.knownRoles[state.playerId] === "WOLF_CUB";
-  /**
-   * Mất đồng đội thì bớt đẩy phiếu lộ liễu.
-   *
-   * Một con Sói vừa mất bạn mà vẫn hăng hái chỉ mặt người khác là con Sói dễ bị
-   * để ý nhất trên bàn: cả làng vừa treo đúng một người, và ai lớn tiếng nhất
-   * ngay sau đó sẽ được soi kỹ. Nâng ngưỡng lên tức là im lặng nhiều hơn.
-   */
-  const lostAlly = state.memories.some((memory) => memory.type === "ALLY_LOST");
-  const threshold =
-    voteThreshold(personality, weights) +
-    (lostAlly && selfIsWolf ? weights.deceptionRisk.allyLostThresholdBonus : 0);
 
   // Hiểu biết riêng của vai, do chính strategy của vai đó cấp. Tách khỏi vòng
   // lặp chấm điểm để `selectVote` không phải biết vai nào tồn tại.
   const bias = strategyFor(knowledge.selfRole, weights).voteBias(context, state);
-  const aliveIds = knowledge.players.filter((p) => p.alive).map((p) => p.id);
-
   // Đồng bọn mà con Sói này cãi giả vòng này; `null` ở mọi vai khác và ở mọi
   // preset có `fakeFightChance = 0`. Xem `fakeFightTarget` - không rút RNG.
   const fightTarget = selfIsWolf ? fakeFightTarget(context, state, weights) : null;
@@ -262,18 +273,16 @@ export function selectVote(
     ? weights.deceptionRisk.bussingVoteShareHuman
     : weights.deceptionRisk.bussingVoteShare;
 
-  const scored: ScoredTarget[] = [];
-  for (const targetId of candidatesFor(knowledge, state.playerId, aliveIds)) {
-    // Engine cho phép tự bầu mình, nhưng một BOT tự đề cử mình là hành vi vô
-    // nghĩa; luật vẫn được báo cáo trung thực ở knowledge view.
-    if (targetId === state.playerId) continue;
+  const aliveIds = knowledge.players.filter((p) => p.alive).map((p) => p.id);
+  const roleBias: Record<string, number> = { ...bias };
+  const wolfBranches = new Map<string, TraceTerm>();
 
-    const belief = state.suspicion[targetId];
-    const reasons = belief?.reasons ?? [];
-    const topConfidence = reasons.reduce((max, item) => Math.max(max, item.confidence), 0);
+  for (const targetId of candidatesFor(knowledge, state.playerId, aliveIds)) {
+    if (targetId === state.playerId) continue;
 
     const targetRole = knowledge.knownRoles[targetId];
     const targetIsWolf = targetRole === "WEREWOLF" || targetRole === "WOLF_CUB";
+    if (!(selfIsWolf && targetIsWolf)) continue;
 
     /**
      * Bảo vệ đồng đội, TRỪ KHI cả làng đã dồn phiếu vào người đó.
@@ -294,85 +303,260 @@ export function selectVote(
     const votesAgainstTarget = knowledge.currentVoteCounts.players[targetId] ?? 0;
     const voteShare = votesAgainstTarget / Math.max(1, aliveIds.length);
     const willBus =
-      selfIsWolf &&
-      targetIsWolf &&
       voteShare >= bussingShare &&
       personality.deceptionSkill * weights.deceptionRisk.bussingDeceptionScale >= 1;
-    const willFight = targetIsWolf && targetId === fightTarget;
+    const willFight = targetId === fightTarget;
 
-    // Điểm được cộng theo TỪNG SỐ HẠNG chứ không phải một biểu thức dài. Thứ tự
-    // cộng giữ nguyên nên kết quả giống hệt từng bit (xem `sumTerms`), nhưng giờ
-    // mỗi đóng góp có tên - và đó là toàn bộ nội dung của một lời giải thích.
-    const terms: TraceTerm[] = [
-      { name: "belief", value: belief?.score ?? 0 },
-      {
-        name: "evidenceConfidence",
-        value: topConfidence * weights.suspicion.evidenceConfidenceBonus,
-      },
-      {
-        name: "hostility",
-        value: incomingHostilityOf(state, targetId) * weights.suspicion.hostilityBonus,
-      },
-      {
-        name: "pairPressure",
-        value: pairPressure(state, targetId, weights) * weights.suspicion.pairBonus,
-      },
-      {
-        name: "trustDamping",
-        value: -((state.trust[targetId]?.score ?? 0) * weights.trust.damping),
-      },
-      // Bỏ luôn bias của vai khi đã quyết hy sinh: `voteBias` của Sói đẩy -100
-      // vào mỗi đồng bọn, và một số hạng lớn thế sẽ nuốt chửng mọi thứ khác.
-      { name: "roleBias", value: willBus || willFight ? 0 : bias[targetId] ?? 0 },
-      // Người bị cả làng dồn vào mà không ai bênh thì dễ bị treo; đó vừa là tín
-      // hiệu (có thể họ đã lộ), vừa là cái bẫy (đám đông có khi đang sai).
-      // Trọng số nhỏ có chủ đích: nó không được tự mình đẩy ai qua ngưỡng.
-      {
-        name: "isolation",
-        value: isolationScore(state, targetId, aliveIds) * weights.suspicion.isolationBonus,
-      },
-    ];
-
-    if (selfIsWolf && targetIsWolf) {
-      terms.push(
-        willBus
-          ? // Nhảy lên chuyến xe đang lăn. Gỡ phạt thôi là chưa đủ: đồng đội có
-            // suspicion bằng 0 trong mắt chính con Sói, nên không gì đẩy nó lên
-            // đầu bảng. Bussing thật là *bỏ phiếu cùng đa số*.
-            { name: "bussingJoin", value: voteShare * weights.deceptionRisk.bussingJoinBonus }
-          : willFight
-            ? // Cãi giả: cùng cơ chế nhưng không có chuyến xe nào, nên chỉ một
-              // phần. Xem `FAKE_FIGHT_JOIN_SCALE`.
-              {
-                name: "fakeFight",
-                value: FAKE_FIGHT_JOIN_SCALE * weights.deceptionRisk.bussingJoinBonus,
-              }
-            : {
-                name: "teammateProtection",
-                value: -(
-                  weights.teammateProtection.penaltyBase +
-                  personality.loyalty * weights.teammateProtection.loyaltySpan
-                ),
-              },
-      );
-    }
-
-    terms.push({ name: "jitter", value: (rng() - 0.5) * weights.confidence.jitterSpan });
-
-    const score = sumTerms(terms);
-    const evidence = reasons.slice(-weights.limits.intentionEvidence);
-
-    if (probe) {
-      probe.candidate({
-        targetId,
-        score,
-        terms,
-        evidenceIds: evidence.map((item) => item.id),
+    if (willBus) {
+      // Nhảy lên chuyến xe đang lăn. Gỡ phạt thôi là chưa đủ: đồng đội có
+      // suspicion bằng 0 trong mắt chính con Sói, nên không gì đẩy nó lên
+      // đầu bảng. Bussing thật là *bỏ phiếu cùng đa số*.
+      wolfBranches.set(targetId, {
+        name: "bussingJoin",
+        value: voteShare * weights.deceptionRisk.bussingJoinBonus,
+      });
+    } else if (willFight) {
+      // Cãi giả: cùng cơ chế nhưng không có chuyến xe nào, nên chỉ một
+      // phần. Xem `FAKE_FIGHT_JOIN_SCALE`.
+      wolfBranches.set(targetId, {
+        name: "fakeFight",
+        value: FAKE_FIGHT_JOIN_SCALE * weights.deceptionRisk.bussingJoinBonus,
+      });
+    } else {
+      wolfBranches.set(targetId, {
+        name: "teammateProtection",
+        value: -(
+          weights.teammateProtection.penaltyBase +
+          personality.loyalty * weights.teammateProtection.loyaltySpan
+        ),
       });
     }
 
-    scored.push({ targetId, score, evidence, topConfidence });
+    // Bỏ luôn bias của vai khi đã quyết hy sinh: `voteBias` của Sói đẩy -100
+    // vào mỗi đồng bọn, và một số hạng lớn thế sẽ nuốt chửng mọi thứ khác.
+    if (willBus || willFight) roleBias[targetId] = 0;
   }
+
+  return { weights, aliveIds, roleBias, wolfBranches, fightTarget };
+}
+
+/**
+ * Chấm điểm MỘT ứng viên phiếu — scorer mà `ImmediateUtilityPlanner` bọc lại.
+ *
+ * Tách khỏi vòng lặp của `selectVote` để seam `StrategicPlanner` có một hàm
+ * thuần để trỏ vào: cùng một bảng term, cùng lệ rút jitter (MỘT số cho mỗi ứng
+ * viên), cùng thứ tự cộng. Hàm KHÔNG quyết định winner, không biết ngưỡng hay
+ * hysteresis — mọi thứ sau bảng điểm vẫn thuộc `selectVote`.
+ *
+ * `frame` không cấp thì tự suy với trọng số mặc định: đủ cho script và test;
+ * `selectVote` cấp frame tính sẵn để dùng đúng weights của lượt gọi.
+ */
+export function scoreVoteCandidate(
+  targetId: string,
+  plannerContext: StrategyContext<VoteScoringFrame>,
+): ActionEvaluation {
+  const { context, state, rng } = plannerContext;
+  const frame =
+    plannerContext.frame ??
+    deriveVoteScoringFrame(context, state, DEFAULT_BOT_WEIGHTS);
+
+  const belief = state.suspicion[targetId];
+  const reasons = belief?.reasons ?? [];
+  const topConfidence = reasons.reduce((max, item) => Math.max(max, item.confidence), 0);
+
+  const terms: TraceTerm[] = [
+    { name: "belief", value: belief?.score ?? 0 },
+    {
+      name: "evidenceConfidence",
+      value: topConfidence * frame.weights.suspicion.evidenceConfidenceBonus,
+    },
+    {
+      name: "hostility",
+      value: incomingHostilityOf(state, targetId) * frame.weights.suspicion.hostilityBonus,
+    },
+    {
+      name: "pairPressure",
+      value: pairPressure(state, targetId, frame.weights) * frame.weights.suspicion.pairBonus,
+    },
+    {
+      name: "trustDamping",
+      value: -((state.trust[targetId]?.score ?? 0) * frame.weights.trust.damping),
+    },
+    { name: "roleBias", value: frame.roleBias[targetId] ?? 0 },
+    {
+      name: "isolation",
+      value:
+        isolationScore(state, targetId, frame.aliveIds) *
+        frame.weights.suspicion.isolationBonus,
+    },
+  ];
+
+  const branch = frame.wolfBranches.get(targetId);
+  if (branch) terms.push(branch);
+
+  terms.push({ name: "jitter", value: (rng() - 0.5) * frame.weights.confidence.jitterSpan });
+
+  const score = sumTerms(terms);
+  const evidence = reasons.slice(-frame.weights.limits.intentionEvidence);
+  return { score, terms, confidence: topConfidence, evidence };
+}
+
+/**
+ * Look-ahead MỘT BƯỚC cho bảng điểm phiếu (spec BOT_AI_UPGRADE §12).
+ *
+ * Bảng điểm myopic chỉ trả lời "người này đáng treo ra sao NGAY BÂY GIỜ". Số
+ * hạng `futureRisk` trả lời câu kế tiếp: "treo người này, NẾU họ vô tội, pha
+ * sau làng trả giá bao nhiêu?". Công thức, thuần và chỉ đọc dữ liệu CÔNG KHAI
+ * + belief của chính bot:
+ *
+ *   futureRisk = −scale x (1 − P(Sói)) x (áp lực sĩ số + khan hiếm bằng chứng)
+ *
+ * - `1 − P(Sói)`: belief là thang 0..100 tích luỹ bằng chứng, không phải xác
+ *   suất; dùng `1 − belief/100` làm proxy heuristic của P(vô tội) — đúng tinh
+ *   thần "heuristic Bayesian-like" của spec §6. Ứng viên có kết quả soi ghim
+ *   (belief 0 hoặc 100) đã được xử đúng: ghim 100 → phạt 0, ghim 0 → phạt tối
+ *   đa, tức làng tự tránh treo nhầm người đã được xác nhận trong sạch.
+ * - áp lực sĩ số: dùng lại ĐÚNG `survivalPressure` của cổng abstain — cùng một
+ *   phép đo cho cùng một câu hỏi "làng còn bao nhiêu mạng để tiêu".
+ * - khan hiếm bằng chứng: trong những người sống khác (trừ mình và ứng viên),
+ *   bao nhiêu phần trăm có bảng belief TRỐNG. Làng sắp hết người có dữ liệu
+ *   thì một lá phiếu bám jitter càng đắt cho các vòng sau.
+ *
+ * Sói (WEREWOLF/WOLF_CUB) chỉ nhận thưởng `wolfMislynchGain` — 0 ở v20 — nên
+ * bảng điểm Sói không đổi một bit so với v18. Nhánh làng không được phép nhận
+ * thưởng (chỉ phạt): "treo nhầm là có lợi" không phải một suy luận mà làng
+ * được phép tính.
+ */
+export function voteFutureRisk(
+  targetId: string,
+  ctx: StrategyContext<VoteScoringFrame>,
+): number {
+  const frame = ctx.frame;
+  if (!frame) return 0;
+  const lookAhead = frame.weights.lookAhead;
+  if (!lookAhead) return 0;
+
+  const knowledge = ctx.context.knowledge;
+  const selfRole = knowledge.knownRoles[ctx.state.playerId];
+  const selfIsWolf = selfRole === "WEREWOLF" || selfRole === "WOLF_CUB";
+
+  const belief = ctx.state.suspicion[targetId]?.score ?? 0;
+  const innocentProb = clampUnit(1 - belief / MAX_BELIEF_SCORE);
+  const pressure = survivalPressure(knowledge);
+
+  if (selfIsWolf) {
+    return lookAhead.wolfMislynchGain * innocentProb * pressure;
+  }
+
+  const others = frame.aliveIds.filter(
+    (id) => id !== ctx.state.playerId && id !== targetId,
+  );
+  let bearing = 0;
+  for (const id of others) {
+    if ((ctx.state.suspicion[id]?.reasons.length ?? 0) > 0) bearing += 1;
+  }
+  const scarcity = others.length === 0 ? 0 : 1 - bearing / others.length;
+
+  return -(
+    innocentProb *
+    (lookAhead.mislynchPressureScale * pressure +
+      lookAhead.mislynchScarcityScale * scarcity)
+  );
+}
+
+/**
+ * Planner look-ahead: bọc planner immediate-utility và cộng thêm số hạng
+ * `futureRisk` vào cuối bảng điểm. Không rút RNG (rủi ro tương lai là một phép
+ * suy tất định từ belief hiện có), nên stream RNG của bot giữ nguyên.
+ *
+ * `risk === 0` (Sói ở v20, hoặc nhóm vắng) trả nguyên evaluation gốc — wrapper
+ * không thay gì, kể cả thứ tự term.
+ */
+export function lookAheadVotePlanner(
+  base: StrategicPlanner<VoteScoringFrame>,
+): StrategicPlanner<VoteScoringFrame> {
+  return {
+    name: "look-ahead-v1",
+    evaluate(candidate, ctx) {
+      const baseEvaluation = base.evaluate(candidate, ctx);
+      const risk = voteFutureRisk(candidate, ctx);
+      if (risk === 0) return baseEvaluation;
+      const terms = [...baseEvaluation.terms, { name: "futureRisk", value: risk }];
+      return { ...baseEvaluation, terms, score: sumTerms(terms) };
+    },
+  };
+}
+
+/**
+ * Chấm điểm mọi lựa chọn hợp lệ rồi trả về một ý định có bằng chứng thật.
+ *
+ * Hàm này thuần: cùng context, cùng state và cùng RNG thì cùng kết quả. Nó
+ * không bao giờ nhận `GameState` hay `Room`, và không bao giờ bịa ra một mục
+ * tiêu không nằm trong `legalVoteChoices` mà engine đã cấp.
+ */
+export function selectVote(
+  context: BotDecisionContext,
+  state: BotBrainState,
+  rng: BotRng,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+  probe?: DecisionProbe,
+  policyParam?: PolicyModel<VoteScoringFrame>,
+): BotVoteIntention {
+  const knowledge = context.knowledge;
+  const personality = state.personality;
+  const selfIsWolf =
+    knowledge.knownRoles[state.playerId] === "WEREWOLF" ||
+    knowledge.knownRoles[state.playerId] === "WOLF_CUB";
+  /**
+   * Mất đồng đội thì bớt đẩy phiếu lộ liễu.
+   *
+   * Một con Sói vừa mất bạn mà vẫn hăng hái chỉ mặt người khác là con Sói dễ bị
+   * để ý nhất trên bàn: cả làng vừa treo đúng một người, và ai lớn tiếng nhất
+   * ngay sau đó sẽ được soi kỹ. Nâng ngưỡng lên tức là im lặng nhiều hơn.
+   */
+  const lostAlly = state.memories.some((memory) => memory.type === "ALLY_LOST");
+  const threshold =
+    voteThreshold(personality, weights) +
+    (lostAlly && selfIsWolf ? weights.deceptionRisk.allyLostThresholdBonus : 0);
+
+  // Nhóm `lookAhead` có mặt (v20+) thì bảng điểm đi qua planner look-ahead;
+  // v1..v19 không có nhóm này → đường immediate-utility y như cũ.
+  const basePlanner: StrategicPlanner<VoteScoringFrame> =
+    immediateUtilityPlanner(scoreVoteCandidate);
+  const planner = weights.lookAhead ? lookAheadVotePlanner(basePlanner) : basePlanner;
+  const frame = deriveVoteScoringFrame(context, state, weights);
+  const plannerContext: StrategyContext<VoteScoringFrame> = {
+    context,
+    state,
+    rng,
+    frame,
+  };
+
+  const scored: ScoredTarget[] = candidatesFor(
+    knowledge,
+    state.playerId,
+    knowledge.players.filter((p) => p.alive).map((p) => p.id),
+  )
+    // Engine cho phép tự bầu mình, nhưng một BOT tự đề cử mình là hành vi vô
+    // nghĩa; luật vẫn được báo cáo trung thực ở knowledge view.
+    .filter((targetId) => targetId !== state.playerId)
+    .map((targetId) => {
+    const evaluation = planner.evaluate(targetId, plannerContext);
+    if (probe) {
+      probe.candidate({
+        targetId,
+        score: evaluation.score,
+        terms: evaluation.terms,
+        evidenceIds: evaluation.evidence.map((item) => item.id),
+      });
+    }
+    return {
+      targetId,
+      score: evaluation.score,
+      evidence: evaluation.evidence,
+      topConfidence: evaluation.confidence,
+    };
+  });
 
   // Sắp xếp có tie-break theo id để hai lần chạy giống hệt nhau không phụ thuộc
   // thứ tự chèn của bảng belief.
@@ -382,13 +566,24 @@ export function selectVote(
       : right.score - left.score,
   );
 
+  // Seam `PolicyModel` (spec §27): mặc định là heuristic argmax — cùng người
+  // thắng mà sort phía trên từng chọn. Model khác (RL sau này) cắm qua tham số
+  // `policy` mà không đổi call sites; `null` từ model = chủ động không chọn ai.
+  const policy = policyParam ?? heuristicPolicyModel<VoteScoringFrame>();
+  const decision = policy.selectAction(scored, plannerContext, probe);
+
   const best = scored[0];
   if (!best) {
     probe?.fallback("không có ứng viên hợp lệ nào để chấm điểm");
     return noEliminationIntention(1);
   }
-
-  let winner = best;
+  if (decision.targetId === null) {
+    return noEliminationIntention(1);
+  }
+  let winner =
+    decision.targetId === best.targetId
+      ? best
+      : (scored.find((item) => item.targetId === decision.targetId) ?? best);
   const myVote = knowledge.myVote;
   if (myVote && myVote.type === "PLAYER") {
     const current = scored.find((item) => item.targetId === myVote.targetId);
@@ -406,7 +601,6 @@ export function selectVote(
       winner = current;
     }
   }
-
   // Một mục tiêu dẫn đầu chỉ nhờ jitter mà không có lý do nào thì không đáng
   // để treo: BOT chọn không treo thay vì bịa một cáo buộc không nguồn.
   //
@@ -439,7 +633,7 @@ export function selectVote(
   // "tôi thấy anh hơi lạ" chưa bao giờ được nói. `fightTarget` chỉ khác null
   // khi đã qua mọi cổng ở `fakeFightTarget`, nên đây không mở đường cho một
   // lá phiếu vô căn cứ nào khác.
-  const isFakeFight = winner.targetId === fightTarget;
+  const isFakeFight = winner.targetId === frame.fightTarget;
 
   if (
     villageAbstains ||

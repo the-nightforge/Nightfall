@@ -638,7 +638,7 @@ describe("v2 là cấu hình production", () => {
    * dev chúng vẫn dưới 5s, nhưng runner CI chậm hơn 2–3 lần đã đẩy cả hai vượt
    * hạn và làm đỏ build - xem `docs/bot-ai-phase-4-verification.md` §9 C8.
    */
-  const BATCH_TIMEOUT_MS = 60_000;
+  const BATCH_TIMEOUT_MS = 150_000;
 
   /**
    * Đo bằng `runSelfPlay` mặc định (có lời nói): đo bằng một cấu hình không ai

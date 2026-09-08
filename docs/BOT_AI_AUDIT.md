@@ -229,11 +229,21 @@ registry + `passiveStrategy` fallback — đúng shape spec §9:
 
 1. **Không có long-term look-ahead**: scorer là myopic (utility ngay + risk term
    nội sinh), chưa có "action → predicted outcome → next phase risk" như spec §12.
-   `StrategicPlanner` abstraction chưa tồn tại tách rời. Đây là khoảng trống lớn
-   nhất còn lại so với spec.
-2. **Role strategies trùng lặp pattern**: mỗi role file tự hand-roll TraceTerm +
-   jitter + tie-break (8 nơi); không có shared night-scoring engine như `selectVote`
-   của day. Khó tune đồng bộ, dễ trôi.
+   `StrategicPlanner` abstraction chưa tồn tại tách rời. **→ Đã đắp (M5 seam +
+   M6 look-ahead v1):** `lookAheadVotePlanner` cộng số hạng `futureRisk`
+   (mislynch risk = P(vô tội) x áp lực sĩ số + khan hiếm bằng chứng) vào bảng
+   điểm phiếu nhánh làng, sau seam của M5; weights v20, KHÔNG mặc định.
+   Bench 2×1.000 ván (`--seed m6-bench{,2} --preset`): làng thắng 51,2% →
+   51,4% (nhiễu), villageVoteAccuracy 44,66% → 45,75% (+1,1 điểm, z≈2,45),
+   0 vi phạm; replay `--verify-replay` 30 ván 0 divergence. Giữ v18 làm default
+   theo cùng kỷ luật v19 — tổng 4.000 ván chưa đủ để kết luận nâng default.
+2. ~~**Role strategies trùng lặp pattern**~~ **Đã tách (M4):**
+   `roles/night-scoring.ts::rankNightTargets` dùng chung cho 7 vai đêm
+   (seer, detective, guard, sorcerer, werewolf, tracker, serial-killer) — giữ
+   nguyên thứ tự term, lệ rút RNG jitter, scale sau tổng của Sát Nhân và
+   tie-break `score desc, id asc`. Equivalence chứng minh bằng suite pin đủ
+   4.657 test + self-play 30 ván `--verify-replay` 0 divergence. (Phù Thuỷ
+   không dùng pattern này — nó chấm ngưỡng, không xếp hạng.)
 3. **Wolf coordination ẩn định qua hash**: `fakeFightTarget`/`wolfBluffSeat` dựa vào
    mọi Sói tự tính cùng đáp số từ public state + hash — không có pack channel; đủ
    tốt nhưng mong manh nếu knowledge view diverge (đã handle dead-wolf, vẫn là điểm
@@ -261,8 +271,9 @@ registry + `passiveStrategy` fallback — đúng shape spec §9:
    trước khi tie-break trong `selectVote`/role night strategies.
 2. **Shared night-scoring helper**: trích pattern TraceTerm+jitter+tie-break chung
    cho role files (giảm trùng lặp, giữ term names per-role).
-3. **`PolicyModel` seam** (spec §27): `HeuristicPolicyModel` bọc scorer hiện tại,
-   để sau này cắm `RLPolicyModel` mà không đổi engine/BotRuntime call sites.
+3. **`PolicyModel` seam** (spec §27): **Đã cắm (M7)** — `bot/policy/policy-model.ts`;
+   `HeuristicPolicyModel` hiện hành, model RL sau này cắm qua tham số `policy` của
+   `selectVote` mà không đổi BotRuntime/engine call sites.
 4. **Belief → probability projection**: hàm thuần chuyển
    `suspicion/trust/evidence` → `P(role)` theo deck composition (chỉ khi cần cho
    benchmark/debug; không bắt buộc cho gameplay).
@@ -337,10 +348,10 @@ feature surface đã có, plan chỉ gồm các bước đắp khoảng trống:
 | M1 | **XONG** — xoá `decideDefenseClaim` legacy khỏi `BotRuntime` (0 call site production; nhánh claim-in-defense đã có characterization ở `jester-defense-decision.test.ts`) | `BotRuntime.ts` | suite engine + server xanh |
 | M2 | **XONG** — `tests/bot-marker-eviction.test.ts` (RED: crash `1:nomination:3`) + guard skip-mất-nguồn trong `ingestRecaps` (GREEN); test pin thêm đường tracker tự lành | `BotRuntime.ts`, test mới | suite xanh (engine 83 file / 4.657) |
 | M3 | **XONG** — viết lại `scripts/bot-probe.ts` cho khớp `SpeechRequest`; typecheck riêng + smoke-run PASS | `scripts/bot-probe.ts` | tsc scripts/bot-probe.ts |
-| M4 | Extract shared night-scoring helper (TraceTerm + jitter + tie-break) dùng lại ở 8 role files — giữ nguyên tên term và semantics; self-play A/B cùng seed phải cho kết quả y hệt | `roles/*.ts` | `bot-night-strategies`, `bot-role-strategy` + selfplay `--verify-replay` 0 divergence |
-| M5 | `StrategicPlanner` seam (spec §12): interface + `ImmediateUtilityPlanner` bọc scorer hiện tại, cắm vào `selectVote` + role night paths; chưa có look-ahead đổi behavior trong bước này | `decision/`, `roles/` | characterization tests giữ nguyên output |
-| M6 | Look-ahead v1 trong planner (future-risk term: "action → outcome → next-phase pressure"), bật qua weights mới (V20) — KHÔNG đổi default cho đến khi bench 1.000 ván không tụt | `config/weights.ts`, `planning/` | bench `npm run selfplay -- --games 1000 --preset --verify-replay` |
-| M7 | `PolicyModel` seam (spec §27): `HeuristicPolicyModel` gọi planner hiện tại; BotRuntime giữ API cũ | `bot/policy/` (mới) | suite xanh, replay determinism |
+| M4 | **XONG** — `roles/night-scoring.ts::rankNightTargets` thay khung map→jitter→sum→probe→sort ở 7 vai đêm; semantics giữ nguyên từng bit | `roles/*.ts` (7 file), file mới | suite 4.657 + selfplay `--seed m4-replay --games 30 --preset --verify-replay` 0 divergence |
+| M5 | **XONG** — seam `StrategicPlanner` (spec §12/§27): `bot/planning/planner.ts` (`ActionEvaluation`, `StrategyContext<Frame>`, `StrategicPlanner`, `immediateUtilityPlanner`); scorer phiếu tách thành `scoreVoteCandidate` + `deriveVoteScoringFrame`, `selectVote` đi qua planner. Zero behavior change — 2 test mới chứng minh planner cho cùng `{score, terms}` với probe của `selectVote` cùng seed | `planning/planner.ts` (mới), `decision/vote-decision.ts` | suite 84 file / 4.659 + selfplay `--seed m5-replay --games 30 --preset --verify-replay` 0 divergence |
+| M6 | **XONG** — look-ahead v1: nhóm `lookAhead` optional trong `BotWeights` (`mislynchPressureScale/mislynchScarcityScale/wolfMislynchGain`), `voteFutureRisk` + `lookAheadVotePlanner` bọc planner của M5, preset `20.0.0` (default vẫn v18). 5 test mới (`bot-lookahead.test.ts`) | `config/weights.ts`, `config/presets.ts`, `decision/vote-decision.ts`, test mới | suite 85 file / 4.664 + replay 30 ván 0 divergence + bench 2×1.000 (v18 vs v20: WR nhiễu, voteAccuracy +1,1 điểm) |
+| M7 | **XONG** — seam `PolicyModel` (spec §27): `bot/policy/policy-model.ts` (`PolicyModel.selectAction` nhận bảng điểm đã chấm, trả targetId hoặc null = chủ động bỏ; `heuristicPolicyModel` = argmax + tie-break id, fallback text giữ nguyên để trace byte-identical). `selectVote` nhận tham số `policy` optional — BotRuntime giữ API cũ. Module export từ index cho RL model tương lai | `policy/policy-model.ts` (mới), `decision/vote-decision.ts`, `index.ts` | 4 test mới (`bot-policy.test.ts`); suite 86 file / 4.668 + replay 30 ván 0 divergence |
 
 M1–M3 là dọn nợ an toàn (làm trước, mỗi bước một commit). M4–M7 là mở rộng;
 M6/M7 chỉ forward khi benchmark thoả điều kiện trong spec §21.
