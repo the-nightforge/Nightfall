@@ -26,6 +26,8 @@ export * from "./bot/decision/defense-decision";
 export * from "./bot/decision/defense-scheduler";
 export * from "./bot/decision/ghost-decision";
 export * from "./bot/decision/last-letter-decision";
+export * from "./bot/planning/planner";
+export * from "./bot/policy/policy-model";
 export * from "./bot/roles/strategy";
 export * from "./bot/roles/jester";
 export * from "./bot/roles/serial-killer";

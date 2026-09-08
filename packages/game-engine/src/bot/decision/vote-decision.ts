@@ -9,7 +9,9 @@ import type {
   StrategicPlanner,
   StrategyContext,
 } from "../planning/planner";
-import { immediateUtilityPlanner } from "../planning/planner";import { strategyFor } from "../roles/registry";
+import { immediateUtilityPlanner } from "../planning/planner";
+import type { PolicyModel } from "../policy/policy-model";
+import { heuristicPolicyModel } from "../policy/policy-model";import { strategyFor } from "../roles/registry";
 import { fakeFightTarget } from "../roles/werewolf";
 import { sumTerms, type DecisionProbe, type TraceTerm } from "../trace/trace";
 import type {
@@ -498,6 +500,7 @@ export function selectVote(
   rng: BotRng,
   weights: BotWeights = DEFAULT_BOT_WEIGHTS,
   probe?: DecisionProbe,
+  policyParam?: PolicyModel<VoteScoringFrame>,
 ): BotVoteIntention {
   const knowledge = context.knowledge;
   const personality = state.personality;
@@ -563,13 +566,24 @@ export function selectVote(
       : right.score - left.score,
   );
 
+  // Seam `PolicyModel` (spec §27): mặc định là heuristic argmax — cùng người
+  // thắng mà sort phía trên từng chọn. Model khác (RL sau này) cắm qua tham số
+  // `policy` mà không đổi call sites; `null` từ model = chủ động không chọn ai.
+  const policy = policyParam ?? heuristicPolicyModel<VoteScoringFrame>();
+  const decision = policy.selectAction(scored, plannerContext, probe);
+
   const best = scored[0];
   if (!best) {
     probe?.fallback("không có ứng viên hợp lệ nào để chấm điểm");
     return noEliminationIntention(1);
   }
-
-  let winner = best;
+  if (decision.targetId === null) {
+    return noEliminationIntention(1);
+  }
+  let winner =
+    decision.targetId === best.targetId
+      ? best
+      : (scored.find((item) => item.targetId === decision.targetId) ?? best);
   const myVote = knowledge.myVote;
   if (myVote && myVote.type === "PLAYER") {
     const current = scored.find((item) => item.targetId === myVote.targetId);
@@ -587,7 +601,6 @@ export function selectVote(
       winner = current;
     }
   }
-
   // Một mục tiêu dẫn đầu chỉ nhờ jitter mà không có lý do nào thì không đáng
   // để treo: BOT chọn không treo thay vì bịa một cáo buộc không nguồn.
   //
