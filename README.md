@@ -4,7 +4,7 @@
 
 **A real-time multiplayer Werewolf (Mafia) game — 20 roles, 17 dynamic events, voice chat, and AI bots that actually reason.**
 
-[![CI](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml)
+[![CI](https://github.com/the-nightforge/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/the-nightforge/ma-soi-online/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-4739%20passing-brightgreen)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
@@ -532,6 +532,7 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `npm run selfplay` | Run bot self-play batches and print a report. Add `--traces <dir>` to dump per-decision JSONL for the first few games |
 | `npm run trace-view` | Read a self-play trace file as a per-bot timeline — what moved each belief, which scoring terms decided each vote, why a bot spoke. See [`docs/bot-tuning-workflow.md`](docs/bot-tuning-workflow.md) |
 | `npm run role-power` | Measure each role's marginal win-rate contribution by paired self-play, to recalibrate `ROLE_POWER` |
+| `npm run role-power:sweep` | The full 15-shard sweep across every preset, run locally in parallel and merged into one table. Results land in `.role-power/`; finished shards are skipped on a re-run, so an interrupted overnight sweep resumes instead of restarting. `-- --games 30` for a pipeline smoke test |
 | `npm run reveal-ab` | Paired self-play that flips one flag only — `revealRoleOnDeath` — to separate "the bots reason poorly" from "the hidden-role rule itself tilts the match" |
 | `npm run mine-aliases` | Read stored match chat and propose role aliases the claim parser does not understand yet. It writes a proposal for a human to approve; it never edits `ROLE_PHRASES` itself |
 | `npm run bot:probe` | One real LLM call against a fake match, to validate keys and prompts |

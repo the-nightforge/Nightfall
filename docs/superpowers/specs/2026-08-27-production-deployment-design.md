@@ -43,7 +43,7 @@ Frontend và backend tiếp tục dùng chung monorepo. Render chạy một back
 
 ## Trạng thái triển khai thực tế
 
-- Repository: <https://github.com/kangha23/ma-soi-online>
+- Repository: <https://github.com/the-nightforge/ma-soi-online>
 - Frontend Vercel: <https://ma-soi-online-nu.vercel.app>
 - Backend Render: <https://ma-soi-server-xzhv.onrender.com>
 - Health check: <https://ma-soi-server-xzhv.onrender.com/api/health>

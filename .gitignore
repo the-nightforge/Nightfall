@@ -19,6 +19,9 @@ prisma/migrations/dev.db*
 # Bao cao self-play: chi commit fixture mau nho o docs/fixtures/
 reports/
 
+# Ket qua sweep role-power chay cuc bo (npm run role-power:sweep)
+.role-power/
+
 # Python (tools/audio)
 __pycache__/
 *.pyc

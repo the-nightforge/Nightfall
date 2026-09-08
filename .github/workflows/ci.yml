@@ -3,15 +3,62 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.vscode/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.vscode/**'
+  # Cho chạy tay khi job nặng bị skip do lọc path (ví dụ deploy lại sau khi fix infra).
+  workflow_dispatch:
 
 # Push liên tiếp lên cùng một nhánh thì chỉ lần cuối đáng chạy.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Repo này CÔNG KHAI, nên workflow chạy được từ PR của người lạ. Không job nào ở
+# đây cần quyền ghi: đặt trần read ở cấp workflow để token của một PR fork không
+# đẩy commit, sửa release hay bình luận thay mình được.
+permissions:
+  contents: read
+
 jobs:
+  # Lọc path MỘT lần để job nặng (e2e, docker) chỉ chạy khi backend/docker đổi.
+  # Commit chỉ sửa apps/web/** sẽ skip 2 job này -> tiết kiệm ~10-20 phút Actions/run.
+  # Chạy tay (workflow_dispatch) thì luôn chạy đủ để kiểm toàn diện.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.filter.outputs.server }}
+      docker: ${{ steps.filter.outputs.docker }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            server:
+              - 'apps/server/**'
+              - 'packages/shared/**'
+              - 'packages/game-engine/**'
+              - 'package.json'
+              - 'package-lock.json'
+            docker:
+              - 'Dockerfile.server'
+              - 'apps/server/**'
+              - 'packages/shared/**'
+              - 'packages/game-engine/**'
+              - 'package.json'
+              - 'package-lock.json'
+
   verify:
     runs-on: ubuntu-latest
 
@@ -80,6 +127,10 @@ jobs:
   # Chạy song song với `verify` để không cộng dồn thời gian; deploy-production
   # chờ cả ba (xem bên dưới).
   e2e:
+    needs: changes
+    # Chỉ chạy khi backend đổi. Sửa mỗi apps/web/** thì skip -> tiết kiệm phút.
+    # Chạy tay luôn chạy để kiểm toàn diện.
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -170,6 +221,8 @@ jobs:
   # Frontend đọc trường mà backend mới phải cấp; web mới + server cũ là kiểu
   # hỏng lặng lẽ nhất của repo này. Build thử ở đây để chặn nó trước deploy.
   docker-server:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.docker == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -206,7 +259,11 @@ jobs:
 
   deploy-preview:
     needs: verify
-    if: github.event_name == 'pull_request'
+    # PR từ fork KHÔNG được cấp secrets (GitHub cố ý), nên job này ở đó chỉ có
+    # thể đỏ với token rỗng. Nó cũng không nên chạy: deploy preview một PR lạ là
+    # đem mã của người ngoài lên hạ tầng Vercel của mình. Chỉ PR mở từ nhánh
+    # trong chính repo này mới được preview.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     # Build của project này mất ~35s và Vercel cắt mọi build ở 45 phút, nên bất
     # cứ thứ gì vượt mốc dưới đây là hỏng chứ không phải chậm. Không có dòng này
@@ -255,8 +312,10 @@ jobs:
     # Chờ cả ván khói lẫn build Docker: Vercel ship web trong khi Render không
     # build nổi image mới là kiểu hỏng lặng lẽ đã ghi ở docker-server. Preview
     # thì chỉ cần verify - đó là tiện ích cho PR, không phải cổng ra production.
+    # e2e/docker có thể `skipped` khi chỉ sửa web -> vẫn cho deploy (always() +
+    # kiểm result từng job). Không dùng `always()` thì deploy bị skip theo.
     needs: [verify, e2e, docker-server]
-    if: github.event_name == 'push'
+    if: always() && github.event_name == 'push' && needs.verify.result == 'success' && (needs.e2e.result == 'success' || needs.e2e.result == 'skipped') && (needs.docker-server.result == 'success' || needs.docker-server.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
