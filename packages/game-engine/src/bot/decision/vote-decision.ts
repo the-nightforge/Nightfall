@@ -4,9 +4,12 @@ import { incomingHostilityOf, possibleWolfPairScore } from "../analysis/social-a
 import { MAX_BELIEF_SCORE } from "../belief/evidence";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { isHumanTable } from "../knowledge";
-import type { ActionEvaluation, StrategyContext } from "../planning/planner";
-import { immediateUtilityPlanner } from "../planning/planner";
-import { strategyFor } from "../roles/registry";
+import type {
+  ActionEvaluation,
+  StrategicPlanner,
+  StrategyContext,
+} from "../planning/planner";
+import { immediateUtilityPlanner } from "../planning/planner";import { strategyFor } from "../roles/registry";
 import { fakeFightTarget } from "../roles/werewolf";
 import { sumTerms, type DecisionProbe, type TraceTerm } from "../trace/trace";
 import type {
@@ -397,6 +400,92 @@ export function scoreVoteCandidate(
 }
 
 /**
+ * Look-ahead MỘT BƯỚC cho bảng điểm phiếu (spec BOT_AI_UPGRADE §12).
+ *
+ * Bảng điểm myopic chỉ trả lời "người này đáng treo ra sao NGAY BÂY GIỜ". Số
+ * hạng `futureRisk` trả lời câu kế tiếp: "treo người này, NẾU họ vô tội, pha
+ * sau làng trả giá bao nhiêu?". Công thức, thuần và chỉ đọc dữ liệu CÔNG KHAI
+ * + belief của chính bot:
+ *
+ *   futureRisk = −scale x (1 − P(Sói)) x (áp lực sĩ số + khan hiếm bằng chứng)
+ *
+ * - `1 − P(Sói)`: belief là thang 0..100 tích luỹ bằng chứng, không phải xác
+ *   suất; dùng `1 − belief/100` làm proxy heuristic của P(vô tội) — đúng tinh
+ *   thần "heuristic Bayesian-like" của spec §6. Ứng viên có kết quả soi ghim
+ *   (belief 0 hoặc 100) đã được xử đúng: ghim 100 → phạt 0, ghim 0 → phạt tối
+ *   đa, tức làng tự tránh treo nhầm người đã được xác nhận trong sạch.
+ * - áp lực sĩ số: dùng lại ĐÚNG `survivalPressure` của cổng abstain — cùng một
+ *   phép đo cho cùng một câu hỏi "làng còn bao nhiêu mạng để tiêu".
+ * - khan hiếm bằng chứng: trong những người sống khác (trừ mình và ứng viên),
+ *   bao nhiêu phần trăm có bảng belief TRỐNG. Làng sắp hết người có dữ liệu
+ *   thì một lá phiếu bám jitter càng đắt cho các vòng sau.
+ *
+ * Sói (WEREWOLF/WOLF_CUB) chỉ nhận thưởng `wolfMislynchGain` — 0 ở v20 — nên
+ * bảng điểm Sói không đổi một bit so với v18. Nhánh làng không được phép nhận
+ * thưởng (chỉ phạt): "treo nhầm là có lợi" không phải một suy luận mà làng
+ * được phép tính.
+ */
+export function voteFutureRisk(
+  targetId: string,
+  ctx: StrategyContext<VoteScoringFrame>,
+): number {
+  const frame = ctx.frame;
+  if (!frame) return 0;
+  const lookAhead = frame.weights.lookAhead;
+  if (!lookAhead) return 0;
+
+  const knowledge = ctx.context.knowledge;
+  const selfRole = knowledge.knownRoles[ctx.state.playerId];
+  const selfIsWolf = selfRole === "WEREWOLF" || selfRole === "WOLF_CUB";
+
+  const belief = ctx.state.suspicion[targetId]?.score ?? 0;
+  const innocentProb = clampUnit(1 - belief / MAX_BELIEF_SCORE);
+  const pressure = survivalPressure(knowledge);
+
+  if (selfIsWolf) {
+    return lookAhead.wolfMislynchGain * innocentProb * pressure;
+  }
+
+  const others = frame.aliveIds.filter(
+    (id) => id !== ctx.state.playerId && id !== targetId,
+  );
+  let bearing = 0;
+  for (const id of others) {
+    if ((ctx.state.suspicion[id]?.reasons.length ?? 0) > 0) bearing += 1;
+  }
+  const scarcity = others.length === 0 ? 0 : 1 - bearing / others.length;
+
+  return -(
+    innocentProb *
+    (lookAhead.mislynchPressureScale * pressure +
+      lookAhead.mislynchScarcityScale * scarcity)
+  );
+}
+
+/**
+ * Planner look-ahead: bọc planner immediate-utility và cộng thêm số hạng
+ * `futureRisk` vào cuối bảng điểm. Không rút RNG (rủi ro tương lai là một phép
+ * suy tất định từ belief hiện có), nên stream RNG của bot giữ nguyên.
+ *
+ * `risk === 0` (Sói ở v20, hoặc nhóm vắng) trả nguyên evaluation gốc — wrapper
+ * không thay gì, kể cả thứ tự term.
+ */
+export function lookAheadVotePlanner(
+  base: StrategicPlanner<VoteScoringFrame>,
+): StrategicPlanner<VoteScoringFrame> {
+  return {
+    name: "look-ahead-v1",
+    evaluate(candidate, ctx) {
+      const baseEvaluation = base.evaluate(candidate, ctx);
+      const risk = voteFutureRisk(candidate, ctx);
+      if (risk === 0) return baseEvaluation;
+      const terms = [...baseEvaluation.terms, { name: "futureRisk", value: risk }];
+      return { ...baseEvaluation, terms, score: sumTerms(terms) };
+    },
+  };
+}
+
+/**
  * Chấm điểm mọi lựa chọn hợp lệ rồi trả về một ý định có bằng chứng thật.
  *
  * Hàm này thuần: cùng context, cùng state và cùng RNG thì cùng kết quả. Nó
@@ -427,7 +516,11 @@ export function selectVote(
     voteThreshold(personality, weights) +
     (lostAlly && selfIsWolf ? weights.deceptionRisk.allyLostThresholdBonus : 0);
 
-  const planner = immediateUtilityPlanner(scoreVoteCandidate);
+  // Nhóm `lookAhead` có mặt (v20+) thì bảng điểm đi qua planner look-ahead;
+  // v1..v19 không có nhóm này → đường immediate-utility y như cũ.
+  const basePlanner: StrategicPlanner<VoteScoringFrame> =
+    immediateUtilityPlanner(scoreVoteCandidate);
+  const planner = weights.lookAhead ? lookAheadVotePlanner(basePlanner) : basePlanner;
   const frame = deriveVoteScoringFrame(context, state, weights);
   const plannerContext: StrategyContext<VoteScoringFrame> = {
     context,

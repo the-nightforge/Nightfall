@@ -229,8 +229,14 @@ registry + `passiveStrategy` fallback — đúng shape spec §9:
 
 1. **Không có long-term look-ahead**: scorer là myopic (utility ngay + risk term
    nội sinh), chưa có "action → predicted outcome → next phase risk" như spec §12.
-   `StrategicPlanner` abstraction chưa tồn tại tách rời. Đây là khoảng trống lớn
-   nhất còn lại so với spec.
+   `StrategicPlanner` abstraction chưa tồn tại tách rời. **→ Đã đắp (M5 seam +
+   M6 look-ahead v1):** `lookAheadVotePlanner` cộng số hạng `futureRisk`
+   (mislynch risk = P(vô tội) x áp lực sĩ số + khan hiếm bằng chứng) vào bảng
+   điểm phiếu nhánh làng, sau seam của M5; weights v20, KHÔNG mặc định.
+   Bench 2×1.000 ván (`--seed m6-bench{,2} --preset`): làng thắng 51,2% →
+   51,4% (nhiễu), villageVoteAccuracy 44,66% → 45,75% (+1,1 điểm, z≈2,45),
+   0 vi phạm; replay `--verify-replay` 30 ván 0 divergence. Giữ v18 làm default
+   theo cùng kỷ luật v19 — tổng 4.000 ván chưa đủ để kết luận nâng default.
 2. ~~**Role strategies trùng lặp pattern**~~ **Đã tách (M4):**
    `roles/night-scoring.ts::rankNightTargets` dùng chung cho 7 vai đêm
    (seer, detective, guard, sorcerer, werewolf, tracker, serial-killer) — giữ
@@ -343,7 +349,7 @@ feature surface đã có, plan chỉ gồm các bước đắp khoảng trống:
 | M3 | **XONG** — viết lại `scripts/bot-probe.ts` cho khớp `SpeechRequest`; typecheck riêng + smoke-run PASS | `scripts/bot-probe.ts` | tsc scripts/bot-probe.ts |
 | M4 | **XONG** — `roles/night-scoring.ts::rankNightTargets` thay khung map→jitter→sum→probe→sort ở 7 vai đêm; semantics giữ nguyên từng bit | `roles/*.ts` (7 file), file mới | suite 4.657 + selfplay `--seed m4-replay --games 30 --preset --verify-replay` 0 divergence |
 | M5 | **XONG** — seam `StrategicPlanner` (spec §12/§27): `bot/planning/planner.ts` (`ActionEvaluation`, `StrategyContext<Frame>`, `StrategicPlanner`, `immediateUtilityPlanner`); scorer phiếu tách thành `scoreVoteCandidate` + `deriveVoteScoringFrame`, `selectVote` đi qua planner. Zero behavior change — 2 test mới chứng minh planner cho cùng `{score, terms}` với probe của `selectVote` cùng seed | `planning/planner.ts` (mới), `decision/vote-decision.ts` | suite 84 file / 4.659 + selfplay `--seed m5-replay --games 30 --preset --verify-replay` 0 divergence |
-| M6 | Look-ahead v1 trong planner (future-risk term: "action → outcome → next-phase pressure"), bật qua weights mới (V20) — KHÔNG đổi default cho đến khi bench 1.000 ván không tụt | `config/weights.ts`, `planning/` | bench `npm run selfplay -- --games 1000 --preset --verify-replay` |
+| M6 | **XONG** — look-ahead v1: nhóm `lookAhead` optional trong `BotWeights` (`mislynchPressureScale/mislynchScarcityScale/wolfMislynchGain`), `voteFutureRisk` + `lookAheadVotePlanner` bọc planner của M5, preset `20.0.0` (default vẫn v18). 5 test mới (`bot-lookahead.test.ts`) | `config/weights.ts`, `config/presets.ts`, `decision/vote-decision.ts`, test mới | suite 85 file / 4.664 + replay 30 ván 0 divergence + bench 2×1.000 (v18 vs v20: WR nhiễu, voteAccuracy +1,1 điểm) |
 | M7 | `PolicyModel` seam (spec §27): `HeuristicPolicyModel` gọi planner hiện tại; BotRuntime giữ API cũ | `bot/policy/` (mới) | suite xanh, replay determinism |
 
 M1–M3 là dọn nợ an toàn (làm trước, mỗi bước một commit). M4–M7 là mở rộng;

@@ -732,6 +732,26 @@ export interface ClaimWeights {
   profilePriorStrength: number;
 }
 
+export interface LookAheadWeights {
+  /**
+   * Hệ số áp lên áp lực sĩ số (0..1) trong số hạng `futureRisk` của nhánh làng.
+   * Càng cuối ván, một án treo nhầm người vô tội càng đắt vì làng ít mạng hơn.
+   * `0` TẮT số hạng này.
+   */
+  mislynchPressureScale: number;
+  /**
+   * Hệ số áp lên độ khan hiếm bằng chứng (0..1): tỉ lệ người còn sống khác
+   * đang có bảng belief TRỐNG. Làng gần hết "nguồn dữ liệu" thì càng phải treo
+   * đúng người có bằng chứng. `0` TẮT.
+   */
+  mislynchScarcityScale: number;
+  /**
+   * Nhánh Sói: thưởng khi treo nhầm người làng, nhân với áp lực. `0` TẮT —
+   * v20 để 0 để chỉ đổi MỘT hành vi (nhánh làng) so với v18.
+   */
+  wolfMislynchGain: number;
+}
+
 export interface BotWeights {
   /** Semver. Đổi giá trị bất kỳ là phải đổi version. */
   readonly version: string;
@@ -758,6 +778,11 @@ export interface BotWeights {
   readonly jester: JesterWeights;
   readonly serialKiller: SerialKillerWeights;
   readonly executioner: ExecutionerWeights;
+  /**
+   * Look-ahead một bước cho bảng điểm phiếu (spec §12). OPTIONAL vì v1..v19
+   * không có nhóm này: vắng mặt = tắt, và `voteFutureRisk` trả 0.
+   */
+  readonly lookAhead?: LookAheadWeights;
 }
 
 /** Cho phép ghi đè từng nhánh mà không phải khai lại cả cây. */
@@ -2208,6 +2233,39 @@ export const BOT_WEIGHTS_V19: BotWeights = Object.freeze({
   aggression: Object.freeze({
     ...BOT_WEIGHTS_V18.aggression,
     villageAbstainPressureCeiling: 0.25,
+  }),
+});
+
+/**
+ * Cấu hình v20 - look-ahead một bước cho phiếu của nhánh làng.
+ *
+ * MỘT nhóm mới: `lookAhead` (v18 KHÔNG có nhóm này nên byte-identical).
+ *
+ * Số hạng `futureRisk` trả lời câu hỏi mà bảng điểm myopic bỏ sót (spec
+ * BOT_AI_UPGRADE §12): "treo người này, nếu họ vô tội, pha sau làng trả giá
+ * bao nhiêu?". Hai thành phần:
+ *
+ * - áp lực sĩ số (`mislynchPressureScale`): càng cuối ván, một án treo nhầm
+ *   càng đắt vì làng ít mạng hơn. Đây là dạng lặp của `survivalPressure` mà
+ *   `selectVote` đã dùng cho cổng abstain - dùng lại cùng một phép đo.
+ * - độ khan hiếm bằng chứng (`mislynchScarcityScale`): tỉ lệ người còn sống
+ *   khác đang có bảng belief TRỐNG. Làng sắp hết "nguồn dữ liệu" thì án treo
+ *   phải bám vào người CÓ bằng chứng, không phải người nổi đầu nhờ jitter.
+ *
+ * Phạt = −scale x (1 − P(Sói)) x (áp lực + khan hiếm), CHỈ áp cho nhánh làng;
+ * `wolfMislynchGain = 0` ở v20 nên bảng điểm Sói không đổi một bit.
+ *
+ * KHÔNG mặc định. `DEFAULT_BOT_WEIGHTS` vẫn là v18 cho đến khi bench ≥1.000
+ * ván (spec §21) không tụt — cùng kỷ luật với v19 ngay trên.
+ */
+export const BOT_WEIGHTS_V20: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V18,
+  version: "20.0.0",
+
+  lookAhead: Object.freeze({
+    mislynchPressureScale: 6,
+    mislynchScarcityScale: 4,
+    wolfMislynchGain: 0,
   }),
 });
 
