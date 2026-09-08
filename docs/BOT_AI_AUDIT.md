@@ -231,9 +231,13 @@ registry + `passiveStrategy` fallback — đúng shape spec §9:
    nội sinh), chưa có "action → predicted outcome → next phase risk" như spec §12.
    `StrategicPlanner` abstraction chưa tồn tại tách rời. Đây là khoảng trống lớn
    nhất còn lại so với spec.
-2. **Role strategies trùng lặp pattern**: mỗi role file tự hand-roll TraceTerm +
-   jitter + tie-break (8 nơi); không có shared night-scoring engine như `selectVote`
-   của day. Khó tune đồng bộ, dễ trôi.
+2. ~~**Role strategies trùng lặp pattern**~~ **Đã tách (M4):**
+   `roles/night-scoring.ts::rankNightTargets` dùng chung cho 7 vai đêm
+   (seer, detective, guard, sorcerer, werewolf, tracker, serial-killer) — giữ
+   nguyên thứ tự term, lệ rút RNG jitter, scale sau tổng của Sát Nhân và
+   tie-break `score desc, id asc`. Equivalence chứng minh bằng suite pin đủ
+   4.657 test + self-play 30 ván `--verify-replay` 0 divergence. (Phù Thuỷ
+   không dùng pattern này — nó chấm ngưỡng, không xếp hạng.)
 3. **Wolf coordination ẩn định qua hash**: `fakeFightTarget`/`wolfBluffSeat` dựa vào
    mọi Sói tự tính cùng đáp số từ public state + hash — không có pack channel; đủ
    tốt nhưng mong manh nếu knowledge view diverge (đã handle dead-wolf, vẫn là điểm
@@ -337,7 +341,7 @@ feature surface đã có, plan chỉ gồm các bước đắp khoảng trống:
 | M1 | **XONG** — xoá `decideDefenseClaim` legacy khỏi `BotRuntime` (0 call site production; nhánh claim-in-defense đã có characterization ở `jester-defense-decision.test.ts`) | `BotRuntime.ts` | suite engine + server xanh |
 | M2 | **XONG** — `tests/bot-marker-eviction.test.ts` (RED: crash `1:nomination:3`) + guard skip-mất-nguồn trong `ingestRecaps` (GREEN); test pin thêm đường tracker tự lành | `BotRuntime.ts`, test mới | suite xanh (engine 83 file / 4.657) |
 | M3 | **XONG** — viết lại `scripts/bot-probe.ts` cho khớp `SpeechRequest`; typecheck riêng + smoke-run PASS | `scripts/bot-probe.ts` | tsc scripts/bot-probe.ts |
-| M4 | Extract shared night-scoring helper (TraceTerm + jitter + tie-break) dùng lại ở 8 role files — giữ nguyên tên term và semantics; self-play A/B cùng seed phải cho kết quả y hệt | `roles/*.ts` | `bot-night-strategies`, `bot-role-strategy` + selfplay `--verify-replay` 0 divergence |
+| M4 | **XONG** — `roles/night-scoring.ts::rankNightTargets` thay khung map→jitter→sum→probe→sort ở 7 vai đêm; semantics giữ nguyên từng bit | `roles/*.ts` (7 file), file mới | suite 4.657 + selfplay `--seed m4-replay --games 30 --preset --verify-replay` 0 divergence |
 | M5 | `StrategicPlanner` seam (spec §12): interface + `ImmediateUtilityPlanner` bọc scorer hiện tại, cắm vào `selectVote` + role night paths; chưa có look-ahead đổi behavior trong bước này | `decision/`, `roles/` | characterization tests giữ nguyên output |
 | M6 | Look-ahead v1 trong planner (future-risk term: "action → outcome → next-phase pressure"), bật qua weights mới (V20) — KHÔNG đổi default cho đến khi bench 1.000 ván không tụt | `config/weights.ts`, `planning/` | bench `npm run selfplay -- --games 1000 --preset --verify-replay` |
 | M7 | `PolicyModel` seam (spec §27): `HeuristicPolicyModel` gọi planner hiện tại; BotRuntime giữ API cũ | `bot/policy/` (mới) | suite xanh, replay determinism |

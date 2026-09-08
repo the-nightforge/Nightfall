@@ -1,7 +1,7 @@
 import { isRole, roleTeam, type Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
-import { sumTerms, type TraceTerm } from "../trace/trace";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
+import { rankNightTargets } from "./night-scoring";
 
 /** Vai thuộc dòng Tiên Tri mà Sói Pháp Sư đi săn. */
 const SEER_LINE: ReadonlySet<string> = new Set(["SEER", "APPRENTICE_SEER"]);
@@ -59,28 +59,27 @@ export function sorcererStrategy(
       }
 
       const tuning = weights.roleThresholds;
-      const ranked = candidates
-        .map((targetId) => {
+      const ranked = rankNightTargets(candidates, {
+        weights,
+        rng,
+        probe,
+        termsFor: (targetId) => {
           const claimedSeerLine = state.claims.some(
             (memory) =>
               memory.actorId === targetId &&
               (memory.type === "ROLE_CLAIM" || memory.type === "COUNTER_CLAIM") &&
               isRole(memory.data.role) && SEER_LINE.has(memory.data.role),
           );
-          const terms: TraceTerm[] = [
+          return [
             {
               name: "seerClaim",
               value: claimedSeerLine ? tuning.wolfClaimedPowerScore : 0,
             },
             { name: "trust", value: state.trust[targetId]?.score ?? 0 },
             { name: "suspicion", value: state.suspicion[targetId]?.score ?? 0 },
-            { name: "jitter", value: (rng() - 0.5) * weights.confidence.jitterSpan },
           ];
-          const score = sumTerms(terms);
-          probe?.candidate({ targetId, score, terms, evidenceIds: [] });
-          return { targetId, score };
-        })
-        .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));
+        },
+      });
 
       const winner = ranked[0];
       return {

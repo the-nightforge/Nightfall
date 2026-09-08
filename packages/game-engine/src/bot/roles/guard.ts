@@ -1,7 +1,7 @@
 import type { Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
-import { sumTerms, type TraceTerm } from "../trace/trace";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
+import { rankNightTargets } from "./night-scoring";
 
 /**
  * Bảo Vệ đỡ người đáng tin nhất và chưa được đỡ gần đây.
@@ -52,25 +52,24 @@ export function guardStrategy(
           .map((entry) => entry.targetId as string),
       );
 
-      const scored = candidates
-        .map((targetId) => {
+      const scored = rankNightTargets(candidates, {
+        weights,
+        rng,
+        probe,
+        termsFor: (targetId) => {
           const trust = state.trust[targetId]?.score ?? 0;
           const suspicion = state.suspicion[targetId]?.score ?? 0;
-          // Đỡ người mình nghi là Sói thì vừa phí lượt vừa cứu nhầm phe.
-          const terms: TraceTerm[] = [
+          return [
             { name: "trust", value: trust },
+            // Đỡ người mình nghi là Sói thì vừa phí lượt vừa cứu nhầm phe.
             { name: "suspicionPenalty", value: -(suspicion * tuning.guardSuspicionPenalty) },
             {
               name: "repeatPenalty",
               value: guardedBefore.has(targetId) ? -tuning.guardRepeatPenalty : 0,
             },
-            { name: "jitter", value: (rng() - 0.5) * weights.confidence.jitterSpan },
           ];
-          const score = sumTerms(terms);
-          probe?.candidate({ targetId, score, terms, evidenceIds: [] });
-          return { targetId, score };
-        })
-        .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));
+        },
+      });
 
       const winner = scored[0];
       // Đêm Cảnh Giác mở lượt che thứ hai. Điều kiện do engine chốt ở

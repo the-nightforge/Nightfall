@@ -1,8 +1,8 @@
 import type { Role } from "@masoi/shared";
 import { incomingHostilityOf } from "../analysis/social-analysis";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
-import { sumTerms, type TraceTerm } from "../trace/trace";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
+import { rankNightTargets } from "./night-scoring";
 
 /**
  * Kẻ Theo Dõi không cứu ai - nó đi tìm XÁC NHẬN. Vì vậy chấm điểm ngược hẳn một
@@ -36,18 +36,14 @@ export function trackerStrategy(
         return null;
       }
 
-      const ranked = candidates
-        .map((targetId) => {
-          const terms: TraceTerm[] = [
-            { name: "suspicion", value: state.suspicion[targetId]?.score ?? 0 },
-            { name: "incomingHostility", value: incomingHostilityOf(state, targetId) },
-          ];
-          const score = sumTerms(terms);
-          probe?.candidate({ targetId, score, terms, evidenceIds: [] });
-          return { targetId, score };
-        })
-        // Tie-break theo id để cùng seed luôn ra cùng kết quả.
-        .sort((a, b) => (b.score === a.score ? a.targetId.localeCompare(b.targetId) : b.score - a.score));
+      const ranked = rankNightTargets(candidates, {
+        weights,
+        probe,
+        termsFor: (targetId) => [
+          { name: "suspicion", value: state.suspicion[targetId]?.score ?? 0 },
+          { name: "incomingHostility", value: incomingHostilityOf(state, targetId) },
+        ],
+      });
 
       const best = ranked[0]!;
 

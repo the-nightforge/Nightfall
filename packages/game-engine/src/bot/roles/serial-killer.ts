@@ -3,9 +3,9 @@ import { socialEdgeKey } from "../analysis/social-analysis";
 import { MAX_BELIEF_SCORE } from "../belief/evidence";
 import { voteLeader } from "../decision/claim-decision";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
-import { sumTerms, type TraceTerm } from "../trace/trace";
 import type { BotBrainState } from "../types";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
+import { rankNightTargets } from "./night-scoring";
 
 /**
  * Sát Nhân: chơi để CÒN LẠI MỘT MÌNH.
@@ -124,13 +124,16 @@ export function serialKillerStrategy(
       );
       const shielded = ownSurvivingVictims(state.previousNightActions, aliveIds);
 
-      const scored = candidates
-        .map((targetId) => {
+      const scored = rankNightTargets(candidates, {
+        weights,
+        // Cổng tái lập: 0 = tắt (đã thoát sớm phía trên), 1 = bảng điểm thật.
+        scale: tuning.nightThreatWeight,
+        probe,
+        termsFor: (targetId) => {
           const trust = state.trust[targetId]?.score ?? 0;
           const suspicion = state.suspicion[targetId]?.score ?? 0;
           const hostility = hostilityToward(state, targetId, context.knowledge.botId);
-
-          const terms: TraceTerm[] = [
+          return [
             { name: "trust", value: trust * tuning.nightTrustWeight },
             { name: "hostility", value: hostility * tuning.nightHostilityWeight },
             // Âm: làng đang nghi sẵn thì để làng tự treo, đừng tiêu một đêm.
@@ -140,12 +143,8 @@ export function serialKillerStrategy(
               value: shielded.has(targetId) ? -tuning.avoidOwnVictimWeight : 0,
             },
           ];
-          const total = sumTerms(terms) * tuning.nightThreatWeight;
-          probe?.candidate({ targetId, score: total, terms, evidenceIds: [] });
-          return { targetId, score: total, trust, hostility };
-        })
-        // Phá hoà theo id để hai lần chạy cùng seed không đảo thứ tự.
-        .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));
+        },
+      });
 
       const best = scored[0];
 

@@ -10,8 +10,8 @@ import { MAX_BELIEF_SCORE } from "../belief/evidence";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { wolfBluffSeat } from "../decision/claim-decision";
 import { fnv1a32 } from "../hash";
-import { sumTerms, type TraceTerm } from "../trace/trace";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
+import { rankNightTargets } from "./night-scoring";
 
 /** Vai thuộc bầy mà `knownRoles` của một con Sói còn sống liệt kê. */
 function isPackRole(role: Role | undefined): boolean {
@@ -172,19 +172,19 @@ export function werewolfStrategy(
         return null;
       }
 
-      const scored = candidates
-        .map((targetId) => {
-          const { score, reason } = threatScore(state, context, targetId, weights);
-          const terms: TraceTerm[] = [
-            { name: "threat", value: score },
-            { name: "jitter", value: (rng() - 0.5) * weights.confidence.jitterSpan },
-          ];
-          const total = sumTerms(terms);
-          probe?.candidate({ targetId, score: total, terms, evidenceIds: [] });
-          return { targetId, score: total, reason };
-        })
-        // Tie-break theo id để hai lần chạy cùng seed không đảo thứ tự.
-        .sort((a, b) => b.score - a.score || a.targetId.localeCompare(b.targetId));
+      // `threatScore` thuần và không rút RNG, nên tính sẵn một lần cho từng
+      // ứng viên: bảng term cần `score`, còn evidence cần `reason` của người thắng.
+      const threatByTarget = new Map(
+        candidates.map((targetId) => [targetId, threatScore(state, context, targetId, weights)]),
+      );
+      const scored = rankNightTargets(candidates, {
+        weights,
+        rng,
+        probe,
+        termsFor: (targetId) => [
+          { name: "threat", value: threatByTarget.get(targetId)!.score },
+        ],
+      });
 
       const winner = scored[0];
       // Cuộc Săn Đẫm Máu và Sói Con phẫn nộ cùng mở một mục tiêu phụ; engine đã
@@ -204,7 +204,7 @@ export function werewolfStrategy(
             "ACCUSE",
             context.knowledge.round,
             winner.targetId,
-            winner.reason,
+            threatByTarget.get(winner.targetId)!.reason,
             0,
             weights,
           ),
