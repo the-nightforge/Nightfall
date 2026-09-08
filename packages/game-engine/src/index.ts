@@ -19,6 +19,7 @@ export * from "./bot/analysis/chat-analysis";
 export * from "./bot/analysis/coalition";
 export * from "./bot/analysis/claim-credibility";
 export * from "./bot/belief/private-info";
+export * from "./bot/belief/role-belief";
 export * from "./bot/decision/vote-decision";
 export * from "./bot/decision/trial-decision";
 export * from "./bot/decision/claim-decision";

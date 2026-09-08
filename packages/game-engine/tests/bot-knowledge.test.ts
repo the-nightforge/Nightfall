@@ -141,9 +141,22 @@ describe("bot knowledge security boundary", () => {
     const view = e.botKnowledgeFor("villager");
 
     expect(view.knownRoles).toEqual({ villager: "VILLAGER" });
-    expect(JSON.stringify(view)).not.toContain("SEER");
-    expect(JSON.stringify(view)).not.toContain("WITCH");
-    expect(JSON.stringify(view)).not.toContain("WEREWOLF");
+    // `roleComposition` là thông tin BỘ BÀI công khai (`RoomSnapshot.config`)
+    // nên được phép nhắc tên vai; mọi phần KHÁC của view vẫn không được nhắc
+    // tên vai nào ngoài vai đã lộ của chính viewer. Kiểm bằng cách loại
+    // composition khỏi chuỗi so sánh - cùng bảo chứng với bản cũ.
+    const { roleComposition: _public, ...privateView } = view;
+    expect(JSON.stringify(privateView)).not.toContain("SEER");
+    expect(JSON.stringify(privateView)).not.toContain("WITCH");
+    expect(JSON.stringify(privateView)).not.toContain("WEREWOLF");
+    // Composition nói ĐÚNG bộ bài fixture chia: 2 Sói, 1 Tiên Tri, 1 Phù Thuỷ,
+    // 1 Dân (fixture 5 người). Nó không nói ai cầm lá nào.
+    expect(view.roleComposition).toEqual({
+      WEREWOLF: 2,
+      SEER: 1,
+      WITCH: 1,
+      VILLAGER: 1,
+    });
   });
 
   it("keeps a dead player visible as a person while hiding the role", () => {
@@ -160,7 +173,9 @@ describe("bot knowledge security boundary", () => {
     const view = knowledgeFixture().botKnowledgeFor("wolf-a");
 
     expect(view.knownRoles).toEqual({ "wolf-a": "WEREWOLF", "wolf-b": "WEREWOLF" });
-    expect(JSON.stringify(view)).not.toContain("SEER");
+    // Composition là bộ bài công khai - tách khỏi phần riêng tư khi kiểm chuỗi.
+    const { roleComposition: _public, ...privateView } = view;
+    expect(JSON.stringify(privateView)).not.toContain("SEER");
   });
 
   it("hides teammates from a dead wolf", () => {
@@ -310,6 +325,10 @@ describe("bot knowledge security boundary", () => {
         // hình phòng đi xuống mọi client trong `RoomSnapshot.config`. Nó nói
         // vai nào CÓ THỂ có mặt, không nói ai đang cầm lá nào.
         "neutralRolesInPlay",
+        // Vai → SỐ GHẾ của bộ bài, cùng nguồn công khai với
+        // `neutralRolesInPlay` ngay trên nhưng đủ để belief xác suất đặt
+        // prior theo đúng preset (xem `role-belief.ts`).
+        "roleComposition",
         // Mục tiêu của CHÍNH bot này khi nó là Kẻ Báo Thù, và `null` với mọi
         // vai khác - đúng như `seerResult` ngay trên: engine lọc theo chủ sở
         // hữu, nên trường có mặt mà giá trị thì không. Với một Dân Làng (đúng

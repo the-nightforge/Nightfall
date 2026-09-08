@@ -517,6 +517,18 @@ export interface BotKnowledgeView {
    */
   neutralRolesInPlay: Role[];
   /**
+   * Vai → số ghế trong bộ bài của ván, suy từ CẤU HÌNH PHÒNG công khai
+   * (`RoomConfig` đi xuống mọi client trong `RoomSnapshot.config`).
+   *
+   * Nói vai nào CÓ THỂ có mặt và CÓ BAO NHIÊU ghế, không nói ai đang cầm lá
+   * nào — cùng tính công khai với `neutralRolesInPlay`, nhưng đủ để lớp belief
+   * xác suất (`role-belief.ts`) đặt prior theo đúng bộ bài thật thay vì đoán.
+   *
+   * Optional vì `BotKnowledgeView` được dựng lại từ record self-play cũ và từ
+   * fixture test; thiếu thì projection dùng fallback pool tối giản.
+   */
+  roleComposition?: Record<string, number>;
+  /**
    * Mục tiêu của CHÍNH bot này, khi nó là Kẻ Báo Thù. `null` với mọi vai khác.
    *
    * Đây là thông tin RIÊNG đúng nghĩa - engine cấp nó, không suy ra được từ
