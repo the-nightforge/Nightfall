@@ -31,6 +31,8 @@
     "trace-view": "tsx apps/server/scripts/trace-view.ts",
     "prerole-power": "npm run build:deps",
     "role-power": "tsx apps/server/scripts/role-power.ts",
+    "prerole-power:sweep": "npm run build:deps",
+    "role-power:sweep": "tsx apps/server/scripts/role-power-sweep.ts",
     "prereveal-ab": "npm run build:deps",
     "reveal-ab": "tsx apps/server/scripts/reveal-ab.ts",
     "premine-aliases": "npm run build:deps",

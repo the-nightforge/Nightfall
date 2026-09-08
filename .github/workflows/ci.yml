@@ -21,6 +21,12 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Repo này CÔNG KHAI, nên workflow chạy được từ PR của người lạ. Không job nào ở
+# đây cần quyền ghi: đặt trần read ở cấp workflow để token của một PR fork không
+# đẩy commit, sửa release hay bình luận thay mình được.
+permissions:
+  contents: read
+
 jobs:
   # Lọc path MỘT lần để job nặng (e2e, docker) chỉ chạy khi backend/docker đổi.
   # Commit chỉ sửa apps/web/** sẽ skip 2 job này -> tiết kiệm ~10-20 phút Actions/run.
@@ -253,7 +259,11 @@ jobs:
 
   deploy-preview:
     needs: verify
-    if: github.event_name == 'pull_request'
+    # PR từ fork KHÔNG được cấp secrets (GitHub cố ý), nên job này ở đó chỉ có
+    # thể đỏ với token rỗng. Nó cũng không nên chạy: deploy preview một PR lạ là
+    # đem mã của người ngoài lên hạ tầng Vercel của mình. Chỉ PR mở từ nhánh
+    # trong chính repo này mới được preview.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     # Build của project này mất ~35s và Vercel cắt mọi build ở 45 phút, nên bất
     # cứ thứ gì vượt mốc dưới đây là hỏng chứ không phải chậm. Không có dòng này
