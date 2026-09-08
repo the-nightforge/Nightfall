@@ -231,7 +231,6 @@ export const ROLE_POWER: Record<Role, number> = {
   APPRENTICE_SEER: 0.5,
   DETECTIVE: 2,
   GUARD: 2.5,
-  GUARDIAN_ANGEL: 1.5,
   /** TẠM 2, ngang DETECTIVE (cùng hạng lá thông tin). Chốt lại sau sweep. */
   TRACKER: 2,
   WITCH: 3,
@@ -357,7 +356,7 @@ const BASE_TIMINGS: Pick<
  * một bầy chơi bằng luật khác.
  *
  *  Lá được phép gỡ ra để chỉnh cân bằng là phần còn lại: Thám Tử, Thị Trưởng,
- *  Thiên Thần Hộ Mệnh, Tiên Tri Tập Sự, Sói Con, Kẻ Nguyền Rủa.
+ *  Kẻ Theo Dõi, Tiên Tri Tập Sự, Sói Con, Kẻ Nguyền Rủa.
  */
 export const CORE_PRESET_ROLES: readonly Role[] = [
   "SEER",
@@ -401,7 +400,7 @@ function preset(overrides: Partial<RoomConfig>): RoomConfig {
     alphaWolf: false,
     apprenticeSeer: false,
     detective: false,
-    guardianAngel: false,
+    tracker: false,
     mayor: false,
     elder: false,
     doppelganger: false,
@@ -491,9 +490,9 @@ function preset(overrides: Partial<RoomConfig>): RoomConfig {
  * 10: WEREWOLF, WOLF_CUB, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, HUNTER, VILLAGER x2
  * 11: xem khối chú thích ngay trên `11: preset(...)` - đã đổi 2026-09-04
  * 12: xem khối chú thích ngay trên `11: preset(...)` - đã đổi 2026-09-04
- * 13: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, VILLAGER x3
- * 14: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, VILLAGER x4
- * 15: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, VILLAGER x3
+ * 13: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x3
+ * 14: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x4
+ * 15: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x3
  */
 
 const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
@@ -538,16 +537,22 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
    * cũng ra đúng 43.7; chọn Thiên Thần vì nó có việc để làm ngay từ đêm 1, còn
    * Tập Sự đo ra gần bằng 0 (xem `ROLE_POWER`).
    *
+   * ĐỔI 2026-09-07: ghế đó giờ là KẺ THEO DÕI, vì Thiên Thần Hộ Mệnh đã bị xoá
+   * cứng (nó là một Bảo Vệ yếu hơn hẳn - cùng khiên, cùng ràng buộc, chỉ có 2
+   * lượt - mà cả 9 preset chứa nó đều đã có Bảo Vệ). Số ghế không đổi, nhưng
+   * mọi con số đo ở khối này là số của bộ bài CŨ: `ROLE_POWER.TRACKER` còn là
+   * giá tạm và cả 9 cỡ phòng chờ một lượt đo lại.
+   *
    * 11 người vẫn là cỡ phòng lệch nhất bảng. Nó nằm trong dải 35-55 mà repo tự
    * tuyên bố, nhưng không chạm được 45 - và cả bộ vai hiện có đã thử hết.
    *
-   * 11: WEREWOLF x2, TRAITOR, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, VILLAGER x2
+   * 11: WEREWOLF x2, TRAITOR, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x2
    * 12: WEREWOLF x2, TRAITOR, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, VILLAGER x4
    */
   11: preset({
     werewolves: 2,
     traitor: true,
-    guardianAngel: true,
+    tracker: true,
     seer: true,
     witch: true,
     guard: true,
@@ -573,7 +578,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     detective: true,
     hunter: true,
     mayor: true,
-    guardianAngel: true,
+    tracker: true,
   }),
   14: preset({
     werewolves: 3,
@@ -583,7 +588,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     detective: true,
     hunter: true,
     mayor: true,
-    guardianAngel: true,
+    tracker: true,
   }),
   15: preset({
     werewolves: 3,
@@ -595,7 +600,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     detective: true,
     hunter: true,
     mayor: true,
-    guardianAngel: true,
+    tracker: true,
   }),
   /*
    * 16-20: bộ vai làng đã CẠN, nên lá điều chỉnh là Kẻ Nguyền Rủa.
@@ -652,10 +657,10 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
    * không bị đụng tới ở đây vì bàn đông cần NHIỀU thời gian nói hơn chứ không
    * ít hơn, nhưng con số đó là một quyết định sản phẩm chưa ai ra.
    *
-   * 16: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, VILLAGER x4
-   * 17: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, ELDER, SORCERER, VILLAGER x3
-   * 18: WEREWOLF x4, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, ELDER, SORCERER, VILLAGER x4
-   * 19: WEREWOLF x4, DOPPELGANGER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, GUARDIAN_ANGEL, ELDER, ALPHA_WOLF, VILLAGER x4
+   * 16: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x4
+   * 17: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, SORCERER, VILLAGER x3
+   * 18: WEREWOLF x4, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, SORCERER, VILLAGER x4
+   * 19: WEREWOLF x4, DOPPELGANGER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, ALPHA_WOLF, VILLAGER x4
    * 20: như trên thêm CURSED, VILLAGER x4
    *
    * Đổi 2026-09-05 (SORCERER + ALPHA_WOLF thay MEDIUM + PRIEST, xóa cứng):
@@ -740,7 +745,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     detective: true,
     hunter: true,
     mayor: true,
-    guardianAngel: true,
+    tracker: true,
   }),
   17: preset({
     werewolves: 3,
@@ -752,7 +757,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     detective: true,
     hunter: true,
     mayor: true,
-    guardianAngel: true,
+    tracker: true,
     elder: true,
     sorcerer: true,
   }),
@@ -765,7 +770,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     detective: true,
     hunter: true,
     mayor: true,
-    guardianAngel: true,
+    tracker: true,
     elder: true,
     sorcerer: true,
   }),
@@ -779,7 +784,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     detective: true,
     hunter: true,
     mayor: true,
-    guardianAngel: true,
+    tracker: true,
     elder: true,
     alphaWolf: true,
   }),
@@ -794,7 +799,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     detective: true,
     hunter: true,
     mayor: true,
-    guardianAngel: true,
+    tracker: true,
     elder: true,
     alphaWolf: true,
   }),
@@ -891,7 +896,6 @@ export function specialRoleList(config: RoomConfig): Role[] {
   if (config.apprenticeSeer) roles.push("APPRENTICE_SEER");
   if (config.detective) roles.push("DETECTIVE");
   if (config.guard) roles.push("GUARD");
-  if (config.guardianAngel) roles.push("GUARDIAN_ANGEL");
   if (config.tracker) roles.push("TRACKER");
   if (config.witch) roles.push("WITCH");
   if (config.hunter) roles.push("HUNTER");

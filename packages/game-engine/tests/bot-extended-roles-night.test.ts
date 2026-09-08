@@ -22,7 +22,7 @@ const CONFIG: RoomConfig = {
   apprenticeSeer: true,
   detective: true,
   guard: true,
-  guardianAngel: true,
+  tracker: true,
   sorcerer: true,
   witch: true,
   hunter: false,
@@ -44,15 +44,18 @@ const ALWAYS_ACT: readonly Role[] = [
   "DETECTIVE",
   "GUARD",
   "SORCERER",
+  // Kẻ Theo Dõi không có kho lượt: còn mục tiêu hợp lệ là theo dõi.
+  "TRACKER",
 ];
 
 /**
  * Vai có SỐ LƯỢT GIỚI HẠN cả ván. Giữ lượt khi chưa có lý do là hành vi đúng,
- * không phải bot hỏng - Phù Thuỷ và Thiên Thần chỉ có vài lượt. Chúng được
- * kiểm bằng test riêng có điều kiện. (Linh Mục - thành viên thứ ba của nhóm
- * này - đã bị xóa cứng; Sói Pháp Sư soi MỖI ĐÊM nên thuộc nhóm trên.)
+ * không phải bot hỏng - Phù Thuỷ chỉ có hai bình. Chúng được kiểm bằng test
+ * riêng có điều kiện. (Linh Mục và Thiên Thần Hộ Mệnh - hai thành viên còn lại
+ * của nhóm này - đều đã bị xóa cứng; Sói Pháp Sư soi MỖI ĐÊM nên thuộc nhóm
+ * trên.)
  */
-const LIMITED_CHARGE: readonly Role[] = ["WITCH", "GUARDIAN_ANGEL"];
+const LIMITED_CHARGE: readonly Role[] = ["WITCH"];
 
 function nightEngine(roles: readonly Role[]) {
   const engine = GameEngine.create(
@@ -75,7 +78,7 @@ function fullBoard() {
     "APPRENTICE_SEER",
     "DETECTIVE",
     "GUARD",
-    "GUARDIAN_ANGEL",
+    "TRACKER",
     "SORCERER",
     "WITCH",
     "VILLAGER",
@@ -132,27 +135,6 @@ describe("knowledge đêm cho vai mở rộng", () => {
 
     expect(night.legalActions).toContain("DETECTIVE_CHECK");
     expect(night.legalTargets.DETECTIVE_CHECK.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it("Thiên Thần Hộ Mệnh không được đỡ lại người đêm trước", () => {
-    const engine = fullBoard();
-    const previous = idOf(engine, "VILLAGER");
-    engine.state.guardianAngelPrevious = previous;
-
-    const night = engine.botKnowledgeFor(idOf(engine, "GUARDIAN_ANGEL")).night!;
-
-    expect(night.legalActions).toContain("GUARDIAN_PROTECT");
-    expect(night.legalTargets.GUARDIAN_PROTECT).not.toContain(previous);
-  });
-
-  it("Thiên Thần hết lượt thì không còn được chào bảo vệ", () => {
-    const engine = fullBoard();
-    const angel = idOf(engine, "GUARDIAN_ANGEL");
-    engine.state.guardianAngelCharges[angel] = 0;
-
-    expect(engine.botKnowledgeFor(angel).night!.legalActions).not.toContain(
-      "GUARDIAN_PROTECT",
-    );
   });
 
   it("Sói Pháp Sư được chào SORCERER_CHECK cùng phiếu cắn của bầy", () => {
@@ -243,31 +225,6 @@ describe("chiến lược đêm cho vai mở rộng", () => {
       runtime.observe(context);
       expect(runtime.decideNight(context)).toBeNull();
     }
-  });
-
-  it("Thiên Thần tiêu lượt khi có người rõ ràng đang bị nhắm", () => {
-    const engine = fullBoard();
-    const angel = idOf(engine, "GUARDIAN_ANGEL");
-    const victim = idOf(engine, "VILLAGER");
-
-    const context = contextFor(engine, angel);
-    const runtime = runtimeFor(engine, angel);
-    runtime.observe(context);
-    for (const attacker of ["SEER", "GUARD", "WITCH"] as const) {
-      runtime.state.relationships[`${idOf(engine, attacker)}->${victim}`] = {
-        support: 0,
-        hostility: 1,
-        voteAlignment: 0,
-        samples: 4,
-        reasons: [],
-        lastUpdatedRound: 1,
-      };
-    }
-
-    const decision = runtime.decideNight(context)!;
-
-    expect(decision.action).toBe("GUARDIAN_PROTECT");
-    expect(decision.targetId).toBe(victim);
   });
 
   it("quyết định của mọi vai đều được engine chấp nhận", () => {

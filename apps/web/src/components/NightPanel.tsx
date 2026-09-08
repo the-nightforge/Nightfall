@@ -540,36 +540,6 @@ export function NightPanel({ snapshot, onAction }: Props) {
           </>
         )}
 
-        {/* THIÊN THẦN HỘ MỆNH */}
-        {role === "GUARDIAN_ANGEL" && (
-          <>
-            <div className="mb-2 flex items-center justify-between gap-2 text-sm">
-              <span className="text-mist/85">
-                Lượt khiên còn lại: <b className="text-amber-300">{night?.guardianAngelCharges ?? 2}/2</b>
-              </span>
-              {night?.guardianAngelPrevious && (
-                <span className="text-xs text-mist/85">
-                  Đêm trước: <b>{nameOf(night.guardianAngelPrevious)}</b>
-                </span>
-              )}
-            </div>
-            <p className="mb-2 text-[13px] text-mist-strong">
-              Bảo vệ 1 người khỏi mọi đòn giết ban đêm (tối đa 2 lần cả ván, không chọn cùng 1 người 2 đêm liền).
-            </p>
-            {aliveOthers({
-              allowSelf: true,
-              disabledIds: night?.guardianAngelPrevious ? [night.guardianAngelPrevious] : undefined,
-            })}
-            <button
-              className="btn-primary mt-3 w-full"
-              disabled={!selected || acted || (night?.guardianAngelCharges ?? 2) <= 0}
-              onClick={() => selected && onAction("GUARDIAN_PROTECT", selected)}
-            >
-              🛡️ {(night?.guardianAngelCharges ?? 2) <= 0 ? "Đã hết lượt bảo vệ" : "Dùng khiên hộ mệnh"}
-            </button>
-          </>
-        )}
-
         {/* SÓI PHÁP SƯ: lượt kiểm tra dòng Tiên Tri, ngoài phiếu cắn cùng bầy */}
         {role === "SORCERER" && (
           <>

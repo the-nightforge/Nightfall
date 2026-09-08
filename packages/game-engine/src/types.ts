@@ -79,7 +79,6 @@ export interface NightState {
    * đang chạy sẽ không khôi phục được. Constructor chuẩn hoá về null.
    */
   guardSecondTarget?: string | null;
-  guardianAngelTarget: string | null;
   /** Phù Thuỷ đã quyết định dùng bình cứu cho nạn nhân đêm nay chưa */
   healTonight: boolean;
   poisonTarget: string | null;
@@ -133,7 +132,7 @@ export interface NightState {
   /**
    * Mục tiêu theo dõi đêm nay, khoá theo id NGƯỜI THEO DÕI.
    *
-   * `Record` chứ không phải một ô đơn như `guardianAngelTarget`: DOPPELGANGER
+   * `Record` chứ không phải một ô đơn như `guardTarget`: DOPPELGANGER
    * sao chép được vai, nên hai Kẻ Theo Dõi là tình huống có thật. Cùng khuôn
    * với `seerResults`.
    */
@@ -255,12 +254,9 @@ export interface GameState {
    *
    * Trường riêng thay vì đổi `guardPrevious` thành mảng: `guardPrevious` đã nằm
    * trong snapshot, trong bot knowledge và trong mọi bản ghi đã lưu, nên đổi
-   * kiểu của nó là làm mọi ván đang chạy không khôi phục được. Cùng hình dạng
-   * với `guardianAngelPrevious` ngay bên cạnh.
+   * kiểu của nó là làm mọi ván đang chạy không khôi phục được.
    */
   guardSecondPrevious?: string | null;
-  guardianAngelPrevious: string | null;
-  guardianAngelCharges: Record<string, number>;
   apprenticeAwakened: boolean;
   wolfCubRageNextNight: boolean;
   /**

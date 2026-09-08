@@ -5,16 +5,16 @@ import { sumTerms, type TraceTerm } from "../trace/trace";
 import { nightEvidence, type BotRoleStrategy } from "./strategy";
 
 /**
- * Kẻ Theo Dõi không cứu ai - nó đi tìm XÁC NHẬN. Vì vậy chấm điểm ngược hẳn
- * Thiên Thần Hộ Mệnh cũ (`roles/guardian-angel.ts`): Thiên Thần ưu tiên người
- * đáng TIN để che, còn ở đây ưu tiên người đáng NGỜ để theo dõi. Dùng lại đúng
- * hai tín hiệu Thiên Thần có (suspicion, incomingHostilityOf) thay vì bịa tín
- * hiệu mới - chỉ đổi suspicion từ khoản phạt (âm) thành khoản thưởng (dương).
+ * Kẻ Theo Dõi không cứu ai - nó đi tìm XÁC NHẬN. Vì vậy chấm điểm ngược hẳn một
+ * vai đỡ đòn: vai đỡ đòn ưu tiên người đáng TIN để che, còn ở đây ưu tiên người
+ * đáng NGỜ để theo dõi. Dùng lại đúng hai tín hiệu sẵn có (suspicion,
+ * incomingHostilityOf) thay vì bịa tín hiệu mới - chỉ đổi suspicion từ khoản
+ * phạt (âm) thành khoản thưởng (dương).
  *
- * Không có ngưỡng "đáng để tiêu lượt" như Thiên Thần: TRACK không phải tài
- * nguyên khan hiếm dùng vài lần cả ván (Task 2), nên còn mục tiêu hợp lệ là
- * dùng. Cũng không lọc "mục tiêu đêm trước" như Bảo Vệ lọc `guardPrevious` -
- * luật cố ý CHO PHÉP theo dõi lặp lại đúng một người ở hai đêm liên tiếp.
+ * Không có ngưỡng "đáng để tiêu lượt": TRACK không phải tài nguyên khan hiếm
+ * dùng vài lần cả ván (Task 2), nên còn mục tiêu hợp lệ là dùng. Cũng không lọc
+ * "mục tiêu đêm trước" như Bảo Vệ lọc `guardPrevious` - luật cố ý CHO PHÉP theo
+ * dõi lặp lại đúng một người ở hai đêm liên tiếp.
  */
 export function trackerStrategy(
   _role: Role = "TRACKER",

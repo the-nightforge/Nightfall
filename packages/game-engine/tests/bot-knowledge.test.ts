@@ -44,7 +44,6 @@ function knowledgeFixture(phase: GamePhase = "VOTING") {
       // mọi trường bí mật để các assert "không lộ" ở dưới có thứ để lộ.
       wolfSecondaryTarget: "villager",
       wolfCubRageTonight: true,
-      guardianAngelTarget: "witch",
       detectiveTargets: { target1: "wolf-a", target2: "witch" },
       detectiveResults: {
         witch: { target1Id: "wolf-a", target2Id: "witch", sameTeam: false },
@@ -68,8 +67,6 @@ function knowledgeFixture(phase: GamePhase = "VOTING") {
     hunterShots: [],
     // Cùng lý do với `night` ở trên: nhồi giá trị thật vào state của các vai mở
     // rộng để assert "không lộ" có thứ để lộ.
-    guardianAngelPrevious: "villager",
-    guardianAngelCharges: { villager: 1 },
     alphaShieldUsed: {},
     apprenticeAwakened: true,
     wolfCubRageNextNight: true,

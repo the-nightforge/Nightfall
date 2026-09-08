@@ -211,7 +211,6 @@ function accentFor(role: Role): VillageAccent {
   if (ROLE_META[role].team === "neutral") return "jester";
   switch (role) {
     case "GUARD":
-    case "GUARDIAN_ANGEL":
       return "guard";
     case "SEER":
     case "APPRENTICE_SEER":

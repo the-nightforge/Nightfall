@@ -14,7 +14,6 @@ export const NIGHT_SCAFFOLD: NightState = {
   wolfCubRageTonight: false,
   wolvesLocked: false,
   guardTarget: null,
-  guardianAngelTarget: null,
   healTonight: false,
   poisonTarget: null,
   witchSkipped: false,

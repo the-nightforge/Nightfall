@@ -369,7 +369,6 @@ export type NightActionKind =
   | "POISON"
   | "SKIP"
   | "DETECTIVE_CHECK"
-  | "GUARDIAN_PROTECT"
   | "SORCERER_CHECK"
   | "SERIAL_KILL"
   | "TRACK";

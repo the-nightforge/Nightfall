@@ -65,7 +65,11 @@ export function rolesInRecap(nights: NightRecap[], config?: RoomConfig): RecapRo
 
   return {
     guard: inPlay(config?.guard, (night) => night.guardTarget != null),
-    guardianAngel: inPlay(config?.guardianAngel, (night) => night.guardianAngelTarget != null),
+    // CHỈ vế lịch sử: Thiên Thần Hộ Mệnh đã bị xoá cứng nên `RoomConfig` không
+    // còn cờ cho nó, nhưng recap của ván ĐÃ XONG vẫn nằm trong hồ sơ và phải
+    // đọc lại được. Ván mới không bao giờ có `guardianAngelTarget` nên dòng này
+    // tự tắt.
+    guardianAngel: seen((night) => night.guardianAngelTarget != null),
     // Tiên Tri Tập Sự thừa kế kỹ năng soi, nên lượt soi của nó cũng rơi vào
     // `seerChecks`: một ván chỉ bật Tập Sự vẫn phải có dòng Tiên Tri.
     seer:

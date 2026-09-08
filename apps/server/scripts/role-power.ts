@@ -37,7 +37,7 @@ const TOGGLES: ReadonlyArray<[Role, keyof RoomConfig]> = [
   ["WOLF_CUB", "wolfCub"],
   ["APPRENTICE_SEER", "apprenticeSeer"],
   ["DETECTIVE", "detective"],
-  ["GUARDIAN_ANGEL", "guardianAngel"],
+  ["TRACKER", "tracker"],
   ["MAYOR", "mayor"],
   ["ELDER", "elder"],
   ["SORCERER", "sorcerer"],

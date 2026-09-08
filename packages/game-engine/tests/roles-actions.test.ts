@@ -14,13 +14,6 @@ function createTestState(players: Partial<EnginePlayer>[]): GameState {
     cursedTurned: p.cursedTurned ?? false,
   }));
 
-  const guardianAngelCharges: Record<string, number> = {};
-  for (const p of fullPlayers) {
-    if (p.role === "GUARDIAN_ANGEL") {
-      guardianAngelCharges[p.id] = 2;
-    }
-  }
-
   return {
     deadCanSpeakChosenId: null,
     phase: "NIGHT",
@@ -40,7 +33,6 @@ function createTestState(players: Partial<EnginePlayer>[]): GameState {
       wolfCubRageTonight: false,
       wolvesLocked: false,
       guardTarget: null,
-      guardianAngelTarget: null,
       healTonight: false,
       poisonTarget: null,
     witchSkipped: false,
@@ -55,8 +47,6 @@ function createTestState(players: Partial<EnginePlayer>[]): GameState {
     voteMutations: [],
     dayVoteHistory: [],
     guardPrevious: null,
-    guardianAngelPrevious: null,
-    guardianAngelCharges,
     alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
@@ -93,7 +83,7 @@ describe("Extended Roles - Deck Building", () => {
       apprenticeSeer: true,
       detective: true,
       guard: true,
-      guardianAngel: true,
+      tracker: true,
       witch: true,
       hunter: true,
       mayor: true,
@@ -107,7 +97,7 @@ describe("Extended Roles - Deck Building", () => {
     expect(deck).toContain("APPRENTICE_SEER");
     expect(deck).toContain("DETECTIVE");
     expect(deck).toContain("GUARD");
-    expect(deck).toContain("GUARDIAN_ANGEL");
+    expect(deck).toContain("TRACKER");
     expect(deck).toContain("WITCH");
     expect(deck).toContain("HUNTER");
     expect(deck).toContain("MAYOR");
@@ -196,81 +186,6 @@ describe("Detective Role Actions", () => {
     // Danh sách hợp lệ phải nói cùng một điều, nếu không client vẫn mời người
     // chơi bấm vào một nước mà engine sẽ từ chối.
     expect(engine.botKnowledgeFor("det").night?.legalTargets.DETECTIVE_CHECK).not.toContain("det");
-  });
-});
-
-describe("Guardian Angel Role Actions", () => {
-  it("không thể tự bảo vệ mình, giống Bảo Vệ", () => {
-    const state = createTestState([
-      { id: "ga", role: "GUARDIAN_ANGEL" },
-      { id: "v1", role: "VILLAGER" },
-      { id: "w1", role: "WEREWOLF" },
-    ]);
-    const engine = new GameEngine(state);
-
-    expect(() => engine.submitNightAction("ga", "GUARDIAN_PROTECT", "ga")).toThrow(
-      /không thể tự bảo vệ/i,
-    );
-    expect(engine.botKnowledgeFor("ga").night?.legalTargets.GUARDIAN_PROTECT).not.toContain("ga");
-  });
-
-  it("protects player and consumes charge, prevents wolf kill", () => {
-    const state = createTestState([
-      { id: "ga", role: "GUARDIAN_ANGEL" },
-      { id: "v1", role: "VILLAGER" },
-      { id: "w1", role: "WEREWOLF" },
-    ]);
-    const engine = new GameEngine(state);
-
-    expect(engine.snapshotFor("ga").nightInfo?.guardianAngelCharges).toBe(2);
-
-    engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v1");
-    // Charge chưa mất khi đêm còn mở: người chơi vẫn được đổi ý.
-    expect(engine.snapshotFor("ga").nightInfo?.guardianAngelCharges).toBe(2);
-
-    engine.submitNightAction("w1", "KILL", "v1");
-    const deaths = engine.resolveNight();
-
-    expect(engine.state.guardianAngelCharges["ga"]).toBe(1);
-    expect(deaths).toHaveLength(0);
-    expect(engine.player("v1")?.alive).toBe(true);
-  });
-
-  it("cannot protect same player two nights in a row", () => {
-    const state = createTestState([
-      { id: "ga", role: "GUARDIAN_ANGEL" },
-      { id: "v1", role: "VILLAGER" },
-      { id: "v2", role: "VILLAGER" },
-      { id: "w1", role: "WEREWOLF" },
-    ]);
-    const engine = new GameEngine(state);
-
-    engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v1");
-    engine.resolveNight();
-
-    engine.setPhase("NIGHT", 30000);
-
-    // Attempting same target on next night
-    expect(() => engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v1")).toThrow();
-
-    // Protecting different target succeeds
-    engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v2");
-    engine.resolveNight();
-    expect(engine.state.guardianAngelCharges["ga"]).toBe(0);
-  });
-
-  it("cannot protect when 0 charges left", () => {
-    const state = createTestState([
-      { id: "ga", role: "GUARDIAN_ANGEL" },
-      { id: "v1", role: "VILLAGER" },
-      { id: "v2", role: "VILLAGER" },
-      { id: "v3", role: "VILLAGER" },
-      { id: "w1", role: "WEREWOLF" },
-    ]);
-    state.guardianAngelCharges["ga"] = 0;
-    const engine = new GameEngine(state);
-
-    expect(() => engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v1")).toThrow();
   });
 });
 
@@ -455,21 +370,6 @@ describe("Wolf Cub Rage Mechanics", () => {
 });
 
 describe("Night Recap - đủ diễn biến vai trò mở rộng", () => {
-  it("ghi lại mục tiêu Thiên Thần Hộ Mệnh bảo vệ", () => {
-    const state = createTestState([
-      { id: "ga", role: "GUARDIAN_ANGEL" },
-      { id: "v1", role: "VILLAGER" },
-      { id: "w1", role: "WEREWOLF" },
-    ]);
-    const engine = new GameEngine(state);
-    engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v1");
-    engine.submitNightAction("w1", "KILL", "v1");
-    engine.resolveNight();
-
-    const night = engine.state.nightHistory[0];
-    expect(night.guardianAngelTarget).toEqual({ id: "v1", name: "Player 2" });
-  });
-
   it("ghi lại 2 mục tiêu Thám Tử kiểm tra", () => {
     const state = createTestState([
       { id: "det", role: "DETECTIVE" },
@@ -593,24 +493,6 @@ describe("Mayor 2x Vote Weight", () => {
 });
 
 describe("Đổi ý trong đêm không đốt mất lượt", () => {
-  it("Thiên Thần đổi mục tiêu chỉ tốn 1 charge", () => {
-    const state = createTestState([
-      { id: "ga", role: "GUARDIAN_ANGEL" },
-      { id: "v1", role: "VILLAGER" },
-      { id: "v2", role: "VILLAGER" },
-      { id: "w1", role: "WEREWOLF" },
-    ]);
-    const engine = new GameEngine(state);
-
-    engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v1");
-    engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v2");
-    engine.submitNightAction("w1", "KILL", "v2");
-    const deaths = engine.resolveNight();
-
-    expect(deaths).toHaveLength(0);
-    expect(engine.state.guardianAngelCharges["ga"]).toBe(1);
-  });
-
   it("Phù Thuỷ bỏ qua sau khi đã chọn thuốc thì không dùng thuốc", () => {
     const state = createTestState([
       { id: "witch", role: "WITCH" },

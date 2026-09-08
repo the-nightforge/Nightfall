@@ -302,7 +302,7 @@ describe("cấu hình vai mở rộng", () => {
         apprenticeSeer: true,
         detective: true,
         guard: true,
-        guardianAngel: true,
+        tracker: true,
         sorcerer: true,
         witch: true,
         hunter: true,

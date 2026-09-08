@@ -324,4 +324,21 @@ describe("trackerTargets/trackerResults của Kẻ Theo Dõi", () => {
     expect(parsed.night.trackerTargets).toEqual({ p1: "p2" });
     expect(parsed.night.trackerResults).toEqual({ p1: { targetId: "p2", acted: true } });
   });
+
+  it("snapshot cũ còn Thiên Thần vẫn khôi phục được, không mất trường nào", () => {
+    // Ván đang chạy trên Redis lúc deploy bản xoá cứng Thiên Thần Hộ Mệnh vẫn
+    // mang ba trường này. `z.object()` thường STRIP khoá lạ, nên bỏ chúng khỏi
+    // schema không ném lỗi - nó lặng lẽ xoá dữ liệu của những ván ấy. Vì thế
+    // phép kiểm ở đây là GIỮ ĐƯỢC, không phải "không ném".
+    const raw = JSON.parse(JSON.stringify(engineState()));
+    raw.guardianAngelCharges = { p1: 2 };
+    raw.guardianAngelPrevious = "p2";
+    raw.night.guardianAngelTarget = "p3";
+
+    const parsed = gameStateSchema.parse(raw) as unknown as Record<string, unknown>;
+
+    expect((parsed as { guardianAngelCharges?: unknown }).guardianAngelCharges).toEqual({ p1: 2 });
+    expect((parsed as { guardianAngelPrevious?: unknown }).guardianAngelPrevious).toBe("p2");
+    expect((parsed.night as { guardianAngelTarget?: unknown }).guardianAngelTarget).toBe("p3");
+  });
 });

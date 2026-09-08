@@ -4,7 +4,7 @@ import { DEFAULT_ROOM_CONFIG, RoomMode } from "../src/phases";
 import { GameEventId } from "../src/events";
 import { GameEventView, RoomSnapshot, NightActionView } from "../src/snapshot";
 import { gameActionPayload, roomConfigSchema, validateRoomConfig } from "../src/schemas";
-import { ROLE_POWER } from "../src/balance";
+import { PRESET_DECKS, ROLE_POWER, specialRoleList } from "../src/balance";
 
 describe("Shared Roles", () => {
   it("includes all 15 roles with valid meta", () => {
@@ -17,7 +17,6 @@ describe("Shared Roles", () => {
       "APPRENTICE_SEER",
       "DETECTIVE",
       "GUARD",
-      "GUARDIAN_ANGEL",
       "WITCH",
       "HUNTER",
       "MAYOR",
@@ -52,7 +51,6 @@ describe("Shared Roles", () => {
     expect(roleTeam("APPRENTICE_SEER")).toBe("village");
     expect(roleTeam("DETECTIVE")).toBe("village");
     expect(roleTeam("GUARD")).toBe("village");
-    expect(roleTeam("GUARDIAN_ANGEL")).toBe("village");
     expect(roleTeam("WITCH")).toBe("village");
     expect(roleTeam("HUNTER")).toBe("village");
     expect(roleTeam("MAYOR")).toBe("village");
@@ -90,7 +88,6 @@ describe("Shared Roles", () => {
     // Tracker: 3
     // Witch: 3
     expect(ROLE_META.GUARD.nightOrder).toBe(0);
-    expect(ROLE_META.GUARDIAN_ANGEL.nightOrder).toBe(0.5);
     expect(ROLE_META.SEER.nightOrder).toBe(1);
     expect(ROLE_META.APPRENTICE_SEER.nightOrder).toBe(1);
     expect(ROLE_META.SORCERER.nightOrder).toBe(1);
@@ -104,7 +101,6 @@ describe("Shared Roles", () => {
 
     expect(ROLE_ORDER_FOR_NIGHT).toEqual([
       "GUARD",
-      "GUARDIAN_ANGEL",
       "SEER",
       "APPRENTICE_SEER",
       // Sói Pháp Sư cùng nightOrder 1 với hai vai soi: cả ba chỉ ĐỌC, không đổi
@@ -156,7 +152,7 @@ describe("Shared Game Events", () => {
 });
 
 describe("Shared Schemas and Payloads", () => {
-  it("validates gameActionPayload for detective, sorcerer, guardian angel", () => {
+  it("validates gameActionPayload for detective, sorcerer", () => {
     // Detective action with targetId and secondary target or targetId1 & targetId2
     const detectiveAction = gameActionPayload.parse({
       type: "DETECTIVE_CHECK",
@@ -164,13 +160,6 @@ describe("Shared Schemas and Payloads", () => {
       targetId2: "p2",
     });
     expect(detectiveAction.type).toBe("DETECTIVE_CHECK");
-
-    // Guardian Angel action
-    const guardianAction = gameActionPayload.parse({
-      type: "GUARDIAN_PROTECT",
-      targetId: "p1",
-    });
-    expect(guardianAction.type).toBe("GUARDIAN_PROTECT");
 
     // Sorcerer action
     const sorcererAction = gameActionPayload.parse({
@@ -191,5 +180,24 @@ describe("Kẻ Theo Dõi", () => {
 
   it("có giá tạm bằng Thám Tử - cùng hạng lá thông tin", () => {
     expect(ROLE_POWER.TRACKER).toBe(ROLE_POWER.DETECTIVE);
+  });
+});
+
+describe("Xoá cứng Thiên Thần Hộ Mệnh", () => {
+  it("Thiên Thần Hộ Mệnh đã bị xoá cứng", () => {
+    expect(isRole("GUARDIAN_ANGEL")).toBe(false);
+    expect((ROLE_POWER as Record<string, number>).GUARDIAN_ANGEL).toBeUndefined();
+  });
+
+  it("9 preset từng có Thiên Thần giờ có Kẻ Theo Dõi, giữ nguyên số ghế", () => {
+    for (const n of [11, 13, 14, 15, 16, 17, 18, 19, 20]) {
+      const preset = PRESET_DECKS[n]!;
+      expect(preset.tracker, `preset ${n}`).toBe(true);
+      expect((preset as unknown as Record<string, unknown>).guardianAngel, `preset ${n}`).toBeUndefined();
+      // Bảo Vệ ở lại: cả 9 preset đều đã có sẵn nó.
+      expect(preset.guard, `preset ${n}`).toBe(true);
+      // Đổi một-đổi-một, nên số ghế đặc biệt phải khớp cỡ phòng như trước.
+      expect(specialRoleList(preset).length + (preset.villagers ?? 0), `preset ${n}`).toBe(n);
+    }
   });
 });

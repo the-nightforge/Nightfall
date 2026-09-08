@@ -36,7 +36,6 @@ function nightKnowledge(over: Partial<NightKnowledge> = {}): NightKnowledge {
       POISON: [],
       SKIP: [],
       DETECTIVE_CHECK: [],
-      GUARDIAN_PROTECT: [],
       SERIAL_KILL: ["trusted", "suspect", "quiet"],
       SORCERER_CHECK: [],
       TRACK: [],

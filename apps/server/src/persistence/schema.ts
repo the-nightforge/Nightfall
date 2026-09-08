@@ -124,7 +124,13 @@ const nightStateSchema = z.object({
   wolvesLocked: z.boolean(),
   guardTarget: z.string().nullable(),
   guardSecondTarget: z.string().nullable().optional(),
-  guardianAngelTarget: z.string().nullable(),
+  /**
+   * GIỮ cho ván CŨ. Thiên Thần Hộ Mệnh đã bị xoá cứng, nhưng snapshot đang nằm
+   * trên Redis lúc deploy vẫn mang trường này. Bỏ nó đi là làm những ván ấy
+   * trượt schema rồi rơi vào `quarantine` - tức giết sạch ván đang chạy. Engine
+   * hiện tại không bao giờ SINH ra nó nữa.
+   */
+  guardianAngelTarget: z.string().nullable().optional(),
   healTonight: z.boolean(),
   poisonTarget: z.string().nullable(),
   witchSkipped: z.boolean(),
@@ -188,8 +194,12 @@ export const gameStateSchema = z.object({
   dayVoteHistory: z.array(objectOf<DayVoteRecap>()),
   guardPrevious: z.string().nullable(),
   guardSecondPrevious: z.string().nullable().optional(),
-  guardianAngelPrevious: z.string().nullable(),
-  guardianAngelCharges: z.record(z.string(), z.number()),
+  /**
+   * GIỮ cho ván CŨ, cùng lý do với `night.guardianAngelTarget` ở trên: vai đã
+   * bị xoá cứng nhưng snapshot trên Redis lúc deploy vẫn mang hai trường này.
+   */
+  guardianAngelPrevious: z.string().nullable().optional(),
+  guardianAngelCharges: z.record(z.string(), z.number()).optional(),
   // `.default({})` cùng lý do với `sorcererResults` ngay trên: ảnh bản cũ
   // thiếu khiên soi Alpha vẫn đọc được, output vẫn required cho tsc.
   alphaShieldUsed: z.record(z.string(), z.boolean()).default({}),
@@ -334,6 +344,8 @@ export const botBrainStateSchema = z.object({
         "POISON",
         "SKIP",
         "DETECTIVE_CHECK",
+        // CHẾT nhưng GIỮ, cùng tiền lệ với "HOLY_WATER"/"PRIEST_BLESS" bên
+        // dưới: brain của bot ghi khi Thiên Thần còn sống mang mã này.
         "GUARDIAN_PROTECT",
         // Sói Pháp Sư soi dòng Tiên Tri; thay cặp Linh Mục/Bà Đồng đã xóa cứng.
         "SORCERER_CHECK",

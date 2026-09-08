@@ -70,7 +70,7 @@ function setupRoomWithRoles(
     apprenticeSeer: false,
     detective: false,
     guard: false,
-    guardianAngel: false,
+    tracker: false,
     mayor: false,
     cursed: false,
     discussionSeconds: 60,
@@ -89,9 +89,6 @@ function setupRoomWithRoles(
   for (const p of fullPlayers) {
     const ep = engine.player(p.id);
     if (ep) ep.role = p.role;
-    if (p.role === "GUARDIAN_ANGEL") {
-      engine.state.guardianAngelCharges[p.id] = 2;
-    }
   }
 
   return {
@@ -135,28 +132,28 @@ describe("Extended Roles and Events Server Flow Integration", () => {
     expect(snap.night?.detectiveResult?.target2.name).toBe("Wolf Cub");
   });
 
-  it("handles Guardian Angel protection reducing charges and saving victim", () => {
-    const room = setupRoomWithRoles([
-      { id: "ga", name: "Angel", role: "GUARDIAN_ANGEL" },
-      { id: "w1", name: "Wolf 1", role: "WEREWOLF" },
-      { id: "v1", name: "Villager", role: "VILLAGER" },
-    ]);
+  it("handles Tracker night track and owner-only Tracker snapshot", () => {
+    const room = setupRoomWithRoles(
+      [
+        { id: "tr", name: "Tracker", role: "TRACKER" },
+        { id: "w1", name: "Wolf 1", role: "WEREWOLF" },
+        { id: "v1", name: "Villager", role: "VILLAGER" },
+      ],
+      { tracker: true },
+    );
     const engine = room.engine!;
     engine.setPhase("NIGHT", 30000);
 
-    const gaSnapBefore = buildSnapshot(room, "ga");
-    expect(gaSnapBefore.night?.guardianAngelCharges).toBe(2);
-
-    engine.submitNightAction("ga", "GUARDIAN_PROTECT", "v1");
-    // Charge chỉ mất khi đêm khép lại, nên tới lúc này vẫn còn nguyên hai: đêm
-    // còn mở thì người chơi còn được đổi mục tiêu.
-    expect(buildSnapshot(room, "ga").night?.guardianAngelCharges).toBe(2);
+    // Kết quả chỉ có sau bình minh, nên trước `resolveNight` snapshot còn rỗng.
+    engine.submitNightAction("tr", "TRACK", "w1");
+    expect(buildSnapshot(room, "tr").trackerResult).toBeNull();
 
     engine.submitNightAction("w1", "KILL", "v1");
     engine.resolveNight();
 
-    expect(engine.player("v1")?.alive).toBe(true);
-    expect(engine.state.guardianAngelCharges["ga"]).toBe(1);
+    expect(buildSnapshot(room, "tr").trackerResult).toEqual({ targetId: "w1", acted: true });
+    // Biết ai đang bị dõi đã là một rò rỉ: người khác không được thấy gì.
+    expect(buildSnapshot(room, "w1").trackerResult).toBeNull();
   });
 
   it("handles Sorcerer seer-line check and Sorcerer snapshot", () => {

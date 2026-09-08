@@ -9,8 +9,8 @@ import type { SpeechSource } from "./speech-stats";
  * `SKIP` — vô hại khi chỉ có provider sinh hành động, nhưng sai ngay khi lõi
  * deterministic tiếp quản, vì Phù Thuỷ chủ động bỏ lượt là một nước đi thật.
  *
- * Ba mã cuối đến từ các vai mở rộng (Thám Tử, Thiên Thần Hộ Mệnh, Sói Pháp
- * Sư), và `SERIAL_KILL` từ Sát Nhân - một mã RIÊNG, không dùng lại `KILL` của bầy Sói:
+ * `DETECTIVE_CHECK` và `SORCERER_CHECK` đến từ các vai mở rộng (Thám Tử, Sói
+ * Pháp Sư), và `SERIAL_KILL` từ Sát Nhân - một mã RIÊNG, không dùng lại `KILL` của bầy Sói:
  * hai kỹ năng khác luật, khác nhịp và khác trạng thái, nên một mã dùng chung sẽ
  * buộc engine phân giải theo vai người gửi. `TRACK` từ Kẻ Theo Dõi.
  */
@@ -22,7 +22,6 @@ export type NightActionType =
   | "POISON"
   | "SKIP"
   | "DETECTIVE_CHECK"
-  | "GUARDIAN_PROTECT"
   | "SORCERER_CHECK"
   | "SERIAL_KILL"
   | "TRACK";

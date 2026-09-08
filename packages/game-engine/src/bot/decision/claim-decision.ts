@@ -116,7 +116,7 @@ export interface BotChatClaimIntention {
 const INFORMANT_ROLES = new Set<Role>(["SEER", "APPRENTICE_SEER"]);
 
 /** Vai chức năng mà một con Sói bị dồn có thể nấp sau. Thứ tự là thứ tự ưu tiên. */
-const BLUFF_COVERS: readonly Role[] = ["GUARD", "WITCH", "HUNTER", "GUARDIAN_ANGEL"];
+const BLUFF_COVERS: readonly Role[] = ["GUARD", "WITCH", "HUNTER", "TRACKER"];
 
 /**
  * "Vai chức năng" ở file này là ĐÚNG tập `isPowerRole` của `@masoi/shared`, tập

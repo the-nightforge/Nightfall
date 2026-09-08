@@ -26,7 +26,6 @@ function emptyNight(over: Partial<NightKnowledge> = {}): NightKnowledge {
       POISON: [],
       SKIP: [],
       DETECTIVE_CHECK: [],
-      GUARDIAN_PROTECT: [],
       SERIAL_KILL: [],
       SORCERER_CHECK: [],
       TRACK: [],
@@ -252,10 +251,10 @@ describe("nội dung trace", () => {
       ["SEER", { legalActions: ["SEE"], legalTargets: { ...emptyNight().legalTargets, SEE: ["a", "b", "c"] } }],
       ["GUARD", { legalActions: ["GUARD"], legalTargets: { ...emptyNight().legalTargets, GUARD: ["a", "b", "c"] } }],
       [
-        "GUARDIAN_ANGEL",
+        "TRACKER",
         {
-          legalActions: ["GUARDIAN_PROTECT"],
-          legalTargets: { ...emptyNight().legalTargets, GUARDIAN_PROTECT: ["a", "b", "c"] },
+          legalActions: ["TRACK"],
+          legalTargets: { ...emptyNight().legalTargets, TRACK: ["a", "b", "c"] },
         },
       ],
       [
@@ -386,7 +385,7 @@ function rolesMentionedIn(trace: BotDecisionTrace): string[] {
     "SEER",
     "APPRENTICE_SEER",
     "GUARD",
-    "GUARDIAN_ANGEL",
+    "TRACKER",
     "WITCH",
     "HUNTER",
     "CURSED",

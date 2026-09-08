@@ -42,8 +42,6 @@ export function asciiForm(text: string): string {
 export const ROLE_PHRASES: ReadonlyArray<readonly [string, Role]> = [
   ["kẻ nguyền rủa", "CURSED"],
   ["tiên tri tập sự", "APPRENTICE_SEER"],
-  ["thiên thần hộ mệnh", "GUARDIAN_ANGEL"],
-  ["thiên thần", "GUARDIAN_ANGEL"],
   ["thằng hề", "JESTER"],
   // Từ tờ đề xuất `reports/alias-proposal.md`: cách người chơi thật gọi vai.
   // "thầy bói" đứng trước "tiên tri" chỉ vì cùng vai, không đụng cụm nào.

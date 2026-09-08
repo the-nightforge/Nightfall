@@ -36,7 +36,7 @@ export const DECK_KEYS = [
   "traitor",
   "apprenticeSeer",
   "detective",
-  "guardianAngel",
+  "tracker",
   "sorcerer",
   "mayor",
   "elder",

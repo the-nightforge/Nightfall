@@ -76,8 +76,6 @@ export interface NightInfoView {
   wolfVotesRequired?: number;
   myWolfVote?: string | null;
   guardPrevious?: string | null;
-  guardianAngelCharges?: number;
-  guardianAngelPrevious?: string | null;
   seerResult: SeerResultView | null;
   apprenticeAwakened?: boolean;
   detectiveResult?: DetectiveResultView | null;
@@ -219,7 +217,6 @@ function emptyNight(wolfCubRageTonight = false): GameState["night"] {
     wolvesLocked: false,
     guardTarget: null,
     guardSecondTarget: null,
-    guardianAngelTarget: null,
     healTonight: false,
     poisonTarget: null,
     witchSkipped: false,
@@ -254,7 +251,6 @@ function didActTonight(st: GameState, playerId: string): boolean {
   const player = st.players.find((p) => p.id === playerId);
   if (!player) return false;
   if (player.role === "GUARD") return n.guardTarget !== null;
-  if (player.role === "GUARDIAN_ANGEL") return n.guardianAngelTarget !== null;
   if (player.role === "WITCH") return n.healTonight || n.poisonTarget !== null;
   if (player.role === "SERIAL_KILLER") return (n.serialKillerTarget ?? null) !== null;
   return false;
@@ -284,7 +280,6 @@ export class GameEngine {
     this.state.night.wolvesLocked ??= false;
     this.state.night.witchSkipped ??= false;
     this.state.night.guardSecondTarget ??= null;
-    this.state.night.guardianAngelTarget ??= null;
     this.state.night.detectiveTargets ??= null;
     this.state.night.detectiveResults ??= {};
     this.state.night.sorcererResults ??= {};
@@ -298,8 +293,6 @@ export class GameEngine {
     // một nhát dao.
     this.state.night.serialKillerTarget ??= null;
     this.state.night.serialKillerSkipped ??= false;
-    this.state.guardianAngelPrevious ??= null;
-    this.state.guardianAngelCharges ??= {};
     this.state.apprenticeAwakened ??= false;
     this.state.wolfCubRageNextNight ??= false;
     this.state.activeEvent ??= null;
@@ -350,9 +343,6 @@ export class GameEngine {
       player.cursedTurned ??= false;
       player.executionerTurned ??= false;
       player.doppelgangerTurned ??= false;
-      if (player.role === "GUARDIAN_ANGEL" && this.state.guardianAngelCharges[player.id] === undefined) {
-        this.state.guardianAngelCharges[player.id] = 2;
-      }
     }
   }
 
@@ -388,12 +378,6 @@ export class GameEngine {
       players.map((p) => ({ id: p.id, role: roles[p.id] })),
       rng,
     );
-    const guardianAngelCharges: Record<string, number> = {};
-    for (const p of players) {
-      if (roles[p.id] === "GUARDIAN_ANGEL") {
-        guardianAngelCharges[p.id] = 2;
-      }
-    }
     const state: GameState = {
       phase: "ROLE_REVEAL",
       round: 0,
@@ -415,8 +399,6 @@ export class GameEngine {
       dayVoteHistory: [],
       guardPrevious: null,
       guardSecondPrevious: null,
-      guardianAngelPrevious: null,
-      guardianAngelCharges,
       apprenticeAwakened: false,
       wolfCubRageNextNight: false,
       alphaShieldUsed: {},
@@ -715,7 +697,6 @@ export class GameEngine {
       | "POISON"
       | "SKIP"
       | "DETECTIVE_CHECK"
-      | "GUARDIAN_PROTECT"
       | "SERIAL_KILL"
       | "SORCERER_CHECK"
       | "TRACK",
@@ -926,34 +907,6 @@ export class GameEngine {
         }
         st.night.guardTarget = targetId;
         st.night.guardSecondTarget = guardSecondId;
-        break;
-      }
-      case "GUARDIAN_PROTECT": {
-        if (p.role !== "GUARDIAN_ANGEL") throw new GameError("Chỉ Thiên Thần Hộ Mệnh mới được bảo vệ");
-        if (!targetId || !target) throw new GameError("Hãy chọn một người để bảo vệ");
-        /*
-         * Không tự đỡ, gương theo Bảo Vệ ngay trên.
-         *
-         * Trước đây đây là vai DUY NHẤT tự nhắm được mình: Bảo Vệ và Tiên Tri
-         * đều loại chính mình, còn vai này thì không - không có lý do
-         * nào được viết ra, không có test, README cũng không nói. Nó là chỗ sót.
-         *
-         * Và nó không vô hại: hai lượt, không mất phí mỗi đêm, nên với một Thiên
-         * Thần đã lộ mặt thì tự đỡ là nước đi trội tuyệt đối. Vai bảo vệ LÀNG khi
-         * ấy thành vai tự bảo toàn, đúng thứ mà luật của Bảo Vệ sinh ra để chặn.
-         * "Chỉ có 2 lượt nên tự đỡ đã tự mang chi phí" không cứu được lập luận:
-         * Bảo Vệ cũng đánh đổi đúng một lượt như thế mỗi đêm mà vẫn bị cấm.
-         */
-        if (targetId === playerId) {
-          throw new GameError("Thiên Thần Hộ Mệnh không thể tự bảo vệ mình");
-        }
-        const charges = st.guardianAngelCharges[playerId] ?? 2;
-        if (charges <= 0) throw new GameError("Thiên Thần Hộ Mệnh đã hết lượt bảo vệ");
-        if (targetId === st.guardianAngelPrevious) {
-          throw new GameError("Không thể bảo vệ cùng một người hai đêm liên tiếp");
-        }
-        // Charge trừ lúc khép đêm chứ không phải lúc bấm, xem `resolveNight`.
-        st.night.guardianAngelTarget = targetId;
         break;
       }
       case "TRACK": {
@@ -1232,7 +1185,6 @@ export class GameEngine {
     const guardedIds = new Set<string>();
     if (st.night.guardTarget) guardedIds.add(st.night.guardTarget);
     if (st.night.guardSecondTarget) guardedIds.add(st.night.guardSecondTarget);
-    if (st.night.guardianAngelTarget) guardedIds.add(st.night.guardianAngelTarget);
     /*
      * Trăng Máu: nạp từ đêm trước thì đêm nay 20% xuyên MỘT khiên.
      *
@@ -1408,18 +1360,8 @@ export class GameEngine {
     }
 
     // Cập nhật trạng thái
-    if (st.night.guardianAngelTarget) {
-      // Trừ charge ở đây, không ở `submitNightAction`: cùng lý do với bình cứu
-      // của Phù Thuỷ - tài nguyên chỉ mất khi đêm đã khép lại, để một cú bấm
-      // nhầm còn sửa được.
-      const angel = this.alivePlayers().find((p) => p.role === "GUARDIAN_ANGEL");
-      if (angel) {
-        st.guardianAngelCharges[angel.id] = (st.guardianAngelCharges[angel.id] ?? 2) - 1;
-      }
-    }
     st.guardPrevious = st.night.guardTarget;
     st.guardSecondPrevious = st.night.guardSecondTarget ?? null;
-    st.guardianAngelPrevious = st.night.guardianAngelTarget;
     // Bình Độc của Phù Thuỷ là nguồn chết ĐÊM duy nhất do chính phe làng gây ra,
     // nên nó là nguồn duy nhất ở đây kích được cái bẫy của Trưởng Lão. Nhát cắn
     // và nhát dao thì không: xem `elderKilledByVillage`.
@@ -1508,9 +1450,6 @@ export class GameEngine {
         cause: death.cause,
       })),
       cursedTurned: recapPlayer(cursedTurned ?? undefined),
-      guardianAngelTarget: recapPlayer(
-        st.night.guardianAngelTarget ? this.player(st.night.guardianAngelTarget) : undefined,
-      ),
       detectiveChecks: Object.entries(st.night.detectiveResults).flatMap(([detectiveId, result]) => {
         const detective = recapPlayer(this.player(detectiveId));
         const target1 = recapPlayer(this.player(result.target1Id));
@@ -2485,8 +2424,6 @@ export class GameEngine {
       acted = st.night.seerResults[viewer.id] !== undefined;
     } else if (viewer.role === "GUARD") {
       acted = st.night.guardTarget !== null;
-    } else if (viewer.role === "GUARDIAN_ANGEL") {
-      acted = st.night.guardianAngelTarget !== null;
     } else if (viewer.role === "DETECTIVE") {
       acted = st.night.detectiveResults[viewer.id] !== undefined;
     } else if (viewer.role === "SERIAL_KILLER") {
@@ -2516,10 +2453,6 @@ export class GameEngine {
       wolfVotesRequired: isWolf ? this.aliveWolves().length : undefined,
       myWolfVote: isWolf ? st.night.wolfVotes[viewer.id] ?? null : undefined,
       guardPrevious: viewer.role === "GUARD" ? st.guardPrevious : undefined,
-      guardianAngelCharges:
-        viewer.role === "GUARDIAN_ANGEL" ? st.guardianAngelCharges[viewer.id] ?? 2 : undefined,
-      guardianAngelPrevious:
-        viewer.role === "GUARDIAN_ANGEL" ? st.guardianAngelPrevious : undefined,
       seerResult,
       apprenticeAwakened: viewer.role === "APPRENTICE_SEER" ? st.apprenticeAwakened : undefined,
       detectiveResult,
@@ -2966,7 +2899,6 @@ export class GameEngine {
       POISON: [],
       SKIP: [],
       DETECTIVE_CHECK: [],
-      GUARDIAN_PROTECT: [],
       SERIAL_KILL: [],
       SORCERER_CHECK: [],
       TRACK: [],
@@ -3008,17 +2940,6 @@ export class GameEngine {
       if (targets.length >= 2) {
         legalActions.push("DETECTIVE_CHECK");
         legalTargets.DETECTIVE_CHECK = targets;
-      }
-    } else if (viewer.role === "GUARDIAN_ANGEL") {
-      // Hai lượt cả ván, không đỡ lại đúng người đêm trước, và không tự đỡ -
-      // xem hàng rào cùng tên ở `submitNightAction`.
-      const charges = st.guardianAngelCharges[viewer.id] ?? 2;
-      const targets = alive
-        .filter((player) => player.id !== st.guardianAngelPrevious && player.id !== viewer.id)
-        .map((player) => player.id);
-      if (charges > 0 && targets.length > 0) {
-        legalActions.push("GUARDIAN_PROTECT");
-        legalTargets.GUARDIAN_PROTECT = targets;
       }
     } else if (viewer.role === "SERIAL_KILLER") {
       // Một mình, mỗi đêm, và không bị nhịp khoá phiếu của bầy Sói chi phối -
@@ -3066,14 +2987,7 @@ export class GameEngine {
       legalTargets,
       wolfTarget:
         (isWolf || isWitch) && st.night.wolvesLocked ? st.night.killTarget : null,
-      // Mỗi vai chỉ thấy mốc "đêm trước" của CHÍNH kỹ năng mình; Bảo Vệ và
-      // Thiên Thần có hai bộ đếm riêng và không được nhìn thấy của nhau.
-      guardPrevious:
-        viewer.role === "GUARD"
-          ? st.guardPrevious
-          : viewer.role === "GUARDIAN_ANGEL"
-            ? st.guardianAngelPrevious
-            : null,
+      guardPrevious: viewer.role === "GUARD" ? st.guardPrevious : null,
       healUsed: isWitch ? st.healUsed : false,
       poisonUsed: isWitch ? st.poisonUsed : false,
       wolvesLocked: st.night.wolvesLocked,
@@ -3180,7 +3094,6 @@ export class GameEngine {
     }
     if (viewer.role === "GUARD") return st.night.guardTarget === null;
     if (viewer.role === "DETECTIVE") return st.night.detectiveResults[viewer.id] === undefined;
-    if (viewer.role === "GUARDIAN_ANGEL") return st.night.guardianAngelTarget === null;
     if (viewer.role === "TRACKER") return st.night.trackerTargets[viewer.id] === undefined;
     if (viewer.role === "SERIAL_KILLER") {
       return st.night.serialKillerTarget === null && st.night.serialKillerSkipped !== true;

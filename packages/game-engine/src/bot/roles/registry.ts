@@ -3,7 +3,6 @@ import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { detectiveStrategy } from "./detective";
 import { executionerStrategy } from "./executioner";
 import { guardStrategy } from "./guard";
-import { guardianAngelStrategy } from "./guardian-angel";
 import { jesterStrategy } from "./jester";
 import { seerStrategy } from "./seer";
 import { serialKillerStrategy } from "./serial-killer";
@@ -48,7 +47,6 @@ const REGISTRY: Partial<Record<Role, (role: Role, weights: BotWeights) => BotRol
   // trả `night: null` nên strategy này không bao giờ được hỏi.
   APPRENTICE_SEER: seerStrategy,
   GUARD: guardStrategy,
-  GUARDIAN_ANGEL: guardianAngelStrategy,
   SORCERER: sorcererStrategy,
   // Sói Alpha cắn cùng bầy như Sói Con: nó không có lượt soi riêng, và cơ chế
   // "lừa lượt soi đầu" nằm ở engine chứ không phải ở lựa chọn của nó.

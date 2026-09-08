@@ -9,7 +9,6 @@ export const ROLES = [
   "APPRENTICE_SEER",
   "DETECTIVE",
   "GUARD",
-  "GUARDIAN_ANGEL",
   "TRACKER",
   "WITCH",
   "ELDER",
@@ -153,15 +152,6 @@ export const ROLE_META: Record<Role, RoleMeta> = {
       "Mỗi đêm bảo vệ một người khỏi mọi đòn giết ban đêm, không thể bảo vệ cùng một người hai đêm liền.",
     team: "village",
     nightOrder: 0,
-  },
-  GUARDIAN_ANGEL: {
-    id: "GUARDIAN_ANGEL",
-    name: "Thiên Thần Hộ Mệnh",
-    // Cùng lý do với Bảo Vệ ngay trên: khiên chặn cả nhát dao của Sát Nhân.
-    description:
-      "Tối đa 2 lần cả ván, chọn 1 người để bảo vệ khỏi đòn giết ban đêm (không lặp 2 đêm liền).",
-    team: "village",
-    nightOrder: 0.5,
   },
   TRACKER: {
     id: "TRACKER",

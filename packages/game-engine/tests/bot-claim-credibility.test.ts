@@ -196,11 +196,11 @@ describe("claimEvidence", () => {
    * FIX 3: Linh Mục từng là chỗ nấp AN TOÀN NHẤT của một con Sói bị dồn (nó đứng
    * trong `BLUFF_COVERS`) nhưng tập `POWER_ROLES` chép tay cũ của file này bỏ
    * sót nó. Linh Mục đã bị xóa cứng, nhưng bài học còn: mọi vai trong
-   * `BLUFF_COVERS` hôm nay (GUARDIAN_ANGEL thay chỗ PRIEST) đều phải là vai
-   * quyền lực mà mô hình nhìn thấy.
+   * `BLUFF_COVERS` hôm nay (TRACKER thay chỗ PRIEST rồi GUARDIAN_ANGEL) đều
+   * phải là vai quyền lực mà mô hình nhìn thấy.
    */
-  it("FIX: GUARDIAN_ANGEL/MAYOR nay cũng là vai quyền lực", () => {
-    for (const role of ["GUARDIAN_ANGEL", "MAYOR"]) {
+  it("FIX: TRACKER/MAYOR nay cũng là vai quyền lực", () => {
+    for (const role of ["TRACKER", "MAYOR"]) {
       const found = claimEvidence(
         { ...BASE, claims: [claim("p1", role, 1, "m1"), claim("p2", role, 2, "m2")] },
         BOT_WEIGHTS_V4,
