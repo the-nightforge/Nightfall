@@ -669,6 +669,42 @@ export function NightPanel({ snapshot, onAction }: Props) {
           </>
         )}
 
+        {/* KẺ THEO DÕI */}
+        {role === "TRACKER" && (
+          <>
+            <p className="mb-2 text-sm text-mist-strong">
+              Không thể tự theo dõi chính mình. Theo dõi lại đúng người đêm trước vẫn được -
+              không có luật đổi chỗ như Bảo Vệ.
+            </p>
+            {snapshot.trackerResult && (
+              <div className="mb-2 rounded-lg bg-night-800 p-2.5 text-sm">
+                <p className="text-[13px] text-mist-strong">Kết quả theo dõi gần nhất:</p>
+                {/*
+                  * Không tô đỏ/xanh như Tiên Tri hay Sói Pháp Sư: "có ra tay"
+                  * không nghiêng về phe nào - Bảo Vệ, Phù Thuỷ, chính Sói đều
+                  * ra tay đêm đó. Cùng tông hổ phách mà Thám Tử dùng cho "cùng
+                  * phe" - một dữ kiện để suy luận, không phải một lời phán.
+                  */}
+                <p className="mt-1">
+                  <b>{nameOf(snapshot.trackerResult.targetId)}</b>{" "}
+                  <b className="text-amber-300">
+                    {snapshot.trackerResult.acted ? "CÓ" : "KHÔNG"}
+                  </b>{" "}
+                  ra tay đêm qua.
+                </p>
+              </div>
+            )}
+            {aliveOthers({ allowSelf: false })}
+            <button
+              className="btn-primary mt-3 w-full"
+              disabled={!selected || acted}
+              onClick={() => selected && onAction("TRACK", selected)}
+            >
+              👣 Theo dõi người này
+            </button>
+          </>
+        )}
+
         {/* SÁT NHÂN */}
         {role === "SERIAL_KILLER" && (
           <>
