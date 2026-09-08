@@ -592,7 +592,7 @@ default)` trong phiên có violations=0, knowledge=0.
 | 2 | Belief is probabilistic | ✅ | PR 1: `role-belief.ts` + `roleComposition` engine-cấp |
 | 3 | Role constraints are respected | ✅ | PR 1: composition pool, certain>vidence, seer-pin theo team |
 | 4 | Pairwise relationships are modeled | ✅ | PR 2: `assessPairs` + Fréchet cap |
-| 5 | Suspicion/threat/credibility are distinct | ⚠️ một phần | threat (wolfThreatScore), credibility (S1) vẫn phân tán; chưa surface chung |
+| 5 | Suspicion/threat/credibility are distinct | ✅ | **PlayerAssessment** (§9): `suspicion/trust` scalar giữ nguyên + `wolfProbability` (PR 1) + `threat` (công thức threat bầy, /100) + `credibility` (hồ sơ P1.1, không từ suspicion) + `influence` + `cooperationValue` + `survivalImportance` — mỗi chiều một câu chuyện, ví dụ B nghi hơn nhưng A nguy hiểm hơn |
 | 6 | One-step counterfactual planning exists | ✅ | PR 3: planner + V21 default sau bench 2×1k |
 | 7 | Wolf team planning exists | ✅ | PR 5: `planWolfTeam`; v22 preset thí nghiệm |
 | 8 | Personality affects decisions | ✅ (có sẵn) | threshold/inertia/deceptionSkill |
@@ -603,5 +603,33 @@ default)` trong phiên có violations=0, knowledge=0.
 | 13 | Scenario benchmarks exist | ✅ | PR 9: 5 kịch bản, 7 test |
 | 14 | Fixed-seed benchmark exists | ✅ | runBatch + paired seeds (p9-a1..a5) |
 | 15 | New bot beats baseline ≥1 metric, không tụt metric khác | ✅ | V21: WR +2,06 (z=2,06), accuracy +4,02 (z=14,35), 0 violation |
-| 16 | Existing tests and replay invariants pass | ✅ | 95 file / 4.739 + server 1.095 + replay 0 divergence |
+| 16 | Existing tests and replay invariants pass | ✅ | engine 96 file / 4.747 + server 1.095 + replay 0 divergence |
 | 17 | Architecture remains modular | ✅ | mỗi PR = module mới + seam, không god class |
+
+---
+
+## 19. Khép tiêu chí cuối — PlayerAssessment (§40-#5, §9)
+
+Tiêu chí duy nhất còn ⚠️ sau PR 9 đã đóng bằng **`belief/player-assessment.ts`**
+(8 test, `bot-player-assessment.test.ts`):
+
+- `suspicion` / `trust` — scalar gốc 0..100, giữ nguyên thang vì decision đang
+  đọc trực tiếp.
+- `wolfProbability` — P(wolf-team) từ projection PR 1.
+- `threat` — ĐÚNG công thức threat mà bầy Sói dùng chọn mục tiêu cắn
+  (`wolfThreatBase + trust×w + influence×w − suspicion×w`, /100).
+- `credibility` — đúng công thức P1.1 của `claim-credibility`
+  (`accuracy − bluffRate × profileStrength`): chỉ từ HỒ SƠ, không từ suspicion.
+- `influence` (incomingHostility), `cooperationValue` (trust riêng + support
+  incoming), `survivalImportance` ((1−P(Sói)) × giá trị vai: khai quyền lực
+  chưa bác / seer-clear / trust).
+
+Ví dụ §9 chốt bằng test: B đáng nghi hơn nhưng A nguy hiểm hơn (threat A 0.65
+đối đầu threat B 0.26, trong khi wolfProbability của B cao hơn A) — mỗi số một
+câu chuyện.
+
+Module view thuần (không decision wiring — consistent PR 1/2/4). Suite cuối:
+engine **96 file / 4.747 pass**, server **1.095 pass**, lint xanh 4 workspace,
+replay default (V21) 0 divergence / 0 knowledge violation.
+
+**Spec §40: 17/17 ✅.**
