@@ -4,7 +4,7 @@
 
 **A real-time multiplayer Werewolf (Mafia) game — 20 roles, 17 dynamic events, voice chat, and AI bots that actually reason.**
 
-[![CI](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/kangha23/ma-soi-online/actions/workflows/ci.yml)
+[![CI](https://github.com/the-nightforge/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/the-nightforge/ma-soi-online/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-4739%20passing-brightgreen)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
