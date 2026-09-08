@@ -424,4 +424,51 @@ v22 là preset hợp lệ cho phòng thí nghiệm tiếp theo (PR 8 HybridPolic
   components without measurable reason" — §2).
 - `wolfThreatScore` bỏ `context` tham số cũ của `threatScore` (không dùng).
 
-**Tiếp theo (PR 7):** trajectory export (§22).
+---
+
+## 15. PR 7 — Báo cáo thực hiện (spec §41)
+
+**Changed files:**
+
+- `packages/game-engine/src/bot/evaluation/trajectory.ts` (MỚI) —
+  `gameToTrajectories(game)` (mỗi trace → một `BotTrajectory`) +
+  `serializeTrajectory()` (một line JSONL). Nguồn: `BotDecisionTrace` đã bị
+  invariant kiểm; label cấp-ván: `finalRole` (vai thật của CHÍNH bot),
+  `finalWinner`, `reward ±1` qua `roleWonOutcome` + `personalWins` (Thằng Hề
+  thắng riêng vẫn +1) — không dựng lại luật thắng
+- `apps/server/scripts/selfplay.ts` — cờ `--trajectories <dir>` (mặc định tắt;
+  bật thì `traceGames` tự có nghĩa ngay cả khi không có `--traces`), writer
+  `writeTrajectories()` ghi MỘT file `trajectories.jsonl` chung (dữ liệu train
+  đọc theo luồng, khác trace-per-game dùng debug)
+- `packages/game-engine/src/index.ts` — export
+- Tests: `tests/bot-trajectory.test.ts` (5)
+
+**Ranh giới §22 thực thi bằng CẤU TRÚC:** `observation` chỉ gồm trường có nguồn
+từ `knowledgeSnapshot` của trace (aliveIds/legalActions/knownRoles/seerResult —
+bản sao knowledge đã lọc của chính bot đó) + belief snapshot + personality.
+`finalRole` là field CẤP MỘT tách khỏi observation; vai người khác không có
+đường vào observation. Audit bằng script quét 390 dòng smoke-run (3 ván × 130
+quyết định): **0 role-leak** — WEREWOLF chỉ xuất hiện trong observation của bot
+hợp pháp thấy bầy (86 dòng).
+
+**Tests:** engine **93 file / 4.723 pass** (+5), server 1.095 pass, lint xanh.
+Chốt: shape line (gameId/seed/player/turn/observation/legal/candidates/
+selected/reward/finalWinner); reward ±1 theo đúng team vai (roleWonOutcome) +
+thắng cá nhân; observation không mang vai người khác; finalRole là đường duy
+nhất mang vai thật; tất định JSONL (cùng game → cùng chuỗi, một line một dòng).
+
+**Benchmark:** không cần — export thuần, không đổi decision. Smoke CLI: 3 ván
+`--preset --trajectories` → 390 dòng hợp lệ, 0 violation.
+
+**Known limitations:**
+
+- `observation` mới gồm snapshot có sẵn trong trace; chưa có full observation
+  builder (chat đã parse, publicVoteHistory) — đủ cho PR 8 (value model học từ
+  score terms + belief), mở rộng khi cần.
+- Trần `--trace-games` (5) vẫn áp dụng cho trajectory: một batch 10k ván muốn
+  full trajectory cần `--trace-games` lớn — cần nhắc trong PR 8 khi train.
+- File JSONL một file chung: batch rất lớn sẽ cần append/rotate ngoài phạm vi.
+
+**Tiếp theo (PR 8):** HybridPolicy (§24) trên seam `PolicyModel` của M7 —
+`finalScore = alpha × heuristic + beta × learned`, beta=0 ban đầu; learned
+scorer ban đầu là bảng traOffline từ trajectory (không ML framework).

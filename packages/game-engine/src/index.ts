@@ -8,6 +8,7 @@ export * from "./bot/types";
 export * from "./bot/rng";
 export * from "./bot/hash";
 export * from "./bot/evaluation/casual-tone";
+export * from "./bot/evaluation/trajectory";
 export * from "./bot/memory/memory-store";
 export * from "./bot/memory/memory-decay";
 export * from "./bot/belief/evidence";
