@@ -208,3 +208,61 @@ decision.)
 làng (M6/v20) thành expectedOutcome đủ thành phần (§10: immediateValue,
 survivalValue, informationValue, teamValue, futureRisk) cho nhánh Sói và cho
 decision đêm, chạy trên seam `StrategicPlanner` của M5.
+
+---
+
+## 11. PR 3 — Báo cáo thực hiện (spec §41)
+
+**Changed files:**
+
+- `packages/game-engine/src/bot/planning/counterfactual.ts` (MỚI) —
+  `expectedOutcomeFor()` (teamValue / survivalValue / informationValue /
+  wolfProbability) + `counterfactualVotePlanner()` bọc planner M5, cộng ba term
+  named vào bảng điểm
+- `packages/game-engine/src/bot/config/weights.ts` — nhóm optional
+  `counterfactual` (`teamValueGain=5, mislynchSurvivalCost=6, evidenceLossCost=4,
+  wolfSideGain=0`), preset **21.0.0** (mọc từ V18, KHÔNG default)
+- `packages/game-engine/src/bot/config/presets.ts` — đăng ký 21.0.0
+- `packages/game-engine/src/bot/decision/vote-decision.ts` — chuỗi planner
+  MỘT LỚP: counterfactual (v21+) → lookAhead (v20) → immediate (v1–v19);
+  belief PR 1 chỉ tính khi lớp counterfactual bật
+- `packages/game-engine/src/index.ts` — export
+- Tests: `tests/bot-counterfactual.test.ts` (8)
+
+**Behavior changed:** CÓ — nhánh làng v21 nhận ba term counterfactual dùng
+P(wolf-team) từ projection PR 1 (thay proxy raw suspicion của v20); tách
+"mất ghế" (survival) khỏi "mất nguồn dữ liệu" (information). Nhánh Sói
+`wolfSideGain = 0` → byte-identical v18. v18/v20 output KHÔNG đổi (chỉ một lớp
+counterfactual tại một thời điểm).
+
+**Tests:** engine **90 file / 4.697 pass** (+8), lint xanh. Chốt: teamValue
+theo P(Sói); survival theo áp lực sĩ số; informationValue phạt mất nguồn khi
+khan dữ liệu; Sói passthrough; Σterms===score; preset đăng ký; v18 sạch term.
+
+**Benchmark** (2×1.000 ván `--preset`, paired seeds `pr3-bench{,2}`, ~4,5 phút):
+
+| Metric | V18 | V21 | Δ |
+|---|---|---|---|
+| Làng thắng | 53,4% (1068/2000) | 53,4% (1068/2000) | z=0,00 — cân bằng giữ nguyên |
+| **villageVoteAccuracy** | **45,73%** | **48,71%** | **+3,0 điểm, z=6,72** |
+| violations | 0 | 0 | — |
+
+Replay V21: `--verify-replay` 30 ván — 0 divergence, 0 knowledge violation.
+Tốc độ: ~0,13s/ván (không verify) — V21 không chậm hơn V18 (60–70s/1000).
+
+**Kết luận:** v21 thắng baseline đúng tiêu chí §40 ("measurably beats baseline
+on at least one important metric without materially degrading others") —
+accuracy +3 điểm có ý nghĩa (z=6,7), win-rate không đổi. NHƯNG default vẫn
+giữ v18 cho tới khi đạt chuẩn §27 (5 batch × 10.000 ván) — kỷ luật v19.
+
+**Known limitations:**
+
+- `expectedWinValue` (§10) chưa có — cần đếm thế trận sau đợt treo; phần này
+  chờ PR 5 (team planner) vì chỉ nghĩa khi có mô hình team.
+- Chỉ phủ nhánh phiếu ban ngày; decision đêm (soi/đỡ/cắn) chưa có
+  counterfactual — PR 5.
+- `deceptionValue` của §10 là đặc thù Sói — chờ PR 5.
+
+**Tiếp theo (PR 4):** discussion strategy — discussion graph theo §13
+(ai tố ai, ai bênh ai, ai né, ai theo đám đông) ghi có cấu trúc, nối được vào
+`pair-assessment` (shared targets) và planner; sau đó PR 5 wolf team planner.

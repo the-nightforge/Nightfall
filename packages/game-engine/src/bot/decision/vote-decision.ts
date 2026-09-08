@@ -10,8 +10,11 @@ import type {
   StrategyContext,
 } from "../planning/planner";
 import { immediateUtilityPlanner } from "../planning/planner";
+import { counterfactualVotePlanner } from "../planning/counterfactual";
+import { projectRoleBeliefs } from "../belief/role-belief";
 import type { PolicyModel } from "../policy/policy-model";
-import { heuristicPolicyModel } from "../policy/policy-model";import { strategyFor } from "../roles/registry";
+import { heuristicPolicyModel } from "../policy/policy-model";
+import { strategyFor } from "../roles/registry";
 import { fakeFightTarget } from "../roles/werewolf";
 import { sumTerms, type DecisionProbe, type TraceTerm } from "../trace/trace";
 import type {
@@ -519,12 +522,20 @@ export function selectVote(
     voteThreshold(personality, weights) +
     (lostAlly && selfIsWolf ? weights.deceptionRisk.allyLostThresholdBonus : 0);
 
-  // Nhóm `lookAhead` có mặt (v20+) thì bảng điểm đi qua planner look-ahead;
-  // v1..v19 không có nhóm này → đường immediate-utility y như cũ.
+  // Tầng counterfactual, CHỈ MỘT LỚP tại một thời điểm:
+  // v21+ (`counterfactual`) thay v20 (`lookAhead`) thay immediate.
+  // Bảng belief PR 1 chỉ tính khi lớp counterfactual thật sự bật.
   const basePlanner: StrategicPlanner<VoteScoringFrame> =
     immediateUtilityPlanner(scoreVoteCandidate);
-  const planner = weights.lookAhead ? lookAheadVotePlanner(basePlanner) : basePlanner;
   const frame = deriveVoteScoringFrame(context, state, weights);
+  const planner = weights.counterfactual
+    ? counterfactualVotePlanner(
+        basePlanner,
+        projectRoleBeliefs({ knowledge, state, roleComposition: knowledge.roleComposition }),
+      )
+    : weights.lookAhead
+      ? lookAheadVotePlanner(basePlanner)
+      : basePlanner;
   const plannerContext: StrategyContext<VoteScoringFrame> = {
     context,
     state,
