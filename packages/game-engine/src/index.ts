@@ -33,6 +33,7 @@ export * from "./bot/decision/last-letter-decision";
 export * from "./bot/planning/planner";
 export * from "./bot/planning/counterfactual";
 export * from "./bot/policy/policy-model";
+export * from "./bot/policy/hybrid";
 export * from "./bot/roles/strategy";
 export * from "./bot/roles/wolf-team-plan";
 export * from "./bot/roles/jester";

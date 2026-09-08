@@ -472,3 +472,54 @@ nhất mang vai thật; tất định JSONL (cùng game → cùng chuỗi, một
 **Tiếp theo (PR 8):** HybridPolicy (§24) trên seam `PolicyModel` của M7 —
 `finalScore = alpha × heuristic + beta × learned`, beta=0 ban đầu; learned
 scorer ban đầu là bảng traOffline từ trajectory (không ML framework).
+
+---
+
+## 16. PR 8 — Báo cáo thực hiện (spec §41)
+
+**Changed files:**
+
+- `packages/game-engine/src/bot/policy/hybrid.ts` (MỚI) —
+  `hybridPolicyModel({alpha, beta, learned})`: `finalScore = alpha × heuristic
+  score + beta × learnedScore`; `beta = 0` (khởi điểm §24) → **đi đúng heuristic
+  kể cả khi learned có mặt**; `LearnedScorer` trả điểm chuẩn hoá ±1 hoặc `null`
+  (không có dữ liệu = trung tính 0, không được beta cộng/trừ);
+  `buildTrajectoryStats()` gom reward theo bucket suspicion (10 điểm/bucket,
+  clamp 0..9) từ trajectory PR 7 — tabular, không ML framework (§23/§38);
+  `statsLearnedScorer()` tra bảng
+- `packages/game-engine/src/bot/BotRuntime.ts` — option `votePolicy?`:
+  cấu hình chứ KHÔNG phải state (không vào `serialize()`; restart → heuristic
+  mặc định, đúng hành vi an toàn); `decideVote` truyền qua tham số `policy` của
+  `selectVote` (seam M7)
+- `packages/game-engine/src/index.ts` — export
+- Tests: `tests/bot-hybrid-policy.test.ts` (9)
+
+**Behavior changed:** KHÔNG — không call site production truyền `votePolicy`;
+beta=0 là khởi điểm §24. Lối vào để bật: `new BotRuntime({ votePolicy:
+hybridPolicyModel({ alpha: 1, beta: 30, learned: statsLearnedScorer(stats) }) })`
+— khi benchmark 5×10k (§27) chứng minh beta>0 thắng.
+
+**Tests:** engine **94 file / 4.732 pass** (+9), server 1.095 pass, lint xanh.
+Chốt: stats gom đúng bucket + clamp; scorer avg/null; **beta=0 byte-identical
+heuristic kể cả khi learned có data**; beta=50 lật lựa chọn khi learned đủ mạnh;
+bucket trống trung tính; rỗng ứng viên → NO_ELIMINATION; tất định;
+BotRuntime inject (contrarian qua `votePolicy` đổi được lựa chọn — seam sống).
+
+**Benchmark:** equivalence β=0 chứng minh bằng unit test (selection identical);
+self-play `--seed pr8-verify --games 30 --preset --verify-replay` — 0 divergence,
+0 knowledge violation (path mặc định không đổi). Bench beta>0 là MỤC ĐÍCH của
+PR 9 (scenario benchmarks §28) + protocol §27 (5×10k) — chưa chạy vì cần dataset
+trajectory lớn hơn 3 ván smoke.
+
+**Known limitations:**
+
+- Bucket suspicion đơn trục — chưa dùng pairs (PR 2), role belief (PR 1) làm
+  feature; bảng tra tabular có thể mở khoá shape `counts` mà không phá consumer.
+- Chỉ decision VOTE có thống kê; NIGHT/SPEECH để shape mở.
+- CLI self-play chưa có cờ `--policy-beta/--policy-stats` — injection hiện qua
+  code (BotRuntime option); làm cùng PR 9 khi cần bench beta>0.
+
+**Tiếp theo (PR 9):** scenario benchmarks (§28) — 5 kịch bản có kiểm định danh
+(two seer claims, suspicious teammate, late-game parity, conflicting evidence,
+social manipulation), mỗi kịch bản một test + một metrics đo; và protocol
+5×10k cho quyết định nâng default weights lên v21.
