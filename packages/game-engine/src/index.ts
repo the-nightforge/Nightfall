@@ -17,6 +17,7 @@ export * from "./bot/analysis/vote-analysis";
 export * from "./bot/analysis/social-analysis";
 export * from "./bot/analysis/chat-analysis";
 export * from "./bot/analysis/coalition";
+export * from "./bot/analysis/discussion-graph";
 export * from "./bot/analysis/claim-credibility";
 export * from "./bot/belief/private-info";
 export * from "./bot/belief/role-belief";

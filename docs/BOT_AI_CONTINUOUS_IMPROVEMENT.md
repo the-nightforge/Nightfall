@@ -266,3 +266,51 @@ giữ v18 cho tới khi đạt chuẩn §27 (5 batch × 10.000 ván) — kỷ lu
 **Tiếp theo (PR 4):** discussion strategy — discussion graph theo §13
 (ai tố ai, ai bênh ai, ai né, ai theo đám đông) ghi có cấu trúc, nối được vào
 `pair-assessment` (shared targets) và planner; sau đó PR 5 wolf team planner.
+
+---
+
+## 12. PR 4 — Báo cáo thực hiện (spec §41)
+
+**Changed files:**
+
+- `packages/game-engine/src/bot/analysis/discussion-graph.ts` (MỚI) —
+  `buildDiscussionGraph()` → `PressureEpisode[]`: mỗi đợt áp lực quanh một
+  target trong một vòng, ghi `initiatorId` (người tố đầu theo thứ tự
+  `bot-chat:{round}:{total}` tất định), `accuserIds`, `defenderIds`,
+  `silentIds` (người sống không hành động). Đọc từ memory ACCUSE/DEFEND mà
+  `analyzeChat` đã ghi — không parse lại chat
+- `packages/game-engine/src/bot/belief/pair-assessment.ts` — thêm
+  `coAccusationScore` vào `PlayerPairAssessment`: cùng tố (2/accuserCount —
+  đám đông đông thì loãng, đúng §13) hoặc cùng bênh một target; chiết khấu
+  theo số đợt qua `priorStrength`; joint của PR 2 giờ dùng
+  `1 + min(1, compatibility + coAccusationScore)` — Fréchet vẫn giữ
+- `packages/game-engine/src/index.ts` — export
+- Tests: `tests/bot-discussion-graph.test.ts` (11)
+
+**Behavior changed:** KHÔNG với decision (view thuần); CÓ với surface của
+`assessPairs` (thêm field) — không consumer cũ nào bị phá (field mới, giá trị
+joint chỉ đổi khi có co-direction, và mọi test PR 2 giữ nguyên pass).
+
+**Tests:** engine **91 file / 4.708 pass** (+11 mới, 8 test cũ của PR 2 vẫn
+xanh), server 1.095 pass, lint xanh 4 workspace. Chốt: initiator = message đầu;
+silent = sống-mà-im (người chết không tính); co-accusation 2 người > 3 người
+(loãng theo độ đông); cùng bênh cũng là tín hiệu; a-tố-b (không cùng hướng) →
+0 và joint giữ độc lập; Fréchet vẫn giữ; tất định JSON-equal.
+
+**Benchmark:** self-play `--seed pr4-verify --games 30 --preset --weights 21.0.0
+--verify-replay` — 0 divergence, 0 knowledge violation. (assessPairs chưa có
+consumer trong decision → bench thật để sau khi nối.)
+
+**Known limitations:**
+
+- `silentIds` mới chỉ là dữ liệu; tín hiệu "im lặng nhiều vòng" đã có sẵn ở
+  `AVOIDANCE` (vote-analysis) — chưa nối.
+- Co-direction mới tính theo từng vòng riêng lẻ rồi chiết khấu số ĐỢT; chưa
+  phân biệt "cùng đợt liên tiếp nhiều vòng" với "rải rác".
+- Chưa có consumer trong planner/decision — để PR sau quyết định chỗ nối
+  (isolation của planner, wolf team planner của PR 5).
+
+**Tiếp theo (PR 5):** wolf team planner (§14–§17) — WolfTeamPlan (kill target,
+claimant, distancing, sacrifice) trên dữ liệu personality + assessment có sẵn,
+giữ tất định không kênh chat;wolfSideGain của v21 là chỗ bật counterfactual
+cho nhánh Sói.

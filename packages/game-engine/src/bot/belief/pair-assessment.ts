@@ -2,6 +2,7 @@ import { roleTeam, type Role } from "@masoi/shared";
 import type { BotEvidence } from "../types";
 import type { RoleBelief, RoleBeliefInput } from "./role-belief";
 import { projectRoleBeliefs } from "./role-belief";
+import { buildDiscussionGraph } from "../analysis/discussion-graph";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { possibleWolfPairScore, socialEdgeKey } from "../analysis/social-analysis";
 
@@ -50,6 +51,12 @@ export interface PlayerPairAssessment {
   allyScore: number;
   /** Độ thù địch 0..1: cáo buộc + phản bác, chiết khấu theo số mẫu. */
   conflictScore: number;
+  /**
+   * Độ CÙNG-HƯỚNG 0..1 (PR 4): hai người cùng tố hay cùng bênh một người khác
+   * trong các đợt áp lực gần đây — tín hiệu liên minh §34 "shared targets",
+   * chiết khấu theo ĐỘ ĐÔNG của đám đông (§13: cặp đôi mạnh hơn đám đông).
+   */
+  coAccusationScore: number;
   /** Bằng chứng từ CẢ HAI hướng cạnh, sort theo id, không trùng. */
   evidence: BotEvidence[];
 }
@@ -91,6 +98,46 @@ function clampUnit(value: number): number {
 }
 
 /**
+ * Độ cùng-hướng của một cặp từ discussion graph (PR 4).
+ *
+ * Mỗi đợt áp lực mà cả hai cùng đứng về một phía cộng:
+ * - cùng TỐ: `2 / accuserCount` — đám đông hai người thì đầy đủ, đông hơn thì
+ *   loãng (ba người → 0.67, năm → 0.4). Đó là phần §13 "chỉ hai đứa cùng tố"
+ *   là tín hiệu của bầy.
+ * - cùng BÊNH: `coDefenseContribution` — bênh thường ít người tham gia hơn tố,
+ *   nên mỗi đợt bênh nặng hơn.
+ *
+ * Chiết khấu theo SỐ ĐỢT qua `priorStrength` của social: một đợt trùng hợp là
+ * chuyện thường, hai ba đợt liên tiếp mới là khuôn mẫu.
+ */
+export function coAccusationScoreOf(
+  input: PairAssessmentInput,
+  leftId: string,
+  rightId: string,
+): number {
+  const graph = buildDiscussionGraph(input);
+  let raw = 0;
+  let episodes = 0;
+  for (const episode of graph.episodes) {
+    const bothAccuse =
+      episode.accuserIds.includes(leftId) && episode.accuserIds.includes(rightId);
+    const bothDefend =
+      episode.defenderIds.includes(leftId) && episode.defenderIds.includes(rightId);
+    if (!bothAccuse && !bothDefend) continue;
+    episodes += 1;
+    if (bothAccuse) raw += 2 / Math.max(2, episode.accuserIds.length);
+    if (bothDefend) raw += coDefenseContribution;
+  }
+  if (episodes === 0) return 0;
+  const observationWeight = episodes / (episodes + priorStrengthOf(input));
+  return Math.min(1, raw * observationWeight);
+}
+
+const coDefenseContribution = 1;
+const priorStrengthOf = (input: PairAssessmentInput): number =>
+  (input.weights ?? DEFAULT_BOT_WEIGHTS).social.priorStrength;
+
+/**
  * Đánh giá MỌI cặp người SỐNG, theo thứ tự chuẩn hoá. Với n người sống thì có
  * n×(n−1)/2 cặp — dưới 20 người là trần hợp lý, không cần lọc trước.
  */
@@ -116,11 +163,12 @@ export function assessPairs(input: PairAssessmentInput): PlayerPairAssessment[] 
       // tin để kể là quan hệ.
       const observationWeight = samples / (samples + weights.social.priorStrength);
       const compatibility = possibleWolfPairScore(input.state, leftId, rightId, weights);
+      const coScore = coAccusationScoreOf(input, leftId, rightId);
 
       const independent = pLeft * pRight;
       const joint = Math.min(
         Math.min(pLeft, pRight),
-        independent * (1 + compatibility),
+        independent * (1 + Math.min(1, compatibility + coScore)),
       );
 
       // Evidence gom hai hướng cạnh: cùng một bảng reason mà graph đang giữ,
@@ -143,6 +191,7 @@ export function assessPairs(input: PairAssessmentInput): PlayerPairAssessment[] 
           (stats.support + stats.alignment) * observationWeight,
         ),
         conflictScore: clampUnit(stats.hostility * observationWeight),
+        coAccusationScore: coScore,
         evidence: evidenceList,
       });
     }
