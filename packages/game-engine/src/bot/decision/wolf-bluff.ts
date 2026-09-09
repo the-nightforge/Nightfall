@@ -198,8 +198,12 @@ export function wolfDistanceStance(
     knowledge.players.filter((player) => player.alive).length,
   );
   const votes = knowledge.currentVoteCounts.players;
-  const allyPressure = (votes[allyId] ?? 0) / aliveCount;
-  const myPressure = (votes[selfId] ?? 0) / aliveCount;
+  // Bị đưa ra xử là mức nguy cao nhất, không phụ thuộc bảng phiếu: phiên toà mở
+  // ra thì bảng phiếu ban ngày đã đóng, nên đọc mình phiếu sẽ thấy một bị cáo
+  // "sạch" đúng vào lúc họ sắp bị treo.
+  const onTrial = (playerId: string): boolean => knowledge.trialAccusedId === playerId;
+  const allyPressure = onTrial(allyId) ? 1 : (votes[allyId] ?? 0) / aliveCount;
+  const myPressure = onTrial(selfId) ? 1 : (votes[selfId] ?? 0) / aliveCount;
 
   // Chính mình đang bị soi thì mở miệng bênh là tự buộc hai người vào một dây.
   if (myPressure >= ceiling) return "IGNORE";

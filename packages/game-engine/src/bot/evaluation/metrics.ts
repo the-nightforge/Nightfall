@@ -296,6 +296,23 @@ export interface SelfPlayMetrics {
    * phần thông tin của làng.
    */
   claimAccuracy: Ratio;
+  /**
+   * Trong những lần một con SÓI khai láo Tiên Tri, bao nhiêu lần làng đi theo
+   * lời khai đó (COMMUNICATION §17).
+   *
+   * Đây là chỉ số ĐÍCH của việc chấm điểm ghế khai láo: `wolfBluffCandidateScore`
+   * tồn tại để bầy đẩy ra con nói dối *có sức thuyết phục hơn*, và không có
+   * con số này thì "đã chọn ghế khác" chỉ nói rằng có gì đó đổi, không nói rằng
+   * nó đổi theo chiều tốt hơn.
+   *
+   * Anh em với `claimAccuracy` nhưng ĐỘC LẬP với nó: mẫu số ở đây là lời khai
+   * láo của Sói, còn `claimAccuracy` lấy mẫu số là những lời khai làng ĐÃ tin.
+   * Một cơ chế đẩy chỉ số này lên sẽ kéo `claimAccuracy` xuống - đó là cùng một
+   * sự việc nhìn từ hai phía, không phải hai kết quả mâu thuẫn.
+   *
+   * Chỉ tồn tại được ở harness: chỉ đây mới biết vai thật để đối chiếu.
+   */
+  wolfBluffBelievedRate: Ratio;
 
   // ---- Nghe người thật (P0.3) ----
 
@@ -443,6 +460,9 @@ export function collectMetrics(
   let fromTemplateCount = 0;
   let sameTargetRuns = 0;
   let replies = 0;
+  // Mẫu số / tử số của `wolfBluffBelievedRate` (§17).
+  let wolfBluffClaims = 0;
+  let wolfBluffBelieved = 0;
   let directQuestionTotal = 0;
   let directQuestionAnswered = 0;
   let chainMax = 0;
@@ -933,6 +953,15 @@ export function collectMetrics(
               seerClaimsBelieved += 1;
               if (game.roles[event.actorId] === "SEER") seerClaimsAccurate += 1;
             }
+
+            // §17: cùng một lời khai Tiên Tri, nhìn từ phía bầy Sói. Mẫu số là
+            // MỌI lần Sói khai láo, kể cả lần không ai tin - nếu không thì một
+            // cơ chế làm Sói khai ít đi mà chuẩn hơn sẽ đọc ra y hệt một cơ chế
+            // làm Sói khai đúng bằng ấy lần mà thuyết phục hơn.
+            if (event.claimedRole === "SEER" && teamOf(event.actorId) === "wolves") {
+              wolfBluffClaims += 1;
+              if (followed) wolfBluffBelieved += 1;
+            }
           }
         }
 
@@ -1056,6 +1085,7 @@ export function collectMetrics(
     counterClaimRate: ratio(counterClaimGames, games.length),
     claimFollowRate: ratio(claimPointFollowed, claimPointTotal),
     claimAccuracy: ratio(seerClaimsAccurate, seerClaimsBelieved),
+    wolfBluffBelievedRate: ratio(wolfBluffBelieved, wolfBluffClaims),
 
     humanAccuseSeenRate: ratio(humanChat.accuseSeen, humanChat.accuseTotal),
     humanDefendSeenRate: ratio(humanChat.defendSeen, humanChat.defendTotal),

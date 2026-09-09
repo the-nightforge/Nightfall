@@ -787,12 +787,12 @@ export interface ClaimWeights {
   wolfBluffScoreShare: number;
   /**
    * Áp lực (`ConversationState.pressureOnMe`, `[0,1]`) dưới mức này thì lời khai
-   * được nói NHẸ (COMMUNICATION §16 "HOW STRONGLY"). Từ mức này tới gấp đôi nó
-   * là khai VỪA; trên nữa là khai DỨT KHOÁT. `0` TẮT - mọi lời khai đều dứt
-   * khoát, đúng hành vi trước PR 7.
+   * CHỦ ĐỘNG được nói NHẸ; từ mức này trở lên thì nói dứt khoát
+   * (COMMUNICATION §16 "HOW STRONGLY"). `0` TẮT - mọi lời khai đều dứt khoát,
+   * đúng hành vi trước PR 7.
    *
-   * MỘT nút vặn cho ba bậc, không phải hai: hai ngưỡng rời nhau chỉ có nghĩa
-   * nếu có số đo nói chúng nên rời nhau, và hiện chưa có.
+   * Hai bậc, không phải ba. Xem `claimTone`: dải giữa của bản đầu trúng 3/859
+   * lời khai vì một lời khai chủ động gần như luôn xảy ra lúc áp lực bằng 0.
    */
   softClaimPressureCeiling: number;
   /**

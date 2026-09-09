@@ -323,19 +323,23 @@ function questionDrafts(
 /**
  * Lời khai này được nói NẶNG tới đâu (COMMUNICATION §16 "HOW STRONGLY").
  *
- * Ba bậc, chọn theo đúng bậc thang §16 mô tả:
- *
  * ```text
- * an toàn        -> khai nhẹ      (SOFT)
- * bị dồn vừa     -> khai vừa      (NEUTRAL)
- * bị dồn mạnh    -> khai dứt khoát (giọng của tính cách)
+ * chưa ai đụng tới mình  -> khai nhẹ       (SOFT)
+ * đang bị dồn            -> khai dứt khoát (giọng của tính cách)
  * ```
  *
+ * HAI bậc, không phải ba như bản đầu. §16 mô tả ba (soft / partial / full) và
+ * bản đầu cài đúng ba, với dải giữa là `[ceiling, 2 x ceiling)`. Đo trên 300
+ * ván: dải giữa trúng đúng **3 trên 859** lời khai. Không phải lỗi hiệu chỉnh
+ * mà là hệ quả của việc một lời khai CHỦ ĐỘNG gần như luôn xảy ra lúc chưa ai
+ * đụng tới người khai - áp lực lúc đó bằng 0. Bậc giữa vì vậy là một nhánh
+ * chết, và một quy ước "gấp đôi" không có gì chống lưng; cả hai đã bị bỏ.
+ *
  * `COUNTER` và `UNDER_FIRE` luôn ở bậc cao nhất, không hỏi áp lực: cả hai theo
- * định nghĩa đã là lúc bị dồn: một bên bị mạo danh, một bên sắp bị treo. Đọc
+ * định nghĩa đã là lúc bị dồn - một bên bị mạo danh, một bên sắp bị treo. Đọc
  * lại áp lực ở đó chỉ tạo thêm một đường để nói nhẹ đúng lúc không được nhẹ.
  *
- * `softClaimPressureCeiling = 0` (v1..v26) làm mọi so sánh sai và trả về đúng
+ * `softClaimPressureCeiling = 0` (v1..v26) làm phép so sánh sai và trả về đúng
  * giọng cũ - không một bit nào lệch.
  *
  * Chỉ dựng `ConversationState` khi nút vặn thật sự bật: nó quét cả memory, và
@@ -350,10 +354,7 @@ function claimTone(
   const ceiling = weights.claim.softClaimPressureCeiling;
   if (ceiling <= 0 || kind !== "PROACTIVE") return toneFor("ACCUSE", style);
 
-  const pressure = socialSituation().pressureOnMe;
-  if (pressure < ceiling) return "SOFT";
-  if (pressure < ceiling * 2) return "NEUTRAL";
-  return toneFor("ACCUSE", style);
+  return socialSituation().pressureOnMe < ceiling ? "SOFT" : toneFor("ACCUSE", style);
 }
 
 /**

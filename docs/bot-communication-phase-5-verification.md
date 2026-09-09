@@ -15,7 +15,8 @@
 | `conversation/speech-planner.ts` | `claimTone` (§16); `applyDistancing` (§18) |
 | `config/weights.ts` | +3 trường `claim.*`, +`BOT_WEIGHTS_V27` |
 | `config/presets.ts`, `index.ts` | đăng ký / export |
-| `tests/bot-wolf-bluff.test.ts` | mới — 18 test |
+| `tests/bot-wolf-bluff.test.ts` | mới — 20 test |
+| `evaluation/metrics.ts` | +`wolfBluffBelievedRate` (§9.2) |
 
 ## 2. Existing modules reused
 
@@ -51,8 +52,9 @@ ghế khai láo là hai đường sẽ trôi lệch, và lúc trôi thì kế ho
 đằng còn con Sói mở miệng là một nẻo. Có test khoá.
 
 **§16 — lời khai có sức nặng.** `PROACTIVE` được nói NHẸ khi không ai đụng tới
-mình, dứt khoát dần theo áp lực. `COUNTER` và `UNDER_FIRE` luôn ở bậc cao nhất,
-không hỏi áp lực: theo định nghĩa cả hai đã là lúc bị dồn.
+mình, dứt khoát khi đã bị dồn. `COUNTER` và `UNDER_FIRE` luôn ở bậc cao nhất,
+không hỏi áp lực: theo định nghĩa cả hai đã là lúc bị dồn. (Hai bậc, không phải
+ba như §16 mô tả — xem §9.3.)
 
 **§18 — giữ khoảng cách với đồng bọn.** `wolfDistanceStance` trả `DEFEND` /
 `SOFT_DISAGREE` / `IGNORE`, và ứng viên `DEFEND` bị loại tương ứng.
@@ -68,7 +70,7 @@ và vì consumer của lá phiếu sẽ cần đúng tên gọi ấy.
 
 Không thêm lượt rút RNG nào — cả ba cơ chế đều thuần, và cả ba quy về hành vi cũ
 ở giá trị `0`. `--verify-replay` 0 failedSeeds ở v21/v26/v27;
-**engine 4.902 test PASS / 106 file, server 1.102 test PASS / 132 file**, lint
+**engine 4.904 test PASS / 106 file, server 1.102 test PASS / 132 file**, lint
 xanh cả 4 workspace.
 
 Một tính chất riêng của PR này, có test: **hai con Sói nghe cùng một ván phải
@@ -138,33 +140,116 @@ v27  CLAIM_ROLE    FIRM 300   TENSE 263   SOFT 293   NEUTRAL 3
 - **§16 là cơ chế chạy rộng nhất PR này**: 73% số ván đổi lời nói, và 34,5% lời
   khai chủ động giờ được nói nhẹ thay vì luôn dứt khoát. `COUNTER_CLAIM` không
   đổi một chữ — đúng thiết kế.
-- **Bậc giữa gần như không tồn tại**: `NEUTRAL` chỉ 3/859. Dải áp lực
-  `[0.2, 0.4)` quá hẹp trong thực tế, nên thang ba bậc của §16 đang chạy như
-  thang hai bậc. Không sai, nhưng nên biết trước khi tin vào chữ "PARTIAL".
-- **`claimAccuracy` giảm 1,11 điểm so v26** — chênh lệch lớn nhất trong bảng, và
-  là chỉ số duy nhất đáng lo. Nó có một giả thuyết CỤ THỂ, khác với "các ván
-  phân kỳ": §17 giờ chủ động chọn ghế khai láo có uy tín cao hơn, nên lời nói
-  dối của Sói sống lâu hơn trước khi bị bác. Nếu đúng thì đó là §17 đang LÀM
-  ĐÚNG VIỆC của nó, và `claimAccuracy` giảm là cái giá phe làng phải trả — nhưng
-  **giả thuyết này chưa được kiểm**, và nó phải được kiểm trước khi cân nhắc
-  nâng v27 lên mặc định.
+- **Bậc giữa gần như không tồn tại**: `NEUTRAL` chỉ 3/859. Đã bỏ hẳn ở §9.3.
+- **`claimAccuracy` giảm 1,11 điểm so v26** — chênh lệch lớn nhất trong bảng.
+  Đã truy nguyên ở §9 bên dưới: **đó là nhiễu**, không phải một hồi quy.
 - **§18 gần như không chạy**: 11/300 ván. Tiền đề cần một đồng bọn bị tố CÔNG
   KHAI bằng lời trong khi con Sói kia đang có `trust` đủ cao — hiếm trong bàn
   toàn bot, cùng lý do với PR 5.
 
 ## 8. Known limitations
 
-1. §17 chỉ được đo qua "bao nhiêu ván đổi lời nói", **chưa có chỉ số nào nói
-   ghế được chọn có nói dối TỐT HƠN không**. Đó là chỉ số PR này thiếu nhất.
-2. `claimAccuracy` −1,11 pt chưa được truy nguyên (xem §7).
-3. Bậc `PARTIAL` của §16 gần như chết (3/859).
-4. §18 không sinh `BUS`/`HARD_DISAGREE` — cố ý (xem §3), nhưng nghĩa là §18 mới
+1. ~~§17 chưa có chỉ số đo chất lượng~~ — ĐÃ LÀM: `wolfBluffBelievedRate`, §9.
+2. ~~`claimAccuracy` −1,11 pt chưa truy nguyên~~ — ĐÃ LÀM: nhiễu, §9.
+3. ~~Bậc `PARTIAL` của §16 gần như chết~~ — ĐÃ BỎ: `claimTone` còn hai bậc, §9.
+4. ~~`wolfDistanceStance` không đọc `trialAccusedId`~~ — ĐÃ SỬA, §9.
+5. §18 không sinh `BUS`/`HARD_DISAGREE` — cố ý (xem §3), nhưng nghĩa là §18 mới
    được thực hiện một nửa: nửa LỜI NÓI. Nửa LÁ PHIẾU vẫn nằm ở `werewolf.ts` và
    chưa đọc `wolfDistanceStance`.
-5. Ba hằng số ngưỡng (`DEFEND_WHEN_SAFE_BELOW` suy ra bằng nửa
-   `wolfDistancePressure`, dải giữa của `softClaimPressureCeiling`) đều là quy
-   ước "gấp đôi / một nửa", chưa qua quét tham số.
-6. `wolfDistanceStance` chỉ đọc PHIẾU công khai, không đọc `trialAccusedId` —
-   một đồng bọn đang bị đưa ra xử mà chưa ai bỏ phiếu thì vẫn bị coi là an toàn.
-7. Chưa đụng §28 (metric cho pressure/floor/strategy/style/bluff).
-8. v27 chưa đủ bằng chứng để mặc định.
+6. `wolfDistancePressure` và ngưỡng bênh-ra-mặt (nửa của nó) chưa qua quét tham
+   số. `softClaimPressureCeiling` cũng vậy.
+7. Chưa đụng §28 (metric cho pressure/floor/strategy/style).
+8. **v27 vẫn chưa đủ bằng chứng để mặc định** — và sau §9 thì lý do đã đổi: không
+   còn là "có một chỉ số đáng lo chưa truy nguyên", mà là "chưa đo được lợi ích
+   nào".
+
+
+---
+
+## 9. PR 7 nối — đóng bốn món nợ của §8
+
+Bốn hạng mục đã mở ở lần giao trước, làm tiếp trên cùng nhánh.
+
+### 9.1 `claimAccuracy` −1,11 pt: là NHIỄU
+
+Tách tỉ lệ ra tử số / mẫu số:
+
+```text
+v26  298/387 = 0,7700
+v27  296/390 = 0,7590
+```
+
+Chênh lệch cả thảy là **5 lời khai trên 1.200 ván**. Sai số chuẩn của một tỉ lệ
+`p ≈ 0,77` ở mẫu số 390 là `sqrt(0,77 x 0,23 / 390) ≈ 2,1 điểm`, nên 1,11 điểm
+là **nửa sai số chuẩn**.
+
+Chạy lại toàn bộ trên một gốc seed KHÁC (`comm-pr7b`, cũng 1.200 ván) thì dấu
+lật ngược: `claimAccuracy` v26 78,96% -> v27 **79,13%** (+0,17 pt, z=+0,06).
+
+Giả thuyết ở §7 ("§17 chọn ghế uy tín hơn nên lời dối sống lâu hơn") vì vậy
+**không có gì chống lưng**. Cách đọc đúng: chỉ số này không phân biệt được v26
+với v27 ở cỡ mẫu 1.200 ván.
+
+### 9.2 `wolfBluffBelievedRate` — chỉ số §17 còn thiếu
+
+Thêm vào `evaluation/metrics.ts`: trong những lần một con SÓI khai láo Tiên Tri,
+bao nhiêu lần làng đi theo lời khai đó. Đây là chỉ số ĐÍCH của §17 —
+`wolfBluffCandidateScore` tồn tại để bầy đẩy ra con nói dối *thuyết phục hơn*, và
+"đã chọn ghế khác" chỉ nói có gì đó đổi, không nói nó đổi theo chiều tốt hơn.
+
+Độc lập với `claimAccuracy` chứ không trùng: mẫu số ở đây là lời khai láo của
+Sói, còn `claimAccuracy` lấy mẫu số là những lời khai làng ĐÃ tin. Một cơ chế
+đẩy chỉ số này lên sẽ kéo `claimAccuracy` xuống — cùng một sự việc nhìn từ hai
+phía.
+
+Self-play 1.200 ván, paired seeds (`comm-pr7b`):
+
+| | v21 | v26 | v27 | z (v26→v27) |
+| --- | --- | --- | --- | --- |
+| wolfBluffBelievedRate | 13,73% (91/663) | 15,18% (97/639) | **15,31% (96/627)** | +0,06 |
+| claimAccuracy | 79,82% (360/451) | 78,96% (364/461) | 79,13% (364/460) | +0,06 |
+| claimFollowRate | 50,51% | 52,05% | 52,25% | +0,13 |
+| counterClaimRate | 58,58% | 59,00% | 59,92% | +0,46 |
+| villageWinRate | 53,58% | 52,92% | 52,67% | z(v21→v27)=−0,45 |
+| invariant violations / failedSeeds | 0 / 0 | 0 / 0 | 0 / 0 | — |
+
+**Kết luận thẳng: §17 KHÔNG đo được lợi ích nào.** Ghế khai láo được chấm điểm
+không nói dối thuyết phục hơn ghế do vòng xoay hash chọn — +0,13 điểm, z=+0,06.
+
+Cỡ mẫu cần để kết luận khác đi: phát hiện một chênh lệch 2 điểm ở tỉ lệ ~15% với
+lực 80% cần **khoảng 5.000 lời khai láo mỗi nhánh**, tức ~9.500 ván mỗi nhánh
+(đo được 0,52 lời khai láo mỗi ván). Batch 1.200 ván không đủ để nói §17 vô ích;
+nó chỉ đủ để nói **chưa ai chứng minh được nó có ích**, và đó là lý do v27 vẫn
+không được nâng lên mặc định.
+
+Ghi chú đọc bảng: chênh lệch v21 → v26 (+1,45 điểm) lớn hơn hẳn v26 → v27, tức
+phần nhúc nhích của chỉ số này đến từ PR 3–6 chứ không từ PR 7.
+
+### 9.3 Bậc `PARTIAL` của §16: đã BỎ
+
+Đo được 3/859 lời khai rơi vào dải giữa. Không phải lỗi hiệu chỉnh mà là hệ quả
+cấu trúc: một lời khai CHỦ ĐỘNG gần như luôn xảy ra lúc chưa ai đụng tới người
+khai, tức áp lực bằng 0. Nới dải chỉ chuyển `SOFT` thành `NEUTRAL`, không thêm
+thông tin nào.
+
+`claimTone` giờ còn hai bậc, và quy ước "gấp đôi" — một hằng số không có gì chống
+lưng, đã tự ghi vào hạn chế #5 của lần trước — biến mất cùng nó. Xoá, không phải
+hiệu chỉnh.
+
+### 9.4 `wolfDistanceStance` đọc `trialAccusedId`
+
+Trước: chỉ đọc `currentVoteCounts`. Một đồng bọn đang bị đưa ra XỬ mà bảng phiếu
+ban ngày đã đóng (nên trống trơn) đọc ra "an toàn", đúng vào lúc họ sắp bị treo.
+Giờ bị đưa ra xử là áp lực tối đa, cho cả đồng bọn lẫn chính mình. Hai test mới.
+
+### 9.5 Trạng thái sau khi nối
+
+```text
+engine  4.904 test PASS / 106 file      (+2 test §18, +1 metric)
+server  1.102 test PASS / 132 file
+lint    xanh cả 4 workspace
+--verify-replay  0 failedSeeds ở v21/v26/v27
+```
+
+`docs/fixtures/selfplay-sample.json` được sinh lại để nhận trường metric mới —
+fixture đó pin SCHEMA, không pin số liệu, nên diff của nó đúng bằng 5 dòng.

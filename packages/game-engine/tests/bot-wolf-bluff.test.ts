@@ -270,6 +270,24 @@ describe("wolfDistanceStance (§18)", () => {
     );
   });
 
+  it("đồng bọn bị đưa ra XỬ là nguy nhất, dù bảng phiếu đã đóng và trống trơn", () => {
+    const trial = context("w1", {
+      currentVoteCounts: { players: {}, noElimination: 0 },
+      trialAccusedId: "w2",
+    }).knowledge;
+    // Cùng bảng phiếu trống đó mà không có phiên toà thì vẫn là "cứ bênh".
+    expect(wolfDistanceStance(alive({}), "w2", "w1", BOT_WEIGHTS_V27)).toBe("DEFEND");
+    expect(wolfDistanceStance(trial, "w2", "w1", BOT_WEIGHTS_V27)).toBe("SOFT_DISAGREE");
+  });
+
+  it("chính mình bị đưa ra xử thì không đụng vào chuyện của đồng bọn", () => {
+    const trial = context("w1", {
+      currentVoteCounts: { players: {}, noElimination: 0 },
+      trialAccusedId: "w1",
+    }).knowledge;
+    expect(wolfDistanceStance(trial, "w2", "w1", BOT_WEIGHTS_V27)).toBe("IGNORE");
+  });
+
   it("không bao giờ tự chọn BUS hay HARD_DISAGREE — đó là việc của lá phiếu", () => {
     const cases: Array<Record<string, number>> = [
       {},
