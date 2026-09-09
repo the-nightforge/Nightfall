@@ -22,6 +22,12 @@ reports/
 # Ket qua sweep role-power chay cuc bo (npm run role-power:sweep)
 .role-power/
 
-# Python (tools/audio)
+# Python (tools/audio, ai-training)
 __pycache__/
 *.pyc
+.venv/
+
+# Dataset/model cua tang train: nang GB, tai sinh duoc bang ai:dataset + ai:train
+ai-training/data/
+ai-training/models/
+.tmp/

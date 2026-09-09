@@ -51,6 +51,31 @@ export interface BotTrajectory {
   finalWinner: string;
 }
 
+/**
+ * Tập hành động hợp lệ ĐÚNG với loại quyết định của line.
+ *
+ * `legalChoices` là tập BAN NGÀY; đọc nó cho một quyết định NIGHT sẽ ra mảng
+ * rỗng và biến mọi hành động đêm thành "ngoài luật" với tầng kiểm dataset
+ * (BOT_SELF_LEARNING §42). Ba loại quyết định CHỌN MỤC TIÊU có ba tập riêng;
+ * `FINAL_VOTE` (treo/tha) và `SPEECH` không chọn mục tiêu trong không gian này
+ * nên vẫn mang tập ban ngày để tham khảo, và tầng kiểm không ép luật cho chúng.
+ *
+ * Đêm gộp mục tiêu của MỌI loại hành động bot có: nó chọn cả loại lẫn mục tiêu
+ * trong một lượt, nên hợp của các tập chính là tập nó được chọn.
+ */
+function legalActionsFor(trace: BotDecisionTrace): string[] {
+  const snapshot = trace.knowledgeSnapshot;
+  if (trace.decision === "NIGHT") {
+    const targets = new Set<string>();
+    for (const list of Object.values(snapshot.nightLegalTargets ?? {})) {
+      for (const target of list) targets.add(target);
+    }
+    return [...targets].sort();
+  }
+  if (trace.decision === "HUNTER_SHOT") return [...(snapshot.hunterLegalTargets ?? [])];
+  return [...snapshot.legalChoices];
+}
+
 function rewardFor(game: SelfPlayGame, playerId: string, role: Role): number {
   const personalWon = (game.personalWins ?? []).some(
     (win) => win.playerId === playerId,
@@ -76,6 +101,8 @@ export function gameToTrajectories(game: SelfPlayGame): BotTrajectory[] {
     const finalRole = game.roles[trace.botId];
     if (!finalRole) continue;
 
+    const legalActions = legalActionsFor(trace);
+
     const belief = Object.entries(trace.beliefAfter).map(([playerId, entry]) => ({
       playerId,
       suspicion: entry.suspicion,
@@ -93,7 +120,7 @@ export function gameToTrajectories(game: SelfPlayGame): BotTrajectory[] {
       decision: trace.decision,
       observation: {
         aliveIds: [...trace.knowledgeSnapshot.aliveIds].sort(),
-        legalActions: [...trace.knowledgeSnapshot.legalChoices],
+        legalActions: [...legalActions],
         knownRoles: { ...trace.knowledgeSnapshot.knownRoles },
         seerResult: trace.knowledgeSnapshot.seerResult
           ? { ...trace.knowledgeSnapshot.seerResult }
@@ -101,7 +128,7 @@ export function gameToTrajectories(game: SelfPlayGame): BotTrajectory[] {
         belief,
         personality: { ...trace.personality },
       },
-      legalActions: [...trace.knowledgeSnapshot.legalChoices],
+      legalActions,
       candidates: trace.candidates.map((candidate) => ({ ...candidate })),
       selectedAction: {
         decision: trace.decision,

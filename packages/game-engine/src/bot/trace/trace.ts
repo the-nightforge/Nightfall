@@ -48,7 +48,20 @@ export type BeliefSnapshot = Record<string, { suspicion: number; trust: number }
  */
 export interface TraceKnowledgeSnapshot {
   aliveIds: string[];
+  /** Lựa chọn hợp lệ BAN NGÀY (`legalVoteChoices`), gồm `NO_ELIMINATION`. */
   legalChoices: string[];
+  /**
+   * Mục tiêu hợp lệ BAN ĐÊM theo từng loại hành động, sao từ
+   * `knowledge.night.legalTargets`; `null` = bot không có lượt đêm ở pha này.
+   *
+   * Có mặt vì `legalChoices` là tập của BAN NGÀY: ban đêm nó rỗng, nên một
+   * quyết định NIGHT được trace ra sẽ trông như một nước đi ngoài luật với mọi
+   * tầng kiểm "hành động ∈ tập hợp lệ" (BOT_SELF_LEARNING §42). Optional vì
+   * trace ghi trước bản này không có trường này.
+   */
+  nightLegalTargets?: Record<string, string[]> | null;
+  /** Mục tiêu hợp lệ của phát bắn Thợ Săn; `null` = không có lượt bắn. */
+  hunterLegalTargets?: string[] | null;
   knownRoles: Record<string, Role>;
   seerResult: { targetId: string; isWolf: boolean } | null;
 }
