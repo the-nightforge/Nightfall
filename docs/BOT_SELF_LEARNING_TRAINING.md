@@ -329,11 +329,29 @@ model có `featureNames`/`actionNames` lệch encoder hiện tại.
 npm run ai:benchmark -- --model .tmp/model-ob/model.weights.json --games 300 --repeat 3 --seed bench
 ```
 
-Ba cấu hình trên cùng seed: heuristic cả bàn, làng học được, sói học được. Đọc
-Δ tỉ lệ thắng của làng so với baseline; 60 ván lệch ±10 điểm, 3×300 ván mới
-kết luận ±3%. Với behavior cloning, Δ ≈ 0 là ĐÚNG kỳ vọng — model là bản sao
-của bot heuristic. Δ dương chỉ có thể tới từ RL (kế hoạch
-`2026-09-09-rl-self-play`).
+Ba cấu hình mặc định trên cùng seed: heuristic cả bàn, làng học được, sói học
+được. Đọc Δ tỉ lệ thắng của làng so với baseline, GHÉP THEO SEED ± sai số chuẩn
+(lệnh tự in). Với 300 ván/lô, sàn nhiễu nhị thức là ±2,85 điểm bất kể cấu
+hình; ba lô cho SE của hiệu ≈ 1,3 điểm — một hiệu +2 chỉ tương đương ~1,5σ.
+
+**Hai hiệu làng/sói có thể NGƯỢC DẤU nhau** (policy-0004: −2,9 và +8,1), nên
+không suy ra được "cả bàn dùng model" bằng cách lấy trung bình. Muốn biết cắm
+vào production thì ra sao, phải đo thẳng:
+
+```bash
+npm run ai:benchmark -- --model .tmp/model-ob/model.weights.json --setups baseline,all,teacher
+```
+
+- `all` — cả bàn dùng model: đúng cấu hình production.
+- `teacher` — heuristic KHÔNG jitter: chính teacher mà BC đã chép. **Khoảng
+  cách `all − teacher` là độ trung thành đo bằng TỈ LỆ THẮNG**, thứ agreement
+  không đo được. policy-0004: agreement tie-aware 0,940 nhưng thua teacher
+  **6,6 điểm** — 6% nước lệch rơi đúng vào chỗ đắt giá.
+- `--learned-decisions vote|night` — ablation: model chỉ quyết một lượt. Với
+  policy-0004, mỗi nước đêm lệch đắt gấp ~4 lần một nước bầu lệch.
+
+Mục tiêu của behavior cloning là `all − teacher → 0`, không phải agreement → 1.
+Chi tiết ở `reports/train-policy-0002.md`.
 
 Một lệnh chạy đủ ba cấu hình. Ở mỗi cấu hình, model chỉ được cấp cho ghế của
 phe đang đo; ghế còn lại chạy heuristic y như production. Mã thoát khác 0 khi
