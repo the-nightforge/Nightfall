@@ -21,6 +21,7 @@ import torch
 from torch import nn
 
 from .data import SPLIT_NAMES, action_distribution, load
+from .export import export_weights_json
 from .model import PolicyValueNet, masked_logits
 
 
@@ -165,6 +166,17 @@ def main() -> None:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), out / "model.pt")
+
+    # Đường vào runtime TypeScript: trọng số thuần JSON, kèm schema encoder
+    # để `loadMlpPolicy` từ chối một model train trên vector khác.
+    export_weights_json(
+        model,
+        full.meta,
+        out / "model.weights.json",
+        model_id=args.model_id,
+        training_seed=args.seed,
+        hidden=args.hidden,
+    )
 
     # §39: ONNX là đường vào runtime TypeScript. Không có exporter thì vẫn giữ
     # được model.pt — thiếu ONNX là bất tiện, không phải mất kết quả train.

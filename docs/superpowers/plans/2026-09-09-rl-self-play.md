@@ -16,6 +16,8 @@
 - Không đổi chiều observation (413) hay không gian hành động (187). `datasetVersion` của encode có rollout: `rollout-0001`.
 - Mọi RNG lấy mẫu đi qua `rng` có seed của bot (qua `wrapRngForTrace`), để `replayGame` tái lập ván rollout.
 - Champion là file JSON bất biến trong `.tmp/champions/<modelId>.weights.json`; không ghi đè. `modelId` tăng theo iteration: `ppo-0001`, `ppo-0002`, …
+- **Vòng lặp phải CHẠY TIẾP ĐƯỢC.** 20 vòng là ~3,5 giờ và người ta sẽ tắt máy giữa chừng; một vòng lặp bắt đầu lại từ đầu biến việc đó thành mất trắng. Mỗi bước đã xong ghi dấu trên đĩa và lượt sau bỏ qua — cùng cách `role-power:sweep` đã làm để sweep qua đêm bị ngắt không phải đo lại.
+- Rollout chạy song song (máy 16 lõi). ĐỪNG đưa rollout lên GitHub Actions: runner 2 lõi/shard, và repo đã gỡ `role-power.yml` vì đúng lý do đó.
 - `PYTHONUTF8=1` cho mọi lệnh Python.
 - Sau khi sửa engine: `npm run build:deps` rồi `npm run lint`, đọc mã thoát.
 - TDD, một commit mỗi task, nhánh `feat/rl-self-play` từ `main`.
@@ -563,7 +565,9 @@ Thêm `python tests/test_ppo.py` vào job CI `ai-training` (`.github/workflows/c
 - Test: chạy thật 1 iteration nhỏ
 
 **Interfaces:**
-- CLI: `python rl_loop.py --champion <weights.json> --iterations 3 --games 600 --bench-games 300 --bench-repeat 3 --out .tmp/rl`
+- CLI: `python rl_loop.py --champion <weights.json> --iterations 3 --games 600 --bench-games 300 --bench-repeat 3 --out .tmp/rl [--bench-every 1] [--resume/--no-resume]`
+- `--bench-every N`: chỉ benchmark ở vòng chia hết cho N và vòng CUỐI (benchmark tốn 6/16 phút mỗi vòng). Vòng không benchmark: challenger vẫn thành điểm xuất phát của vòng sau, nhưng KHÔNG được ghi vào `champions/` — champion chính thức chỉ đổi khi có điểm.
+- `--resume` (mặc định bật): đọc `state.json` trong `--out`, bỏ qua mọi vòng đã hoàn tất.
 - Mỗi iteration `k`: rollout 3 phần (all/village/wolves, mỗi phần `games/3`, seed `rl-k-<seats>`) → encode `--rollout` → `train_ppo --init champion --model-id ppo-000k` → `ai:benchmark --model challenger --out bench.json` → điểm = mean(Δlàng, Δsói) → thăng hạng nếu > champion + 2 điểm.
 
 - [ ] **Step 1: Viết script**
@@ -632,15 +636,88 @@ if __name__ == "__main__":
     main()
 ```
 
+- [ ] **Step 1b: `state.json` để chạy tiếp được sau khi ngắt**
+
+Trong `rl_loop.py`, ngay sau khi tạo `out`:
+
+```python
+    state_path = out / "state.json"
+    state = (json.loads(state_path.read_text(encoding="utf8"))
+             if (a.resume and state_path.exists()) else {"done": [], "champion": None, "championScore": None})
+
+    def save_state() -> None:
+        state_path.write_text(json.dumps(state, indent=2), encoding="utf8")
+```
+
+Khôi phục champion khi có:
+```python
+    if state["champion"]:
+        champion = Path(state["champion"]); champion_score = state["championScore"]
+    else:
+        shutil.copy(a.champion, champion)
+```
+Đầu mỗi vòng: `if k in state["done"]: print(f"vòng {k}: đã xong, bỏ qua"); continue`.
+
+Trong vòng, bỏ qua từng bước ĐÃ CÓ KẾT QUẢ trên đĩa:
+```python
+        if not (part / "trajectories.jsonl").exists(): run([...selfplay...])
+        if not (it / "enc" / "meta.json").exists():     run([...encode...])
+        if not (it / "model" / "model.weights.json").exists(): run([...train_ppo...])
+        if should_bench and not bench.exists():         run([...benchmark...])
+```
+Cuối vòng: `state["done"].append(k); state["champion"] = str(champion); state["championScore"] = champion_score; save_state()`.
+
+Bỏ qua theo FILE chứ không chỉ theo số vòng: máy tắt giữa lúc rollout thì vòng đó chưa vào `done`, nhưng hai phần seats đã sinh xong vẫn còn nguyên và không phải chạy lại.
+
+Thêm `p.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)`.
+
+- [ ] **Step 1c: Rollout song song và benchmark thưa**
+
+Ba phần seats của một vòng độc lập → chạy cùng lúc thay vì nối đuôi:
+```python
+    from concurrent.futures import ThreadPoolExecutor
+    def rollout_one(seats: str) -> None:
+        part = it / f"roll-{seats}"
+        if (part / "trajectories.jsonl").exists(): return
+        run(["npx", "tsx", "apps/server/scripts/selfplay.ts", "--games", str(a.games // 3), "--players", "8",
+             "--preset", "--defense", "--seed", f"rl-{k}-{seats}", "--policy", str(champion),
+             "--temperature", str(a.temperature), "--learned-seats", seats,
+             "--trajectories", str(part), "--trace-games", str(a.games // 3), "--quiet"])
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        list(pool.map(rollout_one, ("all", "village", "wolves")))
+```
+Gộp file CHỈ sau khi cả ba xong, và gộp theo thứ tự cố định `("all", "village", "wolves")` để `merged` tất định.
+
+Benchmark thưa:
+```python
+    should_bench = (k % a.bench_every == 0) or (k == a.iterations)
+```
+Không benchmark thì in `vòng k: bỏ benchmark (--bench-every)`, đặt `champion = challenger` để vòng sau rollout từ nó, và KHÔNG chạm `champions/` cũng không đổi `champion_score`.
+
 - [ ] **Step 2: Chạy 1 iteration nhỏ để kiểm đường ống**
 
 Run: `cd ai-training && PYTHONUTF8=1 ./.venv/Scripts/python.exe rl_loop.py --champion ../.tmp/model-ob/model.weights.json --iterations 1 --games 60 --bench-games 30 --bench-repeat 1 --out .tmp/rl-smoke`
 Expected: in điểm champion, rollout ba phần, validate SẠCH, encode `TỪ CHỐI 0`, PPO 4 epoch, benchmark, rồi `GIỮ champion` hoặc `THĂNG HẠNG`. Số ván nhỏ chỉ để kiểm đường ống, không kết luận.
 
-- [ ] **Step 3: Chạy thật**
+- [ ] **Step 2b: Kiểm chạy tiếp được — BẮT BUỘC, vì đây là điều kiện để chạy qua đêm**
 
-Run: `cd ai-training && PYTHONUTF8=1 ./.venv/Scripts/python.exe rl_loop.py --champion ../.tmp/model-ob/model.weights.json --iterations 3 --games 3000 --bench-games 300 --bench-repeat 3 --out .tmp/rl`
-Thời gian ước: mỗi iteration ~8 phút rollout + ~2 phút PPO + ~6 phút benchmark. Ghi bảng điểm từng iteration và `agreementWithInit` vào `reports/train-policy-0002.md` mục "RL". Kỳ vọng trung thực: 3 iteration có thể chưa thăng hạng; đó vẫn là kết quả — đường ống chạy, và số đo nói RL có tín hiệu hay không.
+Chạy `--iterations 2 --games 60 --bench-games 30 --bench-repeat 1 --out .tmp/rl-resume`, **Ctrl+C giữa vòng 2**, rồi chạy lại ĐÚNG lệnh đó.
+Expected: lần hai in `vòng 1: đã xong, bỏ qua`, không sinh lại rollout vòng 1, và kết thúc bình thường. Nếu nó chạy lại từ đầu thì `state.json` sai — sửa trước khi đi tiếp, vì không có bước này thì mọi lần ngắt đêm là mất trắng.
+
+- [ ] **Step 3: Chạy thật (qua đêm, không cần trông)**
+
+```bash
+cd ai-training && PYTHONUTF8=1 ./.venv/Scripts/python.exe rl_loop.py \
+  --champion ../.tmp/model-ob/model.weights.json \
+  --iterations 20 --games 3000 --bench-games 300 --bench-repeat 3 \
+  --bench-every 5 --out .tmp/rl
+```
+
+Thời gian: ~10 phút/vòng khi không benchmark, ~16 phút ở vòng có benchmark → 20 vòng ≈ **3,5 giờ**. Ngắt lúc nào cũng được: `--resume` giữ các vòng đã xong và champion đã lưu.
+
+Ghi bảng điểm từng vòng và `agreementWithInit` vào `reports/train-policy-0002.md` mục "RL".
+
+**Kỳ vọng trung thực:** không ai biết trước cần bao nhiêu vòng, kể cả người viết kế hoạch này. 20 vòng có thể chưa thăng hạng lần nào — đó vẫn là kết quả đọc được: đường ống chạy, và điểm từng vòng nói RL có tín hiệu hay không. **Đừng tăng số vòng một cách mù quáng.** Nếu điểm đi ngang suốt 20 vòng thì nút thắt nằm ở reward hoặc observation, không nằm ở số vòng, và chạy thêm 80 vòng nữa chỉ tốn một đêm để biết lại điều đã biết.
 
 - [ ] **Step 4: Commit**
 ```bash

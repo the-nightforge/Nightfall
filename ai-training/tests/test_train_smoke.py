@@ -77,6 +77,7 @@ def main() -> None:
         train_bc.main()
 
         assert (out / "model.pt").exists(), "thiếu model.pt"
+        assert (out / "model.weights.json").exists(), "thiếu model.weights.json"
         report = json.loads((out / "metrics.json").read_text(encoding="utf8"))
         assert report["obsSize"] == OBS and report["actionSize"] == ACT
         assert len(report["history"]) == 2
