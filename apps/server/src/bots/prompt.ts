@@ -287,6 +287,24 @@ function priorStanceLines(stance: NonNullable<SpeechRequest["priorStance"]>): st
   ];
 }
 
+/**
+ * Cách trình bày hợp với người đang được nói tới (§9).
+ *
+ * Đề nghị về CÁCH NÓI, không phải về nội dung: nó không được đổi mục tiêu, đổi
+ * lập trường hay thêm bằng chứng - ba thứ đó đã chốt ở lõi. Vì vậy câu cuối
+ * nói thẳng ranh giới đó, và khối này đứng SAU dòng bằng chứng.
+ */
+function listenerLines(listener: NonNullable<SpeechRequest["listener"]>): string[] {
+  const how = {
+    EVIDENCE: `${listener.name} chỉ bị thuyết phục bởi căn cứ cụ thể. Bám vào bằng chứng ở trên, đừng nói chung chung.`,
+    CHALLENGE: `${listener.name} phản ứng với lời nói thẳng. Nói gọn và dứt khoát, đừng vòng vo rào đón.`,
+    CONSENSUS: `${listener.name} hay đi theo số đông. Đặt ý của bạn vào mạch chung của bàn.`,
+    CONSISTENCY: `${listener.name} đang không tin bạn. Chỉ vào chỗ không khớp thay vì khẳng định thêm một lần nữa.`,
+  }[listener.style];
+
+  return [how, "Đây là gợi ý về CÁCH NÓI. Đừng đổi mục tiêu, lập trường hay bằng chứng.", ""];
+}
+
 export function buildDaySpeechPrompt(request: SpeechRequest): PromptSpec {
   const evidenceLines = request.evidence.length
     ? request.evidence.map((item) => `- [${item.sourceId}] ${item.summary}`)
@@ -341,6 +359,7 @@ export function buildDaySpeechPrompt(request: SpeechRequest): PromptSpec {
       "Bằng chứng bạn được phép nhắc tới:",
       ...evidenceLines,
       "",
+      ...(request.listener ? listenerLines(request.listener) : []),
       ...(request.recentOwnLines.length
         ? [
             "Bạn vừa nói những câu sau. ĐỪNG diễn đạt lại chúng:",

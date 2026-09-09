@@ -54,6 +54,7 @@ function request(
     avoidOpenings: [],
     recentSpeechSourceIds: [],
     priorStance: null,
+    listener: null,
     seq: 0,
     round: 1,
     // Khớp id speaker ("bot") và mục tiêu mặc định ("c" → "Chi") để cổng

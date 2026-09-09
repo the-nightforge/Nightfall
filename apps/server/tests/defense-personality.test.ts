@@ -43,6 +43,7 @@ function defenseRequest(style: ReturnType<typeof deriveSpeechStyle>): SpeechRequ
     avoidOpenings: [],
     recentSpeechSourceIds: [],
     priorStance: null,
+    listener: null,
     seq: 0,
     round: 2,
     players: [{ id: "bot", name: "An", alive: true }],

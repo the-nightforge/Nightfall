@@ -43,6 +43,7 @@ function request(over: Partial<SpeechRequest> = {}): SpeechRequest {
     avoidOpenings: [],
     recentSpeechSourceIds: [],
     priorStance: null,
+    listener: null,
     seq: 0,
     round: 1,
     players: [

@@ -26,6 +26,7 @@ import { botBrain, resetBotBudget } from "../bots";
 import { buildBotDecisionContext } from "../bots/context";
 import { renderBotSpeech, speechTemplate } from "../bots/speech-renderer";
 import {
+  buildCommunicationProfile,
   buildNarrative,
   describeSpeechStyle,
   liveStanceOn,
@@ -936,6 +937,7 @@ export function toSpeechRequest(
       limits.promptRecentOwnLines,
     ),
     priorStance: priorStanceOn(runtime, speech.targetId, context, nameOf),
+    listener: listenerFor(runtime, speech.targetId, context, nameOf),
     seq: runtime.state.speechSequence,
     round: context.knowledge.round,
     players: context.knowledge.players,
@@ -973,6 +975,29 @@ function priorStanceOn(
     stance,
     sinceRound: narrative[targetId]!.createdAtRound,
   };
+}
+
+/**
+ * Kiểu lập luận hợp với người đang được nói tới (COMMUNICATION §8, §9).
+ *
+ * `null` khi cơ chế tắt (`persuasionMinSamples = 0`, tức v1..v25), khi ý định
+ * không nhắm vào ai, hoặc khi BOT chưa quan sát đủ về người đó.
+ */
+function listenerFor(
+  runtime: { state: BotBrainState; weights: BotWeights },
+  targetId: string | undefined,
+  context: BotDecisionContext,
+  nameOf: (playerId: string) => string | undefined,
+): SpeechRequest["listener"] {
+  // Thoát TRƯỚC khi dựng hồ sơ khi cơ chế tắt - cùng lý do với `priorStanceOn`.
+  if (!targetId || runtime.weights.conversation.persuasionMinSamples <= 0) return null;
+  const style = buildCommunicationProfile(
+    context.knowledge,
+    runtime.state,
+    targetId,
+    runtime.weights,
+  ).style;
+  return style === null ? null : { name: nameOf(targetId) ?? "người đó", style };
 }
 
 /**

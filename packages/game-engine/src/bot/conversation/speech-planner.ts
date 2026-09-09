@@ -1,3 +1,7 @@
+import {
+  buildCommunicationProfile,
+  type PersuasionStyle,
+} from "../belief/communication-profile";
 import { credibilityOf } from "../belief/player-assessment";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { decideChatClaim, seerHoldsForHumans } from "../decision/claim-decision";
@@ -119,6 +123,39 @@ function candidatesFor(trigger: ConversationTrigger, style: BotSpeechStyle): Bot
     default:
       return [];
   }
+}
+
+/**
+ * Ứng viên mà từng kiểu người nghe phản ứng tốt nhất (COMMUNICATION §9).
+ *
+ * Đây là bảng ƯU TIÊN, không phải bảng SINH: `reorderForListener` chỉ đẩy lên
+ * đầu những kind VỐN ĐÃ có trong danh sách của trigger. `candidatesFor` vẫn là
+ * nơi duy nhất quyết định cái gì hợp lệ để đáp một trigger - người nghe không
+ * được phép mở ra một nước đi mà tình huống không cho phép.
+ */
+const PREFERRED_FOR: Readonly<Record<PersuasionStyle, readonly BotSpeechKind[]>> =
+  Object.freeze({
+    EVIDENCE: ["ASK_EVIDENCE", "REPLY"],
+    CHALLENGE: ["CHALLENGE", "DISAGREE"],
+    CONSENSUS: ["AGREE", "REPLY"],
+    CONSISTENCY: ["DISAGREE", "ASK_EVIDENCE"],
+  });
+
+/**
+ * Xếp lại ứng viên theo kiểu của NGƯỜI NGHE, giữ nguyên tập hợp.
+ *
+ * Ổn định: những kind không được ưu tiên giữ nguyên thứ tự tương đối của
+ * `candidatesFor`, tức vẫn theo tính cách của chính BOT. Người nghe quyết định
+ * cái gì lên đầu, tính cách quyết định phần còn lại.
+ */
+function reorderForListener(
+  candidates: BotSpeechKind[],
+  style: PersuasionStyle | null,
+): BotSpeechKind[] {
+  if (style === null) return candidates;
+  const preferred = PREFERRED_FOR[style].filter((kind) => candidates.includes(kind));
+  if (preferred.length === 0) return candidates;
+  return [...preferred, ...candidates.filter((kind) => !preferred.includes(kind))];
 }
 
 /**
@@ -376,6 +413,28 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
   // ---- 1. Có ai đang nói với mình không ----
   const { questionIgnoreFloor } = weights.conversation;
 
+  /**
+   * Kiểu thuyết phục hợp với NGƯỜI đang nói với mình (§8, §9), hoặc `null`.
+   *
+   * Nhớ theo người: một trigger loop có thể đi qua nhiều người khác nhau,
+   * nhưng cùng một người thì hồ sơ không đổi trong một lượt. Thuần, nên không
+   * lệch chuỗi RNG dù có dựng hay không.
+   */
+  const listenerStyles = new Map<string, PersuasionStyle | null>();
+  const persuasionOf = (listenerId: string): PersuasionStyle | null => {
+    if (weights.conversation.persuasionMinSamples <= 0) return null;
+    const cached = listenerStyles.get(listenerId);
+    if (cached !== undefined) return cached;
+    const style = buildCommunicationProfile(
+      context.knowledge,
+      state,
+      listenerId,
+      weights,
+    ).style;
+    listenerStyles.set(listenerId, style);
+    return style;
+  };
+
   for (const trigger of findConversationTriggers(context, state, weights)) {
     /**
      * Ứng viên cho trigger này, đã là Ý ĐỊNH đầy đủ.
@@ -388,17 +447,24 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
     const drafts: BotSpeechIntention[] =
       questionIgnoreFloor > 0 && trigger.kind === "QUESTIONED_ME"
         ? questionDrafts(trigger, style, state, vote, usable, socialSituation(), weights)
-        : candidatesFor(trigger, style).map((kind) => ({
-            kind,
-            targetId: targetFor(trigger, kind),
-            replyToMessageId: trigger.messageId,
-            replyToActorId: trigger.actorId,
-            topic: topicFor(trigger),
-            confidence: vote.confidence,
-            evidence: [],
-            tone: toneFor(kind, style),
-            reason: `phản hồi ${trigger.kind}`,
-          }));
+        : ((listener) =>
+            reorderForListener(candidatesFor(trigger, style), listener).map((kind) => ({
+              kind,
+              targetId: targetFor(trigger, kind),
+              replyToMessageId: trigger.messageId,
+              replyToActorId: trigger.actorId,
+              topic: topicFor(trigger),
+              confidence: vote.confidence,
+              evidence: [],
+              tone: toneFor(kind, style),
+              // Kiểu người nghe đi vào `reason` để trace đọc được cơ chế này có
+              // chạy hay không. `reason` là ghi chú NỘI BỘ, không bao giờ gửi
+              // cho nhà cung cấp - xem `BotSpeechIntention.reason`.
+              reason:
+                listener === null
+                  ? `phản hồi ${trigger.kind}`
+                  : `phản hồi ${trigger.kind} theo kiểu ${listener}`,
+            })))(persuasionOf(trigger.actorId));
 
     for (const draft of drafts) {
       // Bênh một người mình vừa công khai tố (hoặc ngược lại) mà không nói gì

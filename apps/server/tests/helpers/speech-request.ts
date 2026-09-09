@@ -35,6 +35,7 @@ export function speechDefaults(): Omit<
     avoidOpenings: [],
     recentSpeechSourceIds: [],
     priorStance: null,
+    listener: null,
     seq: 0,
     round: 1,
     // Khớp id/tên mà các fixture đang dùng cho speaker ("bot") và mục tiêu

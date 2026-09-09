@@ -720,6 +720,15 @@ export interface ConversationWeights {
    * không bao giờ đổi ý được nữa - và cả bàn cũng đã quên lời đó rồi.
    */
   narrativeMemoryRounds: number;
+  /**
+   * Số quan sát tối thiểu về một người trước khi BOT dám nói theo KIỂU của
+   * người đó (COMMUNICATION §8, §9). `0` TẮT cả cơ chế.
+   *
+   * `0` đọc xuôi cả hai nghĩa: "không cần mẫu nào" cũng chính là "điều chỉnh
+   * theo hư không", tức đúng hành vi trước PR 6 - nói theo tính cách của chính
+   * mình, bất kể đang nói với ai. Cùng quy ước với `claim.accusationWeight`.
+   */
+  persuasionMinSamples: number;
 }
 
 /**
@@ -1307,6 +1316,7 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     urgencyBoost: 0,
     questionIgnoreFloor: 0,
     narrativeMemoryRounds: 0,
+    persuasionMinSamples: 0,
   }),
 
   /**
@@ -1575,6 +1585,7 @@ export const BOT_WEIGHTS_V3: BotWeights = Object.freeze({
     urgencyBoost: 0,
     questionIgnoreFloor: 0,
     narrativeMemoryRounds: 0,
+    persuasionMinSamples: 0,
   }),
 }) as BotWeights;
 
@@ -2504,6 +2515,39 @@ export const BOT_WEIGHTS_V25: BotWeights = Object.freeze({
   conversation: Object.freeze({
     ...BOT_WEIGHTS_V24.conversation,
     narrativeMemoryRounds: 3,
+  }),
+});
+
+/**
+ * Cấu hình v26 - nói theo kiểu của NGƯỜI NGHE (COMMUNICATION §8, §9).
+ *
+ * MỘT ô đổi so v25: `conversation.persuasionMinSamples` 0 -> 4.
+ *
+ * Trước v26, thứ tự ứng viên cho một câu đáp chỉ phụ thuộc tính cách của chính
+ * BOT (`candidatesFor`). Hai người nghe khác hẳn nhau - một người chỉ tin bằng
+ * chứng, một người chỉ phản ứng với thách thức thẳng - nhận đúng một cách nói.
+ *
+ * Từ v26, `buildCommunicationProfile` đọc bốn chiều từ hành vi CÔNG KHAI (hay
+ * buộc tội, hay theo phe đông, hay đòi bằng chứng, quan hệ với chính BOT) rồi
+ * chốt một trong bốn kiểu thuyết phục của §9. Kiểu đó ĐẢO THỨ TỰ ứng viên -
+ * không bao giờ thêm một ứng viên mới: `candidatesFor` vẫn là nơi duy nhất
+ * quyết định cái gì HỢP LỆ cho một trigger, người nghe chỉ chọn trong đó.
+ *
+ * `4` mẫu, không phải `1`: đọc tính cách một người từ một quan sát là đọc
+ * nhiễu, và nó làm bàn nghe thất thường chứ không tinh tế hơn.
+ *
+ * KHÔNG thêm lượt rút RNG nào: hồ sơ thuần, và việc đảo thứ tự nằm trong phần
+ * chọn ứng viên, phía trước lượt rút vốn có.
+ *
+ * KHÔNG mặc định - bench v26 so v21 trước, kỷ luật v19.
+ */
+export const BOT_WEIGHTS_V26: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V25,
+  version: "26.0.0",
+
+  conversation: Object.freeze({
+    ...BOT_WEIGHTS_V25.conversation,
+    persuasionMinSamples: 4,
   }),
 });
 

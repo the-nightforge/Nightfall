@@ -107,6 +107,21 @@ export interface SpeechRequest {
     /** Vòng đầu tiên của mạch lập trường đó. */
     sinceRound: number;
   } | null;
+  /**
+   * Kiểu lập luận mà NGƯỜI ĐANG ĐƯỢC NÓI TỚI phản ứng tốt nhất, hoặc `null`
+   * khi BOT chưa quan sát đủ để dám đọc (COMMUNICATION §8, §9).
+   *
+   * Không phải thông tin riêng: bốn chiều đứng sau nó đều đọc từ hành vi công
+   * khai - lịch sử phiếu, và loại mệnh đề mà cả bàn đã nghe.
+   *
+   * Lõi đã dùng nó để chọn LOẠI ý định; trường này để nhà cung cấp chọn CÁCH
+   * DIỄN ĐẠT. Nó không được phép đổi mục tiêu hay lập trường - chỉ đổi cách
+   * trình bày cùng một nước đi.
+   */
+  listener: {
+    name: string;
+    style: "EVIDENCE" | "CHALLENGE" | "CONSENSUS" | "CONSISTENCY";
+  } | null;
   /** Lượt nói thứ mấy của BOT này; nguồn biến thiên của bảng mẫu. */
   seq: number;
   round: number;

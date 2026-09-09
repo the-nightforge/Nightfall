@@ -51,6 +51,7 @@ function request(over: Partial<SpeechRequest> = {}): SpeechRequest {
     avoidOpenings: ["tôi nghi bình"],
     recentSpeechSourceIds: ["recap:1"],
     priorStance: null,
+    listener: null,
     seq: 3,
     round: 2,
     players: [
@@ -279,5 +280,34 @@ describe("prompt — lập trường đã nêu trước đó (COMMUNICATION §15
     const quotedAt = prompt.user.indexOf("<quoted_data>");
     expect(stanceAt).toBeGreaterThanOrEqual(0);
     expect(quotedAt).toBeGreaterThan(stanceAt);
+  });
+});
+
+describe("prompt — cách nói theo người nghe (COMMUNICATION §9)", () => {
+  it("không có hồ sơ người nghe thì không thêm dòng nào", () => {
+    const prompt = buildDaySpeechPrompt(request({ listener: null }));
+    expect(prompt.user).not.toContain("Đây là gợi ý về CÁCH NÓI");
+  });
+
+  it("mỗi kiểu người nghe cho một lời dặn khác nhau", () => {
+    const seen = new Set<string>();
+    for (const style of ["EVIDENCE", "CHALLENGE", "CONSENSUS", "CONSISTENCY"] as const) {
+      const prompt = buildDaySpeechPrompt(
+        request({ listener: { name: "Chi", style } }),
+      );
+      const line = prompt.user
+        .split("\n")
+        .find((text) => text.startsWith("Chi "));
+      expect(line).toBeDefined();
+      seen.add(line!);
+    }
+    expect(seen.size).toBe(4);
+  });
+
+  it("luôn kèm ranh giới: chỉ đổi cách nói, không đổi nước đi", () => {
+    const prompt = buildDaySpeechPrompt(
+      request({ listener: { name: "Chi", style: "EVIDENCE" } }),
+    );
+    expect(prompt.user).toContain("Đừng đổi mục tiêu, lập trường hay bằng chứng.");
   });
 });
