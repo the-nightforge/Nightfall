@@ -279,8 +279,21 @@ jobs:
           build-args: GIT_COMMIT=${{ github.sha }}
           # Cache layer npm ci giữa các lần chạy; build sạch mất ~4 phút, có
           # cache thì ~1 phút khi package-lock không đổi.
+          #
+          # `ignore-error=true` vì job này tồn tại để bắt DOCKERFILE hỏng, không
+          # phải để nuôi cache. Đã gặp thật hai lần: hai run trên CÙNG một cây mã
+          # (merge commit của PR và nhánh của chính PR đó) sinh cùng blob sha,
+          # run sau không đặt chỗ được khoá mà run trước vừa ghi - cache của
+          # Actions không cho ghi đè - nên buildx trả `failed to reserve cache`
+          # SAU KHI mọi layer đã CACHED xong. Job đỏ trong khi Dockerfile hoàn
+          # toàn lành: đúng kiểu tín hiệu sai đắt nhất, vì nó dạy người đọc bỏ
+          # qua job này.
+          #
+          # Đánh đổi: khi cache hỏng thì lần build sau mất ~4 phút thay vì ~1.
+          # Chậm hơn nhưng THẤY được ở thời gian job, còn một Dockerfile hỏng lọt
+          # qua đây thì chỉ lộ ra ở Render, sau khi Vercel đã ship frontend mới.
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,ignore-error=true
 
   # Vercel Hobby chỉ cho deploy commit mà git author là chủ account. Commit của
   # người khác không "fail" - deployment vào thẳng trạng thái BLOCKED, bỏ qua
