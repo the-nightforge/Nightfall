@@ -12,6 +12,7 @@ import {
   encodeObservation,
   observationFeatureNames,
   observationSize,
+  optimalActionMask,
   splitOf,
   validateTrajectoryLine,
   type BotTrajectory,
@@ -102,6 +103,7 @@ async function main(): Promise<void> {
     splits: createWriteStream(join(outDir, "splits.u8.bin")),
     roles: createWriteStream(join(outDir, "roles.u8.bin")),
     decisions: createWriteStream(join(outDir, "decisions.u8.bin")),
+    optimal: createWriteStream(join(outDir, "optimal.u8.bin")),
   };
 
   let read = 0;
@@ -156,6 +158,8 @@ async function main(): Promise<void> {
     streams.splits.write(Buffer.from(Uint8Array.of(SPLIT_CODE[split])));
     streams.roles.write(Buffer.from(Uint8Array.of(roleIndex.get(line.finalRole) ?? 255)));
     streams.decisions.write(Buffer.from(Uint8Array.of(decisionIndex.get(line.decision) ?? 255)));
+    const optimal = optimalActionMask(line, encoded, options.maxSeats);
+    streams.optimal.write(Buffer.from(Uint8Array.from(optimal, (ok) => (ok ? 1 : 0))));
   }
 
   await Promise.all(

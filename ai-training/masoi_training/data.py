@@ -29,6 +29,9 @@ class Dataset:
     roles: np.ndarray  # (N,) uint8, chỉ số trong meta["roles"]
     decisions: np.ndarray  # (N,) uint8, chỉ số trong meta["decisions"] (VOTE/NIGHT/HUNTER_SHOT)
     meta: dict
+    # Tập hành động hoà đỉnh trong thang điểm teacher (`optimalActionMask` của TS).
+    # `None` với dataset encode bằng bản cũ — không có file thì không bịa mask.
+    optimal: np.ndarray | None = None  # (N, action_size) bool
 
     @property
     def obs_size(self) -> int:
@@ -51,6 +54,7 @@ class Dataset:
             roles=self.roles[keep],
             decisions=self.decisions[keep],
             meta=self.meta,
+            optimal=self.optimal[keep] if self.optimal is not None else None,
         )
 
     def __len__(self) -> int:
@@ -72,6 +76,10 @@ def load(directory: str | Path) -> Dataset:
     roles = np.fromfile(root / "roles.u8.bin", dtype=np.uint8)
     decisions = np.fromfile(root / "decisions.u8.bin", dtype=np.uint8)
 
+    # Optional: chỉ có ở dataset encode sau khi `optimalActionMask` ra đời.
+    optimal_path = root / "optimal.u8.bin"
+    optimal = np.fromfile(optimal_path, dtype=np.uint8) if optimal_path.exists() else None
+
     # Kiểm kích thước trước khi reshape: một file cụt sẽ reshape ra ma trận lệch
     # hàng và train im lặng trên dữ liệu sai lệch một dòng.
     expected = {
@@ -83,6 +91,8 @@ def load(directory: str | Path) -> Dataset:
         "roles": (roles.size, rows),
         "decisions": (decisions.size, rows),
     }
+    if optimal is not None:
+        expected["optimal"] = (optimal.size, rows * action_size)
     for name, (got, want) in expected.items():
         if got != want:
             raise ValueError(f"{name}: {got} phần tử, chờ {want} — dataset không khớp meta.json")
@@ -96,6 +106,7 @@ def load(directory: str | Path) -> Dataset:
         roles=roles,
         decisions=decisions,
         meta=meta,
+        optimal=optimal.reshape(rows, action_size).astype(bool) if optimal is not None else None,
     )
 
 
