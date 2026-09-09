@@ -121,7 +121,7 @@ export function werewolfStrategy(
   return {
     role,
 
-    decideNight(context, state, rng, probe): BotNightIntention | null {
+    decideNight(context, state, rng, probe, policy): BotNightIntention | null {
       const night = context.knowledge.night;
       if (!night || !night.legalActions.includes("KILL")) {
         probe?.fallback("không có lượt cắn nào đang mở");
@@ -151,6 +151,8 @@ export function werewolfStrategy(
         weights,
         rng,
         probe,
+        action: "KILL",
+        policy,
         termsFor: (targetId) => [
           { name: "threat", value: threatByTarget.get(targetId)!.score },
         ],

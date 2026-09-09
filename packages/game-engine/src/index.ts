@@ -71,3 +71,4 @@ export * from "./bot/learning/speech-dataset";
 export * from "./bot/learning/mlp";
 export * from "./bot/learning/live-observation";
 export * from "./bot/policy/learned-policy";
+export * from "./bot/policy/residual-policy";

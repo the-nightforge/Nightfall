@@ -2,6 +2,7 @@ import { isRole, isWolfPack, type Role } from "@masoi/shared";
 import { createSeededRng } from "../rng";
 import type { BotTrajectory, ObservationInput } from "../evaluation/trajectory";
 import {
+  ACTION_KINDS,
   DAY_ACTION_KIND,
   DEFAULT_MAX_SEATS,
   NO_TARGET_ACTION,
@@ -508,23 +509,78 @@ export function optimalActionMask(
   const mask = new Array<boolean>(actionSize(maxSeats)).fill(false);
   if (encoded.actionIndex === null) return mask;
   mask[encoded.actionIndex] = true;
-  const target = line.selectedAction.targetId;
-  if (target === null || line.candidates.length === 0) return mask;
-  const kind = line.decision === "NIGHT" ? (line.selectedAction.kind ?? "SKIP") : DAY_ACTION_KIND;
+  if (line.selectedAction.targetId === null) return mask;
+  const scored = scoredSlots(line, encoded, maxSeats);
   let best = Number.NEGATIVE_INFINITY;
-  const scores = new Map<string, number>();
+  for (const score of scored.values()) if (score > best) best = score;
+  for (const [index, score] of scored) if (score === best) mask[index] = true;
+  return mask;
+}
+
+/**
+ * Điểm teacher (BỎ jitter) của từng ứng viên, đặt vào đúng ô hành động của nó;
+ * `NaN` ở mọi ô khác — kể cả ô đã chọn khi không có bảng ứng viên, vì một
+ * điểm bịa ra là một nhãn dạy model xếp hạng sai.
+ *
+ * Đây là nhãn cho distillation: 80% nước bản sao lệch teacher là "teacher ở
+ * hạng 2 của model" — nó có đúng tập ứng viên nhưng sai thứ tự giữa hai người
+ * đứng đầu, và nhãn one-hot argmax không nói gì về thứ tự đó. Điểm thì có.
+ */
+export function candidateScores(
+  line: BotTrajectory,
+  encoded: EncodedObservation,
+  maxSeats: number = DEFAULT_MAX_SEATS,
+): number[] {
+  const scores = new Array<number>(actionSize(maxSeats)).fill(Number.NaN);
+  for (const [index, score] of scoredSlots(line, encoded, maxSeats)) scores[index] = score;
+  return scores;
+}
+
+/**
+ * Điểm THẬT (GIỮ jitter) theo ô hành động — điểm nền mà residual policy đã
+ * cộng `β·net` vào (spec 2026-09-09-residual-policy D1/D5). Khác
+ * `candidateScores` đúng ở term jitter: Python dựng lại phân phối của policy
+ * đã đi từ đây, nên nó phải là đúng con số policy đã thấy, không phải bản
+ * "sạch" cho distillation.
+ */
+export function candidateBases(
+  line: BotTrajectory,
+  encoded: EncodedObservation,
+  maxSeats: number = DEFAULT_MAX_SEATS,
+): number[] {
+  const bases = new Array<number>(actionSize(maxSeats)).fill(Number.NaN);
+  for (const [index, score] of scoredSlots(line, encoded, maxSeats, true)) bases[index] = score;
+  return bases;
+}
+
+/**
+ * Ánh xạ bảng ứng viên → (ô hành động, điểm bỏ jitter). Chỉ giữ ô ĐANG BẬT
+ * trong mask của chính observation: một ứng viên trỏ vào ô mask tắt là một
+ * mẫu dạy model chọn nước bất hợp lệ.
+ *
+ * Bảng ứng viên của NIGHT là của loại hành động đã chọn (probe ghi trong lúc
+ * strategy chấm mục tiêu cho đúng loại đó), nên mọi ứng viên ánh xạ vào cùng
+ * một loại.
+ */
+function scoredSlots(
+  line: BotTrajectory,
+  encoded: EncodedObservation,
+  maxSeats: number,
+  keepJitter = false,
+): Map<number, number> {
+  const out = new Map<number, number>();
+  if (line.candidates.length === 0) return out;
+  const kind = line.decision === "NIGHT" ? (line.selectedAction.kind ?? "SKIP") : DAY_ACTION_KIND;
+  if (!ACTION_KINDS.includes(kind)) return out;
   for (const candidate of line.candidates) {
     let score = candidate.score;
-    for (const term of candidate.terms) if (term.name === "jitter") score -= term.value;
-    scores.set(candidate.targetId, score);
-    if (score > best) best = score;
-  }
-  for (const [id, score] of scores) {
-    if (score !== best) continue;
-    const seat = encoded.seats.indexOf(id);
+    if (!keepJitter) {
+      for (const term of candidate.terms) if (term.name === "jitter") score -= term.value;
+    }
+    const seat = encoded.seats.indexOf(candidate.targetId);
     if (seat < 0 || seat >= maxSeats) continue;
     const index = actionIndexOf(kind, seat, maxSeats);
-    if (encoded.mask[index]) mask[index] = true;
+    if (encoded.mask[index]) out.set(index, score);
   }
-  return mask;
+  return out;
 }

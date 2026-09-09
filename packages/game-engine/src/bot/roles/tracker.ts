@@ -23,7 +23,7 @@ export function trackerStrategy(
   return {
     role: "TRACKER",
 
-    decideNight(context, state, rng, probe) {
+    decideNight(context, state, rng, probe, policy) {
       const night = context.knowledge.night;
       if (!night || !night.legalActions.includes("TRACK")) {
         probe?.fallback("không có lượt theo dõi nào đang mở");
@@ -39,6 +39,8 @@ export function trackerStrategy(
       const ranked = rankNightTargets(candidates, {
         weights,
         probe,
+        action: "TRACK",
+        policy,
         termsFor: (targetId) => [
           { name: "suspicion", value: state.suspicion[targetId]?.score ?? 0 },
           { name: "incomingHostility", value: incomingHostilityOf(state, targetId) },

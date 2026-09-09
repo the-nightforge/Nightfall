@@ -50,6 +50,17 @@ def main() -> None:
     n_logits, n_value = np_forward(w, x.astype(np.float64))
     assert np.allclose(n_logits, t_logits.numpy(), atol=1e-5), "logits lệch"
     assert np.allclose(n_value, t_value.numpy(), atol=1e-5), "value lệch"
+
+    # Residual: `residual.beta` đi kèm payload khi được cấp, và KHÔNG xuất hiện
+    # ở model thường — engine đọc trường này để chọn đường residual.
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "res.weights.json"
+        export_weights_json(
+            model, meta, path, model_id="r", training_seed=1, hidden=hidden, residual={"beta": 10.0}
+        )
+        r = json.loads(path.read_text(encoding="utf8"))
+    assert r["residual"] == {"beta": 10.0}, r.get("residual")
+    assert "residual" not in w, "model thường không được mang residual"
     print("ok")
 
 

@@ -14,6 +14,8 @@ import {
   observationSize,
 } from "../src/bot/learning/observation";
 import {
+  candidateBases,
+  candidateScores,
   optimalActionMask,
   splitOf,
   splitTrajectories,
@@ -423,5 +425,44 @@ describe("dataset stats + split (§15, §42, §43)", () => {
     const optNone = optimalActionMask(none, encNone);
     expect(optNone.filter(Boolean)).toHaveLength(1);
     expect(optNone[encNone.actionIndex!]).toBe(true);
+  });
+
+  it("candidateScores: điểm teacher BỎ jitter ở đúng ô của từng ứng viên, NaN ở mọi ô khác", () => {
+    const scored = line({
+      candidates: [
+        { targetId: "p1", score: 50, terms: [{ name: "belief", value: 40 }, { name: "jitter", value: 10 }], evidenceIds: [] },
+        { targetId: "p3", score: 33, terms: [{ name: "belief", value: 33 }, { name: "jitter", value: 0 }], evidenceIds: [] },
+      ],
+    });
+    const enc = encodeObservation(scored);
+    const scores = candidateScores(scored, enc);
+    expect(scores).toHaveLength(actionSize());
+    // seats = [p2, p3, p1]: p3 ghế 1 → 33, p1 ghế 2 → 40 (bỏ jitter 10).
+    expect(scores[actionIndexOf("CHOOSE", 1)]).toBe(33);
+    expect(scores[actionIndexOf("CHOOSE", 2)]).toBe(40);
+    expect(scores.filter((v) => !Number.isNaN(v))).toHaveLength(2);
+    // Ô "không treo ai" hợp lệ nhưng không phải ứng viên → NaN, không phải 0.
+    expect(Number.isNaN(scores[actionIndexOf("CHOOSE", DEFAULT_MAX_SEATS)])).toBe(true);
+
+    // Không có bảng ứng viên → toàn NaN, kể cả ô đã chọn: không bịa điểm.
+    const bare = line({ candidates: [] });
+    expect(candidateScores(bare, encodeObservation(bare)).every((v) => Number.isNaN(v))).toBe(true);
+  });
+
+  it("candidateBases: điểm THẬT (giữ jitter) ở cùng ô — điểm nền của residual", () => {
+    const scored = line({
+      candidates: [
+        { targetId: "p1", score: 50, terms: [{ name: "belief", value: 40 }, { name: "jitter", value: 10 }], evidenceIds: [] },
+        { targetId: "p3", score: 33, terms: [{ name: "belief", value: 33 }, { name: "jitter", value: 0 }], evidenceIds: [] },
+      ],
+    });
+    const enc = encodeObservation(scored);
+    const bases = candidateBases(scored, enc);
+    const scores = candidateScores(scored, enc);
+    expect(bases[actionIndexOf("CHOOSE", 1)]).toBe(33);
+    expect(bases[actionIndexOf("CHOOSE", 2)]).toBe(50);
+    expect(scores[actionIndexOf("CHOOSE", 2)]).toBe(40);
+    expect(bases.filter((v) => !Number.isNaN(v))).toHaveLength(2);
+    expect(bases.map((v) => Number.isNaN(v))).toEqual(scores.map((v) => Number.isNaN(v)));
   });
 });

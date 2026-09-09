@@ -13,6 +13,12 @@ Vì sao `logProb` cũ đến từ TypeScript: nó phải là log-xác suất c�
 nước đó, đo trên ĐÚNG vector nó đã thấy. Tính lại ở đây từ trọng số init sẽ ra
 một con số gần đúng — và `ratio` của PPO là một tỉ số, nên "gần đúng" ở mẫu số
 biến clip thành một phép cắt vào chỗ không ai kiểm được.
+
+RESIDUAL (spec 2026-09-09-residual-policy D6): khi `meta.policyKind == "residual"`,
+policy là `softmax((bases + β·net(obs)) / τ)` trên tập ứng viên (`~isnan(bases)`),
+với `bases` là điểm THẬT (có jitter) mà TypeScript đã ghi. Cùng `bases` cho cả
+policy cũ và mới nên jitter triệt tiêu trong ratio; gradient chỉ đi qua `net`.
+β đọc từ meta và PHẢI bằng `residual.beta` của init; τ từ meta.
 """
 
 from __future__ import annotations
@@ -32,7 +38,7 @@ from .export import export_weights_json
 from .model import PolicyValueNet, masked_logits
 
 
-def load_init(path: Path, obs: int, act: int) -> tuple[PolicyValueNet, int]:
+def load_init(path: Path, obs: int, act: int) -> tuple[PolicyValueNet, int, dict | None]:
     """Nạp champion từ chính file JSON mà TypeScript đã chơi bằng nó.
 
     Đọc file JSON chứ không đọc `model.pt`: file JSON là thứ engine nạp, nên nó
@@ -57,7 +63,7 @@ def load_init(path: Path, obs: int, act: int) -> tuple[PolicyValueNet, int]:
         if w.get("valueHead"):
             m.value_head[0].weight.copy_(torch.tensor(w["valueHead"]["w"]))
             m.value_head[0].bias.copy_(torch.tensor(w["valueHead"]["b"]))
-    return m, hidden
+    return m, hidden, w.get("residual")
 
 
 BASELINES = ("role", "mean", "value")
@@ -114,7 +120,7 @@ def main() -> None:
     assert d.logprobs is not None and d.values is not None, (
         "dataset không phải rollout (thiếu logprobs/values) — encode với --rollout"
     )
-    model, hidden = load_init(Path(a.init), d.obs_size, d.action_size)
+    model, hidden, init_residual = load_init(Path(a.init), d.obs_size, d.action_size)
     init_state = copy.deepcopy(model.state_dict())
     opt = torch.optim.Adam(model.parameters(), lr=a.lr)
 
@@ -123,6 +129,34 @@ def main() -> None:
     A = torch.from_numpy(d.actions)
     R = torch.from_numpy(d.rewards)
     OLD = torch.from_numpy(d.logprobs.astype(np.float32))
+
+    # Residual: phân phối trên (bases + β·net)/τ, mask = tập ứng viên. Init và
+    # rollout phải CÙNG loại và CÙNG β — hai policy khác nhau chung một ratio
+    # là học sai trong im lặng, nên dừng ngay ở đây.
+    residual = d.meta.get("policyKind") == "residual"
+    beta = tau = None
+    if residual:
+        assert d.bases is not None, "meta nói residual nhưng thiếu bases.f32.bin"
+        beta = float(d.meta["beta"])
+        tau = float(d.meta["temperature"])
+        assert tau > 0, "rollout residual phải có temperature > 0"
+        assert init_residual is not None and abs(float(init_residual["beta"]) - beta) < 1e-9, (
+            f"β của init ({init_residual}) khác β của rollout ({beta})"
+        )
+        BASES = torch.from_numpy(np.nan_to_num(d.bases, nan=0.0).astype(np.float32))
+        CAND = torch.from_numpy(~np.isnan(d.bases))
+        assert bool(CAND[torch.arange(len(d)), A].all()), (
+            "có hàng mà hành động đã đi không nằm trong bảng ứng viên — tập không nhất quán"
+        )
+    else:
+        assert init_residual is None, "init là residual nhưng rollout không phải — hai policy khác nhau"
+
+    def policy_logp(logits: torch.Tensor, idx: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """(log-softmax toàn hàng, mask đang dùng) của policy trên batch `idx`."""
+        if residual:
+            adj = (BASES[idx] + beta * logits) / tau
+            return torch.log_softmax(masked_logits(adj, CAND[idx]), dim=1), CAND[idx]
+        return torch.log_softmax(masked_logits(logits, M[idx]), dim=1), M[idx]
 
     base = baseline_for(a.baseline, d, R)
     # Baseline chỉ đáng dùng khi nó dự đoán `R` TỐT HƠN một hằng số. Ghi cả hai
@@ -148,7 +182,7 @@ def main() -> None:
         for s in range(0, len(d), a.batch_size):
             idx = order[s : s + a.batch_size]
             logits, value = model(X[idx])
-            logp_all = torch.log_softmax(masked_logits(logits, M[idx]), dim=1)
+            logp_all, used = policy_logp(logits, idx)
             logp = logp_all.gather(1, A[idx].unsqueeze(1)).squeeze(1)
             ratio = torch.exp(logp - OLD[idx])
             unclipped = ratio * adv[idx]
@@ -158,7 +192,7 @@ def main() -> None:
             probs = logp_all.exp()
             # Chỉ cộng entropy của các ô ĐANG BẬT: ô bị che có logp = log(0) và
             # tích `0 * -inf` là NaN, thứ sẽ lan ra toàn bộ gradient.
-            entropy = -(probs * logp_all.masked_fill(~M[idx], 0.0)).sum(1).mean()
+            entropy = -(probs * logp_all.masked_fill(~used, 0.0)).sum(1).mean()
             loss = policy_loss + a.value_coef * value_loss - a.entropy * entropy
             opt.zero_grad()
             loss.backward()
@@ -187,11 +221,12 @@ def main() -> None:
     # Độ trôi so với init: bao nhiêu % argmax còn giống champion (mỏ neo, xem R1).
     model.eval()
     with torch.no_grad():
-        new = masked_logits(model(X)[0], M).argmax(1)
+        everything = torch.arange(len(d))
+        new = policy_logp(model(X)[0], everything)[0].argmax(1)
         ref = PolicyValueNet(d.obs_size, d.action_size, hidden)
         ref.load_state_dict(init_state)
         ref.eval()
-        old = masked_logits(ref(X)[0], M).argmax(1)
+        old = policy_logp(ref(X)[0], everything)[0].argmax(1)
         agree_init = float((new == old).float().mean())
 
     out = Path(a.out)
@@ -199,7 +234,7 @@ def main() -> None:
     torch.save(model.state_dict(), out / "model.pt")
     export_weights_json(
         model, d.meta, out / "model.weights.json",
-        model_id=a.model_id, training_seed=a.seed, hidden=hidden,
+        model_id=a.model_id, training_seed=a.seed, hidden=hidden, residual=init_residual,
     )
     try:
         commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
@@ -220,6 +255,9 @@ def main() -> None:
                 # `baselineMse` > `constantMse` nghĩa là baseline đang LÀM HẠI.
                 "baselineMse": round(baseline_mse, 4),
                 "constantMse": round(constant_mse, 4),
+                "policyKind": "residual" if residual else "logits",
+                "beta": beta,
+                "temperature": d.meta.get("temperature"),
             },
             indent=2,
         ),

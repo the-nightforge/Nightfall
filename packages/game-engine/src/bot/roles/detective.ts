@@ -19,7 +19,7 @@ export function detectiveStrategy(
   return {
     role: "DETECTIVE",
 
-    decideNight(context, state, rng, probe) {
+    decideNight(context, state, rng, probe, policy) {
       const night = context.knowledge.night;
       if (!night || !night.legalActions.includes("DETECTIVE_CHECK")) {
         probe?.fallback("không có lượt điều tra nào đang mở");
@@ -40,6 +40,8 @@ export function detectiveStrategy(
         weights,
         rng,
         probe,
+        action: "DETECTIVE_CHECK",
+        policy,
         termsFor: (targetId) => [
           {
             name: "informationValue",

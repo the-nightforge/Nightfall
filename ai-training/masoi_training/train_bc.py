@@ -106,6 +106,16 @@ def main() -> None:
     # đoán được kết cục (MAE ≈ 1.0, tức đoán 0), nên trọng số dương chỉ lấy
     # sức chứa của policy head mà không đổi lại gì. Bật lên khi tới RL.
     parser.add_argument("--value-weight", type=float, default=0.0)
+    # Distillation theo ĐIỂM của teacher (`scores.f32.bin`): loss =
+    # (1−α)·CE(nước đã chọn) + α·CE-mềm(softmax(điểm/τ)). Vì sao: 80% nước bản
+    # sao lệch teacher là "teacher ở hạng 2 của model" — nó có đúng tập ứng viên
+    # nhưng sai thứ tự giữa hai người đứng đầu, và nhãn one-hot không nói gì về
+    # thứ tự đó. Điểm thì có. Mặc định 0 = hành vi cũ, byte một.
+    parser.add_argument("--distill-alpha", type=float, default=0.0)
+    # τ theo thang điểm teacher: gap top-1/top-2 ở VOTE median ≈ 2,7, p75 ≈ 6,
+    # p90 ≈ 9; τ = 3 cho gap 3 → tỉ lệ ~2,7:1, gap 9 → ~20:1. Lượt đêm hoà đỉnh
+    # nhiều (median gap 0) → target tự chia đều giữa các ô hoà, đúng ý tie-aware.
+    parser.add_argument("--distill-tau", type=float, default=3.0)
     parser.add_argument("--seed", type=int, default=12345)
     parser.add_argument("--model-id", default="policy-v001")
     args = parser.parse_args()
@@ -130,6 +140,27 @@ def main() -> None:
     actions = torch.from_numpy(train.actions).to(device)
     rewards = torch.from_numpy(train.rewards).to(device)
 
+    # Phân phối mục tiêu của teacher, tính MỘT lần: softmax(điểm/τ) trên các ô
+    # ứng viên, 0 ở mọi ô khác. Chỉ áp cho hàng có ≥ 2 ứng viên VÀ nước đã chọn
+    # là một ứng viên: khi teacher bỏ phiếu trắng / giữ thuốc, bảng ứng viên vẫn
+    # có điểm nhưng nước thật là "không ai" — hai nhãn mâu thuẫn, và CE giữ nhãn
+    # thật.
+    teacher_q = None
+    distill_rows = None
+    if args.distill_alpha > 0:
+        if train.scores is None:
+            raise SystemExit("--distill-alpha cần scores.f32.bin — encode lại bằng bản mới")
+        raw = torch.from_numpy(train.scores).to(device)
+        has = ~torch.isnan(raw)
+        teacher_logits = torch.where(has, torch.nan_to_num(raw) / args.distill_tau, torch.full_like(raw, -1e9))
+        teacher_q = torch.softmax(teacher_logits, dim=1)
+        chosen_is_candidate = has.gather(1, actions.unsqueeze(1)).squeeze(1)
+        distill_rows = (has.sum(dim=1) >= 2) & chosen_is_candidate
+        print(
+            f"distill α={args.distill_alpha} τ={args.distill_tau}: "
+            f"{int(distill_rows.sum())}/{len(train)} hàng có target mềm"
+        )
+
     history = []
     # Giữ trọng số của epoch có val agreement cao nhất, không phải epoch cuối:
     # với tập nhỏ, đường cong còn nhiễu và epoch cuối không phải epoch tốt nhất.
@@ -143,9 +174,23 @@ def main() -> None:
         for index in batches(len(train), args.batch_size, generator):
             index = index.to(device)
             logits, value = model(features[index])
-            policy_loss = nn.functional.cross_entropy(
-                masked_logits(logits, masks[index]), actions[index]
-            )
+            masked = masked_logits(logits, masks[index])
+            if teacher_q is None:
+                policy_loss = nn.functional.cross_entropy(masked, actions[index])
+            else:
+                # Trộn THEO TỪNG HÀNG, không theo batch: hàng không có target
+                # mềm (teacher bỏ phiếu trắng / giữ thuốc) phải giữ nguyên CE,
+                # nếu không thì với α = 1 model không bao giờ học "không treo
+                # ai" — đã xảy ra: tie-aware rơi từ 0,946 xuống 0,893.
+                logp = torch.log_softmax(masked, dim=1)
+                hard = -logp.gather(1, actions[index].unsqueeze(1)).squeeze(1)
+                soft = -(teacher_q[index] * logp).sum(dim=1)
+                alpha = torch.where(
+                    distill_rows[index],
+                    torch.full_like(hard, args.distill_alpha),
+                    torch.zeros_like(hard),
+                )
+                policy_loss = ((1 - alpha) * hard + alpha * soft).mean()
             value_loss = nn.functional.mse_loss(value, rewards[index])
             loss = policy_loss + args.value_weight * value_loss
 
@@ -159,7 +204,11 @@ def main() -> None:
         row = {"epoch": epoch, "trainLoss": round(total / max(seen, 1), 4)}
         row.update({f"val_{k}": v for k, v in evaluate(model, validation, device).items()})
         history.append(row)
-        agreement = row.get("val_agreement")
+        # Chọn theo tie-aware khi có: `agreement` cũ chấm oan nước hoà điểm, và
+        # chọn epoch theo nó là chọn epoch đoán trúng cách phá hoà bằng id thô.
+        agreement = row.get("val_agreementTieAware")
+        if agreement is None:
+            agreement = row.get("val_agreement")
         if agreement is not None and agreement > best_agreement:
             best_agreement = agreement
             best_epoch = epoch
@@ -167,6 +216,7 @@ def main() -> None:
         print(
             f"epoch {epoch:>3}  loss {row['trainLoss']:.4f}"
             f"  val agreement {row.get('val_agreement', float('nan'))}"
+            f"  tie-aware {row.get('val_agreementTieAware')}"
         )
 
     if best_epoch > 0:
@@ -215,6 +265,8 @@ def main() -> None:
             "lr": args.lr,
             "hidden": args.hidden,
             "valueWeight": args.value_weight,
+            "distillAlpha": args.distill_alpha,
+            "distillTau": args.distill_tau,
         },
         "obsSize": full.obs_size,
         "actionSize": full.action_size,
