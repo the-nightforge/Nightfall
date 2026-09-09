@@ -1,4 +1,5 @@
 import { PHASES, ROLE_META, ROLES, isRole, type Role, type Team } from "@masoi/shared";
+import { NIGHT_ACTION_KINDS } from "../types";
 import { MAX_ROUNDS } from "../evaluation/selfplay";
 import type { BotTrajectory } from "../evaluation/trajectory";
 
@@ -65,6 +66,9 @@ const SEAT_FEATURE_NAMES = [
   "seerSeenWolf",
   "seerSeenClean",
   "legalTarget",
+  // Hợp lệ cho TỪNG loại hành động đêm. `legalTarget` ở trên là hợp của chúng,
+  // và cái hợp đó không phân biệt được "cứu người này" với "giết người này".
+  ...NIGHT_ACTION_KINDS.map((kind) => `nightLegal:${kind}` as const),
 ] as const;
 
 /** Phe của từng vai, tra sẵn một lần thay vì đọc `ROLE_META` trong vòng lặp. */
@@ -121,6 +125,9 @@ function globalFeatureNames(): string[] {
     "personality:loyalty",
     "personality:stubbornness",
     "noEliminationLegal",
+    // Loại hành động đêm nào ĐANG mở. Vai đã có trong vector, nhưng vai không
+    // đủ: Phù Thuỷ có hai hành động đêm với hai mục tiêu ngược nhau.
+    ...NIGHT_ACTION_KINDS.map((kind) => `nightKindOpen:${kind}`),
   ];
 }
 
@@ -223,6 +230,14 @@ export function encodeObservation(
   );
   features.push(legal.has(NO_TARGET_ACTION) ? 1 : 0);
 
+  const nightTargets = line.observation.nightLegalTargets ?? {};
+  const nightLegalBy = new Map<string, Set<string>>(
+    NIGHT_ACTION_KINDS.map((kind) => [kind, new Set(nightTargets[kind] ?? [])]),
+  );
+  for (const kind of NIGHT_ACTION_KINDS) {
+    features.push((nightLegalBy.get(kind)?.size ?? 0) > 0 ? 1 : 0);
+  }
+
   for (let seat = 0; seat < maxSeats; seat += 1) {
     const id = seats[seat];
     if (id === undefined) {
@@ -244,6 +259,9 @@ export function encodeObservation(
       seer !== null && seer.targetId === id && !seer.isWolf ? 1 : 0,
       legal.has(id) ? 1 : 0,
     );
+    for (const kind of NIGHT_ACTION_KINDS) {
+      features.push(nightLegalBy.get(kind)?.has(id) ? 1 : 0);
+    }
   }
 
   const mask: boolean[] = [];

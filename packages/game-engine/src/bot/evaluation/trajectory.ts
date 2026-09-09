@@ -42,6 +42,15 @@ export interface BotTrajectory {
     seerResult: { targetId: string; isWolf: boolean } | null;
     belief: { playerId: string; suspicion: number; trust: number }[];
     personality: BotDecisionTrace["personality"];
+    /**
+     * Mục tiêu hợp lệ TÁCH THEO từng loại hành động đêm; `null` ngoài lượt đêm.
+     *
+     * `legalActions` ở trên là HỢP của các tập này, và cái hợp đó xoá mất thứ
+     * quyết định nước đi: một Phù Thuỷ thấy tập Cứu và tập Độc trộn làm một sẽ
+     * được hỏi "chọn ai" mà không biết mình đang cứu hay đang giết — hai mục
+     * tiêu ngược nhau dưới cùng một nhãn.
+     */
+    nightLegalTargets: Record<string, string[]> | null;
   };
   legalActions: string[];
   candidates: BotDecisionTrace["candidates"];
@@ -63,6 +72,16 @@ export interface BotTrajectory {
  * Đêm gộp mục tiêu của MỌI loại hành động bot có: nó chọn cả loại lẫn mục tiêu
  * trong một lượt, nên hợp của các tập chính là tập nó được chọn.
  */
+/** Sao chép sâu, để trajectory không giữ tham chiếu sống vào snapshot của trace. */
+function copyNightLegalTargets(
+  targets: Record<string, string[]> | null | undefined,
+): Record<string, string[]> | null {
+  if (!targets) return null;
+  const copy: Record<string, string[]> = {};
+  for (const [kind, list] of Object.entries(targets)) copy[kind] = [...list].sort();
+  return copy;
+}
+
 function legalActionsFor(trace: BotDecisionTrace): string[] {
   const snapshot = trace.knowledgeSnapshot;
   if (trace.decision === "NIGHT") {
@@ -127,6 +146,7 @@ export function gameToTrajectories(game: SelfPlayGame): BotTrajectory[] {
           : null,
         belief,
         personality: { ...trace.personality },
+        nightLegalTargets: copyNightLegalTargets(trace.knowledgeSnapshot.nightLegalTargets),
       },
       legalActions,
       candidates: trace.candidates.map((candidate) => ({ ...candidate })),

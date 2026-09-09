@@ -35,6 +35,7 @@ const BALANCED: BotPersonality = {
 function context(suspicion: Record<string, number>): StrategyContext {
   const state = {
     playerId: "me",
+    nightLegalTargets: null,
     personality: BALANCED,
     suspicion: Object.fromEntries(
       Object.entries(suspicion).map(([id, score]) => [
@@ -73,7 +74,8 @@ function trajectoryLine(
       belief: [
         { playerId: targetId, suspicion: targetSuspicion, trust: 0 },
       ],
-      personality: BALANCED,
+      nightLegalTargets: null,
+    personality: BALANCED,
     },
     legalActions: [targetId],
     candidates: [{ targetId, score: 0, terms: [], evidenceIds: [] }],

@@ -43,6 +43,10 @@ const OBSERVATION_KEYS = new Set([
   "seerResult",
   "belief",
   "personality",
+  // Mục tiêu hợp lệ tách theo loại hành động đêm. Đây là thứ engine ĐÃ cấp cho
+  // đúng bot đó qua `night.legalTargets` — cùng nguồn với `legalActions`, chỉ
+  // là chưa bị gộp mất loại, nên nó không mở thêm quyền nhìn nào.
+  "nightLegalTargets",
 ]);
 
 /** Chỉ hai vai này có `seerResult` — xem case `SEE` trong engine. */

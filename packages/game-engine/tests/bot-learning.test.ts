@@ -45,6 +45,7 @@ function line(overrides: Partial<BotTrajectory> = {}): BotTrajectory {
         { playerId: "p2", suspicion: 0, trust: 20 },
         { playerId: "p3", suspicion: 10, trust: 0 },
       ],
+      nightLegalTargets: null,
       personality: {
         aggressiveness: 0.5,
         talkativeness: 0.4,
@@ -75,6 +76,42 @@ describe("observation encoder (§8-§11)", () => {
     expect(encoded.features).toHaveLength(observationSize());
     expect(observationFeatureNames()).toHaveLength(observationSize());
     expect(encoded.mask).toHaveLength(actionSize());
+  });
+
+  it("tách mục tiêu đêm theo từng loại hành động", () => {
+    // Phù Thuỷ ban đêm: Cứu p1, Độc p3. Hợp của hai tập không phân biệt được
+    // hai ý định ngược nhau, nên cờ theo loại phải khác nhau theo ghế.
+    const witch = line({
+      finalRole: "WITCH" as Role,
+      phase: "NIGHT",
+      decision: "NIGHT",
+      legalActions: ["p1", "p3"],
+      observation: {
+        ...line().observation,
+        nightLegalTargets: { HEAL: ["p1"], POISON: ["p3"] },
+      },
+    });
+
+    const names = observationFeatureNames();
+    const { features, seats } = encodeObservation(witch);
+    const at = (name: string): number => features[names.indexOf(name)]!;
+
+    expect(at("nightKindOpen:HEAL")).toBe(1);
+    expect(at("nightKindOpen:POISON")).toBe(1);
+    expect(at("nightKindOpen:KILL")).toBe(0);
+
+    const healSeat = seats.indexOf("p1");
+    const poisonSeat = seats.indexOf("p3");
+    expect(at(`seat${healSeat}:nightLegal:HEAL`)).toBe(1);
+    expect(at(`seat${healSeat}:nightLegal:POISON`)).toBe(0);
+    expect(at(`seat${poisonSeat}:nightLegal:POISON`)).toBe(1);
+    expect(at(`seat${poisonSeat}:nightLegal:HEAL`)).toBe(0);
+
+    // Ngoài lượt đêm mọi cờ phải tắt, không được rò trạng thái đêm sang ban ngày.
+    const day = encodeObservation(line());
+    for (const kind of ["HEAL", "POISON", "KILL"]) {
+      expect(day.features[names.indexOf(`nightKindOpen:${kind}`)]).toBe(0);
+    }
   });
 
   it("tất định: cùng line → cùng vector", () => {

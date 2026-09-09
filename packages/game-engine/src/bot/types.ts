@@ -361,17 +361,27 @@ export interface SocialEdge {
 }
 
 /** Hành động đêm engine chấp nhận, đúng bằng union của `submitNightAction`. */
-export type NightActionKind =
-  | "KILL"
-  | "SEE"
-  | "GUARD"
-  | "HEAL"
-  | "POISON"
-  | "SKIP"
-  | "DETECTIVE_CHECK"
-  | "SORCERER_CHECK"
-  | "SERIAL_KILL"
-  | "TRACK";
+/**
+ * Mọi loại hành động đêm, ở dạng MẢNG chạy được.
+ *
+ * Tầng học cần lặp qua chúng để dựng đặc trưng; một mảng chép tay ở đó sẽ trôi
+ * lệch khỏi type ngay lần thêm vai kế tiếp. Type được DẪN XUẤT từ mảng này, nên
+ * hai thứ không thể lệch nhau.
+ */
+export const NIGHT_ACTION_KINDS = [
+  "KILL",
+  "SEE",
+  "GUARD",
+  "HEAL",
+  "POISON",
+  "SKIP",
+  "DETECTIVE_CHECK",
+  "SORCERER_CHECK",
+  "SERIAL_KILL",
+  "TRACK",
+] as const;
+
+export type NightActionKind = (typeof NIGHT_ACTION_KINDS)[number];
 
 /**
  * Thông tin ban đêm của ĐÚNG một vai.
