@@ -119,6 +119,10 @@ export const HUMAN_ACCUSATIONS: readonly HumanChatSample[] = [
   accuse("Bình láo"),
   accuse("Bình sói, Chi dân"),
   accuse("Bình im suốt, nghi Bình"),
+  // Phủ định một nhãn TỐT là một lời buộc tội. Trước đây cả hai nằm trong
+  // `HUMAN_TRAPS` - xem chú thích ở đó về vì sao chúng chuyển sang đây.
+  accuse("Bình đếch phải dân"),
+  accuse("Bình éo sạch"),
   // Những câu dưới đây parser CHƯA hiểu; giữ lại để con số nói thật.
   accuse("Bình với Chi cùng phe sói"),
   accuse("Bình mà tt gì, sói thì có"),
@@ -154,9 +158,17 @@ export const HUMAN_DEFENCES: readonly HumanChatSample[] = [
   defend("Bình là dân"),
   defend("Binh la dan"),
   defend("tôi nghĩ Bình vô tội"),
-  // Chưa hiểu.
+  // Phủ định một nhãn XẤU là một lời bênh vực. Năm câu dưới trước đây nằm
+  // trong `HUMAN_TRAPS` - xem chú thích ở đó.
   defend("Bình ko sói đâu"),
   defend("Bình không phải sói"),
+  defend("Bình ko sói"),
+  defend("Bình hem sói đâu"),
+  defend("Bình chả phải sói"),
+  defend("Bình không thể là sói"),
+  defend("Bình ko thể là sói đâu"),
+  // Chưa hiểu: so sánh hai người, không phải một nhãn. Cần một mẫu riêng cho
+  // "tin X hơn Y", ngoài phạm vi luật phủ định.
   defend("tin Bình hơn Chi"),
 ];
 
@@ -192,6 +204,22 @@ export const HUMAN_CLAIMS: readonly HumanChatSample[] = [
  * Câu BẪY: parser không được đọc ra bất cứ bằng chứng nào (cáo buộc, bênh
  * vực, khai vai). Lời nhắm tới (`DIRECT_*`) không tính - chúng không sinh
  * bằng chứng.
+ *
+ * Danh sách này TỪNG chứa bảy câu phủ định một NHÃN ("Bình ko sói", "Bình chả
+ * phải sói", "Bình đếch phải dân"...) trong khi `HUMAN_DEFENCES` lại đòi đọc
+ * ra bênh vực từ "Bình ko sói đâu" và "Bình không phải sói". Đó là cùng một
+ * mẫu, nên không luật nào tách được hai bên - corpus tự mâu thuẫn, và phía
+ * bẫy là phía sai: "Bình không phải sói" đúng là một lời bênh vực.
+ *
+ * Ranh giới mới, và nó vẫn giữ trọn phần thận trọng:
+ *
+ * - Phủ định một NHÃN đọc ra bằng chứng, ngược cực ("ko sói" -> bênh,
+ *   "đếch phải dân" -> tố). Nhãn là một khẳng định về người, nên phủ định nó
+ *   cũng là một khẳng định về người.
+ * - Phủ định một ĐỘNG TỪ vẫn im ("ko nghi Bình", "k vote Bình", "t k tin
+ *   Bình"). Đó là lời về trạng thái của NGƯỜI NÓI, không phải về người bị nêu
+ *   tên, và nó yếu hơn hẳn - "tôi không nghi Bình" không có nghĩa là Bình dân.
+ *   Cả bốn câu ấy vẫn nằm nguyên trong danh sách này.
  */
 export const HUMAN_TRAPS: readonly string[] = [
   "tôi mà là tt thì tôi đã soi Bình rồi",
@@ -204,16 +232,10 @@ export const HUMAN_TRAPS: readonly string[] = [
   "tôi k phải là tiên tri",
   "t hok phải bv",
   "tôi ko nghi Bình",
-  "Bình không thể là sói",
-  "Bình ko thể là sói đâu",
   "ko nghi Bình",
   "k vote Bình",
   "hok treo Bình",
-  "Bình ko sói",
-  "Bình hem sói đâu",
   "t k tin Bình",
-  "Bình đếch phải dân",
-  "Bình éo sạch",
   "ai vote Bình",
   "sao lại treo Bình",
   "ai nghi Bình giơ tay",
@@ -222,7 +244,6 @@ export const HUMAN_TRAPS: readonly string[] = [
   "nghi Binh dan",
   "nghi Binh vo toi",
   "tính Bình sao",
-  "Bình chả phải sói",
   "chào mọi người",
   "Bình ơi nói gì đi",
   "Bình nghĩ sao",
