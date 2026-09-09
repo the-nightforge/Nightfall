@@ -60,6 +60,34 @@ def load_init(path: Path, obs: int, act: int) -> tuple[PolicyValueNet, int]:
     return m, hidden
 
 
+BASELINES = ("role", "mean", "value")
+
+
+def baseline_for(kind: str, data, rewards: torch.Tensor) -> torch.Tensor:
+    """`b` trong `A = R − b`, tính theo một trong ba cách.
+
+    - `value`: value head của policy đã đi rollout. Đúng về lý thuyết, nhưng chỉ
+      giúp khi head ấy THẬT SỰ dự đoán được kết quả ván.
+    - `mean`: một hằng số bằng tỉ lệ thắng chung. Không bao giờ tệ hơn không có
+      baseline, và không cần model nào cả.
+    - `role`: trung bình reward theo TỪNG VAI. Vai đã nằm sẵn ở cột `roles` của
+      encoder, nên gom nhóm được mà Python KHÔNG cần biết vai nào là Sói — §39
+      cấm dựng lại luật game ở tầng train, và "phe" là luật game. Vai mịn hơn
+      phe, và nó bắt được đúng thứ khiến `mean` chưa đủ: một Sói thắng 45% ván
+      và một Dân thắng 60% ván không thể dùng chung một mốc "bình thường".
+    """
+    if kind == "value":
+        assert data.values is not None, "baseline=value cần cột values (encode --rollout)"
+        return torch.from_numpy(data.values.astype(np.float32))
+    if kind == "mean":
+        return torch.full_like(rewards, float(rewards.mean()))
+    base = torch.empty_like(rewards)
+    for index in np.unique(data.roles):
+        keep = torch.from_numpy(data.roles == index)
+        base[keep] = rewards[keep].mean()
+    return base
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--data", required=True, help="Thư mục do `ai:encode --rollout` ghi ra")
@@ -73,6 +101,12 @@ def main() -> None:
     p.add_argument("--value-coef", type=float, default=0.5)
     p.add_argument("--model-id", default="ppo-0001")
     p.add_argument("--seed", type=int, default=12345)
+    p.add_argument(
+        "--baseline",
+        choices=BASELINES,
+        default="role",
+        help="`b` trong A = R − b. Mặc định `role`; `value` là value head (xem baseline_for)",
+    )
     a = p.parse_args()
     torch.manual_seed(a.seed)
 
@@ -89,9 +123,19 @@ def main() -> None:
     A = torch.from_numpy(d.actions)
     R = torch.from_numpy(d.rewards)
     OLD = torch.from_numpy(d.logprobs.astype(np.float32))
+
+    base = baseline_for(a.baseline, d, R)
+    # Baseline chỉ đáng dùng khi nó dự đoán `R` TỐT HƠN một hằng số. Ghi cả hai
+    # số vào metrics để lần sau không phải đoán: `A = R − b` với `b` tệ hơn hằng
+    # số là phép trừ CỘNG THÊM phương sai, tức baseline làm đúng điều ngược lại
+    # với việc nó sinh ra để làm. Đã xảy ra thật với value head của BC
+    # (corr 0,03, MSE 1,11 so với 0,99 của hằng số) — xem reports/.
+    baseline_mse = float(((base - R) ** 2).mean())
+    constant_mse = float(((R.mean() - R) ** 2).mean())
+
     # Chuẩn hoá advantage: reward ±1 làm A dồn về hai cụm, và bước cập nhật khi
     # đó phụ thuộc tỉ lệ thắng của batch chứ không phụ thuộc nước đi nào tốt hơn.
-    adv = R - torch.from_numpy(d.values.astype(np.float32))
+    adv = R - base
     adv = (adv - adv.mean()) / (adv.std() + 1e-8)
 
     gen = torch.Generator().manual_seed(a.seed)
@@ -172,10 +216,18 @@ def main() -> None:
                 "config": vars(a),
                 "history": history,
                 "agreementWithInit": round(agree_init, 4),
+                "baseline": a.baseline,
+                # `baselineMse` > `constantMse` nghĩa là baseline đang LÀM HẠI.
+                "baselineMse": round(baseline_mse, 4),
+                "constantMse": round(constant_mse, 4),
             },
             indent=2,
         ),
         encoding="utf8",
+    )
+    verdict = "hại" if baseline_mse > constant_mse else "có ích"
+    print(
+        f"baseline {a.baseline}: MSE {baseline_mse:.4f} vs hằng số {constant_mse:.4f} — {verdict}"
     )
     print(f"Đã ghi {out}  agreementWithInit {agree_init:.3f}")
 

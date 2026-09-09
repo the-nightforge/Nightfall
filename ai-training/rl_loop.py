@@ -83,6 +83,7 @@ def main() -> None:
     p.add_argument("--out", default=".tmp/rl")
     p.add_argument("--promote-margin", type=float, default=2.0)
     p.add_argument("--temperature", type=float, default=1.0)
+    p.add_argument("--baseline", default="role", help="Xem train_ppo.baseline_for")
     p.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     a = p.parse_args()
 
@@ -171,7 +172,8 @@ def main() -> None:
         step(
             done_marker(it, "ppo"),
             [PY, "-m", "masoi_training.train_ppo", "--data", str(enc),
-             "--init", str(champion), "--out", str(model_dir), "--model-id", model_id],
+             "--init", str(champion), "--out", str(model_dir), "--model-id", model_id,
+             "--baseline", a.baseline],
             cwd=ROOT / "ai-training",
         )
         challenger = model_dir / "model.weights.json"
