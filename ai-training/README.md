@@ -110,6 +110,7 @@ nên `approxKl` epoch 1 ≈ 0 (test_ppo canh cả hai loại).
 python tests/test_data.py          # loader nhị phân, không cần torch
 python tests/test_train_smoke.py   # trọn vòng train trên dataset tổng hợp, cần torch
 python tests/test_ppo.py           # một update PPO trên rollout tổng hợp, cần torch
+python tests/test_rl_loop.py       # cổng thăng hạng hai bộ seed, không cần torch
 ```
 
 CI chạy cả ba (job `ai-training`) mỗi khi `ai-training/**` đổi.

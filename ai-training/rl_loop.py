@@ -1,7 +1,9 @@
 """Vòng lặp RL: rollout (TS) → PPO (Py) → benchmark (TS) → thăng hạng (spec R5).
 
 Chạy từ thư mục ai-training. Champion là file JSON bất biến; challenger chỉ
-thay champion khi điểm benchmark cao hơn ít nhất 2 điểm (trên nhiễu ±3% đã đo).
+thay champion khi điểm benchmark cao hơn ít nhất 2 điểm trên HAI bộ seed độc
+lập (xem `should_promote` — một bộ seed đã từng cho +4,7 rồi −3,2 cho cùng
+một model).
 
 CHẠY TIẾP ĐƯỢC là yêu cầu, không phải tiện nghi: 20 vòng là ~3,5 giờ và người ta
 sẽ tắt máy giữa chừng. Mỗi bước xong ghi một dấu `.done` cạnh sản phẩm của nó và
@@ -91,6 +93,18 @@ def score_of(bench_json: Path, side: str = "all") -> float:
     return ((village - base) + (base - wolves)) / 2 * 100
 
 
+def should_promote(scores: list[float], champion: float, margin: float) -> bool:
+    """Thăng hạng khi MỌI bộ seed đều vượt `champion + margin`.
+
+    Một bộ seed không đủ, và sai số chuẩn in ra từ 3 seed cũng không đủ để tin:
+    2026-09-10, challenger `--side wolves` đạt +4,7 ± 1,9 trên `rl-bench` rồi cho
+    −3,2 ± 1,8 trên `rl-conf` — cùng model, cùng số ván, chỉ khác bộ seed. Gộp 6
+    seed ra +0,7 ± 2,1, tức không có hiệu ứng nào. Cổng AND ở đây loại đúng
+    trường hợp đó, và cái giá là một lần benchmark thêm CHỈ khi có ứng viên.
+    """
+    return len(scores) > 0 and all(s > champion + margin for s in scores)
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--champion", required=True, help="model.weights.json xuất phát")
@@ -106,6 +120,8 @@ def main() -> None:
     p.add_argument("--side", default="all", choices=("all", "wolves", "village"),
                    help="Train residual cho MỘT phe; điểm thăng hạng = Δ của phe đó")
     p.add_argument("--target-kl", type=float, default=None, help="Xem train_ppo --target-kl")
+    p.add_argument("--confirm-seed", default="rl-conf",
+                   help="Tiền tố seed ĐỘC LẬP để xác nhận trước khi thăng hạng; rỗng = tắt (không khuyến nghị)")
     p.add_argument("--lr", type=float, default=3e-4, help="Xem train_ppo --lr")
     p.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     a = p.parse_args()
@@ -221,11 +237,28 @@ def main() -> None:
             )
             s = score_of(bench, a.side)
             print(f"iteration {k}: challenger {s:+.1f} vs champion {champion_score:+.1f}", flush=True)
-            state["scores"].append({"iteration": k, "modelId": model_id, "score": round(s, 2)})
-            if s > champion_score + a.promote_margin:
+            row = {"iteration": k, "modelId": model_id, "score": round(s, 2)}
+            scores = [s]
+            # Bộ seed thứ hai chỉ chạy khi bộ thứ nhất đã vượt ngưỡng: nó tốn
+            # thêm một lần benchmark, nhưng chỉ ở những vòng hiếm có ứng viên.
+            if a.confirm_seed and should_promote(scores, champion_score, a.promote_margin):
+                conf = it / "bench-confirm.json"
+                step(
+                    done_marker(it, "bench-confirm"),
+                    [tool("npm"), "run", "ai:benchmark", "--", "--model", str(challenger),
+                     "--games", str(a.bench_games), "--repeat", str(a.bench_repeat),
+                     "--setups", "baseline,village,wolves,all",
+                     "--seed", a.confirm_seed, "--out", str(conf)],
+                )
+                c = score_of(conf, a.side)
+                scores.append(c)
+                row["confirmScore"] = round(c, 2)
+                print(f"  xác nhận trên seed {a.confirm_seed}: {c:+.1f}", flush=True)
+            state["scores"].append(row)
+            if should_promote(scores, champion_score, a.promote_margin):
                 champion = champions / f"champion-{k:04d}.weights.json"
                 shutil.copy(challenger, champion)
-                champion_score = s
+                champion_score = min(scores)
                 print(f"THĂNG HẠNG → {champion.name}", flush=True)
             else:
                 print("GIỮ champion", flush=True)
