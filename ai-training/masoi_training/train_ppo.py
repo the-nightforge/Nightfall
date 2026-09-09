@@ -108,6 +108,18 @@ def main() -> None:
     p.add_argument("--model-id", default="ppo-0001")
     p.add_argument("--seed", type=int, default=12345)
     p.add_argument(
+        "--side",
+        choices=("all", "wolves", "village"),
+        default="all",
+        help="Chỉ train trên hàng của một phe (đọc meta.wolfPack do TypeScript ghi). Xem Dataset.side",
+    )
+    p.add_argument(
+        "--target-kl",
+        type=float,
+        default=None,
+        help="Dừng sớm khi approxKl trung bình của một epoch vượt ngưỡng (ghi epochsRun)",
+    )
+    p.add_argument(
         "--baseline",
         choices=BASELINES,
         default="role",
@@ -116,10 +128,11 @@ def main() -> None:
     a = p.parse_args()
     torch.manual_seed(a.seed)
 
-    d = load(a.data)
+    d = load(a.data).side(a.side)
     assert d.logprobs is not None and d.values is not None, (
         "dataset không phải rollout (thiếu logprobs/values) — encode với --rollout"
     )
+    assert len(d) > 0, f"không còn hàng nào sau khi lọc --side {a.side}"
     model, hidden, init_residual = load_init(Path(a.init), d.obs_size, d.action_size)
     init_state = copy.deepcopy(model.state_dict())
     opt = torch.optim.Adam(model.parameters(), lr=a.lr)
@@ -217,6 +230,13 @@ def main() -> None:
             f"epoch {epoch}  policy {row['policyLoss']:.4f}  value {row['valueLoss']:.4f}"
             f"  ent {row['entropy']:.3f}  kl {row['approxKl']:.5f}  clip {row['clipFraction']:.3f}"
         )
+        # Cổng KL: một bước quá xa policy đã sinh rollout là một bước mà ratio
+        # không còn nói đúng về nó — đo 2026-09-09: 4 epoch đổi 12,5 % argmax
+        # trong khi advantage gần như nhiễu. Dừng ở epoch vượt ngưỡng (đã cập
+        # nhật), không quay lui: trọng số vẫn là của epoch đó, và metrics ghi rõ.
+        if a.target_kl is not None and row["approxKl"] > a.target_kl:
+            print(f"dừng sớm: approxKl {row['approxKl']:.5f} > target {a.target_kl}")
+            break
 
     # Độ trôi so với init: bao nhiêu % argmax còn giống champion (mỏ neo, xem R1).
     model.eval()
@@ -248,8 +268,10 @@ def main() -> None:
                 "init": str(a.init),
                 "datasetVersion": d.meta.get("datasetVersion"),
                 "rows": len(d),
+                "side": a.side,
                 "config": vars(a),
                 "history": history,
+                "epochsRun": len(history),
                 "agreementWithInit": round(agree_init, 4),
                 "baseline": a.baseline,
                 # `baselineMse` > `constantMse` nghĩa là baseline đang LÀM HẠI.

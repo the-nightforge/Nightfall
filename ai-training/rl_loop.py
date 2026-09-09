@@ -66,8 +66,11 @@ def step(marker: Path, cmd: list[str], cwd: Path = ROOT) -> None:
     marker.write_text("ok", encoding="utf8")
 
 
-def score_of(bench_json: Path) -> float:
+def score_of(bench_json: Path, side: str = "all") -> float:
     """Điểm của một model = trung bình hai chiều lợi thế, tính bằng ĐIỂM PHẦN TRĂM.
+
+    `side` = wolves/village: chỉ Δ của phe đó — model train cho một phe thì
+    phe kia đi đường residual chưa được dạy, và Δ của nó không phải thứ đang đo.
 
     Đọc `summary` của `ai:benchmark` THEO TÊN cấu hình, không theo vị trí:
     `--setups` cho phép thêm bớt hàng, và một vòng lặp đọc nhầm hàng `teacher`
@@ -81,6 +84,10 @@ def score_of(bench_json: Path) -> float:
     if missing:
         raise ValueError(f"{bench_json}: thiếu cấu hình {missing} — benchmark phải chạy baseline,village,wolves")
     base, village, wolves = by["baseline"], by["village"], by["wolves"]
+    if side == "village":
+        return (village - base) * 100
+    if side == "wolves":
+        return (base - wolves) * 100
     return ((village - base) + (base - wolves)) / 2 * 100
 
 
@@ -96,6 +103,10 @@ def main() -> None:
     p.add_argument("--promote-margin", type=float, default=2.0)
     p.add_argument("--temperature", type=float, default=1.0, help="policy logits: 1; residual: 5 (thang belief)")
     p.add_argument("--baseline", default="role", help="Xem train_ppo.baseline_for")
+    p.add_argument("--side", default="all", choices=("all", "wolves", "village"),
+                   help="Train residual cho MỘT phe; điểm thăng hạng = Δ của phe đó")
+    p.add_argument("--target-kl", type=float, default=None, help="Xem train_ppo --target-kl")
+    p.add_argument("--lr", type=float, default=3e-4, help="Xem train_ppo --lr")
     p.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     a = p.parse_args()
 
@@ -128,7 +139,7 @@ def main() -> None:
          "--setups", "baseline,village,wolves,all",
          "--seed", "rl-bench", "--out", str(bench0)],
     )
-    champion_score = score_of(bench0)
+    champion_score = score_of(bench0, a.side)
     print(f"champion điểm {champion_score:+.1f}", flush=True)
 
     # Khôi phục champion đã thăng hạng ở lần chạy trước. Đặt SAU bench0 để lần
@@ -186,7 +197,8 @@ def main() -> None:
             done_marker(it, "ppo"),
             [PY, "-m", "masoi_training.train_ppo", "--data", str(enc),
              "--init", str(champion), "--out", str(model_dir), "--model-id", model_id,
-             "--baseline", a.baseline],
+             "--baseline", a.baseline, "--side", a.side, "--lr", str(a.lr),
+             *(["--target-kl", str(a.target_kl)] if a.target_kl is not None else [])],
             cwd=ROOT / "ai-training",
         )
         challenger = model_dir / "model.weights.json"
@@ -207,7 +219,7 @@ def main() -> None:
                  "--setups", "baseline,village,wolves,all",
                  "--seed", "rl-bench", "--out", str(bench)],
             )
-            s = score_of(bench)
+            s = score_of(bench, a.side)
             print(f"iteration {k}: challenger {s:+.1f} vs champion {champion_score:+.1f}", flush=True)
             state["scores"].append({"iteration": k, "modelId": model_id, "score": round(s, 2)})
             if s > champion_score + a.promote_margin:

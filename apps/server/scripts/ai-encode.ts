@@ -8,7 +8,7 @@ import {
 import { execFileSync } from "node:child_process";
 import { createInterface } from "node:readline";
 import { resolve, join } from "node:path";
-import { ROLES } from "@masoi/shared";
+import { ROLES, isWolfPack } from "@masoi/shared";
 import {
   ACTION_KINDS,
   DECISION_KINDS,
@@ -305,6 +305,10 @@ async function main(): Promise<void> {
     splitCounts: perSplit,
     splitCode: SPLIT_CODE,
     roles: [...ROLES],
+    // Phe của từng vai, thẳng hàng với `roles`, tính ở ĐÂY bằng `isWolfPack`
+    // (cùng quy ước `LearnedSeats`: trung lập về phía làng). Python lọc theo
+    // phe bằng bảng này thay vì tự biết vai nào là Sói (§39).
+    wolfPack: ROLES.map((role) => isWolfPack(role)),
     decisions: [...DECISION_KINDS],
     actionKinds: [...ACTION_KINDS],
     featureNames: observationFeatureNames(options.maxSeats),
