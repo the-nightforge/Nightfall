@@ -175,13 +175,22 @@ def main() -> None:
             index = index.to(device)
             logits, value = model(features[index])
             masked = masked_logits(logits, masks[index])
-            policy_loss = nn.functional.cross_entropy(masked, actions[index])
-            if teacher_q is not None:
-                rows = distill_rows[index]
-                if bool(rows.any()):
-                    logp = torch.log_softmax(masked, dim=1)
-                    soft = -(teacher_q[index] * logp).sum(dim=1)[rows].mean()
-                    policy_loss = (1 - args.distill_alpha) * policy_loss + args.distill_alpha * soft
+            if teacher_q is None:
+                policy_loss = nn.functional.cross_entropy(masked, actions[index])
+            else:
+                # Trộn THEO TỪNG HÀNG, không theo batch: hàng không có target
+                # mềm (teacher bỏ phiếu trắng / giữ thuốc) phải giữ nguyên CE,
+                # nếu không thì với α = 1 model không bao giờ học "không treo
+                # ai" — đã xảy ra: tie-aware rơi từ 0,946 xuống 0,893.
+                logp = torch.log_softmax(masked, dim=1)
+                hard = -logp.gather(1, actions[index].unsqueeze(1)).squeeze(1)
+                soft = -(teacher_q[index] * logp).sum(dim=1)
+                alpha = torch.where(
+                    distill_rows[index],
+                    torch.full_like(hard, args.distill_alpha),
+                    torch.zeros_like(hard),
+                )
+                policy_loss = ((1 - alpha) * hard + alpha * soft).mean()
             value_loss = nn.functional.mse_loss(value, rewards[index])
             loss = policy_loss + args.value_weight * value_loss
 
