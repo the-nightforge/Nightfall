@@ -684,6 +684,23 @@ export interface ConversationWeights {
   promptRecentOwnLines: number;
   /** Số lượt thảo luận mỗi vòng trong self-play. */
   selfPlayTurnsPerRound: number;
+  /**
+   * Câu hỏi nhắm thẳng vào bot còn được coi là "đang nợ" trong bấy nhiêu vòng.
+   * `0` TẮT hẳn danh sách.
+   *
+   * Rộng hơn `triggerFreshnessRounds` có chủ đích: hai con số trả lời hai câu
+   * hỏi khác nhau — "có đáng đáp NGAY không" và "mình đang nợ ai câu nào".
+   * Không ảnh hưởng RNG: `ConversationState` là một cái nhìn dẫn xuất.
+   */
+  unansweredQuestionRounds: number;
+  /**
+   * Phần `speechUrge` được cộng vào ngưỡng `talkativeness` khi bot cân nhắc tự
+   * mở lời. `[0,1]`; `0` TẮT — ngưỡng quy về đúng hành vi Phase 3.
+   *
+   * Cộng vào NGƯỠNG chứ không thêm một lượt rút: đây là điều kiện để mọi preset
+   * cũ replay từng bit.
+   */
+  urgencyBoost: number;
 }
 
 /**
@@ -1266,6 +1283,8 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     promptChatWindow: 20,
     promptRecentOwnLines: 4,
     selfPlayTurnsPerRound: 1,
+    unansweredQuestionRounds: 0,
+    urgencyBoost: 0,
   }),
 
   /**
@@ -1526,6 +1545,12 @@ export const BOT_WEIGHTS_V3: BotWeights = Object.freeze({
      * ngưỡng chất lượng. Cao hơn nữa chỉ tốn thời gian batch.
      */
     selfPlayTurnsPerRound: 4,
+    /**
+     * Danh sách câu nợ BẬT từ v3 (nó chỉ là một cái nhìn dẫn xuất, không rút
+     * số), nhưng `urgencyBoost` vẫn TẮT: v3..v22 phải replay từng bit.
+     */
+    unansweredQuestionRounds: 3,
+    urgencyBoost: 0,
   }),
 }) as BotWeights;
 
@@ -2357,6 +2382,34 @@ export const BOT_WEIGHTS_V22: BotWeights = Object.freeze({
   counterfactual: Object.freeze({
     ...BOT_WEIGHTS_V21.counterfactual!,
     wolfSideGain: 5,
+  }),
+});
+
+/**
+ * Cấu hình v23 - SPEAK vs WAIT có chủ đích (COMMUNICATION §11, §12).
+ *
+ * MỘT ô đổi so v21: `conversation.urgencyBoost` 0 -> 0.35.
+ *
+ * Trước v23, cổng tự mở lời là đúng một dòng - `rng() > talkativeness` - nên
+ * một con BOT vừa nhặt được bằng chứng mới và một con BOT không còn gì để nói
+ * im lặng ngang nhau. Từ v23, ngưỡng đó được cộng thêm `urgencyBoost x
+ * speechUrge(...)`, trong đó `speechUrge` gom bốn lý do nên nói (bằng chứng
+ * chưa nói, áp lực đang dồn vào mình, câu hỏi còn nợ, bị cả bàn bỏ quên) và trừ
+ * hai lý do không nên (đã nói đủ phần trong vòng, đang cầm trịch cả bàn).
+ *
+ * KHÔNG thêm một lượt rút nào: `speechUrge` là hàm thuần, và với
+ * `urgencyBoost = 0` biểu thức quy về đúng ngưỡng cũ. Đó là lý do v1..v22
+ * replay từng bit qua thay đổi này.
+ *
+ * KHÔNG mặc định - bench v23 so v21 trước, kỷ luật v19.
+ */
+export const BOT_WEIGHTS_V23: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V21,
+  version: "23.0.0",
+
+  conversation: Object.freeze({
+    ...BOT_WEIGHTS_V21.conversation,
+    urgencyBoost: 0.35,
   }),
 });
 

@@ -11,6 +11,7 @@ import type {
   BotSpeechTone,
   BotVoteIntention,
 } from "../types";
+import { buildConversationState, speechUrge, type ConversationState } from "./conversation-state";
 import { speechSemanticFingerprint } from "./fingerprint";
 import { hasRecentSemantic } from "./speech-memory";
 import { findConversationTriggers, type ConversationTrigger } from "./triggers";
@@ -237,12 +238,38 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
   //
   // Từ đây trở xuống là đúng bậc thang Phase 3, và lượt rút ngay dưới đây là
   // lượt rút DUY NHẤT mà cấu hình v1/v2 thực hiện.
-  if (rng() > state.personality.talkativeness) {
-    probe?.fallback("không đủ hoạt ngôn để lên tiếng lượt này");
-    return null;
+  const spoken = new Set(state.speechMemory.flatMap((entry) => entry.sourceIds));
+
+  /**
+   * Hoạt ngôn là TÍNH CÁCH; "lượt này có đáng nói không" là TÌNH HUỐNG. Ngưỡng
+   * là tổng của cả hai.
+   *
+   * Cộng vào ngưỡng chứ không thêm một lượt rút: `speechUrge` thuần, và với
+   * `urgencyBoost = 0` (v1..v22) biểu thức quy về đúng `talkativeness`, nên
+   * chuỗi RNG của mọi preset cũ không lệch một bit. Chỉ dựng
+   * `ConversationState` khi nút vặn thật sự bật - nó quét cả memory, và một
+   * bảng không ai đọc là một vòng lặp trả tiền cho không.
+   */
+  const { urgencyBoost } = weights.conversation;
+  let conversation: ConversationState | null = null;
+  let threshold = state.personality.talkativeness;
+  if (urgencyBoost > 0) {
+    conversation = buildConversationState(context, state, weights);
+    const unspoken = vote.evidence.filter((item) => !spoken.has(item.sourceId)).length;
+    threshold = Math.min(
+      1,
+      state.personality.talkativeness + urgencyBoost * speechUrge(conversation, unspoken, weights),
+    );
   }
 
-  const spoken = new Set(state.speechMemory.flatMap((entry) => entry.sourceIds));
+  if (rng() > threshold) {
+    probe?.fallback(
+      conversation
+        ? `chưa đáng lên tiếng lượt này (${conversation.floor}, áp lực ${conversation.pressureOnMe.toFixed(2)})`
+        : "không đủ hoạt ngôn để lên tiếng lượt này",
+    );
+    return null;
+  }
 
   /**
    * Bằng chứng soi mở khoá theo LỜI KHAI, không theo số vòng.
