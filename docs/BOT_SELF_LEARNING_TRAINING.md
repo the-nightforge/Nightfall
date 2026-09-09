@@ -238,6 +238,54 @@ của model. Nó hữu ích khi so hai model, không phải để qua cổng §1
 
 ---
 
+## Train trên Google Colab
+
+Colab có sẵn PyTorch và GPU T4 miễn phí, nên bỏ qua được Bước 0.
+Notebook: [`ai-training/colab/train_bc_colab.ipynb`](../ai-training/colab/train_bc_colab.ipynb).
+
+Chia việc theo đúng ranh giới §39: **máy bạn sinh và encode (TypeScript), Colab
+chỉ train (Python)**. Colab nhận file `.bin` toàn số, không parse trajectory và
+không có bản sao nào của observation encoder — đưa việc train sang máy khác
+không kéo theo ranh giới thông tin.
+
+### 1. Máy bạn — sinh, kiểm, encode, đóng gói
+
+Chạy Bước 2 → 3 → 4 ở trên (nhớ `--no-jitter`), rồi nén hai thứ Colab cần:
+
+```powershell
+Compress-Archive -Path ai-training\masoi_training, .tmp\enc-0001 -DestinationPath .tmpc-package.zip -Force
+```
+
+**Không tải JSONL lên.** Tensor đã encode nhẹ hơn nhiều và nén rất tốt vì phần
+lớn đặc trưng là one-hot — bộ 10.000 ván ra khoảng vài chục MB.
+
+### 2. Drive → Colab
+
+Đặt `bc-package.zip` ở gốc `MyDrive` (chỗ khác thì sửa biến `ZIP` ở cell 2).
+Mở notebook trên [colab.research.google.com](https://colab.research.google.com),
+chọn `Runtime → Change runtime type → T4 GPU`. CPU cũng chạy được, chỉ chậm hơn.
+
+### 3. Chạy các cell theo thứ tự
+
+| Cell | Việc |
+|---|---|
+| 1 | Phiên bản torch + GPU |
+| 2 | Mount Drive, giải nén vào `/content/bc` |
+| 3 | **Kiểm dữ liệu** — file khớp `meta.json`, ba phần cộng đúng, mọi nhãn hợp lệ theo chính mask của nó |
+| 4 | Chạy thử 2 epoch (~30 giây) |
+| 5 | Train thật |
+| 6-7 | Agreement train/val/test, so với trần, tách theo loại quyết định và theo vai |
+| 8 | Chép `model.pt` / `model.onnx` / `metrics.json` về Drive |
+
+Cell 3 đáng giá nhất: nó ném lỗi ngay nếu zip thiếu file hoặc dataset lệch, thay
+vì để bạn phát hiện sau nửa giờ GPU.
+
+**Session ngắt là mất `/content`** — cell cuối chép model về Drive, đừng bỏ qua.
+Và đừng tách `metrics.json` khỏi `model.pt`/`model.onnx`: nó là thứ duy nhất
+truy model về `datasetVersion`, `gitCommit` và `trainingSeed` (§46).
+
+---
+
 ## Giới hạn đã biết
 
 1. **Thám Tử chọn HAI người** (`secondaryTargetId`); nhãn hiện chỉ giữ người
