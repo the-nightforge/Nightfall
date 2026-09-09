@@ -221,6 +221,65 @@ và commit đã sinh ra nó là một model không tái lập được.
 
 ---
 
+## Train trên Google Colab (khuyến nghị)
+
+Colab đã cài sẵn PyTorch và cho GPU T4 miễn phí, nên bỏ qua được Bước 0 hoàn toàn.
+Notebook: [`ai-training/colab/train_bc_colab.ipynb`](../ai-training/colab/train_bc_colab.ipynb).
+
+Chia việc theo đúng ranh giới §39: **máy bạn sinh và encode dữ liệu (TypeScript),
+Colab chỉ train (Python)**. Colab không parse trajectory và không có bản sao nào của
+observation encoder, nên ranh giới thông tin không đổi khi đưa lên máy khác.
+
+### 1. Ở máy bạn — sinh dữ liệu và đóng gói
+
+Chạy Bước 2 → 3 → 4 ở trên, rồi nén hai thứ Colab cần vào một file:
+
+```powershell
+Compress-Archive -Path ai-training\masoi_training, .tmp\enc-0001 -DestinationPath .tmp\bc-package.zip -Force
+```
+
+Zip gồm `masoi_training/` (3 file Python) và `enc-0001/` (tensor `.bin` + `meta.json`).
+
+**Không tải trajectory JSONL 2,7 GB lên.** Tensor đã encode nhỏ hơn nhiều
+(~370 MB cho 10.000 ván) và nén rất tốt vì phần lớn đặc trưng là one-hot — thực tế
+còn khoảng vài chục MB.
+
+### 2. Tải lên Google Drive
+
+Đặt `bc-package.zip` vào `MyDrive` (gốc Drive). Nếu để chỗ khác thì sửa biến `ZIP`
+trong cell thứ hai của notebook.
+
+### 3. Mở notebook trên Colab
+
+Tải `train_bc_colab.ipynb` lên [colab.research.google.com](https://colab.research.google.com)
+(`File → Upload notebook`), rồi `Runtime → Change runtime type → T4 GPU`.
+
+CPU cũng chạy được — MLP 128×128 trên ~470.000 mẫu không nặng — chỉ chậm hơn vài lần.
+
+### 4. Chạy các cell theo thứ tự
+
+| Cell | Việc |
+|---|---|
+| 1 | In phiên bản torch + GPU |
+| 2 | Mount Drive, giải nén vào `/content/bc` |
+| 3 | **Kiểm dữ liệu**: file khớp `meta.json`, ba phần cộng lại đúng, và MỌI nhãn là nước hợp lệ theo chính mask của nó |
+| 4 | Chạy thử 2 epoch (~30 giây) |
+| 5 | Train thật (30 epoch) |
+| 6-7 | In `test agreement` theo vai + vẽ đường loss/agreement |
+| 8 | Chép `model.pt` / `model.onnx` / `metrics.json` về Drive |
+
+Cell 3 là cell đáng giá nhất: nó ném lỗi ngay nếu zip thiếu file hoặc dataset lệch,
+thay vì để bạn phát hiện sau 30 phút GPU.
+
+### Lưu ý Colab
+
+- **Session ngắt là mất `/content`.** Cell cuối chép model về Drive; đừng bỏ qua nó.
+- **Giữ tab mở.** Colab free ngắt runtime khi tab đóng lâu.
+- Đừng tách `metrics.json` khỏi `model.pt`/`model.onnx`: nó là thứ duy nhất truy được
+  model về `datasetVersion`, `gitCommit` và `trainingSeed` (§46).
+
+---
+
 ## Giới hạn đã biết (đọc trước khi thất vọng vì con số)
 
 1. **Observation còn nghèo so với §8.** Hiện chỉ có `suspicion`/`trust` cho mỗi
