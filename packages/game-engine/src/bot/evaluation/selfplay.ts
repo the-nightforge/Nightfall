@@ -218,6 +218,15 @@ export type SelfPlayEvent =
       /** 0 là tự mở lời; n là câu thứ n trong một chuỗi đối đáp. */
       chainDepth: number;
       tone: BotSpeechIntention["tone"];
+      /**
+       * Trục nội dung của ý định, hoặc `null`.
+       *
+       * Cần cho dataset speech policy (COMMUNICATION §26): từ PR 4, `topic` là
+       * thứ DUY NHẤT phân biệt một câu lảng (`DEFLECT` -> `PROCESS`) với một
+       * câu đáp thẳng - hai cái cùng `kind: "REPLY"`. Thiếu nó thì nhãn của hai
+       * chiến thuật khác hẳn nhau trùng khít lên nhau.
+       */
+      topic: BotSpeechIntention["topic"] | null;
       /** Văn bản đã phát. Không đo được lặp thật nếu không có nó. */
       text: string;
       textFingerprint: string;
@@ -779,6 +788,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       replyToMessageId: speech.replyToMessageId ?? null,
       chainDepth: depth,
       tone: speech.tone,
+      topic: speech.topic ?? null,
       text,
       textFingerprint: speechTextFingerprint(text),
       semanticFingerprint: speechSemanticFingerprint(speech),

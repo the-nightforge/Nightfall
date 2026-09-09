@@ -5,6 +5,7 @@ import type { BotWeights } from "../config/weights";
 import { DEFAULT_BOT_WEIGHTS } from "../config/weights";
 import { fnv1a32 } from "../hash";
 import { wolfBluffSeat } from "../decision/claim-decision";
+import { wolfBluffPick } from "../decision/wolf-bluff";
 
 /**
  * PR 5 của BOT_AI_CONTINUE_UPGRADE (§14-§17): WOLF TEAM PLANNER.
@@ -178,8 +179,12 @@ export function planWolfTeam(input: WolfTeamPlanInput): WolfTeamPlan {
       : (leaderTie[fnv1a32(`wolf-leader|${roster.join(",")}|${round}`) % leaderTie.length]
           ?.id ?? null);
 
-  // --- Claimant: ghế hash của Phase 3, tái dùng nguyên cơ chế ---
-  const claimant = wolfBluffSeat(pack, roster, round);
+  // --- Claimant: ghế hash của Phase 3 pha với điểm chiến lược của §17 ---
+  //
+  // PHẢI đi qua đúng `wolfBluffPick` mà `decideChatClaim` gọi. Hai đường tính
+  // ghế khai láo là hai đường sẽ trôi lệch, và lúc trôi thì kế hoạch của bầy
+  // nói một đằng còn con Sói mở miệng là một nẻo.
+  const claimant = wolfBluffPick(knowledge, state, pack, wolfBluffSeat(pack, roster, round), weights);
 
   // --- Sacrifice & distancing: ai đang bị dồn phiếu công khai ---
   const votes = knowledge.currentVoteCounts.players;

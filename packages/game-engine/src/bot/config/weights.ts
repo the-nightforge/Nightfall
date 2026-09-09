@@ -684,6 +684,64 @@ export interface ConversationWeights {
   promptRecentOwnLines: number;
   /** Số lượt thảo luận mỗi vòng trong self-play. */
   selfPlayTurnsPerRound: number;
+  /**
+   * Câu hỏi nhắm thẳng vào bot còn được coi là "đang nợ" trong bấy nhiêu vòng.
+   * `0` TẮT hẳn danh sách.
+   *
+   * Rộng hơn `triggerFreshnessRounds` có chủ đích: hai con số trả lời hai câu
+   * hỏi khác nhau — "có đáng đáp NGAY không" và "mình đang nợ ai câu nào".
+   * Không ảnh hưởng RNG: `ConversationState` là một cái nhìn dẫn xuất.
+   */
+  unansweredQuestionRounds: number;
+  /**
+   * Phần `speechUrge` được cộng vào ngưỡng `talkativeness` khi bot cân nhắc tự
+   * mở lời. `[0,1]`; `0` TẮT — ngưỡng quy về đúng hành vi Phase 3.
+   *
+   * Cộng vào NGƯỠNG chứ không thêm một lượt rút: đây là điều kiện để mọi preset
+   * cũ replay từng bit.
+   */
+  urgencyBoost: number;
+  /**
+   * Ngưỡng tầm quan trọng để một câu hỏi đáng được đáp, `[0,1]`. Dưới ngưỡng
+   * (và không bị dồn) thì BOT bỏ qua có chủ đích — spec §28 nói thẳng đừng tối
+   * ưu tỉ lệ trả lời lên 100%.
+   *
+   * `0` TẮT toàn bộ chính sách trả lời câu hỏi (§13, §14) và quay về bậc thang
+   * REPLY/ASK_EVIDENCE theo tính cách. Hai nghĩa ấy khớp nhau chứ không chỏi:
+   * "không câu hỏi nào tầm thường tới mức bỏ qua" chính là hành vi cũ. Cùng
+   * quy ước với `claim.accusationWeight` và `deceptionRisk.bussingVoteShare`.
+   */
+  questionIgnoreFloor: number;
+  /**
+   * Một lập trường CÔNG KHAI còn ràng buộc BOT trong bấy nhiêu vòng
+   * (COMMUNICATION §15). `0` TẮT cả trí nhớ tường thuật.
+   *
+   * Không phải vĩnh viễn: một lời tố ở vòng 1 mà khoá BOT trọn ván thì nó
+   * không bao giờ đổi ý được nữa - và cả bàn cũng đã quên lời đó rồi.
+   */
+  narrativeMemoryRounds: number;
+  /**
+   * Số quan sát tối thiểu về một người trước khi BOT dám nói theo KIỂU của
+   * người đó (COMMUNICATION §8, §9). `0` TẮT cả cơ chế.
+   *
+   * `0` đọc xuôi cả hai nghĩa: "không cần mẫu nào" cũng chính là "điều chỉnh
+   * theo hư không", tức đúng hành vi trước PR 6 - nói theo tính cách của chính
+   * mình, bất kể đang nói với ai. Cùng quy ước với `claim.accusationWeight`.
+   */
+  persuasionMinSamples: number;
+  /**
+   * Khi mọi luận điểm về mục tiêu phiếu đã nói hết, BOT được thử hỏi bấy nhiêu
+   * NGƯỜI KHÁC trước khi chịu im (COMMUNICATION §24). `0` TẮT.
+   *
+   * §24 đòi đổi CHIẾN THUẬT chứ không chỉ đổi cách diễn đạt, và "hỏi một người
+   * khác" là ô đầu tiên trong danh sách của nó.
+   *
+   * Ứng viên BẮT BUỘC phải là người BOT đang thật sự nghi (`suspicion > 0`) —
+   * xem `redirectTargets`. Đó là ranh giới giữa việc đổi chiến thuật và việc
+   * nặn ra một câu chỉ để né cơ chế chống lặp; cái sau làm chỉ số lặp đẹp lên
+   * trong khi hội thoại tệ đi, và chú thích ở nhánh "Hết ý" đã cảnh báo đúng nó.
+   */
+  redirectCandidates: number;
 }
 
 /**
@@ -730,6 +788,34 @@ export interface ClaimWeights {
   knownBluffPenalty: number;
   /** Prior của `profileStrength`: hồ sơ phải có bấy nhiêu mẫu mới nặng bằng nửa. */
   profilePriorStrength: number;
+  /**
+   * Phần ĐIỂM CHIẾN LƯỢC trong việc chọn ghế khai láo của bầy Sói, `[0,1]`
+   * (COMMUNICATION §17). `0` là vòng xoay hash thuần của Phase 3, tức TẮT.
+   *
+   * Là một phép PHA, không phải một công tắc: `share x score + (1 - share) x
+   * (ghế hash được 1 điểm)`. Mọi giá trị ở giữa đều có nghĩa - hash là một
+   * prior mạnh mà chỉ một ghế rõ ràng tốt hơn mới vượt được. Xem
+   * `decision/wolf-bluff.ts`.
+   */
+  wolfBluffScoreShare: number;
+  /**
+   * Áp lực (`ConversationState.pressureOnMe`, `[0,1]`) dưới mức này thì lời khai
+   * CHỦ ĐỘNG được nói NHẸ; từ mức này trở lên thì nói dứt khoát
+   * (COMMUNICATION §16 "HOW STRONGLY"). `0` TẮT - mọi lời khai đều dứt khoát,
+   * đúng hành vi trước PR 7.
+   *
+   * Hai bậc, không phải ba. Xem `claimTone`: dải giữa của bản đầu trúng 3/859
+   * lời khai vì một lời khai chủ động gần như luôn xảy ra lúc áp lực bằng 0.
+   */
+  softClaimPressureCeiling: number;
+  /**
+   * Áp lực phiếu (`0..1`) mà từ đó một con Sói thôi bênh đồng bọn đang bị dồn
+   * (COMMUNICATION §18). `0` TẮT - Sói cứ bênh, đúng hành vi trước PR 7.
+   *
+   * Dưới NỬA mức này, và bản thân chưa gánh phiếu nào, thì bênh ra mặt; ở giữa
+   * thì chỉ gợn lại một câu; từ mức này trở lên thì không đụng vào chuyện đó.
+   */
+  wolfDistancePressure: number;
 }
 
 export interface LookAheadWeights {
@@ -840,6 +926,10 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   ["recency", "memoryDecayPerRound"],
   ["recency", "profileDecayPerRound"],
   ["selfPreservation", "guardSuspicionPenalty"],
+  ["claim", "wolfBluffScoreShare"],
+  ["claim", "softClaimPressureCeiling"],
+  ["claim", "wolfDistancePressure"],
+  ["conversation", "questionIgnoreFloor"],
   ["deceptionRisk", "abstainPressureCeiling"],
   ["aggression", "villageAbstainPressureCeiling"],
   // So THẲNG với một số trong [0, 1) sinh từ hash trong `fakeFightTarget`.
@@ -1266,6 +1356,12 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     promptChatWindow: 20,
     promptRecentOwnLines: 4,
     selfPlayTurnsPerRound: 1,
+    unansweredQuestionRounds: 0,
+    urgencyBoost: 0,
+    questionIgnoreFloor: 0,
+    narrativeMemoryRounds: 0,
+    persuasionMinSamples: 0,
+    redirectCandidates: 0,
   }),
 
   /**
@@ -1291,6 +1387,9 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     // Tắt ở v1..v11; v12 bật. Không đổi một bit của preset cũ vì cổng `0`.
     knownBluffPenalty: 0,
     profilePriorStrength: 2,
+    wolfBluffScoreShare: 0,
+    softClaimPressureCeiling: 0,
+    wolfDistancePressure: 0,
   }),
 
   /**
@@ -1526,6 +1625,16 @@ export const BOT_WEIGHTS_V3: BotWeights = Object.freeze({
      * ngưỡng chất lượng. Cao hơn nữa chỉ tốn thời gian batch.
      */
     selfPlayTurnsPerRound: 4,
+    /**
+     * Danh sách câu nợ BẬT từ v3 (nó chỉ là một cái nhìn dẫn xuất, không rút
+     * số), nhưng `urgencyBoost` vẫn TẮT: v3..v22 phải replay từng bit.
+     */
+    unansweredQuestionRounds: 3,
+    urgencyBoost: 0,
+    questionIgnoreFloor: 0,
+    narrativeMemoryRounds: 0,
+    persuasionMinSamples: 0,
+    redirectCandidates: 0,
   }),
 }) as BotWeights;
 
@@ -1563,6 +1672,9 @@ export const BOT_WEIGHTS_V4: BotWeights = Object.freeze({
     wolfBluffFromRound: 2,
     knownBluffPenalty: 0,
     profilePriorStrength: 2,
+    wolfBluffScoreShare: 0,
+    softClaimPressureCeiling: 0,
+    wolfDistancePressure: 0,
   }),
 });
 
@@ -2357,6 +2469,213 @@ export const BOT_WEIGHTS_V22: BotWeights = Object.freeze({
   counterfactual: Object.freeze({
     ...BOT_WEIGHTS_V21.counterfactual!,
     wolfSideGain: 5,
+  }),
+});
+
+/**
+ * Cấu hình v23 - SPEAK vs WAIT có chủ đích (COMMUNICATION §11, §12).
+ *
+ * MỘT ô đổi so v21: `conversation.urgencyBoost` 0 -> 0.35.
+ *
+ * Trước v23, cổng tự mở lời là đúng một dòng - `rng() > talkativeness` - nên
+ * một con BOT vừa nhặt được bằng chứng mới và một con BOT không còn gì để nói
+ * im lặng ngang nhau. Từ v23, ngưỡng đó được cộng thêm `urgencyBoost x
+ * speechUrge(...)`, trong đó `speechUrge` gom bốn lý do nên nói (bằng chứng
+ * chưa nói, áp lực đang dồn vào mình, câu hỏi còn nợ, bị cả bàn bỏ quên) và trừ
+ * hai lý do không nên (đã nói đủ phần trong vòng, đang cầm trịch cả bàn).
+ *
+ * KHÔNG thêm một lượt rút nào: `speechUrge` là hàm thuần, và với
+ * `urgencyBoost = 0` biểu thức quy về đúng ngưỡng cũ. Đó là lý do v1..v22
+ * replay từng bit qua thay đổi này.
+ *
+ * KHÔNG mặc định - bench v23 so v21 trước, kỷ luật v19.
+ */
+export const BOT_WEIGHTS_V23: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V21,
+  version: "23.0.0",
+
+  conversation: Object.freeze({
+    ...BOT_WEIGHTS_V21.conversation,
+    urgencyBoost: 0.35,
+  }),
+});
+
+/**
+ * Cấu hình v24 - chiến lược trả lời câu hỏi (COMMUNICATION §13, §14).
+ *
+ * MỘT ô đổi so v23: `conversation.questionIgnoreFloor` 0 -> 0.45.
+ *
+ * Chồng LÊN v23 chứ không lên v21: hai PR nói về cùng một thứ - bot chọn nói gì
+ * khi bị nói tới - và tách chúng thành hai nhánh song song thì không bản nào
+ * đo được cả cụm. v23 vẫn là mốc A/B cho riêng SPEAK/WAIT.
+ *
+ * Trước v24, một câu hỏi nhắm vào BOT chỉ có hai đường ra (`REPLY` hoặc
+ * `ASK_EVIDENCE`) chọn theo đúng một trait, nên "mày là sói phải ko" và "nghi
+ * ai nhất" nhận cùng một cách xử. Từ v24, câu hỏi được `chat-analysis` gắn
+ * nhãn lúc parse (7 loại) và `question-policy` chọn một trong 7 cách đáp.
+ *
+ * Hai luật cứng đi kèm, cả hai đều là luật AN TOÀN chứ không phải hiệu chỉnh:
+ *
+ * - Bị hỏi vai mà CHƯA khai thì không bao giờ trả lời thẳng. Lời khai là quyết
+ *   định của `decideChatClaim`; để một câu hỏi moi được nó ra là giao nước đi
+ *   nặng nhất của lời nói cho đối thủ.
+ * - `IGNORE` là một kết quả hợp lệ. Spec §28 nói thẳng: đừng tối ưu tỉ lệ trả
+ *   lời lên 100%.
+ *
+ * KHÔNG mặc định - bench v24 so v21 trước, kỷ luật v19.
+ */
+export const BOT_WEIGHTS_V24: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V23,
+  version: "24.0.0",
+
+  conversation: Object.freeze({
+    ...BOT_WEIGHTS_V23.conversation,
+    questionIgnoreFloor: 0.45,
+  }),
+});
+
+/**
+ * Cấu hình v25 - nhất quán tường thuật (COMMUNICATION §15).
+ *
+ * MỘT ô đổi so v24: `conversation.narrativeMemoryRounds` 0 -> 3.
+ *
+ * Trước v25, thứ duy nhất giữ BOT khỏi tự mâu thuẫn là một phép so chuỗi con
+ * trên `currentTheory.summary`, và nó chỉ chạy khi `style.concession >= 0.5`.
+ * Nghĩa là một con BOT bướng bỉnh quay xe hoàn toàn trong im lặng: hôm qua nó
+ * bênh An, hôm nay nó tố An, và không câu nào thừa nhận điều đó.
+ *
+ * Từ v25, lập trường công khai được dựng lại từ chính những gì BOT đã NÓI và đã
+ * BỎ PHIẾU (`narrative.ts`), rồi:
+ *
+ * - đảo sang NGHI một người mình đã công khai bênh -> `CHANGE_MIND`, bất kể
+ *   tính cách. Bướng bỉnh quyết định bạn đổi ý BAO NHIÊU LẦN, không quyết định
+ *   bạn có được vờ như chưa từng nghĩ khác hay không.
+ * - đảo sang BÊNH một người mình đã công khai tố -> ứng viên đó bị loại, và
+ *   BOT rơi xuống ứng viên kế (thường là `DISAGREE`, không nêu lập trường).
+ *   Hướng này chưa có ý định nào diễn đạt được "tôi đã nghi, giờ tôi tin" -
+ *   xem phần hạn chế của văn bản kiểm chứng.
+ *
+ * KHÔNG thêm lượt rút RNG nào: `buildNarrative` thuần, và cả hai nhánh đều nằm
+ * trong phần chọn ỨNG VIÊN, phía trước lượt rút vốn có.
+ *
+ * KHÔNG mặc định - bench v25 so v21 trước, kỷ luật v19.
+ */
+export const BOT_WEIGHTS_V25: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V24,
+  version: "25.0.0",
+
+  conversation: Object.freeze({
+    ...BOT_WEIGHTS_V24.conversation,
+    narrativeMemoryRounds: 3,
+  }),
+});
+
+/**
+ * Cấu hình v26 - nói theo kiểu của NGƯỜI NGHE (COMMUNICATION §8, §9).
+ *
+ * MỘT ô đổi so v25: `conversation.persuasionMinSamples` 0 -> 4.
+ *
+ * Trước v26, thứ tự ứng viên cho một câu đáp chỉ phụ thuộc tính cách của chính
+ * BOT (`candidatesFor`). Hai người nghe khác hẳn nhau - một người chỉ tin bằng
+ * chứng, một người chỉ phản ứng với thách thức thẳng - nhận đúng một cách nói.
+ *
+ * Từ v26, `buildCommunicationProfile` đọc bốn chiều từ hành vi CÔNG KHAI (hay
+ * buộc tội, hay theo phe đông, hay đòi bằng chứng, quan hệ với chính BOT) rồi
+ * chốt một trong bốn kiểu thuyết phục của §9. Kiểu đó ĐẢO THỨ TỰ ứng viên -
+ * không bao giờ thêm một ứng viên mới: `candidatesFor` vẫn là nơi duy nhất
+ * quyết định cái gì HỢP LỆ cho một trigger, người nghe chỉ chọn trong đó.
+ *
+ * `4` mẫu, không phải `1`: đọc tính cách một người từ một quan sát là đọc
+ * nhiễu, và nó làm bàn nghe thất thường chứ không tinh tế hơn.
+ *
+ * KHÔNG thêm lượt rút RNG nào: hồ sơ thuần, và việc đảo thứ tự nằm trong phần
+ * chọn ứng viên, phía trước lượt rút vốn có.
+ *
+ * KHÔNG mặc định - bench v26 so v21 trước, kỷ luật v19.
+ */
+export const BOT_WEIGHTS_V26: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V25,
+  version: "26.0.0",
+
+  conversation: Object.freeze({
+    ...BOT_WEIGHTS_V25.conversation,
+    persuasionMinSamples: 4,
+  }),
+});
+
+/**
+ * Cấu hình v27 - lời khai và lời nói dối có chiến lược (COMMUNICATION §16, §17).
+ *
+ * BA ô đổi so v26, cả ba đều thuộc nhóm `claim`:
+ *
+ * - `wolfBluffScoreShare` 0 -> 0.85 (§17). Ghế đứng ra khai láo của bầy Sói
+ *   không còn là một vòng xoay hash mù. Hash vẫn ở đó làm PRIOR - công thức là
+ *   một phép pha, `0.85 x điểm + 0.15 x (ghế hash được 1 điểm)` - nên vòng xoay
+ *   vẫn quyết khi bốn số hạng không phân định được ai hơn ai, đúng như §17 dặn
+ *   ("giữ hash làm fallback"). Điểm gồm uy tín, mức bàn dễ nghe theo (chính là
+ *   `persuadability` của PR 6 - consumer đầu tiên của nó), mức chưa bị soi, trừ
+ *   đi mức đang gánh phiếu.
+ *
+ *   `0.85`, KHÔNG phải `0.6` như bản nháp đầu: quét 300 ván cho thấy ở `0.6`
+ *   prior vòng xoay nặng tới mức điểm số gần như không bao giờ thắng nổi - chỉ
+ *   2/300 ván đổi lời nói, tức một tính năng nằm im. Đường cong đo được:
+ *   `0.6 -> 2/300`, `0.75 -> 35/300`, `0.85 -> 58/300`, `0.95 -> 94/300`. Ở
+ *   MỌI mức, "cùng một ghế khai hai lượt liền" vẫn bằng 0 - vai trò chống lặp
+ *   của vòng xoay hoá ra đã được `state.myClaim` gánh sẵn, nên phần việc còn
+ *   lại của hash là phá hoà một cách tất định, và nó vẫn làm đúng việc đó.
+ * - `softClaimPressureCeiling` 0 -> 0.2 (§16). Một lời khai chủ động lúc không
+ *   ai đụng tới mình được nói NHẸ; càng bị dồn thì càng nói dứt khoát. Trước
+ *   v27 mọi lời khai đều mang đúng một giọng, bất kể tình thế.
+ * - `wolfDistancePressure` 0 -> 0.34 (§18). Một con Sói không còn bênh đồng bọn
+ *   bất kể tình thế: đang tự gánh phiếu thì nó im, và chỉ bênh ra mặt khi cả
+ *   hai còn sạch.
+ *
+ * KHÔNG thêm lượt rút RNG nào: cả hai đều thuần, và cả hai đều quy về hành vi
+ * cũ ở giá trị `0`.
+ *
+ * KHÔNG mặc định - bench v27 so v21 trước, kỷ luật v19.
+ */
+export const BOT_WEIGHTS_V27: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V26,
+  version: "27.0.0",
+
+  claim: Object.freeze({
+    ...BOT_WEIGHTS_V26.claim,
+    wolfBluffScoreShare: 0.85,
+    softClaimPressureCeiling: 0.2,
+    wolfDistancePressure: 0.34,
+  }),
+});
+
+/**
+ * Cấu hình v28 - chống lặp bằng ĐỔI CHIẾN THUẬT (COMMUNICATION §24).
+ *
+ * MỘT ô đổi so v27: `conversation.redirectCandidates` 0 -> 2.
+ *
+ * Trước v28, cơ chế chống lặp chỉ biết NÓI KHÔNG: một ý đã nói rồi thì ứng viên
+ * bị loại, và khi cả `ACCUSE` lẫn `QUESTION` về mục tiêu phiếu đều đã cũ thì
+ * BOT im. §24 đòi thứ khác - đổi chiến thuật, mà ô đầu tiên trong danh sách của
+ * nó là "hỏi một người khác".
+ *
+ * Ràng buộc giữ cho nó không thành câu độn: ứng viên phải là người BOT đang
+ * THẬT SỰ nghi (`suspicion > 0`). Hỏi một người mình không có ý kiến gì sẽ làm
+ * `semanticRepetitionRate` đẹp lên trong khi hội thoại tệ đi, và đó đúng là cái
+ * bẫy mà chú thích ở nhánh "Hết ý" đã cảnh báo từ Phase 4.
+ *
+ * KHÔNG thêm lượt rút RNG nào: `redirectTargets` thuần, và nhánh mới nằm TRƯỚC
+ * hai lượt rút của reaction/humor - nên khi nó trả về câu, hai lượt rút đó
+ * không chạy. Đó là một thay đổi hành vi có thật, và là lý do v28 cần bench
+ * riêng chứ không thể suy từ v27.
+ *
+ * KHÔNG mặc định - bench v28 so v21 trước, kỷ luật v19.
+ */
+export const BOT_WEIGHTS_V28: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V27,
+  version: "28.0.0",
+
+  conversation: Object.freeze({
+    ...BOT_WEIGHTS_V27.conversation,
+    redirectCandidates: 2,
   }),
 });
 

@@ -53,6 +53,8 @@ function request(
     chatWindow: [],
     avoidOpenings: [],
     recentSpeechSourceIds: [],
+    priorStance: null,
+    listener: null,
     seq: 0,
     round: 1,
     // Khớp id speaker ("bot") và mục tiêu mặc định ("c" → "Chi") để cổng
@@ -525,5 +527,73 @@ describe("hỏi lại nhà cung cấp một lần khi trượt cổng", () => {
     const { brain } = sequenced([() => decided({ chat: OWN }), () => decided({ chat: "x".repeat(500) })]);
     const result = await renderBotSpeech(request({}, { recentOwnLines: [OWN] }), brain, 120);
     expect(result.text!.length).toBe(120);
+  });
+});
+
+describe("cổng lệch mục tiêu (COMMUNICATION §23)", () => {
+  /** Bàn ba người: Bình có THẬT trong roster, nên parser giải được tên. */
+  const table = {
+    players: [
+      { id: "bot", name: "An", alive: true },
+      { id: "b", name: "Bình", alive: true },
+      { id: "c", name: "Chi", alive: true },
+    ],
+  };
+
+  it("tố đúng người lõi đã chốt thì đi qua", async () => {
+    const result = await renderBotSpeech(
+      request({}, table),
+      speaking("tôi nghi Chi, đổi phiếu sát giờ chót"),
+    );
+    expect(result.fromTemplate).toBe(false);
+    expect(result.text).toContain("Chi");
+  });
+
+  it("tố NGƯỜI KHÁC thì bị chặn và rơi về mẫu câu", async () => {
+    const result = await renderBotSpeech(
+      request({}, table),
+      speaking("tôi nghi Bình, lươn lắm"),
+    );
+    expect(result.fromTemplate).toBe(true);
+    expect(result.text).not.toContain("Bình");
+  });
+
+  it("bênh một người lõi không nhắc tới cũng bị chặn", async () => {
+    const result = await renderBotSpeech(
+      request({}, table),
+      speaking("đừng treo Bình, Bình dân mà"),
+    );
+    expect(result.fromTemplate).toBe(true);
+  });
+
+  it("ý định KHÔNG nhắm ai thì không được đọc ra cáo buộc nào", async () => {
+    const result = await renderBotSpeech(
+      request({ kind: "HUMOR", targetId: undefined, topic: "SMALLTALK", tone: "PLAYFUL" }, table),
+      speaking("kk tôi nghi Chi thật đấy"),
+    );
+    expect(result.fromTemplate).toBe(true);
+  });
+
+  it("câu không tố ai vẫn hợp lệ — cổng nói 'đừng tố nhầm', không nói 'phải tố'", async () => {
+    const result = await renderBotSpeech(
+      request({}, table),
+      speaking("hmm để t hóng thêm đã"),
+    );
+    expect(result.fromTemplate).toBe(false);
+  });
+
+  it("một lần trượt vẫn được hỏi lại đúng một lần, rồi mới về mẫu", async () => {
+    let calls = 0;
+    const flaky: BotBrain = {
+      name: "flaky",
+      renderDaySpeech: async () => {
+        calls += 1;
+        return decided({ chat: calls === 1 ? "tôi nghi Bình" : "tôi nghi Chi, lạ lắm" });
+      },
+    };
+    const result = await renderBotSpeech(request({}, table), flaky);
+    expect(calls).toBe(2);
+    expect(result.fromTemplate).toBe(false);
+    expect(result.text).toContain("Chi");
   });
 });

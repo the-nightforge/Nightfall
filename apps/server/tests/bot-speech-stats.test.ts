@@ -42,6 +42,8 @@ function request(over: Partial<SpeechRequest> = {}): SpeechRequest {
     chatWindow: [],
     avoidOpenings: [],
     recentSpeechSourceIds: [],
+    priorStance: null,
+    listener: null,
     seq: 0,
     round: 1,
     players: [

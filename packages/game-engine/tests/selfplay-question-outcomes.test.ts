@@ -74,6 +74,7 @@ function claim(round: number, actorId: string, seq: number): SelfPlayEvent {
     replyToMessageId: null,
     chainDepth: 0,
     tone: "FIRM",
+    topic: null,
     text,
     textFingerprint: speechTextFingerprint(text),
     semanticFingerprint: "claim",

@@ -297,6 +297,11 @@
       "numerator": 0,
       "denominator": 0
     },
+    "wolfBluffBelievedRate": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
+    },
     "humanAccuseSeenRate": {
       "value": 0.8787878787878788,
       "numerator": 58,
