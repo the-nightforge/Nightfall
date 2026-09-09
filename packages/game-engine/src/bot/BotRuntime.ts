@@ -48,6 +48,7 @@ import { markReplied, recordSpeechIntention } from "./conversation/speech-memory
 import { planSpeech } from "./conversation/speech-planner";
 import { deriveSpeechStyle, type BotSpeechStyle } from "./personality/speech-style";
 import { strategyFor } from "./roles/registry";
+import { buildLiveObservation } from "./learning/live-observation";
 import { snapshotBelief, snapshotKnowledge } from "./trace/snapshot";
 import { decayAndPrune } from "./memory/memory-decay";
 import { createBotBrainState, remember } from "./memory/memory-store";
@@ -114,6 +115,15 @@ export interface BotRuntimeOptions {
    * Bỏ trống = heuristic thuần, hành vi production hiện hành.
    */
   votePolicy?: PolicyModel;
+  /**
+   * Ghi kèm `liveInput` vào mỗi trace: observation dựng bằng
+   * `buildLiveObservation` ngay lúc quyết định.
+   *
+   * Phải bật rõ ràng vì nó nhân đôi bộ nhớ của một tập trace và không bao giờ
+   * được ghi ra JSONL — người dùng duy nhất là test đối chiếu "hai đường một
+   * vector". Một batch dựng dataset không cần nó.
+   */
+  traceLiveInput?: boolean;
 }
 
 interface MemoryDraft {
@@ -185,6 +195,8 @@ export class BotRuntime {
   private readonly trace: BotTraceSink | undefined;
   /** Policy lượt VOTE; `undefined` = heuristic thuần. Xem `BotRuntimeOptions.votePolicy`. */
   private readonly votePolicy: PolicyModel | undefined;
+  /** Xem `BotRuntimeOptions.traceLiveInput`. */
+  private readonly traceLiveInput: boolean;
   /**
    * Belief trước và sau lần `observe` gần nhất.
    *
@@ -205,6 +217,7 @@ export class BotRuntime {
     this.rng = options.rng;
     this.trace = options.trace;
     this.votePolicy = options.votePolicy;
+    this.traceLiveInput = options.traceLiveInput === true;
     this.weights = options.weights ?? DEFAULT_BOT_WEIGHTS;
 
     // Kiểm ngay tại constructor, không phải ở vòng 7 của ván thứ 214. Một NaN
@@ -560,6 +573,18 @@ export class BotRuntime {
         const chosen: BotDecisionTrace["chosen"] = { targetId, label };
         if (reason !== undefined) chosen.reason = reason;
         if (actionKind !== undefined) chosen.actionKind = actionKind;
+        // Cùng knowledge, cùng belief mà dòng trace này mang: `liveInput` là
+        // đường LÚC CHƠI, và test đối chiếu nó với `observationFromTrace` của
+        // chính dòng này.
+        const liveInput = this.traceLiveInput
+          ? buildLiveObservation(
+              context.knowledge,
+              this.state,
+              this.weights,
+              decision,
+              this.beliefAfter,
+            )
+          : undefined;
         sink.record({
           botId: this.state.playerId,
           round: context.knowledge.round,
@@ -576,6 +601,8 @@ export class BotRuntime {
           rngDraws: draws,
           fallbackReason: probe.fallbackReason,
           knowledgeSnapshot: snapshotKnowledge(context.knowledge),
+          // Bỏ hẳn khoá khi tắt, cùng lý do với `reason` ở trên.
+          ...(liveInput ? { liveInput } : {}),
         });
       },
     };

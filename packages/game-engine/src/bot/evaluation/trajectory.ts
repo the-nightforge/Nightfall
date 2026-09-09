@@ -96,7 +96,9 @@ export interface BotTrajectory {
  * Đêm gộp mục tiêu của MỌI loại hành động bot có: nó chọn cả loại lẫn mục tiêu
  * trong một lượt, nên hợp của các tập chính là tập nó được chọn.
  */
-function legalActionsFor(trace: BotDecisionTrace): string[] {
+function legalActionsFor(
+  trace: Pick<BotDecisionTrace, "decision" | "knowledgeSnapshot">,
+): string[] {
   const snapshot = trace.knowledgeSnapshot;
   if (trace.decision === "NIGHT") {
     const targets = new Set<string>();
@@ -126,6 +128,95 @@ function rewardFor(game: SelfPlayGame, playerId: string, role: Role): number {
  * cho MỘT quyết định được trace. Ván không trace (traceGames cap) không sinh
  * line nào: danh sách rỗng là đúng, không bịa observation thay thế.
  */
+export type ObservationInput = Pick<
+  BotTrajectory,
+  "playerId" | "turn" | "phase" | "decision" | "observation" | "legalActions"
+> & { selectedAction?: BotTrajectory["selectedAction"] };
+
+/** Đúng những trường của một trace mà observation cần đọc. */
+export type TraceObservationSource = Pick<
+  BotDecisionTrace,
+  "botId" | "round" | "phase" | "decision" | "beliefAfter" | "personality" | "knowledgeSnapshot"
+>;
+
+/**
+ * Phần OBSERVATION của một line, từ một trace.
+ *
+ * Đây là hàm DUY NHẤT biến (knowledgeSnapshot, beliefAfter, personality) thành
+ * observation; cả export trajectory lẫn `buildLiveObservation` đều đi qua đây.
+ * Hai bản của phép biến đổi này là hai vector sẽ trôi lệch nhau, và một model
+ * train trên vector A rồi chơi bằng vector B thì không sai to — nó sai nhỏ,
+ * đều, và không có gì chỉ ra chỗ sai.
+ *
+ * KHÔNG có `selectedAction`: đây là câu hỏi, không phải nhãn.
+ */
+export function observationFromTrace(trace: TraceObservationSource): ObservationInput {
+  const legalActions = legalActionsFor(trace);
+
+  const belief = Object.entries(trace.beliefAfter).map(([playerId, entry]) => ({
+    playerId,
+    suspicion: entry.suspicion,
+    trust: entry.trust,
+    // Trace cũ không có assessment: 0 là "không có tín hiệu", đúng nghĩa với
+    // cả bốn thang 0..1 này.
+    wolfProbability: entry.wolfProbability ?? 0,
+    threat: entry.threat ?? 0,
+    credibility: entry.credibility ?? 0,
+    influence: entry.influence ?? 0,
+    informationValue: entry.informationValue ?? 0,
+    claimedPowerRole: entry.claimedPowerRole ?? false,
+    guardedBefore: entry.guardedBefore ?? false,
+  }));
+  belief.sort((left, right) => left.playerId.localeCompare(right.playerId));
+
+  const snapshot = trace.knowledgeSnapshot;
+  // Chỉ giữ loại hành động CÓ mục tiêu hoặc được chào rõ (SKIP của Phù Thuỷ):
+  // engine khởi tạo đủ 10 khoá với mảng rỗng, và một khoá rỗng không phải
+  // một lựa chọn.
+  let nightLegalTargets: Record<string, string[]> | null = null;
+  if (snapshot.nightLegalTargets) {
+    nightLegalTargets = {};
+    const offered = new Set(snapshot.nightLegalActions ?? []);
+    for (const [kind, targets] of Object.entries(snapshot.nightLegalTargets)) {
+      if (targets.length > 0 || offered.has(kind)) nightLegalTargets[kind] = [...targets].sort();
+    }
+  }
+
+  return {
+    playerId: trace.botId,
+    turn: trace.round,
+    phase: trace.phase,
+    decision: trace.decision,
+    observation: {
+      aliveIds: [...snapshot.aliveIds].sort(),
+      legalActions: [...legalActions],
+      nightLegalTargets,
+      knownRoles: { ...snapshot.knownRoles },
+      seerResult: snapshot.seerResult ? { ...snapshot.seerResult } : null,
+      belief,
+      personality: { ...trace.personality },
+      nightWolfTarget: snapshot.nightWolfTarget ?? null,
+      healUsed: snapshot.healUsed ?? false,
+      poisonUsed: snapshot.poisonUsed ?? false,
+      guardPrevious: snapshot.guardPrevious ?? null,
+      lastNightDeaths: [...(snapshot.lastNightDeaths ?? [])].sort(),
+      voteCounts: snapshot.voteCounts
+        ? {
+            players: { ...snapshot.voteCounts.players },
+            noElimination: snapshot.voteCounts.noElimination,
+          }
+        : { players: {}, noElimination: 0 },
+      trialAccusedId: snapshot.trialAccusedId ?? null,
+    },
+    legalActions,
+  };
+}
+
+/**
+ * Chuyển một ván self-play (có trace) thành danh sách trajectory — MỘT line
+ * cho MỘT quyết định được trace. Ván không trace (traceGames cap) không sinh
+ * line nào: danh sách rỗng là đúng, không bịa observation thay thế.
+ */
 export function gameToTrajectories(game: SelfPlayGame): BotTrajectory[] {
   const lines: BotTrajectory[] = [];
   const seed = game.record.seed;
@@ -134,67 +225,20 @@ export function gameToTrajectories(game: SelfPlayGame): BotTrajectory[] {
     const finalRole = game.roles[trace.botId];
     if (!finalRole) continue;
 
-    const legalActions = legalActionsFor(trace);
-
-    const belief = Object.entries(trace.beliefAfter).map(([playerId, entry]) => ({
-      playerId,
-      suspicion: entry.suspicion,
-      trust: entry.trust,
-      // Trace cũ không có assessment: 0 là "không có tín hiệu", đúng nghĩa với
-      // cả bốn thang 0..1 này.
-      wolfProbability: entry.wolfProbability ?? 0,
-      threat: entry.threat ?? 0,
-      credibility: entry.credibility ?? 0,
-      influence: entry.influence ?? 0,
-      informationValue: entry.informationValue ?? 0,
-      claimedPowerRole: entry.claimedPowerRole ?? false,
-      guardedBefore: entry.guardedBefore ?? false,
-    }));
-    belief.sort((left, right) => left.playerId.localeCompare(right.playerId));
-
-    const snapshot = trace.knowledgeSnapshot;
-    // Chỉ giữ loại hành động CÓ mục tiêu hoặc được chào rõ (SKIP của Phù Thuỷ):
-    // engine khởi tạo đủ 10 khoá với mảng rỗng, và một khoá rỗng không phải
-    // một lựa chọn.
-    let nightLegalTargets: Record<string, string[]> | null = null;
-    if (snapshot.nightLegalTargets) {
-      nightLegalTargets = {};
-      const offered = new Set(snapshot.nightLegalActions ?? []);
-      for (const [kind, targets] of Object.entries(snapshot.nightLegalTargets)) {
-        if (targets.length > 0 || offered.has(kind)) nightLegalTargets[kind] = [...targets].sort();
-      }
-    }
-
+    // Từng khoá viết thẳng ra thay vì spread `base`: thứ tự khoá của object
+    // NÀY là thứ tự byte của dòng JSONL, và những file đã encode phải đọc lại
+    // được y nguyên.
+    const base = observationFromTrace(trace);
     lines.push({
       gameId: seed,
       seed,
-      playerId: trace.botId,
+      playerId: base.playerId,
       finalRole,
-      turn: trace.round,
-      phase: trace.phase,
-      decision: trace.decision,
-      observation: {
-        aliveIds: [...snapshot.aliveIds].sort(),
-        legalActions: [...legalActions],
-        nightLegalTargets,
-        knownRoles: { ...snapshot.knownRoles },
-        seerResult: snapshot.seerResult ? { ...snapshot.seerResult } : null,
-        belief,
-        personality: { ...trace.personality },
-        nightWolfTarget: snapshot.nightWolfTarget ?? null,
-        healUsed: snapshot.healUsed ?? false,
-        poisonUsed: snapshot.poisonUsed ?? false,
-        guardPrevious: snapshot.guardPrevious ?? null,
-        lastNightDeaths: [...(snapshot.lastNightDeaths ?? [])].sort(),
-        voteCounts: snapshot.voteCounts
-          ? {
-              players: { ...snapshot.voteCounts.players },
-              noElimination: snapshot.voteCounts.noElimination,
-            }
-          : { players: {}, noElimination: 0 },
-        trialAccusedId: snapshot.trialAccusedId ?? null,
-      },
-      legalActions,
+      turn: base.turn,
+      phase: base.phase,
+      decision: base.decision,
+      observation: base.observation,
+      legalActions: base.legalActions,
       candidates: trace.candidates.map((candidate) => ({ ...candidate })),
       selectedAction: {
         decision: trace.decision,

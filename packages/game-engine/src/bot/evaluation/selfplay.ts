@@ -115,6 +115,11 @@ export interface SelfPlayInput {
   defense?: boolean;
   /** Thu trace mọi quyết định. Tốn bộ nhớ; mặc định tắt. */
   trace?: boolean;
+  /**
+   * Ghi kèm observation lúc chơi vào mỗi trace. Xem
+   * `BotRuntimeOptions.traceLiveInput`; chỉ có nghĩa khi `trace` bật.
+   */
+  traceLiveInput?: boolean;
   /** Xem `SelfPlayRecord.humanSeats`. Mặc định 0. */
   humanSeats?: number;
 }
@@ -495,6 +500,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
         playerIds: engine.state.players.map((p) => p.id),
         weights,
         trace: collector as BotTraceSink | undefined,
+        traceLiveInput: input.traceLiveInput === true,
       }),
     );
   }
