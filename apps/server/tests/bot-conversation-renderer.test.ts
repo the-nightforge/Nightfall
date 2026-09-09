@@ -164,6 +164,20 @@ describe("nhà cung cấp chỉ được viết câu chữ", () => {
     const result = await renderBotSpeech(request(), failing);
     expect(result.text).toContain("Chi");
     expect(result.fromTemplate).toBe(true);
+    expect(result.source).toBe("provider_failed");
+  });
+
+  it("không có ai để nói tới thì IM, và nhãn phải nói đúng là im", async () => {
+    // `speechTemplate` trả `null` khi một ý định thuộc `NEEDS_SOMEONE` không có
+    // người để nói tới: im còn hơn phát ra "Tôi nghi người đó."
+    //
+    // Nhãn ở lối ra đó từng là `provider_failed`/`gate_rejected` - tức một lượt
+    // IM bị đếm y như một lượt CÓ phát câu mẫu. `template_silent` vì thế đếm
+    // thiếu, và `bySource` trên `/api/health` nói sai về chuyện bot có mở miệng
+    // hay không.
+    const result = await renderBotSpeech(request({}, { targetName: null }), failing);
+    expect(result.text).toBeNull();
+    expect(result.source).toBe("template_silent");
   });
 
   it("nhà cung cấp im lặng cũng về mẫu", async () => {
