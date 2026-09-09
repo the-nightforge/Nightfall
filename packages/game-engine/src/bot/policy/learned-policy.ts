@@ -35,6 +35,12 @@ export interface LearnedPick {
   logProb: number;
   value: number | null;
   temperature: number;
+  /**
+   * Có mặt = nước do RESIDUAL policy sinh (`residual-policy.ts`), với β đã
+   * dùng. `ai:encode` đọc nó để biết tập rollout là residual và xuất `bases`
+   * (điểm có jitter) cho Python dựng lại đúng phân phối cũ.
+   */
+  beta?: number;
 }
 
 /** Nước đi policy ĐỀ XUẤT, đã giải mã — để vòng gọi đối chiếu với nước THẬT SỰ đi. */

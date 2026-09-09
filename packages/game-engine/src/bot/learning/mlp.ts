@@ -34,6 +34,14 @@ export interface MlpWeightsJson {
   layers: MlpLinear[];
   policyHead: MlpLinear;
   valueHead?: MlpLinear;
+  /**
+   * Có mặt = model là RESIDUAL (spec 2026-09-09-residual-policy D2): logits là
+   * phần hiệu chỉnh cộng vào điểm heuristic với hệ số `beta`, không phải
+   * logits thay teacher. Nằm trong file để benchmark/replay không bao giờ
+   * dùng sai β — một model residual chạy với β khác β lúc train là một con
+   * số vô nghĩa, và cờ CLI là chỗ dễ quên nhất.
+   */
+  residual?: { beta: number };
 }
 
 export interface LearnedPolicy {
@@ -42,6 +50,8 @@ export interface LearnedPolicy {
   logits(features: readonly number[]): number[];
   /** value head (tanh) nếu model có, ngược lại `null`. */
   value(features: readonly number[]): number | null;
+  /** Xem `MlpWeightsJson.residual`. Vắng = policy logits thuần. */
+  readonly residual?: { beta: number };
 }
 
 function linear(layer: MlpLinear, x: readonly number[]): number[] {
@@ -119,6 +129,14 @@ export function loadMlpPolicy(
   });
   const policyHead = checkLinear("policyHead", w.policyHead, act, width);
   const valueHead = w.valueHead ? checkLinear("valueHead", w.valueHead, 1, width) : undefined;
+  let residual: { beta: number } | undefined;
+  if (w.residual !== undefined) {
+    const beta = (w.residual as { beta?: unknown } | null)?.beta;
+    if (typeof beta !== "number" || !Number.isFinite(beta) || beta <= 0) {
+      throw new Error("residual.beta phải là số hữu hạn > 0");
+    }
+    residual = { beta };
+  }
   const weights: MlpWeightsJson = { ...(w as MlpWeightsJson), layers, policyHead, valueHead };
   const id = typeof w.modelId === "string" ? w.modelId : "unnamed";
 
@@ -127,6 +145,7 @@ export function loadMlpPolicy(
   };
   return {
     id,
+    ...(residual ? { residual } : {}),
     logits(features) {
       guard(features);
       return mlpForward(weights, features).logits;

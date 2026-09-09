@@ -72,6 +72,18 @@ describe("loadMlpPolicy", () => {
     expect(() => loadMlpPolicy(bad)).toThrow(/layers\[0\]/);
   });
 
+  it("residual: nạp `residual.beta` hữu hạn > 0; vắng thì không có trường; sai thì TỪ CHỐI", () => {
+    const plain = loadMlpPolicy(zeroWeights());
+    expect(plain.residual).toBeUndefined();
+    const res = loadMlpPolicy({ ...zeroWeights(), residual: { beta: 10 } });
+    expect(res.residual).toEqual({ beta: 10 });
+    expect(() => loadMlpPolicy({ ...zeroWeights(), residual: { beta: 0 } })).toThrow(/residual/);
+    expect(() => loadMlpPolicy({ ...zeroWeights(), residual: { beta: Number.NaN } })).toThrow(
+      /residual/,
+    );
+    expect(() => loadMlpPolicy({ ...zeroWeights(), residual: {} })).toThrow(/residual/);
+  });
+
   it("TỪ CHỐI input sai chiều lúc gọi", () => {
     const policy = loadMlpPolicy(zeroWeights());
     expect(() => policy.logits([1, 2, 3])).toThrow(/chiều/);
