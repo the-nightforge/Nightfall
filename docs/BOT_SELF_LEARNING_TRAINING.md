@@ -351,7 +351,16 @@ npm run ai:benchmark -- --model .tmp/model-ob/model.weights.json --setups baseli
   policy-0004, mỗi nước đêm lệch đắt gấp ~4 lần một nước bầu lệch.
 
 Mục tiêu của behavior cloning là `all − teacher → 0`, không phải agreement → 1.
-Chi tiết ở `reports/train-policy-0002.md`.
+
+**Nhưng `all` một mình KHÔNG nói model mạnh hay yếu.** Nó đo CÂN BẰNG (tỉ lệ
+làng thắng khi cả bàn dùng model), và cân bằng tăng được vì *đối thủ dở đi*: một
+model vừa là dân làng tệ hơn (−6,4) vừa là sói yếu hơn (+2,3) đã cho `all` =
+62,6%, cao hơn cả teacher — vì sói yếu đi nhiều hơn. Luôn đọc `village` và
+`wolves` (sức mạnh từng phe đo riêng, đối thủ cố định) TRƯỚC, rồi mới đọc `all`.
+
+`--distill-alpha` (train theo điểm của teacher thay vì one-hot) đã thử: α = 0,5
+không khác policy-0004, α = 1,0 tệ hơn ở cả hai phe. Giữ làm công cụ đo; mặc
+định 0. Chi tiết ở `reports/train-policy-0002.md`.
 
 Một lệnh chạy đủ ba cấu hình. Ở mỗi cấu hình, model chỉ được cấp cho ghế của
 phe đang đo; ghế còn lại chạy heuristic y như production. Mã thoát khác 0 khi
