@@ -300,6 +300,32 @@ truy model về `datasetVersion`, `gitCommit` và `trainingSeed` (§46).
 
 ---
 
+## Bước 7 — Cho model chơi và đo (champion/challenger)
+
+`train_bc` xuất thêm `model.weights.json` (định dạng `masoi-mlp-1`). Runtime
+TypeScript chạy forward pass thuần từ file này — không có ONNX runtime, vì
+`game-engine` phải thuần và mọi quyết định của bot là đồng bộ. Loader TỪ CHỐI
+model có `featureNames`/`actionNames` lệch encoder hiện tại.
+
+```bash
+npm run ai:benchmark -- --model .tmp/model-ob/model.weights.json --games 300 --repeat 3 --seed bench
+```
+
+Ba cấu hình trên cùng seed: heuristic cả bàn, làng học được, sói học được. Đọc
+Δ tỉ lệ thắng của làng so với baseline; 60 ván lệch ±10 điểm, 3×300 ván mới
+kết luận ±3%. Với behavior cloning, Δ ≈ 0 là ĐÚNG kỳ vọng — model là bản sao
+của bot heuristic. Δ dương chỉ có thể tới từ RL (kế hoạch
+`2026-09-09-rl-self-play`).
+
+Một lệnh chạy đủ ba cấu hình. Ở mỗi cấu hình, model chỉ được cấp cho ghế của
+phe đang đo; ghế còn lại chạy heuristic y như production. Mã thoát khác 0 khi
+có bất kỳ vi phạm bất biến nào — một nước đi engine không chào làm hỏng mọi
+con số trong bảng.
+
+Production KHÔNG đổi: `session-registry.ts` không cấp `learnedPolicy`.
+
+---
+
 ## Giới hạn đã biết
 
 1. **Thước đo `agreement` chấm oan các nước hoà điểm.** Xem phần trần ở đầu
