@@ -1,5 +1,6 @@
 import {
   isRole,
+  isWolfPack,
   ROLE_META,
   type GamePhase,
   type PersonalWin,
@@ -12,6 +13,7 @@ import { GameEngine } from "../../engine";
 import { detectCoalitions } from "../analysis/coalition";
 import { BotRuntime } from "../BotRuntime";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import type { LearnedPolicy } from "../learning/mlp";
 import { judgeChainPosition, type ChainBlockReason } from "../conversation/chain-limits";
 import {
   DEFENSE_MAX_SPEECHES_PER_BOT,
@@ -65,6 +67,14 @@ export const MAX_ROUNDS = 20;
  * Đây là thứ được in ra cho mỗi seed thất bại. Một báo cáo lỗi không kèm đủ dữ
  * liệu để chạy lại là một báo cáo không hành động được.
  */
+/**
+ * Ghế nào chơi bằng policy học được.
+ *
+ * Phe đọc theo `isWolfPack(role)`; vai trung lập tính về phía làng, cùng quy
+ * ước với mọi tầng đo khác trong harness.
+ */
+export type LearnedSeats = "all" | "village" | "wolves";
+
 export interface SelfPlayRecord {
   seed: string;
   playerCount: number;
@@ -91,6 +101,15 @@ export interface SelfPlayRecord {
    * không có trường này; vắng mặt là 0.
    */
   humanSeats?: number;
+  /**
+   * Id của policy học được đã chơi ván này; vắng mặt = heuristic thuần.
+   *
+   * Chỉ có ID chứ không có trọng số: một record phải nhỏ và đọc được, còn
+   * `replayGame` thì đòi đúng policy đó được cấp lại — cùng luật với
+   * `weightsVersion`.
+   */
+  learnedPolicyId?: string;
+  learnedSeats?: LearnedSeats;
 }
 
 export interface SelfPlayInput {
@@ -120,6 +139,10 @@ export interface SelfPlayInput {
    * `BotRuntimeOptions.traceLiveInput`; chỉ có nghĩa khi `trace` bật.
    */
   traceLiveInput?: boolean;
+  /** Policy học được (MLP) cắm vào BotRuntime. Vắng = heuristic thuần. */
+  learnedPolicy?: LearnedPolicy;
+  /** Ghế nào dùng policy; mặc định `"all"`. Xem `LearnedSeats`. */
+  learnedSeats?: LearnedSeats;
   /** Xem `SelfPlayRecord.humanSeats`. Mặc định 0. */
   humanSeats?: number;
 }
@@ -461,6 +484,15 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     speech: input.speech ?? true,
     defense: input.defense === true,
     humanSeats: input.humanSeats ?? 0,
+    // Bỏ hẳn hai khoá khi không có policy, thay vì để `undefined`: record được
+    // ghi thẳng ra JSON, và một record heuristic phải giống hệt record trước
+    // bản này — `Object.keys` của nó là một hợp đồng có test canh.
+    ...(input.learnedPolicy
+      ? {
+          learnedPolicyId: input.learnedPolicy.id,
+          learnedSeats: input.learnedSeats ?? "all",
+        }
+      : {}),
   };
 
   const config = record.config;
@@ -490,8 +522,15 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   const nameOf = (playerId: string): string =>
     engine.state.players.find((p) => p.id === playerId)?.name ?? playerId;
 
+  const learnedSeats = input.learnedSeats ?? "all";
   const runtimes = new Map<string, BotRuntime>();
   for (const player of engine.state.players) {
+    // Ghế không thuộc phe được chọn nhận `undefined` chứ không nhận một policy
+    // bị vô hiệu hoá: `BotRuntime` không có `learnedPolicy` là đường heuristic
+    // hiện hành, byte một, và đó chính là phía đối chứng của benchmark.
+    const usesLearned =
+      input.learnedPolicy !== undefined &&
+      (learnedSeats === "all" || (learnedSeats === "wolves") === isWolfPack(player.role));
     runtimes.set(
       player.id,
       new BotRuntime({
@@ -501,6 +540,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
         weights,
         trace: collector as BotTraceSink | undefined,
         traceLiveInput: input.traceLiveInput === true,
+        learnedPolicy: usesLearned ? input.learnedPolicy : undefined,
       }),
     );
   }
@@ -1489,11 +1529,29 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
 }
 
 /** Dựng lại CHÍNH XÁC một ván từ record của nó, không cần batch. */
-export function replayGame(record: SelfPlayRecord, weights?: BotWeights): SelfPlayGame {
+export function replayGame(
+  record: SelfPlayRecord,
+  weights?: BotWeights,
+  learnedPolicy?: LearnedPolicy,
+): SelfPlayGame {
   if (weights && weights.version !== record.weightsVersion) {
     throw new Error(
       `Record cần trọng số phiên bản "${record.weightsVersion}" nhưng nhận "${weights.version}"`,
     );
+  }
+  // Cùng luật với `weightsVersion`: dựng lại một ván bằng một policy KHÁC cho
+  // ra một ván khác, và một ván khác mang tên seed cũ là thứ tệ hơn một lỗi.
+  if (record.learnedPolicyId !== undefined) {
+    if (!learnedPolicy) {
+      throw new Error(
+        `Record cần learnedPolicy "${record.learnedPolicyId}" nhưng không được cấp`,
+      );
+    }
+    if (learnedPolicy.id !== record.learnedPolicyId) {
+      throw new Error(
+        `Record cần learnedPolicy "${record.learnedPolicyId}" nhưng nhận "${learnedPolicy.id}"`,
+      );
+    }
   }
   return runSelfPlay({
     seed: record.seed,
@@ -1505,6 +1563,8 @@ export function replayGame(record: SelfPlayRecord, weights?: BotWeights): SelfPl
     speech: record.speech,
     defense: record.defense,
     humanSeats: record.humanSeats,
+    learnedPolicy,
+    learnedSeats: record.learnedSeats,
   });
 }
 

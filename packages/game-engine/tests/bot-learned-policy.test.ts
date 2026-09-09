@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { runSelfPlay } from "../src/bot/evaluation/selfplay";
+import { isWolfPack } from "@masoi/shared";
+import { replayGame, runSelfPlay } from "../src/bot/evaluation/selfplay";
 import {
   actionIndexOf,
   actionSize,
@@ -90,7 +91,10 @@ describe("selectLearnedNight (NIGHT)", () => {
       traceLiveInput: true,
       learnedPolicy: preferring(actionIndexOf("SKIP", DEFAULT_MAX_SEATS)),
     });
-    expect(game.violations).toEqual([]);
+    // Không ai hành động đêm thì không ai chết đêm, nên ván chạm trần vòng —
+    // đó là hệ quả của policy giả, không phải một nước đi phạm luật. Thứ đang
+    // được đo là seam đêm không bao giờ gửi một nước engine không chào.
+    expect(game.violations.filter((v) => v.id !== "ROUND_LIMIT")).toEqual([]);
     const witchNights = game.traces.filter(
       (t) =>
         t.decision === "NIGHT" &&
@@ -103,5 +107,60 @@ describe("selectLearnedNight (NIGHT)", () => {
     );
     // heuristic giữ lượt Thám Tử
     if (detective) expect(detective.chosen.targetId).not.toBeNull();
+  });
+});
+
+describe("self-play cấp policy theo phe, và replay đòi đúng policy", () => {
+  it("learnedSeats='wolves': chỉ ghế Sói dùng policy", () => {
+    // Policy thích "không treo ai" ban ngày: nếu ÁP cho làng, làng sẽ hay bỏ
+    // treo hơn hẳn. Đếm số phiếu "không treo ai" của phe làng ở hai cấu hình.
+    const policy = preferring(actionIndexOf("CHOOSE", DEFAULT_MAX_SEATS));
+    const wolvesOnly = runSelfPlay({
+      seed: "lp-7",
+      playerCount: 8,
+      maxRounds: 6,
+      trace: true,
+      learnedPolicy: policy,
+      learnedSeats: "wolves",
+    });
+    const all = runSelfPlay({
+      seed: "lp-7",
+      playerCount: 8,
+      maxRounds: 6,
+      trace: true,
+      learnedPolicy: policy,
+      learnedSeats: "all",
+    });
+    const noneVotes = (game: typeof all, wolf: boolean): number =>
+      game.traces.filter(
+        (t) =>
+          t.decision === "VOTE" &&
+          isWolfPack(game.roles[t.botId]!) === wolf &&
+          t.chosen.targetId === null,
+      ).length;
+    // Làng ở wolvesOnly KHÔNG bị policy chi phối.
+    expect(noneVotes(wolvesOnly, false)).toBeLessThan(noneVotes(all, false));
+    expect(wolvesOnly.record.learnedPolicyId).toBe(policy.id);
+    expect(wolvesOnly.record.learnedSeats).toBe("wolves");
+  });
+
+  it("record không có policy thì không mang hai trường đó", () => {
+    const plain = runSelfPlay({ seed: "lp-9", playerCount: 8, maxRounds: 4 });
+    // Khoá phải VẮNG chứ không phải bằng `undefined`: record đi thẳng ra JSON
+    // và một ván heuristic phải cho ra đúng record như trước bản này.
+    expect(Object.keys(plain.record)).not.toContain("learnedPolicyId");
+    expect(Object.keys(plain.record)).not.toContain("learnedSeats");
+  });
+
+  it("replayGame từ chối khi thiếu policy đúng id", () => {
+    const policy = preferring(actionIndexOf("CHOOSE", 1));
+    const game = runSelfPlay({ seed: "lp-8", playerCount: 8, maxRounds: 4, learnedPolicy: policy });
+    expect(() => replayGame(game.record)).toThrow(/learnedPolicy/);
+    expect(() =>
+      replayGame(game.record, undefined, preferring(actionIndexOf("CHOOSE", 2))),
+    ).toThrow(/prefer-/);
+    const again = replayGame(game.record, undefined, policy);
+    expect(again.winner).toBe(game.winner);
+    expect(again.actions).toBe(game.actions);
   });
 });
