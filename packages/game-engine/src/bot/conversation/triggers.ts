@@ -1,3 +1,4 @@
+import { type QuestionType } from "../analysis/chat-analysis";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { BotBrainState, BotDecisionContext, BotMemory } from "../types";
 import { hasReplied } from "./speech-memory";
@@ -33,6 +34,14 @@ export interface ConversationTrigger {
   subjectId: string;
   /** Cao hơn thì được xét trước. Xem bảng trong spec §5.3. */
   priority: number;
+  /**
+   * Chỉ `QUESTIONED_ME`: câu hỏi đang hỏi về chuyện gì (COMMUNICATION §13).
+   *
+   * Đến từ `memory.data.questionType` mà `chat-analysis` đã chốt lúc parse -
+   * module này KHÔNG đọc raw text, và ranh giới đó không được nới ra vì một
+   * cái nhãn. Vắng mặt với mọi kind khác, và với memory cũ chưa có nhãn.
+   */
+  questionType?: QuestionType;
 }
 
 /**
@@ -96,12 +105,16 @@ export function findConversationTriggers(
     memory: BotMemory,
     subjectId: string,
   ): void => {
+    const questionType = memory.data.questionType;
     triggers.push({
       kind,
       messageId: memory.sourceId,
       actorId: memory.actorId,
       subjectId,
       priority: PRIORITY[kind],
+      ...(typeof questionType === "string"
+        ? { questionType: questionType as QuestionType }
+        : {}),
     });
   };
 

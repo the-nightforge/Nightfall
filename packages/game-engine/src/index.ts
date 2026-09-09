@@ -47,6 +47,7 @@ export * from "./bot/personality/speech-style";
 export * from "./bot/conversation/chain-limits";
 export * from "./bot/conversation/conversation-state";
 export * from "./bot/conversation/fingerprint";
+export * from "./bot/conversation/question-policy";
 export * from "./bot/conversation/speech-memory";
 export * from "./bot/conversation/triggers";
 export * from "./bot/conversation/speech-planner";

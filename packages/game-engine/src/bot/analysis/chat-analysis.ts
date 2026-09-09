@@ -347,6 +347,67 @@ function requestsOpinion(raw: string): boolean {
 }
 
 /**
+ * Câu hỏi ĐANG HỎI VỀ CHUYỆN GÌ (spec COMMUNICATION §13).
+ *
+ * Bảy ô, và mỗi ô tồn tại vì `question-policy.ts` rẽ nhánh KHÁC NHAU trên nó.
+ * Spec §13 gợi ý thêm `MOTIVE` và `DEFENSE`; hai ô đó bị bỏ có chủ đích vì mọi
+ * đường đi của chúng trùng khít `GENERAL` - một nhãn không ai đọc là một nhãn
+ * sẽ trôi lệch khỏi hành vi thật. Thêm lại khi có một nhánh chiến thuật cần nó.
+ */
+export const QUESTION_TYPES = [
+  /** "mày là sói phải ko" - một cáo buộc mặc áo câu hỏi. */
+  "ACCUSATION",
+  /** "vai gì thế", "t là tt, còn ông" - hỏi thẳng vai. */
+  "ROLE",
+  /** "dựa vào đâu", "căn cứ gì" - đòi bằng chứng. */
+  "EVIDENCE",
+  /** "sao lúc nãy bảo tin A giờ lại nghi" - hỏi về tính nhất quán. */
+  "CONSISTENCY",
+  /** "sao vote B" - hỏi về lá phiếu. */
+  "VOTE",
+  /** "nghi ai nhất" - hỏi mục tiêu. */
+  "TARGET",
+  "GENERAL",
+] as const;
+
+export type QuestionType = (typeof QUESTION_TYPES)[number];
+
+/** Dấu hiệu của từng loại. Bảo thủ: không khớp gì thì `GENERAL`. */
+const QUESTION_MARKERS: ReadonlyArray<readonly [QuestionType, readonly string[]]> = [
+  // Trước ROLE: "mày là sói ko" có chữ vai, nhưng nó là một lời tố chứ không
+  // phải một câu hỏi về vai. Chỉ dòng SÓI mới đảo được nghĩa như vậy.
+  ["ACCUSATION", ["sói", "ma sói", "sw", "sói con", "sói alpha", "phản bội", "sát nhân"]],
+  ["ROLE", ["vai gì", "vai nào", "vai j", "role gì", "vai của", "tiên tri", "tt", "bảo vệ", "bv", "phù thuỷ", "phù thủy", "thợ săn", "thám tử", "dân làng", "dân"]],
+  ["EVIDENCE", ["căn cứ", "bằng chứng", "dựa vào đâu", "dựa vào gì", "sao biết", "biết sao", "lý do", "chứng minh", "cơ sở"]],
+  // Trước VOTE: "sao lúc nãy đổi phiếu" là câu hỏi về tính nhất quán, không
+  // phải một câu hỏi về lá phiếu hôm nay.
+  ["CONSISTENCY", ["lúc nãy", "hồi nãy", "vừa nãy", "hôm qua", "vòng trước", "đổi ý", "đổi phiếu", "quay xe", "lúc trước", "ban nãy", "mới nói", "vừa bảo"]],
+  ["VOTE", ["vote", "phiếu", "bỏ phiếu", "treo ai", "treo ", "vót"]],
+  ["TARGET", ["nghi ai", "nghi ng nào", "ai lạ", "chọn ai", "theo ai", "nhắm ai", "ai nhất"]],
+];
+
+/**
+ * Câu hỏi này thuộc loại nào.
+ *
+ * Chạy trên CẢ tin nhắn, cùng lý do với `parseDirectAddress`: dấu hiệu loại
+ * thường nằm khác mệnh đề với lời gọi tên ("An ơi, dựa vào đâu vậy").
+ *
+ * Thuần cú pháp như phần còn lại của module: nó nói câu hỏi ĐỀ CẬP tới chuyện
+ * gì, không nói người hỏi đang nghĩ gì. Không sinh bằng chứng, không đổi belief.
+ */
+export function classifyQuestion(whole: Clause): QuestionType {
+  for (const [type, markers] of QUESTION_MARKERS) {
+    for (const marker of markers) {
+      const ascii = asciiForm(marker);
+      if (includesWord(whole.plain, marker) || includesWord(whole.ascii, ascii)) {
+        return type;
+      }
+    }
+  }
+  return "GENERAL";
+}
+
+/**
  * Một câu nói THẲNG VỚI một người, nếu có.
  *
  * Đòi hỏi một dấu hiệu cú pháp tường minh: dấu hỏi, một từ để hỏi, một tiểu từ
@@ -378,7 +439,13 @@ function parseDirectAddress(
     QUESTION_WORDS.some((word) => (word === "đâu" && negated ? false : includesWord(whole.plain, word))) ||
     endsWithYesNoTail(raw) ||
     requestsOpinion(raw);
-  if (asking) return { type: "DIRECT_QUESTION", targetId: target.id, data: {} };
+  if (asking) {
+    return {
+      type: "DIRECT_QUESTION",
+      targetId: target.id,
+      data: { questionType: classifyQuestion(whole) },
+    };
+  }
 
   const calling =
     VOCATIVE_PARTICLES.some((word) => includesWord(whole.plain, word)) ||

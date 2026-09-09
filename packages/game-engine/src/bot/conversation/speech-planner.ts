@@ -1,3 +1,4 @@
+import { credibilityOf } from "../belief/player-assessment";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { decideChatClaim, seerHoldsForHumans } from "../decision/claim-decision";
 import type { BotSpeechStyle } from "../personality/speech-style";
@@ -13,6 +14,7 @@ import type {
 } from "../types";
 import { buildConversationState, speechUrge, type ConversationState } from "./conversation-state";
 import { speechSemanticFingerprint } from "./fingerprint";
+import { chooseResponseStrategy, intentionFor } from "./question-policy";
 import { hasRecentSemantic } from "./speech-memory";
 import { findConversationTriggers, type ConversationTrigger } from "./triggers";
 
@@ -161,6 +163,130 @@ function responseProbability(
   return Math.min(Math.max(base, floor), replyCeiling);
 }
 
+/**
+ * Bằng chứng BOT được phép nói RA lượt này.
+ *
+ * Ba bộ lọc, theo thứ tự: đã nói rồi thì thôi, bằng chứng soi bị giữ tới lúc
+ * khai vai, và trần `limits.intentionEvidence`.
+ *
+ * Tách thành hàm vì từ PR 4 có HAI chỗ hỏi cùng một câu - đường tự mở lời và
+ * câu đáp `ANSWER_WITH_EVIDENCE`. Hai bản sao của luật giữ bằng chứng soi là
+ * hai bản sẽ trôi lệch, và chỗ trôi lệch đó là một rò rỉ thông tin vai.
+ *
+ * THUẦN: không rút số. Gọi ở đâu cũng không lệch chuỗi RNG.
+ */
+function sayableEvidence(
+  context: BotDecisionContext,
+  state: BotBrainState,
+  vote: BotVoteIntention,
+  weights: BotWeights,
+): BotSpeechIntention["evidence"] {
+  const spoken = new Set(state.speechMemory.flatMap((entry) => entry.sourceIds));
+
+  /**
+   * Bằng chứng soi mở khoá theo LỜI KHAI, không theo số vòng.
+   *
+   * Nói "tôi soi thấy Nam là sói" mà chưa hề nhận mình là Tiên Tri là một câu
+   * vô nghĩa: cả làng không biết dựa vào đâu, và bầy Sói thì biết thừa phải cắn
+   * ai. Giữ lại tới đúng lúc khai thì cả hai bung ra một lượt, và lời khai
+   * thành một khoảnh khắc thay vì một dòng tin rỉ ra dần.
+   *
+   * Nhánh `else` giữ NGUYÊN luật cũ cho v1/v2/v3. Đổi thẳng sẽ đảo ngược hành
+   * vi của chúng: ở đó không BOT nào khai vai bao giờ, nên "chưa khai" luôn
+   * đúng và bằng chứng soi sẽ không bao giờ được nói ra — trong khi hôm nay
+   * `seerRevealRound = 0` nghĩa là nó LUÔN được nói ra.
+   *
+   * Bàn có người thật (P2.1) thêm một điều kiện giữ nữa, dùng CHUNG với cổng
+   * PROACTIVE của `decideChatClaim`: chưa khai vai VÀ chưa tới
+   * `seerRevealRoundHuman` thì kết quả soi không lọt vào lời nào cả. Đã khai
+   * rồi (bị dồn, bị mạo danh) thì thả - giấu bằng chứng sau khi đã lộ vai chỉ
+   * làm lời khai yếu đi. `0` ở v1..v13 nên biểu thức này rút gọn về luật cũ.
+   */
+  const holdForHumans = state.myClaim === null && seerHoldsForHumans(context, weights);
+  const holdSeerEvidence =
+    holdForHumans ||
+    (weights.claim.accusationWeight > 0
+      ? state.myClaim === null
+      : context.knowledge.round < weights.deceptionRisk.seerRevealRound);
+
+  return vote.evidence
+    .filter((item) => !spoken.has(item.sourceId))
+    .filter(
+      (item) =>
+        !holdSeerEvidence ||
+        (item.kind !== "SEER_RESULT_WOLF" && item.kind !== "SEER_RESULT_CLEAR"),
+    )
+    .slice(0, weights.limits.intentionEvidence)
+    .map((item) => ({ ...item }));
+}
+
+/**
+ * Câu đáp cho một câu hỏi nhắm thẳng vào BOT (COMMUNICATION §13, §14).
+ *
+ * Trả về `[]` khi chính sách chọn `IGNORE`. Danh sách rỗng là tín hiệu cho chỗ
+ * gọi bỏ qua trigger này mà KHÔNG rút số - né có chủ đích, không phải một lượt
+ * rút xui.
+ *
+ * Luôn tối đa MỘT ứng viên. Bậc thang theo tính cách của Phase 4 đưa ra nhiều
+ * ứng viên vì nó không biết câu hỏi nói về chuyện gì; ở đây thì biết, nên một
+ * lựa chọn thứ hai chỉ là một cách nói "chính sách chưa chắc" - và chỗ gọi vốn
+ * đã bỏ qua ứng viên thứ hai sau lượt rút đầu tiên.
+ *
+ * THUẦN: không rút số.
+ */
+function questionDrafts(
+  trigger: ConversationTrigger,
+  style: BotSpeechStyle,
+  state: BotBrainState,
+  vote: BotVoteIntention,
+  usable: BotSpeechIntention["evidence"],
+  conversation: ConversationState,
+  weights: BotWeights,
+): BotSpeechIntention[] {
+  const type = trigger.questionType ?? "GENERAL";
+  const strategy = chooseResponseStrategy({
+    type,
+    pressureOnMe: conversation.pressureOnMe,
+    askerCredibility: credibilityOf(state, trigger.actorId, weights),
+    unspokenEvidence: usable.length,
+    hasClaimedRole: state.myClaim !== null,
+    ignoreFloor: weights.conversation.questionIgnoreFloor,
+    style,
+  });
+
+  const shape = intentionFor(strategy, type, style);
+  if (!shape) return [];
+
+  return [
+    {
+      kind: shape.kind,
+      // Câu đáp luôn hướng về NGƯỜI HỎI. Trả lời một câu hỏi mà nhắm vào người
+      // thứ ba là đang nói chuyện khác, không phải đang đáp.
+      targetId: trigger.actorId,
+      replyToMessageId: trigger.messageId,
+      replyToActorId: trigger.actorId,
+      topic: shape.topic,
+      confidence: vote.confidence,
+      evidence: shape.withEvidence ? usable : [],
+      tone: shape.tone,
+      reason: `đáp câu hỏi ${type} bằng ${strategy}`,
+    },
+  ];
+}
+
+/**
+ * Vì sao im lặng, cho trace.
+ *
+ * Hàm riêng chứ không phải một biểu thức tại chỗ: `conversation` chỉ được gán
+ * bên trong một closure, nên tại điểm gọi trình biên dịch thu nó về `never` và
+ * hai trường bên dưới thành lỗi. Đọc qua tham số là cách nói đúng ý - "cái
+ * bảng ấy có thể đã dựng, có thể chưa".
+ */
+function silenceReason(conversation: ConversationState | null): string {
+  if (conversation === null) return "không đủ hoạt ngôn để lên tiếng lượt này";
+  return `chưa đáng lên tiếng lượt này (${conversation.floor}, áp lực ${conversation.pressureOnMe.toFixed(2)})`;
+}
+
 export interface SpeechPlanInput {
   context: BotDecisionContext;
   state: BotBrainState;
@@ -210,20 +336,45 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
     if (intention) return intention;
   }
 
+  // Bằng chứng nói ra được lượt này. Thuần, nên tính sớm không lệch chuỗi RNG;
+  // cả câu đáp `ANSWER_WITH_EVIDENCE` lẫn đường tự mở lời đều đọc đúng nó.
+  const usable = sayableEvidence(context, state, vote, weights);
+
+  // Dựng một lần, dùng chung cho cả hai đường, và CHỈ khi có ai đó thật sự đọc:
+  // nó quét cả memory, và một bảng không ai đọc là một vòng lặp trả tiền không.
+  let conversation: ConversationState | null = null;
+  const socialSituation = (): ConversationState =>
+    (conversation ??= buildConversationState(context, state, weights));
+
   // ---- 1. Có ai đang nói với mình không ----
+  const { questionIgnoreFloor } = weights.conversation;
+
   for (const trigger of findConversationTriggers(context, state, weights)) {
-    for (const kind of candidatesFor(trigger, style)) {
-      const candidate = fresh({
-        kind,
-        targetId: targetFor(trigger, kind),
-        replyToMessageId: trigger.messageId,
-        replyToActorId: trigger.actorId,
-        topic: topicFor(trigger),
-        confidence: vote.confidence,
-        evidence: [],
-        tone: toneFor(kind, style),
-        reason: `phản hồi ${trigger.kind}`,
-      });
+    /**
+     * Ứng viên cho trigger này, đã là Ý ĐỊNH đầy đủ.
+     *
+     * Câu hỏi nhắm thẳng vào BOT đi qua `question-policy` khi nút vặn bật; mọi
+     * trigger khác giữ nguyên bậc thang theo tính cách của Phase 4. Danh sách
+     * RỖNG nghĩa là bỏ qua trigger này mà KHÔNG rút số - đó là `IGNORE`, và né
+     * một câu hỏi là một nước đi hợp lệ (spec §28).
+     */
+    const drafts: BotSpeechIntention[] =
+      questionIgnoreFloor > 0 && trigger.kind === "QUESTIONED_ME"
+        ? questionDrafts(trigger, style, state, vote, usable, socialSituation(), weights)
+        : candidatesFor(trigger, style).map((kind) => ({
+            kind,
+            targetId: targetFor(trigger, kind),
+            replyToMessageId: trigger.messageId,
+            replyToActorId: trigger.actorId,
+            topic: topicFor(trigger),
+            confidence: vote.confidence,
+            evidence: [],
+            tone: toneFor(kind, style),
+            reason: `phản hồi ${trigger.kind}`,
+          }));
+
+    for (const draft of drafts) {
+      const candidate = fresh(draft);
       if (!candidate) continue;
 
       if (rng() < responseProbability(trigger, style, weights)) return candidate;
@@ -238,73 +389,32 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
   //
   // Từ đây trở xuống là đúng bậc thang Phase 3, và lượt rút ngay dưới đây là
   // lượt rút DUY NHẤT mà cấu hình v1/v2 thực hiện.
-  const spoken = new Set(state.speechMemory.flatMap((entry) => entry.sourceIds));
-
   /**
    * Hoạt ngôn là TÍNH CÁCH; "lượt này có đáng nói không" là TÌNH HUỐNG. Ngưỡng
    * là tổng của cả hai.
    *
    * Cộng vào ngưỡng chứ không thêm một lượt rút: `speechUrge` thuần, và với
    * `urgencyBoost = 0` (v1..v22) biểu thức quy về đúng `talkativeness`, nên
-   * chuỗi RNG của mọi preset cũ không lệch một bit. Chỉ dựng
-   * `ConversationState` khi nút vặn thật sự bật - nó quét cả memory, và một
-   * bảng không ai đọc là một vòng lặp trả tiền cho không.
+   * chuỗi RNG của mọi preset cũ không lệch một bit.
+   *
+   * `usable.length` chứ không phải số bằng chứng đang CẦM: một kết quả soi còn
+   * bị giữ tới lúc khai vai thì lượt này không nói ra được, nên nó không phải
+   * một lý do để mở lời.
    */
   const { urgencyBoost } = weights.conversation;
-  let conversation: ConversationState | null = null;
   let threshold = state.personality.talkativeness;
   if (urgencyBoost > 0) {
-    conversation = buildConversationState(context, state, weights);
-    const unspoken = vote.evidence.filter((item) => !spoken.has(item.sourceId)).length;
     threshold = Math.min(
       1,
-      state.personality.talkativeness + urgencyBoost * speechUrge(conversation, unspoken, weights),
+      state.personality.talkativeness +
+        urgencyBoost * speechUrge(socialSituation(), usable.length, weights),
     );
   }
 
   if (rng() > threshold) {
-    probe?.fallback(
-      conversation
-        ? `chưa đáng lên tiếng lượt này (${conversation.floor}, áp lực ${conversation.pressureOnMe.toFixed(2)})`
-        : "không đủ hoạt ngôn để lên tiếng lượt này",
-    );
+    probe?.fallback(silenceReason(conversation));
     return null;
   }
-
-  /**
-   * Bằng chứng soi mở khoá theo LỜI KHAI, không theo số vòng.
-   *
-   * Nói "tôi soi thấy Nam là sói" mà chưa hề nhận mình là Tiên Tri là một câu
-   * vô nghĩa: cả làng không biết dựa vào đâu, và bầy Sói thì biết thừa phải cắn
-   * ai. Giữ lại tới đúng lúc khai thì cả hai bung ra một lượt, và lời khai
-   * thành một khoảnh khắc thay vì một dòng tin rỉ ra dần.
-   *
-   * Nhánh `else` giữ NGUYÊN luật cũ cho v1/v2/v3. Đổi thẳng sẽ đảo ngược hành
-   * vi của chúng: ở đó không BOT nào khai vai bao giờ, nên "chưa khai" luôn
-   * đúng và bằng chứng soi sẽ không bao giờ được nói ra — trong khi hôm nay
-   * `seerRevealRound = 0` nghĩa là nó LUÔN được nói ra.
-   *
-   * Bàn có người thật (P2.1) thêm một điều kiện giữ nữa, dùng CHUNG với cổng
-   * PROACTIVE của `decideChatClaim`: chưa khai vai VÀ chưa tới
-   * `seerRevealRoundHuman` thì kết quả soi không lọt vào lời nào cả. Đã khai
-   * rồi (bị dồn, bị mạo danh) thì thả - giấu bằng chứng sau khi đã lộ vai chỉ
-   * làm lời khai yếu đi. `0` ở v1..v13 nên biểu thức này rút gọn về luật cũ.
-   */
-  const holdForHumans = state.myClaim === null && seerHoldsForHumans(context, weights);
-  const holdSeerEvidence =
-    holdForHumans ||
-    (weights.claim.accusationWeight > 0
-      ? state.myClaim === null
-      : round < weights.deceptionRisk.seerRevealRound);
-  const usable = vote.evidence
-    .filter((item) => !spoken.has(item.sourceId))
-    .filter(
-      (item) =>
-        !holdSeerEvidence ||
-        (item.kind !== "SEER_RESULT_WOLF" && item.kind !== "SEER_RESULT_CLEAR"),
-    )
-    .slice(0, weights.limits.intentionEvidence)
-    .map((item) => ({ ...item }));
 
   if (vote.choice.type !== "PLAYER") {
     probe?.fallback("phiếu không nhắm ai nên không có gì để cáo buộc");

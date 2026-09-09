@@ -701,6 +701,17 @@ export interface ConversationWeights {
    * cũ replay từng bit.
    */
   urgencyBoost: number;
+  /**
+   * Ngưỡng tầm quan trọng để một câu hỏi đáng được đáp, `[0,1]`. Dưới ngưỡng
+   * (và không bị dồn) thì BOT bỏ qua có chủ đích — spec §28 nói thẳng đừng tối
+   * ưu tỉ lệ trả lời lên 100%.
+   *
+   * `0` TẮT toàn bộ chính sách trả lời câu hỏi (§13, §14) và quay về bậc thang
+   * REPLY/ASK_EVIDENCE theo tính cách. Hai nghĩa ấy khớp nhau chứ không chỏi:
+   * "không câu hỏi nào tầm thường tới mức bỏ qua" chính là hành vi cũ. Cùng
+   * quy ước với `claim.accusationWeight` và `deceptionRisk.bussingVoteShare`.
+   */
+  questionIgnoreFloor: number;
 }
 
 /**
@@ -857,6 +868,7 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   ["recency", "memoryDecayPerRound"],
   ["recency", "profileDecayPerRound"],
   ["selfPreservation", "guardSuspicionPenalty"],
+  ["conversation", "questionIgnoreFloor"],
   ["deceptionRisk", "abstainPressureCeiling"],
   ["aggression", "villageAbstainPressureCeiling"],
   // So THẲNG với một số trong [0, 1) sinh từ hash trong `fakeFightTarget`.
@@ -1285,6 +1297,7 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     selfPlayTurnsPerRound: 1,
     unansweredQuestionRounds: 0,
     urgencyBoost: 0,
+    questionIgnoreFloor: 0,
   }),
 
   /**
@@ -1551,6 +1564,7 @@ export const BOT_WEIGHTS_V3: BotWeights = Object.freeze({
      */
     unansweredQuestionRounds: 3,
     urgencyBoost: 0,
+    questionIgnoreFloor: 0,
   }),
 }) as BotWeights;
 
@@ -2410,6 +2424,40 @@ export const BOT_WEIGHTS_V23: BotWeights = Object.freeze({
   conversation: Object.freeze({
     ...BOT_WEIGHTS_V21.conversation,
     urgencyBoost: 0.35,
+  }),
+});
+
+/**
+ * Cấu hình v24 - chiến lược trả lời câu hỏi (COMMUNICATION §13, §14).
+ *
+ * MỘT ô đổi so v23: `conversation.questionIgnoreFloor` 0 -> 0.45.
+ *
+ * Chồng LÊN v23 chứ không lên v21: hai PR nói về cùng một thứ - bot chọn nói gì
+ * khi bị nói tới - và tách chúng thành hai nhánh song song thì không bản nào
+ * đo được cả cụm. v23 vẫn là mốc A/B cho riêng SPEAK/WAIT.
+ *
+ * Trước v24, một câu hỏi nhắm vào BOT chỉ có hai đường ra (`REPLY` hoặc
+ * `ASK_EVIDENCE`) chọn theo đúng một trait, nên "mày là sói phải ko" và "nghi
+ * ai nhất" nhận cùng một cách xử. Từ v24, câu hỏi được `chat-analysis` gắn
+ * nhãn lúc parse (7 loại) và `question-policy` chọn một trong 7 cách đáp.
+ *
+ * Hai luật cứng đi kèm, cả hai đều là luật AN TOÀN chứ không phải hiệu chỉnh:
+ *
+ * - Bị hỏi vai mà CHƯA khai thì không bao giờ trả lời thẳng. Lời khai là quyết
+ *   định của `decideChatClaim`; để một câu hỏi moi được nó ra là giao nước đi
+ *   nặng nhất của lời nói cho đối thủ.
+ * - `IGNORE` là một kết quả hợp lệ. Spec §28 nói thẳng: đừng tối ưu tỉ lệ trả
+ *   lời lên 100%.
+ *
+ * KHÔNG mặc định - bench v24 so v21 trước, kỷ luật v19.
+ */
+export const BOT_WEIGHTS_V24: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V23,
+  version: "24.0.0",
+
+  conversation: Object.freeze({
+    ...BOT_WEIGHTS_V23.conversation,
+    questionIgnoreFloor: 0.45,
   }),
 });
 

@@ -82,7 +82,15 @@ function incomingSupportOf(state: BotBrainState, targetId: string): number {
   return count === 0 ? 0 : total / count;
 }
 
-function credibilityOf(
+/**
+ * "Lời người này nói đáng tin tới mức nào", `0..1`, CHỈ từ hồ sơ trong ván.
+ *
+ * `export` vì `speech-planner` cần đúng con số này khi cân xem một câu hỏi có
+ * đáng đáp không (COMMUNICATION §13 "Importance"). Một bản sao công thức ở đó
+ * sẽ trôi lệch, và khi nó trôi thì hai tầng cùng nói "uy tín" mà ý hai thứ khác
+ * nhau.
+ */
+export function credibilityOf(
   state: BotBrainState,
   playerId: string,
   weights: BotWeights,
