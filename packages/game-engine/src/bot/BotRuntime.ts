@@ -48,7 +48,9 @@ import { markReplied, recordSpeechIntention } from "./conversation/speech-memory
 import { planSpeech } from "./conversation/speech-planner";
 import { deriveSpeechStyle, type BotSpeechStyle } from "./personality/speech-style";
 import { strategyFor } from "./roles/registry";
+import type { LearnedPolicy } from "./learning/mlp";
 import { buildLiveObservation } from "./learning/live-observation";
+import { learnedPolicyModel } from "./policy/learned-policy";
 import { snapshotBelief, snapshotKnowledge } from "./trace/snapshot";
 import { decayAndPrune } from "./memory/memory-decay";
 import { createBotBrainState, remember } from "./memory/memory-store";
@@ -124,6 +126,14 @@ export interface BotRuntimeOptions {
    * vector". Một batch dựng dataset không cần nó.
    */
   traceLiveInput?: boolean;
+  /**
+   * Policy học được (MLP) cho cả VOTE lẫn NIGHT. Vắng = heuristic thuần, tức
+   * hành vi production hiện hành, byte một.
+   *
+   * Nếu cấp cả `votePolicy` thì `votePolicy` thắng ở lượt VOTE (để hybrid
+   * alpha/beta còn cắm được); `learnedPolicy` vẫn dùng cho NIGHT.
+   */
+  learnedPolicy?: LearnedPolicy;
 }
 
 interface MemoryDraft {
@@ -197,6 +207,8 @@ export class BotRuntime {
   private readonly votePolicy: PolicyModel | undefined;
   /** Xem `BotRuntimeOptions.traceLiveInput`. */
   private readonly traceLiveInput: boolean;
+  /** Xem `BotRuntimeOptions.learnedPolicy`. */
+  private readonly learnedPolicy: LearnedPolicy | undefined;
   /**
    * Belief trước và sau lần `observe` gần nhất.
    *
@@ -216,9 +228,18 @@ export class BotRuntime {
   constructor(options: BotRuntimeOptions) {
     this.rng = options.rng;
     this.trace = options.trace;
-    this.votePolicy = options.votePolicy;
     this.traceLiveInput = options.traceLiveInput === true;
+    this.learnedPolicy = options.learnedPolicy;
     this.weights = options.weights ?? DEFAULT_BOT_WEIGHTS;
+    // Sau `this.weights`: model dựng observation bằng đúng bảng trọng số này.
+    // `belief` đọc lười ảnh chụp cuối `observe` — cùng vector mà trace ghi.
+    this.votePolicy =
+      options.votePolicy ??
+      (options.learnedPolicy
+        ? learnedPolicyModel(options.learnedPolicy, this.weights, {
+            belief: () => this.beliefAfter,
+          })
+        : undefined);
 
     // Kiểm ngay tại constructor, không phải ở vòng 7 của ván thứ 214. Một NaN
     // lọt qua sẽ không ném - nó chỉ làm mọi phép so sánh trả về false, và BOT
@@ -339,7 +360,11 @@ export class BotRuntime {
     applyPrivateInformation(this.state, knowledge, this.weights);
     this.adaptToDeaths(knowledge, previousKnownRoles);
 
-    if (this.trace) this.beliefAfter = this.snapshotBelief(knowledge);
+    // Policy học được đọc ảnh chụp NÀY chứ không tự tính lại: giữa lần
+    // `observe` và lúc quyết định, knowledge đã đổi (người khác vừa bỏ phiếu,
+    // bầy Sói vừa khoá nạn nhân), nên tính lại sẽ ra một belief khác belief mà
+    // model đã thấy lúc train.
+    if (this.trace || this.learnedPolicy) this.beliefAfter = this.snapshotBelief(knowledge);
   }
 
   /** Chốt phiếu deterministic từ belief hiện tại. */
