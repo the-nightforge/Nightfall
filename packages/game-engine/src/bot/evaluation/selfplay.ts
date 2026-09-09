@@ -110,6 +110,8 @@ export interface SelfPlayRecord {
    */
   learnedPolicyId?: string;
   learnedSeats?: LearnedSeats;
+  /** Nhiệt độ lấy mẫu đã dùng; vắng = 0 (argmax). `replayGame` cần nó để tái lập. */
+  learnedTemperature?: number;
 }
 
 export interface SelfPlayInput {
@@ -143,6 +145,8 @@ export interface SelfPlayInput {
   learnedPolicy?: LearnedPolicy;
   /** Ghế nào dùng policy; mặc định `"all"`. Xem `LearnedSeats`. */
   learnedSeats?: LearnedSeats;
+  /** Xem `BotRuntimeOptions.learnedTemperature`. Mặc định 0 (argmax). */
+  learnedTemperature?: number;
   /** Xem `SelfPlayRecord.humanSeats`. Mặc định 0. */
   humanSeats?: number;
 }
@@ -491,6 +495,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       ? {
           learnedPolicyId: input.learnedPolicy.id,
           learnedSeats: input.learnedSeats ?? "all",
+          learnedTemperature: input.learnedTemperature ?? 0,
         }
       : {}),
   };
@@ -541,6 +546,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
         trace: collector as BotTraceSink | undefined,
         traceLiveInput: input.traceLiveInput === true,
         learnedPolicy: usesLearned ? input.learnedPolicy : undefined,
+        learnedTemperature: input.learnedTemperature,
       }),
     );
   }
@@ -1565,6 +1571,7 @@ export function replayGame(
     humanSeats: record.humanSeats,
     learnedPolicy,
     learnedSeats: record.learnedSeats,
+    learnedTemperature: record.learnedTemperature,
   });
 }
 

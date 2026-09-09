@@ -71,10 +71,19 @@ def evaluate(model: PolicyValueNet, data, device: torch.device) -> dict:
         top2 = logits.topk(2, dim=1).indices
         in_top2 = (top2 == actions.unsqueeze(1)).any(dim=1).cpu().numpy()
 
+    # `agreementTieAware`: chấm đúng khi nước model chọn HOÀ đỉnh với teacher.
+    # `agreement` chấm oan mọi nước hoà điểm mà teacher phá hoà bằng id thô —
+    # thông tin §9 cố tình giấu khỏi observation, nên model không thể học nó.
+    tie_aware = None
+    if data.optimal is not None:
+        pred = predicted.cpu().numpy()
+        tie_aware = round(float(data.optimal[np.arange(len(pred)), pred].mean()), 4)
+
     return {
         "samples": len(data),
         "policyLoss": round(loss, 4),
         "agreement": round(float(correct.mean()), 4),
+        "agreementTieAware": tie_aware,
         "top2Agreement": round(float(in_top2.mean()), 4),
         "valueMae": round(float((value - rewards).abs().mean().item()), 4),
         "agreementByRole": _group_means(correct, data.roles, data.meta["roles"]),
@@ -233,7 +242,8 @@ def main() -> None:
         entry = report["metrics"][name]
         print(
             f"  {name:<11} agreement {entry.get('agreement')}"
-            f"  (top-2 {entry.get('top2Agreement')})"
+            f"  (tie-aware: {entry.get('agreementTieAware')}"
+            f", top-2 {entry.get('top2Agreement')})"
         )
 
     train_score = report["metrics"]["train"].get("agreement", 0)

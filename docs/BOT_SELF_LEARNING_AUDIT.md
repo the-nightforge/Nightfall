@@ -274,15 +274,23 @@ So sánh champion/challenger chỉ có nghĩa khi §55 Step 8 (behavior cloning)
 Chỉ được bắt đầu khi leak validation xanh — đã xanh. Thứ tự:
 
 ```text
-1. Sinh 10.000 ván  →  ai:validate-dataset  →  dataset-0001
-2. Behavior cloning (§17/§18): MLP nhỏ, policy head + value head
-3. Đo "learned bot ≈ current bot" — chưa đạt thì KHÔNG sang RL (§17)
-4. Self-play + opponent pool (§22/§23)  →  PPO (§38)
-5. Champion/challenger trên seed cố định (§24/§25/§26)
+1. Sinh 10.000 ván  →  ai:validate-dataset  →  dataset-0001      ✅ XONG
+2. Behavior cloning (§17/§18): MLP nhỏ, policy head + value head  ✅ XONG (policy-0004)
+3. Đo "learned bot ≈ current bot" — chưa đạt thì KHÔNG sang RL    ✅ XONG (tie-aware 0,940)
+4. Self-play + opponent pool (§22/§23)  →  PPO (§38)              ✅ ĐƯỜNG ỐNG (rl_loop.py)
+5. Champion/challenger trên seed cố định (§24/§25/§26)            ✅ ĐƯỜNG ỐNG (ai:benchmark)
 ```
 
-Split đã sẵn sàng cho bước 2; `hybridPolicyModel` đã sẵn sàng cho bước 5 với
-`alpha = 1, beta = 0` (§30).
+Bước 3 chỉ đọc được sau khi thước đo được sửa: `agreement` chấm oan 28% nước
+hoà điểm (48% ở đêm), nên `agreementTieAware` mới là con số trả lời câu hỏi
+"model có tái lập được chính sách của bot không". policy-0004 đạt 0,940 tổng
+thể, 0,959 ở lượt đêm — đủ để mở cổng sang RL.
+
+Bước 4 và 5 có ĐƯỜNG ỐNG chạy được, chưa có KẾT QUẢ: `rl_loop.py` chạy trọn
+vòng rollout → PPO → benchmark → thăng hạng và tự chạy tiếp được sau khi ngắt,
+nhưng bao nhiêu vòng thì bot vượt heuristic là câu hỏi chưa ai trả lời.
+
+`hybridPolicyModel` vẫn sẵn cho bước 5 với `alpha = 1, beta = 0` (§30).
 
 ---
 

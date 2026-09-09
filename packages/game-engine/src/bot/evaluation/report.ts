@@ -60,6 +60,8 @@ export interface SelfPlayBatchInput {
   learnedPolicy?: LearnedPolicy;
   /** Ghế nào dùng policy đó. Xem `LearnedSeats`. */
   learnedSeats?: LearnedSeats;
+  /** Xem `SelfPlayInput.learnedTemperature`. Mặc định 0 (argmax). */
+  learnedTemperature?: number;
 }
 
 export interface ReportTiming {
@@ -114,6 +116,7 @@ export function runBatch(input: SelfPlayBatchInput): SelfPlayGame[] {
       humanSeats: input.humanSeats,
       learnedPolicy: input.learnedPolicy,
       learnedSeats: input.learnedSeats,
+      learnedTemperature: input.learnedTemperature,
       // `false` chứ không phải `undefined` cho phần đuôi batch: `runSelfPlay`
       // đọc trường này bằng một phép kiểm chân trị, nên cả hai đều tắt - nhưng
       // viết thẳng ra thì trần trace là một luật đọc được ở đây.
@@ -140,6 +143,7 @@ export function runBatch(input: SelfPlayBatchInput): SelfPlayGame[] {
         // báo REPLAY_DIVERGENCE ở mọi ván có policy.
         learnedPolicy: input.learnedPolicy,
         learnedSeats: input.learnedSeats,
+        learnedTemperature: input.learnedTemperature,
         // Lần chạy đối chứng KHÔNG thu trace: nó chỉ tồn tại để so chuỗi sự
         // kiện, và thu trace ở đây là trả gấp đôi bộ nhớ cho một bản sao không
         // ai đọc.

@@ -18,12 +18,50 @@ import type {
   BotBrainState,
   BotDecisionContext,
   BotNightIntention,
+  BotRng,
   NightActionKind,
 } from "../types";
 import { heuristicPolicyModel, type PolicyModel } from "./policy-model";
 
+/**
+ * Nước đi policy đã LẤY MẪU, kèm đúng hai con số PPO cần: `logProb` của chính
+ * nước đó dưới policy đã sinh ra nó, và `value(s)` của cùng observation.
+ *
+ * Tính ở đây chứ không tính lại ở Python: Python không có encoder, và một
+ * `logProb` tính lại từ một vector dựng lại là một `logProb` của policy KHÁC.
+ */
+export interface LearnedPick {
+  actionIndex: number;
+  logProb: number;
+  value: number | null;
+  temperature: number;
+}
+
+/** Nước đi policy ĐỀ XUẤT, đã giải mã — để vòng gọi đối chiếu với nước THẬT SỰ đi. */
+export interface LearnedDecided {
+  /** `DAY_ACTION_KIND` hoặc một `NightActionKind`; "SKIP" cho bỏ lượt có chủ ý. */
+  kind: string;
+  targetId: string | null;
+}
+
+/**
+ * Nhận `LearnedPick` mỗi khi policy thật sự quyết (không gọi khi rơi về
+ * heuristic).
+ *
+ * Kèm nước đã giải mã vì policy chỉ ĐỀ XUẤT: `selectVote` còn hysteresis và
+ * hai cổng "không treo ai" phía sau, và một nước bị ghi đè là một `logProb`
+ * dạy PPO cập nhật theo hành động chưa từng xảy ra. Vòng gọi đối chiếu rồi mới
+ * ghi.
+ */
+export type LearnedPickSink = (pick: LearnedPick, decided: LearnedDecided) => void;
+
 export interface LearnedPolicyOptions {
   maxSeats?: number;
+  /**
+   * 0 = argmax (mặc định, đúng hành vi đánh giá). 1 = lấy mẫu từ softmax —
+   * chế độ rollout của RL, nơi policy PHẢI thăm dò để có gradient.
+   */
+  temperature?: number;
   /**
    * Ảnh chụp belief lấy ở CUỐI `observe` — đúng thứ trace ghi vào
    * `beliefAfter` và đúng thứ model đã thấy lúc train. Xem
@@ -47,6 +85,46 @@ export function argmaxMasked(
 }
 
 /**
+ * Lấy mẫu từ softmax(logits/T) trên các ô đang bật. T=0 → argmax (logProb vẫn
+ * là log p của ô đó tại T=1, để BC/RL cùng một quy ước). RNG là của bot, đi
+ * qua `wrapRngForTrace`, nên rollout tái lập được bằng seed.
+ */
+export function sampleMasked(
+  logits: readonly number[],
+  mask: readonly boolean[],
+  temperature: number,
+  rng: BotRng,
+): { index: number; logProb: number } | null {
+  const idx: number[] = [];
+  for (let i = 0; i < logits.length; i += 1) if (mask[i]) idx.push(i);
+  if (idx.length === 0) return null;
+  // Trừ max trước khi exp: logit của một MLP chưa chuẩn hoá chạy tới vài chục,
+  // và `Math.exp(800)` là `Infinity` — tức mọi xác suất thành NaN.
+  const logP = (t: number): Map<number, number> => {
+    const max = Math.max(...idx.map((i) => logits[i]! / t));
+    const exps = idx.map((i) => Math.exp(logits[i]! / t - max));
+    const z = exps.reduce((a, b) => a + b, 0);
+    return new Map(idx.map((i, k) => [i, Math.log(exps[k]! / z)]));
+  };
+  if (temperature <= 0) {
+    let best = idx[0]!;
+    for (const i of idx) if (logits[i]! > logits[best]!) best = i;
+    return { index: best, logProb: logP(1).get(best)! };
+  }
+  const table = logP(temperature);
+  const u = rng();
+  let acc = 0;
+  for (const i of idx) {
+    acc += Math.exp(table.get(i)!);
+    if (u < acc) return { index: i, logProb: table.get(i)! };
+  }
+  // Sai số dồn của tổng có thể để `acc` dừng dưới `u` ở ô cuối; ô cuối là câu
+  // trả lời đúng ở đó, không phải một lỗi.
+  const last = idx[idx.length - 1]!;
+  return { index: last, logProb: table.get(last)! };
+}
+
+/**
  * `PolicyModel` cho lượt VOTE, chọn bằng policy học được.
  *
  * Nhận bảng ứng viên đã chấm (hợp đồng seam) nhưng KHÔNG đọc điểm: nó dựng
@@ -59,6 +137,7 @@ export function learnedPolicyModel(
   policy: LearnedPolicy,
   weights: BotWeights,
   options: LearnedPolicyOptions = {},
+  onPick?: LearnedPickSink,
 ): PolicyModel<VoteScoringFrame> {
   const maxSeats = options.maxSeats ?? DEFAULT_MAX_SEATS;
   const slots = slotsPerKind(maxSeats);
@@ -85,12 +164,25 @@ export function learnedPolicyModel(
         if (slot === maxSeats) return noneLegal;
         return allowed.has(encoded.seats[slot]!);
       });
-      const index = argmaxMasked(policy.logits(encoded.features), mask);
-      if (index === null) return fallback.selectAction(candidates, context, probe);
-      const decoded = decodeAction(index, encoded.seats, maxSeats);
+      const temperature = options.temperature ?? 0;
+      const features = encoded.features;
+      const picked = sampleMasked(policy.logits(features), mask, temperature, context.rng);
+      if (!picked) return fallback.selectAction(candidates, context, probe);
+      const decoded = decodeAction(picked.index, encoded.seats, maxSeats);
       if (decoded.kind !== DAY_ACTION_KIND) {
         return fallback.selectAction(candidates, context, probe);
       }
+      // Chỉ báo khi nước NÀY thật sự là nước đi: một `logProb` của nước bị bỏ
+      // đi là một mẫu dạy PPO cập nhật theo hành động chưa từng xảy ra.
+      onPick?.(
+        {
+          actionIndex: picked.index,
+          logProb: picked.logProb,
+          value: policy.value(features),
+          temperature,
+        },
+        { kind: DAY_ACTION_KIND, targetId: decoded.targetId },
+      );
       return { targetId: decoded.targetId };
     },
   };
@@ -111,7 +203,9 @@ export function selectLearnedNight(
   context: BotDecisionContext,
   state: BotBrainState,
   heuristic: BotNightIntention | null,
+  rng: BotRng,
   options: LearnedPolicyOptions = {},
+  onPick?: LearnedPickSink,
 ): BotNightIntention | null {
   const night = context.knowledge.night;
   if (!night || !night.canAct) return heuristic;
@@ -124,11 +218,29 @@ export function selectLearnedNight(
     options.belief?.(),
   );
   const encoded = encodeObservation(live, { maxSeats });
-  const index = argmaxMasked(policy.logits(encoded.features), encoded.mask);
-  if (index === null) return heuristic;
-  const decoded = decodeAction(index, encoded.seats, maxSeats);
+  const temperature = options.temperature ?? 0;
+  const features = encoded.features;
+  const picked = sampleMasked(policy.logits(features), encoded.mask, temperature, rng);
+  if (!picked) return heuristic;
+  const decoded = decodeAction(picked.index, encoded.seats, maxSeats);
   const kind = decoded.kind as NightActionKind;
-  if (kind === "SKIP") return null;
+  const report = (targetId: string | null): void => {
+    onPick?.(
+      {
+        actionIndex: picked.index,
+        logProb: picked.logProb,
+        value: policy.value(features),
+        temperature,
+      },
+      { kind, targetId },
+    );
+  };
+  // SKIP là một nước ĐI có chủ ý của policy, không phải một lần rơi về
+  // heuristic — nó có nhãn, nên nó vào rollout.
+  if (kind === "SKIP") {
+    report(null);
+    return null;
+  }
   if (kind === "DETECTIVE_CHECK") return heuristic;
   if (!night.legalActions.includes(kind)) return heuristic;
   const needsTarget = kind !== "HEAL";
@@ -143,6 +255,7 @@ export function selectLearnedNight(
     confidence: 0.5,
     evidence: [],
   };
+  report(needsTarget ? decoded.targetId : null);
   return {
     ...base,
     action: kind,

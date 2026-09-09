@@ -50,7 +50,13 @@ import { deriveSpeechStyle, type BotSpeechStyle } from "./personality/speech-sty
 import { strategyFor } from "./roles/registry";
 import type { LearnedPolicy } from "./learning/mlp";
 import { buildLiveObservation } from "./learning/live-observation";
-import { learnedPolicyModel, selectLearnedNight } from "./policy/learned-policy";
+import { DAY_ACTION_KIND } from "./learning/observation";
+import {
+  learnedPolicyModel,
+  selectLearnedNight,
+  type LearnedDecided,
+  type LearnedPick,
+} from "./policy/learned-policy";
 import { snapshotBelief, snapshotKnowledge } from "./trace/snapshot";
 import { decayAndPrune } from "./memory/memory-decay";
 import { createBotBrainState, remember } from "./memory/memory-store";
@@ -134,6 +140,12 @@ export interface BotRuntimeOptions {
    * alpha/beta còn cắm được); `learnedPolicy` vẫn dùng cho NIGHT.
    */
   learnedPolicy?: LearnedPolicy;
+  /**
+   * Nhiệt độ lấy mẫu của `learnedPolicy`. 0 (mặc định) = argmax, tức hành vi
+   * đánh giá. 1 = rollout RL: policy thăm dò, và mỗi nước nó chọn mang
+   * `logProb` ra trace để PPO cập nhật được.
+   */
+  learnedTemperature?: number;
 }
 
 interface MemoryDraft {
@@ -209,6 +221,8 @@ export class BotRuntime {
   private readonly traceLiveInput: boolean;
   /** Xem `BotRuntimeOptions.learnedPolicy`. */
   private readonly learnedPolicy: LearnedPolicy | undefined;
+  /** Xem `BotRuntimeOptions.learnedTemperature`. */
+  private readonly learnedTemperature: number;
   /**
    * Belief trước và sau lần `observe` gần nhất.
    *
@@ -230,16 +244,12 @@ export class BotRuntime {
     this.trace = options.trace;
     this.traceLiveInput = options.traceLiveInput === true;
     this.learnedPolicy = options.learnedPolicy;
+    this.learnedTemperature = options.learnedTemperature ?? 0;
     this.weights = options.weights ?? DEFAULT_BOT_WEIGHTS;
-    // Sau `this.weights`: model dựng observation bằng đúng bảng trọng số này.
-    // `belief` đọc lười ảnh chụp cuối `observe` — cùng vector mà trace ghi.
-    this.votePolicy =
-      options.votePolicy ??
-      (options.learnedPolicy
-        ? learnedPolicyModel(options.learnedPolicy, this.weights, {
-            belief: () => this.beliefAfter,
-          })
-        : undefined);
+    // CHỈ policy người dùng cấp tường minh. Bản learned được dựng theo từng
+    // lượt trong `decideVote`, vì nó cần `run.onPick` — thứ chỉ tồn tại bên
+    // trong một lượt quyết định.
+    this.votePolicy = options.votePolicy;
 
     // Kiểm ngay tại constructor, không phải ở vòng 7 của ván thứ 214. Một NaN
     // lọt qua sẽ không ném - nó chỉ làm mọi phép so sánh trả về false, và BOT
@@ -370,7 +380,19 @@ export class BotRuntime {
   /** Chốt phiếu deterministic từ belief hiện tại. */
   decideVote(context: BotDecisionContext): BotVoteIntention {
     const run = this.beginTracedDecision();
-    const vote = selectVote(context, this.state, run.rng, this.weights, run.probe, this.votePolicy);
+    // `votePolicy` tường minh thắng (để hybrid alpha/beta còn cắm được); nếu
+    // không, learned model dựng ở đây để `onPick` của đúng lượt này nghe được.
+    const votePolicy =
+      this.votePolicy ??
+      (this.learnedPolicy
+        ? learnedPolicyModel(
+            this.learnedPolicy,
+            this.weights,
+            { temperature: this.learnedTemperature, belief: () => this.beliefAfter },
+            run.onPick,
+          )
+        : undefined);
+    const vote = selectVote(context, this.state, run.rng, this.weights, run.probe, votePolicy);
     run.finish(context, "VOTE", vote.choice.type === "PLAYER" ? vote.choice.targetId : null, {
       PLAYER: "bầu",
       NO_ELIMINATION: "không treo ai",
@@ -490,7 +512,9 @@ export class BotRuntime {
           context,
           this.state,
           heuristicNight,
-          { belief: () => this.beliefAfter },
+          run.rng,
+          { temperature: this.learnedTemperature, belief: () => this.beliefAfter },
+          run.onPick,
         )
       : heuristicNight;
     run.finish(
@@ -587,6 +611,8 @@ export class BotRuntime {
   private beginTracedDecision(): {
     rng: BotRng;
     probe: DecisionProbeCollector | undefined;
+    /** Nghe nước policy lấy mẫu; no-op khi không trace (không có chỗ để ghi). */
+    onPick: (pick: LearnedPick, decided: LearnedDecided) => void;
     finish: (
       context: BotDecisionContext,
       decision: TraceDecisionKind,
@@ -597,21 +623,39 @@ export class BotRuntime {
     ) => void;
   } {
     if (!this.trace) {
-      return { rng: this.rng, probe: undefined, finish: () => {} };
+      return { rng: this.rng, probe: undefined, onPick: () => {}, finish: () => {} };
     }
 
     const sink = this.trace;
     const draws: number[] = [];
     const probe = createDecisionProbe();
     const rng = wrapRngForTrace(this.rng, draws);
+    // Nước CUỐI thắng: `decideNight` có thể hỏi policy rồi rơi về heuristic,
+    // và lượt Phù Thuỷ mở lại `decideNight` trong cùng một vòng.
+    let learnedPick: LearnedPick | undefined;
+    let learnedDecided: LearnedDecided | undefined;
 
     return {
       rng,
       probe,
+      onPick: (pick, decided) => {
+        learnedPick = pick;
+        learnedDecided = decided;
+      },
       finish: (context, decision, targetId, label, reason, actionKind) => {
         const chosen: BotDecisionTrace["chosen"] = { targetId, label };
         if (reason !== undefined) chosen.reason = reason;
         if (actionKind !== undefined) chosen.actionKind = actionKind;
+        // Chỉ ghi khi nước policy đề xuất CHÍNH LÀ nước đã đi. `selectVote` còn
+        // hysteresis và hai cổng "không treo ai" phía sau nó, và `decideNight`
+        // có thể rơi về heuristic sau khi policy đã nói — giữ `logProb` của một
+        // nước bị ghi đè là dạy PPO cập nhật theo hành động chưa từng xảy ra.
+        if (learnedPick && learnedDecided) {
+          const kind = decision === "NIGHT" ? (actionKind ?? "SKIP") : DAY_ACTION_KIND;
+          if (kind === learnedDecided.kind && targetId === learnedDecided.targetId) {
+            chosen.learned = learnedPick;
+          }
+        }
         // Cùng knowledge, cùng belief mà dòng trace này mang: `liveInput` là
         // đường LÚC CHƠI, và test đối chiếu nó với `observationFromTrace` của
         // chính dòng này.

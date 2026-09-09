@@ -56,6 +56,24 @@ chỉ đạt 75,3% tổng thể (62,6% ở lượt đêm), trong khi trần in r
 nhiêu" như thể toàn bộ khoảng cách ấy là lỗi của model — với nước đi hoà điểm,
 chọn ứng viên nào cũng tái lập đúng chính sách của bot.
 
+**Vì vậy thước đo chính từ nay là `agreementTieAware`**, không phải `agreement`.
+Nó chấm một nước là ĐÚNG khi nước đó hoà đỉnh với teacher trong chính thang
+điểm của teacher (đã bỏ jitter) — tức khi chọn nó tái lập đúng chính sách của
+bot, dù `localeCompare` đã chọn người khác. `ai:encode` ghi tập hoà đỉnh ra
+`optimal.u8.bin` và `train_bc` in cả hai số cạnh nhau.
+
+Chênh lệch giữa hai thước đo KHÔNG nhỏ. policy-0004 trên đúng tập test cũ:
+
+| Tập | agreement | **tie-aware** |
+|---|---|---|
+| tổng | 0,8607 | **0,9400** |
+| VOTE | 0,9081 | 0,9307 |
+| **NIGHT** | 0,7671 | **0,9589** |
+| HUNTER_SHOT | 0,9049 | 0,9091 |
+
+Đọc `agreement` cũ mà tưởng lượt đêm còn hổng 23 điểm là đuổi theo một khoảng
+trống phần lớn không tồn tại.
+
 ---
 
 ## Bước 0 — Môi trường Python
@@ -326,23 +344,93 @@ Production KHÔNG đổi: `session-registry.ts` không cấp `learnedPolicy`.
 
 ---
 
+## Bước 8 — RL self-play (rollout → PPO → benchmark → thăng hạng)
+
+Behavior cloning chỉ chép lại bot heuristic; trần của nó là chính bot heuristic.
+Muốn bot MẠNH HƠN teacher thì phải để nó tự chơi và học từ kết quả ván — đó là
+việc của `rl_loop.py`.
+
+```bash
+cd ai-training && PYTHONUTF8=1 ./.venv/Scripts/python.exe rl_loop.py \
+  --champion ../.tmp/model-ob/model.weights.json \
+  --iterations 20 --games 3000 --bench-games 300 --bench-repeat 3 \
+  --bench-every 5 --out .tmp/rl
+```
+
+Mỗi vòng làm bốn việc:
+
+1. **Rollout** — chính champion chơi 3.000 ván ở `--temperature 1`, chia ba phần
+   `all`/`village`/`wolves` chạy SONG SONG. Nhiệt độ 1 nghĩa là policy lấy mẫu
+   từ softmax thay vì argmax: không thăm dò thì mọi ván giống nhau và không có
+   gradient nào để học. RNG vẫn là RNG có seed của bot, nên `replayGame` dựng
+   lại được một ván rollout.
+2. **Encode `--rollout`** — chỉ giữ nước do CHÍNH policy đi, kèm `logProb` và
+   `value` đo lúc nó đi. Nước heuristic trong cùng ván (Thám Tử, mọi lần rơi về
+   nước lui, mọi lần `selectVote` ghi đè bằng hysteresis) bị bỏ: PPO chỉ cập
+   nhật được theo hành động policy thật sự đã sinh ra.
+3. **PPO** — một update clipped, khởi tạo từ champion, advantage `R − V(s)`.
+4. **Benchmark + thăng hạng** — `ai:benchmark` ba cấu hình, điểm =
+   trung bình (Δ làng, Δ sói). Challenger chỉ thay champion khi hơn **+2 điểm**;
+   dưới mức đó là nhiễu (60 ván lệch ±10 điểm; 3×300 ván mới kết luận ±3%).
+
+**Champion là file bất biến** trong `<out>/champions/champion-000k.weights.json`
+— không bao giờ ghi đè, nên luôn quay lại được bản trước.
+
+### Ngắt lúc nào cũng được
+
+`--resume` (mặc định bật) đọc `state.json` và bỏ qua mọi vòng đã hoàn tất; trong
+một vòng dở dang, từng bước đã xong cũng được bỏ qua theo dấu `.done`. Dấu chỉ
+được ghi sau khi tiến trình con thoát 0 — một tiến trình bị giết giữa lúc ghi để
+lại file cụt, và một file cụt được "bỏ qua" là cách im lặng nhất để hỏng cả đêm.
+
+Thời gian: ~10 phút/vòng khi không benchmark, ~16 phút ở vòng có benchmark →
+20 vòng ≈ **3,5 giờ**.
+
+**ĐỪNG đưa rollout lên GitHub Actions**: runner 2 lõi mỗi shard, và repo đã gỡ
+`role-power.yml` vì đúng lý do đó.
+
+### Đọc kết quả
+
+| Số | Ở đâu | Nghĩa |
+|---|---|---|
+| điểm mỗi vòng | stdout, `state.json` → `scores` | Δ trung bình so với baseline heuristic |
+| `agreementWithInit` | `iter-*/model/metrics.json` | % argmax còn giống champion — MỎ NEO |
+| `approxKl` | cùng file, `history` | Lệch policy mỗi epoch; vọt lên là bước quá dài |
+| `clipFraction` | cùng file | Tỉ lệ mẫu bị clip cắt |
+
+`agreementWithInit` là mỏ neo chứ không phải mục tiêu: rơi xuống 0,3 sau MỘT
+vòng nghĩa là update đã quăng model đi quá xa khỏi thứ đã biết chơi được, và
+điểm benchmark gần như chắc chắn sẽ tệ hơn.
+
+**Kỳ vọng trung thực:** không ai biết trước cần bao nhiêu vòng. 20 vòng có thể
+chưa thăng hạng lần nào — đó vẫn là kết quả đọc được: đường ống chạy, và điểm
+từng vòng nói RL có tín hiệu hay không. **Đừng tăng số vòng một cách mù quáng.**
+Nếu điểm đi ngang suốt 20 vòng thì nút thắt nằm ở reward hoặc observation, không
+nằm ở số vòng, và chạy thêm 80 vòng nữa chỉ tốn một đêm để biết lại điều đã biết.
+
+---
+
 ## Giới hạn đã biết
 
-1. **Thước đo `agreement` chấm oan các nước hoà điểm.** Xem phần trần ở đầu
-   file. Việc đáng làm trước mọi nỗ lực nâng lượt đêm là đổi sang "lựa chọn của
-   model có nằm trong nhóm hoà đỉnh của teacher không"; nếu không, mọi thay đổi
-   sau sẽ đuổi theo một con số bị nhiễu bởi cách phá hoà tuỳ tiện.
+1. ~~**Thước đo `agreement` chấm oan các nước hoà điểm.**~~ ĐÃ SỬA:
+   `agreementTieAware` là thước đo chính, xem phần trần ở đầu file. `agreement`
+   vẫn được in ra để so với các bảng cũ.
 2. **Thám Tử chọn HAI người** (`secondaryTargetId`); nhãn hiện chỉ giữ người
    thứ nhất. Kết quả soi của Thám Tử và Sói Pháp Sư cũng chưa vào observation.
    Đo được: cấp `informationValue` cho nó chỉ nâng agreement +0,002, vì một nửa
    quyết định của nó nằm ngoài không gian hành động.
 3. **`FINAL_VOTE` và `SPEECH` chưa có không gian hành động** — cần làm khi tới lượt.
-4. **Chưa có RL, chưa có champion/challenger.** §55 chặn cả hai cho tới khi
-   behavior cloning đạt. Khi cắm model vào runtime, `decodeAction` trả (loại,
-   mục tiêu) — `hybridPolicyModel` hiện chỉ nhận điểm theo mục tiêu ban ngày,
-   nên phần đêm cần một seam mới.
-4. **Ghế chính tắc là sort-rồi-xoay**, chưa phải ghế ngồi thật của phòng.
-5. **Validator cho phép biết vai người đã chết bất kể `revealRoleOnDeath`.**
+4. **RL mới có ĐƯỜNG ỐNG, chưa có kết quả.** Bước 8 chạy trọn vòng
+   rollout → PPO → benchmark → thăng hạng, nhưng bao nhiêu vòng thì bot mạnh
+   hơn heuristic là câu hỏi chưa ai trả lời được. Điểm đi ngang nghĩa là nút
+   thắt nằm ở reward hoặc observation, không nằm ở số vòng.
+5. **Nước heuristic trong ván rollout không vào tập PPO.** Thám Tử (chọn hai
+   người), mọi lần rơi về nước lui, và mọi lần `selectVote` ghi đè policy bằng
+   hysteresis hoặc cổng "không treo ai" — đúng như phải thế, vì PPO chỉ cập
+   nhật được theo hành động chính policy đã sinh ra. Hệ quả: policy không nhận
+   được gradient nào cho những tình huống ấy.
+6. **Ghế chính tắc là sort-rồi-xoay**, chưa phải ghế ngồi thật của phòng.
+7. **Validator cho phép biết vai người đã chết bất kể `revealRoleOnDeath`.**
    Dataset self-play hiện luôn bật tiết lộ; nếu sinh dữ liệu từ phòng tắt tiết
    lộ, phải siết luật này trước.
 
@@ -355,8 +443,13 @@ Production KHÔNG đổi: `session-registry.ts` không cấp `learnedPolicy`.
 | Sinh trajectory | `npm run ai:dataset -- --games N --players 8 --preset --defense --seed S --trajectories DIR --trace-games N --no-jitter` |
 | Kiểm rò rỉ + trần | `npm run ai:validate-dataset -- DIR/trajectories.jsonl` |
 | Encode | `npm run ai:encode -- --in DIR/trajectories.jsonl --out ENC` |
-| Train | `python -m masoi_training.train_bc --data ENC --out MODEL` |
-| Self-check Python | `python tests/test_data.py && python tests/test_train_smoke.py` |
+| Train (BC) | `python -m masoi_training.train_bc --data ENC --out MODEL` |
+| Benchmark | `npm run ai:benchmark -- --model MODEL/model.weights.json --games 300 --repeat 3 --seed bench` |
+| Rollout RL | `npx tsx apps/server/scripts/selfplay.ts --games N --players 8 --preset --defense --seed S --policy W.json --temperature 1 --learned-seats all --trajectories DIR --trace-games N --quiet` |
+| Encode rollout | `npm run ai:encode -- --in DIR/trajectories.jsonl --out ENC --rollout` |
+| Train (PPO) | `python -m masoi_training.train_ppo --data ENC --init W.json --out MODEL` |
+| Vòng lặp RL | `python rl_loop.py --champion W.json --iterations 20 --games 3000 --bench-every 5 --out .tmp/rl` |
+| Self-check Python | `python tests/test_data.py && python tests/test_train_smoke.py && python tests/test_ppo.py` |
 | Test TS | `npm test` |
 
 Chi tiết kiến trúc và lý do từng quyết định: [BOT_SELF_LEARNING_AUDIT.md](BOT_SELF_LEARNING_AUDIT.md).
