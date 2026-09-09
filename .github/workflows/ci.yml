@@ -162,6 +162,13 @@ jobs:
       - name: Behavior cloning smoke (torch thật)
         run: python tests/test_train_smoke.py
 
+      # Một update PPO trên rollout tổng hợp. Thứ nó canh không phải "loss có
+      # giảm không" mà là `approxKl` của batch đầu ≈ 0: ratio của PPO phải bắt
+      # đầu ở 1, nếu không thì init đã lệch policy sinh ra rollout và clip đang
+      # cắt vào chỗ không ai kiểm được.
+      - name: PPO update (torch thật)
+        run: python tests/test_ppo.py
+
   # Ván khói thật: 8 socket chơi trọn một ván tới GAME_OVER, rồi kịch bản khôi
   # phục SIGKILL server giữa ván và kiểm ván sống lại từ Redis. Cả hai cần
   # Postgres + Redis thật - unit test không thay được, vì bug đã gặp nhiều lần

@@ -14,6 +14,7 @@ import {
   observationSize,
 } from "../src/bot/learning/observation";
 import {
+  optimalActionMask,
   splitOf,
   splitTrajectories,
   summarizeDataset,
@@ -400,5 +401,27 @@ describe("dataset stats + split (§15, §42, §43)", () => {
     expect(share("train")).toBeLessThan(0.8);
     expect(share("validation")).toBeGreaterThan(0.08);
     expect(share("test")).toBeGreaterThan(0.08);
+  });
+
+  it("optimalActionMask: mọi ứng viên hoà đỉnh (bỏ jitter) đều là tối ưu; không ứng viên → chỉ ô đã chọn", () => {
+    const tied = line({
+      candidates: [
+        { targetId: "p1", score: 50, terms: [{ name: "belief", value: 40 }, { name: "jitter", value: 10 }], evidenceIds: [] },
+        { targetId: "p3", score: 40, terms: [{ name: "belief", value: 40 }, { name: "jitter", value: 0 }], evidenceIds: [] },
+      ],
+    });
+    const enc = encodeObservation(tied);
+    const opt = optimalActionMask(tied, enc);
+    // seats = [p2, p3, p1] → p3 ghế 1, p1 ghế 2; cả hai hoà 40 sau khi bỏ jitter.
+    expect(opt[actionIndexOf("CHOOSE", 1)]).toBe(true);
+    expect(opt[actionIndexOf("CHOOSE", 2)]).toBe(true);
+    expect(opt.filter(Boolean)).toHaveLength(2);
+    expect(opt[enc.actionIndex!]).toBe(true);
+
+    const none = line({ selectedAction: { decision: "VOTE", targetId: null, label: "không treo", kind: null } });
+    const encNone = encodeObservation(none);
+    const optNone = optimalActionMask(none, encNone);
+    expect(optNone.filter(Boolean)).toHaveLength(1);
+    expect(optNone[encNone.actionIndex!]).toBe(true);
   });
 });

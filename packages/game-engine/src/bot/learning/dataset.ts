@@ -2,11 +2,16 @@ import { isRole, isWolfPack, type Role } from "@masoi/shared";
 import { createSeededRng } from "../rng";
 import type { BotTrajectory, ObservationInput } from "../evaluation/trajectory";
 import {
+  DAY_ACTION_KIND,
+  DEFAULT_MAX_SEATS,
   NO_TARGET_ACTION,
   TARGETING_DECISIONS,
+  actionIndexOf,
+  actionSize,
   encodeObservation,
   legalMoves,
   type EncodeOptions,
+  type EncodedObservation,
 } from "./observation";
 
 /**
@@ -485,4 +490,41 @@ export function splitTrajectories(
   const out: Record<DatasetSplit, BotTrajectory[]> = { train: [], validation: [], test: [] };
   for (const line of lines) out[splitOf(line.gameId, options)].push(line);
   return out;
+}
+
+/**
+ * Tập hành động TỐI ƯU theo teacher: mọi ứng viên có điểm (bỏ jitter) bằng
+ * điểm cao nhất, ánh xạ vào ô của loại hành động đã chọn. Khi bot không chọn
+ * ai (SKIP/NO_ELIMINATION) hoặc không có bảng ứng viên, tập = { ô đã chọn }.
+ *
+ * Lý do tồn tại: `argmax == chosen` chấm oan 28% nước hoà điểm (48% ở đêm)
+ * — teacher phá hoà bằng id thô mà §9 cố tình giấu khỏi observation.
+ */
+export function optimalActionMask(
+  line: BotTrajectory,
+  encoded: EncodedObservation,
+  maxSeats: number = DEFAULT_MAX_SEATS,
+): boolean[] {
+  const mask = new Array<boolean>(actionSize(maxSeats)).fill(false);
+  if (encoded.actionIndex === null) return mask;
+  mask[encoded.actionIndex] = true;
+  const target = line.selectedAction.targetId;
+  if (target === null || line.candidates.length === 0) return mask;
+  const kind = line.decision === "NIGHT" ? (line.selectedAction.kind ?? "SKIP") : DAY_ACTION_KIND;
+  let best = Number.NEGATIVE_INFINITY;
+  const scores = new Map<string, number>();
+  for (const candidate of line.candidates) {
+    let score = candidate.score;
+    for (const term of candidate.terms) if (term.name === "jitter") score -= term.value;
+    scores.set(candidate.targetId, score);
+    if (score > best) best = score;
+  }
+  for (const [id, score] of scores) {
+    if (score !== best) continue;
+    const seat = encoded.seats.indexOf(id);
+    if (seat < 0 || seat >= maxSeats) continue;
+    const index = actionIndexOf(kind, seat, maxSeats);
+    if (encoded.mask[index]) mask[index] = true;
+  }
+  return mask;
 }

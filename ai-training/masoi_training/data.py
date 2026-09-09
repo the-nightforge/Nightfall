@@ -29,6 +29,14 @@ class Dataset:
     roles: np.ndarray  # (N,) uint8, chỉ số trong meta["roles"]
     decisions: np.ndarray  # (N,) uint8, chỉ số trong meta["decisions"] (VOTE/NIGHT/HUNTER_SHOT)
     meta: dict
+    # Tập hành động hoà đỉnh trong thang điểm teacher (`optimalActionMask` của TS).
+    # `None` với dataset encode bằng bản cũ — không có file thì không bịa mask.
+    optimal: np.ndarray | None = None  # (N, action_size) bool
+    # Chỉ tập ROLLOUT (`ai:encode --rollout`) mới có hai cột này: `logProb` của
+    # nước đã đi dưới CHÍNH policy đã đi nó, và `value(s)` cùng lúc đó. PPO cần
+    # cả hai; tập behavior cloning không có, và `None` là câu trả lời đúng.
+    logprobs: np.ndarray | None = None  # (N,) float32, <= 0
+    values: np.ndarray | None = None  # (N,) float32
 
     @property
     def obs_size(self) -> int:
@@ -51,6 +59,9 @@ class Dataset:
             roles=self.roles[keep],
             decisions=self.decisions[keep],
             meta=self.meta,
+            optimal=self.optimal[keep] if self.optimal is not None else None,
+            logprobs=self.logprobs[keep] if self.logprobs is not None else None,
+            values=self.values[keep] if self.values is not None else None,
         )
 
     def __len__(self) -> int:
@@ -72,6 +83,16 @@ def load(directory: str | Path) -> Dataset:
     roles = np.fromfile(root / "roles.u8.bin", dtype=np.uint8)
     decisions = np.fromfile(root / "decisions.u8.bin", dtype=np.uint8)
 
+    # Optional: chỉ có ở dataset encode sau khi `optimalActionMask` ra đời.
+    optimal_path = root / "optimal.u8.bin"
+    optimal = np.fromfile(optimal_path, dtype=np.uint8) if optimal_path.exists() else None
+
+    # Chỉ tập rollout mới có; xem `Dataset.logprobs`.
+    logprobs_path = root / "logprobs.f32.bin"
+    logprobs = np.fromfile(logprobs_path, dtype="<f4") if logprobs_path.exists() else None
+    values_path = root / "values.f32.bin"
+    values = np.fromfile(values_path, dtype="<f4") if values_path.exists() else None
+
     # Kiểm kích thước trước khi reshape: một file cụt sẽ reshape ra ma trận lệch
     # hàng và train im lặng trên dữ liệu sai lệch một dòng.
     expected = {
@@ -83,6 +104,12 @@ def load(directory: str | Path) -> Dataset:
         "roles": (roles.size, rows),
         "decisions": (decisions.size, rows),
     }
+    if optimal is not None:
+        expected["optimal"] = (optimal.size, rows * action_size)
+    if logprobs is not None:
+        expected["logprobs"] = (logprobs.size, rows)
+    if values is not None:
+        expected["values"] = (values.size, rows)
     for name, (got, want) in expected.items():
         if got != want:
             raise ValueError(f"{name}: {got} phần tử, chờ {want} — dataset không khớp meta.json")
@@ -96,6 +123,9 @@ def load(directory: str | Path) -> Dataset:
         roles=roles,
         decisions=decisions,
         meta=meta,
+        optimal=optimal.reshape(rows, action_size).astype(bool) if optimal is not None else None,
+        logprobs=logprobs,
+        values=values,
     )
 
 

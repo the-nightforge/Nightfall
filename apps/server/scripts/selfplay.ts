@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import {
   BOT_WEIGHTS_PRESETS,
@@ -7,12 +7,14 @@ import {
   buildReport,
   formatReportText,
   gameToTrajectories,
+  loadMlpPolicy,
   runBatch,
   serializeTrajectory,
   serializeTraces,
   traceFileName,
   weightsPreset,
   type BotWeights,
+  type LearnedSeats,
   type SelfPlayBatchInput,
   type SelfPlayGame,
 } from "@masoi/game-engine";
@@ -62,6 +64,16 @@ interface Options {
    * benchmark champion/challenger: bot thật vẫn có jitter.
    */
   noJitter: boolean;
+  /** `model.weights.json` (masoi-mlp-1) cắm vào bot; `null` = heuristic thuần. */
+  policy: string | null;
+  /**
+   * Nhiệt độ lấy mẫu của policy. 0 = argmax (đo), 1 = lấy mẫu (rollout RL).
+   * Chỉ ở T > 0 thì trajectory mới mang `learned` — tức mới encode được
+   * `--rollout`.
+   */
+  temperature: number;
+  /** Ghế nào dùng policy. Xem `SelfPlayInput.learnedSeats`. */
+  learnedSeats: LearnedSeats;
 }
 
 /**
@@ -94,6 +106,9 @@ function usage(): string {
     "  --trajectories <dir> Ghi trajectory train (§22) ra JSONL, một file chung (mặc định: tắt)",
     `  --trace-games <số>  Số ván đầu được ghi trace (mặc định: ${DEFAULT_TRACE_GAMES})`,
     "  --no-jitter         Tắt term jitter (teacher tất định cho behavior cloning; xem BOT_SELF_LEARNING_TRAINING.md)",
+    "  --policy <file>     model.weights.json (masoi-mlp-1) cắm vào bot; xem --learned-seats, --temperature",
+    "  --temperature <t>   0 = argmax (mặc định); 1 = lấy mẫu cho rollout RL",
+    "  --learned-seats <s> all | village | wolves (mặc định all)",
     "  --quiet             Chỉ in JSON, không in bản tóm tắt",
     "",
     "Đọc trace:  npm run trace-view -- <file.jsonl> [--bot <id>]",
@@ -119,6 +134,9 @@ function parseArgs(argv: readonly string[]): Options {
     traceGames: DEFAULT_TRACE_GAMES,
     trajectories: null,
     noJitter: false,
+    policy: null,
+    temperature: 0,
+    learnedSeats: "all",
   };
 
   const number = (raw: string | undefined, flag: string): number => {
@@ -182,6 +200,28 @@ function parseArgs(argv: readonly string[]): Options {
       case "--no-jitter":
         options.noJitter = true;
         break;
+      case "--policy":
+        options.policy = argv[++i] ?? "";
+        break;
+      case "--temperature": {
+        // Không dùng `number()`: 0 là giá trị HỢP LỆ và là mặc định, còn
+        // `number()` từ chối mọi số không dương.
+        const raw = argv[++i];
+        const value = Number(raw);
+        if (!Number.isFinite(value) || value < 0) {
+          throw new Error(`--temperature cần một số >= 0, nhận "${raw}"`);
+        }
+        options.temperature = value;
+        break;
+      }
+      case "--learned-seats": {
+        const raw = argv[++i];
+        if (raw !== "all" && raw !== "village" && raw !== "wolves") {
+          throw new Error(`--learned-seats cần all | village | wolves, nhận "${raw}"`);
+        }
+        options.learnedSeats = raw;
+        break;
+      }
       case "--quiet":
         options.quiet = true;
         break;
@@ -285,6 +325,12 @@ function currentCommit(): string | null {
 function main(): void {
   const options = parseArgs(process.argv.slice(2));
 
+  // Nạp một lần cho cả batch: file trọng số là vài trăm KB JSON, và đọc lại nó
+  // mỗi ván là cách chắc chắn nhất để một batch 1000 ván chạy chậm gấp đôi.
+  const learnedPolicy = options.policy
+    ? loadMlpPolicy(JSON.parse(readFileSync(resolve(options.policy), "utf8")))
+    : undefined;
+
   const batch: SelfPlayBatchInput = {
     seedBase: options.seed,
     games: options.games,
@@ -309,6 +355,13 @@ function main(): void {
       options.traces === null && options.trajectories === null
         ? 0
         : Math.min(options.traceGames, options.games),
+    ...(learnedPolicy
+      ? {
+          learnedPolicy,
+          learnedSeats: options.learnedSeats,
+          learnedTemperature: options.temperature,
+        }
+      : {}),
   };
 
   const startedAt = performance.now();

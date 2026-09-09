@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isWolfPack } from "@masoi/shared";
 import { replayGame, runSelfPlay } from "../src/bot/evaluation/selfplay";
+import { gameToTrajectories } from "../src/bot/evaluation/trajectory";
 import {
   actionIndexOf,
   actionSize,
@@ -8,6 +9,8 @@ import {
   encodeObservation,
 } from "../src/bot/learning/observation";
 import type { LearnedPolicy } from "../src/bot/learning/mlp";
+import { sampleMasked } from "../src/bot/policy/learned-policy";
+import { createSeededRng } from "../src/bot/rng";
 
 /** Policy giả: luôn thích một chỉ số hành động cho trước. */
 function preferring(index: number): LearnedPolicy {
@@ -162,5 +165,48 @@ describe("self-play cấp policy theo phe, và replay đòi đúng policy", () =
     const again = replayGame(game.record, undefined, policy);
     expect(again.winner).toBe(game.winner);
     expect(again.actions).toBe(game.actions);
+  });
+});
+
+describe("lấy mẫu có nhiệt độ (rollout RL)", () => {
+  it("sampleMasked: T=0 là argmax; T=1 lấy mẫu đúng phân phối; logProb khớp softmax", () => {
+    const logits = [2, 0, 1, 5];
+    const mask = [true, true, true, false]; // ô 3 bị che dù logit cao nhất
+    const rng = createSeededRng("sample-1");
+    const greedy = sampleMasked(logits, mask, 0, rng)!;
+    expect(greedy.index).toBe(0);
+    const counts = [0, 0, 0, 0];
+    for (let i = 0; i < 2000; i += 1) counts[sampleMasked(logits, mask, 1, rng)!.index]! += 1;
+    expect(counts[3]).toBe(0);
+    expect(counts[0]!).toBeGreaterThan(counts[2]!);
+    expect(counts[2]!).toBeGreaterThan(counts[1]!);
+    const z = Math.exp(2) + Math.exp(0) + Math.exp(1);
+    expect(sampleMasked(logits, mask, 0, rng)!.logProb).toBeCloseTo(Math.log(Math.exp(2) / z), 8);
+  });
+
+  it("rollout: T=1 ghi learned{actionIndex,logProb,value} vào trace và trajectory, replay tái lập", () => {
+    const policy = preferring(actionIndexOf("CHOOSE", 1));
+    const game = runSelfPlay({
+      seed: "rl-1",
+      playerCount: 8,
+      maxRounds: 5,
+      trace: true,
+      learnedPolicy: policy,
+      learnedTemperature: 1,
+    });
+    const picks = game.traces.filter((t) => t.chosen.learned);
+    expect(picks.length).toBeGreaterThan(0);
+    for (const t of picks) {
+      expect(t.chosen.learned!.logProb).toBeLessThanOrEqual(0);
+      expect(t.chosen.learned!.temperature).toBe(1);
+    }
+    const lines = gameToTrajectories(game);
+    const withLearned = lines.filter((l) => l.learned);
+    expect(withLearned.length).toBe(picks.length);
+    // Nhãn encoder phải trùng chỉ số policy đã lấy mẫu.
+    for (const l of withLearned) expect(encodeObservation(l).actionIndex).toBe(l.learned!.actionIndex);
+    const again = replayGame(game.record, undefined, policy);
+    expect(again.actions).toBe(game.actions);
+    expect(again.winner).toBe(game.winner);
   });
 });

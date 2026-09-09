@@ -1,4 +1,5 @@
 import { roleWonOutcome, type Role } from "@masoi/shared";
+import type { LearnedPick } from "../policy/learned-policy";
 import type { BotDecisionTrace } from "../trace/trace";
 import type { SelfPlayGame } from "./selfplay";
 
@@ -82,6 +83,12 @@ export interface BotTrajectory {
   /** +1 thắng / −1 thua theo đúng luật (kể cả thắng cá nhân vai trung lập). */
   reward: number;
   finalWinner: string;
+  /**
+   * Có mặt khi nước này do policy học được LẤY MẪU ra (rollout RL). Nó không
+   * phải observation và không phải nhãn teacher — nó là hai con số PPO cần
+   * (`logProb` cũ, `value` cũ) đo trên chính policy đã đi nước này.
+   */
+  learned?: LearnedPick;
 }
 
 /**
@@ -256,6 +263,9 @@ export function gameToTrajectories(game: SelfPlayGame): BotTrajectory[] {
       },
       reward: rewardFor(game, trace.botId, finalRole),
       finalWinner: game.winner ?? "draw",
+      // Khoá VẮNG hẳn ở nước heuristic, không phải `undefined`: dòng này đi
+      // thẳng ra JSONL và một ván heuristic phải cho ra đúng byte như trước.
+      ...(trace.chosen.learned ? { learned: { ...trace.chosen.learned } } : {}),
     });
   }
 
