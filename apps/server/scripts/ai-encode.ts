@@ -38,18 +38,30 @@ interface Options {
   input: string;
   out: string;
   maxSeats: number;
+  /**
+   * Chỉ giữ line do policy học được LẤY MẪU ra, và ghi thêm `logprobs`/`values`
+   * — tập cho PPO chứ không phải cho behavior cloning. Line heuristic trong
+   * cùng file bị bỏ qua: PPO chỉ cập nhật được theo nước chính policy đã đi.
+   */
+  rollout: boolean;
 }
 
 function usage(): string {
   return [
-    "npm run ai:encode -- --in <trajectories.jsonl> --out <dir> [--max-seats <n>]",
+    "npm run ai:encode -- --in <trajectories.jsonl> --out <dir> [--max-seats <n>] [--rollout]",
     "",
     `  --max-seats <n>  Trần số ghế của vector (mặc định: ${DEFAULT_MAX_SEATS})`,
+    "  --rollout        Tập PPO: chỉ giữ line có `learned`, ghi thêm logprobs/values",
   ].join("\n");
 }
 
 function parseArgs(argv: readonly string[]): Options {
-  const options: Options = { input: "", out: "", maxSeats: DEFAULT_MAX_SEATS };
+  const options: Options = {
+    input: "",
+    out: "",
+    maxSeats: DEFAULT_MAX_SEATS,
+    rollout: false,
+  };
   for (let i = 0; i < argv.length; i += 1) {
     switch (argv[i]) {
       case "--in":
@@ -60,6 +72,9 @@ function parseArgs(argv: readonly string[]): Options {
         break;
       case "--max-seats":
         options.maxSeats = Number(argv[++i] ?? DEFAULT_MAX_SEATS);
+        break;
+      case "--rollout":
+        options.rollout = true;
         break;
       case "--help":
       case "-h":
@@ -105,11 +120,23 @@ async function main(): Promise<void> {
     decisions: createWriteStream(join(outDir, "decisions.u8.bin")),
     optimal: createWriteStream(join(outDir, "optimal.u8.bin")),
   };
+  // Chỉ mở khi `--rollout`: `data.py` nhận diện tập rollout bằng SỰ CÓ MẶT của
+  // hai file này, nên một cặp file rỗng nằm cạnh tập behavior cloning sẽ làm
+  // loader tưởng nó là rollout rồi chết vì lệch kích thước.
+  const rolloutStreams = options.rollout
+    ? {
+        logprobs: createWriteStream(join(outDir, "logprobs.f32.bin")),
+        values: createWriteStream(join(outDir, "values.f32.bin")),
+      }
+    : null;
 
   let read = 0;
   let rejected = 0;
   let unlabelled = 0;
   let rows = 0;
+  /** Nhiệt độ đã sinh ra tập này, đọc từ line rollout đầu tiên. */
+  let temperature: number | null = null;
+  let warnedMismatch = false;
   const games = new Set<string>();
   const perSplit = { train: 0, validation: 0, test: 0 };
 
@@ -146,6 +173,29 @@ async function main(): Promise<void> {
       continue;
     }
 
+    // Line heuristic không có `learned`: nó là mẫu behavior cloning hợp lệ,
+    // nhưng không phải mẫu PPO. Đếm vào "không nhãn" chứ không TỪ CHỐI — một
+    // ván rollout vẫn có nước heuristic (Thám Tử, mọi lần rơi về nước lui).
+    if (options.rollout && !line.learned) {
+      unlabelled += 1;
+      continue;
+    }
+    // Nhãn encoder phải TRÙNG chỉ số policy đã lấy mẫu. Lệch nghĩa là hai
+    // đường dựng observation đã trôi khỏi nhau, và một `logProb` đo trên vector
+    // A gắn vào hành động của vector B là gradient sai hướng.
+    if (options.rollout && line.learned && encoded.actionIndex !== line.learned.actionIndex) {
+      rejected += 1;
+      if (!warnedMismatch) {
+        warnedMismatch = true;
+        process.stderr.write(
+          `CẢNH BÁO: nhãn encoder (${encoded.actionIndex}) lệch chỉ số policy ` +
+            `(${line.learned.actionIndex}) ở ván ${line.gameId}, lượt ${line.turn}. ` +
+            "Chỉ báo một lần; xem tổng ở dòng TỪ CHỐI.\n",
+        );
+      }
+      continue;
+    }
+
     const split = splitOf(line.gameId);
     games.add(line.gameId);
     perSplit[split] += 1;
@@ -160,10 +210,18 @@ async function main(): Promise<void> {
     streams.decisions.write(Buffer.from(Uint8Array.of(decisionIndex.get(line.decision) ?? 255)));
     const optimal = optimalActionMask(line, encoded, options.maxSeats);
     streams.optimal.write(Buffer.from(Uint8Array.from(optimal, (ok) => (ok ? 1 : 0))));
+    if (rolloutStreams && line.learned) {
+      if (temperature === null) temperature = line.learned.temperature;
+      rolloutStreams.logprobs.write(Buffer.from(Float32Array.of(line.learned.logProb).buffer));
+      // `value: null` là model không có value head. 0 là baseline trung tính
+      // trên thang reward ±1, tức advantage = reward — đúng Monte Carlo không
+      // baseline, không phải một con số bịa.
+      rolloutStreams.values.write(Buffer.from(Float32Array.of(line.learned.value ?? 0).buffer));
+    }
   }
 
   await Promise.all(
-    Object.values(streams).map(
+    [...Object.values(streams), ...(rolloutStreams ? Object.values(rolloutStreams) : [])].map(
       (stream) => new Promise<void>((done) => stream.end(done)),
     ),
   );
@@ -172,7 +230,9 @@ async function main(): Promise<void> {
   const meta = {
     // Tăng khi ĐỊNH DẠNG đổi (chiều vector, không gian hành động), để một
     // model cũ không bao giờ được nạp lên tensor mới mà không ai biết.
-    datasetVersion: "dataset-0003",
+    datasetVersion: options.rollout ? "rollout-0001" : "dataset-0003",
+    rollout: options.rollout,
+    temperature,
     gitCommit: currentCommit(),
     source: resolve(options.input),
     rows,
@@ -199,6 +259,7 @@ async function main(): Promise<void> {
       `TỪ CHỐI     ${rejected}`,
       `không nhãn  ${unlabelled}`,
       `mẫu train   ${rows}  (train ${perSplit.train} / val ${perSplit.validation} / test ${perSplit.test})`,
+      ...(options.rollout ? [`rollout     T = ${temperature ?? "?"} (logprobs + values)`] : []),
       `vector      ${obsSize} chiều, ${actSize} hành động`,
       `Đã ghi      ${outDir}`,
       "",
