@@ -9,7 +9,14 @@ import {
   type TeamMetrics,
 } from "./metrics";
 import type { InvariantViolation } from "./invariants";
-import { replayCommand, runSelfPlay, type SelfPlayGame, type SelfPlayInput } from "./selfplay";
+import type { LearnedPolicy } from "../learning/mlp";
+import {
+  replayCommand,
+  runSelfPlay,
+  type LearnedSeats,
+  type SelfPlayGame,
+  type SelfPlayInput,
+} from "./selfplay";
 
 /**
  * Báo cáo một batch tự chơi.
@@ -49,6 +56,10 @@ export interface SelfPlayBatchInput {
    * được: cùng `seedBase` cho cùng những ván đó.
    */
   traceGames?: number;
+  /** Policy học được cắm vào từng ván. Xem `SelfPlayInput.learnedPolicy`. */
+  learnedPolicy?: LearnedPolicy;
+  /** Ghế nào dùng policy đó. Xem `LearnedSeats`. */
+  learnedSeats?: LearnedSeats;
 }
 
 export interface ReportTiming {
@@ -101,6 +112,8 @@ export function runBatch(input: SelfPlayBatchInput): SelfPlayGame[] {
       speech: input.speech,
       defense: input.defense,
       humanSeats: input.humanSeats,
+      learnedPolicy: input.learnedPolicy,
+      learnedSeats: input.learnedSeats,
       // `false` chứ không phải `undefined` cho phần đuôi batch: `runSelfPlay`
       // đọc trường này bằng một phép kiểm chân trị, nên cả hai đều tắt - nhưng
       // viết thẳng ra thì trần trace là một luật đọc được ở đây.
@@ -123,6 +136,10 @@ export function runBatch(input: SelfPlayBatchInput): SelfPlayGame[] {
         // lệch nhau - `--verify-replay --humans n` báo REPLAY_DIVERGENCE ở
         // ~15% ván dù ván tái lập hoàn hảo. Đã xảy ra thật ở v17.
         humanSeats: input.humanSeats,
+        // Cùng lý do: một lần đối chứng không có policy sẽ chạy heuristic và
+        // báo REPLAY_DIVERGENCE ở mọi ván có policy.
+        learnedPolicy: input.learnedPolicy,
+        learnedSeats: input.learnedSeats,
         // Lần chạy đối chứng KHÔNG thu trace: nó chỉ tồn tại để so chuỗi sự
         // kiện, và thu trace ở đây là trả gấp đôi bộ nhớ cho một bản sao không
         // ai đọc.

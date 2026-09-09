@@ -1,4 +1,5 @@
 import type { Phase, Role } from "@masoi/shared";
+import type { ObservationInput } from "../evaluation/trajectory";
 import type { BotPersonality, BotRng } from "../types";
 
 /**
@@ -153,6 +154,12 @@ export interface BotDecisionTrace {
   rngDraws: number[];
   fallbackReason: string | null;
   knowledgeSnapshot: TraceKnowledgeSnapshot;
+  /**
+   * Observation dựng bằng `buildLiveObservation` NGAY LÚC quyết định, chỉ để
+   * test đối chiếu với `observationFromTrace(trace)`. Optional, chỉ có khi
+   * trace bật; không bao giờ vào JSONL (xem `trace-jsonl.ts`).
+   */
+  liveInput?: ObservationInput;
 }
 
 export interface BotTraceSink {

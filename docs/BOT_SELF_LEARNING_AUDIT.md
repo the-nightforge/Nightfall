@@ -78,6 +78,13 @@ play full games") bằng cách cắm vào `BotRuntime({ votePolicy })`.
 Đây là chỗ lệch spec duy nhất và có chủ đích. Nếu cần đúng chữ `reset/step`,
 nói một câu là làm — nhưng nên làm sau khi có model thật để biết nó cần gì.
 
+**Quyết định thứ hai, 2026-09-09: không nạp ONNX ở runtime.** `game-engine`
+phải thuần (không I/O, có test canh), `onnxruntime-node` chỉ có API bất đồng
+bộ trong khi `BotRuntime.decide*` đồng bộ, và model là MLP ~94k tham số. Trọng
+số xuất ra JSON `masoi-mlp-1`, forward pass viết thuần TypeScript
+(`bot/learning/mlp.ts`), có fixture parity với torch. ONNX vẫn xuất cho consumer
+khác.
+
 ---
 
 ## 2. Phase 1 — Báo cáo thực hiện (§55)
@@ -252,6 +259,9 @@ So sánh champion/challenger chỉ có nghĩa khi §55 Step 8 (behavior cloning)
    (knowledge view không phơi ra `seatIndex`). Đã đánh dấu `ponytail:` trong code.
 4. **Không gian hành động chỉ mô tả VOTE/NIGHT/HUNTER_SHOT** (36% số quyết định).
    `FINAL_VOTE` (treo/tha) và `SPEECH` cần không gian riêng — làm khi tới lượt.
+   Runtime đã cắm được cho VOTE/NIGHT (kế hoạch
+   `2026-09-09-learned-policy-runtime`); Thám Tử luôn theo heuristic vì cần hai
+   mục tiêu.
 5. **Thang belief chuẩn hoá cứng `/100`.** Đúng với dải điểm hiện tại; nếu weights
    đổi dải thì phải đo lại.
 6. **Dataset 200 ván là dataset KIỂM ĐƯỜNG ỐNG**, không phải dataset train. §16

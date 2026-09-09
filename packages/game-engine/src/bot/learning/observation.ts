@@ -1,6 +1,6 @@
 import { PHASES, ROLE_META, ROLES, isRole, type Role, type Team } from "@masoi/shared";
 import { MAX_ROUNDS } from "../evaluation/selfplay";
-import type { BotTrajectory } from "../evaluation/trajectory";
+import type { ObservationInput } from "../evaluation/trajectory";
 import type { NightActionKind } from "../types";
 
 /**
@@ -273,7 +273,7 @@ function clamp(value: number, min: number, max: number): number {
  * ponytail: chưa dùng thứ tự ghế THẬT của phòng (knowledge view không phơi ra
  * `seatIndex`); nâng lên nếu benchmark cho thấy quan hệ trái/phải có giá.
  */
-export function canonicalSeats(line: BotTrajectory): string[] {
+export function canonicalSeats(line: ObservationInput): string[] {
   const ids = new Set<string>([line.playerId]);
   for (const id of line.observation.aliveIds) ids.add(id);
   for (const entry of line.observation.belief) ids.add(entry.playerId);
@@ -299,7 +299,7 @@ export function maskLogits(logits: readonly number[], mask: readonly boolean[]):
 }
 
 /** Vai của CHÍNH bot lúc quyết định, đọc từ knowledge view của chính nó. */
-export function selfRoleOf(line: BotTrajectory): Role | null {
+export function selfRoleOf(line: ObservationInput): Role | null {
   const role = line.observation.knownRoles[line.playerId];
   return role !== undefined && isRole(role) ? role : null;
 }
@@ -318,7 +318,9 @@ export function selfRoleOf(line: BotTrajectory): Role | null {
  * `decideNight`, và ghi một trace "bỏ lượt"): không phải một nước đi, không
  * có nhãn, và cũng không phải vi phạm.
  */
-export function legalMoves(line: BotTrajectory): Map<string, { targets: Set<string>; none: boolean }> {
+export function legalMoves(
+  line: ObservationInput,
+): Map<string, { targets: Set<string>; none: boolean }> {
   const moves = new Map<string, { targets: Set<string>; none: boolean }>();
   if (line.decision === "NIGHT") {
     const table = line.observation.nightLegalTargets;
@@ -347,7 +349,7 @@ export interface EncodeOptions {
 }
 
 export function encodeObservation(
-  line: BotTrajectory,
+  line: ObservationInput,
   options: EncodeOptions = {},
 ): EncodedObservation {
   const maxSeats = options.maxSeats ?? DEFAULT_MAX_SEATS;
@@ -455,13 +457,16 @@ export function encodeObservation(
  * `invalidActions` (§42).
  */
 function encodeAction(
-  line: BotTrajectory,
+  line: ObservationInput,
   seats: readonly string[],
   maxSeats: number,
   moves: ReadonlyMap<string, { targets: Set<string>; none: boolean }>,
   mask: readonly boolean[],
 ): number | null {
   if (!TARGETING_DECISIONS.has(line.decision)) return null;
+  // Không có nhãn thì không có chỉ số: `ObservationInput` dùng lúc CHƠI chỉ
+  // mang câu hỏi, và một `0` bịa ra ở đây sẽ thành nhãn train sai.
+  if (!line.selectedAction) return null;
   const target = line.selectedAction.targetId;
   let kind: string;
   if (line.decision === "NIGHT") {
