@@ -47,6 +47,15 @@ Vì vậy:
    champion/challenger vẫn dùng bot thật (có jitter); record self-play ghi
    `weightsVersion` có đuôi `+nojitter` để không ai replay nhầm bằng preset gốc.
 
+**Trần in ra là trần CÓ id, và model không được thấy id.** Nó phá hoà điểm bằng
+`targetId.localeCompare`, đúng quy ước `rankNightTargets`; nhưng §9 cố tình xoá
+ý nghĩa tuyệt đối của id khỏi observation. Đo trên 55.876 nước đi: **28% hoà
+điểm ở đỉnh, riêng lượt đêm là 48%**. Một model mù id đoán đều trong nhóm hoà
+chỉ đạt 75,3% tổng thể (62,6% ở lượt đêm), trong khi trần in ra là 97,3%
+(99,2%). Trần thật nằm giữa hai mức đó. Đừng đọc "agreement còn cách trần bao
+nhiêu" như thể toàn bộ khoảng cách ấy là lỗi của model — với nước đi hoà điểm,
+chọn ứng viên nào cũng tái lập đúng chính sách của bot.
+
 ---
 
 ## Bước 0 — Môi trường Python
@@ -293,10 +302,16 @@ truy model về `datasetVersion`, `gitCommit` và `trainingSeed` (§46).
 
 ## Giới hạn đã biết
 
-1. **Thám Tử chọn HAI người** (`secondaryTargetId`); nhãn hiện chỉ giữ người
+1. **Thước đo `agreement` chấm oan các nước hoà điểm.** Xem phần trần ở đầu
+   file. Việc đáng làm trước mọi nỗ lực nâng lượt đêm là đổi sang "lựa chọn của
+   model có nằm trong nhóm hoà đỉnh của teacher không"; nếu không, mọi thay đổi
+   sau sẽ đuổi theo một con số bị nhiễu bởi cách phá hoà tuỳ tiện.
+2. **Thám Tử chọn HAI người** (`secondaryTargetId`); nhãn hiện chỉ giữ người
    thứ nhất. Kết quả soi của Thám Tử và Sói Pháp Sư cũng chưa vào observation.
-2. **`FINAL_VOTE` và `SPEECH` chưa có không gian hành động** — cần làm khi tới lượt.
-3. **Chưa có RL, chưa có champion/challenger.** §55 chặn cả hai cho tới khi
+   Đo được: cấp `informationValue` cho nó chỉ nâng agreement +0,002, vì một nửa
+   quyết định của nó nằm ngoài không gian hành động.
+3. **`FINAL_VOTE` và `SPEECH` chưa có không gian hành động** — cần làm khi tới lượt.
+4. **Chưa có RL, chưa có champion/challenger.** §55 chặn cả hai cho tới khi
    behavior cloning đạt. Khi cắm model vào runtime, `decodeAction` trả (loại,
    mục tiêu) — `hybridPolicyModel` hiện chỉ nhận điểm theo mục tiêu ban ngày,
    nên phần đêm cần một seam mới.
