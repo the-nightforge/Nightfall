@@ -191,14 +191,24 @@ function chainFacts(room: Room): ChainFacts {
   };
 }
 
-/** Câu của người thật, có sẵn trước khi phiên thảo luận mở. */
-function seedHumanLine(room: Room, id: string): ChatMessage {
+/**
+ * Câu của người thật, có sẵn trước khi phiên thảo luận mở.
+ *
+ * `text` mặc định KHÔNG nêu tên ai: đó là câu dùng cho mọi test về kế toán
+ * chuỗi, và một cái tên trong đó sẽ kích hoạt luật "ai bị hỏi thì nói trước",
+ * tức đổi thứ tự người nói của những test không nói gì về luật ấy.
+ */
+function seedHumanLine(
+  room: Room,
+  id: string,
+  text = "Sáng nay ai thấy gì lạ không, nói đi.",
+): ChatMessage {
   const message: ChatMessage = {
     id,
     channel: "day",
     playerId: "human",
     playerName: "Người thật",
-    text: "Sáng nay ai thấy gì lạ không, nói đi.",
+    text,
     at: Date.now() - 1_000,
   };
   room.chatLog.push(message);
@@ -840,5 +850,94 @@ describe("phòng không có BOT", () => {
     const asked = runtimeFor.mock.calls.map(([botId]) => botId);
     expect(asked.length).toBeGreaterThan(0);
     expect(asked).not.toContain("human");
+  });
+});
+
+/**
+ * Người thật hỏi thẳng một con BOT.
+ *
+ * Trước luật này, ai nói ở checkpoint kế tiếp là do RNG của phòng chọn đều trên
+ * mọi BOT đủ điều kiện. Pha thảo luận mặc định 60 giây với nhịp 2,5-6,5 giây
+ * cho khoảng 13 checkpoint chia cho cả bàn - nên con BOT vừa bị gọi đích danh
+ * có đúng 1/n cơ hội mỗi lượt, và người hỏi thường nhận về câu của một con
+ * khác, nói chuyện khác. Đó là triệu chứng "bot không nghe mình" rõ nhất mà
+ * người chơi thật gặp, và nó nằm ở tầng XẾP LƯỢT chứ không ở lõi: lõi đã có
+ * `QUESTIONED_ME` với priority 95 và một sàn xác suất trả lời riêng, nhưng nó
+ * không bao giờ được hỏi tới.
+ */
+describe("người thật hỏi thẳng một BOT", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    timers.scheduled = [];
+    provider.calls = [];
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    cancelDiscussionScheduler("ROOMA");
+    clearBotSession("ROOMA");
+    vi.useRealTimers();
+  });
+
+  it("con BOT bị gọi đích danh là con nói trước", async () => {
+    const room = discussionRoom(6);
+    const asked = seedHumanLine(room, "human-1", "Bot 4 nghĩ sao?");
+    scriptEveryBot(room, () => replyTo(asked.id, "human"));
+
+    await playDiscussion(room);
+
+    expect(botLines(room)[0]?.playerId).toBe("bot4");
+  });
+
+  it("chỉ mua ĐÚNG MỘT lượt: con được gọi không nói thì cả bàn vẫn nói tiếp", async () => {
+    // Không có ràng buộc này thì mỗi checkpoint lại thấy đúng câu hỏi cũ ở
+    // cuối log, lại chọn đúng con BOT vừa từ chối, và cả phòng câm tới hết pha.
+    const room = discussionRoom(6);
+    const asked = seedHumanLine(room, "human-1", "Bot 4 nghĩ sao?");
+    scriptEveryBot(room, (botId) => (botId === "bot4" ? null : replyTo(asked.id, "human")));
+
+    await playDiscussion(room);
+
+    expect(botLines(room).length).toBeGreaterThan(0);
+    expect(botLines(room).every((message) => message.playerId !== "bot4")).toBe(true);
+  });
+
+  it("câu người thật không nêu tên ai thì thứ tự nói không đổi một chút nào", async () => {
+    // Khoá lời hứa về CHUỖI RNG: luật mới đọc `pick()` y như cũ rồi mới ghi đè
+    // lựa chọn, nên khi nó không nổ, mọi preset và mọi test cũ chạy từng bit
+    // như trước.
+    const withHuman = discussionRoom(6);
+    seedHumanLine(withHuman, "human-1");
+    await playDiscussion(withHuman);
+    const order = botLines(withHuman).map((message) => message.playerId);
+    expect(order.length).toBeGreaterThan(1);
+
+    cancelDiscussionScheduler("ROOMA");
+    clearBotSession("ROOMA");
+
+    const without = discussionRoom(6);
+    await playDiscussion(without);
+
+    expect(botLines(without).map((message) => message.playerId)).toEqual(order);
+  });
+
+  it("câu của một BOT khác không mua được lượt ưu tiên nào", async () => {
+    // Luật này là để phục vụ NGƯỜI THẬT. Cho câu của bot kích hoạt nó nghĩa là
+    // hai con BOT gọi tên nhau sẽ khoá chặt lượt nói của cả bàn vào một cặp.
+    const room = discussionRoom(6);
+    room.chatLog.push({
+      id: "bot-said",
+      channel: "day",
+      playerId: "bot1",
+      playerName: "Bot 1",
+      text: "Bot 4 nghĩ sao?",
+      at: Date.now() - 1_000,
+    });
+    scriptEveryBot(room, () => replyTo("bot-said", "bot1"));
+
+    await playDiscussion(room);
+
+    const speakers = new Set(botLines(room).map((message) => message.playerId));
+    expect(speakers.size).toBeGreaterThan(1);
   });
 });

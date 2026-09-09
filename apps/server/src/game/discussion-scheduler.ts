@@ -1,5 +1,5 @@
 import { SERVER_EVENTS } from "@masoi/shared";
-import { judgeChainPosition, type GameEngine } from "@masoi/game-engine";
+import { analyzeChat, judgeChainPosition, type GameEngine } from "@masoi/game-engine";
 import { buildBotDecisionContext } from "../bots/context";
 import { botSessionFor } from "../bots/session-registry";
 import { renderBotSpeech } from "../bots/speech-renderer";
@@ -73,6 +73,18 @@ interface DiscussionRun {
   messageDepths: Map<string, number>;
   /** Số phản hồi mỗi message đã nhận, đếm theo `replyToMessageId`. */
   replyCounts: Map<string, number>;
+  /**
+   * Câu của người thật đã được TRAO một lượt ưu tiên; `null` là chưa có câu nào.
+   *
+   * Mỗi câu chỉ mua được ĐÚNG MỘT lượt. Không có sổ này thì checkpoint kế tiếp
+   * lại thấy đúng câu hỏi đó ở cuối log, lại chọn đúng con BOT vừa từ chối -
+   * và một con BOT không muốn đáp sẽ khoá miệng cả bàn tới hết pha.
+   *
+   * KHÔNG nằm trong `PersistedDiscussionRun`: sau restart, cùng lắm một câu hỏi
+   * cũ mua thêm một lượt ưu tiên nữa. Đó là một lượt nói, không phải một sai
+   * lệch kế toán như `spoken` hay `total`.
+   */
+  aimedAt: string | null;
 }
 
 const runs = new Map<string, DiscussionRun>();
@@ -127,6 +139,83 @@ export function cancelDiscussionScheduler(roomCode: string): void {
   runs.delete(roomCode);
 }
 
+/**
+ * Loại lời nói nhắm THẲNG vào một người.
+ *
+ * Đúng bằng `DIRECT_TRIGGERS` của lõi (`conversation/speech-planner.ts`) đọc
+ * ngược về loại memory sinh ra chúng: `ACCUSE` → `ACCUSED_ME`,
+ * `DIRECT_QUESTION` → `QUESTIONED_ME`, `DIRECT_ADDRESS` → `ADDRESSED_ME`,
+ * `COUNTER_CLAIM` → `COUNTER_CLAIM_ON_ME`.
+ *
+ * Dùng chung một định nghĩa là chủ ý. Rộng hơn lõi thì scheduler trao lượt cho
+ * một con BOT mà lõi không thấy có gì để đáp, và lượt đó thành lượt trống.
+ */
+const AIMED_AT_SOMEONE: ReadonlySet<string> = new Set([
+  "ACCUSE",
+  "DIRECT_QUESTION",
+  "DIRECT_ADDRESS",
+  "COUNTER_CLAIM",
+]);
+
+/**
+ * Con BOT mà câu MỚI NHẤT của một người thật đang nhắm tới, nếu có.
+ *
+ * Vì sao luật này tồn tại: *ai* nói ở checkpoint kế tiếp vốn do RNG của phòng
+ * chọn ĐỀU trên mọi BOT đủ điều kiện. Pha thảo luận mặc định 60 giây với nhịp
+ * 2,5-6,5 giây cho khoảng 13 checkpoint chia cho cả bàn, nên một người thật gõ
+ * "An ơi sao im thế" có tầm 1/n cơ hội mỗi lượt để nghe chính An trả lời - phần
+ * còn lại là một con BOT khác nói chuyện khác. Lõi đã có sẵn `QUESTIONED_ME`
+ * (priority 95) và một sàn xác suất trả lời riêng cho lời nhắm thẳng, nhưng nó
+ * không bao giờ được hỏi tới. Đây là tầng XẾP LƯỢT, nên chỗ chữa nằm ở đây.
+ *
+ * Ba ràng buộc:
+ *
+ * - Chỉ câu của NGƯỜI THẬT. Luật này để phục vụ người chơi; cho câu của BOT
+ *   kích hoạt nó thì hai con gọi tên nhau sẽ khoá lượt của cả bàn vào một cặp.
+ *   Tiếng Vọng Người Chết cũng rơi vào nhánh này: `GHOST_AUTHOR_ID` không phải
+ *   thành viên nào, nên `isBot` đọc ra `undefined` và câu đó không mua được gì.
+ * - Chỉ câu MỚI NHẤT của kênh `day`. Nó tự giới hạn theo thời gian mà không cần
+ *   một cái đồng hồ nào: BOT vừa nói xong thì câu cũ hết hiệu lực ngay.
+ * - Đọc bằng chính `analyzeChat`, không tự so tên. Một luật riêng ở đây sẽ trôi
+ *   lệch khỏi parser, và lúc đó scheduler trao lượt cho một con BOT mà lõi
+ *   không hề thấy mình bị gọi.
+ *
+ * THUẦN: không rút RNG, không đụng đồng hồ.
+ */
+function aimedBot(
+  room: Room,
+  candidates: readonly Room["members"][number][],
+): { messageId: string; member: Room["members"][number] } | null {
+  if (!room.engine) return null;
+
+  // `findLast` cần lib es2023; `chatLog` bị cắt ở 100 dòng nên một bản đảo
+  // ngược rẻ hơn hẳn việc nới target của cả workspace vì đúng một lời gọi.
+  const last = [...room.chatLog].reverse().find((message) => message.channel === "day");
+  if (!last) return null;
+  if (room.members.find((member) => member.playerId === last.playerId)?.isBot !== false) {
+    return null;
+  }
+
+  const memories = analyzeChat(
+    [{ id: last.id, actorId: last.playerId, text: last.text, at: last.at }],
+    room.engine.state.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      alive: player.alive,
+    })),
+  );
+  const aimed = new Set(
+    memories
+      .filter((memory) => AIMED_AT_SOMEONE.has(memory.type) && memory.targetId !== undefined)
+      .map((memory) => memory.targetId),
+  );
+
+  // `candidates` đã sắp theo id, nên một câu gọi tên hai con BOT cho ra cùng một
+  // lựa chọn ở mọi lần chạy.
+  const member = candidates.find((entry) => aimed.has(entry.playerId));
+  return member ? { messageId: last.id, member } : null;
+}
+
 /** Tình thế vẫn đúng như lúc lên lịch. Kiểm cả trước lẫn sau khi `await`. */
 function stillValid(room: Room, run: DiscussionRun, botId: string): boolean {
   if (run.cancelled) return false;
@@ -175,6 +264,7 @@ export function runDiscussionScheduler(
     lastSpokenAt: new Map(Object.entries(resumed?.lastSpokenAt ?? {})),
     messageDepths: new Map(Object.entries(resumed?.messageDepths ?? {})),
     replyCounts: new Map(Object.entries(resumed?.replyCounts ?? {})),
+    aimedAt: null,
   };
   runs.set(room.code, run);
 
@@ -232,7 +322,20 @@ export function runDiscussionScheduler(
 
     // RNG chứ không phải xoay vòng: xoay vòng cho ra đúng một thứ tự nói mỗi
     // ngày, và "các BOT nghe giống nhau" chính là thứ Phase 4 phải chữa.
-    const member = candidates[Math.floor(pick() * candidates.length)]!;
+    const random = candidates[Math.floor(pick() * candidates.length)]!;
+
+    // Người thật vừa gọi đích danh một con BOT thì con đó nói, không phải con
+    // mà may rủi chỉ vào.
+    //
+    // `pick()` ở trên vẫn được TIÊU dù kết quả có bị ghi đè hay không: dòng RNG
+    // của phòng vì thế không lệch một bit nào khi luật này không nổ, nên mọi
+    // test tái lập và mọi ván đang chạy giữ nguyên thứ tự người nói.
+    //
+    // Ghi sổ cả khi rơi về `random`: câu đó đã có lượt của nó rồi.
+    const aimed = aimedBot(room, candidates);
+    const member = aimed !== null && aimed.messageId !== run.aimedAt ? aimed.member : random;
+    if (aimed !== null) run.aimedAt = aimed.messageId;
+
     const gap = MIN_GAP_MS + Math.floor(pick() * JITTER_MS);
 
     void (async () => {
