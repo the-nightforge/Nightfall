@@ -368,7 +368,9 @@ Mỗi vòng làm bốn việc:
    `value` đo lúc nó đi. Nước heuristic trong cùng ván (Thám Tử, mọi lần rơi về
    nước lui, mọi lần `selectVote` ghi đè bằng hysteresis) bị bỏ: PPO chỉ cập
    nhật được theo hành động policy thật sự đã sinh ra.
-3. **PPO** — một update clipped, khởi tạo từ champion, advantage `R − V(s)`.
+3. **PPO** — một update clipped, khởi tạo từ champion, advantage `R − b`. `b`
+   mặc định là trung bình reward THEO VAI (`--baseline role`); xem mục baseline
+   bên dưới trước khi đổi nó.
 4. **Benchmark + thăng hạng** — `ai:benchmark` ba cấu hình, điểm =
    trung bình (Δ làng, Δ sói). Challenger chỉ thay champion khi hơn **+2 điểm**;
    dưới mức đó là nhiễu (60 ván lệch ±10 điểm; 3×300 ván mới kết luận ±3%).
@@ -402,11 +404,46 @@ Thời gian: ~10 phút/vòng khi không benchmark, ~16 phút ở vòng có bench
 vòng nghĩa là update đã quăng model đi quá xa khỏi thứ đã biết chơi được, và
 điểm benchmark gần như chắc chắn sẽ tệ hơn.
 
-**Kỳ vọng trung thực:** không ai biết trước cần bao nhiêu vòng. 20 vòng có thể
-chưa thăng hạng lần nào — đó vẫn là kết quả đọc được: đường ống chạy, và điểm
-từng vòng nói RL có tín hiệu hay không. **Đừng tăng số vòng một cách mù quáng.**
-Nếu điểm đi ngang suốt 20 vòng thì nút thắt nằm ở reward hoặc observation, không
-nằm ở số vòng, và chạy thêm 80 vòng nữa chỉ tốn một đêm để biết lại điều đã biết.
+### Baseline của advantage — đọc `baselineMse` cạnh `constantMse`
+
+`metrics.json` ghi hai số cạnh nhau. **`baselineMse` lớn hơn `constantMse` nghĩa
+là baseline đang LÀM HẠI**: `A = R − b` với `b` tệ hơn một hằng số là phép trừ
+cộng thêm phương sai, tức baseline làm đúng điều ngược lại với việc nó sinh ra
+để làm. `train_ppo` in thẳng chữ `hại` / `có ích` ở dòng cuối.
+
+Đã xảy ra thật với `--baseline value` (value head thừa kế từ behavior cloning):
+tương quan với kết quả ván chỉ **0,03**, std 0,32, `MSE` **1,11** so với **0,99**
+của hằng số. Nó không lệch — bước chuẩn hoá triệt tiêu mọi hằng số — nó NHIỄU
+theo từng hàng: hai quyết định trong cùng một ván thắng nhận advantage lệch nhau
+tới ±0,6 chỉ vì value head đoán khác nhau ở hai thế cờ nó không hiểu.
+
+Ba lựa chọn (`train_ppo.baseline_for`):
+
+| `--baseline` | `b` | Khi nào |
+|---|---|---|
+| `role` (mặc định) | TB reward theo từng vai | Luôn. Theo cấu tạo không tệ hơn hằng số |
+| `mean` | một hằng số | Khi muốn mốc đối chứng đơn giản nhất |
+| `value` | value head của policy | CHỈ khi `baselineMse < constantMse` |
+
+Gom theo VAI chứ không theo phe: cột `roles` đã có sẵn từ encoder nên Python
+không cần biết vai nào là Sói — §39 cấm dựng lại luật game ở tầng train, và
+"phe" là luật game. Vai cũng mịn hơn phe.
+
+**Nhưng baseline không phải chỗ có đòn bẩy.** `role` chỉ bớt 0,04–0,62% phương
+sai, và đó là TRẦN chứ không phải kết quả kém: `R = ±1` có phương sai ≈ 0,99 còn
+chênh lệch tỉ lệ thắng giữa các vai chỉ cỡ ±0,15, nên một baseline theo vai hoàn
+hảo cũng chỉ gỡ được ~2%. Phần lớn phương sai nằm ở "ván này thắng hay thua", và
+thứ gỡ được nó là reward trung gian có nguồn từ luật game — xem `reports/`.
+
+**Kỳ vọng trung thực — và đã đo được (2026-09-09).** Hai cấu hình baseline × 5
+vòng độc lập = **mười phép đo, không lần nào challenger vượt champion +2 điểm.**
+Điểm dao động 1,1–4,2 quanh champion +2,6, tức trong nhiễu của chính benchmark.
+
+**Đừng tăng số vòng.** Nút thắt là credit assignment: reward ±1 cấp-ván gán đều
+cho ~35 quyết định mỗi ván, nên một nước đêm quyết định thắng thua và một câu
+nói vô thưởng vô phạt nhận cùng một tín hiệu. Việc đáng làm là reward trung gian
+có nguồn từ luật game (ở TypeScript, §39), rồi cắt train theo loại quyết định —
+chi tiết và số liệu ở `reports/train-policy-0002.md`.
 
 ---
 
