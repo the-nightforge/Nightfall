@@ -31,15 +31,21 @@ def write_dataset(root: Path) -> None:
     # Mỗi hàng: đúng một loại hành động được chào, 2 ghế + ô "không ai" hợp lệ.
     masks = np.zeros((ROWS, ACT), dtype=np.uint8)
     actions = np.zeros(ROWS, dtype="<i4")
+    # Điểm teacher: hai ghế là ứng viên, ô "không ai" thì không (NaN). Ghế được
+    # chọn có điểm cao hơn — trừ khi teacher chọn "không ai".
+    scores = np.full((ROWS, ACT), np.nan, dtype="<f4")
     for row in range(ROWS):
         kind = int(rng.integers(KINDS))
         base = kind * (MAX_SEATS + 1)
         legal = [base + 1, base + 2, base + MAX_SEATS]
         masks[row, legal] = 1
         actions[row] = legal[int(rng.integers(len(legal)))]
+        scores[row, base + 1] = 10.0 if actions[row] == base + 1 else 4.0
+        scores[row, base + 2] = 10.0 if actions[row] == base + 2 else 4.0
     features.astype("<f4").tofile(root / "features.f32.bin")
     masks.tofile(root / "masks.u8.bin")
     actions.tofile(root / "actions.i32.bin")
+    scores.tofile(root / "scores.f32.bin")
     rng.choice(np.array([-1, 1], dtype=np.int8), ROWS).tofile(root / "rewards.i8.bin")
     np.array([0] * 64 + [1] * 16 + [2] * 16, dtype=np.uint8).tofile(root / "splits.u8.bin")
     rng.integers(0, 2, ROWS).astype(np.uint8).tofile(root / "roles.u8.bin")
@@ -82,6 +88,19 @@ def main() -> None:
         assert report["obsSize"] == OBS and report["actionSize"] == ACT
         assert len(report["history"]) == 2
         assert report["bestEpoch"] in (1, 2)
+        assert report["trainingConfig"]["distillAlpha"] == 0.0
+
+        # Đường distill: cùng dữ liệu, α > 0 phải chạy trọn và ghi cấu hình.
+        out2 = Path(tmp) / "model-distill"
+        sys.argv = [
+            "train_bc", "--data", str(data), "--out", str(out2),
+            "--epochs", "2", "--batch-size", "32", "--hidden", "16",
+            "--distill-alpha", "0.5", "--distill-tau", "3",
+        ]
+        train_bc.main()
+        report2 = json.loads((out2 / "metrics.json").read_text(encoding="utf8"))
+        assert report2["trainingConfig"]["distillAlpha"] == 0.5
+        assert (out2 / "model.weights.json").exists()
         for split in ("validation", "test"):
             metrics = report["metrics"][split]
             assert 0.0 <= metrics["agreement"] <= metrics["top2Agreement"] <= 1.0, metrics

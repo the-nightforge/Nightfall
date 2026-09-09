@@ -9,6 +9,7 @@ import {
   DEFAULT_MAX_SEATS,
   actionNames,
   actionSize,
+  candidateScores,
   encodeObservation,
   observationFeatureNames,
   observationSize,
@@ -119,6 +120,9 @@ async function main(): Promise<void> {
     roles: createWriteStream(join(outDir, "roles.u8.bin")),
     decisions: createWriteStream(join(outDir, "decisions.u8.bin")),
     optimal: createWriteStream(join(outDir, "optimal.u8.bin")),
+    // Điểm teacher bỏ jitter theo ô hành động, NaN ở ô không phải ứng viên —
+    // nhãn cho distillation (`train_bc --distill-alpha`).
+    scores: createWriteStream(join(outDir, "scores.f32.bin")),
   };
   // Chỉ mở khi `--rollout`: `data.py` nhận diện tập rollout bằng SỰ CÓ MẶT của
   // hai file này, nên một cặp file rỗng nằm cạnh tập behavior cloning sẽ làm
@@ -210,6 +214,9 @@ async function main(): Promise<void> {
     streams.decisions.write(Buffer.from(Uint8Array.of(decisionIndex.get(line.decision) ?? 255)));
     const optimal = optimalActionMask(line, encoded, options.maxSeats);
     streams.optimal.write(Buffer.from(Uint8Array.from(optimal, (ok) => (ok ? 1 : 0))));
+    streams.scores.write(
+      Buffer.from(Float32Array.from(candidateScores(line, encoded, options.maxSeats)).buffer),
+    );
     if (rolloutStreams && line.learned) {
       if (temperature === null) temperature = line.learned.temperature;
       rolloutStreams.logprobs.write(Buffer.from(Float32Array.of(line.learned.logProb).buffer));

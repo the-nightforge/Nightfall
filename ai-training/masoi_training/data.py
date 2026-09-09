@@ -37,6 +37,9 @@ class Dataset:
     # cả hai; tập behavior cloning không có, và `None` là câu trả lời đúng.
     logprobs: np.ndarray | None = None  # (N,) float32, <= 0
     values: np.ndarray | None = None  # (N,) float32
+    # Điểm teacher (bỏ jitter) theo ô hành động, NaN ở ô không phải ứng viên.
+    # Nhãn cho distillation; `None` với dataset encode bằng bản cũ.
+    scores: np.ndarray | None = None  # (N, action_size) float32, NaN = không ứng viên
 
     @property
     def obs_size(self) -> int:
@@ -62,6 +65,7 @@ class Dataset:
             optimal=self.optimal[keep] if self.optimal is not None else None,
             logprobs=self.logprobs[keep] if self.logprobs is not None else None,
             values=self.values[keep] if self.values is not None else None,
+            scores=self.scores[keep] if self.scores is not None else None,
         )
 
     def __len__(self) -> int:
@@ -92,6 +96,8 @@ def load(directory: str | Path) -> Dataset:
     logprobs = np.fromfile(logprobs_path, dtype="<f4") if logprobs_path.exists() else None
     values_path = root / "values.f32.bin"
     values = np.fromfile(values_path, dtype="<f4") if values_path.exists() else None
+    scores_path = root / "scores.f32.bin"
+    scores = np.fromfile(scores_path, dtype="<f4") if scores_path.exists() else None
 
     # Kiểm kích thước trước khi reshape: một file cụt sẽ reshape ra ma trận lệch
     # hàng và train im lặng trên dữ liệu sai lệch một dòng.
@@ -110,6 +116,8 @@ def load(directory: str | Path) -> Dataset:
         expected["logprobs"] = (logprobs.size, rows)
     if values is not None:
         expected["values"] = (values.size, rows)
+    if scores is not None:
+        expected["scores"] = (scores.size, rows * action_size)
     for name, (got, want) in expected.items():
         if got != want:
             raise ValueError(f"{name}: {got} phần tử, chờ {want} — dataset không khớp meta.json")
@@ -126,6 +134,7 @@ def load(directory: str | Path) -> Dataset:
         optimal=optimal.reshape(rows, action_size).astype(bool) if optimal is not None else None,
         logprobs=logprobs,
         values=values,
+        scores=scores.reshape(rows, action_size) if scores is not None else None,
     )
 
 
