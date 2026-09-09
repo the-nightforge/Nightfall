@@ -265,6 +265,28 @@ function defenseLines(defense: NonNullable<SpeechRequest["defense"]>): string[] 
   return [...shared, "Nói một hoặc hai câu để thuyết phục làng đừng treo bạn.", ""];
 }
 
+/**
+ * Nhắc lại lập trường BOT đã CÔNG KHAI nêu về người đang được nói tới (§15).
+ *
+ * Lý do khối này tồn tại: lõi chọn được `CHANGE_MIND`, nhưng lõi không viết
+ * câu. Không có mấy dòng dưới đây, mô hình vẫn thoải mái viết "tôi tin A từ
+ * đầu" ở đúng lượt mà vòng trước chính BOT đã tố A - và đó là lỗi mà §15 nêu
+ * đích danh.
+ *
+ * KHÔNG phải dữ liệu ẩn: cả bàn đã nghe những câu đó và đã thấy những lá phiếu
+ * đó. Vì vậy nó KHÔNG đi qua `untrusted()` - đây là lời của chính BOT, không
+ * phải chữ do người khác gõ.
+ */
+function priorStanceLines(stance: NonNullable<SpeechRequest["priorStance"]>): string[] {
+  const said = stance.stance === "suspect" ? "nghi ngờ" : "bênh vực";
+  return [
+    `Từ vòng ${stance.sinceRound}, bạn đã CÔNG KHAI ${said} ${stance.subjectName}. Cả bàn đều nhớ điều đó.`,
+    "Nếu lượt này bạn nói khác đi, hãy nhận là mình đã đổi ý và nói ngắn gọn vì sao.",
+    `TUYỆT ĐỐI không viết như thể bạn vẫn nghĩ vậy từ đầu, và không phủ nhận việc mình đã ${said} ${stance.subjectName}.`,
+    "",
+  ];
+}
+
 export function buildDaySpeechPrompt(request: SpeechRequest): PromptSpec {
   const evidenceLines = request.evidence.length
     ? request.evidence.map((item) => `- [${item.sourceId}] ${item.summary}`)
@@ -305,6 +327,7 @@ export function buildDaySpeechPrompt(request: SpeechRequest): PromptSpec {
       // người cũng bị nhắm đã công khai ở pha này - KHÔNG phải vai thật, thứ
       // roleContext cũ từng đưa vào đây và đã bị bỏ hẳn khỏi prompt này.
       ...(request.defense ? defenseLines(request.defense) : []),
+      ...(request.priorStance ? priorStanceLines(request.priorStance) : []),
       ...untrusted(
         "quoted_data",
         request.replyTo ? [`${request.replyTo.actorName}: ${request.replyTo.text}`] : [],

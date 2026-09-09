@@ -53,6 +53,7 @@ function request(
     chatWindow: [],
     avoidOpenings: [],
     recentSpeechSourceIds: [],
+    priorStance: null,
     seq: 0,
     round: 1,
     // Khớp id speaker ("bot") và mục tiêu mặc định ("c" → "Chi") để cổng

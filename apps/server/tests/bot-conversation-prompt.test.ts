@@ -50,6 +50,7 @@ function request(over: Partial<SpeechRequest> = {}): SpeechRequest {
     ],
     avoidOpenings: ["tôi nghi bình"],
     recentSpeechSourceIds: ["recap:1"],
+    priorStance: null,
     seq: 3,
     round: 2,
     players: [
@@ -244,5 +245,39 @@ describe("tiếng cười theo loại ý định", () => {
       request({ intention: intention({ kind: "HUMOR", tone: "PLAYFUL" }) }),
     ).user.toLowerCase();
     expect(text).toContain("không emoji");
+  });
+});
+
+describe("prompt — lập trường đã nêu trước đó (COMMUNICATION §15)", () => {
+  it("không có lập trường cũ thì không thêm dòng nào", () => {
+    const prompt = buildDaySpeechPrompt(request({ priorStance: null }));
+    expect(prompt.user).not.toContain("CÔNG KHAI");
+  });
+
+  it("đã tố ai đó thì prompt nhắc lại, kèm lệnh cấm vờ như chưa đổi ý", () => {
+    const prompt = buildDaySpeechPrompt(
+      request({ priorStance: { subjectName: "Chi", stance: "suspect", sinceRound: 1 } }),
+    );
+    expect(prompt.user).toContain("Từ vòng 1, bạn đã CÔNG KHAI nghi ngờ Chi");
+    expect(prompt.user).toContain("đã đổi ý");
+    expect(prompt.user).toContain("TUYỆT ĐỐI không viết như thể bạn vẫn nghĩ vậy từ đầu");
+  });
+
+  it("đã bênh ai đó thì nói đúng chữ bênh vực, không phải nghi ngờ", () => {
+    const prompt = buildDaySpeechPrompt(
+      request({ priorStance: { subjectName: "Chi", stance: "trust", sinceRound: 2 } }),
+    );
+    expect(prompt.user).toContain("Từ vòng 2, bạn đã CÔNG KHAI bênh vực Chi");
+    expect(prompt.user).not.toContain("nghi ngờ Chi");
+  });
+
+  it("khối này KHÔNG bị bọc như dữ liệu không đáng tin — nó là lời của chính bot", () => {
+    const prompt = buildDaySpeechPrompt(
+      request({ priorStance: { subjectName: "Chi", stance: "suspect", sinceRound: 1 } }),
+    );
+    const stanceAt = prompt.user.indexOf("Từ vòng 1");
+    const quotedAt = prompt.user.indexOf("<quoted_data>");
+    expect(stanceAt).toBeGreaterThanOrEqual(0);
+    expect(quotedAt).toBeGreaterThan(stanceAt);
   });
 });

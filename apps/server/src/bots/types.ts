@@ -88,6 +88,25 @@ export interface SpeechRequest {
   avoidOpenings: string[];
   /** Source đã dùng gần đây, đã CẮT theo cửa sổ chứ không phải cả ván. */
   recentSpeechSourceIds: string[];
+  /**
+   * Lập trường mà chính BOT đã CÔNG KHAI nêu về mục tiêu của lượt này, hoặc
+   * `null` khi nó chưa từng nói gì về người đó (COMMUNICATION §15).
+   *
+   * Không phải thông tin riêng: nó được dựng lại từ chính những câu BOT đã phát
+   * ra giữa phòng và những lá phiếu nó đã bỏ công khai. Cả bàn đã thấy hết.
+   *
+   * Có mặt trong prompt vì đây là chỗ DUY NHẤT chặn được lỗi mà §15 nêu đích
+   * danh - mô hình viết "tôi tin A từ đầu" khi vòng trước chính nó đã tố A.
+   * Lõi có thể chọn `CHANGE_MIND`, nhưng nó không kiểm soát được câu chữ; chỉ
+   * một dòng trong prompt mới làm được.
+   */
+  priorStance: {
+    /** Tên hiển thị của người đang được nói tới. */
+    subjectName: string;
+    stance: "trust" | "suspect";
+    /** Vòng đầu tiên của mạch lập trường đó. */
+    sinceRound: number;
+  } | null;
   /** Lượt nói thứ mấy của BOT này; nguồn biến thiên của bảng mẫu. */
   seq: number;
   round: number;

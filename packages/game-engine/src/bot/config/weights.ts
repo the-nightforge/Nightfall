@@ -712,6 +712,14 @@ export interface ConversationWeights {
    * quy ước với `claim.accusationWeight` và `deceptionRisk.bussingVoteShare`.
    */
   questionIgnoreFloor: number;
+  /**
+   * Một lập trường CÔNG KHAI còn ràng buộc BOT trong bấy nhiêu vòng
+   * (COMMUNICATION §15). `0` TẮT cả trí nhớ tường thuật.
+   *
+   * Không phải vĩnh viễn: một lời tố ở vòng 1 mà khoá BOT trọn ván thì nó
+   * không bao giờ đổi ý được nữa - và cả bàn cũng đã quên lời đó rồi.
+   */
+  narrativeMemoryRounds: number;
 }
 
 /**
@@ -1298,6 +1306,7 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     unansweredQuestionRounds: 0,
     urgencyBoost: 0,
     questionIgnoreFloor: 0,
+    narrativeMemoryRounds: 0,
   }),
 
   /**
@@ -1565,6 +1574,7 @@ export const BOT_WEIGHTS_V3: BotWeights = Object.freeze({
     unansweredQuestionRounds: 3,
     urgencyBoost: 0,
     questionIgnoreFloor: 0,
+    narrativeMemoryRounds: 0,
   }),
 }) as BotWeights;
 
@@ -2458,6 +2468,42 @@ export const BOT_WEIGHTS_V24: BotWeights = Object.freeze({
   conversation: Object.freeze({
     ...BOT_WEIGHTS_V23.conversation,
     questionIgnoreFloor: 0.45,
+  }),
+});
+
+/**
+ * Cấu hình v25 - nhất quán tường thuật (COMMUNICATION §15).
+ *
+ * MỘT ô đổi so v24: `conversation.narrativeMemoryRounds` 0 -> 3.
+ *
+ * Trước v25, thứ duy nhất giữ BOT khỏi tự mâu thuẫn là một phép so chuỗi con
+ * trên `currentTheory.summary`, và nó chỉ chạy khi `style.concession >= 0.5`.
+ * Nghĩa là một con BOT bướng bỉnh quay xe hoàn toàn trong im lặng: hôm qua nó
+ * bênh An, hôm nay nó tố An, và không câu nào thừa nhận điều đó.
+ *
+ * Từ v25, lập trường công khai được dựng lại từ chính những gì BOT đã NÓI và đã
+ * BỎ PHIẾU (`narrative.ts`), rồi:
+ *
+ * - đảo sang NGHI một người mình đã công khai bênh -> `CHANGE_MIND`, bất kể
+ *   tính cách. Bướng bỉnh quyết định bạn đổi ý BAO NHIÊU LẦN, không quyết định
+ *   bạn có được vờ như chưa từng nghĩ khác hay không.
+ * - đảo sang BÊNH một người mình đã công khai tố -> ứng viên đó bị loại, và
+ *   BOT rơi xuống ứng viên kế (thường là `DISAGREE`, không nêu lập trường).
+ *   Hướng này chưa có ý định nào diễn đạt được "tôi đã nghi, giờ tôi tin" -
+ *   xem phần hạn chế của văn bản kiểm chứng.
+ *
+ * KHÔNG thêm lượt rút RNG nào: `buildNarrative` thuần, và cả hai nhánh đều nằm
+ * trong phần chọn ỨNG VIÊN, phía trước lượt rút vốn có.
+ *
+ * KHÔNG mặc định - bench v25 so v21 trước, kỷ luật v19.
+ */
+export const BOT_WEIGHTS_V25: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V24,
+  version: "25.0.0",
+
+  conversation: Object.freeze({
+    ...BOT_WEIGHTS_V24.conversation,
+    narrativeMemoryRounds: 3,
   }),
 });
 

@@ -14,6 +14,13 @@ import type {
 } from "../types";
 import { buildConversationState, speechUrge, type ConversationState } from "./conversation-state";
 import { speechSemanticFingerprint } from "./fingerprint";
+import {
+  buildNarrative,
+  contradictsNarrative,
+  liveStanceOn,
+  stanceOfKind,
+  type NarrativePosition,
+} from "./narrative";
 import { chooseResponseStrategy, intentionFor } from "./question-policy";
 import { hasRecentSemantic } from "./speech-memory";
 import { findConversationTriggers, type ConversationTrigger } from "./triggers";
@@ -346,6 +353,26 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
   const socialSituation = (): ConversationState =>
     (conversation ??= buildConversationState(context, state, weights));
 
+  /**
+   * Lập trường BOT đã CÔNG KHAI nêu ra, hoặc `null` khi cơ chế tắt (§15).
+   *
+   * Thuần, nên dựng ở đây không lệch chuỗi RNG. Cả hai đường đọc nó: đường
+   * trigger để không tự mâu thuẫn, đường tự mở lời để nói THÀNH LỜI việc mình
+   * đổi ý thay vì lặng lẽ quay xe.
+   */
+  const narrative: Record<string, NarrativePosition> | null =
+    weights.conversation.narrativeMemoryRounds > 0 ? buildNarrative(state, weights) : null;
+
+  /** Ý định này có đảo ngược một lập trường còn hiệu lực không. */
+  const selfContradicting = (draft: BotSpeechIntention): boolean => {
+    if (narrative === null || draft.targetId === undefined) return false;
+    const stance = stanceOfKind(draft.kind);
+    return (
+      stance !== null &&
+      contradictsNarrative(narrative, draft.targetId, stance, round, weights)
+    );
+  };
+
   // ---- 1. Có ai đang nói với mình không ----
   const { questionIgnoreFloor } = weights.conversation;
 
@@ -374,6 +401,11 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
           }));
 
     for (const draft of drafts) {
+      // Bênh một người mình vừa công khai tố (hoặc ngược lại) mà không nói gì
+      // về việc đổi ý là đúng thứ §15 gọi là bất nhất. Bỏ ứng viên này và thử
+      // ứng viên kế - thường là `DISAGREE`, thứ không nêu lập trường nào.
+      if (selfContradicting(draft)) continue;
+
       const candidate = fresh(draft);
       if (!candidate) continue;
 
@@ -429,6 +461,32 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
 
   const targetId = vote.choice.targetId;
   const conversational = weights.conversation.triggerFreshnessRounds > 0;
+
+  /**
+   * Quay xe thì phải NÓI RA (§15).
+   *
+   * Đứng trên nhánh `currentTheory` ngay dưới và KHÔNG hỏi `style.concession`:
+   * bướng bỉnh quyết định một người đổi ý bao nhiêu lần, chứ không cho phép họ
+   * vờ như chưa bao giờ nghĩ khác. Một con BOT hôm qua bênh An, hôm nay tố An,
+   * và không câu nào thừa nhận điều đó, là đúng thứ §15 phải chữa.
+   *
+   * Chỉ nổ khi lập trường cũ CÒN HIỆU LỰC (`narrativeMemoryRounds` vòng). Xa
+   * hơn thế thì cả bàn đã quên, và một lời "tôi đổi ý" về chuyện không ai nhớ
+   * chỉ làm BOT nghe như đang tự nói với mình.
+   */
+  if (narrative !== null && liveStanceOn(narrative, targetId, round, weights) === "trust") {
+    const position = narrative[targetId]!;
+    const flipped = fresh({
+      kind: "CHANGE_MIND",
+      targetId,
+      topic: "SUSPICION",
+      confidence: vote.confidence,
+      evidence: usable,
+      tone: "SOFT",
+      reason: `đã công khai bênh người này từ vòng ${position.createdAtRound}; giờ phiếu đổi hướng`,
+    });
+    if (flipped) return flipped;
+  }
 
   // Đổi ý là một hành vi xã hội, và nói nó ra thành lời là thứ phân biệt một
   // người chơi với một máy chấm điểm. Chỉ mở khi giả thuyết đang giữ THẬT SỰ
