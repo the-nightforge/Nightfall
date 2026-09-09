@@ -792,7 +792,7 @@ export class BotRuntime {
               weight: this.weights.social.deathMotiveWeight * edge.hostility,
               confidence: this.weights.social.deathMotiveConfidence,
               round: knowledge.round,
-              summary: `từng công kích ${death.name} ngay trước khi người này chết`,
+              summary: `vừa dí ${death.name} xong thì người ta chết`,
             },
             this.weights,
           );

@@ -177,6 +177,37 @@ describe("vote recap analysis", () => {
     );
   });
 
+  it("summary là câu NÓI ĐƯỢC: parser không đọc ra bằng chứng nào từ nó", () => {
+    // `fillSpeechTemplate` ghép `summary` thẳng vào chỗ `{evidence}`, và
+    // `buildDaySpeechPrompt` đưa nguyên văn cho nhà cung cấp - nên mọi chuỗi ở
+    // đây đều được PHÁT ra phòng, rồi bị chính các BOT khác `analyzeChat` đọc
+    // lại. Một summary tình cờ khớp mẫu buộc tội hay khai vai là một nước đi mà
+    // lõi chưa bao giờ chốt, và nó đi vòng qua `targetSurvivesRoundTrip`: cổng
+    // đó chỉ gác đường NHÀ CUNG CẤP, không gác bảng mẫu.
+    //
+    // Đọc summary từ bằng chứng THẬT do `analyzeVoteRecap` sinh ra, không chép
+    // lại chuỗi vào test: một bản sao sẽ vẫn xanh sau khi ai đó sửa chuỗi gốc.
+    const chatPlayers: BotPlayerKnowledge[] = [
+      { id: "a", name: "An", alive: true },
+      { id: "b", name: "Bình", alive: true },
+      { id: "c", name: "Chi", alive: true },
+    ];
+    const summaries = [
+      ...analyzeVoteRecap(decisiveLateSwitchRecap(), 1, alwaysNotice),
+      ...analyzeVoteRecap(saveVoteRecap(), 1, alwaysNotice),
+      ...analyzeVoteRecap(bandwagonRecap(), 1, alwaysNotice),
+    ].map((item) => item.summary);
+
+    expect(summaries.length).toBeGreaterThan(0);
+    for (const summary of summaries) {
+      const spoken = analyzeChat(
+        [{ id: "m1", actorId: "a", text: summary, at: 0 }],
+        chatPlayers,
+      );
+      expect(spoken, summary).toEqual([]);
+    }
+  });
+
   it("weighs a bandwagon below a tie break and a save vote", () => {
     const bandwagon = analyzeVoteRecap(bandwagonRecap(), 1, alwaysNotice).find(
       (item) => item.kind === "BANDWAGON",
