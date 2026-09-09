@@ -11,7 +11,7 @@ import {
 } from "@masoi/shared";
 import { GameEngine } from "../../engine";
 import { detectCoalitions } from "../analysis/coalition";
-import { BotRuntime } from "../BotRuntime";
+import { BotRuntime, type LearnedDecisions } from "../BotRuntime";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { LearnedPolicy } from "../learning/mlp";
 import { judgeChainPosition, type ChainBlockReason } from "../conversation/chain-limits";
@@ -112,6 +112,8 @@ export interface SelfPlayRecord {
   learnedSeats?: LearnedSeats;
   /** Nhiệt độ lấy mẫu đã dùng; vắng = 0 (argmax). `replayGame` cần nó để tái lập. */
   learnedTemperature?: number;
+  /** Vắng = `"both"`. Xem `BotRuntimeOptions.learnedDecisions`. */
+  learnedDecisions?: LearnedDecisions;
 }
 
 export interface SelfPlayInput {
@@ -147,6 +149,8 @@ export interface SelfPlayInput {
   learnedSeats?: LearnedSeats;
   /** Xem `BotRuntimeOptions.learnedTemperature`. Mặc định 0 (argmax). */
   learnedTemperature?: number;
+  /** Xem `BotRuntimeOptions.learnedDecisions`. Mặc định `"both"`. */
+  learnedDecisions?: LearnedDecisions;
   /** Xem `SelfPlayRecord.humanSeats`. Mặc định 0. */
   humanSeats?: number;
 }
@@ -496,6 +500,10 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
           learnedPolicyId: input.learnedPolicy.id,
           learnedSeats: input.learnedSeats ?? "all",
           learnedTemperature: input.learnedTemperature ?? 0,
+          // Chỉ ghi khi KHÁC mặc định: record là hợp đồng JSON có test canh khoá.
+          ...(input.learnedDecisions && input.learnedDecisions !== "both"
+            ? { learnedDecisions: input.learnedDecisions }
+            : {}),
         }
       : {}),
   };
@@ -547,6 +555,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
         traceLiveInput: input.traceLiveInput === true,
         learnedPolicy: usesLearned ? input.learnedPolicy : undefined,
         learnedTemperature: input.learnedTemperature,
+        learnedDecisions: input.learnedDecisions,
       }),
     );
   }
@@ -1572,6 +1581,7 @@ export function replayGame(
     learnedPolicy,
     learnedSeats: record.learnedSeats,
     learnedTemperature: record.learnedTemperature,
+    learnedDecisions: record.learnedDecisions,
   });
 }
 

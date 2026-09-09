@@ -63,12 +63,18 @@ def step(marker: Path, cmd: list[str], cwd: Path = ROOT) -> None:
 def score_of(bench_json: Path) -> float:
     """Điểm của một model = trung bình hai chiều lợi thế, tính bằng ĐIỂM PHẦN TRĂM.
 
-    `summary` của `ai:benchmark` theo đúng thứ tự `setups`: baseline, làng học
-    được, sói học được. Làng mạnh lên đẩy `villageWin` LÊN, sói mạnh lên đẩy nó
-    XUỐNG — nên phải trừ ngược chiều, không phải cộng hai hiệu.
+    Đọc `summary` của `ai:benchmark` THEO TÊN cấu hình, không theo vị trí:
+    `--setups` cho phép thêm bớt hàng, và một vòng lặp đọc nhầm hàng `teacher`
+    thành `wolves` sẽ thăng hạng theo một con số vô nghĩa mà không ai thấy.
+    Làng mạnh lên đẩy `villageWin` LÊN, sói mạnh lên đẩy nó XUỐNG — nên phải trừ
+    ngược chiều, không phải cộng hai hiệu.
     """
     b = json.loads(bench_json.read_text(encoding="utf8"))
-    base, village, wolves = (s["villageWinMean"] for s in b["summary"])
+    by = {s.get("setup"): s["villageWinMean"] for s in b["summary"]}
+    missing = [name for name in ("baseline", "village", "wolves") if name not in by]
+    if missing:
+        raise ValueError(f"{bench_json}: thiếu cấu hình {missing} — benchmark phải chạy baseline,village,wolves")
+    base, village, wolves = by["baseline"], by["village"], by["wolves"]
     return ((village - base) + (base - wolves)) / 2 * 100
 
 
