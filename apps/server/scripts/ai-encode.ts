@@ -168,7 +168,7 @@ async function main(): Promise<void> {
   const meta = {
     // Tăng khi ĐỊNH DẠNG đổi (chiều vector, không gian hành động), để một
     // model cũ không bao giờ được nạp lên tensor mới mà không ai biết.
-    datasetVersion: "dataset-0002",
+    datasetVersion: "dataset-0003",
     gitCommit: currentCommit(),
     source: resolve(options.input),
     rows,

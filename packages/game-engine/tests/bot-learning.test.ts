@@ -46,9 +46,9 @@ function line(overrides: Partial<BotTrajectory> = {}): BotTrajectory {
       knownRoles: { p2: "VILLAGER" as Role },
       seerResult: null,
       belief: [
-        { playerId: "p1", suspicion: 60, trust: 0, wolfProbability: 0.7, threat: 0.2, credibility: 0.4, influence: 0.1 },
-        { playerId: "p2", suspicion: 0, trust: 20, wolfProbability: 0, threat: 0, credibility: 0.5, influence: 0 },
-        { playerId: "p3", suspicion: 10, trust: 0, wolfProbability: 0.2, threat: 0.6, credibility: 0.5, influence: 0.3 },
+        { playerId: "p1", suspicion: 60, trust: 0, wolfProbability: 0.7, threat: 0.2, credibility: 0.4, influence: 0.1, informationValue: 40, claimedPowerRole: true, guardedBefore: false },
+        { playerId: "p2", suspicion: 0, trust: 20, wolfProbability: 0, threat: 0, credibility: 0.5, influence: 0, informationValue: 20, claimedPowerRole: false, guardedBefore: false },
+        { playerId: "p3", suspicion: 10, trust: 0, wolfProbability: 0.2, threat: 0.6, credibility: 0.5, influence: 0.3, informationValue: 30, claimedPowerRole: false, guardedBefore: true },
       ],
       personality: {
         aggressiveness: 0.5,
@@ -149,6 +149,33 @@ describe("observation encoder (§8-§11)", () => {
     };
     expect(encodeObservation(hold).actionIndex).toBe(actionIndexOf("SKIP", DEFAULT_MAX_SEATS));
     expect(validateTrajectoryLine(hold).violations).toEqual([]);
+  });
+
+  it("ba đầu vào của scorer đêm nằm đúng ghế: informationValue, claimedPowerRole, guardedBefore", () => {
+    const encoded = encodeObservation(line());
+    const names = observationFeatureNames();
+    // seats = [p2, p3, p1]
+    expect(encoded.features[names.indexOf("seat2:claimedPowerRole")]).toBe(1); // p1 đã khai
+    expect(encoded.features[names.indexOf("seat1:claimedPowerRole")]).toBe(0);
+    expect(encoded.features[names.indexOf("seat1:guardedBefore")]).toBe(1); // p3 từng được canh
+    expect(encoded.features[names.indexOf("seat2:informationValue")]).toBeCloseTo(0.4);
+    // Trace cũ không có ba trường này → 0, không ném.
+    const legacy = line({
+      observation: {
+        ...line().observation,
+        belief: line().observation.belief.map(({ informationValue, claimedPowerRole, guardedBefore, ...rest }) => rest) as never,
+      },
+    });
+    expect(encodeObservation(legacy).features[names.indexOf("seat2:claimedPowerRole")]).toBe(0);
+    expect(validateTrajectoryLine(legacy).valid).toBe(true);
+    // Kiểu sai thì validator bắt.
+    const bad = line({
+      observation: {
+        ...line().observation,
+        belief: [{ ...line().observation.belief[0]!, claimedPowerRole: "yes" as never }],
+      },
+    });
+    expect(validateTrajectoryLine(bad).valid).toBe(false);
   });
 
   it("vai không có lượt đêm: không nhãn, không vi phạm", () => {

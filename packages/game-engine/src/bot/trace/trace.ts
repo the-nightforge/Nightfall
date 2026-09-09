@@ -52,6 +52,17 @@ export interface BeliefSnapshotEntry {
   threat?: number;
   credibility?: number;
   influence?: number;
+  /**
+   * Ba đầu vào riêng của scorer ĐÊM, đo được là thứ observation còn thiếu
+   * (reports/train-policy-0002.md). Đều là thông tin bot này ĐÃ CÓ: lời khai
+   * là speech cả bàn nghe, lịch sử canh là hành động của chính nó.
+   */
+  /** `informationValue(suspicion)` của Tiên Tri/Thám Tử — thang điểm belief. */
+  informationValue?: number;
+  /** Người này đã khai một vai quyền lực (nhánh rẽ của `wolfThreatScore`). */
+  claimedPowerRole?: boolean;
+  /** Bảo Vệ này đã từng canh người này (`repeatPenalty`). */
+  guardedBefore?: boolean;
 }
 
 /** Ảnh chụp belief; hai bản trước/sau cho thấy quan sát vừa rồi đã đổi gì. */

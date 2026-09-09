@@ -222,11 +222,22 @@ export function validateTrajectoryLine(value: unknown): ObservationLeakReport {
         add("observation.belief", "entry thiếu playerId/suspicion/trust hữu hạn", "schema");
         break;
       }
-      const unit = ["wolfProbability", "threat", "credibility", "influence"].find(
-        (key) => item[key] !== undefined && !isFiniteNumber(item[key]),
-      );
+      const unit = [
+        "wolfProbability",
+        "threat",
+        "credibility",
+        "influence",
+        "informationValue",
+      ].find((key) => item[key] !== undefined && !isFiniteNumber(item[key]));
       if (unit !== undefined) {
         add("observation.belief", `${unit} phải là số hữu hạn`, "schema");
+        break;
+      }
+      const flag = ["claimedPowerRole", "guardedBefore"].find(
+        (key) => item[key] !== undefined && typeof item[key] !== "boolean",
+      );
+      if (flag !== undefined) {
+        add("observation.belief", `${flag} phải là boolean`, "schema");
         break;
       }
     }

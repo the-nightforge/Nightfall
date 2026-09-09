@@ -54,6 +54,9 @@ export interface BotTrajectory {
       threat: number;
       credibility: number;
       influence: number;
+      informationValue: number;
+      claimedPowerRole: boolean;
+      guardedBefore: boolean;
     }[];
     personality: BotDecisionTrace["personality"];
     /** Nạn nhân bầy đã chốt; chỉ Sói và Phù Thuỷ (sau khoá) thấy khác `null`. */
@@ -143,6 +146,9 @@ export function gameToTrajectories(game: SelfPlayGame): BotTrajectory[] {
       threat: entry.threat ?? 0,
       credibility: entry.credibility ?? 0,
       influence: entry.influence ?? 0,
+      informationValue: entry.informationValue ?? 0,
+      claimedPowerRole: entry.claimedPowerRole ?? false,
+      guardedBefore: entry.guardedBefore ?? false,
     }));
     belief.sort((left, right) => left.playerId.localeCompare(right.playerId));
 
