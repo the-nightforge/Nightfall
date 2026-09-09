@@ -37,7 +37,12 @@ def batches(count: int, size: int, generator: torch.Generator):
 
 
 def evaluate(model: PolicyValueNet, data, device: torch.device) -> dict:
-    """Độ khớp với bot heuristic, tổng thể và theo vai (§28)."""
+    """Độ khớp với bot heuristic, tổng thể + theo vai + theo loại quyết định (§28).
+
+    Tách theo loại quyết định vì VOTE và NIGHT là hai bài toán khác nhau đi chung
+    một model: một con số gộp 0,50 không nói được model bám tốt lượt bầu hay lượt
+    đêm, mà đó chính là câu hỏi quyết định nên làm giàu đặc trưng nào tiếp theo.
+    """
     if len(data) == 0:
         return {"samples": 0}
     model.eval()
@@ -53,20 +58,32 @@ def evaluate(model: PolicyValueNet, data, device: torch.device) -> dict:
         predicted = logits.argmax(dim=1)
         correct = (predicted == actions).cpu().numpy()
 
-    by_role: dict[str, float] = {}
-    role_names = data.meta["roles"]
-    for index in np.unique(data.roles):
-        keep = data.roles == index
-        name = role_names[int(index)] if int(index) < len(role_names) else str(index)
-        by_role[name] = round(float(correct[keep].mean()), 4)
+    def breakdown(codes: np.ndarray, names: list) -> dict:
+        out = {}
+        for index in np.unique(codes):
+            keep = codes == index
+            label = names[int(index)] if int(index) < len(names) else str(index)
+            out[label] = {
+                "agreement": round(float(correct[keep].mean()), 4),
+                "samples": int(keep.sum()),
+            }
+        return out
 
-    return {
+    metrics = {
         "samples": len(data),
         "policyLoss": round(loss, 4),
         "agreement": round(float(correct.mean()), 4),
         "valueMae": round(float((value - rewards).abs().mean().item()), 4),
-        "agreementByRole": by_role,
+        "agreementByRole": {
+            role: entry["agreement"]
+            for role, entry in breakdown(data.roles, data.meta["roles"]).items()
+        },
     }
+    if data.decisions.size:
+        metrics["agreementByDecision"] = breakdown(
+            data.decisions, data.meta.get("decisionKinds", [])
+        )
+    return metrics
 
 
 def main() -> None:
@@ -172,6 +189,11 @@ def main() -> None:
         "trainActionDistribution": action_distribution(train),
         "history": history,
         "metrics": {
+            # Có mặt để phân biệt HAI nguyên nhân trông giống nhau từ ngoài:
+            # train ≈ val nghĩa là thiếu đặc trưng hoặc thiếu sức chứa (underfit);
+            # train ≫ val nghĩa là overfit. Hai chẩn đoán đó dẫn tới hai việc
+            # trái ngược nhau, nên thiếu số này là đoán mò.
+            "train": evaluate(model, train, device),
             "validation": evaluate(model, validation, device),
             "test": evaluate(model, test, device),
         },

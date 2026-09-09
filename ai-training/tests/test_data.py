@@ -24,7 +24,9 @@ from masoi_training.data import action_distribution, load  # noqa: E402
 ROWS, OBS, ACT = 6, 4, 3
 
 
-def write_dataset(root: Path, *, truncate_features: bool = False) -> None:
+def write_dataset(
+    root: Path, *, truncate_features: bool = False, with_decisions: bool = True
+) -> None:
     features = np.arange(ROWS * OBS, dtype="<f4")
     if truncate_features:
         features = features[:-1]
@@ -35,6 +37,8 @@ def write_dataset(root: Path, *, truncate_features: bool = False) -> None:
     # 3 train, 2 validation, 1 test
     np.array([0, 0, 0, 1, 1, 2], dtype=np.uint8).tofile(root / "splits.u8.bin")
     np.array([0, 0, 1, 1, 2, 2], dtype=np.uint8).tofile(root / "roles.u8.bin")
+    if with_decisions:
+        np.array([0, 0, 0, 1, 1, 1], dtype=np.uint8).tofile(root / "decisions.u8.bin")
     (root / "meta.json").write_text(
         json.dumps(
             {
@@ -43,6 +47,7 @@ def write_dataset(root: Path, *, truncate_features: bool = False) -> None:
                 "actionSize": ACT,
                 "datasetVersion": "test-0001",
                 "roles": ["VILLAGER", "WEREWOLF", "SEER"],
+                "decisionKinds": ["VOTE", "NIGHT"],
             }
         ),
         encoding="utf8",
@@ -68,6 +73,21 @@ def main() -> None:
         assert data.split("train").actions.tolist() == [0, 1, 0]
 
         assert action_distribution(data) == {0: 3, 1: 3}
+
+        # Cột decision phải đi theo split, nếu không mọi số đo "theo loại quyết
+        # định" sẽ gán nhãn cho nhầm hàng — sai âm thầm, không ai thấy.
+        assert data.decisions.tolist() == [0, 0, 0, 1, 1, 1]
+        assert data.split("validation").decisions.tolist() == [1, 1]
+
+    # Dataset encode TRƯỚC khi cột này tồn tại vẫn phải nạp được: vắng mặt là
+    # mất một số đo, không phải mất dữ liệu.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        write_dataset(root, with_decisions=False)
+        data = load(root)
+        assert len(data) == ROWS
+        assert data.decisions.size == 0
+        assert data.split("train").decisions.size == 0
 
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)

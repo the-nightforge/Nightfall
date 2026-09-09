@@ -4,6 +4,7 @@ import { createInterface } from "node:readline";
 import { resolve, join } from "node:path";
 import { ROLES } from "@masoi/shared";
 import {
+  DECISION_KINDS,
   DEFAULT_MAX_SEATS,
   actionSize,
   encodeObservation,
@@ -89,6 +90,11 @@ async function main(): Promise<void> {
   const obsSize = observationSize(options.maxSeats);
   const actSize = actionSize(options.maxSeats);
   const roleIndex = new Map(ROLES.map((role, index) => [role as string, index]));
+  // Loại quyết định cũng ra một cột riêng: nó đã nằm trong vector dưới dạng
+  // one-hot, nhưng tầng train cần nó ở dạng NHÃN để tách được số đo theo từng
+  // loại. Một con số 0,50 gộp chung không nói được model bám tốt lượt bầu hay
+  // lượt đêm, mà hai thứ đó là hai bài toán khác nhau.
+  const decisionIndex = new Map(DECISION_KINDS.map((kind, index) => [kind as string, index]));
 
   const streams = {
     features: createWriteStream(join(outDir, "features.f32.bin")),
@@ -97,6 +103,7 @@ async function main(): Promise<void> {
     rewards: createWriteStream(join(outDir, "rewards.i8.bin")),
     splits: createWriteStream(join(outDir, "splits.u8.bin")),
     roles: createWriteStream(join(outDir, "roles.u8.bin")),
+    decisions: createWriteStream(join(outDir, "decisions.u8.bin")),
   };
 
   let read = 0;
@@ -150,6 +157,7 @@ async function main(): Promise<void> {
     streams.rewards.write(Buffer.from(Int8Array.of(line.reward)));
     streams.splits.write(Buffer.from(Uint8Array.of(SPLIT_CODE[split])));
     streams.roles.write(Buffer.from(Uint8Array.of(roleIndex.get(line.finalRole) ?? 255)));
+    streams.decisions.write(Buffer.from(Uint8Array.of(decisionIndex.get(line.decision) ?? 255)));
   }
 
   await Promise.all(
@@ -174,6 +182,7 @@ async function main(): Promise<void> {
     splitCounts: perSplit,
     splitCode: SPLIT_CODE,
     roles: [...ROLES],
+    decisionKinds: [...DECISION_KINDS],
     featureNames: observationFeatureNames(options.maxSeats),
   };
   writeFileSync(join(outDir, "meta.json"), `${JSON.stringify(meta, null, 2)}\n`, "utf8");

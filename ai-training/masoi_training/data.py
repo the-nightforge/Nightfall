@@ -27,6 +27,9 @@ class Dataset:
     rewards: np.ndarray  # (N,) float32, ±1
     splits: np.ndarray  # (N,) uint8, 0=train 1=validation 2=test
     roles: np.ndarray  # (N,) uint8, chỉ số trong meta["roles"]
+    # (N,) uint8, chỉ số trong meta["decisionKinds"]; rỗng với dataset encode
+    # trước khi cột này tồn tại — vắng mặt là mất một số đo, không phải mất dữ liệu.
+    decisions: np.ndarray
     meta: dict
 
     @property
@@ -48,6 +51,7 @@ class Dataset:
             rewards=self.rewards[keep],
             splits=self.splits[keep],
             roles=self.roles[keep],
+            decisions=self.decisions[keep] if self.decisions.size else self.decisions,
             meta=self.meta,
         )
 
@@ -68,6 +72,12 @@ def load(directory: str | Path) -> Dataset:
     rewards = np.fromfile(root / "rewards.i8.bin", dtype=np.int8)
     splits = np.fromfile(root / "splits.u8.bin", dtype=np.uint8)
     roles = np.fromfile(root / "roles.u8.bin", dtype=np.uint8)
+    decisions_path = root / "decisions.u8.bin"
+    decisions = (
+        np.fromfile(decisions_path, dtype=np.uint8)
+        if decisions_path.exists()
+        else np.empty(0, dtype=np.uint8)
+    )
 
     # Kiểm kích thước trước khi reshape: một file cụt sẽ reshape ra ma trận lệch
     # hàng và train im lặng trên dữ liệu sai lệch một dòng.
@@ -78,6 +88,7 @@ def load(directory: str | Path) -> Dataset:
         "rewards": (rewards.size, rows),
         "splits": (splits.size, rows),
         "roles": (roles.size, rows),
+        **({"decisions": (decisions.size, rows)} if decisions.size else {}),
     }
     for name, (got, want) in expected.items():
         if got != want:
@@ -90,6 +101,7 @@ def load(directory: str | Path) -> Dataset:
         rewards=rewards.astype(np.float32),
         splits=splits,
         roles=roles,
+        decisions=decisions,
         meta=meta,
     )
 
