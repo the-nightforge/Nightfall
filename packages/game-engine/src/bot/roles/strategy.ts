@@ -1,5 +1,6 @@
 import type { Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import type { NightPolicyModel } from "../policy/policy-model";
 import type { DecisionProbe } from "../trace/trace";
 import type {
   BotBrainState,
@@ -37,6 +38,11 @@ export interface BotRoleStrategy {
     rng: BotRng,
     /** Chỉ có mặt khi trace bật; bỏ qua nó là hợp lệ. */
     probe?: DecisionProbe,
+    /**
+     * Seam chọn của lượt đêm (residual policy). Vai có bảng ứng viên truyền
+     * nó vào `rankNightTargets` cùng `action`; vai không có bảng bỏ qua.
+     */
+    policy?: NightPolicyModel,
   ): BotNightIntention | null;
 
   /**

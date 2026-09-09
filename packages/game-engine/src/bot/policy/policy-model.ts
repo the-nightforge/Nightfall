@@ -1,5 +1,6 @@
 import type { StrategyContext } from "../planning/planner";
 import type { DecisionProbe } from "../trace/trace";
+import type { NightActionKind } from "../types";
 
 /**
  * Seam chính sách (spec BOT_AI_UPGRADE §27): lớp CHỌN-HÀNH-ĐỘNG cuối cùng.
@@ -51,4 +52,28 @@ export function heuristicPolicyModel<Frame>(): PolicyModel<Frame> {
       return { targetId: sorted[0]!.targetId };
     },
   };
+}
+
+/** Một dòng của bảng ứng viên đêm đã chấm. */
+export interface NightCandidate {
+  targetId: string;
+  score: number;
+}
+
+/**
+ * Seam CHỌN cho lượt đêm — đối xứng với `PolicyModel` của lượt bầu.
+ *
+ * `rankNightTargets` gọi nó SAU khi đã chấm và sort bảng của MỘT loại hành
+ * động, rồi đưa lựa chọn lên đầu bảng; vai đọc `scored[0]` như cũ nên không
+ * vai nào phải biết seam tồn tại. Khác `PolicyModel` ngày, model ĐƯỢC rút RNG
+ * (lấy mẫu ở rollout) — RNG là của bot, đi qua `wrapRngForTrace`, nên vẫn
+ * tái lập. Trả `null` = giữ nguyên thứ tự heuristic. Không bịa được ứng viên:
+ * id ngoài bảng bị bỏ qua.
+ */
+export interface NightPolicyModel {
+  readonly name: string;
+  selectTarget(
+    action: NightActionKind,
+    candidates: ReadonlyArray<NightCandidate>,
+  ): string | null;
 }

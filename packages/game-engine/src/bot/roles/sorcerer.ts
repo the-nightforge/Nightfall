@@ -36,7 +36,7 @@ export function sorcererStrategy(
   return {
     role: "SORCERER",
 
-    decideNight(context, state, rng, probe) {
+    decideNight(context, state, rng, probe, policy) {
       const night = context.knowledge.night;
       if (!night || !night.legalActions.includes("SORCERER_CHECK")) {
         probe?.fallback("không có lượt soi Pháp Sư nào đang mở");
@@ -63,6 +63,8 @@ export function sorcererStrategy(
         weights,
         rng,
         probe,
+        action: "SORCERER_CHECK",
+        policy,
         termsFor: (targetId) => {
           const claimedSeerLine = state.claims.some(
             (memory) =>

@@ -85,7 +85,7 @@ export function serialKillerStrategy(
   return {
     role: "SERIAL_KILLER",
 
-    decideNight(context, state, rng, probe) {
+    decideNight(context, state, rng, probe, policy) {
       const night = context.knowledge.night;
       if (!night || !night.legalActions.includes("SERIAL_KILL")) {
         probe?.fallback("không có lượt ra tay nào đang mở");
@@ -129,6 +129,8 @@ export function serialKillerStrategy(
         // Cổng tái lập: 0 = tắt (đã thoát sớm phía trên), 1 = bảng điểm thật.
         scale: tuning.nightThreatWeight,
         probe,
+        action: "SERIAL_KILL",
+        policy,
         termsFor: (targetId) => {
           const trust = state.trust[targetId]?.score ?? 0;
           const suspicion = state.suspicion[targetId]?.score ?? 0;
