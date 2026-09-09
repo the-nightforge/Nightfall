@@ -61,3 +61,4 @@ export * from "./bot/evaluation/metrics";
 export * from "./bot/evaluation/report";
 export * from "./bot/learning/observation";
 export * from "./bot/learning/dataset";
+export * from "./bot/learning/mlp";
