@@ -39,6 +39,11 @@ def main() -> None:
     actions = torch.distributions.Categorical(logits=lp).sample().numpy().astype("<i4")
     logprobs = lp[np.arange(ROWS), actions].numpy().astype("<f4")
     rewards = np.where(actions == 0, 1, -1).astype(np.int8)  # hành động 0 luôn thắng
+    # Hai vai với tỉ lệ thắng LỆCH NHAU: vai 1 được thắng thêm ở nửa số hàng.
+    # Không có chênh lệch này thì baseline theo vai bằng hệt baseline hằng số,
+    # và bài kiểm không phân biệt được hai cách tính.
+    roles = (np.arange(ROWS) % 2).astype(np.uint8)
+    rewards = np.where((roles == 1) & (np.arange(ROWS) % 4 == 1), 1, rewards).astype(np.int8)
 
     with tempfile.TemporaryDirectory() as tmp:
         d = Path(tmp) / "enc"
@@ -48,7 +53,7 @@ def main() -> None:
         actions.tofile(d / "actions.i32.bin")
         rewards.tofile(d / "rewards.i8.bin")
         np.zeros(ROWS, np.uint8).tofile(d / "splits.u8.bin")
-        np.zeros(ROWS, np.uint8).tofile(d / "roles.u8.bin")
+        roles.tofile(d / "roles.u8.bin")
         np.zeros(ROWS, np.uint8).tofile(d / "decisions.u8.bin")
         logprobs.tofile(d / "logprobs.f32.bin")
         val.numpy().astype("<f4").tofile(d / "values.f32.bin")
@@ -57,7 +62,7 @@ def main() -> None:
             "obsSize": OBS,
             "actionSize": ACT,
             "datasetVersion": "rollout-test",
-            "roles": ["A"],
+            "roles": ["A", "B"],
             "decisions": ["VOTE"],
             "featureNames": [f"f{i}" for i in range(OBS)],
             "actionNames": [f"a{i}" for i in range(ACT)],
@@ -95,6 +100,37 @@ def main() -> None:
             assert float(probs[:, 4:].max()) < 1e-6, float(probs[:, 4:].max())
         assert p0 > q0, (p0, q0)
         assert (out / "model.weights.json").exists()
+        assert m["baseline"] == "role", m["baseline"]
+
+        # Baseline: ba cách tính, đo bằng chính MSE của chúng với reward.
+        #
+        # Thứ tự phải là role ≤ mean < value ở đây, và nó KHÔNG hiển nhiên:
+        # `value` là value head chưa train (init ngẫu nhiên), nên nó tệ hơn cả
+        # một hằng số — đúng tình huống đã gặp thật với value head của BC. Bài
+        # kiểm này tồn tại để lần sau ai đổi `baseline_for` thì hỏng ngay, chứ
+        # không hỏng âm thầm ở một lần chạy 3,5 giờ.
+        mses = {}
+        for kind in ("role", "mean", "value"):
+            sub = Path(tmp) / f"out-{kind}"
+            sys.argv = [
+                "train_ppo",
+                "--data", str(d),
+                "--init", str(initp),
+                "--out", str(sub),
+                "--epochs", "1",
+                "--batch-size", "64",
+                "--model-id", f"t-{kind}",
+                "--baseline", kind,
+            ]
+            train_ppo.main()
+            report = json.loads((sub / "metrics.json").read_text(encoding="utf8"))
+            assert report["baseline"] == kind, report["baseline"]
+            mses[kind] = report["baselineMse"]
+            constant = report["constantMse"]
+
+        assert mses["mean"] == constant, (mses, constant)
+        assert mses["role"] < mses["mean"], ("vai có tỉ lệ thắng lệch nhau thì role phải chặt hơn", mses)
+        assert mses["value"] > constant, ("value head chưa train phải TỆ hơn hằng số", mses, constant)
 
     print("ok")
 

@@ -210,3 +210,44 @@ describe("lấy mẫu có nhiệt độ (rollout RL)", () => {
     expect(again.winner).toBe(game.winner);
   });
 });
+
+describe("learnedDecisions — model chỉ quyết một trong hai lượt", () => {
+  it("\"vote\": lượt đêm đi y hệt heuristic; \"night\": lượt bầu đi y hệt heuristic", () => {
+    // Policy thích KILL ghế 2 và CHOOSE ghế 1: mỗi lượt có một ô nó muốn.
+    const policy: LearnedPolicy = {
+      id: "split",
+      logits: () => {
+        const l = new Array<number>(actionSize()).fill(0);
+        l[actionIndexOf("KILL", 2)] = 10;
+        l[actionIndexOf("CHOOSE", 1)] = 10;
+        return l;
+      },
+      value: () => null,
+    };
+    const plain = runSelfPlay({ seed: "ld-1", playerCount: 8, maxRounds: 5, trace: true });
+    const voteOnly = runSelfPlay({
+      seed: "ld-1", playerCount: 8, maxRounds: 5, trace: true,
+      learnedPolicy: policy, learnedDecisions: "vote",
+    });
+    const nightOnly = runSelfPlay({
+      seed: "ld-1", playerCount: 8, maxRounds: 5, trace: true,
+      learnedPolicy: policy, learnedDecisions: "night",
+    });
+    const both = runSelfPlay({
+      seed: "ld-1", playerCount: 8, maxRounds: 5, trace: true, learnedPolicy: policy,
+    });
+    // Đêm ĐẦU TIÊN chưa có gì khác nhau giữa các ván (cùng seed, cùng vai), nên
+    // so được trực tiếp: "vote" phải đi đúng nước đêm của heuristic, "night" thì không.
+    const firstNight = (g: typeof plain) =>
+      g.traces.filter((t) => t.decision === "NIGHT" && t.round === 1).map((t) => [t.botId, t.chosen.actionKind, t.chosen.targetId]);
+    expect(firstNight(voteOnly)).toEqual(firstNight(plain));
+    expect(firstNight(nightOnly)).toEqual(firstNight(both));
+    expect(firstNight(nightOnly)).not.toEqual(firstNight(plain));
+    // Và record ghi lại lựa chọn để replay dựng đúng cấu hình.
+    expect(voteOnly.record.learnedDecisions).toBe("vote");
+    expect(nightOnly.record.learnedDecisions).toBe("night");
+    expect(Object.keys(both.record)).not.toContain("learnedDecisions");
+    expect(Object.keys(plain.record)).not.toContain("learnedDecisions");
+    expect(replayGame(voteOnly.record, undefined, policy).actions).toBe(voteOnly.actions);
+  });
+});

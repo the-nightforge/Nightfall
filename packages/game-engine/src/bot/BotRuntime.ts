@@ -146,7 +146,16 @@ export interface BotRuntimeOptions {
    * `logProb` ra trace để PPO cập nhật được.
    */
   learnedTemperature?: number;
+  /**
+   * Lượt nào giao cho `learnedPolicy`. Mặc định `"both"`. Chỉ dành cho
+   * ablation: đo xem điểm mất ở lượt bầu hay lượt đêm — lượt còn lại đi đúng
+   * đường heuristic hiện hành, byte một, như thể không có policy.
+   */
+  learnedDecisions?: LearnedDecisions;
 }
+
+/** Xem `BotRuntimeOptions.learnedDecisions`. */
+export type LearnedDecisions = "vote" | "night" | "both";
 
 interface MemoryDraft {
   type: BotMemoryType;
@@ -223,6 +232,8 @@ export class BotRuntime {
   private readonly learnedPolicy: LearnedPolicy | undefined;
   /** Xem `BotRuntimeOptions.learnedTemperature`. */
   private readonly learnedTemperature: number;
+  /** Xem `BotRuntimeOptions.learnedDecisions`. */
+  private readonly learnedDecisions: LearnedDecisions;
   /**
    * Belief trước và sau lần `observe` gần nhất.
    *
@@ -245,6 +256,7 @@ export class BotRuntime {
     this.traceLiveInput = options.traceLiveInput === true;
     this.learnedPolicy = options.learnedPolicy;
     this.learnedTemperature = options.learnedTemperature ?? 0;
+    this.learnedDecisions = options.learnedDecisions ?? "both";
     this.weights = options.weights ?? DEFAULT_BOT_WEIGHTS;
     // CHỈ policy người dùng cấp tường minh. Bản learned được dựng theo từng
     // lượt trong `decideVote`, vì nó cần `run.onPick` — thứ chỉ tồn tại bên
@@ -384,7 +396,7 @@ export class BotRuntime {
     // không, learned model dựng ở đây để `onPick` của đúng lượt này nghe được.
     const votePolicy =
       this.votePolicy ??
-      (this.learnedPolicy
+      (this.learnedPolicy && this.learnedDecisions !== "night"
         ? learnedPolicyModel(
             this.learnedPolicy,
             this.weights,
@@ -505,7 +517,7 @@ export class BotRuntime {
     // nước engine không chào, và nó là nguồn của `confidence`/`evidence` mà
     // model không sinh được. Không có `learnedPolicy` thì dòng này là phép
     // gán, và đường chạy production không đổi một byte.
-    const night = this.learnedPolicy
+    const night = this.learnedPolicy && this.learnedDecisions !== "vote"
       ? selectLearnedNight(
           this.learnedPolicy,
           this.weights,

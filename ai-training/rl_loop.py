@@ -63,12 +63,18 @@ def step(marker: Path, cmd: list[str], cwd: Path = ROOT) -> None:
 def score_of(bench_json: Path) -> float:
     """Điểm của một model = trung bình hai chiều lợi thế, tính bằng ĐIỂM PHẦN TRĂM.
 
-    `summary` của `ai:benchmark` theo đúng thứ tự `setups`: baseline, làng học
-    được, sói học được. Làng mạnh lên đẩy `villageWin` LÊN, sói mạnh lên đẩy nó
-    XUỐNG — nên phải trừ ngược chiều, không phải cộng hai hiệu.
+    Đọc `summary` của `ai:benchmark` THEO TÊN cấu hình, không theo vị trí:
+    `--setups` cho phép thêm bớt hàng, và một vòng lặp đọc nhầm hàng `teacher`
+    thành `wolves` sẽ thăng hạng theo một con số vô nghĩa mà không ai thấy.
+    Làng mạnh lên đẩy `villageWin` LÊN, sói mạnh lên đẩy nó XUỐNG — nên phải trừ
+    ngược chiều, không phải cộng hai hiệu.
     """
     b = json.loads(bench_json.read_text(encoding="utf8"))
-    base, village, wolves = (s["villageWinMean"] for s in b["summary"])
+    by = {s.get("setup"): s["villageWinMean"] for s in b["summary"]}
+    missing = [name for name in ("baseline", "village", "wolves") if name not in by]
+    if missing:
+        raise ValueError(f"{bench_json}: thiếu cấu hình {missing} — benchmark phải chạy baseline,village,wolves")
+    base, village, wolves = by["baseline"], by["village"], by["wolves"]
     return ((village - base) + (base - wolves)) / 2 * 100
 
 
@@ -83,6 +89,7 @@ def main() -> None:
     p.add_argument("--out", default=".tmp/rl")
     p.add_argument("--promote-margin", type=float, default=2.0)
     p.add_argument("--temperature", type=float, default=1.0)
+    p.add_argument("--baseline", default="role", help="Xem train_ppo.baseline_for")
     p.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     a = p.parse_args()
 
@@ -171,7 +178,8 @@ def main() -> None:
         step(
             done_marker(it, "ppo"),
             [PY, "-m", "masoi_training.train_ppo", "--data", str(enc),
-             "--init", str(champion), "--out", str(model_dir), "--model-id", model_id],
+             "--init", str(champion), "--out", str(model_dir), "--model-id", model_id,
+             "--baseline", a.baseline],
             cwd=ROOT / "ai-training",
         )
         challenger = model_dir / "model.weights.json"

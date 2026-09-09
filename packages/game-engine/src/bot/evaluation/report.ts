@@ -10,6 +10,7 @@ import {
 } from "./metrics";
 import type { InvariantViolation } from "./invariants";
 import type { LearnedPolicy } from "../learning/mlp";
+import type { LearnedDecisions } from "../BotRuntime";
 import {
   replayCommand,
   runSelfPlay,
@@ -62,6 +63,8 @@ export interface SelfPlayBatchInput {
   learnedSeats?: LearnedSeats;
   /** Xem `SelfPlayInput.learnedTemperature`. Mặc định 0 (argmax). */
   learnedTemperature?: number;
+  /** Xem `SelfPlayInput.learnedDecisions`. Mặc định `"both"`. */
+  learnedDecisions?: LearnedDecisions;
 }
 
 export interface ReportTiming {
@@ -117,6 +120,7 @@ export function runBatch(input: SelfPlayBatchInput): SelfPlayGame[] {
       learnedPolicy: input.learnedPolicy,
       learnedSeats: input.learnedSeats,
       learnedTemperature: input.learnedTemperature,
+      learnedDecisions: input.learnedDecisions,
       // `false` chứ không phải `undefined` cho phần đuôi batch: `runSelfPlay`
       // đọc trường này bằng một phép kiểm chân trị, nên cả hai đều tắt - nhưng
       // viết thẳng ra thì trần trace là một luật đọc được ở đây.
@@ -144,6 +148,7 @@ export function runBatch(input: SelfPlayBatchInput): SelfPlayGame[] {
         learnedPolicy: input.learnedPolicy,
         learnedSeats: input.learnedSeats,
         learnedTemperature: input.learnedTemperature,
+        learnedDecisions: input.learnedDecisions,
         // Lần chạy đối chứng KHÔNG thu trace: nó chỉ tồn tại để so chuỗi sự
         // kiện, và thu trace ở đây là trả gấp đôi bộ nhớ cho một bản sao không
         // ai đọc.
