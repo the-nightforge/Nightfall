@@ -174,6 +174,18 @@ function snapshotKnowledge(knowledge: BotKnowledgeView): TraceKnowledgeSnapshot 
     legalChoices: knowledge.legalVoteChoices.map((choice) =>
       choice.type === "PLAYER" ? choice.targetId : "NO_ELIMINATION",
     ),
+    // Cùng nguồn `BotKnowledgeView` như mọi trường khác ở đây, nên ranh giới
+    // "trace ⊆ knowledge view" không đổi: đây là tập hợp lệ engine đã cấp cho
+    // đúng bot này, không phải một bảng dựng lại từ luật.
+    nightLegalTargets: knowledge.night
+      ? Object.fromEntries(
+          Object.entries(knowledge.night.legalTargets).map(([action, targets]) => [
+            action,
+            [...targets],
+          ]),
+        )
+      : null,
+    hunterLegalTargets: knowledge.hunterShot ? [...knowledge.hunterShot.legalTargets] : null,
     knownRoles: { ...knowledge.knownRoles },
     seerResult: knowledge.seerResult
       ? { targetId: knowledge.seerResult.targetId, isWolf: knowledge.seerResult.isWolf }
