@@ -59,6 +59,10 @@ jobs:
               - 'packages/game-engine/**'
               - 'package.json'
               - 'package-lock.json'
+              # Sửa chính job này thì phải chạy chính nó, nếu không một thay đổi
+              # cache/buildx chỉ lộ đúng/sai ở PR SAU. Cùng lý do mà bộ lọc
+              # `training` đã kể `.github/workflows/ci.yml`.
+              - '.github/workflows/ci.yml'
             training:
               - 'ai-training/**'
               - '.github/workflows/ci.yml'
