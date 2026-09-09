@@ -8,6 +8,12 @@ sẽ tắt máy giữa chừng. Mỗi bước xong ghi một dấu `.done` cạn
 lượt sau bỏ qua. Dấu được ghi SAU khi tiến trình con thoát 0 — chứ không phải khi
 file sản phẩm tồn tại — vì một tiến trình bị giết giữa lúc ghi để lại một file
 cụt, và một file cụt được "bỏ qua" là cách im lặng nhất để hỏng cả đêm chạy.
+
+RESIDUAL: champion có thể là file do `masoi_training.init_residual` tạo (model tự
+khai `residual.beta`; engine tự đi đường hiệu chỉnh điểm heuristic). Vòng lặp
+không đổi; chạy với `--temperature 5` vì thang điểm là belief 0..100 (τ = 1 gần
+như argmax). Benchmark đo bốn cấu hình; `all` chỉ để đọc CÂN BẰNG cả bàn,
+`score_of` vẫn thăng hạng theo `village`/`wolves` (sức mạnh từng phe).
 """
 
 from __future__ import annotations
@@ -88,7 +94,7 @@ def main() -> None:
     p.add_argument("--bench-every", type=int, default=1)
     p.add_argument("--out", default=".tmp/rl")
     p.add_argument("--promote-margin", type=float, default=2.0)
-    p.add_argument("--temperature", type=float, default=1.0)
+    p.add_argument("--temperature", type=float, default=1.0, help="policy logits: 1; residual: 5 (thang belief)")
     p.add_argument("--baseline", default="role", help="Xem train_ppo.baseline_for")
     p.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     a = p.parse_args()
@@ -119,6 +125,7 @@ def main() -> None:
         done_marker(out, "bench-0000"),
         [tool("npm"), "run", "ai:benchmark", "--", "--model", str(champion),
          "--games", str(a.bench_games), "--repeat", str(a.bench_repeat),
+         "--setups", "baseline,village,wolves,all",
          "--seed", "rl-bench", "--out", str(bench0)],
     )
     champion_score = score_of(bench0)
@@ -197,6 +204,7 @@ def main() -> None:
                 done_marker(it, "bench"),
                 [tool("npm"), "run", "ai:benchmark", "--", "--model", str(challenger),
                  "--games", str(a.bench_games), "--repeat", str(a.bench_repeat),
+                 "--setups", "baseline,village,wolves,all",
                  "--seed", "rl-bench", "--out", str(bench)],
             )
             s = score_of(bench)
