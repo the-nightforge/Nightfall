@@ -1,5 +1,6 @@
 import type { Phase, Role } from "@masoi/shared";
 import type { ObservationInput } from "../evaluation/trajectory";
+import type { LearnedPick } from "../policy/learned-policy";
 import type { BotPersonality, BotRng } from "../types";
 
 /**
@@ -143,6 +144,13 @@ export interface BotDecisionTrace {
      * cùng một mục tiêu là hai nước đi khác nhau, và nhãn phải nói được điều đó.
      */
     actionKind?: string | null;
+    /**
+     * Có mặt khi nước NÀY do policy học được lấy mẫu ra: chỉ số hành động,
+     * `logProb` của chính nó, `value(s)` và nhiệt độ đã dùng. Vắng mặt ở mọi
+     * nước heuristic — kể cả nước heuristic trong một ván có policy — vì PPO
+     * chỉ được cập nhật theo hành động chính policy đó đã sinh ra.
+     */
+    learned?: LearnedPick;
   };
   candidates: TraceCandidate[];
   /** Belief lúc bắt đầu lần `observe` gần nhất. */
