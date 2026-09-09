@@ -304,6 +304,19 @@ có), và `repeatPenalty` của Bảo Vệ. Ba đặc trưng đó vào `BeliefSn
 vector 365 → 413, `dataset-0003`. Kiểm trên 40 ván: argmax observation trùng
 nước Sói và Tiên Tri/Thám Tử đã đi 100%.
 
+**Kết quả sau khi bổ sung** (policy-0004, cùng 10.000 ván, cùng cấu hình train,
+chỉ khác vector 365 → 413): test agreement 0,840 → **0,861**; NIGHT 0,713 →
+**0,767**; WEREWOLF 0,758 → **0,806**. 48 chiều đúng chỗ hơn hẳn việc gấp đôi
+sức chứa: h128/413 chiều (0,861) vượt h256/365 chiều (0,849) với một nửa tham số.
+
+**Cảnh báo về thước đo**, phát hiện cùng lúc: trần mà validator in ra phá hoà
+điểm bằng `targetId` thô, trong khi §9 cố tình xoá ý nghĩa tuyệt đối của id khỏi
+observation. 28% nước đi hoà điểm ở đỉnh (lượt đêm là 48%), nên một model mù id
+đoán đều trong nhóm hoà chỉ đạt 75,3% (đêm 62,6%) so với trần in ra 97,3%. Với
+nước hoà điểm, chọn ứng viên nào cũng tái lập đúng chính sách của bot, nên
+`agreement` đang chấm oan. Việc cần làm TRƯỚC khi thêm đặc trưng đêm nữa là đổi
+thước đo sang "lựa chọn của model có nằm trong nhóm hoà đỉnh của teacher không".
+
 Thêm: `ai-training/tests/test_train_smoke.py` chạy trọn vòng train với torch
 thật, và job CI `ai-training` chạy nó khi `ai-training/**` đổi. Hai khe hở
 validator còn giữ nguyên và được ghi ở "Giới hạn đã biết" của tài liệu train:
