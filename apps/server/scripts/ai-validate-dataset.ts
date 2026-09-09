@@ -1,16 +1,17 @@
-import { readFileSync } from "node:fs";
+import { createReadStream } from "node:fs";
+import { createInterface } from "node:readline";
 import { resolve } from "node:path";
-import {
-  splitTrajectories,
-  summarizeDataset,
-  type BotTrajectory,
-} from "@masoi/game-engine";
+import { createDatasetSummarizer, type DatasetStats } from "@masoi/game-engine";
 
 /**
  * BOT_SELF_LEARNING §41/§42: kiểm một file trajectory JSONL TRƯỚC khi train.
  *
- * Vỏ I/O quanh `summarizeDataset` thuần, cùng ranh giới với runner self-play:
+ * Vỏ I/O quanh bộ gom thuần, cùng ranh giới với runner self-play:
  * `packages/game-engine` không được chạm đĩa.
+ *
+ * Đọc theo DÒNG. Dataset 10.000 ván nặng ~2,8 GB — đọc cả file thành một chuỗi
+ * vượt trần chuỗi của V8, tức tầng kiểm sẽ chết đúng ở kích thước nó cần chạy
+ * nhất, và người ta sẽ train mà bỏ qua nó.
  *
  * Mã thoát khác 0 khi có BẤT KỲ vi phạm nào — §7 cấm âm thầm xoá trường rồi
  * train tiếp, nên một dataset bẩn phải làm đỏ CI chứ không chỉ in ra một dòng.
@@ -24,27 +25,34 @@ function usage(): string {
   ].join("\n");
 }
 
-function parseLines(path: string): { parsed: unknown[]; malformed: number } {
-  const parsed: unknown[] = [];
+async function readDataset(path: string): Promise<{ stats: DatasetStats; malformed: number }> {
+  const summarizer = createDatasetSummarizer();
   let malformed = 0;
-  for (const raw of readFileSync(path, "utf8").split("\n")) {
+
+  const lines = createInterface({
+    input: createReadStream(path, "utf8"),
+    crlfDelay: Number.POSITIVE_INFINITY,
+  });
+
+  for await (const raw of lines) {
     const text = raw.trim();
     if (text === "") continue;
     try {
-      parsed.push(JSON.parse(text));
+      summarizer.add(JSON.parse(text));
     } catch {
       // Một dòng JSON hỏng là dữ liệu hỏng, không phải dòng để bỏ qua im lặng.
       malformed += 1;
     }
   }
-  return { parsed, malformed };
+
+  return { stats: summarizer.finish(), malformed };
 }
 
 function percent(part: number, total: number): string {
   return total === 0 ? "0%" : `${((part / total) * 100).toFixed(1)}%`;
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const path = argv[0];
   if (path === undefined || path === "--help" || path === "-h") {
@@ -56,9 +64,8 @@ function main(): void {
   const top = topIndex >= 0 ? Number(argv[topIndex + 1] ?? 10) : 10;
 
   const target = resolve(path);
-  const { parsed, malformed } = parseLines(target);
-  const stats = summarizeDataset(parsed);
-  const split = splitTrajectories(parsed as BotTrajectory[]);
+  const { stats, malformed } = await readDataset(target);
+  const split = stats.splitCounts;
 
   const out: string[] = [
     `Dataset: ${target}`,
@@ -73,7 +80,7 @@ function main(): void {
     `leak violations       ${stats.leakViolations}`,
     `hành động không nhãn  ${stats.unmappedActions} (${percent(stats.unmappedActions, stats.timesteps)})`,
     "",
-    `split (theo ván)      train ${split.train.length} / val ${split.validation.length} / test ${split.test.length}`,
+    `split (theo ván)      train ${split.train} / val ${split.validation} / test ${split.test}`,
     "",
     "Phân phối vai:",
     ...Object.entries(stats.roleDistribution)
@@ -120,4 +127,4 @@ function main(): void {
   if (total > 0) process.exitCode = 1;
 }
 
-main();
+void main();

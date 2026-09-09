@@ -203,6 +203,11 @@ def main() -> None:
         "trainActionDistribution": action_distribution(train),
         "history": history,
         "metrics": {
+            # Phân biệt HAI nguyên nhân trông giống nhau từ ngoài: train ≈ val
+            # nghĩa là underfit (model chưa khai thác hết thứ nó đang thấy, hoặc
+            # observation không đủ để quyết định); train ≫ val nghĩa là overfit.
+            # Hai chẩn đoán dẫn tới hai việc trái ngược nhau.
+            "train": evaluate(model, train, device),
             "validation": evaluate(model, validation, device),
             "test": evaluate(model, test, device),
         },
@@ -212,9 +217,24 @@ def main() -> None:
 
     test_metrics = report["metrics"]["test"]
     print(f"\nĐã ghi {out} (epoch tốt nhất: {best_epoch})")
+    for name in ("train", "validation", "test"):
+        entry = report["metrics"][name]
+        print(
+            f"  {name:<11} agreement {entry.get('agreement')}"
+            f"  (top-2 {entry.get('top2Agreement')})"
+        )
+
+    train_score = report["metrics"]["train"].get("agreement", 0)
+    gap = train_score - report["metrics"]["validation"].get("agreement", 0)
     print(
-        f"test agreement với bot heuristic: {test_metrics.get('agreement')}"
-        f"  (top-2: {test_metrics.get('top2Agreement')})"
+        "\nCHẨN ĐOÁN: "
+        + (
+            "overfit — giảm hidden/epochs hoặc thêm dữ liệu"
+            if gap > 0.05
+            else "underfit — model chưa khai thác hết thứ nó ĐANG thấy, "
+            "hoặc observation chưa đủ để quyết định"
+        )
+        + f"  (train − val = {gap:+.4f})"
     )
     if onnx_error:
         print(f"CẢNH BÁO: không export được ONNX — {onnx_error}")
