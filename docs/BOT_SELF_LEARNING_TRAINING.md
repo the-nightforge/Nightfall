@@ -253,7 +253,7 @@ không kéo theo ranh giới thông tin.
 Chạy Bước 2 → 3 → 4 ở trên (nhớ `--no-jitter`), rồi nén hai thứ Colab cần:
 
 ```powershell
-Compress-Archive -Path ai-training\masoi_training, .tmp\enc-0001 -DestinationPath .tmpc-package.zip -Force
+Compress-Archive -Path ai-training\masoi_training, .tmp\enc-0001 -DestinationPath .tmp\bc-package.zip -Force
 ```
 
 **Không tải JSONL lên.** Tensor đã encode nhẹ hơn nhiều và nén rất tốt vì phần
