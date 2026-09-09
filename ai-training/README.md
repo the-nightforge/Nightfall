@@ -78,6 +78,27 @@ python rl_loop.py --champion ../.tmp/residual/champion-0000.weights.json \
   --iterations 3 --games 900 --temperature 5 --out ../.tmp/rl-residual
 ```
 
+### Tách phe và cổng KL
+
+Đo 2026-09-09: một bước PPO từ heuristic làm LÀNG yếu đi ~3 điểm (ổn định qua 3
+mẫu độc lập) trong khi SÓI mạnh lên +2..4. Hai phe có tín hiệu ngược dấu, nên
+train chung một residual là để hai gradient triệt tiêu nhau.
+
+```bash
+# chỉ cập nhật trên hàng của phe Sói; điểm thăng hạng = Δ sói (không phải trung bình hai phe)
+python rl_loop.py --champion R.json --side wolves --lr 1e-4 --target-kl 0.01 \
+  --iterations 5 --games 900 --temperature 5 --bench-every 5 --out .tmp/rl-wolves
+```
+
+- `--side wolves|village` lọc hàng theo bảng `meta.wolfPack` mà `ai:encode` ghi
+  bằng `isWolfPack` phía TypeScript — Python vẫn không biết vai nào là Sói.
+  Cùng predicate với `--learned-seats` của benchmark, nên train và đo cùng một
+  định nghĩa phe.
+- `--target-kl` dừng epoch khi `approxKl` trung bình vượt ngưỡng; `metrics.json`
+  ghi `epochsRun`. Mốc lành mạnh: `agreementWithInit` ≥ 0,97 mỗi vòng.
+- `--bench-every <n>` ≥ số vòng để các vòng NỐI TIẾP nhau: một challenger không
+  thăng hạng sẽ bị vứt ở vòng có benchmark, nên bench mỗi vòng làm mất tích luỹ.
+
 `ai:encode --rollout` của tập residual ghi thêm `bases.f32.bin` — điểm THẬT
 (có jitter) theo ô hành động, NaN ngoài bảng ứng viên — cùng `meta.beta`,
 `meta.temperature`. `train_ppo` dựng lại `softmax((bases + β·net)/τ)` từ đó,
