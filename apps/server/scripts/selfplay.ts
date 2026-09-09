@@ -6,9 +6,11 @@ import {
   DEFAULT_BOT_WEIGHTS,
   buildReport,
   formatReportText,
+  gameToSpeechSamples,
   gameToTrajectories,
   loadMlpPolicy,
   runBatch,
+  serializeSpeechSample,
   serializeTrajectory,
   serializeTraces,
   traceFileName,
@@ -48,6 +50,8 @@ interface Options {
   quiet: boolean;
   /** Thư mục ghi trajectory JSONL (§22); `null` = tắt. Xem `writeTrajectories`. */
   trajectories: string | null;
+  /** Thư mục ghi dataset SPEECH (COMMUNICATION §26); `null` = tắt. */
+  speechDataset: string | null;
   /** Dùng bộ bài chuẩn của số người đó thay cho bộ bài mặc định của runner. */
   preset: boolean;
   /** Thư mục nhận JSONL trace. `null` là TẮT, và tắt là mặc định. */
@@ -104,6 +108,7 @@ function usage(): string {
     "  --out <đường dẫn>   Ghi JSON ra file",
     "  --traces <thư mục>  Ghi trace quyết định ra JSONL, mỗi ván một file (mặc định: tắt)",
     "  --trajectories <dir> Ghi trajectory train (§22) ra JSONL, một file chung (mặc định: tắt)",
+    "  --speech-dataset <dir> Ghi dataset speech policy (COMMUNICATION §26) ra JSONL (mặc định: tắt)",
     `  --trace-games <số>  Số ván đầu được ghi trace (mặc định: ${DEFAULT_TRACE_GAMES})`,
     "  --no-jitter         Tắt term jitter (teacher tất định cho behavior cloning; xem BOT_SELF_LEARNING_TRAINING.md)",
     "  --policy <file>     model.weights.json (masoi-mlp-1) cắm vào bot; xem --learned-seats, --temperature",
@@ -133,6 +138,7 @@ function parseArgs(argv: readonly string[]): Options {
     traces: null,
     traceGames: DEFAULT_TRACE_GAMES,
     trajectories: null,
+    speechDataset: null,
     noJitter: false,
     policy: null,
     temperature: 0,
@@ -190,6 +196,9 @@ function parseArgs(argv: readonly string[]): Options {
         break;
       case "--traces":
         options.traces = argv[++i] ?? null;
+        break;
+      case "--speech-dataset":
+        options.speechDataset = argv[++i] ?? null;
         break;
       case "--trajectories":
         options.trajectories = argv[++i] ?? null;
@@ -313,6 +322,32 @@ function writeTrajectories(directory: string, games: readonly SelfPlayGame[]): n
   return count;
 }
 
+/** Ký tự xuống dòng, đặt tên để chuỗi mẫu trong file này khỏi phải escape. */
+const NEWLINE = String.fromCharCode(10);
+
+/**
+ * Dataset speech policy (COMMUNICATION §26) ra JSONL.
+ *
+ * Tách hẳn file khỏi `trajectories.jsonl` chứ không thêm cột: §26 dặn "không
+ * train gameplay action và dialogue trong một model ngay từ đầu", và hai file
+ * rời là cách rẻ nhất để điều đó không xảy ra do vô ý.
+ */
+function writeSpeechDataset(directory: string, games: readonly SelfPlayGame[]): number {
+  const root = resolve(directory);
+  mkdirSync(root, { recursive: true });
+  const target = join(root, "speech-dataset.jsonl");
+  writeFileSync(target, "", "utf8");
+
+  let count = 0;
+  for (const game of games) {
+    const lines = gameToSpeechSamples(game).map(serializeSpeechSample);
+    if (lines.length === 0) continue;
+    writeFileSync(target, `${lines.join(NEWLINE)}${NEWLINE}`, { flag: "a", encoding: "utf8" });
+    count += lines.length;
+  }
+  return count;
+}
+
 /** Commit hiện tại, hoặc `null`. Không bao giờ làm hỏng cả lần chạy. */
 function currentCommit(): string | null {
   try {
@@ -394,6 +429,15 @@ function main(): void {
       // In lệnh đọc kèm một file có thật: một đường dẫn không có lệnh đi cùng
       // là một thư mục người ta ghi ra rồi không bao giờ mở.
       if (files[0]) process.stdout.write(`Đọc:  npm run trace-view -- ${files[0]}\n`);
+    }
+  }
+
+  if (options.speechDataset !== null) {
+    const written = writeSpeechDataset(options.speechDataset, games);
+    if (!options.quiet) {
+      process.stdout.write(
+        `${NEWLINE}Đã ghi dataset speech ${written} dòng vào ${resolve(options.speechDataset)}${NEWLINE}`,
+      );
     }
   }
 

@@ -104,8 +104,12 @@ function clampUnit(value: number): number {
  *
  * Người bênh gỡ bớt chứ không xoá: một người được bênh giữa lúc ba người đang
  * tố vẫn đang ở giữa tâm bão.
+ *
+ * `export` vì tầng thu dữ liệu (PR 10, `learning/speech-dataset.ts`) phải dựng
+ * lại đúng con số này từ log ván. Một bản chép công thức ở đó sẽ trôi lệch, và
+ * lúc trôi thì model học một định nghĩa "áp lực" khác hẳn cái planner đang dùng.
  */
-function pressureOf(episode: PressureEpisode | undefined, aliveCount: number): number {
+export function pressureOf(episode: PressureEpisode | undefined, aliveCount: number): number {
   if (!episode) return 0;
   const canAccuse = Math.max(1, aliveCount - 1);
   const net = episode.accuserIds.length - episode.defenderIds.length * DEFENDER_RELIEF;

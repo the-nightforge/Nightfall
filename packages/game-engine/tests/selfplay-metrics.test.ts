@@ -64,6 +64,7 @@ export function speechEvent(
     replyToMessageId: null,
     chainDepth: 0,
     tone: "FIRM",
+    topic: null,
     text,
     textFingerprint: `fp${speechSeq}`,
     semanticFingerprint: `sem${speechSeq}`,

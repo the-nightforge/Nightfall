@@ -48,6 +48,7 @@ function speech(
     replyToMessageId: null,
     chainDepth: 0,
     tone: "FIRM",
+    topic: null,
     text,
     textFingerprint: speechTextFingerprint(text),
     semanticFingerprint: `sem-${text}`,

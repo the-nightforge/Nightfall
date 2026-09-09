@@ -67,6 +67,7 @@ export * from "./bot/evaluation/report";
 export * from "./bot/evaluation/transcript";
 export * from "./bot/learning/observation";
 export * from "./bot/learning/dataset";
+export * from "./bot/learning/speech-dataset";
 export * from "./bot/learning/mlp";
 export * from "./bot/learning/live-observation";
 export * from "./bot/policy/learned-policy";
