@@ -14,6 +14,12 @@ import {
 } from "../learning/observation";
 import type { StrategyContext } from "../planning/planner";
 import type { BeliefSnapshot } from "../trace/trace";
+import type {
+  BotBrainState,
+  BotDecisionContext,
+  BotNightIntention,
+  NightActionKind,
+} from "../types";
 import { heuristicPolicyModel, type PolicyModel } from "./policy-model";
 
 export interface LearnedPolicyOptions {
@@ -87,5 +93,61 @@ export function learnedPolicyModel(
       }
       return { targetId: decoded.targetId };
     },
+  };
+}
+
+/**
+ * Đề xuất nước đi ĐÊM từ policy học được, trên nền nước heuristic đã tính.
+ *
+ * Runtime là trọng tài: chỉ nhận (loại, mục tiêu) nếu loại được engine chào
+ * (`night.legalActions`) và mục tiêu nằm trong `night.legalTargets[loại]`
+ * (HEAL/SKIP không mục tiêu). Giữ `confidence`/`evidence` của heuristic vì
+ * model không sinh được chúng; giữ `secondaryTargetId` khi cùng loại. Thám Tử
+ * cần đúng hai người mà model chỉ nói một → luôn theo heuristic.
+ */
+export function selectLearnedNight(
+  policy: LearnedPolicy,
+  weights: BotWeights,
+  context: BotDecisionContext,
+  state: BotBrainState,
+  heuristic: BotNightIntention | null,
+  options: LearnedPolicyOptions = {},
+): BotNightIntention | null {
+  const night = context.knowledge.night;
+  if (!night || !night.canAct) return heuristic;
+  const maxSeats = options.maxSeats ?? DEFAULT_MAX_SEATS;
+  const live = buildLiveObservation(
+    context.knowledge,
+    state,
+    weights,
+    "NIGHT",
+    options.belief?.(),
+  );
+  const encoded = encodeObservation(live, { maxSeats });
+  const index = argmaxMasked(policy.logits(encoded.features), encoded.mask);
+  if (index === null) return heuristic;
+  const decoded = decodeAction(index, encoded.seats, maxSeats);
+  const kind = decoded.kind as NightActionKind;
+  if (kind === "SKIP") return null;
+  if (kind === "DETECTIVE_CHECK") return heuristic;
+  if (!night.legalActions.includes(kind)) return heuristic;
+  const needsTarget = kind !== "HEAL";
+  if (needsTarget) {
+    if (decoded.targetId === null) return heuristic;
+    if (!(night.legalTargets[kind] ?? []).includes(decoded.targetId)) return heuristic;
+  }
+  const base: BotNightIntention = heuristic ?? {
+    kind: "NIGHT_ACTION",
+    action: kind,
+    targetId: null,
+    confidence: 0.5,
+    evidence: [],
+  };
+  return {
+    ...base,
+    action: kind,
+    targetId: needsTarget ? decoded.targetId : null,
+    secondaryTargetId:
+      heuristic && heuristic.action === kind ? heuristic.secondaryTargetId : undefined,
   };
 }

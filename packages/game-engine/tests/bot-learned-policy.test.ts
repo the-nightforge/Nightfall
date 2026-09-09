@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { runSelfPlay } from "../src/bot/evaluation/selfplay";
-import { actionIndexOf, actionSize, DEFAULT_MAX_SEATS } from "../src/bot/learning/observation";
+import {
+  actionIndexOf,
+  actionSize,
+  DEFAULT_MAX_SEATS,
+  encodeObservation,
+} from "../src/bot/learning/observation";
 import type { LearnedPolicy } from "../src/bot/learning/mlp";
 
 /** Policy giả: luôn thích một chỉ số hành động cho trước. */
@@ -47,5 +52,56 @@ describe("learnedPolicyModel (VOTE)", () => {
     expect(b.winner).toBe(a.winner);
     expect(b.rounds).toBe(a.rounds);
     expect(b.actions).toBe(a.actions);
+  });
+});
+
+describe("selectLearnedNight (NIGHT)", () => {
+  it("ban đêm: policy thích KILL ghế 2 thì Sói cắn đúng người đó khi hợp lệ", () => {
+    const policy = preferring(actionIndexOf("KILL", 2));
+    const game = runSelfPlay({
+      seed: "lp-5",
+      playerCount: 8,
+      maxRounds: 6,
+      trace: true,
+      traceLiveInput: true,
+      learnedPolicy: policy,
+    });
+    expect(game.violations).toEqual([]);
+    let checked = 0;
+    for (const t of game.traces) {
+      if (t.decision !== "NIGHT" || t.chosen.actionKind !== "KILL" || !t.liveInput) continue;
+      const enc = encodeObservation(t.liveInput);
+      const seat2 = enc.seats[2];
+      const legal = t.liveInput.observation.nightLegalTargets?.KILL ?? [];
+      if (seat2 !== undefined && legal.includes(seat2)) {
+        expect(t.chosen.targetId).toBe(seat2);
+        checked += 1;
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
+
+  it("ban đêm: policy thích SKIP thì Phù Thuỷ giữ thuốc, và Thám Tử vẫn đi hai người", () => {
+    const game = runSelfPlay({
+      seed: "lp-6",
+      playerCount: 8,
+      maxRounds: 6,
+      trace: true,
+      traceLiveInput: true,
+      learnedPolicy: preferring(actionIndexOf("SKIP", DEFAULT_MAX_SEATS)),
+    });
+    expect(game.violations).toEqual([]);
+    const witchNights = game.traces.filter(
+      (t) =>
+        t.decision === "NIGHT" &&
+        game.roles[t.botId] === "WITCH" &&
+        t.liveInput?.observation.nightLegalTargets,
+    );
+    for (const t of witchNights) expect(t.chosen.targetId).toBeNull();
+    const detective = game.traces.find(
+      (t) => t.decision === "NIGHT" && t.chosen.actionKind === "DETECTIVE_CHECK",
+    );
+    // heuristic giữ lượt Thám Tử
+    if (detective) expect(detective.chosen.targetId).not.toBeNull();
   });
 });

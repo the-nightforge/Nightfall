@@ -50,7 +50,7 @@ import { deriveSpeechStyle, type BotSpeechStyle } from "./personality/speech-sty
 import { strategyFor } from "./roles/registry";
 import type { LearnedPolicy } from "./learning/mlp";
 import { buildLiveObservation } from "./learning/live-observation";
-import { learnedPolicyModel } from "./policy/learned-policy";
+import { learnedPolicyModel, selectLearnedNight } from "./policy/learned-policy";
 import { snapshotBelief, snapshotKnowledge } from "./trace/snapshot";
 import { decayAndPrune } from "./memory/memory-decay";
 import { createBotBrainState, remember } from "./memory/memory-store";
@@ -473,12 +473,26 @@ export class BotRuntime {
    */
   decideNight(context: BotDecisionContext): BotNightIntention | null {
     const run = this.beginTracedDecision();
-    const night = strategyFor(context.knowledge.selfRole, this.weights).decideNight(
+    const heuristicNight = strategyFor(context.knowledge.selfRole, this.weights).decideNight(
       context,
       this.state,
       run.rng,
       run.probe,
     );
+    // Heuristic chạy TRƯỚC và luôn chạy: nó là nước lui khi model đề xuất một
+    // nước engine không chào, và nó là nguồn của `confidence`/`evidence` mà
+    // model không sinh được. Không có `learnedPolicy` thì dòng này là phép
+    // gán, và đường chạy production không đổi một byte.
+    const night = this.learnedPolicy
+      ? selectLearnedNight(
+          this.learnedPolicy,
+          this.weights,
+          context,
+          this.state,
+          heuristicNight,
+          { belief: () => this.beliefAfter },
+        )
+      : heuristicNight;
     run.finish(
       context,
       "NIGHT",
