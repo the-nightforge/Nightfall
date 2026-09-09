@@ -1,6 +1,6 @@
 import { isRole, isWolfPack, type Role } from "@masoi/shared";
 import { createSeededRng } from "../rng";
-import type { BotTrajectory } from "../evaluation/trajectory";
+import type { BotTrajectory, ObservationInput } from "../evaluation/trajectory";
 import {
   NO_TARGET_ACTION,
   TARGETING_DECISIONS,
@@ -257,7 +257,7 @@ export function validateTrajectoryLine(value: unknown): ObservationLeakReport {
       // §42 "action belongs to legal set", kiểm theo CẶP (loại, mục tiêu) bằng
       // đúng bảng mà encoder dựng mask. FINAL_VOTE (treo/tha) và SPEECH không
       // chọn mục tiêu trong không gian này nên không bị ép luật.
-      const moves = legalMoves(line as unknown as BotTrajectory);
+      const moves = legalMoves(line as unknown as ObservationInput);
       const moveKind =
         String(line.decision) === "NIGHT" ? ((kind as string | null | undefined) ?? "SKIP") : "CHOOSE";
       const move = moves.get(moveKind);

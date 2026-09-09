@@ -31,7 +31,11 @@ import { sumTerms } from "./trace";
  * file fixture nói đúng thứ đã đổi thay vì nhấp nháy theo thứ tự khoá.
  */
 export function serializeTrace(trace: BotDecisionTrace): string {
-  return JSON.stringify(trace);
+  // `liveInput` là bản sao của observation dựng lại được từ chính dòng này;
+  // ghi nó ra đĩa là nhân đôi mỗi file trace cho một trường chỉ test đọc.
+  const { liveInput: _omit, ...persisted } = trace;
+  void _omit;
+  return JSON.stringify(persisted);
 }
 
 export function serializeTraces(traces: readonly BotDecisionTrace[]): string {
