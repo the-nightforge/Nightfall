@@ -36,6 +36,7 @@ jobs:
     outputs:
       server: ${{ steps.filter.outputs.server }}
       docker: ${{ steps.filter.outputs.docker }}
+      training: ${{ steps.filter.outputs.training }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,6 +59,9 @@ jobs:
               - 'packages/game-engine/**'
               - 'package.json'
               - 'package-lock.json'
+            training:
+              - 'ai-training/**'
+              - '.github/workflows/ci.yml'
 
   verify:
     runs-on: ubuntu-latest
@@ -118,6 +122,41 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+  # Tầng train Python (ai-training/). Không có luật game ở đây, chỉ có loader
+  # nhị phân và vòng train; nhưng `train_bc.py` từng được merge mà chưa chạy
+  # lần nào vì máy dev không có torch. Job này là chỗ nó PHẢI chạy: loader tự
+  # kiểm, rồi một vòng train 2 epoch trên dataset tổng hợp, với torch CPU thật.
+  # Chỉ chạy khi ai-training/** đổi - wheel torch CPU nặng ~200 MB.
+  ai-training:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.training == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ai-training
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ai-training/requirements.txt
+
+      - name: Install (torch CPU)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Loader self-check
+        run: python tests/test_data.py
+
+      - name: Behavior cloning smoke (torch thật)
+        run: python tests/test_train_smoke.py
 
   # Ván khói thật: 8 socket chơi trọn một ván tới GAME_OVER, rồi kịch bản khôi
   # phục SIGKILL server giữa ván và kiểm ván sống lại từ Redis. Cả hai cần

@@ -35,6 +35,7 @@ def write_dataset(root: Path, *, truncate_features: bool = False) -> None:
     # 3 train, 2 validation, 1 test
     np.array([0, 0, 0, 1, 1, 2], dtype=np.uint8).tofile(root / "splits.u8.bin")
     np.array([0, 0, 1, 1, 2, 2], dtype=np.uint8).tofile(root / "roles.u8.bin")
+    np.array([0, 1, 0, 1, 0, 1], dtype=np.uint8).tofile(root / "decisions.u8.bin")
     (root / "meta.json").write_text(
         json.dumps(
             {
@@ -43,6 +44,7 @@ def write_dataset(root: Path, *, truncate_features: bool = False) -> None:
                 "actionSize": ACT,
                 "datasetVersion": "test-0001",
                 "roles": ["VILLAGER", "WEREWOLF", "SEER"],
+                "decisions": ["VOTE", "NIGHT"],
             }
         ),
         encoding="utf8",
@@ -66,6 +68,7 @@ def main() -> None:
         assert sizes == {"train": 3, "validation": 2, "test": 1}, sizes
         assert sum(sizes.values()) == ROWS
         assert data.split("train").actions.tolist() == [0, 1, 0]
+        assert data.split("validation").decisions.tolist() == [1, 0]
 
         assert action_distribution(data) == {0: 3, 1: 3}
 
