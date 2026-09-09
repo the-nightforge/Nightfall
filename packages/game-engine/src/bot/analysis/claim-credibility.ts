@@ -1,4 +1,4 @@
-import { isPowerRole, isRole, type DayVoteRecap, type Role } from "@masoi/shared";
+import { isPowerRole, isRole, ROLE_META, type DayVoteRecap, type Role } from "@masoi/shared";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { profileStrength, type BotEvidence, type BotMemory, type PlayerProfile } from "../types";
 
@@ -21,6 +21,24 @@ import { profileStrength, type BotEvidence, type BotMemory, type PlayerProfile }
  * suspicion là buộc tội, `weight < 0` là gỡ tội - và `applyTrustEvidence` đảo
  * dấu, nên một mảnh gỡ tội tự động làm tin tưởng tăng.
  */
+
+/**
+ * Tên vai để ĐỌC, không phải mã vai.
+ *
+ * Câu tóm tắt của bằng chứng đi thẳng vào chỗ trống `{evidence}` của bảng mẫu
+ * và vào prompt, tức nó RA TỚI KHUNG CHAT. Một chữ `GUARD` ở đó là một con BOT
+ * nói giữa phòng "có người khác cũng nhận là GUARD".
+ *
+ * Lỗi này sống trong repo tới tận PR 9 và không test nào bắt được, vì mọi phép
+ * đo đều chạy trên dữ liệu có cấu trúc chứ không ai ĐỌC câu chữ. Bộ biên bản
+ * của §27 bắt nó ở lần chạy đầu tiên - xem `docs/bot-communication-human-eval.md`.
+ *
+ * `isRole` chặn ở biên: khoá của `byRole` là `string`, và một mã vai đã bị xoá
+ * khỏi bộ bài vẫn có thể nằm trong ván cũ.
+ */
+function roleLabel(role: string): string {
+  return isRole(role) ? ROLE_META[role].name : role;
+}
 
 /*
  * CỔNG "VAI QUYỀN LỰC" - `isPowerRole` của `@masoi/shared`.
@@ -265,7 +283,11 @@ export function claimEvidence(
           last.round,
           tuning.collisionPenalty * scale,
           confidence,
-          `Có người khác cũng nhận là ${role}, nên ít nhất một trong hai đang nói dối.`,
+          // Tên hiển thị, KHÔNG phải mã vai: câu này đi thẳng vào `{evidence}`
+          // của bảng mẫu và ra tới khung chat, nên một chữ `GUARD` ở đây là
+          // một con BOT nói "có người khác cũng nhận là GUARD" giữa phòng.
+          // Bắt được nhờ biên bản của §27 - xem `docs/bot-communication-human-eval.md`.
+          `Có người khác cũng nhận là ${roleLabel(role)}, nên ít nhất một trong hai đang nói dối.`,
         ),
       );
     });
