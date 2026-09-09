@@ -195,15 +195,17 @@ function withRejectedLine(request: SpeechRequest, rejected: string): SpeechReque
 }
 
 /**
- * Ba cổng mà một câu của nhà cung cấp phải qua, theo thứ tự rẻ trước đắt sau:
- * không nhại lại chính mình, không mở đầu như vài câu vừa rồi, và nói đúng lời
- * khai đã chốt (hoặc không khai gì nếu lõi không khai).
+ * Bốn cổng mà một câu của nhà cung cấp phải qua, theo thứ tự rẻ trước đắt sau:
+ * không nhại lại chính mình, không mở đầu như vài câu vừa rồi, nói đúng lời
+ * khai đã chốt (hoặc không khai gì nếu lõi không khai), và không tố/bênh một
+ * người mà lõi chưa từng chốt.
  */
 function passesGates(request: SpeechRequest, chat: string): boolean {
   return (
     !echoesRecentOwnLine(request, chat) &&
     !repeatsRecentOpening(request, chat) &&
-    claimSurvivesRoundTrip(request, chat)
+    claimSurvivesRoundTrip(request, chat) &&
+    targetSurvivesRoundTrip(request, chat)
   );
 }
 
@@ -250,6 +252,44 @@ function echoesRecentOwnLine(request: SpeechRequest, chat: string): boolean {
   return request.recentOwnLines.some(
     (line) => speechTextFingerprint(line) === fingerprint,
   );
+}
+
+/**
+ * Câu này có tố / bênh ĐÚNG người mà lõi đã chốt không (COMMUNICATION §23)?
+ *
+ * Lỗ hổng mà cổng này bịt, và là lỗ hổng DUY NHẤT trong danh sách §23 mà ba cổng
+ * kia không chạm tới: **lệch mục tiêu**. Lõi chốt "tố Chi", mô hình viết "tôi
+ * nghi Bình". Không cổng nào cũ bắt được - không phải lời khai, không nhại câu
+ * cũ, không trùng cách mở đầu - nên câu đó đi thẳng ra phòng, và mọi BOT khác
+ * `analyzeChat` nó thành một cáo buộc nhắm vào một người mà lõi CHƯA BAO GIỜ
+ * chọn. Belief của cả bàn dịch theo một nước đi không seed nào dựng lại được.
+ *
+ * Đó đúng là điều §20 cấm ("Do not change selected intent") và §33 gọi tên
+ * ("do NOT ask LLM to choose votes") - chỉ khác là nó lọt qua đường LỜI NÓI
+ * thay vì đường hành động.
+ *
+ * Luật: mọi `ACCUSE`/`DEFEND` mà câu chữ đọc ra phải trỏ ĐÚNG `intention.targetId`.
+ * Ý định không nhắm ai (`HUMOR`, `REACTION`, `WITHHOLD`, một lời khai trần) thì
+ * không được đọc ra cáo buộc nào cả.
+ *
+ * Chỉ xét memory mà câu THẬT SỰ sinh ra: một câu không tố ai vẫn hợp lệ. Cổng
+ * này nói "đừng tố nhầm người", không nói "phải tố".
+ *
+ * Như ba cổng kia, nó chỉ gác đường NHÀ CUNG CẤP. Bảng mẫu có luật riêng của
+ * nó (`avoidFingerprints`, và một test quét toàn bảng), và cho bảng mẫu đi qua
+ * đây thì một lần trượt sẽ không còn đường lui nào.
+ */
+function targetSurvivesRoundTrip(request: SpeechRequest, chat: string): boolean {
+  const approved = request.intention.targetId ?? null;
+
+  const memories = analyzeChat(
+    [{ id: "probe", actorId: request.speaker.id, text: chat, at: 0 }],
+    request.players,
+  );
+
+  return memories
+    .filter((memory) => memory.type === "ACCUSE" || memory.type === "DEFEND")
+    .every((memory) => memory.targetId === approved);
 }
 
 /**

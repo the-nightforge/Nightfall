@@ -28,7 +28,7 @@ import {
 } from "./narrative";
 import { wolfDistanceStance } from "../decision/wolf-bluff";
 import { chooseResponseStrategy, intentionFor } from "./question-policy";
-import { hasRecentSemantic } from "./speech-memory";
+import { hasRecentSemantic, speechCountInRound } from "./speech-memory";
 import { findConversationTriggers, type ConversationTrigger } from "./triggers";
 
 /**
@@ -358,6 +358,51 @@ function claimTone(
 }
 
 /**
+ * Người khác đáng hỏi khi mọi luận điểm về mục tiêu phiếu đã cạn (§24).
+ *
+ * Ba ràng buộc, và cả ba đều cần:
+ *
+ * - Phải CÒN DƯ lượt nói trong vòng. Câu chuyển hướng là thứ RẺ NHẤT BOT có
+ *   thể nói - nó là cái nói ra khi đã hết ý - nên nó không bao giờ được tiêu
+ *   lượt cuối cùng của vòng. Đo trên 1.200 ván khi chưa có ràng buộc này:
+ *   `NO_TURN` của câu hỏi trực tiếp tăng **+4,4 điểm** và tỉ lệ trả lời tụt
+ *   **−3,9 điểm** - BOT đốt hạn mức vào câu hỏi tự phát, rồi tới lúc có người
+ *   hỏi thẳng thì không còn lượt để đáp. Giữ lại một lượt là chỗ chữa.
+ * - Phải là người BOT đang THẬT SỰ nghi (`suspicion > 0`). Đây là ranh giới
+ *   giữa "đổi chiến thuật" và "nặn ra một câu để né cơ chế chống lặp". Hỏi một
+ *   người mình không có ý kiến gì là câu độn, và nó làm chỉ số lặp đẹp lên
+ *   trong khi hội thoại tệ đi - đúng cái bẫy mà chú thích ở nhánh "Hết ý" cảnh
+ *   báo.
+ * - Sắp theo `(nghi giảm dần, id tăng dần)` rồi cắt theo `redirectCandidates`.
+ *   Tất định, không rút số.
+ */
+function redirectTargets(
+  context: BotDecisionContext,
+  state: BotBrainState,
+  exclude: string,
+  weights: BotWeights,
+): string[] {
+  const limit = weights.conversation.redirectCandidates;
+  if (limit <= 0) return [];
+
+  // Chừa đúng một lượt cho việc ĐÁP người khác. Hạn mức 1 nghĩa là không bao
+  // giờ chuyển hướng - đúng ý: bàn chỉ cho mỗi BOT một câu thì câu đó phải để
+  // dành cho người đang nói với nó.
+  const spoken = speechCountInRound(state, context.knowledge.round);
+  if (spoken >= weights.conversation.messagesPerBotPerRound - 1) return [];
+
+  return context.knowledge.players
+    .filter((player) => player.alive)
+    .map((player) => player.id)
+    .filter((id) => id !== exclude && id !== state.playerId)
+    .map((id) => ({ id, score: state.suspicion[id]?.score ?? 0 }))
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score || left.id.localeCompare(right.id))
+    .slice(0, limit)
+    .map((item) => item.id);
+}
+
+/**
  * Vì sao im lặng, cho trace.
  *
  * Hàm riêng chứ không phải một biểu thức tại chỗ: `conversation` chỉ được gán
@@ -675,6 +720,23 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
     tone: "CURIOUS",
   });
   if (question) return question;
+
+  // ---- 2b. Cạn chuyện về người này thì hỏi người khác ----
+  //
+  // §24: khi cùng một ý đã nói rồi, đổi CHIẾN THUẬT chứ không đổi cách diễn
+  // đạt. Chỉ hỏi người mà BOT thật sự đang nghi - xem `redirectTargets`.
+  for (const other of redirectTargets(context, state, targetId, weights)) {
+    const redirect = fresh({
+      kind: "QUESTION",
+      targetId: other,
+      topic: "SUSPICION",
+      confidence: vote.confidence,
+      evidence: [],
+      tone: "CURIOUS",
+      reason: "đã nói hết về mục tiêu phiếu nên chuyển sang người khác",
+    });
+    if (redirect) return redirect;
+  }
 
   // ---- 3. Hết ý ----
   //

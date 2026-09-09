@@ -729,6 +729,19 @@ export interface ConversationWeights {
    * mình, bất kể đang nói với ai. Cùng quy ước với `claim.accusationWeight`.
    */
   persuasionMinSamples: number;
+  /**
+   * Khi mọi luận điểm về mục tiêu phiếu đã nói hết, BOT được thử hỏi bấy nhiêu
+   * NGƯỜI KHÁC trước khi chịu im (COMMUNICATION §24). `0` TẮT.
+   *
+   * §24 đòi đổi CHIẾN THUẬT chứ không chỉ đổi cách diễn đạt, và "hỏi một người
+   * khác" là ô đầu tiên trong danh sách của nó.
+   *
+   * Ứng viên BẮT BUỘC phải là người BOT đang thật sự nghi (`suspicion > 0`) —
+   * xem `redirectTargets`. Đó là ranh giới giữa việc đổi chiến thuật và việc
+   * nặn ra một câu chỉ để né cơ chế chống lặp; cái sau làm chỉ số lặp đẹp lên
+   * trong khi hội thoại tệ đi, và chú thích ở nhánh "Hết ý" đã cảnh báo đúng nó.
+   */
+  redirectCandidates: number;
 }
 
 /**
@@ -1348,6 +1361,7 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     questionIgnoreFloor: 0,
     narrativeMemoryRounds: 0,
     persuasionMinSamples: 0,
+    redirectCandidates: 0,
   }),
 
   /**
@@ -1620,6 +1634,7 @@ export const BOT_WEIGHTS_V3: BotWeights = Object.freeze({
     questionIgnoreFloor: 0,
     narrativeMemoryRounds: 0,
     persuasionMinSamples: 0,
+    redirectCandidates: 0,
   }),
 }) as BotWeights;
 
@@ -2629,6 +2644,38 @@ export const BOT_WEIGHTS_V27: BotWeights = Object.freeze({
     wolfBluffScoreShare: 0.85,
     softClaimPressureCeiling: 0.2,
     wolfDistancePressure: 0.34,
+  }),
+});
+
+/**
+ * Cấu hình v28 - chống lặp bằng ĐỔI CHIẾN THUẬT (COMMUNICATION §24).
+ *
+ * MỘT ô đổi so v27: `conversation.redirectCandidates` 0 -> 2.
+ *
+ * Trước v28, cơ chế chống lặp chỉ biết NÓI KHÔNG: một ý đã nói rồi thì ứng viên
+ * bị loại, và khi cả `ACCUSE` lẫn `QUESTION` về mục tiêu phiếu đều đã cũ thì
+ * BOT im. §24 đòi thứ khác - đổi chiến thuật, mà ô đầu tiên trong danh sách của
+ * nó là "hỏi một người khác".
+ *
+ * Ràng buộc giữ cho nó không thành câu độn: ứng viên phải là người BOT đang
+ * THẬT SỰ nghi (`suspicion > 0`). Hỏi một người mình không có ý kiến gì sẽ làm
+ * `semanticRepetitionRate` đẹp lên trong khi hội thoại tệ đi, và đó đúng là cái
+ * bẫy mà chú thích ở nhánh "Hết ý" đã cảnh báo từ Phase 4.
+ *
+ * KHÔNG thêm lượt rút RNG nào: `redirectTargets` thuần, và nhánh mới nằm TRƯỚC
+ * hai lượt rút của reaction/humor - nên khi nó trả về câu, hai lượt rút đó
+ * không chạy. Đó là một thay đổi hành vi có thật, và là lý do v28 cần bench
+ * riêng chứ không thể suy từ v27.
+ *
+ * KHÔNG mặc định - bench v28 so v21 trước, kỷ luật v19.
+ */
+export const BOT_WEIGHTS_V28: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V27,
+  version: "28.0.0",
+
+  conversation: Object.freeze({
+    ...BOT_WEIGHTS_V27.conversation,
+    redirectCandidates: 2,
   }),
 });
 
