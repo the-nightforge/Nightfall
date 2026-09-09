@@ -118,6 +118,10 @@ const SEAT_FEATURE_NAMES = [
   "voteShare",
   "isAccused",
   "isGuardPrevious",
+  // Ba đầu vào riêng của scorer đêm (reports/train-policy-0002.md).
+  "informationValue",
+  "claimedPowerRole",
+  "guardedBefore",
 ] as const;
 
 /** Phe của từng vai, tra sẵn một lần thay vì đọc `ROLE_META` trong vòng lặp. */
@@ -420,6 +424,9 @@ export function encodeObservation(
       clamp((voteCounts.players[id] ?? 0) / voters, 0, 1),
       observation.trialAccusedId === id ? 1 : 0,
       observation.guardPrevious === id ? 1 : 0,
+      clamp((entry?.informationValue ?? 0) / BELIEF_SCALE, -1, 1),
+      entry?.claimedPowerRole === true ? 1 : 0,
+      entry?.guardedBefore === true ? 1 : 0,
     );
   }
 

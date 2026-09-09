@@ -17,6 +17,8 @@ import {
 import { applyEvidence, applyTrustEvidence, decayBeliefs } from "./belief/belief-state";
 import { observeProfile } from "./belief/player-profile";
 import { assessPlayers } from "./belief/player-assessment";
+import { informationValue } from "./roles/uncertainty";
+import { powerRoleClaimOf } from "./roles/wolf-team-plan";
 import { applyPrivateInformation } from "./belief/private-info";
 import {
   decideRoleClaim,
@@ -639,11 +641,22 @@ export class BotRuntime {
       weights: this.weights,
       roleComposition: knowledge.roleComposition,
     });
+    const guardedBefore = new Set(
+      this.state.previousNightActions
+        .filter((entry) => entry.action === "GUARD" && entry.targetId !== null)
+        .map((entry) => entry.targetId as string),
+    );
     for (const id of Object.keys(this.state.suspicion).sort()) {
       const assessment = assessments[id];
+      const suspicion = this.state.suspicion[id]?.score ?? 0;
       snapshot[id] = {
-        suspicion: this.state.suspicion[id]?.score ?? 0,
+        suspicion,
         trust: this.state.trust[id]?.score ?? 0,
+        // Cùng hàm/predicate mà seer.ts, detective.ts, guard.ts và
+        // wolf-team-plan.ts dùng — không chép công thức lần hai.
+        informationValue: informationValue(suspicion, this.weights),
+        claimedPowerRole: powerRoleClaimOf(this.state, id) !== undefined,
+        guardedBefore: guardedBefore.has(id),
         ...(assessment
           ? {
               wolfProbability: assessment.wolfProbability,

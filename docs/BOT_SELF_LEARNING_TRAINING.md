@@ -169,7 +169,7 @@ Kết quả mong đợi (tỉ lệ theo bộ 20 ván):
 TỪ CHỐI     0
 không nhãn  ~69%
 mẫu train   ~650.000  (train ~70% / val ~15% / test ~15%)
-vector      365 chiều, 187 hành động
+vector      413 chiều, 187 hành động
 ```
 
 `không nhãn` cao là ĐÚNG: không gian hành động chỉ mô tả VOTE/NIGHT/HUNTER_SHOT.
@@ -185,7 +185,12 @@ không phải dòng bị bỏ. `meta.json` có `actionNames` để đọc ngư�
 Observation gồm, mỗi ghế: suspicion, trust, **wolfProbability, threat,
 credibility, influence** (từ `assessPlayers`, cùng hàm scorer dùng), phe đã
 biết (Sói/Làng/Trung lập), kết quả soi, hợp lệ, **nạn nhân bầy, chết đêm qua,
-tỉ lệ phiếu, đang bị xử, Bảo Vệ đã canh**. Toàn cục: pha, loại quyết định, vai,
+tỉ lệ phiếu, đang bị xử, Bảo Vệ đã canh**, và ba đầu vào riêng của scorer đêm:
+**informationValue** (Tiên Tri/Thám Tử), **claimedPowerRole** (nhánh rẽ của
+`wolfThreatScore`: ai đã khai vai quyền lực thì Sói cắn trước), **guardedBefore**
+(`repeatPenalty` của Bảo Vệ). Ba cái sau thêm ở `dataset-0003`, sau khi đo trên
+policy-0002 thấy observation trùng nước Sói đã đi 100% khi không ai khai vai
+nhưng chỉ 71% khi có người khai. Toàn cục: pha, loại quyết định, vai,
 tính cách, loại hành động được chào, hai bình thuốc, phiếu không treo.
 
 ---
@@ -208,7 +213,7 @@ cao nhất** chứ không phải epoch cuối (`metrics.json` ghi `bestEpoch`).
 | `--value-weight` | 0 | Bật (0,1–0,5) khi sang RL cần value head; với BC nó chỉ lấy sức chứa của policy |
 | `--seed` | 12345 | Đổi để kiểm model có ổn định không, không phải để "chọn kết quả đẹp" |
 
-Toàn bộ tập train được nạp lên device một lần (~650k × 365 × 4 byte ≈ 950 MB
+Toàn bộ tập train được nạp lên device một lần (~620k × 413 × 4 byte ≈ 1 GB
 float32). Trên CPU 16 GB thì ổn; nếu OOM, giảm số ván hoặc thêm đọc theo batch.
 
 ---
@@ -233,7 +238,7 @@ của model. Nó hữu ích khi so hai model, không phải để qua cổng §1
 **Đừng nhìn loss để kết luận.** Loss giảm mà agreement không tăng nghĩa là model
 đang học phân bố của lớp đông nhất, không phải học chơi.
 
-`metrics.json` ghi `modelId`, `gitCommit`, `datasetVersion` (`dataset-0002` cho
+`metrics.json` ghi `modelId`, `gitCommit`, `datasetVersion` (`dataset-0003` cho
 định dạng này), `trainingSeed`, `bestEpoch` và toàn bộ `trainingConfig` (§46).
 
 ---

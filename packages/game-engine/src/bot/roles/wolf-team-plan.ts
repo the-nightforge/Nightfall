@@ -1,6 +1,6 @@
 import { roleTeam, type Role } from "@masoi/shared";
 import { incomingHostilityOf } from "../analysis/social-analysis";
-import type { BotBrainState, BotKnowledgeView } from "../types";
+import type { BotBrainState, BotKnowledgeView, BotMemory } from "../types";
 import type { BotWeights } from "../config/weights";
 import { DEFAULT_BOT_WEIGHTS } from "../config/weights";
 import { fnv1a32 } from "../hash";
@@ -80,18 +80,31 @@ const POWER_ROLES = new Set(["SEER", "WITCH", "GUARD", "HUNTER"]);
  * TRỪ phần bị nghi (làng đang nghi sẵn thì để làng tự treo — mỗi đêm cắn người
  * vô hại với mình là một đêm lãng phí).
  */
+/**
+ * Lời khai vai quyền lực của `targetId` mà bot này đã nghe, hoặc `undefined`.
+ *
+ * Tách ra vì nó là NHÁNH RẼ của `wolfThreatScore`: ai đã khai thì threat nhảy
+ * thẳng lên hằng số, bỏ qua công thức. Observation của tầng train phải thấy
+ * đúng nhánh này (BOT_SELF_LEARNING: đo trên 5.809 lượt cắn, observation chỉ
+ * mang công thức thì trùng nước Sói đã đi 100% khi không ai khai và 71% khi có
+ * người khai). Dùng chung một predicate để hai bên không trôi lệch.
+ */
+export function powerRoleClaimOf(state: BotBrainState, targetId: string): BotMemory | undefined {
+  return state.claims.find(
+    (memory) =>
+      memory.actorId === targetId &&
+      memory.type === "ROLE_CLAIM" &&
+      POWER_ROLES.has(String(memory.data.role)),
+  );
+}
+
 export function wolfThreatScore(
   state: BotBrainState,
   targetId: string,
   weights: BotWeights,
 ): { score: number; reason: string } {
   const tuning = weights.roleThresholds;
-  const claim = state.claims.find(
-    (memory) =>
-      memory.actorId === targetId &&
-      memory.type === "ROLE_CLAIM" &&
-      POWER_ROLES.has(String(memory.data.role)),
-  );
+  const claim = powerRoleClaimOf(state, targetId);
   if (claim) {
     return {
       score: tuning.wolfClaimedPowerScore,

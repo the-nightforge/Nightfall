@@ -293,6 +293,17 @@ Kết quả sau sửa, bộ 20 ván `--no-jitter` (788 mẫu train): trần **97
 agreement **0,49** (top-2 0,67) — so với 0,33 trên 6.700 mẫu có jitter trước đó.
 Bộ 10.000 ván chưa chạy.
 
+**Cập nhật cùng ngày, sau policy-0002/0003** (`reports/train-policy-0002.md`):
+dataset `--no-jitter` 10.000 ván cho trần 97,4% và test agreement 0,840 (h128)
+/ 0,849 (h256) — cổng §17 mở. Gấp đôi sức chứa không đổi VOTE một phần vạn,
+nên nút thắt là observation. Đo term của scorer đêm thấy ba đầu vào còn thiếu:
+`informationValue` (Tiên Tri/Thám Tử), nhánh "đã khai vai quyền lực" của
+`wolfThreatScore` (observation trùng nước Sói 100% khi không ai khai, 71% khi
+có), và `repeatPenalty` của Bảo Vệ. Ba đặc trưng đó vào `BeliefSnapshot` qua
+đúng hàm/predicate scorer dùng (`powerRoleClaimOf` tách từ wolf-team-plan.ts);
+vector 365 → 413, `dataset-0003`. Kiểm trên 40 ván: argmax observation trùng
+nước Sói và Tiên Tri/Thám Tử đã đi 100%.
+
 Thêm: `ai-training/tests/test_train_smoke.py` chạy trọn vòng train với torch
 thật, và job CI `ai-training` chạy nó khi `ai-training/**` đổi. Hai khe hở
 validator còn giữ nguyên và được ghi ở "Giới hạn đã biết" của tài liệu train:
