@@ -211,6 +211,8 @@ export interface DatasetStats {
   /** Tần suất theo NHÃN hành động đã encode; chính là bảng mất cân bằng lớp (§43). */
   actionDistribution: Record<string, number>;
   rewardDistribution: { win: number; loss: number };
+  /** Số timestep rơi vào từng phần sau khi chia theo ván (§15). */
+  splitCounts: Record<DatasetSplit, number>;
   /** Đếm theo lý do, để một file hỏng nói được hỏng ở đâu chứ không chỉ hỏng bao nhiêu. */
   violationsByReason: Record<string, number>;
 }
@@ -220,20 +222,25 @@ function bump(table: Record<string, number>, key: string): void {
 }
 
 /**
- * Thống kê §42 trên một tập line ĐÃ parse.
+ * Bộ gom thống kê §42, nhận từng line MỘT.
  *
- * Chạy luôn encoder trên từng line: một line hợp schema nhưng không encode nổi
- * (quá số ghế) vẫn là một line không train được, và chỗ duy nhất phát hiện ra
- * điều đó là ở đây — trước khi train, không phải giữa lúc train.
+ * Tách khỏi `summarizeDataset` vì một dataset thật nặng vài GB: đọc cả file
+ * thành một mảng là cách chắc chắn nhất để tầng kiểm chết đúng lúc nó cần chạy
+ * nhất. Bộ gom chỉ giữ tập id ván/episode và mấy bảng đếm, nên chi phí bộ nhớ
+ * không phụ thuộc số dòng.
  */
-export function summarizeDataset(
-  lines: readonly unknown[],
-  options: EncodeOptions = {},
-): DatasetStats {
+export interface DatasetSummarizer {
+  add(line: unknown): void;
+  finish(): DatasetStats;
+}
+
+export function createDatasetSummarizer(
+  options: EncodeOptions & SplitOptions = {},
+): DatasetSummarizer {
   const stats: DatasetStats = {
     games: 0,
     episodes: 0,
-    timesteps: lines.length,
+    timesteps: 0,
     invalidObservations: 0,
     invalidActions: 0,
     leakViolations: 0,
@@ -243,47 +250,71 @@ export function summarizeDataset(
     decisionDistribution: {},
     actionDistribution: {},
     rewardDistribution: { win: 0, loss: 0 },
+    splitCounts: { train: 0, validation: 0, test: 0 },
     violationsByReason: {},
   };
 
   const games = new Set<string>();
   const episodes = new Set<string>();
 
-  for (const raw of lines) {
-    const report = validateTrajectoryLine(raw);
-    for (const violation of report.violations) {
-      bump(stats.violationsByReason, `${violation.kind}: ${violation.field} — ${violation.reason}`);
-      if (violation.kind === "leak") stats.leakViolations += 1;
-      if (violation.kind === "action") stats.invalidActions += 1;
-      if (violation.kind === "schema") stats.invalidObservations += 1;
-    }
-    if (typeof raw !== "object" || raw === null) continue;
+  return {
+    add(raw) {
+      stats.timesteps += 1;
+      const report = validateTrajectoryLine(raw);
+      for (const violation of report.violations) {
+        bump(
+          stats.violationsByReason,
+          `${violation.kind}: ${violation.field} — ${violation.reason}`,
+        );
+        if (violation.kind === "leak") stats.leakViolations += 1;
+        if (violation.kind === "action") stats.invalidActions += 1;
+        if (violation.kind === "schema") stats.invalidObservations += 1;
+      }
+      if (typeof raw !== "object" || raw === null) return;
 
-    const line = raw as BotTrajectory;
-    if (typeof line.gameId === "string") games.add(line.gameId);
-    if (typeof line.gameId === "string" && typeof line.playerId === "string") {
-      episodes.add(`${line.gameId} ${line.playerId}`);
-    }
-    if (typeof line.finalRole === "string") bump(stats.roleDistribution, line.finalRole);
-    if (typeof line.phase === "string") bump(stats.phaseDistribution, line.phase);
-    if (typeof line.decision === "string") bump(stats.decisionDistribution, line.decision);
-    if (line.reward === 1) stats.rewardDistribution.win += 1;
-    else if (line.reward === -1) stats.rewardDistribution.loss += 1;
+      const line = raw as BotTrajectory;
+      if (typeof line.gameId === "string") {
+        games.add(line.gameId);
+        stats.splitCounts[splitOf(line.gameId, options)] += 1;
+        if (typeof line.playerId === "string") {
+          episodes.add(`${line.gameId} ${line.playerId}`);
+        }
+      }
+      if (typeof line.finalRole === "string") bump(stats.roleDistribution, line.finalRole);
+      if (typeof line.phase === "string") bump(stats.phaseDistribution, line.phase);
+      if (typeof line.decision === "string") bump(stats.decisionDistribution, line.decision);
+      if (line.reward === 1) stats.rewardDistribution.win += 1;
+      else if (line.reward === -1) stats.rewardDistribution.loss += 1;
 
-    if (!report.valid) continue;
-    try {
-      const encoded = encodeObservation(line, options);
-      if (encoded.actionIndex === null) stats.unmappedActions += 1;
-      else bump(stats.actionDistribution, String(encoded.actionIndex));
-    } catch (error) {
-      stats.invalidObservations += 1;
-      bump(stats.violationsByReason, `schema: observation — ${(error as Error).message}`);
-    }
-  }
+      if (!report.valid) return;
+      try {
+        // Chạy luôn encoder: một line hợp schema nhưng không encode nổi (quá số
+        // ghế) vẫn là một line không train được, và chỗ duy nhất phát hiện ra
+        // điều đó là ở đây — trước khi train, không phải giữa lúc train.
+        const encoded = encodeObservation(line, options);
+        if (encoded.actionIndex === null) stats.unmappedActions += 1;
+        else bump(stats.actionDistribution, String(encoded.actionIndex));
+      } catch (error) {
+        stats.invalidObservations += 1;
+        bump(stats.violationsByReason, `schema: observation — ${(error as Error).message}`);
+      }
+    },
+    finish() {
+      stats.games = games.size;
+      stats.episodes = episodes.size;
+      return stats;
+    },
+  };
+}
 
-  stats.games = games.size;
-  stats.episodes = episodes.size;
-  return stats;
+/** Thống kê §42 trên một tập line đã nằm sẵn trong bộ nhớ. */
+export function summarizeDataset(
+  lines: readonly unknown[],
+  options: EncodeOptions & SplitOptions = {},
+): DatasetStats {
+  const summarizer = createDatasetSummarizer(options);
+  for (const line of lines) summarizer.add(line);
+  return summarizer.finish();
 }
 
 export type DatasetSplit = "train" | "validation" | "test";

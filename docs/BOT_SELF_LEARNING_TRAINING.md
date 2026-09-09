@@ -88,7 +88,7 @@ trả lời một câu hỏi: đường ống có chạy hết từ đầu tới
 
 ---
 
-## Bước 2 — Sinh dataset 10.000 ván (~30 phút, ~2,7 GB)
+## Bước 2 — Sinh dataset 10.000 ván (~35 phút, 2,8 GB)
 
 Chạy theo shard 250 ván. Lý do: runner giữ toàn bộ ván trong RAM tới lúc ghi
 file, nên một lần chạy 10.000 ván sẽ hết bộ nhớ trước khi ghi được dòng nào.
@@ -138,7 +138,15 @@ KẾT LUẬN: dataset SẠCH — train được.
 boundary, và train tiếp chỉ dạy model khai thác đúng bug đó. Lệnh in ra tối đa
 10 lý do vi phạm kèm số lần — đọc lý do đầu tiên trước.
 
-Tham chiếu: batch 200 ván đã chạy ra 0/0/0.
+Số đo thật của `dataset-0001` (10.000 ván, đã chạy):
+
+```text
+games 10000 · episodes 80000 · timesteps 1.671.337 · dòng JSON hỏng 0
+invalid observations 0 · invalid actions 0 · leak violations 0
+split (theo ván)  train 1.166.181 / val 243.514 / test 261.642   (69,8 / 14,6 / 15,7 %)
+lớp hành động ghế 1–7: 4,2% mỗi ghế  ← không thiên lệch ghế (§9)
+reward  win 899.516 / loss 771.821
+```
 
 ---
 
@@ -148,15 +156,17 @@ Tham chiếu: batch 200 ván đã chạy ra 0/0/0.
 npm run ai:encode -- --in .tmp/dataset-0001/trajectories.jsonl --out .tmp/enc-0001
 ```
 
-Kết quả mong đợi (con số theo tỉ lệ của batch 200 ván):
+Số đo thật của `dataset-0001`:
 
 ```text
-Đã đọc      ~1.600.000 dòng (10.000 ván)
+Đã đọc      1671337 dòng (10000 ván)
 TỪ CHỐI     0
-không nhãn  ~1.130.000
-mẫu train   ~470.000  (train ~70% / val ~11% / test ~18%)
+không nhãn  1179746
+mẫu train   491591  (train 342854 / val 71754 / test 76983)
 vector      191 chiều, 17 hành động
 ```
+
+File ghi ra: `features.f32.bin` 359 MB, `masks.u8.bin` 8 MB, phần còn lại vài MB.
 
 `không nhãn` cao là ĐÚNG, không phải lỗi: không gian hành động hiện tại chỉ mô
 tả VOTE/NIGHT/HUNTER_SHOT. `SPEECH` và `FINAL_VOTE` (treo/tha) có `targetId`
@@ -240,9 +250,8 @@ Compress-Archive -Path ai-training\masoi_training, .tmp\enc-0001 -DestinationPat
 
 Zip gồm `masoi_training/` (3 file Python) và `enc-0001/` (tensor `.bin` + `meta.json`).
 
-**Không tải trajectory JSONL 2,7 GB lên.** Tensor đã encode nhỏ hơn nhiều
-(~370 MB cho 10.000 ván) và nén rất tốt vì phần lớn đặc trưng là one-hot — thực tế
-còn khoảng vài chục MB.
+**Không tải trajectory JSONL 2,8 GB lên.** Tensor đã encode là ~375 MB, và nén
+xuống còn **14,3 MB** vì phần lớn đặc trưng là one-hot (đã đo, nén mất 3 giây).
 
 ### 2. Tải lên Google Drive
 
