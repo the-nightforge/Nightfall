@@ -39,14 +39,34 @@ python -m masoi_training.train_bc --data <enc-dir> --out <model-dir>
 ```
 
 Kết quả: `model.pt`, `model.onnx`, `metrics.json`. Số cần nhìn là
-`metrics.test.agreement` — độ khớp hành động với bot heuristic (§17), không phải
-loss — và phải đọc nó cạnh dòng `trần độ khớp` mà `ai:validate-dataset` in ra.
+`metrics.test.agreementTieAware` — nước model chọn có HOÀ ĐỈNH với teacher không
+(§17). `agreement` cũ chấm oan mọi nước hoà điểm mà teacher phá hoà bằng id thô,
+thứ §9 cố tình giấu khỏi observation; nó vẫn được in ra để so với bảng cũ.
+
+## RL (self-play → PPO → benchmark)
+
+```bash
+# 1. rollout: chính champion chơi, lấy mẫu ở T=1 để có gradient
+npx tsx apps/server/scripts/selfplay.ts --games 1000 --players 8 --preset --defense \
+  --seed rl-1 --policy <champion.weights.json> --temperature 1 --learned-seats all \
+  --trajectories <dir> --trace-games 1000 --quiet
+
+# 2. encode tập PPO (chỉ giữ nước chính policy đã đi, kèm logprobs/values)
+npm run ai:encode -- --in <dir>/trajectories.jsonl --out <enc-dir> --rollout
+
+# 3. một vòng PPO, khởi tạo từ champion
+python -m masoi_training.train_ppo --data <enc-dir> --init <champion.weights.json> --out <model-dir>
+```
+
+Cả ba bước cộng thăng hạng nằm trong `rl_loop.py` — xem
+`docs/BOT_SELF_LEARNING_TRAINING.md` bước 8.
 
 ## Test
 
 ```bash
 python tests/test_data.py          # loader nhị phân, không cần torch
 python tests/test_train_smoke.py   # trọn vòng train trên dataset tổng hợp, cần torch
+python tests/test_ppo.py           # một update PPO trên rollout tổng hợp, cần torch
 ```
 
-CI chạy cả hai (job `ai-training`) mỗi khi `ai-training/**` đổi.
+CI chạy cả ba (job `ai-training`) mỗi khi `ai-training/**` đổi.
