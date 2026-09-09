@@ -38,14 +38,44 @@ export interface BotTrajectory {
   observation: {
     aliveIds: string[];
     legalActions: string[];
+    /**
+     * Mục tiêu hợp lệ đêm nay THEO LOẠI hành động (`night.legalTargets`), chỉ
+     * những loại được chào; `null` = không có lượt đêm. Đây là nguồn của mask
+     * (loại, mục tiêu) — `legalActions` phẳng ở trên chỉ là hợp của nó.
+     */
+    nightLegalTargets: Record<string, string[]> | null;
     knownRoles: Record<string, Role>;
     seerResult: { targetId: string; isWolf: boolean } | null;
-    belief: { playerId: string; suspicion: number; trust: number }[];
+    belief: {
+      playerId: string;
+      suspicion: number;
+      trust: number;
+      wolfProbability: number;
+      threat: number;
+      credibility: number;
+      influence: number;
+    }[];
     personality: BotDecisionTrace["personality"];
+    /** Nạn nhân bầy đã chốt; chỉ Sói và Phù Thuỷ (sau khoá) thấy khác `null`. */
+    nightWolfTarget: string | null;
+    /** Chỉ Phù Thuỷ thấy `true`. */
+    healUsed: boolean;
+    poisonUsed: boolean;
+    /** Chỉ Bảo Vệ thấy khác `null`. */
+    guardPrevious: string | null;
+    /** Công khai với cả bàn. */
+    lastNightDeaths: string[];
+    voteCounts: { players: Record<string, number>; noElimination: number };
+    trialAccusedId: string | null;
   };
   legalActions: string[];
   candidates: BotDecisionTrace["candidates"];
-  selectedAction: { decision: string; targetId: string | null; label: string };
+  /**
+   * `kind` là `NightActionKind` với quyết định NIGHT (`null` = bot không làm
+   * gì), và `null` với mọi quyết định khác. Nhãn train là cặp (kind, target):
+   * HEAL và POISON cùng một người là hai nước đi khác nhau.
+   */
+  selectedAction: { decision: string; targetId: string | null; label: string; kind: string | null };
   /** +1 thắng / −1 thua theo đúng luật (kể cả thắng cá nhân vai trung lập). */
   reward: number;
   finalWinner: string;
@@ -107,8 +137,27 @@ export function gameToTrajectories(game: SelfPlayGame): BotTrajectory[] {
       playerId,
       suspicion: entry.suspicion,
       trust: entry.trust,
+      // Trace cũ không có assessment: 0 là "không có tín hiệu", đúng nghĩa với
+      // cả bốn thang 0..1 này.
+      wolfProbability: entry.wolfProbability ?? 0,
+      threat: entry.threat ?? 0,
+      credibility: entry.credibility ?? 0,
+      influence: entry.influence ?? 0,
     }));
     belief.sort((left, right) => left.playerId.localeCompare(right.playerId));
+
+    const snapshot = trace.knowledgeSnapshot;
+    // Chỉ giữ loại hành động CÓ mục tiêu hoặc được chào rõ (SKIP của Phù Thuỷ):
+    // engine khởi tạo đủ 10 khoá với mảng rỗng, và một khoá rỗng không phải
+    // một lựa chọn.
+    let nightLegalTargets: Record<string, string[]> | null = null;
+    if (snapshot.nightLegalTargets) {
+      nightLegalTargets = {};
+      const offered = new Set(snapshot.nightLegalActions ?? []);
+      for (const [kind, targets] of Object.entries(snapshot.nightLegalTargets)) {
+        if (targets.length > 0 || offered.has(kind)) nightLegalTargets[kind] = [...targets].sort();
+      }
+    }
 
     lines.push({
       gameId: seed,
@@ -119,14 +168,25 @@ export function gameToTrajectories(game: SelfPlayGame): BotTrajectory[] {
       phase: trace.phase,
       decision: trace.decision,
       observation: {
-        aliveIds: [...trace.knowledgeSnapshot.aliveIds].sort(),
+        aliveIds: [...snapshot.aliveIds].sort(),
         legalActions: [...legalActions],
-        knownRoles: { ...trace.knowledgeSnapshot.knownRoles },
-        seerResult: trace.knowledgeSnapshot.seerResult
-          ? { ...trace.knowledgeSnapshot.seerResult }
-          : null,
+        nightLegalTargets,
+        knownRoles: { ...snapshot.knownRoles },
+        seerResult: snapshot.seerResult ? { ...snapshot.seerResult } : null,
         belief,
         personality: { ...trace.personality },
+        nightWolfTarget: snapshot.nightWolfTarget ?? null,
+        healUsed: snapshot.healUsed ?? false,
+        poisonUsed: snapshot.poisonUsed ?? false,
+        guardPrevious: snapshot.guardPrevious ?? null,
+        lastNightDeaths: [...(snapshot.lastNightDeaths ?? [])].sort(),
+        voteCounts: snapshot.voteCounts
+          ? {
+              players: { ...snapshot.voteCounts.players },
+              noElimination: snapshot.voteCounts.noElimination,
+            }
+          : { players: {}, noElimination: 0 },
+        trialAccusedId: snapshot.trialAccusedId ?? null,
       },
       legalActions,
       candidates: trace.candidates.map((candidate) => ({ ...candidate })),
@@ -134,6 +194,15 @@ export function gameToTrajectories(game: SelfPlayGame): BotTrajectory[] {
         decision: trace.decision,
         targetId: trace.chosen.targetId,
         label: trace.chosen.label,
+        // Trace cũ không có `actionKind`: với NIGHT thì `label` chính là kind
+        // (BotRuntime ghi `night.action`), trừ "bỏ lượt" là không làm gì.
+        kind:
+          trace.decision === "NIGHT"
+            ? (trace.chosen.actionKind ??
+              (trace.chosen.targetId === null && trace.chosen.label === "bỏ lượt"
+                ? null
+                : trace.chosen.label))
+            : null,
       },
       reward: rewardFor(game, trace.botId, finalRole),
       finalWinner: game.winner ?? "draw",

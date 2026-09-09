@@ -3,15 +3,16 @@
 Mọi thứ cần thiết đã nằm trong repo. File này là các bước bạn chạy, theo đúng
 thứ tự, kèm con số cần nhìn ở mỗi bước.
 
-**Phần TypeScript đã chạy thật và xanh** (sinh trajectory → kiểm rò rỉ → encode),
-và loader Python đã đọc được đúng file `.bin` đó bằng numpy. Thứ **chưa** chạy
-được là `train_bc.py`, vì máy chưa cài PyTorch. Vì vậy Bước 0 là bước duy nhất
-còn rủi ro, và Bước 1 rút gọn còn một lệnh.
+Toàn bộ đường ống dưới đây **đã chạy thật trên máy dev** (Python 3.13 + torch
+2.14 CPU), kể cả `train_bc.py` và export ONNX. CI cũng chạy tầng Python (job
+`ai-training`) mỗi khi `ai-training/**` đổi.
 
 Đường ống:
 
 ```text
-self-play (TS)  →  trajectory JSONL  →  leak validator  →  encoder (TS)
+self-play (TS, --no-jitter)  →  trajectory JSONL  →  leak validator + trần độ khớp
+                                                              ↓
+                                                        encoder (TS)
                                                               ↓
                                                      tensor .bin + meta.json
                                                               ↓
@@ -26,52 +27,56 @@ không có đường nào để một thông tin ẩn lọt vào tầng train.
 
 ---
 
-## Bước 0 — Cài PyTorch
+## Điều quan trọng nhất: trần độ khớp và `--no-jitter`
 
-```bash
-cd ai-training && python -m venv .venv && ./.venv/Scripts/python.exe -m pip install -r requirements.txt
-```
+Bot heuristic cộng một term `jitter` lấy từ RNG vào điểm của MỌI ứng viên
+(`vote-decision.ts`, `night-scoring.ts`). RNG không có trong observation, nên
+model không bao giờ học được phần đó. Đo trên bộ 200 ván có jitter: ứng viên
+điểm cao nhất **sau khi bỏ jitter** chỉ trùng nước bot đã đi ở **60%** số lượt.
+Đó là trần của mọi model trên dữ liệu ấy — ngưỡng 0,70 là bất khả thi theo
+cấu trúc, không phải vì model yếu.
 
-`.venv` đã tồn tại sẵn với `numpy` — lệnh trên chỉ bổ sung `torch`. Bản CPU nhẹ
-hơn nhiều (~250 MB thay vì ~2,5 GB) và đủ cho MLP này:
+Vì vậy:
 
-```bash
-cd ai-training && ./.venv/Scripts/python.exe -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-```
+1. Sinh dataset train với `--no-jitter` (teacher tất định). Trần trên bộ 20 ván
+   thử là **97,3%**.
+2. `ai:validate-dataset` in dòng `trần độ khớp` cho mọi dataset. Đọc nó TRƯỚC
+   khi đọc agreement của model: model 0,55 trên tập trần 0,60 là gần xong; trên
+   tập trần 0,97 là còn xa.
+3. `--no-jitter` chỉ dành cho dataset behavior cloning. Benchmark
+   champion/challenger vẫn dùng bot thật (có jitter); record self-play ghi
+   `weightsVersion` có đuôi `+nojitter` để không ai replay nhầm bằng preset gốc.
 
-Kiểm:
+---
+
+## Bước 0 — Môi trường Python
+
+`ai-training/.venv` đã có sẵn numpy + torch. Kiểm:
 
 ```bash
 cd ai-training && ./.venv/Scripts/python.exe -c "import torch; print(torch.__version__)"
 ```
 
-> Máy đang chạy Python 3.14. Nếu pip báo không tìm thấy bản torch phù hợp, tạo
-> venv bằng Python 3.12 hoặc 3.13 rồi lặp lại — phần còn lại không đổi.
-
-Self-check của tầng dữ liệu (không cần torch, chạy trong 1 giây):
+Nếu phải tạo lại: dùng Python 3.12 hoặc 3.13, rồi
 
 ```bash
-cd ai-training && ./.venv/Scripts/python.exe tests/test_data.py
+cd ai-training && python -m venv .venv && ./.venv/Scripts/python.exe -m pip install numpy && ./.venv/Scripts/python.exe -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 ```
 
-Kết quả mong đợi: `ok`.
+Hai self-check của tầng Python (không cần dữ liệu thật, ~10 giây):
+
+```bash
+cd ai-training && ./.venv/Scripts/python.exe tests/test_data.py && ./.venv/Scripts/python.exe tests/test_train_smoke.py
+```
+
+Kết quả mong đợi: hai dòng `ok`.
 
 ---
 
-## Bước 1 — Chạy thử vòng train (1 phút)
-
-Dataset thử **đã có sẵn** ở `.tmp/smoke-enc` (20 ván → 994 mẫu, đã kiểm rò rỉ
-SẠCH và đã được loader Python đọc thành công). Chỉ còn một lệnh:
+## Bước 1 — Chạy thử toàn bộ đường ống (2 phút)
 
 ```bash
-cd ai-training && ./.venv/Scripts/python.exe -m masoi_training.train_bc --data ../.tmp/smoke-enc --out ../.tmp/smoke-model --epochs 3
-```
-
-Nếu `.tmp/smoke-enc` không còn, dựng lại bằng ba lệnh này (đã chạy thật, ra
-`dataset SẠCH` và `994 mẫu`):
-
-```bash
-npm run ai:dataset -- --games 20 --players 8 --preset --defense --seed smoke --trajectories .tmp/smoke --trace-games 20 --quiet
+npm run ai:dataset -- --games 20 --players 8 --preset --defense --seed smoke --trajectories .tmp/smoke --trace-games 20 --no-jitter --quiet
 ```
 
 ```bash
@@ -82,13 +87,17 @@ npm run ai:validate-dataset -- .tmp/smoke/trajectories.jsonl
 npm run ai:encode -- --in .tmp/smoke/trajectories.jsonl --out .tmp/smoke-enc
 ```
 
-Với 20 ván thì độ khớp sẽ rất thấp và **điều đó là bình thường** — bước này chỉ
-trả lời một câu hỏi: đường ống có chạy hết từ đầu tới cuối không. Nếu nó in ra
-`epoch 1 ... epoch 3` rồi `Đã ghi ...` thì xong.
+```bash
+cd ai-training && ./.venv/Scripts/python.exe -m masoi_training.train_bc --data ../.tmp/smoke-enc --out ../.tmp/smoke-model --epochs 80
+```
+
+Con số tham chiếu (20 ván, seed `smoke2`, đã chạy thật): 4.180 dòng → 1.299 mẫu
+có nhãn → test agreement **0,49** (top-2 0,67) với 788 mẫu train. Với 20 ván thì
+số này thấp là bình thường; bước này chỉ trả lời "đường ống có chạy hết không".
 
 ---
 
-## Bước 2 — Sinh dataset 10.000 ván (~30 phút, ~2,7 GB)
+## Bước 2 — Sinh dataset 10.000 ván (~30 phút, ~3 GB)
 
 Chạy theo shard 250 ván. Lý do: runner giữ toàn bộ ván trong RAM tới lúc ghi
 file, nên một lần chạy 10.000 ván sẽ hết bộ nhớ trước khi ghi được dòng nào.
@@ -96,13 +105,13 @@ file, nên một lần chạy 10.000 ván sẽ hết bộ nhớ trước khi ghi
 Git Bash:
 
 ```bash
-mkdir -p .tmp/dataset-0001 && : > .tmp/dataset-0001/trajectories.jsonl && for i in $(seq 0 39); do npx tsx apps/server/scripts/selfplay.ts --games 250 --players 8 --preset --defense --seed "bc-$i" --trajectories .tmp/shard --trace-games 250 --quiet > /dev/null && cat .tmp/shard/trajectories.jsonl >> .tmp/dataset-0001/trajectories.jsonl && echo "shard $i: $(wc -l < .tmp/dataset-0001/trajectories.jsonl) dòng"; done
+mkdir -p .tmp/dataset-0002 && : > .tmp/dataset-0002/trajectories.jsonl && for i in $(seq 0 39); do npx tsx apps/server/scripts/selfplay.ts --games 250 --players 8 --preset --defense --seed "bc-$i" --trajectories .tmp/shard --trace-games 250 --no-jitter --quiet > /dev/null && cat .tmp/shard/trajectories.jsonl >> .tmp/dataset-0002/trajectories.jsonl && echo "shard $i: $(wc -l < .tmp/dataset-0002/trajectories.jsonl) dòng"; done
 ```
 
 PowerShell:
 
 ```powershell
-New-Item -ItemType Directory -Force .tmp\dataset-0001 | Out-Null; Set-Content .tmp\dataset-0001\trajectories.jsonl ""; 0..39 | ForEach-Object { npx tsx apps/server/scripts/selfplay.ts --games 250 --players 8 --preset --defense --seed "bc-$_" --trajectories .tmp\shard --trace-games 250 --quiet > $null; Get-Content .tmp\shard\trajectories.jsonl | Add-Content .tmp\dataset-0001\trajectories.jsonl; Write-Host "shard $_ xong" }
+New-Item -ItemType Directory -Force .tmp\dataset-0002 | Out-Null; Set-Content .tmp\dataset-0002\trajectories.jsonl ""; 0..39 | ForEach-Object { npx tsx apps/server/scripts/selfplay.ts --games 250 --players 8 --preset --defense --seed "bc-$_" --trajectories .tmp\shard --trace-games 250 --no-jitter --quiet > $null; Get-Content .tmp\shard\trajectories.jsonl | Add-Content .tmp\dataset-0002\trajectories.jsonl; Write-Host "shard $_ xong" }
 ```
 
 Ý nghĩa từng cờ:
@@ -112,17 +121,17 @@ New-Item -ItemType Directory -Force .tmp\dataset-0001 | Out-Null; Set-Content .t
 | `--preset` | Dùng bộ bài THẬT của ván 8 người, không phải bộ bài mặc định của runner |
 | `--defense` | Bật vòng bào chữa thật; không có nó thì pha DEFENSE không sinh dữ liệu nào |
 | `--trace-games 250` | Bằng số ván mỗi shard — không có trace thì không có trajectory |
-| `--seed "bc-$i"` | Seed khác nhau mỗi shard; trùng seed là 250 ván giống hệt nhau |
+| `--seed "bc-$i"` | Seed khác nhau mỗi shard; `gameId` = `seed:index` nên không trùng giữa các shard |
+| `--no-jitter` | Teacher tất định — xem phần đầu file |
 
 Muốn nhanh hơn để thử trước: đổi `0..39` thành `0..3` (1.000 ván, ~3 phút).
-Đủ để pipeline chạy, chưa đủ để kết luận model tái lập được bot (§16).
 
 ---
 
-## Bước 3 — Kiểm rò rỉ (BẮT BUỘC, §7)
+## Bước 3 — Kiểm rò rỉ và trần (BẮT BUỘC, §7)
 
 ```bash
-npm run ai:validate-dataset -- .tmp/dataset-0001/trajectories.jsonl
+npm run ai:validate-dataset -- .tmp/dataset-0002/trajectories.jsonl
 ```
 
 Phải thấy:
@@ -131,109 +140,117 @@ Phải thấy:
 invalid observations  0
 invalid actions       0
 leak violations       0
+trần độ khớp (§17)    9x.x% — ...
 KẾT LUẬN: dataset SẠCH — train được.
 ```
 
-**Khác 0 thì dừng lại, đừng train.** Con số đó nghĩa là có bug trong knowledge
-boundary, và train tiếp chỉ dạy model khai thác đúng bug đó. Lệnh in ra tối đa
-10 lý do vi phạm kèm số lần — đọc lý do đầu tiên trước.
+**Ba dòng đầu khác 0 thì dừng lại, đừng train.** Con số đó nghĩa là có bug
+trong knowledge boundary, và train tiếp chỉ dạy model khai thác đúng bug đó.
+Lệnh in ra tối đa 10 lý do vi phạm kèm số lần — đọc lý do đầu tiên trước.
 
-Tham chiếu: batch 200 ván đã chạy ra 0/0/0.
+**Trần dưới 90%** nghĩa là quên `--no-jitter`, hoặc bot có thêm nguồn RNG mới
+ngoài jitter. Đừng train trên tập đó rồi kết luận model kém.
+
+Validator kiểm cả các trường riêng tư theo vai mới thêm: nạn nhân bầy chỉ Sói
+và Phù Thuỷ được thấy, bình thuốc chỉ Phù Thuỷ, người đêm trước chỉ Bảo Vệ.
 
 ---
 
 ## Bước 4 — Encode ra tensor
 
 ```bash
-npm run ai:encode -- --in .tmp/dataset-0001/trajectories.jsonl --out .tmp/enc-0001
+npm run ai:encode -- --in .tmp/dataset-0002/trajectories.jsonl --out .tmp/enc-0002
 ```
 
-Kết quả mong đợi (con số theo tỉ lệ của batch 200 ván):
+Kết quả mong đợi (tỉ lệ theo bộ 20 ván):
 
 ```text
-Đã đọc      ~1.600.000 dòng (10.000 ván)
+Đã đọc      ~2.100.000 dòng (10.000 ván)
 TỪ CHỐI     0
-không nhãn  ~1.130.000
-mẫu train   ~470.000  (train ~70% / val ~11% / test ~18%)
-vector      191 chiều, 17 hành động
+không nhãn  ~69%
+mẫu train   ~650.000  (train ~70% / val ~15% / test ~15%)
+vector      365 chiều, 187 hành động
 ```
 
-`không nhãn` cao là ĐÚNG, không phải lỗi: không gian hành động hiện tại chỉ mô
-tả VOTE/NIGHT/HUNTER_SHOT. `SPEECH` và `FINAL_VOTE` (treo/tha) có `targetId`
-nhưng đó không phải một nước đi trong không gian này, nên chúng bị bỏ thay vì
-được gán một nhãn bịa ra.
+`không nhãn` cao là ĐÚNG: không gian hành động chỉ mô tả VOTE/NIGHT/HUNTER_SHOT.
+`SPEECH` và `FINAL_VOTE` (treo/tha) không phải nước đi trong không gian này, và
+lượt đêm của vai không có hành động đêm (Dân, Thợ Săn) cũng không phải.
 
-Chia train/val/test làm theo VÁN (§15), quyết ở tầng TS, nên không có state nào
-của một ván train lọt sang test.
+**Không gian hành động là (loại × ô)**: 11 loại (`CHOOSE` ban ngày + 10
+`NightActionKind`) × 17 ô (16 ghế + "không mục tiêu"). HEAL và POISON cùng một
+người là hai nhãn khác nhau; Phù Thuỷ "giữ thuốc" là nhãn `SKIP:none` thật chứ
+không phải dòng bị bỏ. `meta.json` có `actionNames` để đọc ngược từng chỉ số, và
+`decodeAction` ở TypeScript để runtime dùng.
+
+Observation gồm, mỗi ghế: suspicion, trust, **wolfProbability, threat,
+credibility, influence** (từ `assessPlayers`, cùng hàm scorer dùng), phe đã
+biết (Sói/Làng/Trung lập), kết quả soi, hợp lệ, **nạn nhân bầy, chết đêm qua,
+tỉ lệ phiếu, đang bị xử, Bảo Vệ đã canh**. Toàn cục: pha, loại quyết định, vai,
+tính cách, loại hành động được chào, hai bình thuốc, phiếu không treo.
 
 ---
 
 ## Bước 5 — Behavior cloning
 
 ```bash
-cd ai-training && ./.venv/Scripts/python.exe -m masoi_training.train_bc --data ../.tmp/enc-0001 --out ../.tmp/model-v001 --epochs 20
+cd ai-training && ./.venv/Scripts/python.exe -m masoi_training.train_bc --data ../.tmp/enc-0002 --out ../.tmp/model-v002
 ```
 
-Tham số đáng chỉnh:
+Mặc định: 40 epoch, `--value-weight 0`, và **giữ checkpoint có val agreement
+cao nhất** chứ không phải epoch cuối (`metrics.json` ghi `bestEpoch`).
 
 | Cờ | Mặc định | Khi nào đổi |
 |---|---|---|
-| `--epochs` | 20 | Val agreement còn tăng ở epoch cuối → tăng lên 40 |
+| `--epochs` | 40 | `bestEpoch` bằng epoch cuối → còn đang tăng, tăng lên 80 |
 | `--lr` | 1e-3 | Loss nhảy loạn → giảm còn 3e-4 |
-| `--hidden` | 128 | Chỉ tăng khi val agreement chững mà train agreement cũng chững (thiếu sức chứa, không phải overfit) |
+| `--hidden` | 128 | Chỉ tăng khi val agreement chững mà train loss cũng chững (thiếu sức chứa, không phải overfit) |
 | `--batch-size` | 512 | Máy hết RAM → giảm |
-| `--value-weight` | 0.5 | Value head lấn policy → giảm về 0.1 |
+| `--value-weight` | 0 | Bật (0,1–0,5) khi sang RL cần value head; với BC nó chỉ lấy sức chứa của policy |
 | `--seed` | 12345 | Đổi để kiểm model có ổn định không, không phải để "chọn kết quả đẹp" |
 
-Toàn bộ tập train được nạp lên device một lần (~360 MB float32). Trên CPU thì
-ổn; nếu dùng GPU nhỏ mà OOM, đó là chỗ cần sửa đầu tiên.
+Toàn bộ tập train được nạp lên device một lần (~650k × 365 × 4 byte ≈ 950 MB
+float32). Trên CPU 16 GB thì ổn; nếu OOM, giảm số ván hoặc thêm đọc theo batch.
 
 ---
 
 ## Bước 6 — Đọc kết quả
 
-Số duy nhất quyết định được: **`metrics.test.agreement`** — tỉ lệ model chọn
-đúng hành động mà bot heuristic đã chọn, trên các ván model chưa từng thấy.
-
 ```bash
-cd ai-training && ./.venv/Scripts/python.exe -c "import json;m=json.load(open('../.tmp/model-v001/metrics.json'));print(json.dumps(m['metrics'],indent=2,ensure_ascii=False))"
+cd ai-training && ./.venv/Scripts/python.exe -c "import json;m=json.load(open('../.tmp/model-v002/metrics.json'));print(json.dumps(m['metrics'],indent=2,ensure_ascii=False))"
 ```
 
-Cách đọc:
+Số quyết định: **`metrics.test.agreement`** so với **trần** ở Bước 3.
 
-| test agreement | Nghĩa là | Làm gì |
+| agreement / trần | Nghĩa là | Làm gì |
 |---|---|---|
-| < 0,30 | Model chưa học được gì đáng kể | Kiểm lại observation có đủ đặc trưng không — xem "Giới hạn đã biết" ở dưới |
-| 0,30 – 0,60 | Học được xu hướng, chưa tái lập bot | Tăng epochs/hidden; nếu vẫn chững thì phải làm giàu observation |
-| > 0,70 | Tái lập baseline khá tốt | Đủ điều kiện §17 để tính tới RL |
+| < 0,5 | Model chưa tái lập được phần lớn quyết định | Xem `agreementByDecision` và `agreementByRole`: loại/vai nào kém nhất, term nào của scorer cho loại đó chưa có trong observation |
+| 0,5 – 0,8 | Học được xu hướng | Tăng epochs; nếu `bestEpoch` không ở cuối mà vẫn chững, làm giàu observation cho loại kém nhất |
+| > 0,8 | Tái lập baseline | Đủ điều kiện §17 để tính tới RL |
 
-**Đừng nhìn loss để kết luận.** §17 nói rõ: chưa tái lập được bot thì chưa được
-sang RL. Loss giảm mà agreement không tăng nghĩa là model đang học phân bố của
-lớp đông nhất, không phải học chơi.
+`top2Agreement` là thước đo mềm: nước bot đi nằm trong hai lựa chọn cao nhất
+của model. Nó hữu ích khi so hai model, không phải để qua cổng §17.
 
-`metrics.*.agreementByRole` cho thấy vai nào model bám kém — thường là vai hiếm
-trong dataset (§43, mất cân bằng lớp). Bảng `trainActionDistribution` trong cùng
-file nói tần suất từng lớp hành động; xem nó TRƯỚC khi nghĩ tới việc cân lớp.
+**Đừng nhìn loss để kết luận.** Loss giảm mà agreement không tăng nghĩa là model
+đang học phân bố của lớp đông nhất, không phải học chơi.
 
-`metrics.json` cũng ghi `modelId`, `gitCommit`, `datasetVersion`, `trainingSeed`
-và toàn bộ `trainingConfig` (§46) — một model không truy ngược được về dataset
-và commit đã sinh ra nó là một model không tái lập được.
+`metrics.json` ghi `modelId`, `gitCommit`, `datasetVersion` (`dataset-0002` cho
+định dạng này), `trainingSeed`, `bestEpoch` và toàn bộ `trainingConfig` (§46).
 
 ---
 
-## Giới hạn đã biết (đọc trước khi thất vọng vì con số)
+## Giới hạn đã biết
 
-1. **Observation còn nghèo so với §8.** Hiện chỉ có `suspicion`/`trust` cho mỗi
-   ghế; chưa có `wolfProbability`, `threat`, `credibility`, `influence` — chúng
-   có trong belief state của bot nhưng chưa được trace chụp lại. Nếu agreement
-   chững quanh 0,3–0,5, đây gần như chắc chắn là nguyên nhân, chứ không phải
-   model quá nhỏ.
-2. **Không gian hành động chỉ phủ 36% số quyết định** (VOTE/NIGHT/HUNTER_SHOT).
-   `FINAL_VOTE` và `SPEECH` cần không gian riêng.
+1. **Thám Tử chọn HAI người** (`secondaryTargetId`); nhãn hiện chỉ giữ người
+   thứ nhất. Kết quả soi của Thám Tử và Sói Pháp Sư cũng chưa vào observation.
+2. **`FINAL_VOTE` và `SPEECH` chưa có không gian hành động** — cần làm khi tới lượt.
 3. **Chưa có RL, chưa có champion/challenger.** §55 chặn cả hai cho tới khi
-   behavior cloning đạt.
-4. **`train_bc.py` chưa từng chạy với torch thật.** Bước 1 tồn tại chính vì lý
-   do này.
+   behavior cloning đạt. Khi cắm model vào runtime, `decodeAction` trả (loại,
+   mục tiêu) — `hybridPolicyModel` hiện chỉ nhận điểm theo mục tiêu ban ngày,
+   nên phần đêm cần một seam mới.
+4. **Ghế chính tắc là sort-rồi-xoay**, chưa phải ghế ngồi thật của phòng.
+5. **Validator cho phép biết vai người đã chết bất kể `revealRoleOnDeath`.**
+   Dataset self-play hiện luôn bật tiết lộ; nếu sinh dữ liệu từ phòng tắt tiết
+   lộ, phải siết luật này trước.
 
 ---
 
@@ -241,11 +258,11 @@ và commit đã sinh ra nó là một model không tái lập được.
 
 | Việc | Lệnh |
 |---|---|
-| Sinh trajectory | `npm run ai:dataset -- --games N --players 8 --preset --defense --seed S --trajectories DIR --trace-games N` |
-| Kiểm rò rỉ | `npm run ai:validate-dataset -- DIR/trajectories.jsonl` |
+| Sinh trajectory | `npm run ai:dataset -- --games N --players 8 --preset --defense --seed S --trajectories DIR --trace-games N --no-jitter` |
+| Kiểm rò rỉ + trần | `npm run ai:validate-dataset -- DIR/trajectories.jsonl` |
 | Encode | `npm run ai:encode -- --in DIR/trajectories.jsonl --out ENC` |
 | Train | `python -m masoi_training.train_bc --data ENC --out MODEL` |
-| Self-check dữ liệu | `python tests/test_data.py` |
+| Self-check Python | `python tests/test_data.py && python tests/test_train_smoke.py` |
 | Test TS | `npm test` |
 
 Chi tiết kiến trúc và lý do từng quyết định: [BOT_SELF_LEARNING_AUDIT.md](BOT_SELF_LEARNING_AUDIT.md).

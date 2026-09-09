@@ -95,7 +95,7 @@ describe("gameToTrajectories (PR7 — trajectory export)", () => {
     expect(first.turn).toBe(2);
     expect(first.legalActions).toEqual(["p1", "p2", "p3", "__none__"]);
     expect(first.candidates).toHaveLength(2);
-    expect(first.selectedAction).toEqual({ targetId: "p2", decision: "VOTE", label: "bầu" });
+    expect(first.selectedAction).toEqual({ targetId: "p2", decision: "VOTE", label: "bầu", kind: null });
     expect(first.finalWinner).toBe("village");
   });
 
