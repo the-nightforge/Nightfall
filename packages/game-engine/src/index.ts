@@ -28,6 +28,7 @@ export * from "./bot/belief/player-assessment";
 export * from "./bot/decision/vote-decision";
 export * from "./bot/decision/trial-decision";
 export * from "./bot/decision/claim-decision";
+export * from "./bot/decision/wolf-bluff";
 export * from "./bot/decision/defense-decision";
 export * from "./bot/decision/defense-scheduler";
 export * from "./bot/decision/ghost-decision";

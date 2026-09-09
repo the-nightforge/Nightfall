@@ -3,6 +3,7 @@ import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import { fnv1a32 } from "../hash";
 import { isHumanTable } from "../knowledge";
 import type { BotBrainState, BotDecisionContext, BotMemory, BotRng } from "../types";
+import { wolfBluffPick } from "./wolf-bluff";
 
 /**
  * Vai BOT công khai nhận trong Ngày Sự Thật.
@@ -396,7 +397,11 @@ export function decideChatClaim(
     // để nó trong danh sách nghĩa là mất trắng lượt bluff của cả vòng đó.
     const spoken = new Set(state.claims.map((memory) => memory.actorId));
     const pack = roster.filter((id) => alivePlayers.has(id) && !spoken.has(id));
-    if (wolfBluffSeat(pack, roster, knowledge.round) === me) {
+    // Vòng xoay hash là PRIOR, không còn là đáp án cuối: `wolfBluffPick` pha nó
+    // với điểm chiến lược của §17. `wolfBluffScoreShare = 0` (v1..v26) trả về
+    // đúng ghế hash, nên nhánh này không lệch một bit ở các preset cũ.
+    const hashSeat = wolfBluffSeat(pack, roster, knowledge.round);
+    if (wolfBluffPick(knowledge, state, pack, hashSeat, weights) === me) {
       const dare =
         weights.claim.wolfBluffChance *
         state.personality.deceptionSkill *

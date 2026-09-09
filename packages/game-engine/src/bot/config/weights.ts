@@ -775,6 +775,34 @@ export interface ClaimWeights {
   knownBluffPenalty: number;
   /** Prior của `profileStrength`: hồ sơ phải có bấy nhiêu mẫu mới nặng bằng nửa. */
   profilePriorStrength: number;
+  /**
+   * Phần ĐIỂM CHIẾN LƯỢC trong việc chọn ghế khai láo của bầy Sói, `[0,1]`
+   * (COMMUNICATION §17). `0` là vòng xoay hash thuần của Phase 3, tức TẮT.
+   *
+   * Là một phép PHA, không phải một công tắc: `share x score + (1 - share) x
+   * (ghế hash được 1 điểm)`. Mọi giá trị ở giữa đều có nghĩa - hash là một
+   * prior mạnh mà chỉ một ghế rõ ràng tốt hơn mới vượt được. Xem
+   * `decision/wolf-bluff.ts`.
+   */
+  wolfBluffScoreShare: number;
+  /**
+   * Áp lực (`ConversationState.pressureOnMe`, `[0,1]`) dưới mức này thì lời khai
+   * được nói NHẸ (COMMUNICATION §16 "HOW STRONGLY"). Từ mức này tới gấp đôi nó
+   * là khai VỪA; trên nữa là khai DỨT KHOÁT. `0` TẮT - mọi lời khai đều dứt
+   * khoát, đúng hành vi trước PR 7.
+   *
+   * MỘT nút vặn cho ba bậc, không phải hai: hai ngưỡng rời nhau chỉ có nghĩa
+   * nếu có số đo nói chúng nên rời nhau, và hiện chưa có.
+   */
+  softClaimPressureCeiling: number;
+  /**
+   * Áp lực phiếu (`0..1`) mà từ đó một con Sói thôi bênh đồng bọn đang bị dồn
+   * (COMMUNICATION §18). `0` TẮT - Sói cứ bênh, đúng hành vi trước PR 7.
+   *
+   * Dưới NỬA mức này, và bản thân chưa gánh phiếu nào, thì bênh ra mặt; ở giữa
+   * thì chỉ gợn lại một câu; từ mức này trở lên thì không đụng vào chuyện đó.
+   */
+  wolfDistancePressure: number;
 }
 
 export interface LookAheadWeights {
@@ -885,6 +913,9 @@ const UNIT_INTERVAL_FIELDS: ReadonlyArray<[keyof BotWeights, string]> = [
   ["recency", "memoryDecayPerRound"],
   ["recency", "profileDecayPerRound"],
   ["selfPreservation", "guardSuspicionPenalty"],
+  ["claim", "wolfBluffScoreShare"],
+  ["claim", "softClaimPressureCeiling"],
+  ["claim", "wolfDistancePressure"],
   ["conversation", "questionIgnoreFloor"],
   ["deceptionRisk", "abstainPressureCeiling"],
   ["aggression", "villageAbstainPressureCeiling"],
@@ -1342,6 +1373,9 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     // Tắt ở v1..v11; v12 bật. Không đổi một bit của preset cũ vì cổng `0`.
     knownBluffPenalty: 0,
     profilePriorStrength: 2,
+    wolfBluffScoreShare: 0,
+    softClaimPressureCeiling: 0,
+    wolfDistancePressure: 0,
   }),
 
   /**
@@ -1623,6 +1657,9 @@ export const BOT_WEIGHTS_V4: BotWeights = Object.freeze({
     wolfBluffFromRound: 2,
     knownBluffPenalty: 0,
     profilePriorStrength: 2,
+    wolfBluffScoreShare: 0,
+    softClaimPressureCeiling: 0,
+    wolfDistancePressure: 0,
   }),
 });
 
@@ -2548,6 +2585,50 @@ export const BOT_WEIGHTS_V26: BotWeights = Object.freeze({
   conversation: Object.freeze({
     ...BOT_WEIGHTS_V25.conversation,
     persuasionMinSamples: 4,
+  }),
+});
+
+/**
+ * Cấu hình v27 - lời khai và lời nói dối có chiến lược (COMMUNICATION §16, §17).
+ *
+ * BA ô đổi so v26, cả ba đều thuộc nhóm `claim`:
+ *
+ * - `wolfBluffScoreShare` 0 -> 0.85 (§17). Ghế đứng ra khai láo của bầy Sói
+ *   không còn là một vòng xoay hash mù. Hash vẫn ở đó làm PRIOR - công thức là
+ *   một phép pha, `0.85 x điểm + 0.15 x (ghế hash được 1 điểm)` - nên vòng xoay
+ *   vẫn quyết khi bốn số hạng không phân định được ai hơn ai, đúng như §17 dặn
+ *   ("giữ hash làm fallback"). Điểm gồm uy tín, mức bàn dễ nghe theo (chính là
+ *   `persuadability` của PR 6 - consumer đầu tiên của nó), mức chưa bị soi, trừ
+ *   đi mức đang gánh phiếu.
+ *
+ *   `0.85`, KHÔNG phải `0.6` như bản nháp đầu: quét 300 ván cho thấy ở `0.6`
+ *   prior vòng xoay nặng tới mức điểm số gần như không bao giờ thắng nổi - chỉ
+ *   2/300 ván đổi lời nói, tức một tính năng nằm im. Đường cong đo được:
+ *   `0.6 -> 2/300`, `0.75 -> 35/300`, `0.85 -> 58/300`, `0.95 -> 94/300`. Ở
+ *   MỌI mức, "cùng một ghế khai hai lượt liền" vẫn bằng 0 - vai trò chống lặp
+ *   của vòng xoay hoá ra đã được `state.myClaim` gánh sẵn, nên phần việc còn
+ *   lại của hash là phá hoà một cách tất định, và nó vẫn làm đúng việc đó.
+ * - `softClaimPressureCeiling` 0 -> 0.2 (§16). Một lời khai chủ động lúc không
+ *   ai đụng tới mình được nói NHẸ; càng bị dồn thì càng nói dứt khoát. Trước
+ *   v27 mọi lời khai đều mang đúng một giọng, bất kể tình thế.
+ * - `wolfDistancePressure` 0 -> 0.34 (§18). Một con Sói không còn bênh đồng bọn
+ *   bất kể tình thế: đang tự gánh phiếu thì nó im, và chỉ bênh ra mặt khi cả
+ *   hai còn sạch.
+ *
+ * KHÔNG thêm lượt rút RNG nào: cả hai đều thuần, và cả hai đều quy về hành vi
+ * cũ ở giá trị `0`.
+ *
+ * KHÔNG mặc định - bench v27 so v21 trước, kỷ luật v19.
+ */
+export const BOT_WEIGHTS_V27: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V26,
+  version: "27.0.0",
+
+  claim: Object.freeze({
+    ...BOT_WEIGHTS_V26.claim,
+    wolfBluffScoreShare: 0.85,
+    softClaimPressureCeiling: 0.2,
+    wolfDistancePressure: 0.34,
   }),
 });
 

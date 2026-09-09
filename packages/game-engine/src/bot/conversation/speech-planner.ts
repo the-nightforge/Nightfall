@@ -2,9 +2,10 @@ import {
   buildCommunicationProfile,
   type PersuasionStyle,
 } from "../belief/communication-profile";
+import { roleTeam } from "@masoi/shared";
 import { credibilityOf } from "../belief/player-assessment";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
-import { decideChatClaim, seerHoldsForHumans } from "../decision/claim-decision";
+import { decideChatClaim, seerHoldsForHumans, type ClaimKind } from "../decision/claim-decision";
 import type { BotSpeechStyle } from "../personality/speech-style";
 import type { DecisionProbeCollector } from "../trace/trace";
 import type {
@@ -25,6 +26,7 @@ import {
   stanceOfKind,
   type NarrativePosition,
 } from "./narrative";
+import { wolfDistanceStance } from "../decision/wolf-bluff";
 import { chooseResponseStrategy, intentionFor } from "./question-policy";
 import { hasRecentSemantic } from "./speech-memory";
 import { findConversationTriggers, type ConversationTrigger } from "./triggers";
@@ -319,6 +321,42 @@ function questionDrafts(
 }
 
 /**
+ * Lời khai này được nói NẶNG tới đâu (COMMUNICATION §16 "HOW STRONGLY").
+ *
+ * Ba bậc, chọn theo đúng bậc thang §16 mô tả:
+ *
+ * ```text
+ * an toàn        -> khai nhẹ      (SOFT)
+ * bị dồn vừa     -> khai vừa      (NEUTRAL)
+ * bị dồn mạnh    -> khai dứt khoát (giọng của tính cách)
+ * ```
+ *
+ * `COUNTER` và `UNDER_FIRE` luôn ở bậc cao nhất, không hỏi áp lực: cả hai theo
+ * định nghĩa đã là lúc bị dồn: một bên bị mạo danh, một bên sắp bị treo. Đọc
+ * lại áp lực ở đó chỉ tạo thêm một đường để nói nhẹ đúng lúc không được nhẹ.
+ *
+ * `softClaimPressureCeiling = 0` (v1..v26) làm mọi so sánh sai và trả về đúng
+ * giọng cũ - không một bit nào lệch.
+ *
+ * Chỉ dựng `ConversationState` khi nút vặn thật sự bật: nó quét cả memory, và
+ * lời khai là nhánh chạy trước hết ở MỌI lượt nói.
+ */
+function claimTone(
+  kind: ClaimKind,
+  socialSituation: () => ConversationState,
+  style: BotSpeechStyle,
+  weights: BotWeights,
+): BotSpeechTone {
+  const ceiling = weights.claim.softClaimPressureCeiling;
+  if (ceiling <= 0 || kind !== "PROACTIVE") return toneFor("ACCUSE", style);
+
+  const pressure = socialSituation().pressureOnMe;
+  if (pressure < ceiling) return "SOFT";
+  if (pressure < ceiling * 2) return "NEUTRAL";
+  return toneFor("ACCUSE", style);
+}
+
+/**
  * Vì sao im lặng, cho trace.
  *
  * Hàm riêng chứ không phải một biểu thức tại chỗ: `conversation` chỉ được gán
@@ -351,6 +389,12 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
       ? null
       : intention;
 
+  // Dựng một lần, dùng chung cho cả ba đường, và CHỈ khi có ai đó thật sự đọc:
+  // nó quét cả memory, và một bảng không ai đọc là một vòng lặp trả tiền không.
+  let conversation: ConversationState | null = null;
+  const socialSituation = (): ConversationState =>
+    (conversation ??= buildConversationState(context, state, weights));
+
   // ---- 0. Có đáng khai vai lúc này không ----
   //
   // Đứng TRÊN cả hai đường kia: một lời khai là nước đi nặng nhất mà lời nói
@@ -374,7 +418,7 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
         .filter((item) => item.kind === "SEER_RESULT_WOLF")
         .slice(0, weights.limits.intentionEvidence)
         .map((item) => ({ ...item })),
-      tone: toneFor("ACCUSE", style),
+      tone: claimTone(claim.kind, socialSituation, style, weights),
       reason: claim.reason,
     });
     if (intention) return intention;
@@ -383,12 +427,6 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
   // Bằng chứng nói ra được lượt này. Thuần, nên tính sớm không lệch chuỗi RNG;
   // cả câu đáp `ANSWER_WITH_EVIDENCE` lẫn đường tự mở lời đều đọc đúng nó.
   const usable = sayableEvidence(context, state, vote, weights);
-
-  // Dựng một lần, dùng chung cho cả hai đường, và CHỈ khi có ai đó thật sự đọc:
-  // nó quét cả memory, và một bảng không ai đọc là một vòng lặp trả tiền không.
-  let conversation: ConversationState | null = null;
-  const socialSituation = (): ConversationState =>
-    (conversation ??= buildConversationState(context, state, weights));
 
   /**
    * Lập trường BOT đã CÔNG KHAI nêu ra, hoặc `null` khi cơ chế tắt (§15).
@@ -399,6 +437,44 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
    */
   const narrative: Record<string, NarrativePosition> | null =
     weights.conversation.narrativeMemoryRounds > 0 ? buildNarrative(state, weights) : null;
+
+  /**
+   * Đồng bọn Sói còn sống, hoặc rỗng khi BOT không phải Sói (§18).
+   *
+   * `knownRoles` chỉ liệt kê cả bầy khi viewer LÀ Sói - engine lọc theo vai, và
+   * đó là cổng duy nhất. Một con Dân Làng đọc ra tập rỗng, nên nhánh giữ khoảng
+   * cách bên dưới không tồn tại với nó.
+   */
+  const packAllies = new Set(
+    Object.entries(context.knowledge.knownRoles)
+      .filter(([id, known]) => id !== state.playerId && roleTeam(known) === "wolves")
+      .map(([id]) => id),
+  );
+
+  /**
+   * Lọc ứng viên theo khoảng cách BOT muốn giữ với một đồng bọn đang bị dồn.
+   *
+   * Trả về danh sách RỖNG là bỏ qua cả trigger mà không rút số - cùng cơ chế
+   * `IGNORE` của PR 4.
+   */
+  const applyDistancing = (
+    trigger: ConversationTrigger,
+    drafts: BotSpeechIntention[],
+  ): BotSpeechIntention[] => {
+    if (!packAllies.has(trigger.subjectId)) return drafts;
+    switch (
+      wolfDistanceStance(context.knowledge, trigger.subjectId, state.playerId, weights)
+    ) {
+      case "DEFEND":
+        return drafts;
+      case "IGNORE":
+        return [];
+      default:
+        // Gợn lại thì bỏ đúng ứng viên BÊNH; ứng viên kế của
+        // `ACCUSED_MY_TRUSTED` là `DISAGREE`, thứ không đứng hẳn về phía ai.
+        return drafts.filter((draft) => draft.kind !== "DEFEND");
+    }
+  };
 
   /** Ý định này có đảo ngược một lập trường còn hiệu lực không. */
   const selfContradicting = (draft: BotSpeechIntention): boolean => {
@@ -444,7 +520,8 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
      * RỖNG nghĩa là bỏ qua trigger này mà KHÔNG rút số - đó là `IGNORE`, và né
      * một câu hỏi là một nước đi hợp lệ (spec §28).
      */
-    const drafts: BotSpeechIntention[] =
+    const drafts: BotSpeechIntention[] = applyDistancing(
+      trigger,
       questionIgnoreFloor > 0 && trigger.kind === "QUESTIONED_ME"
         ? questionDrafts(trigger, style, state, vote, usable, socialSituation(), weights)
         : ((listener) =>
@@ -464,7 +541,8 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
                 listener === null
                   ? `phản hồi ${trigger.kind}`
                   : `phản hồi ${trigger.kind} theo kiểu ${listener}`,
-            })))(persuasionOf(trigger.actorId));
+            })))(persuasionOf(trigger.actorId)),
+    );
 
     for (const draft of drafts) {
       // Bênh một người mình vừa công khai tố (hoặc ngược lại) mà không nói gì
