@@ -4,8 +4,10 @@ import { createInterface } from "node:readline";
 import { resolve, join } from "node:path";
 import { ROLES } from "@masoi/shared";
 import {
+  ACTION_KINDS,
   DECISION_KINDS,
   DEFAULT_MAX_SEATS,
+  actionNames,
   actionSize,
   encodeObservation,
   observationFeatureNames,
@@ -90,10 +92,6 @@ async function main(): Promise<void> {
   const obsSize = observationSize(options.maxSeats);
   const actSize = actionSize(options.maxSeats);
   const roleIndex = new Map(ROLES.map((role, index) => [role as string, index]));
-  // Loại quyết định cũng ra một cột riêng: nó đã nằm trong vector dưới dạng
-  // one-hot, nhưng tầng train cần nó ở dạng NHÃN để tách được số đo theo từng
-  // loại. Một con số 0,50 gộp chung không nói được model bám tốt lượt bầu hay
-  // lượt đêm, mà hai thứ đó là hai bài toán khác nhau.
   const decisionIndex = new Map(DECISION_KINDS.map((kind, index) => [kind as string, index]));
 
   const streams = {
@@ -168,7 +166,9 @@ async function main(): Promise<void> {
 
   // §46: mọi model train ra từ tập này phải truy được về đúng tập này.
   const meta = {
-    datasetVersion: "dataset-0001",
+    // Tăng khi ĐỊNH DẠNG đổi (chiều vector, không gian hành động), để một
+    // model cũ không bao giờ được nạp lên tensor mới mà không ai biết.
+    datasetVersion: "dataset-0002",
     gitCommit: currentCommit(),
     source: resolve(options.input),
     rows,
@@ -182,8 +182,10 @@ async function main(): Promise<void> {
     splitCounts: perSplit,
     splitCode: SPLIT_CODE,
     roles: [...ROLES],
-    decisionKinds: [...DECISION_KINDS],
+    decisions: [...DECISION_KINDS],
+    actionKinds: [...ACTION_KINDS],
     featureNames: observationFeatureNames(options.maxSeats),
+    actionNames: actionNames(options.maxSeats),
   };
   writeFileSync(join(outDir, "meta.json"), `${JSON.stringify(meta, null, 2)}\n`, "utf8");
 

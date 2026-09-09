@@ -11,6 +11,7 @@ Chạy:
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import subprocess
 from pathlib import Path
@@ -36,12 +37,21 @@ def batches(count: int, size: int, generator: torch.Generator):
         yield order[start : start + size]
 
 
-def evaluate(model: PolicyValueNet, data, device: torch.device) -> dict:
-    """Độ khớp với bot heuristic, tổng thể + theo vai + theo loại quyết định (§28).
+def _group_means(correct: np.ndarray, groups: np.ndarray, names: list[str]) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for index in np.unique(groups):
+        keep = groups == index
+        name = names[int(index)] if int(index) < len(names) else str(index)
+        out[name] = round(float(correct[keep].mean()), 4)
+    return out
 
-    Tách theo loại quyết định vì VOTE và NIGHT là hai bài toán khác nhau đi chung
-    một model: một con số gộp 0,50 không nói được model bám tốt lượt bầu hay lượt
-    đêm, mà đó chính là câu hỏi quyết định nên làm giàu đặc trưng nào tiếp theo.
+
+def evaluate(model: PolicyValueNet, data, device: torch.device) -> dict:
+    """Độ khớp với bot heuristic: tổng thể, theo vai (§28) và theo loại quyết định.
+
+    `agreement` là argmax trùng nước bot đã đi. `top2Agreement` là nước đó nằm
+    trong hai lựa chọn cao nhất của model — thước đo mềm hơn, để nhìn thấy
+    tiến bộ trên tập có jitter, nơi argmax bị chặn trần bởi RNG của chính bot.
     """
     if len(data) == 0:
         return {"samples": 0}
@@ -57,45 +67,35 @@ def evaluate(model: PolicyValueNet, data, device: torch.device) -> dict:
         loss = nn.functional.cross_entropy(logits, actions).item()
         predicted = logits.argmax(dim=1)
         correct = (predicted == actions).cpu().numpy()
+        top2 = logits.topk(2, dim=1).indices
+        in_top2 = (top2 == actions.unsqueeze(1)).any(dim=1).cpu().numpy()
 
-    def breakdown(codes: np.ndarray, names: list) -> dict:
-        out = {}
-        for index in np.unique(codes):
-            keep = codes == index
-            label = names[int(index)] if int(index) < len(names) else str(index)
-            out[label] = {
-                "agreement": round(float(correct[keep].mean()), 4),
-                "samples": int(keep.sum()),
-            }
-        return out
-
-    metrics = {
+    return {
         "samples": len(data),
         "policyLoss": round(loss, 4),
         "agreement": round(float(correct.mean()), 4),
+        "top2Agreement": round(float(in_top2.mean()), 4),
         "valueMae": round(float((value - rewards).abs().mean().item()), 4),
-        "agreementByRole": {
-            role: entry["agreement"]
-            for role, entry in breakdown(data.roles, data.meta["roles"]).items()
-        },
+        "agreementByRole": _group_means(correct, data.roles, data.meta["roles"]),
+        "agreementByDecision": _group_means(
+            correct, data.decisions, data.meta.get("decisions", [])
+        ),
     }
-    if data.decisions.size:
-        metrics["agreementByDecision"] = breakdown(
-            data.decisions, data.meta.get("decisionKinds", [])
-        )
-    return metrics
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", required=True, help="Thư mục do ai:encode ghi ra")
     parser.add_argument("--out", required=True, help="Thư mục nhận model + metrics")
-    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--hidden", type=int, default=128)
     # §21: reward cuối ván là nhãn của value head, KHÔNG phải của policy head.
-    parser.add_argument("--value-weight", type=float, default=0.5)
+    # Mặc định 0 cho behavior cloning: một timestep đơn lẻ gần như không dự
+    # đoán được kết cục (MAE ≈ 1.0, tức đoán 0), nên trọng số dương chỉ lấy
+    # sức chứa của policy head mà không đổi lại gì. Bật lên khi tới RL.
+    parser.add_argument("--value-weight", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=12345)
     parser.add_argument("--model-id", default="policy-v001")
     args = parser.parse_args()
@@ -121,6 +121,11 @@ def main() -> None:
     rewards = torch.from_numpy(train.rewards).to(device)
 
     history = []
+    # Giữ trọng số của epoch có val agreement cao nhất, không phải epoch cuối:
+    # với tập nhỏ, đường cong còn nhiễu và epoch cuối không phải epoch tốt nhất.
+    best_state = copy.deepcopy(model.state_dict())
+    best_epoch = 0
+    best_agreement = -1.0
     for epoch in range(1, args.epochs + 1):
         model.train()
         total = 0.0
@@ -144,10 +149,18 @@ def main() -> None:
         row = {"epoch": epoch, "trainLoss": round(total / max(seen, 1), 4)}
         row.update({f"val_{k}": v for k, v in evaluate(model, validation, device).items()})
         history.append(row)
+        agreement = row.get("val_agreement")
+        if agreement is not None and agreement > best_agreement:
+            best_agreement = agreement
+            best_epoch = epoch
+            best_state = copy.deepcopy(model.state_dict())
         print(
             f"epoch {epoch:>3}  loss {row['trainLoss']:.4f}"
             f"  val agreement {row.get('val_agreement', float('nan'))}"
         )
+
+    if best_epoch > 0:
+        model.load_state_dict(best_state)
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -185,14 +198,15 @@ def main() -> None:
         "obsSize": full.obs_size,
         "actionSize": full.action_size,
         "splitSizes": {name: len(full.split(name)) for name in SPLIT_NAMES},
+        "bestEpoch": best_epoch,
         # §43: bảng này để người đọc thấy mất cân bằng lớp, không để tự động cân.
         "trainActionDistribution": action_distribution(train),
         "history": history,
         "metrics": {
-            # Có mặt để phân biệt HAI nguyên nhân trông giống nhau từ ngoài:
-            # train ≈ val nghĩa là thiếu đặc trưng hoặc thiếu sức chứa (underfit);
-            # train ≫ val nghĩa là overfit. Hai chẩn đoán đó dẫn tới hai việc
-            # trái ngược nhau, nên thiếu số này là đoán mò.
+            # Phân biệt HAI nguyên nhân trông giống nhau từ ngoài: train ≈ val
+            # nghĩa là underfit (model chưa khai thác hết thứ nó đang thấy, hoặc
+            # observation không đủ để quyết định); train ≫ val nghĩa là overfit.
+            # Hai chẩn đoán dẫn tới hai việc trái ngược nhau.
             "train": evaluate(model, train, device),
             "validation": evaluate(model, validation, device),
             "test": evaluate(model, test, device),
@@ -202,8 +216,26 @@ def main() -> None:
     (out / "metrics.json").write_text(json.dumps(report, indent=2), encoding="utf8")
 
     test_metrics = report["metrics"]["test"]
-    print(f"\nĐã ghi {out}")
-    print(f"test agreement với bot heuristic: {test_metrics.get('agreement')}")
+    print(f"\nĐã ghi {out} (epoch tốt nhất: {best_epoch})")
+    for name in ("train", "validation", "test"):
+        entry = report["metrics"][name]
+        print(
+            f"  {name:<11} agreement {entry.get('agreement')}"
+            f"  (top-2 {entry.get('top2Agreement')})"
+        )
+
+    train_score = report["metrics"]["train"].get("agreement", 0)
+    gap = train_score - report["metrics"]["validation"].get("agreement", 0)
+    print(
+        "\nCHẨN ĐOÁN: "
+        + (
+            "overfit — giảm hidden/epochs hoặc thêm dữ liệu"
+            if gap > 0.05
+            else "underfit — model chưa khai thác hết thứ nó ĐANG thấy, "
+            "hoặc observation chưa đủ để quyết định"
+        )
+        + f"  (train − val = {gap:+.4f})"
+    )
     if onnx_error:
         print(f"CẢNH BÁO: không export được ONNX — {onnx_error}")
 

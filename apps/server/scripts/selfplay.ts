@@ -52,6 +52,16 @@ interface Options {
   traces: string | null;
   /** Trần số ván được ghi trace. Chỉ có nghĩa khi `traces` khác `null`. */
   traceGames: number;
+  /**
+   * Tắt term `jitter` của scorer (`confidence.jitterSpan = 0`).
+   *
+   * Dành cho sinh dataset behavior cloning: jitter là RNG cộng thẳng vào điểm
+   * ứng viên, không có trong observation, và trên bộ 200 ván nó quyết định
+   * 40% số nước đi — trần độ khớp của mọi model là 0,60 chừng nào nó còn bật.
+   * Đo bằng `ai:validate-dataset` (dòng "trần độ khớp"). KHÔNG dùng cho
+   * benchmark champion/challenger: bot thật vẫn có jitter.
+   */
+  noJitter: boolean;
 }
 
 /**
@@ -83,6 +93,7 @@ function usage(): string {
     "  --traces <thư mục>  Ghi trace quyết định ra JSONL, mỗi ván một file (mặc định: tắt)",
     "  --trajectories <dir> Ghi trajectory train (§22) ra JSONL, một file chung (mặc định: tắt)",
     `  --trace-games <số>  Số ván đầu được ghi trace (mặc định: ${DEFAULT_TRACE_GAMES})`,
+    "  --no-jitter         Tắt term jitter (teacher tất định cho behavior cloning; xem BOT_SELF_LEARNING_TRAINING.md)",
     "  --quiet             Chỉ in JSON, không in bản tóm tắt",
     "",
     "Đọc trace:  npm run trace-view -- <file.jsonl> [--bot <id>]",
@@ -107,6 +118,7 @@ function parseArgs(argv: readonly string[]): Options {
     traces: null,
     traceGames: DEFAULT_TRACE_GAMES,
     trajectories: null,
+    noJitter: false,
   };
 
   const number = (raw: string | undefined, flag: string): number => {
@@ -167,6 +179,9 @@ function parseArgs(argv: readonly string[]): Options {
       case "--trace-games":
         options.traceGames = number(argv[++i], flag);
         break;
+      case "--no-jitter":
+        options.noJitter = true;
+        break;
       case "--quiet":
         options.quiet = true;
         break;
@@ -180,7 +195,22 @@ function parseArgs(argv: readonly string[]): Options {
     }
   }
 
+  if (options.noJitter) options.weights = withoutJitter(options.weights);
   return options;
+}
+
+/**
+ * Bản sao trọng số với jitter tắt. Đổi `version` theo, vì "đổi giá trị bất kỳ
+ * là phải đổi version" (`BotWeights`): record self-play ghi version này, và
+ * `replayGame` sẽ từ chối chạy lại nó bằng preset gốc thay vì lặng lẽ ra một
+ * ván khác.
+ */
+function withoutJitter(weights: BotWeights): BotWeights {
+  return {
+    ...weights,
+    version: `${weights.version}+nojitter`,
+    confidence: { ...weights.confidence, jitterSpan: 0 },
+  };
 }
 
 function presetDeck(playerCount: number): RoomConfig {

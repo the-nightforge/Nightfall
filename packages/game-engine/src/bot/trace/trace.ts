@@ -36,8 +36,26 @@ export interface TraceCandidate {
 
 export type TraceDecisionKind = "VOTE" | "NIGHT" | "FINAL_VOTE" | "HUNTER_SHOT" | "SPEECH";
 
+export interface BeliefSnapshotEntry {
+  suspicion: number;
+  trust: number;
+  /**
+   * Bốn scalar của `PlayerAssessment` (belief/player-assessment.ts), 0..1.
+   *
+   * Chỉ có với người CÒN SỐNG lúc chụp, vì `assessPlayers` chỉ tính cho họ.
+   * Optional vì trace ghi trước bản này không có; encoder coi thiếu là 0.
+   * Đây là những đại lượng có trọng số lớn nhất trong scorer (threat ~46
+   * điểm, so với belief ~2), nên thiếu chúng thì behavior cloning không có
+   * đường tái lập quyết định của bot.
+   */
+  wolfProbability?: number;
+  threat?: number;
+  credibility?: number;
+  influence?: number;
+}
+
 /** Ảnh chụp belief; hai bản trước/sau cho thấy quan sát vừa rồi đã đổi gì. */
-export type BeliefSnapshot = Record<string, { suspicion: number; trust: number }>;
+export type BeliefSnapshot = Record<string, BeliefSnapshotEntry>;
 
 /**
  * Ảnh chụp knowledge ĐÃ LỌC.
@@ -64,6 +82,26 @@ export interface TraceKnowledgeSnapshot {
   hunterLegalTargets?: string[] | null;
   knownRoles: Record<string, Role>;
   seerResult: { targetId: string; isWolf: boolean } | null;
+  /**
+   * Các trường dưới đây là bản sao thêm từ `BotKnowledgeView`, mỗi trường đã
+   * được engine lọc theo quyền của chính bot. Tất cả optional vì trace cũ
+   * không có; tầng trajectory đổi `undefined` thành giá trị rỗng tương ứng.
+   */
+  /** `night.wolfTarget`: nạn nhân bầy đã chốt. Chỉ Sói, và Phù Thuỷ sau khi khoá. */
+  nightWolfTarget?: string | null;
+  /** `night.legalActions`: loại hành động đêm được chào (gồm SKIP của Phù Thuỷ). */
+  nightLegalActions?: string[] | null;
+  /** `night.healUsed` / `night.poisonUsed`: chỉ Phù Thuỷ thấy true. */
+  healUsed?: boolean;
+  poisonUsed?: boolean;
+  /** `night.guardPrevious`: chỉ Bảo Vệ thấy. */
+  guardPrevious?: string | null;
+  /** `lastNightDeaths[].playerId`: công khai với cả bàn. */
+  lastNightDeaths?: string[];
+  /** `currentVoteCounts`: công khai. */
+  voteCounts?: { players: Record<string, number>; noElimination: number };
+  /** `trialAccusedId`: công khai. */
+  trialAccusedId?: string | null;
 }
 
 export interface BotDecisionTrace {
@@ -82,7 +120,18 @@ export interface BotDecisionTrace {
    * view của chính nó. Nó có thể nhắc tới vai thật của người nói, y như
    * `knowledgeSnapshot.knownRoles` đã làm.
    */
-  chosen: { targetId: string | null; label: string; reason?: string };
+  chosen: {
+    targetId: string | null;
+    label: string;
+    reason?: string;
+    /**
+     * Loại hành động đêm (`NightActionKind`) khi `decision === "NIGHT"`; `null`
+     * là bot chủ động không làm gì. Không có mặt ở quyết định ban ngày. `label`
+     * là chữ để người đọc, trường này là dữ liệu cho tầng train: HEAL và POISON
+     * cùng một mục tiêu là hai nước đi khác nhau, và nhãn phải nói được điều đó.
+     */
+    actionKind?: string | null;
+  };
   candidates: TraceCandidate[];
   /** Belief lúc bắt đầu lần `observe` gần nhất. */
   beliefBefore: BeliefSnapshot;

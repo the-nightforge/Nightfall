@@ -1,7 +1,13 @@
 import { isRole, isWolfPack, type Role } from "@masoi/shared";
 import { createSeededRng } from "../rng";
 import type { BotTrajectory } from "../evaluation/trajectory";
-import { TARGETING_DECISIONS, encodeObservation, type EncodeOptions } from "./observation";
+import {
+  NO_TARGET_ACTION,
+  TARGETING_DECISIONS,
+  encodeObservation,
+  legalMoves,
+  type EncodeOptions,
+} from "./observation";
 
 /**
  * BOT_SELF_LEARNING §7 + §15 + §42: leak validator, dataset stats, game-level split.
@@ -39,14 +45,18 @@ export interface ObservationLeakReport {
 const OBSERVATION_KEYS = new Set([
   "aliveIds",
   "legalActions",
+  "nightLegalTargets",
   "knownRoles",
   "seerResult",
   "belief",
   "personality",
-  // Mục tiêu hợp lệ tách theo loại hành động đêm. Đây là thứ engine ĐÃ cấp cho
-  // đúng bot đó qua `night.legalTargets` — cùng nguồn với `legalActions`, chỉ
-  // là chưa bị gộp mất loại, nên nó không mở thêm quyền nhìn nào.
-  "nightLegalTargets",
+  "nightWolfTarget",
+  "healUsed",
+  "poisonUsed",
+  "guardPrevious",
+  "lastNightDeaths",
+  "voteCounts",
+  "trialAccusedId",
 ]);
 
 /** Chỉ hai vai này có `seerResult` — xem case `SEE` trong engine. */
@@ -159,19 +169,64 @@ export function validateTrajectoryLine(value: unknown): ObservationLeakReport {
     }
   }
 
+  // Ba trường riêng tư theo vai, sao đúng `botNightKnowledgeFor`: nạn nhân
+  // bầy chỉ Sói và Phù Thuỷ (sau khi bầy khoá) thấy; hai bình chỉ Phù Thuỷ;
+  // người đêm trước chỉ Bảo Vệ. Kiểm được từ line vì vai của chính bot có đó.
+  if (obs.nightWolfTarget !== undefined && obs.nightWolfTarget !== null) {
+    if (typeof obs.nightWolfTarget !== "string") {
+      add("observation.nightWolfTarget", "phải là chuỗi hoặc null", "schema");
+    } else if (selfRole !== null && !isWolfPack(selfRole) && selfRole !== "WITCH") {
+      add("observation.nightWolfTarget", `vai ${selfRole} không được thấy nạn nhân bầy`, "leak");
+    }
+  }
+  for (const key of ["healUsed", "poisonUsed"] as const) {
+    if (obs[key] === undefined) continue;
+    if (typeof obs[key] !== "boolean") add(`observation.${key}`, "phải là boolean", "schema");
+    else if (obs[key] === true && selfRole !== null && selfRole !== "WITCH") {
+      add(`observation.${key}`, `vai ${selfRole} không có bình thuốc`, "leak");
+    }
+  }
+  if (obs.guardPrevious !== undefined && obs.guardPrevious !== null) {
+    if (typeof obs.guardPrevious !== "string") {
+      add("observation.guardPrevious", "phải là chuỗi hoặc null", "schema");
+    } else if (selfRole !== null && selfRole !== "GUARD") {
+      add("observation.guardPrevious", `vai ${selfRole} không phải Bảo Vệ`, "leak");
+    }
+  }
+  if (obs.lastNightDeaths !== undefined && !isStringArray(obs.lastNightDeaths)) {
+    add("observation.lastNightDeaths", "phải là mảng chuỗi", "schema");
+  }
+  if (obs.nightLegalTargets !== undefined && obs.nightLegalTargets !== null) {
+    const table = obs.nightLegalTargets;
+    if (
+      typeof table !== "object" ||
+      !Object.values(table as Record<string, unknown>).every(isStringArray)
+    ) {
+      add("observation.nightLegalTargets", "phải là bảng loại → mảng chuỗi", "schema");
+    }
+  }
+
   const belief = obs.belief;
   if (!Array.isArray(belief)) {
     add("observation.belief", "phải là mảng", "schema");
   } else {
     for (const entry of belief) {
+      const item = entry as Record<string, unknown> | null;
       if (
-        typeof entry !== "object" ||
-        entry === null ||
-        typeof (entry as { playerId?: unknown }).playerId !== "string" ||
-        !isFiniteNumber((entry as { suspicion?: unknown }).suspicion) ||
-        !isFiniteNumber((entry as { trust?: unknown }).trust)
+        typeof item !== "object" ||
+        item === null ||
+        typeof item.playerId !== "string" ||
+        !isFiniteNumber(item.suspicion) ||
+        !isFiniteNumber(item.trust)
       ) {
         add("observation.belief", "entry thiếu playerId/suspicion/trust hữu hạn", "schema");
+        break;
+      }
+      const unit = ["wolfProbability", "threat", "credibility", "influence"].find(
+        (key) => item[key] !== undefined && !isFiniteNumber(item[key]),
+      );
+      if (unit !== undefined) {
+        add("observation.belief", `${unit} phải là số hữu hạn`, "schema");
         break;
       }
     }
@@ -182,17 +237,26 @@ export function validateTrajectoryLine(value: unknown): ObservationLeakReport {
     add("selectedAction", "thiếu hoặc không phải object", "schema");
   } else {
     const target = (selected as { targetId?: unknown }).targetId;
+    const kind = (selected as { kind?: unknown }).kind;
     if (target !== null && typeof target !== "string") {
       add("selectedAction.targetId", "phải là chuỗi hoặc null", "schema");
-    } else if (
-      typeof target === "string" &&
-      isStringArray(line.legalActions) &&
-      TARGETING_DECISIONS.has(String(line.decision)) &&
-      !line.legalActions.includes(target)
-    ) {
-      // §42 "action belongs to legal set". FINAL_VOTE (treo/tha) và SPEECH
-      // không chọn mục tiêu trong không gian này nên không bị ép luật.
-      add("selectedAction.targetId", "hành động nằm ngoài tập hợp lệ", "action");
+    } else if (kind !== undefined && kind !== null && typeof kind !== "string") {
+      add("selectedAction.kind", "phải là chuỗi hoặc null", "schema");
+    } else if (violations.length === 0 && TARGETING_DECISIONS.has(String(line.decision))) {
+      // §42 "action belongs to legal set", kiểm theo CẶP (loại, mục tiêu) bằng
+      // đúng bảng mà encoder dựng mask. FINAL_VOTE (treo/tha) và SPEECH không
+      // chọn mục tiêu trong không gian này nên không bị ép luật.
+      const moves = legalMoves(line as unknown as BotTrajectory);
+      const moveKind =
+        String(line.decision) === "NIGHT" ? ((kind as string | null | undefined) ?? "SKIP") : "CHOOSE";
+      const move = moves.get(moveKind);
+      if (moves.size === 0 && target === null) {
+        // Không có lượt (vai không có hành động đêm): không phải nước đi.
+      } else if (!move) {
+        add("selectedAction.kind", `loại ${moveKind} không được chào lượt này`, "action");
+      } else if (target === null ? !move.none : !move.targets.has(target as string)) {
+        add("selectedAction.targetId", "hành động nằm ngoài tập hợp lệ", "action");
+      }
     }
   }
 
@@ -215,10 +279,21 @@ export interface DatasetStats {
   /** Tần suất theo NHÃN hành động đã encode; chính là bảng mất cân bằng lớp (§43). */
   actionDistribution: Record<string, number>;
   rewardDistribution: { win: number; loss: number };
-  /** Số timestep rơi vào từng phần sau khi chia theo ván (§15). */
-  splitCounts: Record<DatasetSplit, number>;
   /** Đếm theo lý do, để một file hỏng nói được hỏng ở đâu chứ không chỉ hỏng bao nhiêu. */
   violationsByReason: Record<string, number>;
+  /** Số timestep rơi vào từng phần sau khi chia theo VÁN (§15). */
+  splitCounts: Record<DatasetSplit, number>;
+  /**
+   * Trần độ khớp của behavior cloning trên tập này.
+   *
+   * `rows` là số line có nhãn VÀ có bảng ứng viên; `matched` là số line mà
+   * ứng viên điểm cao nhất SAU KHI BỎ term `jitter` chính là nước bot đã đi.
+   * Term jitter là RNG, không có trong observation, nên phần còn lại là phần
+   * không policy nào học được từ tập này. Đọc `matched / rows` TRƯỚC khi đọc
+   * agreement của model: một model 0,55 trên tập có trần 0,60 là gần xong,
+   * trên tập có trần 0,98 là còn xa.
+   */
+  teacherCeiling: { rows: number; matched: number };
 }
 
 function bump(table: Record<string, number>, key: string): void {
@@ -226,12 +301,20 @@ function bump(table: Record<string, number>, key: string): void {
 }
 
 /**
+ * Thống kê §42 trên một tập line ĐÃ parse.
+ *
+ * Chạy luôn encoder trên từng line: một line hợp schema nhưng không encode nổi
+ * (quá số ghế) vẫn là một line không train được, và chỗ duy nhất phát hiện ra
+ * điều đó là ở đây — trước khi train, không phải giữa lúc train.
+ */
+/**
  * Bộ gom thống kê §42, nhận từng line MỘT.
  *
- * Tách khỏi `summarizeDataset` vì một dataset thật nặng vài GB: đọc cả file
- * thành một mảng là cách chắc chắn nhất để tầng kiểm chết đúng lúc nó cần chạy
- * nhất. Bộ gom chỉ giữ tập id ván/episode và mấy bảng đếm, nên chi phí bộ nhớ
- * không phụ thuộc số dòng.
+ * Tách khỏi `summarizeDataset` vì một dataset thật nặng vài GB: đọc cả file vào
+ * một mảng (hay một chuỗi) là cách chắc chắn nhất để tầng kiểm chết đúng lúc nó
+ * cần chạy nhất — và khi nó chết, phản xạ tự nhiên là train mà bỏ qua nó, đúng
+ * thứ §7 sinh ra để ngăn. Bộ gom chỉ giữ tập id ván/episode và mấy bảng đếm,
+ * nên bộ nhớ phụ thuộc SỐ VÁN chứ không phụ thuộc số dòng.
  */
 export interface DatasetSummarizer {
   add(line: unknown): void;
@@ -254,8 +337,9 @@ export function createDatasetSummarizer(
     decisionDistribution: {},
     actionDistribution: {},
     rewardDistribution: { win: 0, loss: 0 },
-    splitCounts: { train: 0, validation: 0, test: 0 },
     violationsByReason: {},
+    splitCounts: { train: 0, validation: 0, test: 0 },
+    teacherCeiling: { rows: 0, matched: 0 },
   };
 
   const games = new Set<string>();
@@ -292,12 +376,16 @@ export function createDatasetSummarizer(
 
       if (!report.valid) return;
       try {
-        // Chạy luôn encoder: một line hợp schema nhưng không encode nổi (quá số
-        // ghế) vẫn là một line không train được, và chỗ duy nhất phát hiện ra
-        // điều đó là ở đây — trước khi train, không phải giữa lúc train.
         const encoded = encodeObservation(line, options);
         if (encoded.actionIndex === null) stats.unmappedActions += 1;
-        else bump(stats.actionDistribution, String(encoded.actionIndex));
+        else {
+          bump(stats.actionDistribution, String(encoded.actionIndex));
+          const best = jitterFreeArgmax(line);
+          if (best !== undefined) {
+            stats.teacherCeiling.rows += 1;
+            if (best === line.selectedAction.targetId) stats.teacherCeiling.matched += 1;
+          }
+        }
       } catch (error) {
         stats.invalidObservations += 1;
         bump(stats.violationsByReason, `schema: observation — ${(error as Error).message}`);
@@ -319,6 +407,32 @@ export function summarizeDataset(
   const summarizer = createDatasetSummarizer(options);
   for (const line of lines) summarizer.add(line);
   return summarizer.finish();
+}
+
+/**
+ * Ứng viên điểm cao nhất sau khi trừ term `jitter`; `undefined` khi line không
+ * có bảng ứng viên hoặc bot không chọn ai (bảng chỉ xếp hạng NGƯỜI, nên một
+ * lượt "không ai" không nói gì về trần). Hoà điểm phá theo id, cùng quy ước
+ * với scorer của bot.
+ */
+function jitterFreeArgmax(line: BotTrajectory): string | undefined {
+  const target = line.selectedAction.targetId;
+  if (line.candidates.length === 0 || target === null || target === NO_TARGET_ACTION) {
+    return undefined;
+  }
+  let best: string | undefined;
+  let bestScore = Number.NEGATIVE_INFINITY;
+  for (const candidate of line.candidates) {
+    let score = candidate.score;
+    for (const term of candidate.terms) {
+      if (term.name === "jitter") score -= term.value;
+    }
+    if (score > bestScore || (score === bestScore && best !== undefined && candidate.targetId < best)) {
+      bestScore = score;
+      best = candidate.targetId;
+    }
+  }
+  return best;
 }
 
 export type DatasetSplit = "train" | "validation" | "test";

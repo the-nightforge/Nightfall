@@ -16,6 +16,7 @@ import {
 } from "./analysis/verdict-review";
 import { applyEvidence, applyTrustEvidence, decayBeliefs } from "./belief/belief-state";
 import { observeProfile } from "./belief/player-profile";
+import { assessPlayers } from "./belief/player-assessment";
 import { applyPrivateInformation } from "./belief/private-info";
 import {
   decideRoleClaim,
@@ -55,6 +56,7 @@ import {
   createDecisionProbe,
   wrapRngForTrace,
   type BeliefSnapshot,
+  type BotDecisionTrace,
   type BotTraceSink,
   type DecisionProbeCollector,
   type TraceDecisionKind,
@@ -190,6 +192,20 @@ function snapshotKnowledge(knowledge: BotKnowledgeView): TraceKnowledgeSnapshot 
     seerResult: knowledge.seerResult
       ? { targetId: knowledge.seerResult.targetId, isWolf: knowledge.seerResult.isWolf }
       : null,
+    // Phần còn lại của view mà tầng train cần: vẫn là bản sao nguyên trạng, và
+    // engine đã quyết định vai này thấy gì (Phù Thuỷ thấy nạn nhân sau khi bầy
+    // khoá, Bảo Vệ thấy người đêm trước, ai cũng thấy phiếu và người chết).
+    nightWolfTarget: knowledge.night ? knowledge.night.wolfTarget : null,
+    nightLegalActions: knowledge.night ? [...knowledge.night.legalActions] : null,
+    healUsed: knowledge.night?.healUsed ?? false,
+    poisonUsed: knowledge.night?.poisonUsed ?? false,
+    guardPrevious: knowledge.night ? knowledge.night.guardPrevious : null,
+    lastNightDeaths: knowledge.lastNightDeaths.map((death) => death.playerId),
+    voteCounts: {
+      players: { ...knowledge.currentVoteCounts.players },
+      noElimination: knowledge.currentVoteCounts.noElimination,
+    },
+    trialAccusedId: knowledge.trialAccusedId,
   };
 }
 
@@ -276,7 +292,7 @@ export class BotRuntime {
   /** Nạp mọi quan sát công khai chưa thấy vào memory, belief và social graph. */
   observe(context: BotDecisionContext): void {
     const knowledge = context.knowledge;
-    if (this.trace) this.beliefBefore = this.snapshotBelief();
+    if (this.trace) this.beliefBefore = this.snapshotBelief(knowledge);
 
     // Chụp lại TRƯỚC khi ghi đè. Engine gỡ đồng bọn đã chết khỏi `knownRoles`,
     // nên nếu đọc sau dòng dưới thì bot không bao giờ biết mình vừa mất ai -
@@ -357,7 +373,7 @@ export class BotRuntime {
     applyPrivateInformation(this.state, knowledge, this.weights);
     this.adaptToDeaths(knowledge, previousKnownRoles);
 
-    if (this.trace) this.beliefAfter = this.snapshotBelief();
+    if (this.trace) this.beliefAfter = this.snapshotBelief(knowledge);
   }
 
   /** Chốt phiếu deterministic từ belief hiện tại. */
@@ -472,7 +488,14 @@ export class BotRuntime {
       run.rng,
       run.probe,
     );
-    run.finish(context, "NIGHT", night?.targetId ?? null, night?.action ?? "bỏ lượt");
+    run.finish(
+      context,
+      "NIGHT",
+      night?.targetId ?? null,
+      night?.action ?? "bỏ lượt",
+      undefined,
+      night?.action ?? null,
+    );
 
     if (night) {
       const round = context.knowledge.round;
@@ -565,6 +588,7 @@ export class BotRuntime {
       targetId: string | null,
       label: string,
       reason?: string,
+      actionKind?: string | null,
     ) => void;
   } {
     if (!this.trace) {
@@ -579,7 +603,10 @@ export class BotRuntime {
     return {
       rng,
       probe,
-      finish: (context, decision, targetId, label, reason) => {
+      finish: (context, decision, targetId, label, reason, actionKind) => {
+        const chosen: BotDecisionTrace["chosen"] = { targetId, label };
+        if (reason !== undefined) chosen.reason = reason;
+        if (actionKind !== undefined) chosen.actionKind = actionKind;
         sink.record({
           botId: this.state.playerId,
           round: context.knowledge.round,
@@ -588,7 +615,7 @@ export class BotRuntime {
           // Bỏ hẳn khoá khi không có lý do, thay vì để `reason: undefined`:
           // `JSON.stringify` đằng nào cũng bỏ nó, nên giữ nó ở đây chỉ làm hai
           // đường - trong bộ nhớ và trên đĩa - khác nhau mà không ai được gì.
-          chosen: reason === undefined ? { targetId, label } : { targetId, label, reason },
+          chosen,
           candidates: probe.candidates,
           beliefBefore: this.beliefBefore,
           beliefAfter: this.beliefAfter,
@@ -601,12 +628,30 @@ export class BotRuntime {
     };
   }
 
-  private snapshotBelief(): BeliefSnapshot {
+  private snapshotBelief(knowledge: BotKnowledgeView): BeliefSnapshot {
     const snapshot: BeliefSnapshot = {};
+    // Cùng hàm mà scorer dùng, cùng state, cùng weights: ảnh chụp là ĐÚNG đầu
+    // vào của quyết định, không phải một bản tính lại gần đúng. Chỉ chạy khi có
+    // trace, nên production không trả chi phí này.
+    const assessments = assessPlayers({
+      knowledge,
+      state: this.state,
+      weights: this.weights,
+      roleComposition: knowledge.roleComposition,
+    });
     for (const id of Object.keys(this.state.suspicion).sort()) {
+      const assessment = assessments[id];
       snapshot[id] = {
         suspicion: this.state.suspicion[id]?.score ?? 0,
         trust: this.state.trust[id]?.score ?? 0,
+        ...(assessment
+          ? {
+              wolfProbability: assessment.wolfProbability,
+              threat: assessment.threat,
+              credibility: assessment.credibility,
+              influence: assessment.influence,
+            }
+          : {}),
       };
     }
     return snapshot;

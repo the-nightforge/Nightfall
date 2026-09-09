@@ -276,6 +276,30 @@ Split đã sẵn sàng cho bước 2; `hybridPolicyModel` đã sẵn sàng cho b
 
 ---
 
+## 3b. Cập nhật 2026-09-09 — sau lần train đầu tiên
+
+Lần chạy `train_bc.py` đầu tiên trên bộ 200 ván ra test agreement **0,22**
+(5 epoch) và **0,33** (60 epoch, còn đang tăng). Đối chiếu với dữ liệu cho ra
+bốn nguyên nhân cấu trúc, đã sửa ở nhánh `feat/ai-training-fixes`:
+
+| Phát hiện | Số đo trên bộ 200 ván | Sửa |
+|---|---|---|
+| Term `jitter` (RNG) quyết định nước đi | argmax(điểm − jitter) chỉ trùng nước bot đi ở **60%** → trần của mọi model | `selfplay --no-jitter` (teacher tất định, `weightsVersion` đuôi `+nojitter`); `ai:validate-dataset` in **trần độ khớp**; `train_bc` báo thêm `top2Agreement` |
+| Observation thiếu term lớn nhất của scorer | `threat` TB 47 điểm, `teammateProtection` 43, `bussingJoin` 48; `belief` chỉ 1,9. 38% dòng có suspicion = 0 với mọi mục tiêu | `BeliefSnapshot` chụp thêm `wolfProbability/threat/credibility/influence` từ `assessPlayers`; trace chụp thêm nạn nhân bầy, bình thuốc, người Bảo Vệ canh, người chết đêm qua, phiếu, người bị xử. Vector 191 → 365 chiều |
+| Không gian hành động mất LOẠI hành động đêm | HEAL/POISON cùng ghế = cùng nhãn; 924 lượt Phù Thuỷ giữ thuốc (35%) bị bỏ vì không nhãn | Không gian (loại × ô) = 11 × 17 = 187; `SKIP:none` là nhãn thật; `decodeAction` cho runtime; validator kiểm cặp (loại, mục tiêu) |
+| Mặc định train và bảng đọc kết quả sai hướng | value head MAE 0,95 ≈ đoán 0; epoch cuối ≠ epoch tốt nhất | `--value-weight 0`, 40 epoch, giữ checkpoint theo val agreement, `agreementByDecision`; tài liệu đọc agreement so với trần |
+
+Kết quả sau sửa, bộ 20 ván `--no-jitter` (788 mẫu train): trần **97,3%**, test
+agreement **0,49** (top-2 0,67) — so với 0,33 trên 6.700 mẫu có jitter trước đó.
+Bộ 10.000 ván chưa chạy.
+
+Thêm: `ai-training/tests/test_train_smoke.py` chạy trọn vòng train với torch
+thật, và job CI `ai-training` chạy nó khi `ai-training/**` đổi. Hai khe hở
+validator còn giữ nguyên và được ghi ở "Giới hạn đã biết" của tài liệu train:
+vai người chết bất kể `revealRoleOnDeath`, và Thám Tử chỉ có nhãn người thứ nhất.
+
+---
+
 ## 4. Phase 2 — Đã chuẩn bị, CHƯA chạy
 
 Toàn bộ tầng train đã có trong repo; không bước nào được chạy trên máy dev.

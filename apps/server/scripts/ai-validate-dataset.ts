@@ -105,6 +105,12 @@ async function main(): Promise<void> {
       .map(([action, count]) => `  action ${action.padEnd(11)} ${count} (${percent(count, stats.timesteps)})`),
     "",
     `reward                win ${stats.rewardDistribution.win} / loss ${stats.rewardDistribution.loss}`,
+    "",
+    // Con số đầu tiên cần đọc trước khi train: model không thể khớp hơn mức
+    // này, vì phần còn lại do RNG (term jitter) quyết định. Thấp thì sinh lại
+    // dataset với `--no-jitter`, đừng tăng epoch.
+    `trần độ khớp (§17)    ${percent(stats.teacherCeiling.matched, stats.teacherCeiling.rows)}` +
+      ` — ${stats.teacherCeiling.matched}/${stats.teacherCeiling.rows} nước đi trùng argmax(điểm − jitter)`,
   ];
 
   const reasons = Object.entries(stats.violationsByReason).sort((a, b) => b[1] - a[1]);

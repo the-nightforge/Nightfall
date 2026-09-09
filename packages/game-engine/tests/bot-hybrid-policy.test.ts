@@ -35,7 +35,6 @@ const BALANCED: BotPersonality = {
 function context(suspicion: Record<string, number>): StrategyContext {
   const state = {
     playerId: "me",
-    nightLegalTargets: null,
     personality: BALANCED,
     suspicion: Object.fromEntries(
       Object.entries(suspicion).map(([id, score]) => [
@@ -71,15 +70,30 @@ function trajectoryLine(
       legalActions: [targetId],
       knownRoles: { [playerId]: "VILLAGER" },
       seerResult: null,
-      belief: [
-        { playerId: targetId, suspicion: targetSuspicion, trust: 0 },
-      ],
       nightLegalTargets: null,
-    personality: BALANCED,
+      belief: [
+        {
+          playerId: targetId,
+          suspicion: targetSuspicion,
+          trust: 0,
+          wolfProbability: 0,
+          threat: 0,
+          credibility: 0,
+          influence: 0,
+        },
+      ],
+      personality: BALANCED,
+      nightWolfTarget: null,
+      healUsed: false,
+      poisonUsed: false,
+      guardPrevious: null,
+      lastNightDeaths: [],
+      voteCounts: { players: {}, noElimination: 0 },
+      trialAccusedId: null,
     },
     legalActions: [targetId],
     candidates: [{ targetId, score: 0, terms: [], evidenceIds: [] }],
-    selectedAction: { decision: "VOTE", targetId, label: "bầu" },
+    selectedAction: { decision: "VOTE", targetId, label: "bầu", kind: null },
     reward,
     finalWinner: "village",
   };

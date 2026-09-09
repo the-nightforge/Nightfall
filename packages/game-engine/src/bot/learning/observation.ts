@@ -1,7 +1,7 @@
 import { PHASES, ROLE_META, ROLES, isRole, type Role, type Team } from "@masoi/shared";
-import { NIGHT_ACTION_KINDS } from "../types";
 import { MAX_ROUNDS } from "../evaluation/selfplay";
 import type { BotTrajectory } from "../evaluation/trajectory";
+import type { NightActionKind } from "../types";
 
 /**
  * BOT_SELF_LEARNING §8-§13: observation encoder + action encoder + action mask.
@@ -29,7 +29,7 @@ export const DECISION_KINDS = [
 ] as const;
 
 /**
- * Ba loại quyết định CHỌN MỘT NGƯỜI — đúng những loại mà không gian hành động
+ * Ba loại quyết định CHỌN MỘT NƯỚC ĐI — đúng những loại mà không gian hành động
  * ở đây mô tả được.
  *
  * `FINAL_VOTE` là treo/tha và `SPEECH` là một hành vi lời nói: cả hai có
@@ -42,6 +42,48 @@ export const TARGETING_DECISIONS: ReadonlySet<string> = new Set([
   "NIGHT",
   "HUNTER_SHOT",
 ]);
+
+/**
+ * Loại hành động BAN NGÀY (bầu, bắn): một mục tiêu hoặc "không ai".
+ *
+ * Tên riêng để không trùng với bất kỳ `NightActionKind` nào; một quyết định
+ * ban ngày luôn dùng đúng loại này.
+ */
+export const DAY_ACTION_KIND = "CHOOSE";
+
+/**
+ * Mọi `NightActionKind` engine hiểu, theo thứ tự cố định.
+ *
+ * `satisfies Record<NightActionKind, 0>` ép danh sách này khớp CHÍNH XÁC với
+ * union trong `types.ts`: thêm một loại hành động đêm mới vào engine mà quên
+ * ở đây là lỗi biên dịch, không phải một hành động im lặng không mã hoá được.
+ */
+const NIGHT_KIND_TABLE = {
+  KILL: 0,
+  SEE: 0,
+  GUARD: 0,
+  HEAL: 0,
+  POISON: 0,
+  SKIP: 0,
+  DETECTIVE_CHECK: 0,
+  SORCERER_CHECK: 0,
+  SERIAL_KILL: 0,
+  TRACK: 0,
+} as const satisfies Record<NightActionKind, 0>;
+
+export const NIGHT_ACTION_KINDS = Object.keys(NIGHT_KIND_TABLE) as NightActionKind[];
+
+/**
+ * Trục "loại" của không gian hành động: ban ngày + mọi loại đêm.
+ *
+ * Không gian hành động là tích (loại × ô): chỉ số = `kind × (maxSeats + 1) + ô`,
+ * ô cuối của mỗi loại là "không mục tiêu". HEAL và POISON cùng một người là
+ * hai chỉ số khác nhau, và "giữ thuốc" (SKIP, không mục tiêu) là một chỉ số
+ * thật chứ không phải một dòng bị bỏ vì không có nhãn. Đó là toàn bộ lý do có
+ * trục này: một policy chỉ chọn ghế thì khi cắm vào runtime không nói được nó
+ * muốn LÀM GÌ với ghế đó.
+ */
+export const ACTION_KINDS: readonly string[] = [DAY_ACTION_KIND, ...NIGHT_ACTION_KINDS];
 
 /**
  * Trần số ghế của một vector.
@@ -61,14 +103,21 @@ const SEAT_FEATURE_NAMES = [
   "alive",
   "suspicion",
   "trust",
+  "wolfProbability",
+  "threat",
+  "credibility",
+  "influence",
   "knownWolfTeam",
   "knownVillageTeam",
+  "knownNeutralTeam",
   "seerSeenWolf",
   "seerSeenClean",
   "legalTarget",
-  // Hợp lệ cho TỪNG loại hành động đêm. `legalTarget` ở trên là hợp của chúng,
-  // và cái hợp đó không phân biệt được "cứu người này" với "giết người này".
-  ...NIGHT_ACTION_KINDS.map((kind) => `nightLegal:${kind}` as const),
+  "isWolfTarget",
+  "diedLastNight",
+  "voteShare",
+  "isAccused",
+  "isGuardPrevious",
 ] as const;
 
 /** Phe của từng vai, tra sẵn một lần thay vì đọc `ROLE_META` trong vòng lặp. */
@@ -86,16 +135,24 @@ export interface EncodedObservation {
    * đọc ngược từ chỉ số ra người chơi đều cần đúng nó.
    */
   seats: string[];
-  /** `mask[i]` = chọn ghế `i` là hợp lệ; phần tử CUỐI là `NO_TARGET_ACTION`. */
+  /** `mask[i]` = hành động `i` hợp lệ; xem `decodeAction` để đọc ngược `i`. */
   mask: boolean[];
   /**
    * Chỉ số hành động bot đã chọn — nhãn cho behavior cloning.
    *
    * `null` khi hành động không ánh xạ được vào không gian này (SPEECH,
-   * FINAL_VOTE, hoặc một mục tiêu ngoài tập hợp lệ). `null` là "không có nhãn", không phải
-   * "hành động 0": một nhãn bịa ra sẽ dạy model chính xác điều sai.
+   * FINAL_VOTE, hoặc một nước đi ngoài tập hợp lệ). `null` là "không có nhãn",
+   * không phải "hành động 0": một nhãn bịa ra sẽ dạy model chính xác điều sai.
    */
   actionIndex: number | null;
+}
+
+/** Một nước đi đã giải mã từ chỉ số hành động. */
+export interface DecodedAction {
+  /** `DAY_ACTION_KIND` hoặc một `NightActionKind`. */
+  kind: string;
+  /** `null` = ô "không mục tiêu" (không treo ai / giữ thuốc / không bắn). */
+  targetId: string | null;
 }
 
 /** Chiều của vector observation ứng với một `maxSeats`. */
@@ -103,9 +160,57 @@ export function observationSize(maxSeats: number = DEFAULT_MAX_SEATS): number {
   return globalFeatureNames().length + maxSeats * SEAT_FEATURE_NAMES.length;
 }
 
-/** Chiều của không gian hành động: mỗi ghế một hành động, cộng "không treo ai". */
-export function actionSize(maxSeats: number = DEFAULT_MAX_SEATS): number {
+/** Số ô của MỘT loại hành động: mỗi ghế một ô, cộng "không mục tiêu". */
+export function slotsPerKind(maxSeats: number = DEFAULT_MAX_SEATS): number {
   return maxSeats + 1;
+}
+
+/** Chiều của không gian hành động: (loại × ô). */
+export function actionSize(maxSeats: number = DEFAULT_MAX_SEATS): number {
+  return ACTION_KINDS.length * slotsPerKind(maxSeats);
+}
+
+/** Chỉ số hành động của cặp (loại, ô). Ném khi loại không tồn tại. */
+export function actionIndexOf(
+  kind: string,
+  slot: number,
+  maxSeats: number = DEFAULT_MAX_SEATS,
+): number {
+  const kindIndex = ACTION_KINDS.indexOf(kind);
+  if (kindIndex < 0) throw new Error(`loại hành động không tồn tại: ${kind}`);
+  return kindIndex * slotsPerKind(maxSeats) + slot;
+}
+
+/**
+ * Đọc ngược một chỉ số hành động ra (loại, mục tiêu) bằng bảng ghế của chính
+ * observation đó. Ném khi chỉ số ngoài không gian — một policy trả về chỉ số
+ * như vậy là bug ở policy, không phải một nước đi "gần đúng".
+ */
+export function decodeAction(
+  index: number,
+  seats: readonly string[],
+  maxSeats: number = DEFAULT_MAX_SEATS,
+): DecodedAction {
+  const slots = slotsPerKind(maxSeats);
+  const kind = ACTION_KINDS[Math.floor(index / slots)];
+  if (!Number.isInteger(index) || index < 0 || kind === undefined) {
+    throw new Error(`chỉ số hành động ${index} ngoài không gian ${actionSize(maxSeats)}`);
+  }
+  const slot = index % slots;
+  if (slot === maxSeats) return { kind, targetId: null };
+  const targetId = seats[slot];
+  if (targetId === undefined) throw new Error(`ô ${slot} không có người chơi`);
+  return { kind, targetId };
+}
+
+/** Tên từng hành động, cùng thứ tự với `mask`. */
+export function actionNames(maxSeats: number = DEFAULT_MAX_SEATS): string[] {
+  const names: string[] = [];
+  for (const kind of ACTION_KINDS) {
+    for (let seat = 0; seat < maxSeats; seat += 1) names.push(`${kind}:seat${seat}`);
+    names.push(`${kind}:none`);
+  }
+  return names;
 }
 
 function globalFeatureNames(): string[] {
@@ -125,9 +230,13 @@ function globalFeatureNames(): string[] {
     "personality:loyalty",
     "personality:stubbornness",
     "noEliminationLegal",
-    // Loại hành động đêm nào ĐANG mở. Vai đã có trong vector, nhưng vai không
-    // đủ: Phù Thuỷ có hai hành động đêm với hai mục tiêu ngược nhau.
-    ...NIGHT_ACTION_KINDS.map((kind) => `nightKindOpen:${kind}`),
+    // Loại hành động được chào lượt này. Mask đã chặn logits, nhưng model cần
+    // THẤY nó để biết mình đang ở lượt gì (Phù Thuỷ còn bình nào, Sói cắn
+    // hay theo dõi) trước khi tính điểm ghế.
+    ...ACTION_KINDS.map((kind) => `legalKind:${kind}`),
+    "healUsed",
+    "poisonUsed",
+    "noEliminationVoteShare",
   ];
 }
 
@@ -168,6 +277,8 @@ export function canonicalSeats(line: BotTrajectory): string[] {
   for (const action of line.legalActions) {
     if (action !== NO_TARGET_ACTION) ids.add(action);
   }
+  for (const id of line.observation.lastNightDeaths ?? []) ids.add(id);
+  if (line.observation.nightWolfTarget) ids.add(line.observation.nightWolfTarget);
 
   const sorted = [...ids].sort((left, right) => left.localeCompare(right));
   const selfAt = sorted.indexOf(line.playerId);
@@ -189,6 +300,44 @@ export function selfRoleOf(line: BotTrajectory): Role | null {
   return role !== undefined && isRole(role) ? role : null;
 }
 
+/**
+ * Mục tiêu hợp lệ THEO LOẠI cho line này — nguồn của mask và của nhãn.
+ *
+ * Ban ngày (VOTE/HUNTER_SHOT) chỉ có một loại `CHOOSE`; ban đêm là bảng
+ * `nightLegalTargets` của observation, với hai quy ước engine không viết vào
+ * bảng: HEAL không kèm mục tiêu (engine tự cứu nạn nhân bầy — bot thấy nạn
+ * nhân qua `nightWolfTarget`, và `BotNightIntention` của Phù Thuỷ gửi
+ * `targetId: null`), và SKIP là "không mục tiêu". "Không mục tiêu" của ban
+ * ngày là `NO_ELIMINATION`; Thợ Săn luôn được không bắn.
+ *
+ * Map rỗng = line này KHÔNG có lượt (vai không có hành động đêm vẫn được gọi
+ * `decideNight`, và ghi một trace "bỏ lượt"): không phải một nước đi, không
+ * có nhãn, và cũng không phải vi phạm.
+ */
+export function legalMoves(line: BotTrajectory): Map<string, { targets: Set<string>; none: boolean }> {
+  const moves = new Map<string, { targets: Set<string>; none: boolean }>();
+  if (line.decision === "NIGHT") {
+    const table = line.observation.nightLegalTargets;
+    if (!table) return moves;
+    for (const [kind, targets] of Object.entries(table)) {
+      const entry = { targets: new Set(targets), none: kind === "HEAL" || kind === "SKIP" };
+      moves.set(kind, entry);
+    }
+    // Không làm gì luôn là một nước đi hợp lệ ở lượt đêm — bot trả `null` là
+    // thế — và nó phải có một ô thật, nếu không mọi lượt "giữ thuốc" đều thành
+    // dòng không nhãn và policy học được sẽ không bao giờ giữ thuốc.
+    const skip = moves.get("SKIP") ?? { targets: new Set<string>(), none: true };
+    skip.none = true;
+    moves.set("SKIP", skip);
+    return moves;
+  }
+  if (!TARGETING_DECISIONS.has(line.decision)) return moves;
+  const targets = new Set(line.legalActions.filter((action) => action !== NO_TARGET_ACTION));
+  const none = line.legalActions.includes(NO_TARGET_ACTION) || line.decision === "HUNTER_SHOT";
+  moves.set(DAY_ACTION_KIND, { targets, none });
+  return moves;
+}
+
 export interface EncodeOptions {
   maxSeats?: number;
 }
@@ -205,11 +354,16 @@ export function encodeObservation(
     );
   }
 
-  const alive = new Set(line.observation.aliveIds);
+  const observation = line.observation;
+  const alive = new Set(observation.aliveIds);
   const legal = new Set(line.legalActions);
-  const belief = new Map(line.observation.belief.map((entry) => [entry.playerId, entry]));
+  const belief = new Map(observation.belief.map((entry) => [entry.playerId, entry]));
   const selfRole = selfRoleOf(line);
-  const seer = line.observation.seerResult;
+  const seer = observation.seerResult;
+  const moves = legalMoves(line);
+  const deaths = new Set(observation.lastNightDeaths ?? []);
+  const voteCounts = observation.voteCounts ?? { players: {}, noElimination: 0 };
+  const voters = Math.max(alive.size, 1);
 
   const features: number[] = [
     clamp(line.turn / MAX_ROUNDS, 0, 1),
@@ -218,7 +372,7 @@ export function encodeObservation(
   for (const phase of PHASES) features.push(line.phase === phase ? 1 : 0);
   for (const kind of DECISION_KINDS) features.push(line.decision === kind ? 1 : 0);
   for (const role of ROLES) features.push(selfRole === role ? 1 : 0);
-  const personality = line.observation.personality;
+  const personality = observation.personality;
   features.push(
     personality.aggressiveness,
     personality.talkativeness,
@@ -229,14 +383,12 @@ export function encodeObservation(
     personality.stubbornness,
   );
   features.push(legal.has(NO_TARGET_ACTION) ? 1 : 0);
-
-  const nightTargets = line.observation.nightLegalTargets ?? {};
-  const nightLegalBy = new Map<string, Set<string>>(
-    NIGHT_ACTION_KINDS.map((kind) => [kind, new Set(nightTargets[kind] ?? [])]),
+  for (const kind of ACTION_KINDS) features.push(moves.has(kind) ? 1 : 0);
+  features.push(
+    observation.healUsed === true ? 1 : 0,
+    observation.poisonUsed === true ? 1 : 0,
+    clamp(voteCounts.noElimination / voters, 0, 1),
   );
-  for (const kind of NIGHT_ACTION_KINDS) {
-    features.push((nightLegalBy.get(kind)?.size ?? 0) > 0 ? 1 : 0);
-  }
 
   for (let seat = 0; seat < maxSeats; seat += 1) {
     const id = seats[seat];
@@ -246,48 +398,77 @@ export function encodeObservation(
       continue;
     }
     const entry = belief.get(id);
-    const known = line.observation.knownRoles[id];
+    const known = observation.knownRoles[id];
     const knownTeam = known !== undefined && isRole(known) ? ROLE_TEAM[known] : null;
     features.push(
       id === line.playerId ? 1 : 0,
       alive.has(id) ? 1 : 0,
       clamp((entry?.suspicion ?? 0) / BELIEF_SCALE, -1, 1),
       clamp((entry?.trust ?? 0) / BELIEF_SCALE, -1, 1),
+      clamp(entry?.wolfProbability ?? 0, 0, 1),
+      clamp(entry?.threat ?? 0, 0, 1),
+      clamp(entry?.credibility ?? 0, 0, 1),
+      clamp(entry?.influence ?? 0, 0, 1),
       knownTeam === "wolves" ? 1 : 0,
       knownTeam === "village" ? 1 : 0,
+      knownTeam === "neutral" ? 1 : 0,
       seer !== null && seer.targetId === id && seer.isWolf ? 1 : 0,
       seer !== null && seer.targetId === id && !seer.isWolf ? 1 : 0,
       legal.has(id) ? 1 : 0,
+      observation.nightWolfTarget === id ? 1 : 0,
+      deaths.has(id) ? 1 : 0,
+      clamp((voteCounts.players[id] ?? 0) / voters, 0, 1),
+      observation.trialAccusedId === id ? 1 : 0,
+      observation.guardPrevious === id ? 1 : 0,
     );
-    for (const kind of NIGHT_ACTION_KINDS) {
-      features.push(nightLegalBy.get(kind)?.has(id) ? 1 : 0);
+  }
+
+  const slots = slotsPerKind(maxSeats);
+  const mask: boolean[] = new Array<boolean>(ACTION_KINDS.length * slots).fill(false);
+  for (const [kind, move] of moves) {
+    const base = ACTION_KINDS.indexOf(kind) * slots;
+    // Một loại engine không biết là dữ liệu của một bản build khác; không có ô
+    // cho nó, và encodeAction cũng sẽ trả null cho nhãn của nó.
+    if (base < 0) continue;
+    for (let seat = 0; seat < seats.length; seat += 1) {
+      if (move.targets.has(seats[seat]!)) mask[base + seat] = true;
     }
+    if (move.none) mask[base + maxSeats] = true;
   }
 
-  const mask: boolean[] = [];
-  for (let seat = 0; seat < maxSeats; seat += 1) {
-    const id = seats[seat];
-    mask.push(id !== undefined && legal.has(id));
-  }
-  mask.push(legal.has(NO_TARGET_ACTION));
-
-  return { features, seats, mask, actionIndex: encodeAction(line, seats, maxSeats) };
+  return { features, seats, mask, actionIndex: encodeAction(line, seats, maxSeats, moves, mask) };
 }
 
 /**
  * Hành động đã chọn → chỉ số trong không gian hành động.
  *
- * Chỉ trả một chỉ số khi hành động đó THẬT SỰ hợp lệ theo `legalActions` của
- * chính line ấy. Một nhãn trỏ vào ô mà mask đang tắt là một mẫu train dạy model
- * chọn nước bất hợp lệ, nên ở đây nó thành `null` và tầng dataset đếm nó vào
+ * Chỉ trả một chỉ số khi hành động đó THẬT SỰ hợp lệ theo mask của chính line
+ * ấy. Một nhãn trỏ vào ô mà mask đang tắt là một mẫu train dạy model chọn nước
+ * bất hợp lệ, nên ở đây nó thành `null` và tầng dataset đếm nó vào
  * `invalidActions` (§42).
  */
-function encodeAction(line: BotTrajectory, seats: readonly string[], maxSeats: number): number | null {
+function encodeAction(
+  line: BotTrajectory,
+  seats: readonly string[],
+  maxSeats: number,
+  moves: ReadonlyMap<string, { targets: Set<string>; none: boolean }>,
+  mask: readonly boolean[],
+): number | null {
   if (!TARGETING_DECISIONS.has(line.decision)) return null;
-  const legal = new Set(line.legalActions);
   const target = line.selectedAction.targetId;
-  if (target === null) return legal.has(NO_TARGET_ACTION) ? maxSeats : null;
-  if (!legal.has(target)) return null;
-  const seat = seats.indexOf(target);
-  return seat >= 0 && seat < maxSeats ? seat : null;
+  let kind: string;
+  if (line.decision === "NIGHT") {
+    // `kind: null` là bot không làm gì — cùng một ô với SKIP tường minh.
+    kind = line.selectedAction.kind ?? "SKIP";
+    if (kind === "SKIP" && target !== null) return null;
+  } else {
+    kind = DAY_ACTION_KIND;
+  }
+  if (!moves.has(kind)) return null;
+  const kindIndex = ACTION_KINDS.indexOf(kind);
+  if (kindIndex < 0) return null;
+  const slot = target === null ? maxSeats : seats.indexOf(target);
+  if (slot < 0 || slot > maxSeats) return null;
+  const index = kindIndex * slotsPerKind(maxSeats) + slot;
+  return mask[index] === true ? index : null;
 }
