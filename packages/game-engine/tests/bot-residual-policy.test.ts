@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { PRESET_DECKS } from "@masoi/shared";
 import { replayGame, runSelfPlay, type SelfPlayGame } from "../src/bot/evaluation/selfplay";
 import { gameToTrajectories } from "../src/bot/evaluation/trajectory";
+import { candidateBases } from "../src/bot/learning/dataset";
 import type { LearnedPolicy } from "../src/bot/learning/mlp";
 import { actionIndexOf, actionSize, encodeObservation } from "../src/bot/learning/observation";
 import { pickResidual, residualRows, type ResidualRow } from "../src/bot/policy/residual-policy";
@@ -221,5 +222,35 @@ describe("rollout residual T=5: learned cho VOTE lẫn NIGHT, replay tái lập"
       learnedTemperature: 5,
     });
     expect(decisions(traced)).toEqual(decisions(game));
+  });
+});
+
+describe("bases + β + τ dựng lại đúng logProb đã ghi (điều kiện approxKl ≈ 0)", () => {
+  it("log softmax((bases + β·logits)/τ)[a] == learned.logProb ở mọi line rollout", () => {
+    const policy = residualPreferring([actionIndexOf("KILL", 2), actionIndexOf("CHOOSE", 3)]);
+    const game = runSelfPlay({
+      seed: "res-recon",
+      playerCount: 8,
+      config: PRESET_DECKS[8],
+      maxRounds: 6,
+      trace: true,
+      learnedPolicy: policy,
+      learnedTemperature: 5,
+    });
+    const lines = gameToTrajectories(game).filter((l) => l.learned);
+    expect(lines.length).toBeGreaterThan(10);
+    expect(lines.some((l) => l.decision === "NIGHT")).toBe(true);
+    for (const l of lines) {
+      const enc = encodeObservation(l);
+      const bases = candidateBases(l, enc);
+      const logits = policy.logits(enc.features);
+      const adj = bases.map((b, i) => (Number.isNaN(b) ? Number.NaN : (b + 10 * logits[i]!) / 5));
+      const idx = adj.map((v, i) => (Number.isNaN(v) ? -1 : i)).filter((i) => i >= 0);
+      const max = Math.max(...idx.map((i) => adj[i]!));
+      const z = idx.reduce((sum, i) => sum + Math.exp(adj[i]! - max), 0);
+      const a = l.learned!.actionIndex;
+      expect(idx).toContain(a);
+      expect(adj[a]! - max - Math.log(z)).toBeCloseTo(l.learned!.logProb, 9);
+    }
   });
 });

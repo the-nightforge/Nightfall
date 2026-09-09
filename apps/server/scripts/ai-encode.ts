@@ -1,4 +1,10 @@
-import { createReadStream, createWriteStream, mkdirSync, writeFileSync } from "node:fs";
+import {
+  createReadStream,
+  createWriteStream,
+  mkdirSync,
+  writeFileSync,
+  type WriteStream,
+} from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createInterface } from "node:readline";
 import { resolve, join } from "node:path";
@@ -9,6 +15,7 @@ import {
   DEFAULT_MAX_SEATS,
   actionNames,
   actionSize,
+  candidateBases,
   candidateScores,
   encodeObservation,
   observationFeatureNames,
@@ -33,6 +40,12 @@ import {
  *
  * Đọc theo DÒNG: dataset 10.000 ván nặng ~2,7 GB, nạp cả file vào RAM là cách
  * chắc chắn nhất để tầng train không bao giờ chạy được trên máy thật.
+ *
+ * Rollout RESIDUAL (line `learned` có `beta`): ghi thêm `bases.f32.bin` —
+ * điểm THẬT (có jitter) của từng ứng viên theo ô hành động, NaN ở ô khác —
+ * cùng `meta.policyKind = "residual"`, `meta.beta`, `meta.temperature`. Đó là
+ * đúng ba thứ Python cần để dựng lại phân phối `softmax((bases + β·net)/τ)`
+ * mà policy đã lấy mẫu, nên ratio của PPO bắt đầu ở 1.
  */
 
 interface Options {
@@ -140,7 +153,12 @@ async function main(): Promise<void> {
   let rows = 0;
   /** Nhiệt độ đã sinh ra tập này, đọc từ line rollout đầu tiên. */
   let temperature: number | null = null;
+  /** β của residual policy, đọc từ line rollout đầu tiên; `null` = policy logits thuần. */
+  let beta: number | null = null;
+  /** Mở LƯỜI ở line residual đầu: `data.py` nhận diện residual bằng SỰ CÓ MẶT của file. */
+  let basesStream: WriteStream | null = null;
   let warnedMismatch = false;
+  let warnedMixed = false;
   const games = new Set<string>();
   const perSplit = { train: 0, validation: 0, test: 0 };
 
@@ -200,6 +218,29 @@ async function main(): Promise<void> {
       continue;
     }
 
+    // Một tập rollout là của ĐÚNG MỘT policy ở ĐÚNG MỘT nhiệt độ: line mang
+    // T/β khác line đầu là mẫu của một phân phối khác, và PPO trộn hai phân
+    // phối vào một ratio là học sai trong im lặng. Kiểm TRƯỚC khi ghi bất kỳ
+    // stream nào để các file .bin luôn cùng số hàng.
+    if (rolloutStreams && line.learned) {
+      const lineBeta = line.learned.beta ?? null;
+      if (temperature === null) {
+        temperature = line.learned.temperature;
+        beta = lineBeta;
+      } else if (line.learned.temperature !== temperature || lineBeta !== beta) {
+        rejected += 1;
+        if (!warnedMixed) {
+          warnedMixed = true;
+          process.stderr.write(
+            `CẢNH BÁO: line rollout có T/β (${line.learned.temperature}/${lineBeta}) khác line ` +
+              `đầu (${temperature}/${beta}) ở ván ${line.gameId}, lượt ${line.turn} — tập trộn ` +
+              "hai policy là tập PPO sai. Chỉ báo một lần; xem tổng ở dòng TỪ CHỐI.\n",
+          );
+        }
+        continue;
+      }
+    }
+
     const split = splitOf(line.gameId);
     games.add(line.gameId);
     perSplit[split] += 1;
@@ -218,19 +259,26 @@ async function main(): Promise<void> {
       Buffer.from(Float32Array.from(candidateScores(line, encoded, options.maxSeats)).buffer),
     );
     if (rolloutStreams && line.learned) {
-      if (temperature === null) temperature = line.learned.temperature;
       rolloutStreams.logprobs.write(Buffer.from(Float32Array.of(line.learned.logProb).buffer));
       // `value: null` là model không có value head. 0 là baseline trung tính
       // trên thang reward ±1, tức advantage = reward — đúng Monte Carlo không
       // baseline, không phải một con số bịa.
       rolloutStreams.values.write(Buffer.from(Float32Array.of(line.learned.value ?? 0).buffer));
+      if (beta !== null) {
+        basesStream ??= createWriteStream(join(outDir, "bases.f32.bin"));
+        basesStream.write(
+          Buffer.from(Float32Array.from(candidateBases(line, encoded, options.maxSeats)).buffer),
+        );
+      }
     }
   }
 
   await Promise.all(
-    [...Object.values(streams), ...(rolloutStreams ? Object.values(rolloutStreams) : [])].map(
-      (stream) => new Promise<void>((done) => stream.end(done)),
-    ),
+    [
+      ...Object.values(streams),
+      ...(rolloutStreams ? Object.values(rolloutStreams) : []),
+      ...(basesStream ? [basesStream] : []),
+    ].map((stream) => new Promise<void>((done) => stream.end(done))),
   );
 
   // §46: mọi model train ra từ tập này phải truy được về đúng tập này.
@@ -240,6 +288,10 @@ async function main(): Promise<void> {
     datasetVersion: options.rollout ? "rollout-0001" : "dataset-0003",
     rollout: options.rollout,
     temperature,
+    // Loại policy đã sinh tập: `residual` (có `bases.f32.bin`, `beta`) hay
+    // `logits` thuần. `null` khi không phải rollout.
+    policyKind: options.rollout ? (beta !== null ? "residual" : "logits") : null,
+    beta,
     gitCommit: currentCommit(),
     source: resolve(options.input),
     rows,
@@ -266,7 +318,12 @@ async function main(): Promise<void> {
       `TỪ CHỐI     ${rejected}`,
       `không nhãn  ${unlabelled}`,
       `mẫu train   ${rows}  (train ${perSplit.train} / val ${perSplit.validation} / test ${perSplit.test})`,
-      ...(options.rollout ? [`rollout     T = ${temperature ?? "?"} (logprobs + values)`] : []),
+      ...(options.rollout
+        ? [
+            `rollout     T = ${temperature ?? "?"}` +
+              (beta !== null ? ` β = ${beta} (residual: logprobs + values + bases)` : " (logits: logprobs + values)"),
+          ]
+        : []),
       `vector      ${obsSize} chiều, ${actSize} hành động`,
       `Đã ghi      ${outDir}`,
       "",

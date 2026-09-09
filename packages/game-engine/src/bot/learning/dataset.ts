@@ -537,6 +537,23 @@ export function candidateScores(
 }
 
 /**
+ * Điểm THẬT (GIỮ jitter) theo ô hành động — điểm nền mà residual policy đã
+ * cộng `β·net` vào (spec 2026-09-09-residual-policy D1/D5). Khác
+ * `candidateScores` đúng ở term jitter: Python dựng lại phân phối của policy
+ * đã đi từ đây, nên nó phải là đúng con số policy đã thấy, không phải bản
+ * "sạch" cho distillation.
+ */
+export function candidateBases(
+  line: BotTrajectory,
+  encoded: EncodedObservation,
+  maxSeats: number = DEFAULT_MAX_SEATS,
+): number[] {
+  const bases = new Array<number>(actionSize(maxSeats)).fill(Number.NaN);
+  for (const [index, score] of scoredSlots(line, encoded, maxSeats, true)) bases[index] = score;
+  return bases;
+}
+
+/**
  * Ánh xạ bảng ứng viên → (ô hành động, điểm bỏ jitter). Chỉ giữ ô ĐANG BẬT
  * trong mask của chính observation: một ứng viên trỏ vào ô mask tắt là một
  * mẫu dạy model chọn nước bất hợp lệ.
@@ -549,6 +566,7 @@ function scoredSlots(
   line: BotTrajectory,
   encoded: EncodedObservation,
   maxSeats: number,
+  keepJitter = false,
 ): Map<number, number> {
   const out = new Map<number, number>();
   if (line.candidates.length === 0) return out;
@@ -556,7 +574,9 @@ function scoredSlots(
   if (!ACTION_KINDS.includes(kind)) return out;
   for (const candidate of line.candidates) {
     let score = candidate.score;
-    for (const term of candidate.terms) if (term.name === "jitter") score -= term.value;
+    if (!keepJitter) {
+      for (const term of candidate.terms) if (term.name === "jitter") score -= term.value;
+    }
     const seat = encoded.seats.indexOf(candidate.targetId);
     if (seat < 0 || seat >= maxSeats) continue;
     const index = actionIndexOf(kind, seat, maxSeats);
