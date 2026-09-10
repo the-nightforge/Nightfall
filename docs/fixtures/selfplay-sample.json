@@ -271,6 +271,43 @@
         "denominator": 65
       }
     },
+    "humanQuestionOutcomes": {
+      "ANSWERED": {
+        "value": null,
+        "numerator": 0,
+        "denominator": 0
+      },
+      "NOT_PARSED": {
+        "value": null,
+        "numerator": 0,
+        "denominator": 0
+      },
+      "BLOCKED_ROOM": {
+        "value": null,
+        "numerator": 0,
+        "denominator": 0
+      },
+      "NO_TURN": {
+        "value": null,
+        "numerator": 0,
+        "denominator": 0
+      },
+      "DECLINED_SPOKE_OTHER": {
+        "value": null,
+        "numerator": 0,
+        "denominator": 0
+      },
+      "DECLINED_SILENT": {
+        "value": null,
+        "numerator": 0,
+        "denominator": 0
+      },
+      "UNDETERMINED": {
+        "value": null,
+        "numerator": 0,
+        "denominator": 0
+      }
+    },
     "speechBlockedByRoom": {
       "BUDGET": 0,
       "CHAIN_DEPTH": 0,
@@ -285,6 +322,11 @@
       "value": 0,
       "numerator": 0,
       "denominator": 126
+    },
+    "casualToneRateProvider": {
+      "value": null,
+      "numerator": 0,
+      "denominator": 0
     },
     "claimsPerGame": 0,
     "counterClaimRate": {

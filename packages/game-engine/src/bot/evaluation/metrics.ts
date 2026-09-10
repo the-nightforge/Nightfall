@@ -61,6 +61,16 @@ function mean(values: readonly number[]): number | null {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+/** Bảy ngăn số phận câu hỏi thành bảy `Ratio` cùng một mẫu số, giữ thứ tự khoá. */
+function outcomeRatios(
+  counts: Record<QuestionOutcome, number>,
+  total: number,
+): Record<QuestionOutcome, Ratio> {
+  return Object.fromEntries(
+    (Object.keys(counts) as QuestionOutcome[]).map((key) => [key, ratio(counts[key], total)]),
+  ) as Record<QuestionOutcome, Ratio>;
+}
+
 export interface SelfPlayMetrics {
   games: number;
   finished: number;
@@ -268,6 +278,13 @@ export interface SelfPlayMetrics {
    * lệch nhau là một lỗi ở một trong hai.
    */
   directQuestionOutcomes: Record<QuestionOutcome, Ratio>;
+  /**
+   * Số phận câu hỏi của NGƯỜI THẬT nhắm vào bot: cùng bảy ngăn với
+   * `directQuestionOutcomes`, cùng cách lấy mẫu số. Tách bảng vì bảng kia nói
+   * về bot hỏi bot, và trộn hai quần thể vào một mẫu số làm cả hai con số vô
+   * nghĩa. Self-play không có người hỏi nên mọi ngăn là `null`.
+   */
+  humanQuestionOutcomes: Record<QuestionOutcome, Ratio>;
   /** Số câu bị PHÒNG chặn, theo lý do. Không phải tỉ lệ: đây là số đếm thô. */
   speechBlockedByRoom: Record<SpeechBlockReason, number>;
   /**
@@ -285,6 +302,12 @@ export interface SelfPlayMetrics {
    * chính nhà cung cấp, và đó mới là chỗ giọng thật sự trôi được.
    */
   casualToneRate: Ratio;
+  /**
+   * `casualToneRate` chỉ trên câu do NHÀ CUNG CẤP viết (`fromTemplate === false`).
+   * Con số gộp trộn cả bảng mẫu (~0,90), nên nó trôi LÊN đúng lúc nhà cung cấp
+   * chết. Self-play toàn bảng mẫu nên `null`.
+   */
+  casualToneRateProvider: Ratio;
 
   // ---- Lời khai vai (Phase 5) ----
 
@@ -475,6 +498,8 @@ export function collectMetrics(
   let speechTotal = 0;
   let roundLimited = 0;
   let casualLines = 0;
+  let providerLines = 0;
+  let casualProviderLines = 0;
   let exactRepeats = 0;
   let normalizedRepeats = 0;
   let semanticRepeats = 0;
@@ -543,6 +568,8 @@ export function collectMetrics(
     UNDETERMINED: 0,
   };
   let questionOutcomeTotal = 0;
+  const humanQuestionOutcomes: Record<QuestionOutcome, number> = { ...questionOutcomes };
+  let humanQuestionOutcomeTotal = 0;
   const blockedByRoom: Record<SpeechBlockReason, number> = {
     BUDGET: 0,
     CHAIN_DEPTH: 0,
@@ -662,8 +689,13 @@ export function collectMetrics(
       }
       for (const e of game.events) {
         if (e.kind === "QUESTION_OUTCOME") {
-          questionOutcomes[e.outcome] += 1;
-          questionOutcomeTotal += 1;
+          if (e.humanAsker) {
+            humanQuestionOutcomes[e.outcome] += 1;
+            humanQuestionOutcomeTotal += 1;
+          } else {
+            questionOutcomes[e.outcome] += 1;
+            questionOutcomeTotal += 1;
+          }
         } else if (e.kind === "SPEECH_BLOCKED") {
           blockedByRoom[e.reason] += 1;
         }
@@ -940,6 +972,10 @@ export function collectMetrics(
         // self-play cũ, tức bảng mẫu.
         if (event.fromTemplate !== false) fromTemplateCount += 1;
         if (looksCasual(event.text)) casualLines += 1;
+        if (event.fromTemplate === false) {
+          providerLines += 1;
+          if (looksCasual(event.text)) casualProviderLines += 1;
+        }
 
         if (event.targetId !== null && lastTarget.get(event.actorId) === event.targetId) {
           sameTargetRuns += 1;
@@ -1111,15 +1147,8 @@ export function collectMetrics(
      * không có chỉ số nào khác nhìn thấy điều đó.
      */
     silenceRate: ratio(silentBotDays, silenceOpportunities),
-    directQuestionOutcomes: {
-      ANSWERED: ratio(questionOutcomes.ANSWERED, questionOutcomeTotal),
-      NOT_PARSED: ratio(questionOutcomes.NOT_PARSED, questionOutcomeTotal),
-      BLOCKED_ROOM: ratio(questionOutcomes.BLOCKED_ROOM, questionOutcomeTotal),
-      NO_TURN: ratio(questionOutcomes.NO_TURN, questionOutcomeTotal),
-      DECLINED_SPOKE_OTHER: ratio(questionOutcomes.DECLINED_SPOKE_OTHER, questionOutcomeTotal),
-      DECLINED_SILENT: ratio(questionOutcomes.DECLINED_SILENT, questionOutcomeTotal),
-      UNDETERMINED: ratio(questionOutcomes.UNDETERMINED, questionOutcomeTotal),
-    },
+    directQuestionOutcomes: outcomeRatios(questionOutcomes, questionOutcomeTotal),
+    humanQuestionOutcomes: outcomeRatios(humanQuestionOutcomes, humanQuestionOutcomeTotal),
     speechBlockedByRoom: blockedByRoom,
     /**
      * Trong self-play, con số này luôn bằng 1 THEO THIẾT KẾ.
@@ -1130,6 +1159,7 @@ export function collectMetrics(
      */
     fromTemplateRate: ratio(fromTemplateCount, speechTotal),
     casualToneRate: ratio(casualLines, speechTotal),
+    casualToneRateProvider: ratio(casualProviderLines, providerLines),
 
     claimsPerGame: mean(claimCounts),
     counterClaimRate: ratio(counterClaimGames, games.length),
