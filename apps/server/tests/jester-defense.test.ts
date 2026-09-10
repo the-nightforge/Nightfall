@@ -45,10 +45,21 @@ vi.mock("../src/bots", async () => {
   };
 });
 
+/**
+ * Mốc hẹn gom vào HÀNG ĐỢI thay vì chạy.
+ *
+ * Phiên xử giờ dùng chung hàng đợi có nhịp với pha thảo luận, nên nó chạy bằng
+ * đồng hồ chứ không còn bắn hết trong một vòng lặp đồng bộ. Một no-op ở đây
+ * nghĩa là không lượt nói nào xảy ra.
+ */
+const timers = vi.hoisted(() => ({ queued: [] as Array<() => void> }));
+
 vi.mock("../src/rooms/store", () => ({
   clearRoomTimers: () => undefined,
   persistRoom: async () => undefined,
-  setRoomTimer: () => undefined,
+  setRoomTimer: (_code: string, fn: () => void) => {
+    timers.queued.push(fn);
+  },
 }));
 
 const broadcast = vi.hoisted(() => ({ chats: [] as ChatMessage[] }));
@@ -128,10 +139,24 @@ function votingRoom(accusedRole: Role, code: string): Room {
 /** Chạy đúng bước `endVoting` của machine, tức mở phiên toà thật. */
 async function runDefense(room: Room): Promise<void> {
   armStep(room, { name: "endVoting" }, 0);
+  // Bỏ mốc mà `armStep` vừa đặt: bài test tự gọi bước đó ngay dưới.
+  timers.queued.length = 0;
   runPendingStep(room, room.pendingStep!);
   // Lượt bào chữa là một promise nổi; nhường vòng lặp cho nó chạy xong.
-  for (let i = 0; i < 10; i += 1) await Promise.resolve();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  // Quay mốc hẹn MỘT cái mỗi vòng, không xả cả hàng đợi.
+  //
+  // `endVoting` xếp hai mốc theo đúng thứ tự này: [lượt nói đầu của phiên xử,
+  // `beginFinalVote`]. Xả cả hàng đợi sẽ bắn luôn cái thứ hai, tức đổi pha ngay
+  // giữa lúc câu của bị cáo còn đang được viết - và `stillValid` sau `await` sẽ
+  // đúng khi vứt nó đi. Đó là cuộc đua do BÀI TEST tạo ra, không phải của phòng
+  // thật.
+  for (let round = 0; round < 6; round += 1) {
+    const next = timers.queued.shift();
+    if (!next) break;
+    next();
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
 }
 
 /** `SpeechRequest` của lượt bào chữa vừa rồi. */

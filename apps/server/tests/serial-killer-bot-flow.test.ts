@@ -186,8 +186,23 @@ describe("lượt tự bào chữa của BOT Sát Nhân", () => {
     // và chạy nó hai lần là chạy `endVoting` cho một tình thế đã trôi qua.
     timers.queued.length = 0;
     runPendingStep(room, room.pendingStep!);
-    for (let i = 0; i < 10; i += 1) await Promise.resolve();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // Hàng đợi của pha xử giờ chạy bằng ĐỒNG HỒ (gộp vào hàng đợi ban ngày),
+    // nên phải quay mốc hẹn vài vòng thay vì chỉ nhả microtask: mốc đầu là
+    // `OPENING_DELAY_MS`, và mỗi lượt nói tự hẹn lượt kế trong `finally`.
+    // Quay mốc hẹn MỘT cái mỗi vòng, không xả cả hàng đợi.
+    //
+    // `endVoting` xếp hai mốc theo đúng thứ tự này: [lượt nói đầu của phiên xử,
+    // `beginFinalVote`]. Xả cả hàng đợi sẽ bắn luôn cái thứ hai, tức đổi pha
+    // ngay giữa lúc câu của bị cáo còn đang được viết - và `stillValid` sau
+    // `await` sẽ đúng khi vứt nó đi. Đó là một cuộc đua do BÀI TEST tạo ra,
+    // không phải một tình huống của phòng thật.
+    for (let round = 0; round < 4; round += 1) {
+      const next = timers.queued.shift();
+      if (!next) break;
+      next();
+      for (let i = 0; i < 10; i += 1) await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
   }
 
   function defenseRequest(): SpeechRequest {

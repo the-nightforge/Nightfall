@@ -38,10 +38,21 @@ vi.mock("../src/bots", async () => {
   };
 });
 
+/**
+ * Mốc hẹn chạy trên ĐỒNG HỒ GIẢ.
+ *
+ * Phiên xử giờ dùng chung hàng đợi có nhịp với pha thảo luận: tuần tự, cách
+ * nhau vài giây, mỗi bot có nhịp nghỉ riêng. Một no-op ở đây nghĩa là không
+ * lượt nói nào xảy ra; một hàng đợi xả hết một lượt thì `beginFinalVote` nổ
+ * ngay giữa lúc câu đầu còn đang viết. Chỉ đồng hồ giả mới mô phỏng đúng, vì
+ * nhịp nghỉ đọc `Date.now()`.
+ */
 vi.mock("../src/rooms/store", () => ({
   clearRoomTimers: () => undefined,
   persistRoom: async () => undefined,
-  setRoomTimer: () => undefined,
+  setRoomTimer: (_code: string, fn: () => void, ms: number) => {
+    setTimeout(fn, ms);
+  },
 }));
 
 const broadcast = vi.hoisted(() => ({ chats: [] as ChatMessage[] }));
@@ -121,17 +132,21 @@ function votingRoom(code: string): Room {
 async function runDefense(room: Room): Promise<void> {
   armStep(room, { name: "endVoting" }, 0);
   runPendingStep(room, room.pendingStep!);
-  for (let i = 0; i < 10; i += 1) await Promise.resolve();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  // Chạy trọn pha xử theo đồng hồ giả. Mốc 0ms mà `armStep` vừa đặt cũng nổ
+  // trong khoảng này, nhưng `runPendingStep` đã tiêu token nên nó không chạy
+  // lần hai.
+  await vi.advanceTimersByTimeAsync(room.config.defenseSeconds * 1_000 + 1_000);
 }
 
 beforeEach(() => {
+  vi.useFakeTimers();
   brainControl.requests.length = 0;
   brainControl.reply = null;
   broadcast.chats.length = 0;
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   clearBotSession("DDEF1");
   clearBotSession("DDEF2");
   clearBotSession("DDEF3");
@@ -159,6 +174,33 @@ describe("scheduler DEFENSE đa bot", () => {
     expect(broadcast.chats.length).toBeGreaterThan(0);
     for (const [playerId, count] of counts) {
       expect(count, `bot ${playerId} noi qua 2 luot`).toBeLessThanOrEqual(2);
+    }
+  });
+
+  /*
+   * Hai khẳng định dưới đây là bản sao có chủ ý của hai test trong
+   * `discussion-scheduler.test.ts`. Chúng thiếu ở đây suốt thời gian phiên xử
+   * có hàng đợi riêng, và đó là lý do lỗi lọt: đo trên đường thật, cả bàn phát
+   * trong MỘT mili giây, hai cặp cách nhau 0ms, có tin trùng khít dấu thời
+   * gian. Không chỉ số nào của repo nhìn thấy điều đó.
+   */
+  it("khong hai BOT nao gui cung mot khoanh khac", async () => {
+    const room = votingRoom("DDEF1");
+    await runDefense(room);
+
+    const stamps = broadcast.chats.map((message) => message.at);
+    expect(stamps.length).toBeGreaterThan(1);
+    expect(new Set(stamps).size).toBe(stamps.length);
+  });
+
+  it("co khoang nghi giua cac cau, khong doi mot luc", async () => {
+    const room = votingRoom("DDEF1");
+    await runDefense(room);
+
+    const stamps = broadcast.chats.map((message) => message.at).sort((a, b) => a - b);
+    expect(stamps.length).toBeGreaterThan(1);
+    for (let i = 1; i < stamps.length; i += 1) {
+      expect(stamps[i]! - stamps[i - 1]!).toBeGreaterThanOrEqual(1_000);
     }
   });
 
