@@ -324,10 +324,9 @@ export interface SelfPlayMetrics {
    * Trong những lần một con SÓI khai láo Tiên Tri, bao nhiêu lần làng đi theo
    * lời khai đó (COMMUNICATION §17).
    *
-   * Đây là chỉ số ĐÍCH của việc chấm điểm ghế khai láo: `wolfBluffCandidateScore`
-   * tồn tại để bầy đẩy ra con nói dối *có sức thuyết phục hơn*, và không có
-   * con số này thì "đã chọn ghế khác" chỉ nói rằng có gì đó đổi, không nói rằng
-   * nó đổi theo chiều tốt hơn.
+   * Ghế khai láo là vòng xoay hash (`wolfBluffSeat`). Một bản chấm điểm ghế
+   * (v27, đã xoá) đẩy chỉ số này lên +1,31 điểm và kéo `claimAccuracy` xuống
+   * -2,45 - đúng hai mặt của một sự việc, như đoạn dưới nói.
    *
    * Anh em với `claimAccuracy` nhưng ĐỘC LẬP với nó: mẫu số ở đây là lời khai
    * láo của Sói, còn `claimAccuracy` lấy mẫu số là những lời khai làng ĐÃ tin.

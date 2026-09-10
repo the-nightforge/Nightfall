@@ -122,3 +122,27 @@ function initiatorOf(accusers: Map<string, string>): string {
   }
   return bestId;
 }
+
+/** Một người bênh gỡ được bấy nhiêu phần của một người tố. */
+const DEFENDER_RELIEF = 0.6;
+
+/**
+ * Áp lực lên một người trong một vòng, `0..1`.
+ *
+ * Mẫu số là số người CÓ THỂ tố (người sống trừ chính mục tiêu), nên "ba người
+ * tố" nặng hơn hẳn ở bàn còn năm người so với bàn còn mười hai — đúng như cảm
+ * giác thật ở bàn.
+ *
+ * Người bênh gỡ bớt chứ không xoá: một người được bênh giữa lúc ba người đang
+ * tố vẫn đang ở giữa tâm bão.
+ *
+ * Sống cạnh `PressureEpisode` vì nó là phép đọc duy nhất của cấu trúc đó.
+ * `learning/speech-dataset.ts` dựng lại đúng con số này từ log ván; một bản
+ * chép công thức ở đó sẽ trôi lệch.
+ */
+export function pressureOf(episode: PressureEpisode | undefined, aliveCount: number): number {
+  if (!episode) return 0;
+  const canAccuse = Math.max(1, aliveCount - 1);
+  const net = episode.accuserIds.length - episode.defenderIds.length * DEFENDER_RELIEF;
+  return Math.min(1, Math.max(0, net / canAccuse));
+}

@@ -5,7 +5,7 @@ import {
   formatTranscript,
 } from "../src/bot/evaluation/transcript";
 import { runSelfPlay } from "../src/bot/evaluation/selfplay";
-import { BOT_WEIGHTS_V28 } from "../src/bot/config/weights";
+import { DEFAULT_BOT_WEIGHTS } from "../src/bot/config/weights";
 import type { Role } from "@masoi/shared";
 import type { SelfPlayGame } from "../src/bot/evaluation/selfplay";
 
@@ -14,7 +14,7 @@ function play(seed = "transcript-1"): SelfPlayGame {
     seed,
     players: 8,
     maxRounds: 12,
-    weights: BOT_WEIGHTS_V28,
+    weights: DEFAULT_BOT_WEIGHTS,
     speech: true,
   } as never);
 }

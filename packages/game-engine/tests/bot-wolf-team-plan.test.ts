@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Role } from "@masoi/shared";
 import { planWolfTeam } from "../src/bot/roles/wolf-team-plan";
+import { wolfBluffSeat } from "../src/bot/decision/claim-decision";
 import type { WolfTeamPlanInput } from "../src/bot/roles/wolf-team-plan";
 import { BotRuntime } from "../src/bot/BotRuntime";
 import { createSeededRng } from "../src/bot/rng";
@@ -146,6 +147,18 @@ describe("planWolfTeam (PR5 — Wolf Team Planner)", () => {
       if (target !== null) expect(pack).not.toContain(target);
     }
     for (const member of plan.distancingPlayers) expect(pack).toContain(member);
+  });
+
+  it("claimant là ĐÚNG ghế mà `decideChatClaim` hỏi — cùng hàm, cùng đầu vào", () => {
+    // Không có kênh truyền tin giữa các BotRuntime: kế hoạch của bầy và con Sói
+    // mở miệng chỉ khớp nhau khi cả hai tính ra cùng một ghế. Cả hai hỏi thẳng
+    // `wolfBluffSeat`; test này bắt chỗ hai bên lỡ truyền vào hai danh sách khác
+    // nhau. Nó từng sống trong `bot-wolf-bluff.test.ts`, đã xoá cùng
+    // `wolfBluffPick`.
+    const data = input();
+    const plan = planWolfTeam(data);
+    expect(plan.claimant).not.toBeNull();
+    expect(plan.claimant).toBe(wolfBluffSeat(["w1", "w2"], ["w1", "w2"], data.knowledge.round));
   });
 
   it("§14: non-wolf không nhìn thấy plan nào (plan rỗng, không slot nào có giá trị)", () => {

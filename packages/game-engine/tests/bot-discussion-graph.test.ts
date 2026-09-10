@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDiscussionGraph } from "../src/bot/analysis/discussion-graph";
+import { buildDiscussionGraph, pressureOf } from "../src/bot/analysis/discussion-graph";
 import type { PressureEpisode } from "../src/bot/analysis/discussion-graph";
 import { assessPairs } from "../src/bot/belief/pair-assessment";
 import type { PairAssessmentInput } from "../src/bot/belief/pair-assessment";
@@ -307,5 +307,46 @@ describe("PressureEpisode shape", () => {
     // Người vừa tố vừa bênh cùng target: cả hai vai đều ghi nhận.
     expect(episode.accuserIds).toContain("a");
     expect(episode.defenderIds).toContain("a");
+  });
+});
+
+/**
+ * `pressureOf` sống ở đây từ khi `conversation-state.ts` bị xoá cùng thang
+ * v24–v28; `learning/speech-dataset.ts` là người đọc còn lại. Mấy test này thay
+ * cho bộ test áp lực cũ, vốn chỉ chạm tới nó gián tiếp qua
+ * `buildConversationState`.
+ */
+describe("pressureOf", () => {
+  const episode = (accusers: number, defenders: number): PressureEpisode => ({
+    round: 1,
+    targetId: "t",
+    initiatorId: "a0",
+    accuserIds: Array.from({ length: accusers }, (_, i) => `a${i}`),
+    defenderIds: Array.from({ length: defenders }, (_, i) => `d${i}`),
+    silentIds: [],
+  });
+
+  it("không có đợt áp lực nào thì bằng 0", () => {
+    expect(pressureOf(undefined, 8)).toBe(0);
+  });
+
+  it("càng nhiều người tố thì càng cao", () => {
+    expect(pressureOf(episode(3, 0), 8)).toBeGreaterThan(pressureOf(episode(1, 0), 8));
+  });
+
+  it("người bênh gỡ bớt chứ không xoá", () => {
+    const alone = pressureOf(episode(3, 0), 8);
+    const defended = pressureOf(episode(3, 1), 8);
+    expect(defended).toBeLessThan(alone);
+    expect(defended).toBeGreaterThan(0);
+  });
+
+  it("cùng số người tố thì bàn càng mỏng càng nặng", () => {
+    expect(pressureOf(episode(2, 0), 5)).toBeGreaterThan(pressureOf(episode(2, 0), 12));
+  });
+
+  it("luôn nằm trong [0, 1]", () => {
+    expect(pressureOf(episode(10, 0), 3)).toBe(1);
+    expect(pressureOf(episode(0, 5), 8)).toBe(0);
   });
 });

@@ -370,7 +370,10 @@ function requestsOpinion(raw: string): boolean {
 /**
  * Câu hỏi ĐANG HỎI VỀ CHUYỆN GÌ (spec COMMUNICATION §13).
  *
- * Bảy ô, và mỗi ô tồn tại vì `question-policy.ts` rẽ nhánh KHÁC NHAU trên nó.
+ * Bảy ô. Chúng sinh ra cho `question-policy.ts`, nơi rẽ nhánh KHÁC NHAU trên
+ * từng ô; file đó đã bị xoá cùng thang v24–v28 (xem `DEFAULT_BOT_WEIGHTS`),
+ * nên hiện nhãn này vẫn được gắn và đi vào `trigger.questionType` nhưng KHÔNG
+ * còn ai rẽ nhánh trên nó.
  * Spec §13 gợi ý thêm `MOTIVE` và `DEFENSE`; hai ô đó bị bỏ có chủ đích vì mọi
  * đường đi của chúng trùng khít `GENERAL` - một nhãn không ai đọc là một nhãn
  * sẽ trôi lệch khỏi hành vi thật. Thêm lại khi có một nhánh chiến thuật cần nó.
