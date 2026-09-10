@@ -288,7 +288,18 @@ export interface SelfPlayMetrics {
 
   // ---- Lời khai vai (Phase 5) ----
 
-  /** Số lời khai trung bình mỗi ván. Thiết kế nhắm 2–4 ở bàn 12–14. */
+  /**
+   * Số lời khai trung bình mỗi ván.
+   *
+   * ĐỪNG so thẳng với một ngưỡng tuyệt đối - chia cho số ghế đặc biệt
+   * (`specialRoleList(config).length`, tính cả Sói) trước. Con số này đi theo
+   * BỘ BÀI, không theo số người: bộ bài 3 vai của runner cho ~3,5 ở 8, 12 lẫn
+   * 14 người, còn `PRESET_DECKS` 7–12 ghế cho 4,1–6,5. Cái ổn định là tỉ lệ
+   * trên ghế, 0,54–0,61 ở mọi bộ bài (v31, 300 ván mỗi bộ).
+   *
+   * Ngưỡng "2–4 ở bàn 12–14" từng ghi ở đây là con số của bộ bài 3 vai. Dải
+   * đang được gác nằm ở `bot-claim-metrics.test.ts`.
+   */
   claimsPerGame: number | null;
   /** Tỉ lệ ván có ít nhất một lời phản bác. Phải `> 0` và `< 1`. */
   counterClaimRate: Ratio;
