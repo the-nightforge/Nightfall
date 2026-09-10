@@ -57,6 +57,7 @@ import {
   type LearnedDecided,
   type LearnedPick,
 } from "./policy/learned-policy";
+import { residualNightPolicy, residualVotePolicy } from "./policy/residual-policy";
 import { snapshotBelief, snapshotKnowledge } from "./trace/snapshot";
 import { decayAndPrune } from "./memory/memory-decay";
 import { createBotBrainState, remember } from "./memory/memory-store";
@@ -135,6 +136,10 @@ export interface BotRuntimeOptions {
   /**
    * Policy học được (MLP) cho cả VOTE lẫn NIGHT. Vắng = heuristic thuần, tức
    * hành vi production hiện hành, byte một.
+   *
+   * Model tự khai `residual.beta` thì đi đường RESIDUAL: hiệu chỉnh bảng điểm
+   * heuristic ở cả hai lượt (`residual-policy.ts`); residual 0 = heuristic
+   * đúng byte. Không khai thì là policy logits thuần như trước.
    *
    * Nếu cấp cả `votePolicy` thì `votePolicy` thắng ở lượt VOTE (để hybrid
    * alpha/beta còn cắm được); `learnedPolicy` vẫn dùng cho NIGHT.
@@ -394,15 +399,15 @@ export class BotRuntime {
     const run = this.beginTracedDecision();
     // `votePolicy` tường minh thắng (để hybrid alpha/beta còn cắm được); nếu
     // không, learned model dựng ở đây để `onPick` của đúng lượt này nghe được.
+    // Model residual (`residual.beta`) hiệu chỉnh bảng planner đã chấm; model
+    // logits thuần chọn thẳng. Cả hai cùng seam `PolicyModel`.
+    const learnedOptions = { temperature: this.learnedTemperature, belief: () => this.beliefAfter };
     const votePolicy =
       this.votePolicy ??
       (this.learnedPolicy && this.learnedDecisions !== "night"
-        ? learnedPolicyModel(
-            this.learnedPolicy,
-            this.weights,
-            { temperature: this.learnedTemperature, belief: () => this.beliefAfter },
-            run.onPick,
-          )
+        ? this.learnedPolicy.residual
+          ? residualVotePolicy(this.learnedPolicy, this.weights, learnedOptions, run.onPick)
+          : learnedPolicyModel(this.learnedPolicy, this.weights, learnedOptions, run.onPick)
         : undefined);
     const vote = selectVote(context, this.state, run.rng, this.weights, run.probe, votePolicy);
     run.finish(context, "VOTE", vote.choice.type === "PLAYER" ? vote.choice.targetId : null, {
@@ -507,28 +512,48 @@ export class BotRuntime {
    */
   decideNight(context: BotDecisionContext): BotNightIntention | null {
     const run = this.beginTracedDecision();
+    const learnedNight =
+      this.learnedPolicy && this.learnedDecisions !== "vote" ? this.learnedPolicy : undefined;
+    const learnedOptions = { temperature: this.learnedTemperature, belief: () => this.beliefAfter };
+    // Residual đi TRONG strategy (seam `rankNightTargets`), không phải sau nó:
+    // nó hiệu chỉnh bảng điểm trước khi vai chọn, và mọi cổng phía sau của vai
+    // (Sát Nhân "đêm yên", mục tiêu phụ) vẫn chạy trên lựa chọn đã hiệu chỉnh.
+    // Không có policy thì tham số là `undefined` và vai đi đúng đường cũ.
+    const nightPolicy = learnedNight?.residual
+      ? residualNightPolicy(
+          learnedNight,
+          this.weights,
+          context,
+          this.state,
+          run.rng,
+          learnedOptions,
+          run.onPick,
+        )
+      : undefined;
     const heuristicNight = strategyFor(context.knowledge.selfRole, this.weights).decideNight(
       context,
       this.state,
       run.rng,
       run.probe,
+      nightPolicy,
     );
-    // Heuristic chạy TRƯỚC và luôn chạy: nó là nước lui khi model đề xuất một
-    // nước engine không chào, và nó là nguồn của `confidence`/`evidence` mà
-    // model không sinh được. Không có `learnedPolicy` thì dòng này là phép
+    // Model logits thuần đi SAU heuristic: heuristic là nước lui khi model đề
+    // xuất một nước engine không chào, và là nguồn của `confidence`/`evidence`
+    // mà model không sinh được. Không có `learnedPolicy` thì dòng này là phép
     // gán, và đường chạy production không đổi một byte.
-    const night = this.learnedPolicy && this.learnedDecisions !== "vote"
-      ? selectLearnedNight(
-          this.learnedPolicy,
-          this.weights,
-          context,
-          this.state,
-          heuristicNight,
-          run.rng,
-          { temperature: this.learnedTemperature, belief: () => this.beliefAfter },
-          run.onPick,
-        )
-      : heuristicNight;
+    const night =
+      learnedNight && !learnedNight.residual
+        ? selectLearnedNight(
+            learnedNight,
+            this.weights,
+            context,
+            this.state,
+            heuristicNight,
+            run.rng,
+            learnedOptions,
+            run.onPick,
+          )
+        : heuristicNight;
     run.finish(
       context,
       "NIGHT",

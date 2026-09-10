@@ -61,6 +61,28 @@ python -m masoi_training.train_ppo --data <enc-dir> --init <champion.weights.jso
 Cả ba bước cộng thăng hạng nằm trong `rl_loop.py` — xem
 `docs/BOT_SELF_LEARNING_TRAINING.md` bước 8.
 
+## Residual policy (`docs/superpowers/specs/2026-09-09-residual-policy-design.md`)
+
+Model KHÔNG thay teacher, nó hiệu chỉnh teacher: `adjusted = score_heuristic +
+β·net(obs)[ô]`. Champion-0000 có `policyHead = 0` nên là heuristic đúng byte;
+PPO chỉ học phần hơn heuristic. Loại policy và β nằm TRONG file model
+(`residual: {beta}`) — engine, benchmark, replay tự nhận, không có cờ CLI.
+
+```bash
+# champion-0000: chép trunk từ policy-0004, zero policyHead, β = 10
+python -m masoi_training.init_residual --from ../.tmp/model-ob/model.weights.json \
+  --out ../.tmp/residual/champion-0000.weights.json --beta 10
+
+# vòng lặp như cũ; τ = 5 vì thang điểm là belief 0..100
+python rl_loop.py --champion ../.tmp/residual/champion-0000.weights.json \
+  --iterations 3 --games 900 --temperature 5 --out ../.tmp/rl-residual
+```
+
+`ai:encode --rollout` của tập residual ghi thêm `bases.f32.bin` — điểm THẬT
+(có jitter) theo ô hành động, NaN ngoài bảng ứng viên — cùng `meta.beta`,
+`meta.temperature`. `train_ppo` dựng lại `softmax((bases + β·net)/τ)` từ đó,
+nên `approxKl` epoch 1 ≈ 0 (test_ppo canh cả hai loại).
+
 ## Test
 
 ```bash

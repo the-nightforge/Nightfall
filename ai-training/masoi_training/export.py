@@ -33,7 +33,11 @@ def export_weights_json(
     model_id: str,
     training_seed: int,
     hidden: int,
+    residual: dict | None = None,
 ) -> None:
+    """`residual={"beta": β}` đánh dấu model RESIDUAL: engine đọc trường này để
+    đi đường hiệu chỉnh điểm heuristic thay vì thay teacher. Model thường KHÔNG
+    mang trường này."""
     payload = {
         "format": FORMAT,
         "modelId": model_id,
@@ -49,4 +53,6 @@ def export_weights_json(
         "policyHead": _linear(model.policy_head),
         "valueHead": _linear(model.value_head[0]),
     }
+    if residual is not None:
+        payload["residual"] = {"beta": float(residual["beta"])}
     Path(path).write_text(json.dumps(payload), encoding="utf8")

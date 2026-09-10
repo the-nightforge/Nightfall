@@ -37,6 +37,7 @@ def write_dataset(root: Path, *, truncate_features: bool = False) -> None:
     np.array([0, 0, 1, 1, 2, 2], dtype=np.uint8).tofile(root / "roles.u8.bin")
     np.array([0, 1, 0, 1, 0, 1], dtype=np.uint8).tofile(root / "decisions.u8.bin")
     np.tile(np.array([1, 1, 0], dtype=np.uint8), ROWS).tofile(root / "optimal.u8.bin")
+    np.tile(np.array([7.5, 3.0, np.nan], dtype="<f4"), ROWS).tofile(root / "scores.f32.bin")
     (root / "meta.json").write_text(
         json.dumps(
             {
@@ -65,6 +66,9 @@ def main() -> None:
         assert data.optimal is not None and data.optimal.shape == (ROWS, ACT)
         assert data.optimal.dtype == bool
         assert data.split("validation").optimal.shape == (2, ACT)
+        assert data.scores is not None and data.scores.shape == (ROWS, ACT)
+        assert np.isnan(data.scores[0, 2]) and data.scores[0, 0] == 7.5
+        assert data.split("test").scores.shape == (1, ACT)
         assert data.features[1, 0] == 4.0, "reshape sai hàng"
 
         # §15: mỗi hàng thuộc đúng một phần, và ba phần cộng lại là cả tập.

@@ -22,7 +22,7 @@ export function seerStrategy(
   return {
     role,
 
-    decideNight(context, state, rng, probe) {
+    decideNight(context, state, rng, probe, policy) {
       const night = context.knowledge.night;
       if (!night || !night.legalActions.includes("SEE")) {
         probe?.fallback("không có lượt soi nào đang mở");
@@ -45,6 +45,8 @@ export function seerStrategy(
         weights,
         rng,
         probe,
+        action: "SEE",
+        policy,
         termsFor: (targetId) => [
           {
             name: "informationValue",

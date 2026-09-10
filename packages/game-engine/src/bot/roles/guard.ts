@@ -23,7 +23,7 @@ export function guardStrategy(
   return {
     role: "GUARD",
 
-    decideNight(context, state, rng, probe) {
+    decideNight(context, state, rng, probe, policy) {
       const night = context.knowledge.night;
       if (!night || !night.legalActions.includes("GUARD")) {
         probe?.fallback("không có lượt đỡ nào đang mở");
@@ -56,6 +56,8 @@ export function guardStrategy(
         weights,
         rng,
         probe,
+        action: "GUARD",
+        policy,
         termsFor: (targetId) => {
           const trust = state.trust[targetId]?.score ?? 0;
           const suspicion = state.suspicion[targetId]?.score ?? 0;

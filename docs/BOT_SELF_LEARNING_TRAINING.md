@@ -351,7 +351,16 @@ npm run ai:benchmark -- --model .tmp/model-ob/model.weights.json --setups baseli
   policy-0004, mỗi nước đêm lệch đắt gấp ~4 lần một nước bầu lệch.
 
 Mục tiêu của behavior cloning là `all − teacher → 0`, không phải agreement → 1.
-Chi tiết ở `reports/train-policy-0002.md`.
+
+**Nhưng `all` một mình KHÔNG nói model mạnh hay yếu.** Nó đo CÂN BẰNG (tỉ lệ
+làng thắng khi cả bàn dùng model), và cân bằng tăng được vì *đối thủ dở đi*: một
+model vừa là dân làng tệ hơn (−6,4) vừa là sói yếu hơn (+2,3) đã cho `all` =
+62,6%, cao hơn cả teacher — vì sói yếu đi nhiều hơn. Luôn đọc `village` và
+`wolves` (sức mạnh từng phe đo riêng, đối thủ cố định) TRƯỚC, rồi mới đọc `all`.
+
+`--distill-alpha` (train theo điểm của teacher thay vì one-hot) đã thử: α = 0,5
+không khác policy-0004, α = 1,0 tệ hơn ở cả hai phe. Giữ làm công cụ đo; mặc
+định 0. Chi tiết ở `reports/train-policy-0002.md`.
 
 Một lệnh chạy đủ ba cấu hình. Ở mỗi cấu hình, model chỉ được cấp cho ghế của
 phe đang đo; ghế còn lại chạy heuristic y như production. Mã thoát khác 0 khi
@@ -395,6 +404,24 @@ Mỗi vòng làm bốn việc:
 
 **Champion là file bất biến** trong `<out>/champions/champion-000k.weights.json`
 — không bao giờ ghi đè, nên luôn quay lại được bản trước.
+
+### Residual: xuất phát từ heuristic, không từ bản sao
+
+Đo 2026-09-09 (`reports/train-policy-0002.md`): bản sao BC khớp teacher 94 %
+mà thua chính teacher 6,6 điểm, vì observation chỉ mang 2 trong 8 số hạng
+điểm bầu. RL từ bản sao ấy đi ngang. Cách xoá lớp vấn đề đó là **residual
+policy** (`docs/superpowers/specs/2026-09-09-residual-policy-design.md`):
+
+    adjusted_i = score_i (heuristic, CÓ jitter) + β · net(obs)[ô của ứng viên i]
+
+- Model tự khai `residual: {beta}` trong `model.weights.json`; engine đi đường
+  hiệu chỉnh ở CẢ VOTE lẫn NIGHT (seam `NightPolicyModel` trong
+  `rankNightTargets`; Phù Thuỷ không có bảng nên giữ heuristic).
+- Champion-0000 do `python -m masoi_training.init_residual` tạo: `policyHead`
+  = 0 → heuristic đúng byte; `ai:benchmark` cho Δ = 0,0 đúng ở mọi cấu hình.
+- Rollout chạy `--temperature 5` (thang belief); encode ghi `bases.f32.bin`
+  để PPO dựng lại đúng phân phối cũ.
+- Lệnh đầy đủ ở `ai-training/README.md` mục "Residual policy".
 
 ### Ngắt lúc nào cũng được
 
@@ -504,6 +531,7 @@ chi tiết và số liệu ở `reports/train-policy-0002.md`.
 | Encode rollout | `npm run ai:encode -- --in DIR/trajectories.jsonl --out ENC --rollout` |
 | Train (PPO) | `python -m masoi_training.train_ppo --data ENC --init W.json --out MODEL` |
 | Vòng lặp RL | `python rl_loop.py --champion W.json --iterations 20 --games 3000 --bench-every 5 --out .tmp/rl` |
+| Champion residual | `python -m masoi_training.init_residual --from W.json --out R.json --beta 10` rồi `rl_loop.py --champion R.json --temperature 5` |
 | Self-check Python | `python tests/test_data.py && python tests/test_train_smoke.py && python tests/test_ppo.py` |
 | Test TS | `npm test` |
 
