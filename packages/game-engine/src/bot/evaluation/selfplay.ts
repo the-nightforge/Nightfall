@@ -23,6 +23,7 @@ import {
 } from "../decision/defense-scheduler";
 import { witchPoisonThreshold } from "../roles/witch";
 import {
+  speechShapeFingerprint,
   speechSemanticFingerprint,
   speechTextFingerprint,
 } from "../conversation/fingerprint";
@@ -230,6 +231,17 @@ export type SelfPlayEvent =
       /** Văn bản đã phát. Không đo được lặp thật nếu không có nó. */
       text: string;
       textFingerprint: string;
+      /**
+       * Vân tay của KHUNG CÂU - cùng câu, khác tên người, cùng một giá trị.
+       *
+       * Cái duy nhất đo được `crossBotRepetitionRate`. `textFingerprint` không
+       * đo được: hai BOT nói cùng một khuôn về hai người khác nhau cho ra hai
+       * vân tay khác nhau, nên chỉ số lặp báo "không lặp" đúng lúc cả bàn đang
+       * nói y hệt nhau.
+       *
+       * Báo cáo JSON cũ không mang trường này; thiếu nó thì bỏ qua câu đó.
+       */
+      shapeFingerprint?: string;
       semanticFingerprint: string;
       evidenceSourceIds: string[];
       /**
@@ -403,6 +415,7 @@ export function renderIntentionText(
     seq: number;
     avoidFingerprints?: readonly string[];
     avoidOpenings?: readonly string[];
+    avoidShapes?: readonly string[];
   },
 ): string {
   const target = speech.targetId ? nameOf(speech.targetId) : "người đó";
@@ -587,6 +600,23 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
   const repliesTo = new Map<string, number>();
   const spokenThisRound = new Map<string, number>();
   const lastLineOf = new Map<string, string>();
+  /**
+   * Khung câu mà CẢ PHÒNG vừa dùng, cửa sổ `roomShapeWindow` câu gần nhất.
+   *
+   * Sống ở harness chứ không ở lõi, cùng lý do với `chainDepthOf`/`repliesTo`:
+   * đây là luật của CĂN PHÒNG, và một BOT không biết cả bàn vừa nói những khung
+   * câu nào. Nó chỉ đi vào tầng CÂU CHỮ - ý định đã chốt xong trước đó - nên nó
+   * không đổi được nước đi nào, chỉ đổi cách nói.
+   */
+  const roomShapes: string[] = [];
+  /** Tên hiển thị của mọi ghế, để xoá tên khỏi khung câu. Không đổi trong ván. */
+  const allNames = engine.state.players.map((player) => player.name);
+  const rememberShape = (text: string): void => {
+    const window = weights.conversation.roomShapeWindow;
+    if (window <= 0) return;
+    roomShapes.push(speechShapeFingerprint(text, allNames));
+    if (roomShapes.length > window) roomShapes.shift();
+  };
   /** Lá phiếu đã chốt ở lượt đầu; các lượt nói sau chỉ ĐỌC nó. */
   const lastVote = new Map<string, BotVoteIntention>();
   let conversationRound = -1;
@@ -750,6 +780,8 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
           avoidFingerprints: recentTextFingerprints(runtimes.get(playerId)!.state, 3),
           // Cùng luật với server: không mở đầu như năm lượt vừa rồi của chính mình.
           avoidOpenings: recentOpenings(runtimes.get(playerId)!.state),
+          // Và không lặp khung câu người khác vừa nói. Rỗng khi knob tắt.
+          avoidShapes: roomShapes,
         })
       : renderIntentionText(speech, nameOf);
 
@@ -770,6 +802,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       });
     }
     lastLineOf.set(playerId, text);
+    rememberShape(text);
 
     runtimes.get(playerId)!.recordSpeech(speech, round, text);
     chainDepthOf.set(messageId, depth);
@@ -791,6 +824,10 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       topic: speech.topic ?? null,
       text,
       textFingerprint: speechTextFingerprint(text),
+      // Ghi ở đây chứ không để tầng đo tự tính: chỉ chỗ này mới có danh sách
+      // tên của ván, và một phép xoá tên thứ hai ở `metrics.ts` là một chỗ sẽ
+      // trôi lệch khỏi phép mà `renderSpeechTemplate` thật sự dùng để né.
+      shapeFingerprint: speechShapeFingerprint(text, allNames),
       semanticFingerprint: speechSemanticFingerprint(speech),
       evidenceSourceIds: speech.evidence.map((item) => item.sourceId),
       fromTemplate: true,

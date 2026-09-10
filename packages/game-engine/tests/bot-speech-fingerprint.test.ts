@@ -3,6 +3,7 @@ import {
   normalizeSpeechText,
   openingOf,
   speechSemanticFingerprint,
+  speechShapeFingerprint,
   speechTextFingerprint,
 } from "../src/bot/conversation/fingerprint";
 import type { BotEvidence, BotSpeechIntention } from "../src/bot/types";
@@ -153,5 +154,56 @@ describe("openingOf", () => {
 
   it("chuỗi rỗng trả về null chứ không phải chuỗi rỗng", () => {
     expect(openingOf("   ")).toBeNull();
+  });
+});
+
+describe("speechShapeFingerprint", () => {
+  const NAMES = ["An", "Bình", "Người 2", "Người 12", "Chi"];
+
+  it("cùng khuôn, khác tên người, cho cùng một vân tay", () => {
+    // Đây là toàn bộ lý do hàm này tồn tại: `speechTextFingerprint` cho hai giá
+    // trị khác nhau ở đúng cặp câu mà người chơi đọc lên thấy y hệt nhau.
+    expect(speechShapeFingerprint("hỏi thật, An đang nghĩ gì", NAMES)).toBe(
+      speechShapeFingerprint("hỏi thật, Bình đang nghĩ gì", NAMES),
+    );
+    expect(speechTextFingerprint("hỏi thật, An đang nghĩ gì")).not.toBe(
+      speechTextFingerprint("hỏi thật, Bình đang nghĩ gì"),
+    );
+  });
+
+  it("khác khuôn thì khác vân tay, dù cùng tên", () => {
+    expect(speechShapeFingerprint("tôi nghi An", NAMES)).not.toBe(
+      speechShapeFingerprint("An nói rõ ra đi", NAMES),
+    );
+  });
+
+  it("tên nhiều token khớp cả cụm, và tên dài xét trước tên ngắn", () => {
+    // "Người 12" phải khớp trọn; nếu "Người 2" hay một token "người" nuốt trước
+    // thì phần đuôi rơi lại thành một token số và hai khuôn khác nhau.
+    expect(speechShapeFingerprint("tôi nghi Người 12", NAMES)).toBe(
+      speechShapeFingerprint("tôi nghi Người 2", NAMES),
+    );
+    expect(speechShapeFingerprint("tôi nghi Người 12", NAMES)).toBe(
+      speechShapeFingerprint("tôi nghi An", NAMES),
+    );
+  });
+
+  it("dùng chung phép chuẩn hoá với vân tay văn bản", () => {
+    // Dấu câu, chữ hoa và từ đệm đầu câu không được tạo ra hai khuôn.
+    expect(speechShapeFingerprint("Ừ, tôi nghi An.", NAMES)).toBe(
+      speechShapeFingerprint("tôi nghi Bình", NAMES),
+    );
+  });
+
+  it("không có tên nào trong câu thì bằng đúng vân tay văn bản của câu đó", () => {
+    expect(speechShapeFingerprint("thôi chốt đi cho lẹ", NAMES)).toBe(
+      speechShapeFingerprint("thôi chốt đi cho lẹ", []),
+    );
+  });
+
+  it("câu rỗng không ném và không trùng một câu có chữ", () => {
+    expect(speechShapeFingerprint("   ", NAMES)).not.toBe(
+      speechShapeFingerprint("tôi nghi An", NAMES),
+    );
   });
 });

@@ -8,7 +8,10 @@ import {
   templatePoolSizes,
   type SpeechTemplateRequest,
 } from "../src/bot/conversation/templates";
-import { speechTextFingerprint } from "../src/bot/conversation/fingerprint";
+import {
+  speechShapeFingerprint,
+  speechTextFingerprint,
+} from "../src/bot/conversation/fingerprint";
 import { looksCasual } from "../src/bot/evaluation/casual-tone";
 import { analyzeChat } from "../src/bot/analysis/chat-analysis";
 import { BOT_SPEECH_KINDS, BOT_SPEECH_TONES } from "../src/bot/types";
@@ -679,6 +682,43 @@ describe("renderSpeechTemplate tránh cách mở đầu vừa dùng", () => {
   it("avoidOpenings không đổi kết quả khi rỗng: tương thích với chỗ gọi cũ", () => {
     for (let seq = 0; seq < 30; seq += 1) {
       expect(renderSpeechTemplate(request({ seq, avoidOpenings: [] }))).toBe(
+        renderSpeechTemplate(request({ seq })),
+      );
+    }
+  });
+
+  it("né khung câu mà một BOT KHÁC vừa dùng", () => {
+    // Kịch bản thật: hai con BOT rút mẫu độc lập trên cùng một bể và ra cùng
+    // một khuôn, chỉ khác cái tên. `avoidFingerprints` không thấy (hai vân tay
+    // văn bản khác nhau), `avoidOpenings` không chắc thấy (khuôn có thể trùng
+    // từ giữa câu). Chỉ khung câu mới thấy.
+    const mine = request({ targetName: "An", botId: "a" });
+    const theirs = request({ targetName: "Bình", botId: "b" });
+    const spoken = renderSpeechTemplate(theirs);
+    const shape = speechShapeFingerprint(spoken, ["An", "Bình"]);
+
+    const next = renderSpeechTemplate({ ...mine, avoidShapes: [shape] });
+    expect(speechShapeFingerprint(next, ["An", "Bình"])).not.toBe(shape);
+  });
+
+  it("cả bể trùng khung thì vẫn nói chứ không im", () => {
+    // Cùng luật xuống thang với `avoidOpenings`: mềm, không phải cổng. Một BOT
+    // im vì cả phòng đã nói hết mọi khuôn là đổi một lỗi lặp lấy một lỗi nặng
+    // hơn hẳn.
+    const base = request({ intention: intention({ kind: "REACTION", tone: "FIRM" }) });
+    const pool = SPEECH_TEMPLATES.REACTION.FIRM!;
+    const everyShape = pool.map((template) =>
+      speechShapeFingerprint(fillSpeechTemplate(template, base), ["Chi", "Bình"]),
+    );
+    const text = renderSpeechTemplate({ ...base, avoidShapes: everyShape });
+    expect(text.trim().length).toBeGreaterThan(0);
+  });
+
+  it("avoidShapes rỗng không đổi kết quả: preset cũ replay từng bit", () => {
+    // Điều kiện của kỷ luật §19. `roomShapeWindow = 0` ở mọi preset tới v30 cho
+    // chỗ gọi truyền tập rỗng, và tập rỗng phải là một phép đồng nhất.
+    for (let seq = 0; seq < 30; seq += 1) {
+      expect(renderSpeechTemplate(request({ seq, avoidShapes: [] }))).toBe(
         renderSpeechTemplate(request({ seq })),
       );
     }

@@ -6,7 +6,7 @@ import {
   type BotSpeechKind,
   type BotSpeechTone,
 } from "../types";
-import { openingOf, speechTextFingerprint } from "./fingerprint";
+import { openingOf, speechShapeFingerprint, speechTextFingerprint } from "./fingerprint";
 
 /**
  * Câu chữ cho một ý định đã chốt, không cần mạng.
@@ -1404,6 +1404,23 @@ export interface SpeechTemplateRequest {
    * nguyên câu.
    */
   avoidOpenings?: readonly string[];
+  /**
+   * Khung câu (`speechShapeFingerprint`) mà CẢ PHÒNG vừa dùng.
+   *
+   * Khác hẳn hai danh sách trên: chúng nói "đừng nói lại câu của CHÍNH MÌNH",
+   * cái này nói "đừng nói lại câu NGƯỜI KHÁC vừa nói". Trước khi có nó, hai con
+   * BOT rút mẫu độc lập trên cùng một bể ~13 câu và đụng nhau 11,8% số lượt -
+   * và không cơ chế nào thấy, vì cả ba tầng chống lặp lẫn ba chỉ số lặp đều gom
+   * theo `actorId`.
+   *
+   * Là luật của CĂN PHÒNG, giống `maxRepliesPerMessage`: chỗ gọi giữ sổ, BOT
+   * không biết và không cần biết. Nó KHÔNG rò rỉ gì - ý định đã chốt xong trước
+   * khi hàm này được gọi, nên tập này chỉ đổi được CÂU CHỮ, không đổi được một
+   * nước đi nào.
+   *
+   * Mềm như `avoidOpenings`: cả bể đều trùng khung thì vẫn nói.
+   */
+  avoidShapes?: readonly string[];
 }
 
 /** Giọng gần nhất có mẫu; `NEUTRAL` luôn tồn tại nên vòng lặp luôn dừng. */
@@ -1601,7 +1618,7 @@ function humanize(template: string, request: SpeechTemplateRequest): string {
  *
  * Hai vòng quét, theo thứ tự nới dần:
  *
- * 1. Né cả câu đã nói LẪN cách mở đầu đã dùng.
+ * 1. Né câu đã nói, cách mở đầu đã dùng, VÀ khung câu cả phòng vừa dùng.
  * 2. Chỉ né câu đã nói.
  *
  * Cả hai vòng đều cạn thì trả về mẫu đầu chứ không ném: một lượt nói trùng còn
@@ -1612,6 +1629,18 @@ export function renderSpeechTemplate(request: SpeechTemplateRequest): string {
   const pool = poolFor(intention.kind, intention.tone);
   const avoid = new Set(request.avoidFingerprints ?? []);
   const avoidOpenings = new Set(request.avoidOpenings ?? []);
+  const avoidShapes = new Set(request.avoidShapes ?? []);
+
+  /**
+   * Tên mà CHÍNH câu này có thể chứa - đúng hai chỗ trống mang tên người.
+   *
+   * Chỗ gọi xoá tên bằng danh sách ĐẦY ĐỦ của phòng, ở đây chỉ có hai cái tên,
+   * và hai bên vẫn ra cùng một khung: câu này không thể chứa tên nào khác, vì
+   * `fillSpeechTemplate` chỉ điền đúng `{target}` và `{author}`.
+   */
+  const ownNames = [request.targetName, request.replyToName].filter(
+    (name): name is string => name !== null,
+  );
 
   const semantic = [
     intention.kind,
@@ -1626,12 +1655,13 @@ export function renderSpeechTemplate(request: SpeechTemplateRequest): string {
   const rendered = (step: number): string =>
     humanize(pool[(start + step) % pool.length]!, request);
 
-  if (avoidOpenings.size > 0) {
+  if (avoidOpenings.size > 0 || avoidShapes.size > 0) {
     for (let step = 0; step < pool.length; step += 1) {
       const text = rendered(step);
       if (avoid.has(speechTextFingerprint(text))) continue;
       const opening = openingOf(text);
       if (opening !== null && avoidOpenings.has(opening)) continue;
+      if (avoidShapes.has(speechShapeFingerprint(text, ownNames))) continue;
       return text;
     }
   }

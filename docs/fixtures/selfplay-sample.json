@@ -192,6 +192,11 @@
       "numerator": 14,
       "denominator": 126
     },
+    "crossBotRepetitionRate": {
+      "value": 0.7619047619047619,
+      "numerator": 96,
+      "denominator": 126
+    },
     "semanticRepetitionRate": {
       "value": 0.023809523809523808,
       "numerator": 3,

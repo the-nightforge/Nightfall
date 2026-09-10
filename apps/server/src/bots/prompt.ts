@@ -370,6 +370,21 @@ export function buildDaySpeechPrompt(request: SpeechRequest): PromptSpec {
       ...(request.avoidOpenings.length
         ? [`Đừng mở đầu giống những lần trước: ${request.avoidOpenings.join(" / ")}`, ""]
         : []),
+      // Chống lặp XUYÊN NGƯỜI, đường nhà cung cấp.
+      //
+      // Bảng mẫu bị chặn CỨNG bằng `avoidShapes` vì ở đó lặp khung câu đo được
+      // 11,8% - hai BOT rút độc lập trên cùng một bể ~13 mẫu. Nhà cung cấp
+      // không có bể nào để đụng, và đường nó đi CHƯA ĐO ĐƯỢC: self-play chạy
+      // 100% bảng mẫu, nên không có một con số nào nói rằng mô hình cũng lặp
+      // khung câu của người khác. Vì vậy ở đây là một LỜI DẶN, không phải một
+      // cổng thứ năm: dựng cổng cho một vấn đề chưa đo được là trả giá độ trễ
+      // và một lượt hỏi lại cho một thứ có thể không tồn tại.
+      //
+      // Dữ liệu để làm theo lời dặn này đã nằm sẵn trong khối <chat_data> ở
+      // trên; dòng này không thêm gì vào prompt ngoài chính nó.
+      ...(request.chatWindow.length
+        ? ["Đừng dùng lại khuôn câu người khác vừa nói ở trên - cùng ý thì nói theo cách của bạn.", ""]
+        : []),
       request.recentSpeechSourceIds.length
         ? `Bạn đã dùng các căn cứ này gần đây, đừng lặp lại: ${request.recentSpeechSourceIds.join(", ")}`
         : "Đây là lượt nói đầu của bạn trong vòng này.",

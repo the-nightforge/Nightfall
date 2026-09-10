@@ -219,6 +219,19 @@ export interface SelfPlayMetrics {
   normalizedRepetitionRate: Ratio;
   /** Trùng Ý ĐỊNH: cùng loại, mục tiêu, câu được đáp, topic và tập bằng chứng. */
   semanticRepetitionRate: Ratio;
+  /**
+   * Câu lặp lại KHUNG CÂU mà một BOT KHÁC đã dùng trong cùng ván.
+   *
+   * Trục thứ tư, và là trục duy nhất KHÔNG gom theo `actorId`. Ba chỉ số trên
+   * chỉ hỏi "một BOT có tự lặp lại chính nó không"; chúng mù hoàn toàn với việc
+   * cả bàn nói cùng một khuôn câu, vì hai BOT nói "hỏi thật, An đang nghĩ gì" và
+   * "hỏi thật, Bình đang nghĩ gì" cho ra hai `actorId` và hai `textFingerprint`
+   * khác nhau. Đo lần đầu: **11,8%**.
+   *
+   * `null` với báo cáo cũ (không có `shapeFingerprint` trên sự kiện), chứ không
+   * phải 0: "chưa đo" khác "đo được không có".
+   */
+  crossBotRepetitionRate: Ratio;
   /** Ba token mở đầu trùng câu LIỀN TRƯỚC của cùng BOT. */
   repeatedOpeningRate: Ratio;
   /**
@@ -455,6 +468,9 @@ export function collectMetrics(
   let exactRepeats = 0;
   let normalizedRepeats = 0;
   let semanticRepeats = 0;
+  /** Mẫu số RIÊNG: chỉ những câu có vân tay khung. Báo cáo cũ không có. */
+  let shapeTotal = 0;
+  let crossBotRepeats = 0;
   let openingRepeats = 0;
   let distinctOpenings = 0;
   let fromTemplateCount = 0;
@@ -859,6 +875,16 @@ export function collectMetrics(
       return repeated;
     };
 
+    /**
+     * Khung câu đã dùng trong ván, kèm người đã dùng nó.
+     *
+     * Gom theo VÁN chứ không theo `actorId` - đó là toàn bộ điểm khác biệt so
+     * với ba bảng `said*` ở trên. Giữ `actorId` của lần dùng ĐẦU để tách "một
+     * BOT tự lặp khuôn của chính nó" (ba chỉ số kia đã đo) khỏi "hai BOT nói
+     * cùng một khuôn" (chưa ai đo).
+     */
+    const shapeFirstUsedBy = new Map<string, string>();
+
     /** Ván này có ít nhất một lời phản bác (`COUNTER_CLAIM`) hay không. */
     let gameHasCounterClaim = false;
     let gameClaimCount = 0;
@@ -877,6 +903,19 @@ export function collectMetrics(
         }
         if (remember(saidSemantic, event.actorId, event.semanticFingerprint)) {
           semanticRepeats += 1;
+        }
+
+        // Lặp khung câu của NGƯỜI KHÁC. Mẫu số là mọi câu có vân tay khung, nên
+        // một báo cáo cũ (không có trường này) cho ra `null` thay vì 0 - không
+        // có số đo và "đo được 0" là hai chuyện khác nhau.
+        if (event.shapeFingerprint !== undefined) {
+          shapeTotal += 1;
+          const owner = shapeFirstUsedBy.get(event.shapeFingerprint);
+          if (owner === undefined) {
+            shapeFirstUsedBy.set(event.shapeFingerprint, event.actorId);
+          } else if (owner !== event.actorId) {
+            crossBotRepeats += 1;
+          }
         }
 
         const opening = openingOf(event.text);
@@ -1044,6 +1083,7 @@ export function collectMetrics(
 
     exactRepetitionRate: ratio(exactRepeats, speechTotal),
     normalizedRepetitionRate: ratio(normalizedRepeats, speechTotal),
+    crossBotRepetitionRate: ratio(crossBotRepeats, shapeTotal),
     semanticRepetitionRate: ratio(semanticRepeats, speechTotal),
     repeatedOpeningRate: ratio(openingRepeats, speechTotal),
     distinctOpeningRate: ratio(distinctOpenings, speechTotal),

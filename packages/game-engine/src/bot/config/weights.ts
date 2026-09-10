@@ -763,6 +763,30 @@ export interface ConversationWeights {
    * gọi (harness self-play và scheduler) vốn đã không cấp lượt quá con số đó.
    */
   replyReserveTurns: number;
+  /**
+   * Bấy nhiêu câu gần nhất của CẢ PHÒNG được giữ để né trùng KHUNG CÂU. `0` TẮT.
+   *
+   * Vấn đề nó chữa, đo được trên 30 biên bản: **11,8%** số câu lặp lại khung
+   * câu mà một BOT KHÁC vừa dùng trong cùng ván — "hỏi thật, An đang nghĩ gì"
+   * ngay sau "hỏi thật, Bình đang nghĩ gì". Không cơ chế nào thấy nó và không
+   * chỉ số nào đo nó: cả ba tầng chống lặp (`avoidFingerprints`,
+   * `avoidOpenings`, `recentOwnLines`) lẫn cả ba chỉ số lặp trong báo cáo đều
+   * gom theo `actorId`, tức chỉ soi một BOT tự lặp lại CHÍNH MÌNH.
+   *
+   * Không phải hạt giống xấu mà là nghịch lý ngày sinh: chỉ số mẫu là
+   * `fnv1a32(seed|bot|vòng|lượt|ngữ nghĩa) % bể` với `botId` trong khoá, nên
+   * hai BOT rút độc lập trên cùng một bể ~13 mẫu. Không hàm băm nào chữa được;
+   * chỉ một tập "đừng dùng lại" DÙNG CHUNG cả phòng mới chữa được.
+   *
+   * Là luật của CĂN PHÒNG như `maxRepliesPerMessage`: sổ do chỗ gọi giữ (harness
+   * self-play, scheduler phía server), không nằm trong `BotBrainState`. Nó
+   * KHÔNG rò rỉ gì — ý định đã chốt xong trước khi tầng câu chữ được gọi, nên
+   * tập này đổi được CÂU CHỮ chứ không đổi được một nước đi nào.
+   *
+   * `0` quy về đúng hành vi cũ: `renderSpeechTemplate` nhận tập rỗng, và vòng
+   * quét nghiêm ngặt chỉ chạy khi còn `avoidOpenings` — y như trước.
+   */
+  roomShapeWindow: number;
 }
 
 /**
@@ -1384,6 +1408,7 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     persuasionMinSamples: 0,
     redirectCandidates: 0,
     replyReserveTurns: 0,
+    roomShapeWindow: 0,
   }),
 
   /**
@@ -1658,6 +1683,7 @@ export const BOT_WEIGHTS_V3: BotWeights = Object.freeze({
     persuasionMinSamples: 0,
     redirectCandidates: 0,
     replyReserveTurns: 0,
+    roomShapeWindow: 0,
   }),
 }) as BotWeights;
 
@@ -2762,6 +2788,45 @@ export const BOT_WEIGHTS_V30: BotWeights = Object.freeze({
     ...BOT_WEIGHTS_V21.conversation,
     replyReserveTurns: 1,
     urgencyBoost: 0.35,
+  }),
+});
+
+/**
+ * MỘT ô đổi so **v29**, tức so với cấu hình ĐANG CHẠY:
+ * `conversation.roomShapeWindow` 0 -> 12.
+ *
+ * Nhánh từ v29 chứ không từ v21, khác quy ước của v22/v29/v30, và đó là chủ ý:
+ * v29 là mặc định hiện tại, nên "so với đang chạy" và "so với v21" ở đây là
+ * cùng một câu hỏi cộng thêm đúng một ô. Ô này cũng độc lập hoàn toàn với
+ * `replyReserveTurns` - một cái quyết định BOT có LƯỢT để nói không, cái kia
+ * quyết định khi đã có lượt thì DÙNG MẪU nào - nên chúng không thể triệt tiêu
+ * nhau như cặp trong v30.
+ *
+ * Chỉ số đích đã đo được và chỉ đúng một chiều: `crossBotRepetitionRate` đứng
+ * ở **11,8%**. Xem chú thích ở `roomShapeWindow` và `speechShapeFingerprint`.
+ *
+ * 12 chứ không phải một con số mới: bằng đúng `promptChatWindow`, cửa sổ "gần
+ * đây của cả phòng" mà repo này vốn đã dùng. Một hằng số thứ hai cho cùng một
+ * khái niệm là một chỗ sẽ trôi lệch.
+ *
+ * KHÔNG đổi số lần rút RNG - nó chỉ đổi mẫu câu được chọn, không đụng `rng()`.
+ * Nhưng nó ĐỔI CÂU CHỮ, và câu chữ là đầu vào của `chat-analysis`, nên belief
+ * và phiếu sẽ trôi. Đó là thay đổi hành vi thật và là lý do nó cần bench riêng
+ * chứ không suy được từ v29.
+ *
+ * Cái giá phải theo dõi: né khung câu làm BOT lệch khỏi mẫu hợp nhất với tình
+ * huống, nên đọc `crossBotRepetitionRate` CÙNG `casualToneRate` và
+ * `distinctOpeningRate`, không đọc riêng.
+ *
+ * KHÔNG mặc định - bench v31 so v29 trước, kỷ luật v19.
+ */
+export const BOT_WEIGHTS_V31: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V29,
+  version: "31.0.0",
+
+  conversation: Object.freeze({
+    ...BOT_WEIGHTS_V29.conversation,
+    roomShapeWindow: 12,
   }),
 });
 
