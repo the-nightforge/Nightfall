@@ -1,6 +1,8 @@
 import {
   MAX_PLAYERS_PER_ROOM,
+  PRESET_DECKS,
   SERVER_EVENTS,
+  applyDeck,
   deckSize,
   sameDeck,
   validateDeckShape,
@@ -113,6 +115,21 @@ function assertMember(room: Room, playerId: string): RoomMember {
 
 function assertHost(room: Room, playerId: string): void {
   if (room.hostId !== playerId) throw new RoomError("Chỉ chủ phòng mới được thực hiện hành động này");
+}
+
+/*
+ * Tự động áp preset theo sĩ số phòng chờ.
+ *
+ * Gọi sau MỌI lần sĩ số đổi ở LOBBY (người join, addBot, leave, kick): bộ bài
+ * ép sang `PRESET_DECKS[members.length]`, chỉ thay BỘ BÀI qua `applyDeck` nên
+ * mode/voice/phong thư/giây của host giữ nguyên. Không có preset cho cỡ đó
+ * (ngoài 8-20) thì giữ nguyên. IN_GAME không đụng tới.
+ */
+export function applyPresetForSize(room: Room): void {
+  if (room.status !== "LOBBY") return;
+  const preset = PRESET_DECKS[room.members.length];
+  if (!preset) return;
+  room.config = applyDeck(room.config, preset);
 }
 
 /**
@@ -232,6 +249,8 @@ export const roomService = {
           isBot: false,
           avatarUrl,
         });
+        // Người MỚI vào (không phải reconnect): sĩ số đổi nên ép preset mới.
+        applyPresetForSize(room);
       }
 
       await persistRoom(room);
@@ -282,6 +301,9 @@ export const roomService = {
           room.members[0];
         room.hostId = next.playerId;
       }
+
+      // Sĩ số giảm ở LOBBY: ép preset của cỡ mới. IN_GAME thì no-op.
+      applyPresetForSize(room);
 
       // Rời giữa trận: đánh dấu chết để không treo game
       if (room.engine) {
@@ -353,6 +375,7 @@ export const roomService = {
       if (!target) throw new RoomError("Người chơi không tồn tại");
       room.members = room.members.filter((m) => m.playerId !== targetId);
       room.kickedPlayerIds.push(targetId);
+      applyPresetForSize(room);
       // Nói cho người bị đuổi biết. Họ không còn trong `members` nên
       // `broadcastRoom` bỏ qua họ: im lặng ở đây là bỏ họ ngồi trước một sảnh
       // chờ đông cứng, không hiểu vì sao ván mãi không bắt đầu.
@@ -452,6 +475,7 @@ export const roomService = {
       connected: false,
       isBot: true,
     });
+    applyPresetForSize(room);
     void persistRoom(room).then(() => broadcastRoom(room.code));
   },
 
