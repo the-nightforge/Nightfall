@@ -1,4 +1,4 @@
-import type { GameEngine } from "@masoi/game-engine";
+import type { GameEngine, QuestionLedgerState } from "@masoi/game-engine";
 import type { ChatMessage, RoomConfig } from "@masoi/shared";
 import { DEFAULT_ROOM_CONFIG, DEFAULT_VILLAGERS } from "@masoi/shared";
 import { redis } from "../redis";
@@ -17,6 +17,7 @@ import { clearDiscussionSkipVotes } from "../game/discussion-skip";
 import { createLastLetterState, type LastLetterRoomState } from "../game/last-letter";
 import type { PendingStep } from "../game/pending-step";
 import type { ArchivedChatMessage } from "../game/match-chat";
+import type { BotSpeechLogEvent } from "../game/bot-speech-log";
 
 export interface RoomMember {
   playerId: string;
@@ -106,6 +107,21 @@ export interface Room {
    * trước bản này phải sửa cùng lúc. Chỗ ghi tạo lười khi cần.
    */
   matchChat?: ArchivedChatMessage[];
+  /**
+   * Sổ lời nói của bot trong ván, cùng hình dạng sự kiện với self-play, để lúc
+   * hết ván `collectMetrics` đo được ván thật bằng đúng định nghĩa của nó.
+   *
+   * `null` nghĩa là KHÔNG có sổ từ đầu ván (envelope ghi trước khi có trường
+   * này). Ván đó không được đo: một sổ chỉ có nửa sau cho số sai mà trông như
+   * đúng. Xem `game/bot-speech-log.ts`.
+   */
+  speechLog?: BotSpeechLogEvent[] | null;
+  /** Câu hỏi đang mở của ván. Cùng luật `null` với `speechLog`. */
+  questionLedger?: QuestionLedgerState | null;
+  /** Sổ đã chạm trần `MAX_ARCHIVED_MESSAGES` và ngừng ghi. */
+  botSpeechLogTruncated?: boolean;
+  /** Số lần một móc ghi sổ tự ném lỗi trong ván này. */
+  recorderErrors?: number;
 }
 
 const rooms = new Map<string, Room>();

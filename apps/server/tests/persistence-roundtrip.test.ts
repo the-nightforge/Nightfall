@@ -24,6 +24,8 @@ const { roomEnvelopeSchema } = await import("../src/persistence/schema");
 const { botSessionFor, clearBotSession } = await import("../src/bots/session-registry");
 const { botBudgetUsed, resetBotBudget } = await import("../src/bots");
 const { discussionSkipVotes } = await import("../src/game/discussion-skip");
+const { startBotSpeechLog } = await import("../src/game/bot-speech-log");
+const { openQuestion } = await import("@masoi/game-engine");
 
 function lobby(code = "ROUND"): Room {
   return {
@@ -163,5 +165,47 @@ describe("round-trip snapshot phòng", () => {
     expect(envelope.room.engineState).toBeNull();
     expect(restored.engine).toBeNull();
     expect(restored.status).toBe("LOBBY");
+  });
+});
+
+describe("sổ lời nói của bot qua restart", () => {
+  it("sổ, câu hỏi đang mở, cờ trần và số lỗi sống qua serialize → schema → restore", () => {
+    const room = nightRoom("LOGRT");
+    startBotSpeechLog(room);
+    room.speechLog!.push({
+      kind: "SPEECH_BLOCKED",
+      round: 1,
+      actorId: "p5",
+      speech: "REPLY",
+      replyToMessageId: "m1",
+      reason: "CHAIN_DEPTH",
+    });
+    openQuestion(room.questionLedger!, {
+      messageId: "m1",
+      askerId: "p6",
+      targetId: "p5",
+      round: 1,
+      humanAsker: true,
+    });
+    room.recorderErrors = 2;
+
+    const envelope = roomEnvelopeSchema.parse(JSON.parse(JSON.stringify(serializeRoom(room, 7))));
+    const restored = restoreRoomFromEnvelope(envelope);
+
+    expect(restored.speechLog).toEqual(room.speechLog);
+    expect(restored.questionLedger).toEqual(room.questionLedger);
+    expect(restored.botSpeechLogTruncated).toBe(false);
+    expect(restored.recorderErrors).toBe(2);
+  });
+
+  it("envelope ghi trước khi có sổ đọc lên thành null, KHÔNG phải [] — ván đó không được đo", () => {
+    const room = nightRoom("LOGOLD");
+    const raw = JSON.parse(JSON.stringify(serializeRoom(room, 8)));
+    for (const key of ["speechLog", "questionLedger", "botSpeechLogTruncated", "recorderErrors"]) {
+      delete raw.room[key];
+    }
+    const restored = restoreRoomFromEnvelope(roomEnvelopeSchema.parse(raw));
+    expect(restored.speechLog).toBeNull();
+    expect(restored.questionLedger).toBeNull();
   });
 });

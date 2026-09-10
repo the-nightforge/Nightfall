@@ -60,11 +60,11 @@ interface QuestionLedgerState {
 }
 
 openQuestion(state, { messageId, askerId, targetId, round, humanAsker? })
-noteObserved(state, targetId, visibleMessageIds, memories)   // sau observe
-noteSpeechTurn(state, targetId, isInChat)                    // trước decideSpeech
-noteBlocked(state, replyToMessageId, targetId, reason)      // câu đáp bị phòng chặn
-noteSpoke(state, actorId, replyToMessageId, isInChat)        // sau khi phát
-settle(state): QuestionOutcomeEvent[]                        // chốt rồi xoá sổ
+markObserved(state, targetId, visibleChat, memories)         // sau observe
+markSpeechTurn(state, targetId, isInChat)                    // trước lượt nói
+markBlocked(state, replyToMessageId, speakerId, reason)      // câu đáp bị phòng chặn
+markSpoke(state, speakerId, replyToMessageId, isInChat)      // sau khi phát
+settleQuestions(state): QuestionOutcomeEvent[]               // chốt rồi làm rỗng sổ
 ```
 
 Trạng thái là object thuần thay cho `Map` trong closure, để server lưu được vào envelope. Thứ tự duyệt phải giữ đúng thứ tự chèn của `Map` hiện tại — nếu đổi, `QUESTION_OUTCOME` đổi thứ tự và ảnh vàng sẽ bắt được.
@@ -80,16 +80,18 @@ Self-play không có người hỏi và mọi câu đều từ bảng mẫu, nê
 
 ## Luồng dữ liệu trên server
 
-1. **Bắt đầu ván** — cùng chỗ đang gọi `resetMatchChat`: đặt `speechLog = []` và `questionLedger = { open: [] }`.
+1. **Bắt đầu ván** — cùng chỗ đang gọi `resetMatchChat`: `startBotSpeechLog` đặt `speechLog = []` và `questionLedger = { open: [] }`.
 2. **Bot tới lượt** — hàng đợi chung của thảo luận và phiên xử trong `discussion-scheduler.ts`:
-   - sau `runtime.observe(context)` → `noteObserved`
-   - trước `plan.speak` → `noteSpeechTurn`
-   - `judgeChainPosition` chặn → `noteBlocked`, ghi `SPEECH_BLOCKED`
-   - sau `pushChat` → `noteSpoke`, ghi `SPEECH`; câu là `QUESTION`/`ASK_EVIDENCE` nhắm vào người khác → `openQuestion`
-3. **Người thật chat** — `service.chat()`, kênh `day`, pha `DAY_DISCUSSION` hoặc `DEFENSE`: chạy `analyzeChat` trên đúng câu đó với danh sách người chơi của engine; mỗi `DIRECT_QUESTION` nhắm vào một bot còn sống → `openQuestion({ humanAsker: true })`.
-4. **Chốt sổ** — khi và chỉ khi pha đang rời là `DAY_DISCUSSION`. Luật được hiện thực bằng một phép kiểm pha ở **đầu** `beginVoting` và `beginNight`, trước khi engine chuyển pha — không bằng cách liệt kê lối ra, vì danh sách đó dễ bỏ sót. Lý do phải kiểm pha thay vì chốt vô điều kiện: `beginNight` được gọi từ năm chỗ, và chỉ hai đường *bỏ qua thảo luận* (`submitDiscussionSkip`, `reconcileDiscussionSkip`) là rời thảo luận; ba chỗ còn lại (sau cái chết do bị treo trong `continueAfterDeathResult`, sau `finishHunterShot`, bảng step handler) rời phiên xử/bỏ phiếu. Self-play để câu hỏi của phiên xử tới lần chốt hôm sau, và server phải làm y hệt. Không chốt trong `cancelDiscussionScheduler`, vì hàm đó cũng chạy khi khôi phục sau restart (`resume.ts`).
-5. **Câu hỏi còn mở khi ván kết thúc** — xử đúng như self-play. Bước đầu tiên của kế hoạch triển khai kiểm self-play có chốt lúc hết ván hay không, rồi làm theo đúng như vậy.
-6. **Hết ván** — trong `writeGameResultOnce`: `bot-metrics.ts` dựng `SelfPlayGame` tối thiểu (`events = speechLog`, `roles`, `winner`, `rounds`, `personalWins`; các trường chỉ self-play có thì để rỗng), chạy `collectMetrics`, rút gọn, ghi vào `botMetrics` cùng lệnh `create`.
+   - sau `runtime.observe(context)` → `noteBotObserved` (cả hai pha)
+   - trước `plan.speak` → `noteBotSpeechTurn`, **chỉ ở pha `DAY_DISCUSSION`**: self-play không đếm lượt ở phiên xử (`runDefenseDiscussion` gọi `noteObserved` mà không gọi `noteSpeechTurn`)
+   - `judgeChainPosition` chặn → `noteBotBlocked`, ghi `SPEECH_BLOCKED`
+   - sau `pushChat` → `noteBotSpoke`, ghi `SPEECH`; câu là `QUESTION`/`ASK_EVIDENCE` nhắm vào **một bot khác** → `openQuestion`
+3. **Bot quyết phiếu đề cử** — `deterministicVote` (`machine.ts`) gọi `runtime.observe`; ngay sau đó → `noteBotObserved`. Đây là chỗ tương đương lượt cân nhắc lại phiếu của self-play, nơi mọi người sống quan sát lại trước khi sổ được chốt. **Không** móc vào vòng phiếu cuối (`scheduleFinalVoteBots`): self-play không gọi `noteObserved` ở đó.
+4. **Người thật chat** — `roomService.chat()` (`rooms/service.ts`), kênh `day`, pha `DAY_DISCUSSION` hoặc `DEFENSE`: chạy `analyzeChat` trên đúng câu đó với danh sách người chơi của engine; `noteHumanChat` mở câu hỏi với `humanAsker: true` cho `DIRECT_QUESTION` đầu tiên nhắm vào một bot còn sống (sổ khoá theo `messageId`, nên mỗi câu chat mở tối đa một câu hỏi).
+5. **Chỉ mở câu hỏi khi người bị hỏi là bot.** Người thật không có `BotRuntime` để `markObserved` đọc, nên câu hỏi nhắm vào họ sẽ luôn chốt thành `UNDETERMINED` và làm bẩn bảng của bot. Trong self-play mọi ghế đều là bot, nên luật này không đổi một bit nào ở đó.
+6. **Chốt sổ** — cùng vị trí với self-play, nơi `settleQuestions()` được gọi đúng một lần mỗi ngày: *sau* lượt bỏ phiếu và *ngay trước* `resolveNomination`. Trên server đó là `endVoting`, ngay trước `engine(room).resolveNomination(defenseMs)`. Chốt sớm hơn — lúc rời thảo luận — sẽ lệch với self-play: một câu hỏi được hỏi cuối thảo luận mà người bị hỏi chưa có lượt nào sẽ ra `UNDETERMINED`, trong khi self-play, sau khi mọi bot quan sát ở lượt bỏ phiếu, ghi `NO_TURN`. Riêng các ngày **không có bỏ phiếu** (bỏ qua thảo luận ở Ngày Hoà Hoãn: `reconcileDiscussionSkip` → `beginNight`) thì chốt ở đầu `beginNight`, và chỉ khi pha đang rời là `DAY_DISCUSSION` — `beginNight` còn được gọi từ ba chỗ khác (sau cái chết do bị treo, sau phát bắn Thợ Săn, bảng step handler), đều là lúc câu hỏi của phiên xử phải chờ tới lần chốt hôm sau như self-play. Không chốt trong `cancelDiscussionScheduler`, vì hàm đó cũng chạy khi khôi phục sau restart (`resume.ts`).
+7. **Câu hỏi còn mở khi ván kết thúc bị bỏ**, không bao giờ thành `QUESTION_OUTCOME`. Đó đúng là hành vi của self-play: `settleQuestions()` chỉ có một chỗ gọi, và vòng lặp ván thoát ra mà không chốt lần nào nữa.
+8. **Hết ván** — trong `writeGameResultOnce`: `bot-metrics.ts` dựng `SelfPlayGame` tối thiểu (`events = speechLog`, `roles`, `winner`, `rounds`, `personalWins`; các trường chỉ self-play có thì để rỗng), chạy `collectMetrics`, rút gọn, ghi vào `botMetrics` cùng lệnh `create`.
 
 ### Sự kiện `SPEECH` phía server
 
@@ -120,7 +122,8 @@ Tất cả tính thuần từ `SPEECH`, `QUESTION_OUTCOME` và `SPEECH_BLOCKED`.
 
 ```prisma
 /// Chỉ số giao tiếp của bot trong ván, tính lúc kết thúc. Null với ván ghi
-/// trước cột này, ván không có sổ từ đầu, và ván mà việc tính bị lỗi.
+/// trước cột này, ván không có bot, ván không có sổ từ đầu, và ván mà việc
+/// tính bị lỗi.
 botMetrics  Json?
 ```
 
@@ -175,6 +178,7 @@ speechLog?: SelfPlayEvent[] | null;
 questionLedger?: QuestionLedgerState | null;
 ```
 
+- Kiểm schema theo đúng lệ của `speechMemory`: `z.array(objectOf<BotSpeechLogEvent>())` và `objectOf<QuestionLedgerState>()`, không dựng schema zod cho từng trường.
 - Envelope **không có** các trường này (ván bắt đầu trước khi deploy) khôi phục thành `null`, **không phải** `[]` như `matchChat`. Ván đó lưu `botMetrics = null`: một sổ chỉ có nửa sau của ván cho số sai mà trông như đúng.
 - Id câu của bot vốn tất định, nên `replyToMessageId` vẫn nối đúng sau khôi phục.
 - Trần sổ: 2.000 sự kiện, bằng `MAX_ARCHIVED_MESSAGES`. Chạm trần thì dừng ghi và đặt `truncated`.
@@ -204,7 +208,9 @@ Chi phí: một lần `analyzeChat` mỗi câu chat của người, một lần 
 
 **Luồng thật trên server** (phòng dựng bằng helper test sẵn có)
 - Người thật hỏi bot → mở câu hỏi có cờ; bot đáp → `ANSWERED`; bot không được lượt → `NO_TURN`.
-- Chốt chỉ khi rời `DAY_DISCUSSION`; câu hỏi của phiên xử chưa bị chốt ở `beginNight` của ngày thường.
+- Chốt ở `endVoting` trước `resolveNomination`; câu hỏi của phiên xử chưa bị chốt ở `beginNight` của ngày thường; ngày bỏ qua thảo luận chốt ở `beginNight`.
+- Bot hỏi người thật → không mở câu hỏi nào.
+- Câu hỏi còn mở lúc hết ván không thành `QUESTION_OUTCOME`.
 - Bộ ghi ném → câu nói vẫn được phát, `recorderErrors` tăng.
 - Restart giữa vòng → kết quả như không restart; envelope không có sổ → `botMetrics = null`.
 - Quyền riêng tư: quét JSON `botMetrics` tìm mọi tên và id người chơi của phòng → không thấy cái nào.

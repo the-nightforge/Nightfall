@@ -31,6 +31,7 @@ import {
 import { loadAndResumeRoom } from "./load";
 import { getRoomSyncByPlayer } from "./index-helpers";
 import { reconcileDiscussionSkip, startGame, resetToLobby } from "../game/machine";
+import { noteHumanChat } from "../game/bot-speech-log";
 import { DISCONNECT_GRACE_MS } from "../game/discussion-skip";
 import { allRequiredPlayersReady, roomEntryError } from "./rules";
 import { withPlayerRoomLock } from "./player-room-lock";
@@ -499,6 +500,7 @@ export const roomService = {
       at: Date.now(),
     };
     pushChat(room, message);
+    noteHumanChat(room, message, result.channel);
     // Chỉ phát tới những người có quyền xem kênh này
     emitToPlayers(result.recipients, SERVER_EVENTS.CHAT_NEW, message);
     void persistRoom(room);

@@ -6,6 +6,7 @@ import { invalidateLeaderboard } from "../leaderboard";
 import { buildSnapshot } from "../rooms/snapshot";
 import type { Room } from "../rooms/store";
 import { MAX_ARCHIVED_MESSAGES } from "./match-chat";
+import { botMetricsForRoom, type BotMetrics } from "./bot-metrics";
 
 /**
  * Hồ sơ vụ án để lưu kèm kết quả ván.
@@ -60,6 +61,23 @@ function matchChatForHistory(room: Room): Prisma.MatchChatMessageCreateWithoutMa
     }));
 }
 
+/**
+ * Chỉ số giao tiếp của bot, hoặc `null` khi không có gì để đo hay việc tính hỏng.
+ *
+ * Như `caseFileForHistory`: đây là phần thêm. Hỏng nó không được làm mất kết
+ * quả ván - nhưng cũng không được im lặng, nên ghi một dòng log.
+ */
+function botMetricsForHistory(room: Room): BotMetrics | null {
+  try {
+    return botMetricsForRoom(room);
+  } catch {
+    console.warn(
+      JSON.stringify({ event: "game-result.bot-metrics-failed", roomCode: room.code, gameId: room.gameId }),
+    );
+    return null;
+  }
+}
+
 function isUniqueViolation(error: unknown): boolean {
   return typeof error === "object" && error !== null && (error as { code?: string }).code === "P2002";
 }
@@ -98,6 +116,9 @@ export async function writeGameResultOnce(room: Room): Promise<void> {
         // interface đóng như `CaseFile` không có - dù giá trị là JSON hoàn toàn
         // hợp lệ. Ép đúng một lần, ngay tại biên vào DB.
         caseFile: (caseFileForHistory(room) ?? undefined) as Prisma.InputJsonValue | undefined,
+        // Cùng kiểu ép với `caseFile` và cùng lý do: `BotMetrics` là một
+        // interface đóng, không có index signature mà `InputJsonValue` đòi.
+        botMetrics: (botMetricsForHistory(room) ?? undefined) as Prisma.InputJsonValue | undefined,
         // `id` để nối được kết quả về đúng người chơi. Thiếu nó thì bảng này
         // chỉ ghi được chứ không tra ngược được - đó là lý do nó nằm im từ đầu.
         // `playerRoles` là cột Json nên thêm trường không cần migration; ván cũ

@@ -43,6 +43,12 @@ model GameResult {
   /// Lưu bản ĐÃ DỰNG chứ không dựng lại lúc đọc: nguyên liệu (nightHistory,
   /// dayVoteHistory, hunterShots) chỉ sống trong RAM của ván, không có trong DB.
   caseFile    Json?
+  /// Chỉ số giao tiếp của bot trong ván, tính lúc kết thúc bằng `collectMetrics`
+  /// (`game/bot-metrics.ts`). Không chứa chữ, tên hay id người chơi nào.
+  ///
+  /// Null với ván ghi trước cột này, ván không có bot, ván không có sổ từ đầu,
+  /// và ván mà việc tính bị lỗi. Không chặn việc lưu kết quả trong trường hợp nào.
+  botMetrics  Json?
   durationSec Int
   /// Chat của ván, ghi cùng transaction với chính dòng này. Rỗng với ván lưu
   /// trước khi có bảng đó, và với ván không ai nói câu nào.

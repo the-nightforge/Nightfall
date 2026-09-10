@@ -55,6 +55,11 @@ export function serializeRoom(room: Room, opSeq: number): RoomEnvelopeV1 {
       // Sổ chat của ván. Mất nó qua một lần restart là ván đó chỉ lưu được
       // phần nói SAU khi process mới lên - tức đúng đoạn ít người đọc nhất.
       matchChat: room.matchChat,
+      // Sổ đo lời nói của bot. `?? null` giữ đúng nghĩa "ván này không có sổ".
+      speechLog: room.speechLog ?? null,
+      questionLedger: room.questionLedger ?? null,
+      botSpeechLogTruncated: room.botSpeechLogTruncated ?? false,
+      recorderErrors: room.recorderErrors ?? 0,
     },
   };
 }
