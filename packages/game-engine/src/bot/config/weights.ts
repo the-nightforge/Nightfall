@@ -2816,9 +2816,11 @@ export const BOT_WEIGHTS_V30: BotWeights = Object.freeze({
  *
  * Cái giá phải theo dõi: né khung câu làm BOT lệch khỏi mẫu hợp nhất với tình
  * huống, nên đọc `crossBotRepetitionRate` CÙNG `casualToneRate` và
- * `distinctOpeningRate`, không đọc riêng.
+ * `distinctOpeningRate`, không đọc riêng. Đo xong: cái giá đó bằng 0, cả hai
+ * chỉ số đứng im (|z| < 1).
  *
- * KHÔNG mặc định - bench v31 so v29 trước, kỷ luật v19.
+ * ĐÃ NÂNG LÊN MẶC ĐỊNH sau protocol 5×1.000 ván paired seeds - xem
+ * `DEFAULT_BOT_WEIGHTS`.
  */
 export const BOT_WEIGHTS_V31: BotWeights = Object.freeze({
   ...BOT_WEIGHTS_V29,
@@ -2900,5 +2902,37 @@ export const BOT_WEIGHTS_V31: BotWeights = Object.freeze({
   * không dịch một chỉ số nào; v28 (`redirectCandidates`) làm XẤU
   * `semanticRepetitionRate` (+0,11, z = +10,7) - đúng chỉ số §24 sinh ra nó để
   * chữa.
+  *
+  * v31.0.0 (COMMUNICATION) bật `conversation.roomShapeWindow = 12`: không dùng
+  * lại KHUNG CÂU mà cả phòng vừa nói. Protocol 5×1.000 ván paired seeds so v29:
+  *
+  * ```text
+  * crossBotRepetitionRate           19.80% -> 15.15%  (-4,65 điểm, z = -51,5)
+  * casualToneRate                   90.28% -> 90.28%  (-0,00 điểm, z =  -0,0)
+  * distinctOpeningRate              99.40% -> 99.39%  (-0,01 điểm, z =  -0,9)
+  * semanticRepetitionRate            0.76% ->  0.75%  (-0,01 điểm, z =  -0,9)
+  * silenceRate                      18.65% -> 18.62%  (-0,03 điểm, z =  -0,8)
+  * directQuestionOutcomes.ANSWERED  60.12% -> 60.08%  (-0,04 điểm, z =  -0,5)
+  * villageWinRate                   53.80% -> 54.30%  (+0,50 điểm, z =  +0,8)
+  * ```
+  *
+  * Nâng bằng cùng thước với v29 - chỉ số HỘI THOẠI, không phải §40 - và lần này
+  * hình dạng kết quả sạch hơn hẳn v29: đúng MỘT chỉ số dịch (z = -51,5, lớn hơn
+  * mọi hiệu ứng từng đo ở tầng này), và **mọi chỉ số còn lại có |z| < 1,1**,
+  * tức không có một đánh đổi nào để phải cân nhắc. v29 phải trả 1,67 điểm
+  * `casualToneRate`; ô này không trả gì cả.
+  *
+  * Lý do nó rẻ như vậy: nó không đụng tới lượt rút RNG nào và không đổi việc
+  * BOT nói LÚC NÀO hay nói VỚI AI - chỉ đổi mẫu câu được chọn trong cùng một
+  * bể, cho cùng một ý định đã chốt. Mọi cơ chế phía trên nó không nhìn thấy gì.
+  *
+  * `villageWinRate` +0,50 (z = +0,8) là trung tính, đúng như mong đợi, và 5
+  * batch chạy từ -1,10 tới +2,00. 0 violation trên cả 10 batch.
+  *
+  * Vấn đề nó chữa và cách đo, xem `roomShapeWindow` cùng
+  * `speechShapeFingerprint`. Đo trên 30 biên bản bằng phép đo gốc: lặp khung
+  * câu trong 12 câu gần nhất **6,5% -> 0,0%**, tức đúng chỗ nó nhắm thì sạch
+  * hẳn; phần dư là khung dùng lại cách nhau nhiều vòng, thứ cửa sổ 12 câu cố
+  * tình không gác.
   */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V29;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V31;

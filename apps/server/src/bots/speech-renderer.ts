@@ -117,7 +117,7 @@ export async function renderBotSpeech(
   // dù đi đường nào; `source` nói đường đó là đường nào.
   const startedAt = now();
   const rendered = await renderUnmeasured(request, brain, chatMaxLength);
-  stats.record(rendered.source, now() - startedAt);
+  stats.record(rendered.source, now() - startedAt, rendered.text);
   return rendered;
 }
 

@@ -83,11 +83,11 @@ describe("SpeechStats", () => {
 
   it("đếm nguồn, tỉ lệ mẫu và histogram thời gian", () => {
     const stats = new SpeechStats();
-    stats.record("provider", 120);
-    stats.record("provider_retry", 3_000);
-    stats.record("provider_failed", 9_500);
-    stats.record("gate_rejected", 700);
-    stats.record("template_silent", 0);
+    stats.record("provider", 120, "ừ t nghi Chi");
+    stats.record("provider_retry", 3_000, "khoan, ko hẳn đâu");
+    stats.record("provider_failed", 9_500, "Tôi nghi Chi vì lá phiếu đổi sát giờ chốt.");
+    stats.record("gate_rejected", 700, "Tôi vẫn giữ nguyên ý kiến của mình về Chi.");
+    stats.record("template_silent", 0, null);
     const snap = stats.snapshot();
     expect(snap.total).toBe(5);
     // Hai nguồn nhà cung cấp không tính là mẫu; ba nguồn còn lại thì có.
@@ -106,10 +106,67 @@ describe("SpeechStats", () => {
     expect(snap.durationHistogramMs.map((b) => b.count)).toEqual([2, 0, 1, 0, 1, 0, 1]);
   });
 
+  it("chấm giọng từng câu, và lượt IM không có câu nào để chấm", () => {
+    const stats = new SpeechStats();
+    stats.record("provider", 120, "ừ t nghi Chi");
+    stats.record("provider_retry", 300, "khoan, ko hẳn đâu");
+    stats.record("provider_failed", 300, "Tôi nghi Chi vì lá phiếu đổi sát giờ chốt.");
+    stats.record("gate_rejected", 300, "Tôi vẫn giữ nguyên ý kiến của mình về Chi.");
+    stats.record("template_silent", 0, null);
+
+    const snap = stats.snapshot();
+    // 5 lượt, 4 câu: lượt im không vào mẫu số.
+    expect(snap.total).toBe(5);
+    expect(snap.spoken).toBe(4);
+    expect(snap.casual).toBe(2);
+    expect(snap.casualToneRate).toBeCloseTo(2 / 4);
+    expect(snap.casualBySource).toEqual({
+      provider: 1,
+      provider_retry: 1,
+      provider_failed: 0,
+      gate_rejected: 0,
+      template_silent: 0,
+    });
+  });
+
+  it("chưa câu nào phát ra thì tỉ lệ giọng là null, không phải 0", () => {
+    // "Chưa đo được" và "đo được 0%" là hai chuyện khác nhau, và một cái 0 ở đây
+    // sẽ trông như nhà cung cấp đang viết văn - đúng lúc nó chưa nói câu nào.
+    const stats = new SpeechStats();
+    expect(stats.snapshot().casualToneRate).toBeNull();
+    stats.record("template_silent", 0, null);
+    expect(stats.snapshot().casualToneRate).toBeNull();
+  });
+
+  it("tỉ lệ GỘP trôi khi nhà cung cấp chết; chia theo nguồn thì lộ ra", () => {
+    // Đây là lý do `casualBySource` tồn tại, không phải một con số gộp.
+    //
+    // Bảng mẫu đo được ~0,90 sau khi bỏ dấu chấm cuối. Nên khi nhà cung cấp
+    // hỏng lặng lẽ và mọi thứ rơi về bảng mẫu, tỉ lệ GỘP đi LÊN - nó trông y
+    // hệt một cải thiện, đúng lúc đường chạy chính vừa chết.
+    const stats = new SpeechStats();
+    // Nhà cung cấp đang chạy, giọng tệ.
+    for (let i = 0; i < 8; i += 1) {
+      stats.record("provider", 200, "Tôi nghi Chi vì lá phiếu đổi sát giờ chốt.");
+    }
+    const healthy = stats.snapshot();
+
+    // Nhà cung cấp chết; bảng mẫu tiếp quản, giọng tốt.
+    for (let i = 0; i < 32; i += 1) stats.record("provider_failed", 5, "t nghi Chi");
+    const dead = stats.snapshot();
+
+    // Con số gộp ĐI LÊN - nếu chỉ có nó thì không ai thấy gì bất thường.
+    expect(dead.casualToneRate!).toBeGreaterThan(healthy.casualToneRate!);
+    // Chia theo nguồn: `provider` đứng im trong khi `provider_failed` vọt lên.
+    expect(dead.casualBySource.provider).toBe(healthy.casualBySource.provider);
+    expect(dead.casualBySource.provider_failed).toBe(32);
+    expect(dead.bySource.provider).toBe(8);
+  });
+
   it("bộ nhớ cố định: snapshot không lớn theo số lượt", () => {
     const stats = new SpeechStats();
     const before = JSON.stringify(stats.snapshot()).length;
-    for (let i = 0; i < 10_000; i += 1) stats.record("provider", i % 5_000);
+    for (let i = 0; i < 10_000; i += 1) stats.record("provider", i % 5_000, "t nghi Chi");
     const after = JSON.stringify(stats.snapshot()).length;
     // Chỉ chữ số dài ra, không có mảng nào mọc thêm phần tử.
     expect(after - before).toBeLessThan(60);
@@ -118,8 +175,8 @@ describe("SpeechStats", () => {
 
   it("thời gian âm hoặc NaN được ghi là 0 thay vì làm hỏng tổng", () => {
     const stats = new SpeechStats();
-    stats.record("provider", Number.NaN);
-    stats.record("provider", -5);
+    stats.record("provider", Number.NaN, "t nghi Chi");
+    stats.record("provider", -5, "t nghi Chi");
     expect(stats.snapshot().meanDurationMs).toBe(0);
   });
 });
@@ -199,5 +256,53 @@ describe("renderBotSpeech ghi nguồn và thời gian", () => {
     await renderBotSpeech(request(), throwing, 300, stats);
     await renderBotSpeech(request(), speaking("Chi đổi phiếu."), 300, stats);
     expect(stats.snapshot().total).toBe(2);
+  });
+});
+
+/**
+ * Giọng của ĐƯỜNG THẬT, không phải của một `SpeechStats` gọi tay.
+ *
+ * Đây là chỗ duy nhất khẳng định `renderBotSpeech` có chuyển câu chữ vào tầng
+ * đo hay không. Thiếu nó thì `casualToneRate` ở `/api/health` có thể đứng yên ở
+ * `null` suốt đời mà mọi test khác vẫn xanh.
+ */
+describe("renderBotSpeech ghi giọng của câu đã phát", () => {
+  it("câu bảng mẫu được chấm giọng, và vào đúng ngăn nguồn của nó", async () => {
+    const stats = new SpeechStats();
+    await renderBotSpeech(request(), failing, 300, stats);
+    const snap = stats.snapshot();
+    expect(snap.spoken).toBe(1);
+    // Bảng mẫu sau khi bỏ dấu chấm cuối đo được ~0,90 `looksCasual`; một câu
+    // ACCUSE ngắn nằm chắc trong phần đó.
+    expect(snap.casual).toBe(1);
+    expect(snap.casualBySource.provider_failed).toBe(1);
+    expect(snap.casualBySource.provider).toBe(0);
+  });
+
+  it("câu văn viết của nhà cung cấp KHÔNG được tính là giọng chat", async () => {
+    // Đúng kiểu câu mà ván thật đã cho ra và không chỉ số nào bắt được.
+    const stats = new SpeechStats();
+    const result = await renderBotSpeech(
+      request(),
+      speaking("Mình đang nghi Chi nhất, bạn nói rõ căn cứ đi, đừng né."),
+      300,
+      stats,
+    );
+    expect(result.source).toBe("provider");
+    const snap = stats.snapshot();
+    expect(snap.spoken).toBe(1);
+    expect(snap.casual).toBe(0);
+    expect(snap.casualToneRate).toBe(0);
+  });
+
+  it("lượt IM không kéo tỉ lệ giọng xuống", async () => {
+    // `template_silent` không có câu nào; tính nó vào mẫu số sẽ biến một BOT
+    // đang im lặng đúng luật thành một BOT đang viết văn.
+    const stats = new SpeechStats();
+    await renderBotSpeech(request({ targetName: null }), failing, 300, stats);
+    const snap = stats.snapshot();
+    expect(snap.bySource.template_silent).toBe(1);
+    expect(snap.spoken).toBe(0);
+    expect(snap.casualToneRate).toBeNull();
   });
 });

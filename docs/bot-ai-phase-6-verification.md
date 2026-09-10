@@ -150,7 +150,7 @@ Mở chat trên điện thoại: tấm trượt 72dvh che khu chơi và đặt p
 - **Người thật**: mọi số "humans" đều là bot đội cờ. Kết luận về khả năng bị thuyết phục trước người thật cần playtest — kịch bản và mẫu ghi nhận ở `docs/playtest-human-aware.md`. Chưa thực hiện.
 - **Parser bỏ sót 8% câu hỏi do chính bot sinh ra**: đã đo, chưa sửa trong Phase 6. Phase 7 xác định đúng hai mẫu ("hóng ý kiến X.", "X nói rõ hơn được không.") và sửa parser tối thiểu → 0,0%; xem `bot-ai-phase-7-verification.md` §5.
 - **Thiết bị thật**: bàn phím ảo, zoom hệ thống, `prefers-reduced-motion` chỉ được suy từ emulation và code (dải pha chỉ dùng đổi màu, không animation). Chưa chạy trên iOS/Android thật.
-- **Thống kê `botSpeech` ở production**: cơ chế có, nhưng chưa có số thật vì đợt này không gọi nhà cung cấp trả phí.
+- **Thống kê `botSpeech` ở production**: cơ chế có, nhưng chưa có số thật vì đợt này không gọi nhà cung cấp trả phí. *(Cập nhật: `botSpeech` nay đếm thêm GIỌNG — `casual`, `casualToneRate`, `casualBySource`. Đọc `casualBySource` chứ đừng đọc tỉ lệ gộp: bảng mẫu đo được ~0,90, nên khi nhà cung cấp chết và mọi thứ rơi về mẫu, con số gộp ĐI LÊN và trông như một cải thiện.)*
 - **Cân bằng v18 chỉ đo trên preset 8 người**; bàn 12–16 chưa đo.
 
 ---
