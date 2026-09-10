@@ -1,6 +1,6 @@
 import type { Role } from "@masoi/shared";
 import { buildDiscussionGraph } from "../analysis/discussion-graph";
-import { pressureOf } from "../conversation/conversation-state";
+import { pressureOf } from "../analysis/discussion-graph";
 import type { SelfPlayEvent, SelfPlayGame } from "../evaluation/selfplay";
 import type { BotMemory } from "../types";
 

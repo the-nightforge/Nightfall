@@ -3,6 +3,7 @@ import {
   deriveSpeechStyle,
   describeSpeechStyle,
   openingOf,
+  speechShapeFingerprint,
   speechTextFingerprint,
 } from "@masoi/game-engine";
 import type { BotPersonality, BotSpeechIntention } from "@masoi/game-engine";
@@ -53,8 +54,6 @@ function request(
     chatWindow: [],
     avoidOpenings: [],
     recentSpeechSourceIds: [],
-    priorStance: null,
-    listener: null,
     seq: 0,
     round: 1,
     // Khớp id speaker ("bot") và mục tiêu mặc định ("c" → "Chi") để cổng
@@ -442,6 +441,42 @@ describe("nhà cung cấp không được mở đầu như vài câu vừa rồi
     const opening = openingOf(first)!;
     const next = speechTemplate(request({}, { avoidOpenings: [opening] }))!;
     expect(openingOf(next)).not.toBe(opening);
+  });
+
+  it("bảng mẫu ở server né khung câu người khác vừa nói trong phòng", () => {
+    // Nguồn là `chatWindow`, cửa sổ chat đã lọc theo tầm nhìn - thứ vốn đã đi
+    // vào prompt. Ở đây một BOT KHÁC ("Bình") vừa nói đúng khuôn mà BOT này sắp
+    // dùng, chỉ khác cái tên. `recentOwnLines` không thấy (không phải câu của
+    // nó), `avoidFingerprints` không thấy (khác tên nên khác vân tay văn bản).
+    const players = [
+      { id: "bot", name: "An", alive: true },
+      { id: "b", name: "Bình", alive: true },
+      { id: "c", name: "Chi", alive: true },
+    ];
+    const names = players.map((player) => player.name);
+
+    const mine = speechTemplate(request({}, { players }))!;
+    // Đúng câu đó, nhưng do Bình nói về Bình: cùng khung, khác tên.
+    const theirs = mine.replace(/Chi/g, "Bình");
+
+    const next = speechTemplate(
+      request(
+        {},
+        { players, chatWindow: [{ actorName: "Bình", text: theirs, isSelf: false }] },
+      ),
+    )!;
+
+    expect(speechShapeFingerprint(next, names)).not.toBe(
+      speechShapeFingerprint(theirs, names),
+    );
+  });
+
+  it("chatWindow rỗng thì không đổi câu: chỗ gọi cũ không bị ảnh hưởng", () => {
+    for (let seq = 0; seq < 12; seq += 1) {
+      expect(speechTemplate(request({}, { seq, chatWindow: [] }))).toBe(
+        speechTemplate(request({}, { seq })),
+      );
+    }
   });
 
   it("chưa có cách mở đầu nào để tránh thì không chặn gì", async () => {

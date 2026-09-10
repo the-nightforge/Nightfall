@@ -6,7 +6,7 @@ import {
   type BotSpeechKind,
   type BotSpeechTone,
 } from "../types";
-import { openingOf, speechTextFingerprint } from "./fingerprint";
+import { openingOf, speechShapeFingerprint, speechTextFingerprint } from "./fingerprint";
 
 /**
  * Câu chữ cho một ý định đã chốt, không cần mạng.
@@ -1404,6 +1404,23 @@ export interface SpeechTemplateRequest {
    * nguyên câu.
    */
   avoidOpenings?: readonly string[];
+  /**
+   * Khung câu (`speechShapeFingerprint`) mà CẢ PHÒNG vừa dùng.
+   *
+   * Khác hẳn hai danh sách trên: chúng nói "đừng nói lại câu của CHÍNH MÌNH",
+   * cái này nói "đừng nói lại câu NGƯỜI KHÁC vừa nói". Trước khi có nó, hai con
+   * BOT rút mẫu độc lập trên cùng một bể ~13 câu và đụng nhau 11,8% số lượt -
+   * và không cơ chế nào thấy, vì cả ba tầng chống lặp lẫn ba chỉ số lặp đều gom
+   * theo `actorId`.
+   *
+   * Là luật của CĂN PHÒNG, giống `maxRepliesPerMessage`: chỗ gọi giữ sổ, BOT
+   * không biết và không cần biết. Nó KHÔNG rò rỉ gì - ý định đã chốt xong trước
+   * khi hàm này được gọi, nên tập này chỉ đổi được CÂU CHỮ, không đổi được một
+   * nước đi nào.
+   *
+   * Mềm như `avoidOpenings`: cả bể đều trùng khung thì vẫn nói.
+   */
+  avoidShapes?: readonly string[];
 }
 
 /** Giọng gần nhất có mẫu; `NEUTRAL` luôn tồn tại nên vòng lặp luôn dừng. */
@@ -1561,11 +1578,35 @@ function applyLowercase(template: string, text: string, request: SpeechTemplateR
   return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
-/** Mẫu thô → câu như người gõ: typo hiếm, điền chỗ trống, hạ chữ đầu. */
+/**
+ * Bỏ dấu chấm CUỐI câu - chỉ dấu chấm, và chỉ ở cuối.
+ *
+ * 728 trên 975 mẫu trong bảng này kết bằng dấu chấm, và không lớp nhiễu nào
+ * đụng tới nó. Đó là một nửa lý do `casualToneRate` đo được 0,556 trên self-play:
+ * `looksCasual` cần 2 trong 4 dấu hiệu, và một câu ngắn viết hoa đầu kết bằng
+ * dấu chấm chỉ đạt 1. Người Việt chat trong game gần như không bao giờ chấm câu
+ * cuối - đó là dấu hiệu văn viết, và nó là thứ dễ nhận ra nhất trong một khung
+ * chat.
+ *
+ * Sửa ở ĐÂY chứ không sửa 728 chuỗi: một luật viết trong bảng là một luật sẽ bị
+ * quên ở mẫu thứ 976. `humanize` vốn đã là tầng "làm cho giống người gõ".
+ *
+ * `?` và `!` GIỮ NGUYÊN: chúng mang giọng chứ không mang văn phong, và
+ * `looksCasual` cũng chỉ tính dấu chấm. Dấu chấm GIỮA câu ("{target}. {evidence}.")
+ * cũng giữ - người ta vẫn chấm giữa chừng khi gõ nhanh; chỗ lộ ra là dấu cuối.
+ *
+ * KHÔNG đổi vân tay: `speechTextFingerprint` bỏ mọi ký tự không phải chữ/số, và
+ * `openingOf` chỉ đọc ba token đầu. Cơ chế chống lặp vì thế không thấy gì khác.
+ */
+function dropFinalPeriod(text: string): string {
+  return text.replace(/\.+$/u, "");
+}
+
+/** Mẫu thô → câu như người gõ: typo hiếm, điền chỗ trống, hạ chữ đầu, bỏ chấm cuối. */
 function humanize(template: string, request: SpeechTemplateRequest): string {
   const typed = applyTypo(template, request);
   const filled = fillSpeechTemplate(typed, request);
-  return applyLowercase(template, filled, request);
+  return dropFinalPeriod(applyLowercase(template, filled, request));
 }
 
 /**
@@ -1577,7 +1618,7 @@ function humanize(template: string, request: SpeechTemplateRequest): string {
  *
  * Hai vòng quét, theo thứ tự nới dần:
  *
- * 1. Né cả câu đã nói LẪN cách mở đầu đã dùng.
+ * 1. Né câu đã nói, cách mở đầu đã dùng, VÀ khung câu cả phòng vừa dùng.
  * 2. Chỉ né câu đã nói.
  *
  * Cả hai vòng đều cạn thì trả về mẫu đầu chứ không ném: một lượt nói trùng còn
@@ -1588,6 +1629,18 @@ export function renderSpeechTemplate(request: SpeechTemplateRequest): string {
   const pool = poolFor(intention.kind, intention.tone);
   const avoid = new Set(request.avoidFingerprints ?? []);
   const avoidOpenings = new Set(request.avoidOpenings ?? []);
+  const avoidShapes = new Set(request.avoidShapes ?? []);
+
+  /**
+   * Tên mà CHÍNH câu này có thể chứa - đúng hai chỗ trống mang tên người.
+   *
+   * Chỗ gọi xoá tên bằng danh sách ĐẦY ĐỦ của phòng, ở đây chỉ có hai cái tên,
+   * và hai bên vẫn ra cùng một khung: câu này không thể chứa tên nào khác, vì
+   * `fillSpeechTemplate` chỉ điền đúng `{target}` và `{author}`.
+   */
+  const ownNames = [request.targetName, request.replyToName].filter(
+    (name): name is string => name !== null,
+  );
 
   const semantic = [
     intention.kind,
@@ -1602,12 +1655,13 @@ export function renderSpeechTemplate(request: SpeechTemplateRequest): string {
   const rendered = (step: number): string =>
     humanize(pool[(start + step) % pool.length]!, request);
 
-  if (avoidOpenings.size > 0) {
+  if (avoidOpenings.size > 0 || avoidShapes.size > 0) {
     for (let step = 0; step < pool.length; step += 1) {
       const text = rendered(step);
       if (avoid.has(speechTextFingerprint(text))) continue;
       const opening = openingOf(text);
       if (opening !== null && avoidOpenings.has(opening)) continue;
+      if (avoidShapes.has(speechShapeFingerprint(text, ownNames))) continue;
       return text;
     }
   }

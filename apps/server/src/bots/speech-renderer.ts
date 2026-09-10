@@ -2,6 +2,7 @@ import {
   analyzeChat,
   openingOf,
   renderSpeechTemplate,
+  speechShapeFingerprint,
   speechTextFingerprint,
 } from "@masoi/game-engine";
 import { botBrain } from "./index";
@@ -39,6 +40,22 @@ const NEEDS_SOMEONE = new Set([
   "ASK_EVIDENCE",
 ]);
 
+/**
+ * Khung câu mà cả phòng vừa dùng, đọc từ `chatWindow`.
+ *
+ * `chatWindow` đã là cửa sổ chat ĐÃ LỌC theo tầm nhìn của chính BOT này và đã
+ * đi thẳng vào prompt, nên đọc lại nó ở đây không mở thêm đường nhìn nào. Nó
+ * cũng chứa câu của NGƯỜI THẬT, và né phrasing của người thật là đúng ý.
+ *
+ * Xoá tên bằng danh sách ĐẦY ĐỦ của phòng (`request.players`), còn
+ * `renderSpeechTemplate` xoá bằng đúng hai cái tên câu của nó có thể chứa. Hai
+ * bên vẫn ra cùng một khung - xem chú thích `ownNames` trong `templates.ts`.
+ */
+function roomShapes(request: SpeechRequest): string[] {
+  const names = request.players.map((player) => player.name);
+  return request.chatWindow.map((line) => speechShapeFingerprint(line.text, names));
+}
+
 export function speechTemplate(request: SpeechRequest): string | null {
   // Lượt tự bào chữa không có "author" cụ thể để DISAGREE nhắm tới - vote lộ AI
   // đang bị nhắm, không lộ AI đã bỏ phiếu (xem `intentLine` trong prompt.ts).
@@ -68,6 +85,10 @@ export function speechTemplate(request: SpeechRequest): string | null {
     avoidFingerprints: request.recentOwnLines.map(speechTextFingerprint),
     // Cách mở đầu vừa dùng: mẫu trùng mở đầu bị dịch qua khi còn mẫu khác.
     avoidOpenings: request.avoidOpenings,
+    // Khung câu CẢ PHÒNG vừa dùng. Nguồn là `chatWindow` - cửa sổ chat đã lọc
+    // theo tầm nhìn, thứ vốn đã đi vào prompt - nên không có dữ liệu mới nào
+    // được đưa vào tầng này, và không có gì để rò rỉ.
+    avoidShapes: roomShapes(request),
   });
 }
 
@@ -96,7 +117,7 @@ export async function renderBotSpeech(
   // dù đi đường nào; `source` nói đường đó là đường nào.
   const startedAt = now();
   const rendered = await renderUnmeasured(request, brain, chatMaxLength);
-  stats.record(rendered.source, now() - startedAt);
+  stats.record(rendered.source, now() - startedAt, rendered.text);
   return rendered;
 }
 

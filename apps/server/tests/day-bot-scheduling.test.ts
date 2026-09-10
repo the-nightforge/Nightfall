@@ -49,7 +49,6 @@ vi.mock("../src/bots/session-registry", async () => {
       speechMemory: [] as unknown[],
       speechSequence: 0,
       repliedMessageIds: [] as string[],
-      // `buildNarrative` đọc cả phiếu đã bỏ (COMMUNICATION §15).
       previousVotes: [] as unknown[],
     },
     style: engine.deriveSpeechStyle({

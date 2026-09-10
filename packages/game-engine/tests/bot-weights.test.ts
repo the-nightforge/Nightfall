@@ -21,6 +21,7 @@ import {
   BOT_WEIGHTS_V18,
   BOT_WEIGHTS_V21,
   BOT_WEIGHTS_V19,
+  BOT_WEIGHTS_V29,
   DEFAULT_BOT_WEIGHTS,
   resolveWeights,
   validateWeights,
@@ -666,7 +667,7 @@ describe("v2 là cấu hình production", () => {
     return rates;
   }
 
-  it("mặc định trỏ tới v29", () => {
+  it("mặc định trỏ tới v31", () => {
     // Cùng cơ chế rollout mà docstring của `DEFAULT_BOT_WEIGHTS` mô tả: nâng
     // chính hằng số này lên bản mới để `session-registry.ts` (chỗ ván thật
     // dựng `BotRuntime`, không tự truyền `weights`) chạy bản mới mà không phải
@@ -688,8 +689,19 @@ describe("v2 là cấu hình production", () => {
     // trong khi `villageWinRate` trung tính (+1,18, z=+1,2) và `silenceRate`
     // không nhúc nhích (z=−1,3, tức lượt giữ lại được DÙNG chứ không phí).
     // Lý do đổi thước nằm trong docstring của `DEFAULT_BOT_WEIGHTS`.
-    expect(DEFAULT_BOT_WEIGHTS.version).toBe("29.0.0");
-    expect(weightsPreset("29.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    //
+    // v31 (COMMUNICATION) không dùng lại KHUNG CÂU mà cả phòng vừa nói
+    // (`conversation.roomShapeWindow = 12`). Cùng thước hội thoại với v29, và
+    // hình dạng kết quả sạch hơn: 5×1.000 ván paired seeds cho
+    // `crossBotRepetitionRate` 19.80% → 15.15% (−4,65 điểm, z=−51,5), trong khi
+    // MỌI chỉ số còn lại có |z| < 1,1 — `casualToneRate` z=−0,0,
+    // `distinctOpeningRate` z=−0,9, `silenceRate` z=−0,8, `villageWinRate`
+    // +0,50 (z=+0,8). v29 phải trả 1,67 điểm `casualToneRate`; ô này không trả
+    // gì, vì nó không đụng lượt rút RNG nào và không đổi việc bot nói LÚC NÀO
+    // hay nói VỚI AI — chỉ đổi mẫu câu trong cùng một bể cho cùng một ý định.
+    expect(DEFAULT_BOT_WEIGHTS.version).toBe("31.0.0");
+    expect(weightsPreset("31.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    expect(weightsPreset("29.0.0")).toBe(BOT_WEIGHTS_V29);
     expect(weightsPreset("21.0.0")).toBe(BOT_WEIGHTS_V21);
     expect(weightsPreset("18.0.0")).toBe(BOT_WEIGHTS_V18);
     expect(weightsPreset("17.0.0")).toBe(BOT_WEIGHTS_V17);

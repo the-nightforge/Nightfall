@@ -1,9 +1,7 @@
 import { GameEngine } from "@masoi/game-engine";
 import type {
-  BotBrainState,
   BotDecisionContext,
   BotSpeechIntention,
-  BotWeights,
 } from "@masoi/game-engine";
 import {
   DEAD_MESSAGE_MAX_LENGTH,
@@ -26,10 +24,7 @@ import { botBrain, resetBotBudget } from "../bots";
 import { buildBotDecisionContext } from "../bots/context";
 import { renderBotSpeech, speechTemplate } from "../bots/speech-renderer";
 import {
-  buildCommunicationProfile,
-  buildNarrative,
   describeSpeechStyle,
-  liveStanceOn,
   planDefenseCommentary,
   planDefenseSpeakers,
   recentOpenings,
@@ -937,8 +932,6 @@ export function toSpeechRequest(
       runtime.state,
       limits.promptRecentOwnLines,
     ),
-    priorStance: priorStanceOn(runtime, speech.targetId, context, nameOf),
-    listener: listenerFor(runtime, speech.targetId, context, nameOf),
     seq: runtime.state.speechSequence,
     round: context.knowledge.round,
     players: context.knowledge.players,
@@ -946,59 +939,6 @@ export function toSpeechRequest(
     // lời nói ban ngày bình thường. hàng đợi của pha xử tự ghi đè lại.
     defense: null,
   };
-}
-
-/**
- * Lập trường BOT đã công khai nêu về mục tiêu của lượt này (COMMUNICATION §15).
- *
- * Dựng ở đây chứ không trong lõi vì prompt cần TÊN người, còn lõi chỉ làm việc
- * với id - biến id thành tên là việc của tầng có `RoomSnapshot`.
- *
- * `null` khi cơ chế tắt (`narrativeMemoryRounds = 0`, tức v1..v24), khi ý định
- * không nhắm vào ai, hoặc khi BOT chưa từng nói gì về người đó.
- */
-function priorStanceOn(
-  runtime: { state: BotBrainState; weights: BotWeights },
-  targetId: string | undefined,
-  context: BotDecisionContext,
-  nameOf: (playerId: string) => string | undefined,
-): SpeechRequest["priorStance"] {
-  // Thoát TRƯỚC khi quét trí nhớ khi cơ chế tắt: hàm này chạy mỗi lượt nói, và
-  // một bảng lập trường không ai đọc là một vòng quét trả tiền cho không.
-  if (!targetId || runtime.weights.conversation.narrativeMemoryRounds <= 0) return null;
-  const narrative = buildNarrative(runtime.state, runtime.weights);
-  const round = context.knowledge.round;
-  const stance = liveStanceOn(narrative, targetId, round, runtime.weights);
-  if (stance === "neutral") return null;
-
-  return {
-    subjectName: nameOf(targetId) ?? "người đó",
-    stance,
-    sinceRound: narrative[targetId]!.createdAtRound,
-  };
-}
-
-/**
- * Kiểu lập luận hợp với người đang được nói tới (COMMUNICATION §8, §9).
- *
- * `null` khi cơ chế tắt (`persuasionMinSamples = 0`, tức v1..v25), khi ý định
- * không nhắm vào ai, hoặc khi BOT chưa quan sát đủ về người đó.
- */
-function listenerFor(
-  runtime: { state: BotBrainState; weights: BotWeights },
-  targetId: string | undefined,
-  context: BotDecisionContext,
-  nameOf: (playerId: string) => string | undefined,
-): SpeechRequest["listener"] {
-  // Thoát TRƯỚC khi dựng hồ sơ khi cơ chế tắt - cùng lý do với `priorStanceOn`.
-  if (!targetId || runtime.weights.conversation.persuasionMinSamples <= 0) return null;
-  const style = buildCommunicationProfile(
-    context.knowledge,
-    runtime.state,
-    targetId,
-    runtime.weights,
-  ).style;
-  return style === null ? null : { name: nameOf(targetId) ?? "người đó", style };
 }
 
 /**

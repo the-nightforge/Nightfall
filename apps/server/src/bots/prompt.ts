@@ -265,46 +265,6 @@ function defenseLines(defense: NonNullable<SpeechRequest["defense"]>): string[] 
   return [...shared, "Nói một hoặc hai câu để thuyết phục làng đừng treo bạn.", ""];
 }
 
-/**
- * Nhắc lại lập trường BOT đã CÔNG KHAI nêu về người đang được nói tới (§15).
- *
- * Lý do khối này tồn tại: lõi chọn được `CHANGE_MIND`, nhưng lõi không viết
- * câu. Không có mấy dòng dưới đây, mô hình vẫn thoải mái viết "tôi tin A từ
- * đầu" ở đúng lượt mà vòng trước chính BOT đã tố A - và đó là lỗi mà §15 nêu
- * đích danh.
- *
- * KHÔNG phải dữ liệu ẩn: cả bàn đã nghe những câu đó và đã thấy những lá phiếu
- * đó. Vì vậy nó KHÔNG đi qua `untrusted()` - đây là lời của chính BOT, không
- * phải chữ do người khác gõ.
- */
-function priorStanceLines(stance: NonNullable<SpeechRequest["priorStance"]>): string[] {
-  const said = stance.stance === "suspect" ? "nghi ngờ" : "bênh vực";
-  return [
-    `Từ vòng ${stance.sinceRound}, bạn đã CÔNG KHAI ${said} ${stance.subjectName}. Cả bàn đều nhớ điều đó.`,
-    "Nếu lượt này bạn nói khác đi, hãy nhận là mình đã đổi ý và nói ngắn gọn vì sao.",
-    `TUYỆT ĐỐI không viết như thể bạn vẫn nghĩ vậy từ đầu, và không phủ nhận việc mình đã ${said} ${stance.subjectName}.`,
-    "",
-  ];
-}
-
-/**
- * Cách trình bày hợp với người đang được nói tới (§9).
- *
- * Đề nghị về CÁCH NÓI, không phải về nội dung: nó không được đổi mục tiêu, đổi
- * lập trường hay thêm bằng chứng - ba thứ đó đã chốt ở lõi. Vì vậy câu cuối
- * nói thẳng ranh giới đó, và khối này đứng SAU dòng bằng chứng.
- */
-function listenerLines(listener: NonNullable<SpeechRequest["listener"]>): string[] {
-  const how = {
-    EVIDENCE: `${listener.name} chỉ bị thuyết phục bởi căn cứ cụ thể. Bám vào bằng chứng ở trên, đừng nói chung chung.`,
-    CHALLENGE: `${listener.name} phản ứng với lời nói thẳng. Nói gọn và dứt khoát, đừng vòng vo rào đón.`,
-    CONSENSUS: `${listener.name} hay đi theo số đông. Đặt ý của bạn vào mạch chung của bàn.`,
-    CONSISTENCY: `${listener.name} đang không tin bạn. Chỉ vào chỗ không khớp thay vì khẳng định thêm một lần nữa.`,
-  }[listener.style];
-
-  return [how, "Đây là gợi ý về CÁCH NÓI. Đừng đổi mục tiêu, lập trường hay bằng chứng.", ""];
-}
-
 export function buildDaySpeechPrompt(request: SpeechRequest): PromptSpec {
   const evidenceLines = request.evidence.length
     ? request.evidence.map((item) => `- [${item.sourceId}] ${item.summary}`)
@@ -345,7 +305,6 @@ export function buildDaySpeechPrompt(request: SpeechRequest): PromptSpec {
       // người cũng bị nhắm đã công khai ở pha này - KHÔNG phải vai thật, thứ
       // roleContext cũ từng đưa vào đây và đã bị bỏ hẳn khỏi prompt này.
       ...(request.defense ? defenseLines(request.defense) : []),
-      ...(request.priorStance ? priorStanceLines(request.priorStance) : []),
       ...untrusted(
         "quoted_data",
         request.replyTo ? [`${request.replyTo.actorName}: ${request.replyTo.text}`] : [],
@@ -359,7 +318,6 @@ export function buildDaySpeechPrompt(request: SpeechRequest): PromptSpec {
       "Bằng chứng bạn được phép nhắc tới:",
       ...evidenceLines,
       "",
-      ...(request.listener ? listenerLines(request.listener) : []),
       ...(request.recentOwnLines.length
         ? [
             "Bạn vừa nói những câu sau. ĐỪNG diễn đạt lại chúng:",
@@ -369,6 +327,21 @@ export function buildDaySpeechPrompt(request: SpeechRequest): PromptSpec {
         : []),
       ...(request.avoidOpenings.length
         ? [`Đừng mở đầu giống những lần trước: ${request.avoidOpenings.join(" / ")}`, ""]
+        : []),
+      // Chống lặp XUYÊN NGƯỜI, đường nhà cung cấp.
+      //
+      // Bảng mẫu bị chặn CỨNG bằng `avoidShapes` vì ở đó lặp khung câu đo được
+      // 11,8% - hai BOT rút độc lập trên cùng một bể ~13 mẫu. Nhà cung cấp
+      // không có bể nào để đụng, và đường nó đi CHƯA ĐO ĐƯỢC: self-play chạy
+      // 100% bảng mẫu, nên không có một con số nào nói rằng mô hình cũng lặp
+      // khung câu của người khác. Vì vậy ở đây là một LỜI DẶN, không phải một
+      // cổng thứ năm: dựng cổng cho một vấn đề chưa đo được là trả giá độ trễ
+      // và một lượt hỏi lại cho một thứ có thể không tồn tại.
+      //
+      // Dữ liệu để làm theo lời dặn này đã nằm sẵn trong khối <chat_data> ở
+      // trên; dòng này không thêm gì vào prompt ngoài chính nó.
+      ...(request.chatWindow.length
+        ? ["Đừng dùng lại khuôn câu người khác vừa nói ở trên - cùng ý thì nói theo cách của bạn.", ""]
         : []),
       request.recentSpeechSourceIds.length
         ? `Bạn đã dùng các căn cứ này gần đây, đừng lặp lại: ${request.recentSpeechSourceIds.join(", ")}`

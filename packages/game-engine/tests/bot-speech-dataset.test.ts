@@ -5,7 +5,7 @@ import {
   validateSpeechSample,
 } from "../src/bot/learning/speech-dataset";
 import { runSelfPlay, type SelfPlayGame } from "../src/bot/evaluation/selfplay";
-import { BOT_WEIGHTS_V28 } from "../src/bot/config/weights";
+import { DEFAULT_BOT_WEIGHTS } from "../src/bot/config/weights";
 import type { Role } from "@masoi/shared";
 
 function play(seed = "speech-data", speech = true): SelfPlayGame {
@@ -13,7 +13,7 @@ function play(seed = "speech-data", speech = true): SelfPlayGame {
     seed,
     players: 8,
     maxRounds: 12,
-    weights: BOT_WEIGHTS_V28,
+    weights: DEFAULT_BOT_WEIGHTS,
     speech,
   } as never);
 }
@@ -39,8 +39,7 @@ describe("dataset speech — hình dạng", () => {
     );
   });
 
-  it("topic được ghi lại — thiếu nó thì DEFLECT trùng khít câu đáp thẳng", () => {
-    // Cả hai đều là `REPLY`; chỉ `topic` phân biệt (PR 4).
+  it("topic được ghi lại cho câu đáp", () => {
     const replies = SAMPLES.filter((sample) => sample.decision.kind === "REPLY");
     if (replies.length > 0) {
       expect(replies.some((sample) => sample.decision.topic !== null)).toBe(true);
@@ -110,7 +109,7 @@ describe("dataset speech — KHÔNG chở tri thức riêng", () => {
   });
 });
 
-describe("dataset speech — áp lực dùng CHUNG công thức với planner", () => {
+describe("dataset speech — áp lực dùng CHUNG công thức `pressureOf`", () => {
   it("áp lực nằm trong [0,1] và có lúc khác 0", () => {
     const values = SAMPLES.map((sample) => sample.conversation.pressureOnMe);
     for (const value of values) {

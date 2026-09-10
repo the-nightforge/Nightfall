@@ -1,11 +1,5 @@
-import {
-  buildCommunicationProfile,
-  type PersuasionStyle,
-} from "../belief/communication-profile";
-import { roleTeam } from "@masoi/shared";
-import { credibilityOf } from "../belief/player-assessment";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
-import { decideChatClaim, seerHoldsForHumans, type ClaimKind } from "../decision/claim-decision";
+import { decideChatClaim, seerHoldsForHumans } from "../decision/claim-decision";
 import type { BotSpeechStyle } from "../personality/speech-style";
 import type { DecisionProbeCollector } from "../trace/trace";
 import type {
@@ -17,17 +11,7 @@ import type {
   BotSpeechTone,
   BotVoteIntention,
 } from "../types";
-import { buildConversationState, speechUrge, type ConversationState } from "./conversation-state";
 import { speechSemanticFingerprint } from "./fingerprint";
-import {
-  buildNarrative,
-  contradictsNarrative,
-  liveStanceOn,
-  stanceOfKind,
-  type NarrativePosition,
-} from "./narrative";
-import { wolfDistanceStance } from "../decision/wolf-bluff";
-import { chooseResponseStrategy, intentionFor } from "./question-policy";
 import { hasRecentSemantic, speechCountInRound } from "./speech-memory";
 import { findConversationTriggers, type ConversationTrigger } from "./triggers";
 
@@ -128,39 +112,6 @@ function candidatesFor(trigger: ConversationTrigger, style: BotSpeechStyle): Bot
 }
 
 /**
- * Ứng viên mà từng kiểu người nghe phản ứng tốt nhất (COMMUNICATION §9).
- *
- * Đây là bảng ƯU TIÊN, không phải bảng SINH: `reorderForListener` chỉ đẩy lên
- * đầu những kind VỐN ĐÃ có trong danh sách của trigger. `candidatesFor` vẫn là
- * nơi duy nhất quyết định cái gì hợp lệ để đáp một trigger - người nghe không
- * được phép mở ra một nước đi mà tình huống không cho phép.
- */
-const PREFERRED_FOR: Readonly<Record<PersuasionStyle, readonly BotSpeechKind[]>> =
-  Object.freeze({
-    EVIDENCE: ["ASK_EVIDENCE", "REPLY"],
-    CHALLENGE: ["CHALLENGE", "DISAGREE"],
-    CONSENSUS: ["AGREE", "REPLY"],
-    CONSISTENCY: ["DISAGREE", "ASK_EVIDENCE"],
-  });
-
-/**
- * Xếp lại ứng viên theo kiểu của NGƯỜI NGHE, giữ nguyên tập hợp.
- *
- * Ổn định: những kind không được ưu tiên giữ nguyên thứ tự tương đối của
- * `candidatesFor`, tức vẫn theo tính cách của chính BOT. Người nghe quyết định
- * cái gì lên đầu, tính cách quyết định phần còn lại.
- */
-function reorderForListener(
-  candidates: BotSpeechKind[],
-  style: PersuasionStyle | null,
-): BotSpeechKind[] {
-  if (style === null) return candidates;
-  const preferred = PREFERRED_FOR[style].filter((kind) => candidates.includes(kind));
-  if (preferred.length === 0) return candidates;
-  return [...preferred, ...candidates.filter((kind) => !preferred.includes(kind))];
-}
-
-/**
  * Ai là mục tiêu của câu đáp.
  *
  * Với nhóm "bênh người tôi tin / phản đối người bênh kẻ tôi nghi", mục tiêu là
@@ -213,11 +164,9 @@ function responseProbability(
  * Bằng chứng BOT được phép nói RA lượt này.
  *
  * Ba bộ lọc, theo thứ tự: đã nói rồi thì thôi, bằng chứng soi bị giữ tới lúc
- * khai vai, và trần `limits.intentionEvidence`.
- *
- * Tách thành hàm vì từ PR 4 có HAI chỗ hỏi cùng một câu - đường tự mở lời và
- * câu đáp `ANSWER_WITH_EVIDENCE`. Hai bản sao của luật giữ bằng chứng soi là
- * hai bản sẽ trôi lệch, và chỗ trôi lệch đó là một rò rỉ thông tin vai.
+ * khai vai, và trần `limits.intentionEvidence`. Luật giữ bằng chứng soi sống ở
+ * đúng một chỗ này: một bản sao thứ hai sẽ trôi lệch, và chỗ trôi lệch đó là
+ * một rò rỉ thông tin vai.
  *
  * THUẦN: không rút số. Gọi ở đâu cũng không lệch chuỗi RNG.
  */
@@ -266,155 +215,6 @@ function sayableEvidence(
     .map((item) => ({ ...item }));
 }
 
-/**
- * Câu đáp cho một câu hỏi nhắm thẳng vào BOT (COMMUNICATION §13, §14).
- *
- * Trả về `[]` khi chính sách chọn `IGNORE`. Danh sách rỗng là tín hiệu cho chỗ
- * gọi bỏ qua trigger này mà KHÔNG rút số - né có chủ đích, không phải một lượt
- * rút xui.
- *
- * Luôn tối đa MỘT ứng viên. Bậc thang theo tính cách của Phase 4 đưa ra nhiều
- * ứng viên vì nó không biết câu hỏi nói về chuyện gì; ở đây thì biết, nên một
- * lựa chọn thứ hai chỉ là một cách nói "chính sách chưa chắc" - và chỗ gọi vốn
- * đã bỏ qua ứng viên thứ hai sau lượt rút đầu tiên.
- *
- * THUẦN: không rút số.
- */
-function questionDrafts(
-  trigger: ConversationTrigger,
-  style: BotSpeechStyle,
-  state: BotBrainState,
-  vote: BotVoteIntention,
-  usable: BotSpeechIntention["evidence"],
-  conversation: ConversationState,
-  weights: BotWeights,
-): BotSpeechIntention[] {
-  const type = trigger.questionType ?? "GENERAL";
-  const strategy = chooseResponseStrategy({
-    type,
-    pressureOnMe: conversation.pressureOnMe,
-    askerCredibility: credibilityOf(state, trigger.actorId, weights),
-    unspokenEvidence: usable.length,
-    hasClaimedRole: state.myClaim !== null,
-    ignoreFloor: weights.conversation.questionIgnoreFloor,
-    style,
-  });
-
-  const shape = intentionFor(strategy, type, style);
-  if (!shape) return [];
-
-  return [
-    {
-      kind: shape.kind,
-      // Câu đáp luôn hướng về NGƯỜI HỎI. Trả lời một câu hỏi mà nhắm vào người
-      // thứ ba là đang nói chuyện khác, không phải đang đáp.
-      targetId: trigger.actorId,
-      replyToMessageId: trigger.messageId,
-      replyToActorId: trigger.actorId,
-      topic: shape.topic,
-      confidence: vote.confidence,
-      evidence: shape.withEvidence ? usable : [],
-      tone: shape.tone,
-      reason: `đáp câu hỏi ${type} bằng ${strategy}`,
-    },
-  ];
-}
-
-/**
- * Lời khai này được nói NẶNG tới đâu (COMMUNICATION §16 "HOW STRONGLY").
- *
- * ```text
- * chưa ai đụng tới mình  -> khai nhẹ       (SOFT)
- * đang bị dồn            -> khai dứt khoát (giọng của tính cách)
- * ```
- *
- * HAI bậc, không phải ba như bản đầu. §16 mô tả ba (soft / partial / full) và
- * bản đầu cài đúng ba, với dải giữa là `[ceiling, 2 x ceiling)`. Đo trên 300
- * ván: dải giữa trúng đúng **3 trên 859** lời khai. Không phải lỗi hiệu chỉnh
- * mà là hệ quả của việc một lời khai CHỦ ĐỘNG gần như luôn xảy ra lúc chưa ai
- * đụng tới người khai - áp lực lúc đó bằng 0. Bậc giữa vì vậy là một nhánh
- * chết, và một quy ước "gấp đôi" không có gì chống lưng; cả hai đã bị bỏ.
- *
- * `COUNTER` và `UNDER_FIRE` luôn ở bậc cao nhất, không hỏi áp lực: cả hai theo
- * định nghĩa đã là lúc bị dồn - một bên bị mạo danh, một bên sắp bị treo. Đọc
- * lại áp lực ở đó chỉ tạo thêm một đường để nói nhẹ đúng lúc không được nhẹ.
- *
- * `softClaimPressureCeiling = 0` (v1..v26) làm phép so sánh sai và trả về đúng
- * giọng cũ - không một bit nào lệch.
- *
- * Chỉ dựng `ConversationState` khi nút vặn thật sự bật: nó quét cả memory, và
- * lời khai là nhánh chạy trước hết ở MỌI lượt nói.
- */
-function claimTone(
-  kind: ClaimKind,
-  socialSituation: () => ConversationState,
-  style: BotSpeechStyle,
-  weights: BotWeights,
-): BotSpeechTone {
-  const ceiling = weights.claim.softClaimPressureCeiling;
-  if (ceiling <= 0 || kind !== "PROACTIVE") return toneFor("ACCUSE", style);
-
-  return socialSituation().pressureOnMe < ceiling ? "SOFT" : toneFor("ACCUSE", style);
-}
-
-/**
- * Người khác đáng hỏi khi mọi luận điểm về mục tiêu phiếu đã cạn (§24).
- *
- * Ba ràng buộc, và cả ba đều cần:
- *
- * - Phải CÒN DƯ lượt nói trong vòng. Câu chuyển hướng là thứ RẺ NHẤT BOT có
- *   thể nói - nó là cái nói ra khi đã hết ý - nên nó không bao giờ được tiêu
- *   lượt cuối cùng của vòng. Đo trên 1.200 ván khi chưa có ràng buộc này:
- *   `NO_TURN` của câu hỏi trực tiếp tăng **+4,4 điểm** và tỉ lệ trả lời tụt
- *   **−3,9 điểm** - BOT đốt hạn mức vào câu hỏi tự phát, rồi tới lúc có người
- *   hỏi thẳng thì không còn lượt để đáp. Giữ lại một lượt là chỗ chữa.
- * - Phải là người BOT đang THẬT SỰ nghi (`suspicion > 0`). Đây là ranh giới
- *   giữa "đổi chiến thuật" và "nặn ra một câu để né cơ chế chống lặp". Hỏi một
- *   người mình không có ý kiến gì là câu độn, và nó làm chỉ số lặp đẹp lên
- *   trong khi hội thoại tệ đi - đúng cái bẫy mà chú thích ở nhánh "Hết ý" cảnh
- *   báo.
- * - Sắp theo `(nghi giảm dần, id tăng dần)` rồi cắt theo `redirectCandidates`.
- *   Tất định, không rút số.
- */
-function redirectTargets(
-  context: BotDecisionContext,
-  state: BotBrainState,
-  exclude: string,
-  weights: BotWeights,
-): string[] {
-  const limit = weights.conversation.redirectCandidates;
-  if (limit <= 0) return [];
-
-  // Chừa đúng một lượt cho việc ĐÁP người khác. Hạn mức 1 nghĩa là không bao
-  // giờ chuyển hướng - đúng ý: bàn chỉ cho mỗi BOT một câu thì câu đó phải để
-  // dành cho người đang nói với nó.
-  const spoken = speechCountInRound(state, context.knowledge.round);
-  if (spoken >= weights.conversation.messagesPerBotPerRound - 1) return [];
-
-  return context.knowledge.players
-    .filter((player) => player.alive)
-    .map((player) => player.id)
-    .filter((id) => id !== exclude && id !== state.playerId)
-    .map((id) => ({ id, score: state.suspicion[id]?.score ?? 0 }))
-    .filter((item) => item.score > 0)
-    .sort((left, right) => right.score - left.score || left.id.localeCompare(right.id))
-    .slice(0, limit)
-    .map((item) => item.id);
-}
-
-/**
- * Vì sao im lặng, cho trace.
- *
- * Hàm riêng chứ không phải một biểu thức tại chỗ: `conversation` chỉ được gán
- * bên trong một closure, nên tại điểm gọi trình biên dịch thu nó về `never` và
- * hai trường bên dưới thành lỗi. Đọc qua tham số là cách nói đúng ý - "cái
- * bảng ấy có thể đã dựng, có thể chưa".
- */
-function silenceReason(conversation: ConversationState | null): string {
-  if (conversation === null) return "không đủ hoạt ngôn để lên tiếng lượt này";
-  return `chưa đáng lên tiếng lượt này (${conversation.floor}, áp lực ${conversation.pressureOnMe.toFixed(2)})`;
-}
-
 export interface SpeechPlanInput {
   context: BotDecisionContext;
   state: BotBrainState;
@@ -434,12 +234,6 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
     hasRecentSemantic(state, speechSemanticFingerprint(intention), round, weights)
       ? null
       : intention;
-
-  // Dựng một lần, dùng chung cho cả ba đường, và CHỈ khi có ai đó thật sự đọc:
-  // nó quét cả memory, và một bảng không ai đọc là một vòng lặp trả tiền không.
-  let conversation: ConversationState | null = null;
-  const socialSituation = (): ConversationState =>
-    (conversation ??= buildConversationState(context, state, weights));
 
   // ---- 0. Có đáng khai vai lúc này không ----
   //
@@ -464,139 +258,31 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
         .filter((item) => item.kind === "SEER_RESULT_WOLF")
         .slice(0, weights.limits.intentionEvidence)
         .map((item) => ({ ...item })),
-      tone: claimTone(claim.kind, socialSituation, style, weights),
+      tone: toneFor("ACCUSE", style),
       reason: claim.reason,
     });
     if (intention) return intention;
   }
 
-  // Bằng chứng nói ra được lượt này. Thuần, nên tính sớm không lệch chuỗi RNG;
-  // cả câu đáp `ANSWER_WITH_EVIDENCE` lẫn đường tự mở lời đều đọc đúng nó.
+  // Bằng chứng nói ra được lượt này. Thuần, nên tính sớm không lệch chuỗi RNG.
   const usable = sayableEvidence(context, state, vote, weights);
 
-  /**
-   * Lập trường BOT đã CÔNG KHAI nêu ra, hoặc `null` khi cơ chế tắt (§15).
-   *
-   * Thuần, nên dựng ở đây không lệch chuỗi RNG. Cả hai đường đọc nó: đường
-   * trigger để không tự mâu thuẫn, đường tự mở lời để nói THÀNH LỜI việc mình
-   * đổi ý thay vì lặng lẽ quay xe.
-   */
-  const narrative: Record<string, NarrativePosition> | null =
-    weights.conversation.narrativeMemoryRounds > 0 ? buildNarrative(state, weights) : null;
-
-  /**
-   * Đồng bọn Sói còn sống, hoặc rỗng khi BOT không phải Sói (§18).
-   *
-   * `knownRoles` chỉ liệt kê cả bầy khi viewer LÀ Sói - engine lọc theo vai, và
-   * đó là cổng duy nhất. Một con Dân Làng đọc ra tập rỗng, nên nhánh giữ khoảng
-   * cách bên dưới không tồn tại với nó.
-   */
-  const packAllies = new Set(
-    Object.entries(context.knowledge.knownRoles)
-      .filter(([id, known]) => id !== state.playerId && roleTeam(known) === "wolves")
-      .map(([id]) => id),
-  );
-
-  /**
-   * Lọc ứng viên theo khoảng cách BOT muốn giữ với một đồng bọn đang bị dồn.
-   *
-   * Trả về danh sách RỖNG là bỏ qua cả trigger mà không rút số - cùng cơ chế
-   * `IGNORE` của PR 4.
-   */
-  const applyDistancing = (
-    trigger: ConversationTrigger,
-    drafts: BotSpeechIntention[],
-  ): BotSpeechIntention[] => {
-    if (!packAllies.has(trigger.subjectId)) return drafts;
-    switch (
-      wolfDistanceStance(context.knowledge, trigger.subjectId, state.playerId, weights)
-    ) {
-      case "DEFEND":
-        return drafts;
-      case "IGNORE":
-        return [];
-      default:
-        // Gợn lại thì bỏ đúng ứng viên BÊNH; ứng viên kế của
-        // `ACCUSED_MY_TRUSTED` là `DISAGREE`, thứ không đứng hẳn về phía ai.
-        return drafts.filter((draft) => draft.kind !== "DEFEND");
-    }
-  };
-
-  /** Ý định này có đảo ngược một lập trường còn hiệu lực không. */
-  const selfContradicting = (draft: BotSpeechIntention): boolean => {
-    if (narrative === null || draft.targetId === undefined) return false;
-    const stance = stanceOfKind(draft.kind);
-    return (
-      stance !== null &&
-      contradictsNarrative(narrative, draft.targetId, stance, round, weights)
-    );
-  };
-
   // ---- 1. Có ai đang nói với mình không ----
-  const { questionIgnoreFloor } = weights.conversation;
-
-  /**
-   * Kiểu thuyết phục hợp với NGƯỜI đang nói với mình (§8, §9), hoặc `null`.
-   *
-   * Nhớ theo người: một trigger loop có thể đi qua nhiều người khác nhau,
-   * nhưng cùng một người thì hồ sơ không đổi trong một lượt. Thuần, nên không
-   * lệch chuỗi RNG dù có dựng hay không.
-   */
-  const listenerStyles = new Map<string, PersuasionStyle | null>();
-  const persuasionOf = (listenerId: string): PersuasionStyle | null => {
-    if (weights.conversation.persuasionMinSamples <= 0) return null;
-    const cached = listenerStyles.get(listenerId);
-    if (cached !== undefined) return cached;
-    const style = buildCommunicationProfile(
-      context.knowledge,
-      state,
-      listenerId,
-      weights,
-    ).style;
-    listenerStyles.set(listenerId, style);
-    return style;
-  };
-
   for (const trigger of findConversationTriggers(context, state, weights)) {
-    /**
-     * Ứng viên cho trigger này, đã là Ý ĐỊNH đầy đủ.
-     *
-     * Câu hỏi nhắm thẳng vào BOT đi qua `question-policy` khi nút vặn bật; mọi
-     * trigger khác giữ nguyên bậc thang theo tính cách của Phase 4. Danh sách
-     * RỖNG nghĩa là bỏ qua trigger này mà KHÔNG rút số - đó là `IGNORE`, và né
-     * một câu hỏi là một nước đi hợp lệ (spec §28).
-     */
-    const drafts: BotSpeechIntention[] = applyDistancing(
-      trigger,
-      questionIgnoreFloor > 0 && trigger.kind === "QUESTIONED_ME"
-        ? questionDrafts(trigger, style, state, vote, usable, socialSituation(), weights)
-        : ((listener) =>
-            reorderForListener(candidatesFor(trigger, style), listener).map((kind) => ({
-              kind,
-              targetId: targetFor(trigger, kind),
-              replyToMessageId: trigger.messageId,
-              replyToActorId: trigger.actorId,
-              topic: topicFor(trigger),
-              confidence: vote.confidence,
-              evidence: [],
-              tone: toneFor(kind, style),
-              // Kiểu người nghe đi vào `reason` để trace đọc được cơ chế này có
-              // chạy hay không. `reason` là ghi chú NỘI BỘ, không bao giờ gửi
-              // cho nhà cung cấp - xem `BotSpeechIntention.reason`.
-              reason:
-                listener === null
-                  ? `phản hồi ${trigger.kind}`
-                  : `phản hồi ${trigger.kind} theo kiểu ${listener}`,
-            })))(persuasionOf(trigger.actorId)),
-    );
-
-    for (const draft of drafts) {
-      // Bênh một người mình vừa công khai tố (hoặc ngược lại) mà không nói gì
-      // về việc đổi ý là đúng thứ §15 gọi là bất nhất. Bỏ ứng viên này và thử
-      // ứng viên kế - thường là `DISAGREE`, thứ không nêu lập trường nào.
-      if (selfContradicting(draft)) continue;
-
-      const candidate = fresh(draft);
+    for (const kind of candidatesFor(trigger, style)) {
+      const candidate = fresh({
+        kind,
+        targetId: targetFor(trigger, kind),
+        replyToMessageId: trigger.messageId,
+        replyToActorId: trigger.actorId,
+        topic: topicFor(trigger),
+        confidence: vote.confidence,
+        evidence: [],
+        tone: toneFor(kind, style),
+        // Ghi chú NỘI BỘ cho trace, không bao giờ gửi cho nhà cung cấp - xem
+        // `BotSpeechIntention.reason`.
+        reason: `phản hồi ${trigger.kind}`,
+      });
       if (!candidate) continue;
 
       if (rng() < responseProbability(trigger, style, weights)) return candidate;
@@ -611,30 +297,8 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
   //
   // Từ đây trở xuống là đúng bậc thang Phase 3, và lượt rút ngay dưới đây là
   // lượt rút DUY NHẤT mà cấu hình v1/v2 thực hiện.
-  /**
-   * Hoạt ngôn là TÍNH CÁCH; "lượt này có đáng nói không" là TÌNH HUỐNG. Ngưỡng
-   * là tổng của cả hai.
-   *
-   * Cộng vào ngưỡng chứ không thêm một lượt rút: `speechUrge` thuần, và với
-   * `urgencyBoost = 0` (v1..v22) biểu thức quy về đúng `talkativeness`, nên
-   * chuỗi RNG của mọi preset cũ không lệch một bit.
-   *
-   * `usable.length` chứ không phải số bằng chứng đang CẦM: một kết quả soi còn
-   * bị giữ tới lúc khai vai thì lượt này không nói ra được, nên nó không phải
-   * một lý do để mở lời.
-   */
-  const { urgencyBoost } = weights.conversation;
-  let threshold = state.personality.talkativeness;
-  if (urgencyBoost > 0) {
-    threshold = Math.min(
-      1,
-      state.personality.talkativeness +
-        urgencyBoost * speechUrge(socialSituation(), usable.length, weights),
-    );
-  }
-
-  if (rng() > threshold) {
-    probe?.fallback(silenceReason(conversation));
+  if (rng() > state.personality.talkativeness) {
+    probe?.fallback("không đủ hoạt ngôn để lên tiếng lượt này");
     return null;
   }
 
@@ -651,13 +315,13 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
    *
    * - Sau lượt rút: chuỗi RNG không lệch một bit nào khi knob bật, nên hai
    *   preset chỉ khác nhau ở ô này vẫn so được trên cùng một tập ván.
-   * - Trên mọi nhánh tự mở lời: `CHANGE_MIND`, `ACCUSE`, `QUESTION`, câu
-   *   chuyển hướng, `REACTION`, `HUMOR` đều là câu TỰ PHÁT. Lời khai (nhánh 0)
-   *   và câu đáp trigger (nhánh 1) nằm TRÊN chỗ này và không bị chặn - đó đúng
-   *   là thứ đang được giữ chỗ.
+   * - Trên mọi nhánh tự mở lời: `CHANGE_MIND`, `ACCUSE`, `QUESTION`,
+   *   `REACTION`, `HUMOR` đều là câu TỰ PHÁT. Lời khai (nhánh 0) và câu đáp
+   *   trigger (nhánh 1) nằm TRÊN chỗ này và không bị chặn - đó đúng là thứ đang
+   *   được giữ chỗ.
    *
    * `replyReserveTurns = 0` cho ngưỡng `messagesPerBotPerRound`, mà chỗ gọi vốn
-   * đã không cấp lượt quá con số đó - nên v1..v28 đi qua đây không đổi một bit.
+   * đã không cấp lượt quá con số đó - nên v1..v22 đi qua đây không đổi một bit.
    */
   const { replyReserveTurns, messagesPerBotPerRound } = weights.conversation;
   if (
@@ -681,32 +345,6 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
 
   const targetId = vote.choice.targetId;
   const conversational = weights.conversation.triggerFreshnessRounds > 0;
-
-  /**
-   * Quay xe thì phải NÓI RA (§15).
-   *
-   * Đứng trên nhánh `currentTheory` ngay dưới và KHÔNG hỏi `style.concession`:
-   * bướng bỉnh quyết định một người đổi ý bao nhiêu lần, chứ không cho phép họ
-   * vờ như chưa bao giờ nghĩ khác. Một con BOT hôm qua bênh An, hôm nay tố An,
-   * và không câu nào thừa nhận điều đó, là đúng thứ §15 phải chữa.
-   *
-   * Chỉ nổ khi lập trường cũ CÒN HIỆU LỰC (`narrativeMemoryRounds` vòng). Xa
-   * hơn thế thì cả bàn đã quên, và một lời "tôi đổi ý" về chuyện không ai nhớ
-   * chỉ làm BOT nghe như đang tự nói với mình.
-   */
-  if (narrative !== null && liveStanceOn(narrative, targetId, round, weights) === "trust") {
-    const position = narrative[targetId]!;
-    const flipped = fresh({
-      kind: "CHANGE_MIND",
-      targetId,
-      topic: "SUSPICION",
-      confidence: vote.confidence,
-      evidence: usable,
-      tone: "SOFT",
-      reason: `đã công khai bênh người này từ vòng ${position.createdAtRound}; giờ phiếu đổi hướng`,
-    });
-    if (flipped) return flipped;
-  }
 
   // Đổi ý là một hành vi xã hội, và nói nó ra thành lời là thứ phân biệt một
   // người chơi với một máy chấm điểm. Chỉ mở khi giả thuyết đang giữ THẬT SỰ
@@ -750,23 +388,6 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
     tone: "CURIOUS",
   });
   if (question) return question;
-
-  // ---- 2b. Cạn chuyện về người này thì hỏi người khác ----
-  //
-  // §24: khi cùng một ý đã nói rồi, đổi CHIẾN THUẬT chứ không đổi cách diễn
-  // đạt. Chỉ hỏi người mà BOT thật sự đang nghi - xem `redirectTargets`.
-  for (const other of redirectTargets(context, state, targetId, weights)) {
-    const redirect = fresh({
-      kind: "QUESTION",
-      targetId: other,
-      topic: "SUSPICION",
-      confidence: vote.confidence,
-      evidence: [],
-      tone: "CURIOUS",
-      reason: "đã nói hết về mục tiêu phiếu nên chuyển sang người khác",
-    });
-    if (redirect) return redirect;
-  }
 
   // ---- 3. Hết ý ----
   //
