@@ -57,6 +57,12 @@ export function restoreRoomFromEnvelope(envelope: RoomEnvelopeV1): Room {
     // Snapshot ghi trước bảng chat đọc lên thành một ván chưa ghim câu nào.
     // `seq` tiếp tục từ độ dài này, nên thứ tự sau khôi phục vẫn liền mạch.
     matchChat: data.matchChat ?? [],
+    // `?? null`, KHÔNG `?? []`: snapshot ghi trước khi có sổ là một ván không
+    // có sổ từ đầu, và ván đó không được đo. Xem `Room.speechLog`.
+    speechLog: data.speechLog ?? null,
+    questionLedger: data.questionLedger ?? null,
+    botSpeechLogTruncated: data.botSpeechLogTruncated ?? false,
+    recorderErrors: data.recorderErrors ?? 0,
   };
 
   if (data.botSession) {

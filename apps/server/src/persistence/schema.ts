@@ -29,8 +29,10 @@ import type {
   BotMemory,
   BotSpeechRecord,
   PlayerProfile,
+  QuestionLedgerState,
   SocialEdge,
 } from "@masoi/game-engine";
+import type { BotSpeechLogEvent } from "../game/bot-speech-log";
 import type { LastLetterRoomState } from "../game/last-letter";
 import type { ArchivedChatMessage } from "../game/match-chat";
 import type { PendingStep } from "../game/pending-step";
@@ -511,6 +513,14 @@ const persistedRoomSchema = z.object({
   // bản này đọc lên với sổ chat rỗng: nó mất phần đã nói TRƯỚC lần restart đó,
   // chứ không phải hỏng cả phòng.
   matchChat: z.array(archivedChatMessageSchema).optional(),
+  // OPTIONAL vì cùng lý do với các trường ngay trên. Vắng mặt đọc lên thành
+  // `null` chứ không phải `[]`: ván đó không có sổ từ đầu và không được đo.
+  // `objectOf` như `speechMemory`: một zod mirror đầy đủ của `SelfPlayEvent`
+  // sẽ trôi lệch khỏi kiểu nhanh hơn là bắt được lỗi thật.
+  speechLog: z.array(objectOf<BotSpeechLogEvent>()).nullable().optional(),
+  questionLedger: objectOf<QuestionLedgerState>().nullable().optional(),
+  botSpeechLogTruncated: z.boolean().optional(),
+  recorderErrors: z.number().int().min(0).optional(),
 });
 
 export const roomEnvelopeSchema = z.object({
