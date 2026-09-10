@@ -2833,6 +2833,57 @@ export const BOT_WEIGHTS_V31: BotWeights = Object.freeze({
 });
 
 /**
+ * v31 + CẢ THANG v24–v28 - câu hỏi "sáu ô giao tiếp có đáng giữ không" hỏi
+ * đúng cách.
+ *
+ * Thang v23–v28 được bench so v21, và đo được là không cải thiện chỉ số hội
+ * thoại nào một cách nhất quán; v29 vì thế tách nhánh từ v21. Nhưng v28 thiếu
+ * `replyReserveTurns` - ô đo được lớn nhất ở tầng này (`NO_TURN` −7,43) - nên
+ * so v28 với v29 là so một bên thiếu đúng thứ làm bên kia thắng. A/B một lần
+ * v28 vs v29 cho `ANSWERED` −8,8 điểm và `NO_TURN` +9,7: gần như trọn hiệu ứng
+ * của ô vắng mặt, không nói gì về sáu ô kia.
+ *
+ * Preset này lấp đúng lỗ đó: bằng v28 cộng hai ô của mặc định hiện hành, nên
+ * v32 − v31 = đúng tám ô của thang v24–v28 (năm ô `conversation`, ba ô
+ * `claim`), không thêm không bớt. Nếu thang đó có giá trị, đây là chỗ nó phải
+ * hiện ra.
+ *
+ * ĐÃ BENCH, KHÔNG NÂNG. Protocol 5×1.000 ván paired seeds so v31, tiêu chí chốt
+ * TRƯỚC khi xem số (thắng = `ANSWERED` hoặc `replyRate` tốt lên |z| > 2, không
+ * chỉ số hội thoại nào xấu đi |z| > 2, `claimAccuracy` ≥ 0,5):
+ *
+ * ```text
+ * directQuestionOutcomes.ANSWERED  60.08% -> 58.92%  (-1,16 điểm, z = -20,0)
+ * DECLINED_SPOKE_OTHER             21.56% -> 22.72%  (+1,16 điểm, z = +13,0)
+ * replyRate                        40.67% -> 40.34%  (-0,33 điểm, z =  -2,9)
+ * semanticRepetitionRate            0.75% ->  0.89%  (+0,14 điểm, z =  +8,3)
+ * crossBotRepetitionRate           15.15% -> 15.56%  (+0,41 điểm, z =  +3,7)
+ * silenceRate                      18.62% -> 17.01%  (-1,61 điểm, z = -17,6)
+ * claimAccuracy                    58.49% -> 56.04%  (-2,45 điểm, z =  -2,6)
+ * wolfBluffBelievedRate            18.25% -> 19.56%  (+1,31 điểm, z =  +2,1)
+ * villageWinRate                   54.30% -> 54.64%  (+0,34 điểm, z =  +0,5)
+ * ```
+ *
+ * Đọc: bot NÓI NHIỀU hơn (`silenceRate` −1,61) nhưng ĐÁP ÍT hơn - tăng đúng
+ * bằng lượng `ANSWERED` giảm dồn sang "bị hỏi mà nói chuyện khác", và lặp ý
+ * nhiều hơn. Phía lời khai: làng tin nhầm nhiều hơn, Sói nói dối trót lọt hơn.
+ * Win-rate trung tính. 0 violation. Không có trục nào mà thang này mua được
+ * thứ nó sinh ra để mua.
+ *
+ * Giữ làm mốc A/B như v22/v30. KHÔNG mặc định.
+ */
+export const BOT_WEIGHTS_V32: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V28,
+  version: "32.0.0",
+
+  conversation: Object.freeze({
+    ...BOT_WEIGHTS_V28.conversation,
+    replyReserveTurns: 1,
+    roomShapeWindow: 12,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
