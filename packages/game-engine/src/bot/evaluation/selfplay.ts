@@ -27,6 +27,15 @@ import {
   speechSemanticFingerprint,
   speechTextFingerprint,
 } from "../conversation/fingerprint";
+import {
+  createQuestionLedger,
+  markBlocked,
+  markObserved,
+  markSpeechTurn,
+  markSpoke,
+  openQuestion,
+  settleQuestions,
+} from "./question-ledger";
 import { recentOpenings, recentTextFingerprints } from "../conversation/speech-memory";
 import { renderSpeechTemplate } from "../conversation/templates";
 import { createSeededRng } from "../rng";
@@ -294,6 +303,11 @@ export type SelfPlayEvent =
       askerId: string;
       targetId: string;
       outcome: QuestionOutcome;
+      /**
+       * Người hỏi là NGƯỜI THẬT. Chỉ phòng thật đặt cờ này; self-play không
+       * bao giờ có, nên JSON của nó không đổi một ký tự.
+       */
+      humanAsker?: true;
     }
   | {
       /**
@@ -640,61 +654,16 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
    * `recognized === null` nghĩa là người được hỏi CHƯA quan sát chat nào có
    * câu đó, nên chưa nói được gì về parser.
    */
-  interface PendingQuestion {
-    messageId: string;
-    askerId: string;
-    targetId: string;
-    round: number;
-    recognized: boolean | null;
-    /** Số lần `decideSpeech` của người được hỏi SAU khi câu đã hiện trong chat. */
-    turns: number;
-    blocked: SpeechBlockReason | null;
-    answered: boolean;
-    spokeOther: boolean;
-  }
-  const pendingQuestions = new Map<string, PendingQuestion>();
+  const questions = createQuestionLedger();
   const chatHas = (messageId: string): boolean => chat.some((m) => m.id === messageId);
 
   /** Sau mỗi `observe`: parser của người được hỏi có nhận ra câu hỏi không. */
-  const noteObserved = (playerId: string, context: BotDecisionContext): void => {
-    for (const question of pendingQuestions.values()) {
-      if (question.targetId !== playerId || question.recognized !== null) continue;
-      if (!context.visibleChat.some((m) => m.id === question.messageId)) continue;
-      const state = runtimes.get(playerId)!.state;
-      question.recognized = state.memories.some(
-        (memory) => memory.sourceId === question.messageId && memory.targetId === playerId,
-      );
-    }
-  };
+  const noteObserved = (playerId: string, context: BotDecisionContext): void =>
+    markObserved(questions, playerId, context.visibleChat, runtimes.get(playerId)!.state.memories);
 
   /** Trước mỗi `decideSpeech`: người được hỏi có thêm một cơ hội đáp. */
-  const noteSpeechTurn = (playerId: string): void => {
-    for (const question of pendingQuestions.values()) {
-      if (question.targetId === playerId && chatHas(question.messageId)) question.turns += 1;
-    }
-  };
-
-  /** Chốt số phận mọi câu hỏi của vòng rồi xoá sổ. Xem `QuestionOutcome`. */
-  const settleQuestions = (): void => {
-    for (const question of pendingQuestions.values()) {
-      let outcome: QuestionOutcome;
-      if (question.answered) outcome = "ANSWERED";
-      else if (question.blocked !== null) outcome = "BLOCKED_ROOM";
-      else if (question.recognized === null) outcome = "UNDETERMINED";
-      else if (!question.recognized) outcome = "NOT_PARSED";
-      else if (question.turns === 0) outcome = "NO_TURN";
-      else outcome = question.spokeOther ? "DECLINED_SPOKE_OTHER" : "DECLINED_SILENT";
-      log.push({
-        kind: "QUESTION_OUTCOME",
-        round: question.round,
-        messageId: question.messageId,
-        askerId: question.askerId,
-        targetId: question.targetId,
-        outcome,
-      });
-    }
-    pendingQuestions.clear();
-  };
+  const noteSpeechTurn = (playerId: string): void =>
+    markSpeechTurn(questions, playerId, chatHas);
 
   /**
    * Phát một câu, hoặc từ chối nó vì đã chạm một trong các trần.
@@ -735,10 +704,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
         replyToMessageId: speech.replyToMessageId ?? null,
         reason: blockReason,
       });
-      const asked = speech.replyToMessageId
-        ? pendingQuestions.get(speech.replyToMessageId)
-        : undefined;
-      if (asked && asked.targetId === playerId) asked.blocked = blockReason;
+      markBlocked(questions, speech.replyToMessageId, playerId, blockReason);
       return;
     }
 
@@ -837,27 +803,13 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     // Sổ câu hỏi: câu này ĐÁP một câu hỏi đang chờ, hay là chuyện khác của
     // chính người được hỏi? Chỉ tính khi câu hỏi đã hiện trong chat chung -
     // một câu nói ra trước khi thấy câu hỏi không phải là "chọn nói việc khác".
-    for (const question of pendingQuestions.values()) {
-      if (question.targetId !== playerId || !chatHas(question.messageId)) continue;
-      if (speech.replyToMessageId === question.messageId) question.answered = true;
-      else question.spokeOther = true;
-    }
+    markSpoke(questions, playerId, speech.replyToMessageId, chatHas);
     if (
       (speech.kind === "QUESTION" || speech.kind === "ASK_EVIDENCE") &&
       speech.targetId !== undefined &&
       speech.targetId !== playerId
     ) {
-      pendingQuestions.set(messageId, {
-        messageId,
-        askerId: playerId,
-        targetId: speech.targetId,
-        round,
-        recognized: null,
-        turns: 0,
-        blocked: null,
-        answered: false,
-        spokeOther: false,
-      });
+      openQuestion(questions, { messageId, askerId: playerId, targetId: speech.targetId, round });
     }
 
     sink.push({ id: messageId, actorId: playerId, text, at: now });
@@ -1420,7 +1372,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     // Mọi người sống đã đọc hết chat của vòng: đủ bằng chứng để chốt số phận
     // từng câu hỏi. Trigger chỉ sống một vòng (`triggerFreshnessRounds`), nên
     // không câu nào còn được đáp ở vòng sau.
-    settleQuestions();
+    log.push(...settleQuestions(questions));
 
     const outcome = engine.resolveNomination(config.defenseSeconds * 1_000, tick(1_000));
     log.push({

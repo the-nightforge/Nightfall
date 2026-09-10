@@ -56,6 +56,7 @@ export * from "./bot/trace/trace";
 export * from "./bot/trace/trace-jsonl";
 export * from "./bot/trace/trace-view";
 export * from "./bot/evaluation/selfplay";
+export * from "./bot/evaluation/question-ledger";
 export * from "./bot/evaluation/invariants";
 export * from "./bot/evaluation/metrics";
 export * from "./bot/evaluation/report";
