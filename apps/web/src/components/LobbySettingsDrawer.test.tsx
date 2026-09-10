@@ -14,8 +14,8 @@ import { DEFAULT_ROOM_CONFIG, type RoomSnapshot } from "@masoi/shared";
  *     đúng việc mà nút × làm, và focus phải quay về đúng cái nút đã mở nó -
  *     không thì Tab tiếp theo bắt đầu lại từ đầu trang.
  *   - toàn bộ ruột `LobbySettings` đi qua một tầng mới. Bộ test này mount ruột
- *     thật (không mock) để chắc rằng trạng thái chỉ-xem của khách không rơi
- *     rụng dọc đường: khách vẫn phải thấy đúng bộ bài, và vẫn không chỉnh được.
+ *     thật (không mock) để chắc nội dung chủ phòng thấy đi qua nguyên vẹn, và
+ *     khách thì không có lối vào nào - nút trigger vắng mặt hẳn.
  */
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
@@ -187,6 +187,14 @@ describe("LobbySettingsDrawer: đóng và mở", () => {
   });
 });
 
+describe("LobbySettingsDrawer: chỉ chủ phòng thấy nút", () => {
+  it("khách không thấy nút 'Luật và vai trò'", async () => {
+    const view = await mountDrawer(GUEST_ID);
+    assert.equal(view.trigger() !== null, false, "khách không được thấy nút");
+    await view.cleanup();
+  });
+});
+
 describe("LobbySettingsDrawer: chủ phòng và khách", () => {
   it("chủ phòng mở ra đủ ba mục, kể cả cài đặt nâng cao", async () => {
     const view = await mountDrawer(HOST_ID);
@@ -200,25 +208,12 @@ describe("LobbySettingsDrawer: chủ phòng và khách", () => {
     await view.cleanup();
   });
 
-  it("khách: cùng nội dung, nhưng ở trạng thái chỉ xem", async () => {
+  it("khách không mở được lớp phủ bằng bàn phím hay nút nào khác", async () => {
+    // Không có trigger thì không có lối vào: kiểm cả dialog lẫn backdrop đều
+    // vắng mặt, không chỉ nút.
     const view = await mountDrawer(GUEST_ID);
-    assert.match(view.trigger()?.textContent ?? "", /Xem đội hình/);
-
-    await view.open();
-    const text = view.dialogText();
-    assert.match(text, /Luật của phòng/, "khách đọc 'Luật của phòng', không phải 'Thiết lập ván'");
-    assert.match(text, /Xem toàn bộ vai trò/);
-    assert.doesNotMatch(text, /Cài đặt nâng cao/, "khách không được thấy mục thời gian");
-
-    // Công tắc chế độ bị khoá chứ không bị GIẤU: khách vẫn phải đọc được phòng
-    // đang ở Ranked hay Chaos.
-    const modeGroup = view.dialog()?.querySelector('[aria-label="Chế độ sự kiện"]');
-    const modes = [...(modeGroup?.querySelectorAll("button") ?? [])];
-    assert.equal(modes.length, 2, "khách vẫn thấy cả hai chế độ");
-    assert.ok(
-      modes.every((button) => button.disabled),
-      "nhưng không bấm được cái nào",
-    );
+    assert.equal(view.dialog() !== null, false, "khách không có dialog");
+    assert.equal(view.backdrop() !== null, false, "khách không có tấm nền");
     assert.equal(view.updates.length, 0, "và không phát ra thay đổi cấu hình nào");
     await view.cleanup();
   });

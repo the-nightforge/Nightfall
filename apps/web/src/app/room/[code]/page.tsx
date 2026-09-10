@@ -520,6 +520,7 @@ export default function RoomPage() {
                   snapshot={snapshot}
                   isHost={isHost}
                   onKick={(targetId) => room.emit("room:kick", { targetId })}
+                  onTransferHost={(targetId) => room.emit("room:transfer-host", { targetId })}
                 />
               )}
             </div>

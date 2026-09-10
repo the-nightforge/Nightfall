@@ -277,6 +277,14 @@ export function setupSocket(io: SocketServer): void {
       await roomService.kick(playerId, targetId);
     });
 
+    handler(CLIENT_EVENTS.ROOM_TRANSFER_HOST, async (payload) => {
+      // Cùng hình với kick (`{ targetId }`) nên dùng chung `kickPayload`:
+      // thêm một schema mới chỉ để đặt tên khác là thêm chỗ phải giữ đồng bộ.
+      const { targetId } = kickPayload.parse(payload);
+      if (!allowAction(`transfer-host:${playerId}`, 5, 10_000)) throw new RoomError("Thao tác quá nhanh");
+      roomService.transferHost(playerId, targetId);
+    });
+
     handler(CLIENT_EVENTS.ROOM_UPDATE_CONFIG, async (payload) => {
       const { config: cfg } = updateConfigPayload.parse(payload);
       if (!allowAction(`config:${playerId}`, 10, 3_000)) throw new RoomError("Thao tác quá nhanh");

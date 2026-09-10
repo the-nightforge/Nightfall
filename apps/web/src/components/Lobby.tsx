@@ -116,15 +116,12 @@ export function Lobby({
     ...(stage.rated && counts.villagers > 0 ? (["VILLAGER"] as Role[]) : []),
   ];
   /*
-   * Bốn thẻ vai, không phải năm.
+   * Hiện ĐỦ mọi vai, không gom vào "+n".
    *
-   * Thẻ này đứng trong một cột rộng khoảng 22rem ở 1024px, và ở bề ngang đó
-   * thẻ thứ năm luôn rơi xuống một hàng thứ ba - 37px chỉ để nói thêm đúng một
-   * cái tên vai, lấy thẳng từ chiều cao của khung chat ngay bên dưới. Bốn thẻ
-   * cộng phù hiệu "+n" vừa hai hàng ở mọi bề ngang mà cột này từng có, và
-   * người muốn xem đủ mười ba vai đã có "Luật và vai trò" ở chân thanh.
+   * Vùng chip là `flex-wrap` trong phần tóm tắt cuộn được, nên nhiều vai chỉ
+   * làm phần đó dài thêm chứ không đẩy nút Bắt đầu đi đâu - nút nằm ngoài
+   * vùng cuộn, trong khối ghim dính đáy.
    */
-  const visibleRoles = activeRoles.slice(0, 4);
 
   /*
    * Thanh hành động dính đáy trên điện thoại tự khai báo chiều cao của nó.
@@ -160,19 +157,16 @@ export function Lobby({
    * thay BỘ BÀI: Chaos, voice, Phong thư và bộ giây của phòng giữ nguyên.
    */
   /*
-   * "Thêm bot" đứng ở một trong hai chỗ, tuỳ nó có phải LỐI THOÁT hay không.
+   * "Thêm bot" đứng YÊN một chỗ: trong khối ghim dưới nút Bắt đầu, thiếu hay
+   * đủ người cũng vậy.
    *
-   * Khối ghim dưới nút Bắt đầu chỉ chứa ba thứ: nút, lý do đang chặn, và cách
-   * sửa đúng lý do đó. Phòng chưa đủ người thì cách sửa chính là thêm bot, nên
-   * nó ở đó. Phòng đã đủ người thì nó là một hành động phụ - và mỗi pixel của
-   * khối ghim là một pixel lấy khỏi phần tóm tắt cuộn được ngay trên nó: ở
-   * 1280x800, với cả nút áp preset đang hiện, phần tóm tắt chỉ còn 135px và
-   * dòng diễn biến biến mất hẳn. Cho nó xuống cuối phần cuộn được thì tóm tắt
-   * lấy lại 52px, mà lối vào vẫn nằm ngay dưới bộ bài - đúng chỗ host đang đọc
-   * khi họ nghĩ tới chuyện thêm người.
+   * Bản cũ cho nó ở hai chỗ tuỳ có phải lối thoát hay không (thiếu người thì
+   * ở khối ghim, đủ người thì xuống phần tóm tắt cuộn được), nên qua ngưỡng
+   * đủ người là cả khối ghim lẫn phần tóm tắt cùng giật layout. Giữ một chỗ
+   * thì nút Bắt đầu và lý do chặn đứng im, đổi lấy một hàng trong khối ghim
+   * khi phòng đã đủ người.
    */
   const canAddBot = isHost && count < MAX_PLAYERS_PER_ROOM;
-  const addBotIsTheFix = block?.kind === "need-players";
 
   const presetForCount = PRESET_DECKS[count];
   const fixDeck =
@@ -208,7 +202,7 @@ export function Lobby({
         </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {visibleRoles.map((role) => {
+        {activeRoles.map((role) => {
           const amount =
             role === "WEREWOLF"
               ? config.werewolves
@@ -216,16 +210,19 @@ export function Lobby({
                 ? counts.villagers
                 : 1;
           return (
-            <span key={role} className="lobby-role-chip">
+            <span
+              key={role}
+              className="lobby-role-chip"
+              /* Tooltip chức năng khi hover: cùng pattern native `title` mà
+               * `RoleDeckPanel`, `PlayerSeat` và `RosterPanel` đang dùng. */
+              title={ROLE_META[role].description}
+            >
               <svg viewBox="0 0 512 512" aria-hidden="true"><path d={ROLE_ICON_PATHS[role]} /></svg>
               <span>{amount}</span>
               <span className="truncate">{ROLE_META[role].name}</span>
             </span>
           );
         })}
-        {activeRoles.length > visibleRoles.length && (
-          <span className="lobby-role-chip text-mist/85">+{activeRoles.length - visibleRoles.length}</span>
-        )}
       </div>
 
       <p className="mt-2.5 text-[13px] leading-relaxed text-mist/85">
@@ -238,9 +235,6 @@ export function Lobby({
         <LobbyActivity snapshot={snapshot} />
       </div>
 
-      {/* Đủ người rồi thì "Thêm bot" xuống ĐÂY, trong phần cuộn được. Lý do ở
-        * chỗ khai `addBotIsTheFix`. */}
-      {canAddBot && !addBotIsTheFix && <AddBotButton onAddBot={onAddBot} />}
       </div>
 
       <div ref={dockRef} className="lobby-primary-action mt-3">
@@ -260,15 +254,15 @@ export function Lobby({
           </button>
         )}
         <BlockReason block={block} isHost={isHost} onFixDeck={fixDeck} count={count} />
-        {/* Phòng chưa đủ người thì "Thêm bot" chính là cách sửa lý do đang
-          * chặn, nên nó ở lại trong khối GHIM cùng nút Bắt đầu. */}
-        {canAddBot && addBotIsTheFix && <AddBotButton onAddBot={onAddBot} />}
+        {/* Một chỗ đứng duy nhất: khối ghim dưới nút Bắt đầu, thiếu hay đủ
+          * người cũng vậy để layout không giật khi qua ngưỡng. */}
+        {canAddBot && <AddBotButton onAddBot={onAddBot} />}
       </div>
     </section>
   );
 }
 
-/** Một nút, hai chỗ đứng - xem `addBotIsTheFix` trong `Lobby`. */
+/** Nút Thêm bot: một chỗ đứng duy nhất, trong khối ghim dưới nút Bắt đầu. */
 function AddBotButton({ onAddBot }: { onAddBot: () => void }) {
   return (
     <button

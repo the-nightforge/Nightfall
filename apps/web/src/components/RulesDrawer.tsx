@@ -46,6 +46,13 @@ export function RulesDrawer({ snapshot }: Props) {
     onEscape: () => setOpen(false),
   });
 
+  /*
+   * Chỉ chủ phòng thấy nút tra luật - cả giữa ván. `you.id` là id của chính
+   * người xem đã nằm sẵn trong snapshot, nên không cần thêm prop identity.
+   * Đặt SAU các hook: return sớm trước hook là lỗi thứ tự hook của React.
+   */
+  if (snapshot.hostId !== snapshot.you?.id) return null;
+
   return (
     <>
       <button

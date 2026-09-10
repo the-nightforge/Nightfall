@@ -132,6 +132,14 @@ describe("RulesDrawer", () => {
     await v.cleanup();
   });
 
+  it("người không phải chủ phòng không thấy nút", async () => {
+    const v = await mount(
+      snapshot({ hostId: "me", you: { id: "guest", name: "Khách", ready: true, connected: true, role: "GUARD", alive: true } }),
+    );
+    assert.equal(v.trigger() !== null, false, "khách không được thấy nút tra luật");
+    await v.cleanup();
+  });
+
   it("phòng xếp hạng không có mục sự kiện; phòng hỗn loạn thì có", async () => {
     const event = {
       id: "CURFEW" as const,

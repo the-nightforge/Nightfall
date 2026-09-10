@@ -49,6 +49,13 @@ export function LobbySettingsDrawer({ snapshot, identity, onUpdateConfig }: Prop
     onEscape: () => setOpen(false),
   });
 
+  /*
+   * Chỉ chủ phòng thấy nút "Luật và vai trò". Khách trước đây mở ra bản
+   * chỉ-xem đội hình - giờ không còn lối vào đó nữa. Đặt SAU các hook để
+   * không phạm lỗi thứ tự hook của React.
+   */
+  if (!isHost) return null;
+
   return (
     <>
       <button

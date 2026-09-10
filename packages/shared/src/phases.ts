@@ -131,8 +131,9 @@ export interface RoomConfig {
   executioner?: boolean;
   mode?: RoomMode;
   /**
-   * Bật voice chat cho phòng. Mặc định tắt: phòng không bật thì không có gì
-   * thay đổi so với trước khi có tính năng này.
+   * Bật voice chat cho phòng. Mặc định BẬT: phòng mới nào cũng có sẵn kênh
+   * nói, host không thích thì tự tắt. Cấu hình phòng ghi trước bản này không
+   * có trường này nên vẫn tắt (undefined), đúng như lúc nó được tạo.
    */
   voice?: boolean;
   /**
@@ -201,6 +202,7 @@ export const DEFAULT_ROOM_CONFIG: RoomConfig = {
   hunter: false,
   cursed: false,
   mode: "ranked",
+  voice: true,
   nightSeconds: 30,
   // Hạ từ 90 khi thêm phiên toà: vote sơ bộ giờ đã đóng vai trò vòng thảo luận
   // thứ hai, giữ 90 thì một ngày kéo dài gần ba phút.
