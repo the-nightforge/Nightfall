@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { gameActionPayload, roomConfigSchema, validateRoomConfig } from "../src/schemas";
 import { DEFAULT_ROOM_CONFIG } from "../src/phases";
 
+describe("RoomConfig voice mặc định", () => {
+  it("phòng mới bật voice chat ngay từ đầu", () => {
+    expect(DEFAULT_ROOM_CONFIG.voice).toBe(true);
+  });
+});
+
 describe("RoomConfig SORCERER+ALPHA_WOLF", () => {
   it("rejects priest/medium keys (strict schema)", () => {
     expect(() => roomConfigSchema.parse({ ...DEFAULT_ROOM_CONFIG, priest: true })).toThrow();
