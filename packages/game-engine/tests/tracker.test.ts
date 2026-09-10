@@ -138,6 +138,15 @@ describe("kết quả theo dõi ở bình minh", () => {
   });
 });
 
+describe("cờ acted cho UI đêm", () => {
+  it("sau TRACK thì nightInfo.acted bật true để nút hiện Đã hành động", () => {
+    const engine = trackerGame();
+    expect(engine.snapshotFor("t1").nightInfo?.acted).toBe(false);
+    engine.submitNightAction("t1", "TRACK", "w1");
+    expect(engine.snapshotFor("t1").nightInfo?.acted).toBe(true);
+  });
+});
+
 describe("kết quả theo dõi là riêng tư", () => {
   it("chỉ chủ nhân thấy kết quả của mình", () => {
     const engine = trackerGame();

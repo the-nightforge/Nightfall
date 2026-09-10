@@ -2444,6 +2444,8 @@ export class GameEngine {
       acted = st.night.guardTarget !== null;
     } else if (viewer.role === "DETECTIVE") {
       acted = st.night.detectiveResults[viewer.id] !== undefined;
+    } else if (viewer.role === "TRACKER") {
+      acted = st.night.trackerTargets[viewer.id] !== undefined;
     } else if (viewer.role === "SERIAL_KILLER") {
       acted = st.night.serialKillerTarget !== null || st.night.serialKillerSkipped === true;
     } else if (isWitch) {
