@@ -14,6 +14,7 @@ interface Props {
   snapshot: RoomSnapshot;
   isHost: boolean;
   onKick: (playerId: string) => void;
+  onTransferHost: (playerId: string) => void;
 }
 
 /**
@@ -24,7 +25,7 @@ interface Props {
  * vậy trên desktop cả sân, thanh điều khiển và khung chat cùng nằm trong một
  * màn `100dvh` mà không phần nào phải cắt bớt nội dung.
  */
-export function LobbyPlayerGrid({ snapshot, isHost, onKick }: Props) {
+export function LobbyPlayerGrid({ snapshot, isHost, onKick, onTransferHost }: Props) {
   const meId = snapshot.you?.id ?? null;
   const rosterKey = snapshot.players.map((player) => player.id).join(",");
   const avatars = useMemo(
@@ -283,6 +284,23 @@ export function LobbyPlayerGrid({ snapshot, isHost, onKick }: Props) {
             >
               Mời khỏi phòng
             </button>
+            {/*
+              * Chuyển chủ phòng cho thành viên thật. Bot không có nút này:
+              * server từ chối chuyển cho bot, nên bày ra chỉ để người ta bấm
+              * vào một lỗi đã biết trước.
+              */}
+            {!selected.isBot && (
+              <button
+                type="button"
+                className="mt-2 flex min-h-12 w-full items-center justify-center rounded-xl border border-amber-400/35 bg-amber-500/10 px-4 font-bold text-amber-200 transition hover:bg-amber-500/20"
+                onClick={() => {
+                  onTransferHost(selected.id);
+                  setSelectedId(null);
+                }}
+              >
+                Chuyển chủ phòng
+              </button>
+            )}
           </div>
         </div>
       )}

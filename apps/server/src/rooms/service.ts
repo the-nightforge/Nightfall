@@ -460,6 +460,27 @@ export const roomService = {
     void persistRoom(room).then(() => broadcastRoom(room.code));
   },
 
+  /**
+   * Chuyển quyền chủ phòng cho một thành viên khác (không phải bot).
+   *
+   * Cùng họ với `kick`: chỉ ở LOBBY, chỉ chủ phòng hiện tại gọi được. Mọi
+   * quyền host (updateConfig, addBot, kick, start) đi theo `room.hostId` nên
+   * gán một chỗ này là đủ, không có cờ nào khác phải dọn.
+   */
+  transferHost(hostId: string, targetId: string): void {
+    const roomCode = getRoomSyncByPlayer(hostId);
+    if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
+    const room = getRoom(roomCode)!;
+    assertHost(room, hostId);
+    if (room.status !== "LOBBY") throw new RoomError("Chỉ được chuyển chủ phòng trước khi bắt đầu");
+    if (hostId === targetId) throw new RoomError("Bạn đã là chủ phòng");
+    const target = room.members.find((m) => m.playerId === targetId);
+    if (!target) throw new RoomError("Người chơi không tồn tại");
+    if (target.isBot) throw new RoomError("Không thể chuyển chủ phòng cho bot");
+    room.hostId = targetId;
+    void persistRoom(room).then(() => broadcastRoom(room.code));
+  },
+
   addBot(hostId: string): void {
     const roomCode = getRoomSyncByPlayer(hostId);
     if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");

@@ -8,6 +8,7 @@ export const CLIENT_EVENTS = {
   ROOM_LEAVE: "room:leave",
   ROOM_SET_READY: "room:set-ready",
   ROOM_KICK: "room:kick",
+  ROOM_TRANSFER_HOST: "room:transfer-host",
   ROOM_UPDATE_CONFIG: "room:update-config",
   ROOM_ADD_BOT: "room:add-bot",
   ROOM_START: "room:start",
