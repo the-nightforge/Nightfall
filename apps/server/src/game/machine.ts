@@ -17,6 +17,13 @@ import { clearRoomTimers, persistRoom, setRoomTimer } from "../rooms/store";
 import { armStep, clearPendingStep, registerStepHandlers } from "./steps";
 import { writeGameResultOnce } from "./game-result";
 import { resetMatchChat } from "./match-chat";
+import {
+  discardBotSpeechLog,
+  noteBotObserved,
+  settleBotQuestions,
+  settleBotQuestionsIfLeavingDiscussion,
+  startBotSpeechLog,
+} from "./bot-speech-log";
 import { broadcastRoom, emitToPlayers } from "../rooms/broadcast";
 import { syncVoicePermissions } from "../voice/service";
 import { buildSnapshot, dayRecipients, pushChat, resolveChat } from "../rooms/snapshot";
@@ -173,6 +180,7 @@ export function startGame(room: Room): void {
   // ván thứ hai trong cùng phòng lưu kèm trọn ván trước, và `seq` sẽ nói dối về
   // thứ tự của chính nó.
   resetMatchChat(room);
+  startBotSpeechLog(room);
   clearDiscussionSkipVotes(room.code);
   // Ván mới, sổ thư trắng: một lá thư của ván trước mở ra giữa ván này sẽ nói
   // về những người đã đổi vai.
@@ -201,6 +209,9 @@ export function startGame(room: Room): void {
 
 function beginNight(room: Room): void {
   clearRoomTimers(room.code);
+  // Phải đứng trước `startNight`: sau đó pha đã là NIGHT và phép kiểm pha
+  // trong hàm này không còn biết mình vừa rời pha nào.
+  settleBotQuestionsIfLeavingDiscussion(room);
   // Ngày Hoà Hoãn đi thẳng từ thảo luận sang đêm, nên đây cũng là một lối ra
   // của pha thảo luận và mọi phản hồi đang chờ phải bị bỏ.
   cancelDiscussionScheduler(room.code);
@@ -356,6 +367,10 @@ export function endVoting(room: Room): void {
   clearRoomTimers(room.code);
   if (!room.engine || room.engine.state.phase !== "VOTING") return;
   const defenseMs = room.config.defenseSeconds * 1000;
+  // Đúng vị trí chốt của self-play: sau lượt bỏ phiếu, ngay trước khi đề cử
+  // được chốt. Chốt sớm hơn (lúc rời thảo luận) thì câu hỏi hỏi cuối thảo luận
+  // ra UNDETERMINED ở đây mà NO_TURN ở self-play.
+  settleBotQuestions(room);
   const outcome = engine(room).resolveNomination(defenseMs);
   sync(room);
 
@@ -459,6 +474,7 @@ export function resetToLobby(room: Room): void {
    * là thiết lập của PHÒNG và phải sống qua mọi lần chơi lại.
    */
   room.config.lastLetter = false;
+  discardBotSpeechLog(room);
   room.engine = null;
   room.status = "LOBBY";
   for (const m of room.members) m.ready = false;
@@ -1019,6 +1035,7 @@ function deterministicVote(room: Room, botId: string): PlannedVote | null {
     const runtime = botSessionFor(room).runtimeFor(botId);
     const context = buildBotDecisionContext(room, botId);
     runtime.observe(context);
+    noteBotObserved(room, botId, context.visibleChat, runtime.state.memories);
     return toPlannedVote(runtime.decideVote(context).choice);
   } catch {
     return null;

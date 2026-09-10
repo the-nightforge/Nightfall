@@ -221,3 +221,14 @@ export function settleBotQuestions(room: Room): void {
     for (const event of settleQuestions(ledger)) push(room, log, event);
   });
 }
+
+/**
+ * Cho `beginNight`: chốt khi và chỉ khi pha đang rời là thảo luận - tức ngày
+ * không có bỏ phiếu (bỏ qua thảo luận ở Ngày Hoà Hoãn). `beginNight` còn được
+ * gọi sau cái chết do bị treo, sau phát bắn Thợ Săn và từ bảng step handler;
+ * ở ba chỗ đó câu hỏi của phiên xử phải chờ lần chốt hôm sau, như self-play.
+ */
+export function settleBotQuestionsIfLeavingDiscussion(room: Room): void {
+  if (room.engine?.state.phase !== "DAY_DISCUSSION") return;
+  settleBotQuestions(room);
+}

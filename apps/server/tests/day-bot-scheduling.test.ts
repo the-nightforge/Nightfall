@@ -5,6 +5,7 @@ import type { Attempt, DaySpeechDecision } from "../src/bots/types";
 import type { Room } from "../src/rooms/store";
 import { scheduleDayBots, submitDiscussionSkip } from "../src/game/machine";
 import { clearDiscussionSkipVotes } from "../src/game/discussion-skip";
+import { startBotSpeechLog } from "../src/game/bot-speech-log";
 import { ROOM_SCAFFOLD } from "./helpers/room";
 import { NIGHT_SCAFFOLD } from "./helpers/night";
 import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";
@@ -50,6 +51,7 @@ vi.mock("../src/bots/session-registry", async () => {
       speechSequence: 0,
       repliedMessageIds: [] as string[],
       previousVotes: [] as unknown[],
+      memories: [] as unknown[],
     },
     style: engine.deriveSpeechStyle({
       aggressiveness: 0.5,
@@ -191,5 +193,20 @@ describe("scheduleDayBots", () => {
     // Bỏ phiếu là việc của pha VOTING. Một phiếu đóng băng từ lúc thảo luận là
     // phiếu bỏ qua mọi thứ xảy ra sau đó, kể cả người vừa bị nghi lên tiếng.
     expect(room.engine!.getState().votes).toEqual({});
+  });
+
+  it("câu bot đã phát đi vào sổ đo, đúng một SPEECH, không lỗi bộ ghi", async () => {
+    const room = discussionRoom();
+    startBotSpeechLog(room);
+    scheduleDayBots(room);
+
+    await vi.advanceTimersByTimeAsync(Math.floor(room.config.discussionSeconds * 1_000 / 2));
+    brainControl.resolveDay?.({ ok: true, value: { chat: "t nghi Người 1" } });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(room.speechLog).toEqual([
+      expect.objectContaining({ kind: "SPEECH", actorId: "bot", text: "t nghi Người 1", fromTemplate: false }),
+    ]);
+    expect(room.recorderErrors).toBe(0);
   });
 });

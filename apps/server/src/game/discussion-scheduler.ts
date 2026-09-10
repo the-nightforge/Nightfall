@@ -15,6 +15,7 @@ import { emitToPlayers } from "../rooms/broadcast";
 import { pushChat, resolveChat } from "../rooms/snapshot";
 import { persistRoom, setRoomTimer, type Room } from "../rooms/store";
 import { toSpeechRequest } from "./machine";
+import { noteBotBlocked, noteBotObserved, noteBotSpeechTurn, noteBotSpoke } from "./bot-speech-log";
 import type { BotSpeechIntention } from "@masoi/game-engine";
 import type { SpeechRequest } from "../bots/types";
 
@@ -384,6 +385,10 @@ function startTurnQueue(
         const runtime = session.runtimeFor(member.playerId);
         const context = buildBotDecisionContext(room, member.playerId);
         runtime.observe(context);
+        noteBotObserved(room, member.playerId, context.visibleChat, runtime.state.memories);
+        // Chỉ pha thảo luận mới đếm lượt: self-play không gọi `noteSpeechTurn`
+        // trong phiên xử, và hai bên phải hiểu "được lượt" theo một nghĩa.
+        if (plan.phase === "DAY_DISCUSSION") noteBotSpeechTurn(room, member.playerId);
 
         const planned = plan.speak(runtime, context, member);
         if (!planned) return;
@@ -408,6 +413,7 @@ function startTurnQueue(
           // Báo cho lõi là chuyện này đã xử lý xong. Không có bước này, con BOT
           // sẽ thấy lại đúng trigger đó ở checkpoint sau và đề nghị đáp lần
           // nữa, mãi mãi.
+          noteBotBlocked(room, member.playerId, run.round, speech, position.blockedBy);
           runtime.declineSpeech(speech);
           return;
         }
@@ -458,6 +464,15 @@ function startTurnQueue(
           at: Math.max(at, run.lastAt + 1),
         };
         pushChat(room, message);
+        noteBotSpoke(room, {
+          botId: member.playerId,
+          round: run.round,
+          messageId: message.id,
+          text: rendered.text,
+          speech,
+          chainDepth: position.depth,
+          fromTemplate: rendered.fromTemplate,
+        });
 
         // Vào sổ SAU khi câu đã thật sự nằm trong log, không sớm hơn. Một câu
         // bị `resolveChat` chặn, hay về muộn quá hạn, mà đã kịp chiếm một suất

@@ -178,3 +178,29 @@ describe("bot-speech-log — lỗi và trần", () => {
     expect(r.questionLedger).toBeNull();
   });
 });
+
+describe("bot-speech-log — chốt khi rời thảo luận", () => {
+  function withOpenQuestion(phase: "DAY_DISCUSSION" | "VOTING" | "DEFENSE"): Room {
+    const r = room();
+    log.startBotSpeechLog(r);
+    log.noteHumanChat(r, { id: "hq", playerId: "h1", text: "Bình ơi sao im thế", at: 1 }, "day");
+    r.engine!.state.phase = phase;
+    return r;
+  }
+
+  it("đang ở thảo luận (ngày không bỏ phiếu): chốt", () => {
+    const r = withOpenQuestion("DAY_DISCUSSION");
+    log.settleBotQuestionsIfLeavingDiscussion(r);
+    expect(r.questionLedger!.open).toEqual([]);
+    expect(r.speechLog!.map((e) => e.kind)).toEqual(["QUESTION_OUTCOME"]);
+  });
+
+  it("rời phiên xử hay bỏ phiếu: KHÔNG chốt — câu hỏi chờ tới lần chốt hôm sau, như self-play", () => {
+    for (const phase of ["VOTING", "DEFENSE"] as const) {
+      const r = withOpenQuestion(phase);
+      log.settleBotQuestionsIfLeavingDiscussion(r);
+      expect(r.questionLedger!.open, phase).toHaveLength(1);
+      expect(r.speechLog, phase).toEqual([]);
+    }
+  });
+});
