@@ -423,6 +423,15 @@ policy** (`docs/superpowers/specs/2026-09-09-residual-policy-design.md`):
   để PPO dựng lại đúng phân phối cũ.
 - Lệnh đầy đủ ở `ai-training/README.md` mục "Residual policy".
 
+### Tách phe: hai phe có tín hiệu ngược dấu
+
+Ba vòng đầu (2026-09-09) cho làng −3 điểm ổn định và sói +2..4. Từ đó, train
+residual cho MỘT phe mỗi lần: `rl_loop.py --side wolves|village`, điểm thăng
+hạng là Δ của chính phe đó. Phe được lọc theo `meta.wolfPack` do `ai:encode`
+ghi — cùng predicate `isWolfPack` mà `--learned-seats` của benchmark dùng.
+Kèm `--target-kl 0.01` và `--lr 1e-4` để mỗi bước giữ `agreementWithInit`
+≥ 0,97, và `--bench-every` ≥ số vòng để các vòng nối tiếp nhau.
+
 ### Ngắt lúc nào cũng được
 
 `--resume` (mặc định bật) đọc `state.json` và bỏ qua mọi vòng đã hoàn tất; trong
@@ -532,6 +541,7 @@ chi tiết và số liệu ở `reports/train-policy-0002.md`.
 | Train (PPO) | `python -m masoi_training.train_ppo --data ENC --init W.json --out MODEL` |
 | Vòng lặp RL | `python rl_loop.py --champion W.json --iterations 20 --games 3000 --bench-every 5 --out .tmp/rl` |
 | Champion residual | `python -m masoi_training.init_residual --from W.json --out R.json --beta 10` rồi `rl_loop.py --champion R.json --temperature 5` |
+| RL một phe | `python rl_loop.py --champion R.json --side wolves --lr 1e-4 --target-kl 0.01 --bench-every 5 --iterations 5` |
 | Self-check Python | `python tests/test_data.py && python tests/test_train_smoke.py && python tests/test_ppo.py` |
 | Test TS | `npm test` |
 

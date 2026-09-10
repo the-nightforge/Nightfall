@@ -56,7 +56,25 @@ class Dataset:
     def split(self, name: str) -> "Dataset":
         if name not in SPLIT_NAMES:
             raise ValueError(f"split không hợp lệ: {name!r} (có: {SPLIT_NAMES})")
-        keep = self.splits == SPLIT_NAMES.index(name)
+        return self.where(self.splits == SPLIT_NAMES.index(name))
+
+    def side(self, name: str) -> "Dataset":
+        """Chỉ giữ hàng của MỘT phe: `wolves` hay `village` (trung lập tính về làng,
+        cùng quy ước `LearnedSeats`). Phe đọc từ bảng `meta["wolfPack"]` do
+        `ai:encode` ghi bằng `isWolfPack` phía TypeScript — Python KHÔNG tự
+        quyết vai nào là Sói (§39). Thiếu bảng thì dừng, không lặng lẽ train cả bàn."""
+        if name == "all":
+            return self
+        if name not in ("wolves", "village"):
+            raise ValueError(f"side không hợp lệ: {name!r} (có: all, wolves, village)")
+        pack = self.meta.get("wolfPack")
+        assert isinstance(pack, list) and len(pack) == len(self.meta.get("roles", [])), (
+            "meta thiếu `wolfPack` (encode bằng bản cũ) — không lọc phe được"
+        )
+        is_wolf = np.asarray(pack, dtype=bool)[self.roles]
+        return self.where(is_wolf if name == "wolves" else ~is_wolf)
+
+    def where(self, keep: np.ndarray) -> "Dataset":
         return Dataset(
             features=self.features[keep],
             masks=self.masks[keep],

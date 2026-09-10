@@ -223,6 +223,36 @@ def residual_case() -> None:
         p0, q0 = float(p[:, 0].mean()), float(torch.softmax(lp, 1)[:, 0].mean())
         assert p0 > q0, ("hành động thắng phải tăng xác suất", p0, q0)
 
+        # --side: chỉ train trên hàng có vai thuộc phe, đọc bảng `wolfPack` do
+        # TypeScript ghi trong meta (Python không biết vai nào là Sói).
+        meta_side = {**meta, "wolfPack": [False, True]}
+        (d / "meta.json").write_text(json.dumps(meta_side), encoding="utf8")
+        side_out = Path(tmp) / "side"
+        sys.argv = ["train_ppo", "--data", str(d), "--init", str(initp), "--out", str(side_out),
+                    "--epochs", "2", "--batch-size", "64", "--side", "wolves"]
+        train_ppo.main()
+        ms = json.loads((side_out / "metrics.json").read_text(encoding="utf8"))
+        assert ms["rows"] == int((roles == 1).sum()) and ms["side"] == "wolves", (ms["rows"], ms["side"])
+        # Thiếu bảng thì phải dừng, không được lặng lẽ train cả bàn.
+        (d / "meta.json").write_text(json.dumps(meta), encoding="utf8")
+        sys.argv = ["train_ppo", "--data", str(d), "--init", str(initp), "--out", str(Path(tmp) / "y"),
+                    "--epochs", "1", "--side", "village"]
+        try:
+            train_ppo.main()
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError("--side không có wolfPack trong meta phải bị từ chối")
+
+        # --target-kl: lr lớn đẩy KL vượt ngưỡng ngay → dừng sớm, ghi epochsRun.
+        kl_out = Path(tmp) / "kl"
+        sys.argv = ["train_ppo", "--data", str(d), "--init", str(initp), "--out", str(kl_out),
+                    "--epochs", "8", "--batch-size", "64", "--lr", "0.05", "--target-kl", "1e-4"]
+        train_ppo.main()
+        mk = json.loads((kl_out / "metrics.json").read_text(encoding="utf8"))
+        assert mk["epochsRun"] < 8 and len(mk["history"]) == mk["epochsRun"], (mk["epochsRun"], len(mk["history"]))
+        assert m["epochsRun"] == 8, m["epochsRun"]
+
         # Init residual nhưng rollout logits thuần (không bases) → phải dừng.
         (d / "bases.f32.bin").unlink()
         meta.update({"policyKind": "logits", "beta": None})
