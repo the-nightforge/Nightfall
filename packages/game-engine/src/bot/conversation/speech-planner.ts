@@ -638,6 +638,36 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
     return null;
   }
 
+  /**
+   * Giữ lại lượt cuối của vòng để ĐÁP người khác, không tiêu vào câu tự phát.
+   *
+   * `directQuestionOutcomes.NO_TURN` đo được 22,9%: gần một phần tư câu hỏi
+   * đích danh không được đáp chỉ vì người bị hỏi đã đốt hết hạn mức TRƯỚC KHI
+   * câu hỏi tới. Nó không phải chuyện BOT không muốn đáp hay không đọc ra câu
+   * hỏi - hai chuyện đó đã có ngăn riêng (`DECLINED_*`, `NOT_PARSED`).
+   *
+   * Đứng ở đây, tức SAU lượt rút `talkativeness` và TRƯỚC mọi nhánh tự mở lời,
+   * vì hai lý do tách bạch:
+   *
+   * - Sau lượt rút: chuỗi RNG không lệch một bit nào khi knob bật, nên hai
+   *   preset chỉ khác nhau ở ô này vẫn so được trên cùng một tập ván.
+   * - Trên mọi nhánh tự mở lời: `CHANGE_MIND`, `ACCUSE`, `QUESTION`, câu
+   *   chuyển hướng, `REACTION`, `HUMOR` đều là câu TỰ PHÁT. Lời khai (nhánh 0)
+   *   và câu đáp trigger (nhánh 1) nằm TRÊN chỗ này và không bị chặn - đó đúng
+   *   là thứ đang được giữ chỗ.
+   *
+   * `replyReserveTurns = 0` cho ngưỡng `messagesPerBotPerRound`, mà chỗ gọi vốn
+   * đã không cấp lượt quá con số đó - nên v1..v28 đi qua đây không đổi một bit.
+   */
+  const { replyReserveTurns, messagesPerBotPerRound } = weights.conversation;
+  if (
+    replyReserveTurns > 0 &&
+    speechCountInRound(state, round) >= messagesPerBotPerRound - replyReserveTurns
+  ) {
+    probe?.fallback("để dành lượt cuối của vòng cho việc đáp người khác");
+    return null;
+  }
+
   if (vote.choice.type !== "PLAYER") {
     probe?.fallback("phiếu không nhắm ai nên không có gì để cáo buộc");
     return fresh({

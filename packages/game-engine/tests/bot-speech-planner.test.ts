@@ -404,3 +404,86 @@ describe("tất định và tính cách", () => {
     expect(kinds.has("CHANGE_MIND")).toBe(true);
   });
 });
+
+/**
+ * Giữ lượt cuối của vòng cho việc ĐÁP (`conversation.replyReserveTurns`).
+ *
+ * Chỉ số đích, đo trên 5×1.000 ván: `directQuestionOutcomes.NO_TURN = 22,9%`.
+ * Gần một phần tư câu hỏi đích danh không được đáp KHÔNG phải vì BOT không
+ * muốn, cũng không phải vì parser không đọc ra - hai chuyện đó đã có ngăn riêng
+ * (`DECLINED_*`, `NOT_PARSED`) - mà vì người bị hỏi đã tiêu hết hạn mức của
+ * vòng vào câu TỰ PHÁT trước khi câu hỏi tới.
+ */
+describe("giữ lượt cuối để đáp", () => {
+  function botWith(seed: string, replyReserveTurns: number): BotRuntime {
+    return new BotRuntime({
+      playerId: "me",
+      rng: createSeededRng(seed),
+      playerIds: PLAYERS.map((player) => player.id),
+      personality: personality(),
+      weights: resolveWeights({ conversation: { replyReserveTurns } }),
+    });
+  }
+
+  /**
+   * Đưa BOT về đúng trạng thái "đã nói `count` câu trong vòng 1".
+   *
+   * Nhắm vào p2/p4 chứ không phải mục tiêu phiếu (p3): vân tay ngữ nghĩa sẽ lọc
+   * mất nhánh tự mở lời về p3 nếu ta ghi sẵn một câu về chính p3, và lúc đó test
+   * xanh vì lý do khác hẳn thứ nó định đo.
+   */
+  function spendTurns(runtime: BotRuntime, count: number): void {
+    for (let index = 0; index < count; index += 1) {
+      runtime.recordSpeech(
+        {
+          kind: "QUESTION",
+          targetId: index === 0 ? "p2" : "p4",
+          topic: "SUSPICION",
+          confidence: 0.5,
+          evidence: [],
+          tone: "CURIOUS",
+        },
+        1,
+      );
+    }
+  }
+
+  it("đã tiêu 2/3 lượt thì thôi tự mở lời", () => {
+    const spoken = overSeeds(60, (seed) => {
+      const runtime = botWith(seed, 1);
+      spendTurns(runtime, 2);
+      const ctx = context([]);
+      runtime.observe(ctx);
+      return runtime.decideSpeech(ctx, vote("p3"));
+    });
+
+    expect(spoken.every((item) => item === null)).toBe(true);
+  });
+
+  it("nhưng vẫn ĐÁP được người hỏi thẳng - đó chính là lượt đang giữ", () => {
+    const spoken = overSeeds(60, (seed) => {
+      const runtime = botWith(seed, 1);
+      spendTurns(runtime, 2);
+      const ctx = context([say("m1", "p2", "An ơi sao lúc nãy đổi phiếu?")]);
+      runtime.observe(ctx);
+      return runtime.decideSpeech(ctx, vote("p3"));
+    });
+
+    const replies = spoken.filter((item) => item?.replyToMessageId === "m1");
+    expect(replies.length).toBeGreaterThan(0);
+  });
+
+  it("knob = 0 thì hành vi y như cũ: vẫn tự mở lời ở lượt thứ ba", () => {
+    // Cùng seed, cùng trạng thái, chỉ khác một ô. Không có khẳng định này thì
+    // test đầu tiên có thể xanh vì một lý do chẳng liên quan gì tới knob.
+    const spoken = overSeeds(60, (seed) => {
+      const runtime = botWith(seed, 0);
+      spendTurns(runtime, 2);
+      const ctx = context([]);
+      runtime.observe(ctx);
+      return runtime.decideSpeech(ctx, vote("p3"));
+    });
+
+    expect(spoken.some((item) => item !== null)).toBe(true);
+  });
+});
