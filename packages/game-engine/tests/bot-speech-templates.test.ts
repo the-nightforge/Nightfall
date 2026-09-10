@@ -9,6 +9,7 @@ import {
   type SpeechTemplateRequest,
 } from "../src/bot/conversation/templates";
 import { speechTextFingerprint } from "../src/bot/conversation/fingerprint";
+import { looksCasual } from "../src/bot/evaluation/casual-tone";
 import { analyzeChat } from "../src/bot/analysis/chat-analysis";
 import { BOT_SPEECH_KINDS, BOT_SPEECH_TONES } from "../src/bot/types";
 import type {
@@ -123,6 +124,52 @@ describe("bảng mẫu câu", () => {
         }
       }
     }
+  });
+
+  /**
+   * Mọi câu bảng mẫu CÓ THỂ phát ra, quét đủ (loại × giọng × lượt).
+   *
+   * `seq` chạy qua bể lớn nhất nên mọi mẫu đều được chạm ít nhất một lần: chỉ
+   * số mẫu là hàm băm có `seq` trong khoá, và hai vòng quét né trùng của
+   * `renderSpeechTemplate` chỉ dịch trong cùng bể.
+   */
+  function everyRenderedLine(): string[] {
+    const lines: string[] = [];
+    for (const kind of BOT_SPEECH_KINDS) {
+      for (const tone of BOT_SPEECH_TONES) {
+        for (let seq = 0; seq < 24; seq += 1) {
+          lines.push(
+            renderSpeechTemplate(request({ intention: intention({ kind, tone }), seq })),
+          );
+        }
+      }
+    }
+    return lines;
+  }
+
+  it("không câu nào kết bằng dấu chấm", () => {
+    // Khoá `dropFinalPeriod`. 728/975 mẫu trong bảng kết bằng dấu chấm và điều
+    // đó KHÔNG SAO - luật sống ở `humanize`, không ở bảng, đúng để mẫu thứ 976
+    // không phải nhớ nó. Cái phải đúng là câu ĐI RA KHỎI đây.
+    //
+    // `?` và `!` vẫn hợp lệ: chúng mang giọng, không mang văn phong.
+    for (const line of everyRenderedLine()) {
+      expect(line, line).not.toMatch(/\.$/u);
+    }
+  });
+
+  it("phần lớn câu đọc như người chat, không như văn viết", () => {
+    // `looksCasual` là đúng cái thước sinh ra `casualToneRate` trong báo cáo
+    // self-play, và cũng là thước đang gác `VOICE_HINTS` ở `prompt.ts`. Bảng
+    // mẫu - đường mà MỌI lần nhà cung cấp hỏng đều rơi vào - trước đây không có
+    // ai gác, và nó đo được 0,556.
+    //
+    // Sàn chứ không phải 1.0, vì `looksCasual` đòi 2 trong 4 dấu hiệu và một
+    // câu dài kể lại chuỗi phiếu vẫn là câu hợp lệ. Đòi đủ thì cái thước thành
+    // cái khuôn, và cả bàn bị ép về một giọng - đúng bệnh nó sinh ra để đo.
+    const lines = everyRenderedLine();
+    const casual = lines.filter((line) => looksCasual(line)).length;
+    expect(casual / lines.length).toBeGreaterThanOrEqual(0.85);
   });
 
   it("không dùng nguồn ngẫu nhiên toàn cục", () => {
@@ -375,6 +422,16 @@ describe("nhiễu người trong renderSpeechTemplate", () => {
     return text.charAt(0).toUpperCase() + text.slice(1);
   }
 
+  /**
+   * Bỏ dấu chấm cuối ở CẢ HAI phía trước khi so.
+   *
+   * `humanize` bỏ dấu chấm cuối ở mọi câu, và đó KHÔNG phải nhiễu - nó là một
+   * phép biến đổi cố định, không băm, không xác suất. Nhóm test này đo hai lớp
+   * nhiễu (typo, hạ chữ đầu); để dấu chấm lọt vào phép so thì mọi câu đều
+   * không khớp bảng và cả bảng bị đếm là "typo".
+   */
+  const bare = (text: string): string => text.replace(/\.+$/u, "");
+
   interface NoiseCounts {
     clean: number;
     lowered: number;
@@ -386,7 +443,9 @@ describe("nhiễu người trong renderSpeechTemplate", () => {
   function sample(kind: BotSpeechKind, tone: BotSpeechTone, bots: number, seqs: number): NoiseCounts {
     const base = request({ intention: intention({ kind, tone, evidence: [evidence()] }) });
     const pool = SPEECH_TEMPLATES[kind][tone]!;
-    const cleanOf = new Map(pool.map((template) => [fillSpeechTemplate(template, base), template]));
+    const cleanOf = new Map(
+      pool.map((template) => [bare(fillSpeechTemplate(template, base)), template]),
+    );
     const counts: NoiseCounts = { clean: 0, lowered: 0, typo: 0, letterStart: 0 };
     for (let bot = 0; bot < bots; bot += 1) {
       for (let seq = 0; seq < seqs; seq += 1) {

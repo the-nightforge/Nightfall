@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { GameEngine } from "@masoi/game-engine";
+import { GameEngine, speechTextFingerprint } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG, type ChatMessage, type Role } from "@masoi/shared";
 import type { Attempt, DaySpeechDecision, SpeechRequest } from "../src/bots/types";
 import type { Room } from "../src/rooms/store";
@@ -178,6 +178,21 @@ const HUMOR_LINES: string[] = Object.values(
   (await import("@masoi/game-engine")).SPEECH_TEMPLATES.HUMOR,
 ).flat();
 
+/**
+ * Vân tay của cả bể `HUMOR`, để so được với câu ĐÃ QUA lớp nhiễu người.
+ *
+ * `humanize` hạ chữ đầu ở ~30% lượt và bỏ dấu chấm cuối ở mọi lượt, nên một
+ * phép so nguyên văn với bảng mẫu thô chỉ đúng nhờ may: bể này chưa từng trúng
+ * lượt hạ chữ đầu với seed của test. `speechTextFingerprint` là đúng phép chuẩn
+ * hoá mà cơ chế chống lặp dùng - bỏ dấu câu, hạ chữ thường, bỏ từ đệm đầu câu -
+ * nên nó bỏ qua LỚP NHIỄU mà vẫn phân biệt được hai mẫu khác nhau. Điều test
+ * này khoá không đổi: câu bào chữa của Hề đến từ bể `HUMOR`, không từ bể
+ * `DISAGREE`.
+ */
+const HUMOR_PRINTS = new Set(
+  HUMOR_LINES.map((line) => speechTextFingerprint(line)),
+);
+
 /** Toàn bộ chữ mà lời bào chữa đã phát ra phòng. */
 function spokenText(): string {
   return broadcast.chats.map((message) => message.text).join(" ");
@@ -262,7 +277,7 @@ describe("Thằng Hề tự bào chữa", () => {
     // bảo đảm không câu nào thanh minh, cầu xin hay lộ vai.
     for (const message of broadcast.chats) {
       expect(message.playerId).toBe("p2");
-      expect(HUMOR_LINES).toContain(message.text);
+      expect(HUMOR_PRINTS.has(speechTextFingerprint(message.text)), message.text).toBe(true);
     }
 
     for (const begging of ["đừng treo", "không phải tôi", "phản đối", "oan", "tha cho"]) {

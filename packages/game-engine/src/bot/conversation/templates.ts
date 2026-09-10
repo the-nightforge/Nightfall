@@ -1561,11 +1561,35 @@ function applyLowercase(template: string, text: string, request: SpeechTemplateR
   return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
-/** Mẫu thô → câu như người gõ: typo hiếm, điền chỗ trống, hạ chữ đầu. */
+/**
+ * Bỏ dấu chấm CUỐI câu - chỉ dấu chấm, và chỉ ở cuối.
+ *
+ * 728 trên 975 mẫu trong bảng này kết bằng dấu chấm, và không lớp nhiễu nào
+ * đụng tới nó. Đó là một nửa lý do `casualToneRate` đo được 0,556 trên self-play:
+ * `looksCasual` cần 2 trong 4 dấu hiệu, và một câu ngắn viết hoa đầu kết bằng
+ * dấu chấm chỉ đạt 1. Người Việt chat trong game gần như không bao giờ chấm câu
+ * cuối - đó là dấu hiệu văn viết, và nó là thứ dễ nhận ra nhất trong một khung
+ * chat.
+ *
+ * Sửa ở ĐÂY chứ không sửa 728 chuỗi: một luật viết trong bảng là một luật sẽ bị
+ * quên ở mẫu thứ 976. `humanize` vốn đã là tầng "làm cho giống người gõ".
+ *
+ * `?` và `!` GIỮ NGUYÊN: chúng mang giọng chứ không mang văn phong, và
+ * `looksCasual` cũng chỉ tính dấu chấm. Dấu chấm GIỮA câu ("{target}. {evidence}.")
+ * cũng giữ - người ta vẫn chấm giữa chừng khi gõ nhanh; chỗ lộ ra là dấu cuối.
+ *
+ * KHÔNG đổi vân tay: `speechTextFingerprint` bỏ mọi ký tự không phải chữ/số, và
+ * `openingOf` chỉ đọc ba token đầu. Cơ chế chống lặp vì thế không thấy gì khác.
+ */
+function dropFinalPeriod(text: string): string {
+  return text.replace(/\.+$/u, "");
+}
+
+/** Mẫu thô → câu như người gõ: typo hiếm, điền chỗ trống, hạ chữ đầu, bỏ chấm cuối. */
 function humanize(template: string, request: SpeechTemplateRequest): string {
   const typed = applyTypo(template, request);
   const filled = fillSpeechTemplate(typed, request);
-  return applyLowercase(template, filled, request);
+  return dropFinalPeriod(applyLowercase(template, filled, request));
 }
 
 /**
