@@ -10,6 +10,7 @@ import {
 } from "@masoi/game-engine";
 import type { Room } from "../src/rooms/store";
 import type { BotSpeechLogEvent } from "../src/game/bot-speech-log";
+import type { BotMetrics } from "../src/game/bot-metrics";
 import { ROOM_SCAFFOLD } from "./helpers/room";
 
 const db = vi.hoisted(() => ({ created: [] as Array<Record<string, unknown>> }));
@@ -35,7 +36,7 @@ vi.mock("../src/rooms/store", () => ({
 }));
 vi.mock("../src/redis", () => ({ redis: { status: "ready" } }));
 
-const { buildBotMetrics, RATIO_KEYS } = await import("../src/game/bot-metrics");
+const { aggregateBotMetrics, buildBotMetrics, RATIO_KEYS } = await import("../src/game/bot-metrics");
 const { writeGameResultOnce } = await import("../src/game/game-result");
 
 const KINDS = new Set(["SPEECH", "SPEECH_BLOCKED", "QUESTION_OUTCOME"]);
@@ -175,5 +176,51 @@ describe("writeGameResultOnce ghi botMetrics", () => {
     await writeGameResultOnce(room);
     const metrics = db.created[0]!.botMetrics as { questionOutcomes: { human: Record<string, number> } };
     expect(Object.values(metrics.questionOutcomes.human).every((n) => n === 0)).toBe(true);
+  });
+});
+
+describe("aggregateBotMetrics — cộng dồn nhiều ván", () => {
+  const row = (over: Partial<BotMetrics> = {}): BotMetrics => ({ ...BUILT, ...over });
+
+  it("cộng tử số và mẫu số, KHÔNG lấy trung bình tỉ lệ từng ván", () => {
+    const a = row({ ratios: { ...BUILT.ratios, casualToneRateProvider: [1, 1] } });
+    const b = row({ ratios: { ...BUILT.ratios, casualToneRateProvider: [0, 9] } });
+    const report = aggregateBotMetrics([a, b])!;
+    // Trung bình hai tỉ lệ là 0,5; cộng dồn đúng là 1/10.
+    expect(report.ratios.casualToneRateProvider).toEqual([1, 10]);
+    expect(report.games).toBe(2);
+  });
+
+  it("chỉ cộng bản metricsVersion mới nhất, và báo số ván bị bỏ", () => {
+    const report = aggregateBotMetrics([row(), row({ metricsVersion: 0 })])!;
+    expect(report.metricsVersion).toBe(1);
+    expect(report.games).toBe(1);
+    expect(report.skippedOtherVersion).toBe(1);
+  });
+
+  it("lọc theo số ghế người và theo weightsVersion", () => {
+    const rows = [
+      row({ players: 8, bots: 8 }),
+      row({ players: 8, bots: 5 }),
+      row({ players: 8, bots: 5, weightsVersion: "29.0.0" }),
+    ];
+    expect(aggregateBotMetrics(rows, { minHumans: 1 })!.games).toBe(2);
+    expect(aggregateBotMetrics(rows, { minHumans: 1 })!.skippedFilters).toBe(1);
+    expect(aggregateBotMetrics(rows, { minHumans: 1, weightsVersion: "29.0.0" })!.games).toBe(1);
+  });
+
+  it("đếm ván theo brain, ván bị cắt sổ và tổng lỗi bộ ghi", () => {
+    const report = aggregateBotMetrics([
+      row({ brain: "gemini" }),
+      row({ brain: "gemini", truncated: true, recorderErrors: 2 }),
+      row({ brain: "random" }),
+    ])!;
+    expect(report.byBrain).toEqual({ gemini: 2, random: 1 });
+    expect(report.truncatedGames).toBe(1);
+    expect(report.recorderErrors).toBe(2);
+  });
+
+  it("không có ván nào thì null, không phải một báo cáo toàn số 0", () => {
+    expect(aggregateBotMetrics([])).toBeNull();
   });
 });

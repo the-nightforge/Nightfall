@@ -184,3 +184,91 @@ export function botMetricsForRoom(room: Room): BotMetrics | null {
     config: room.config,
   });
 }
+
+export interface AggregateOptions {
+  /** Chỉ cộng các ván chạy đúng phiên bản trọng số này. */
+  weightsVersion?: string;
+  /** Chỉ cộng các ván có ít nhất bấy nhiêu ghế người thật. */
+  minHumans?: number;
+}
+
+export interface BotMetricsReport {
+  metricsVersion: number;
+  games: number;
+  skippedOtherVersion: number;
+  skippedFilters: number;
+  truncatedGames: number;
+  recorderErrors: number;
+  /** Số ván theo `brain` - gồm cả số ván chạy lúc không có nhà cung cấp nào. */
+  byBrain: Record<string, number>;
+  ratios: Record<BotMetricsRatioKey, [number, number]>;
+  /**
+   * Số đếm thô của bảy ngăn. `Record<string, number>` chứ không phải
+   * `Partial<Record<QuestionOutcome, number>>`: thuộc tính optional mang kiểu
+   * `number | undefined`, không cộng dồn qua `addCounts` được khi bật strict.
+   */
+  questionOutcomes: { bot: Record<string, number>; human: Record<string, number> };
+  blocked: Record<string, number>;
+  botDays: [number, number];
+  maxChain: number;
+  claims: number;
+  gamesWithCounterClaim: number;
+}
+
+function addCounts(into: Record<string, number>, from: Record<string, number>): void {
+  for (const [key, value] of Object.entries(from)) into[key] = (into[key] ?? 0) + value;
+}
+
+/**
+ * Cộng dồn nhiều ván: cộng tử số và mẫu số - không lấy trung bình các tỉ lệ
+ * từng ván - đúng cách báo cáo self-play cộng. Chỉ cộng các ván cùng
+ * `metricsVersion`, mặc định là bản mới nhất có mặt. THUẦN.
+ */
+export function aggregateBotMetrics(
+  rows: readonly BotMetrics[],
+  options: AggregateOptions = {},
+): BotMetricsReport | null {
+  if (rows.length === 0) return null;
+  const version = Math.max(...rows.map((row) => row.metricsVersion));
+  const sameVersion = rows.filter((row) => row.metricsVersion === version);
+  const kept = sameVersion.filter(
+    (row) =>
+      (options.weightsVersion === undefined || row.weightsVersion === options.weightsVersion) &&
+      (options.minHumans === undefined || row.players - row.bots >= options.minHumans),
+  );
+
+  const report: BotMetricsReport = {
+    metricsVersion: version,
+    games: kept.length,
+    skippedOtherVersion: rows.length - sameVersion.length,
+    skippedFilters: sameVersion.length - kept.length,
+    truncatedGames: 0,
+    recorderErrors: 0,
+    byBrain: {},
+    ratios: Object.fromEntries(RATIO_KEYS.map((key) => [key, [0, 0]])) as BotMetricsReport["ratios"],
+    questionOutcomes: { bot: {}, human: {} },
+    blocked: {},
+    botDays: [0, 0],
+    maxChain: 0,
+    claims: 0,
+    gamesWithCounterClaim: 0,
+  };
+
+  for (const row of kept) {
+    if (row.truncated) report.truncatedGames += 1;
+    report.recorderErrors += row.recorderErrors;
+    report.byBrain[row.brain] = (report.byBrain[row.brain] ?? 0) + 1;
+    for (const key of RATIO_KEYS) {
+      const [n, d] = row.ratios[key];
+      report.ratios[key] = [report.ratios[key][0] + n, report.ratios[key][1] + d];
+    }
+    addCounts(report.questionOutcomes.bot, row.questionOutcomes.bot);
+    addCounts(report.questionOutcomes.human, row.questionOutcomes.human);
+    addCounts(report.blocked, row.blocked);
+    report.botDays = [report.botDays[0] + row.botDays[0], report.botDays[1] + row.botDays[1]];
+    report.maxChain = Math.max(report.maxChain, row.maxChain);
+    report.claims += row.claims;
+    if (row.hadCounterClaim) report.gamesWithCounterClaim += 1;
+  }
+  return report;
+}
