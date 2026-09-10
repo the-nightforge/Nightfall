@@ -742,6 +742,27 @@ export interface ConversationWeights {
    * trong khi hội thoại tệ đi, và chú thích ở nhánh "Hết ý" đã cảnh báo đúng nó.
    */
   redirectCandidates: number;
+  /**
+   * Bấy nhiêu lượt nói mỗi vòng được GIỮ LẠI, chỉ dùng để ĐÁP người khác. `0` TẮT.
+   *
+   * Vấn đề nó chữa, đo được: `directQuestionOutcomes.NO_TURN` đứng ở **22,9%**
+   * — gần một phần tư số câu hỏi đích danh không được đáp chỉ vì người bị hỏi
+   * đã tiêu hết hạn mức của vòng TRƯỚC KHI câu hỏi tới. Không phải BOT không
+   * muốn đáp, cũng không phải nó không đọc ra câu hỏi; nó không còn lượt.
+   *
+   * Hạn mức bị đốt ở đường TỰ MỞ LỜI, nên chỗ giữ cũng nằm đúng ở đó: nhánh 2
+   * của `planSpeech` thôi phát khi số câu đã nói chạm
+   * `messagesPerBotPerRound - replyReserveTurns`. Đường đáp trigger (nhánh 1)
+   * và lời khai (nhánh 0) KHÔNG bị chặn - đó chính là thứ đang được giữ chỗ.
+   *
+   * `redirectTargets` đã làm đúng phép giữ này cho riêng câu chuyển hướng
+   * (`spoken >= messagesPerBotPerRound - 1`), và đo được +4,4 điểm `NO_TURN`
+   * khi thiếu nó. Knob này là cùng một luật, áp cho cả nhánh tự mở lời.
+   *
+   * `0` quy về đúng hành vi cũ: ngưỡng thành `messagesPerBotPerRound`, mà chỗ
+   * gọi (harness self-play và scheduler) vốn đã không cấp lượt quá con số đó.
+   */
+  replyReserveTurns: number;
 }
 
 /**
@@ -1362,6 +1383,7 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     narrativeMemoryRounds: 0,
     persuasionMinSamples: 0,
     redirectCandidates: 0,
+    replyReserveTurns: 0,
   }),
 
   /**
@@ -1635,6 +1657,7 @@ export const BOT_WEIGHTS_V3: BotWeights = Object.freeze({
     narrativeMemoryRounds: 0,
     persuasionMinSamples: 0,
     redirectCandidates: 0,
+    replyReserveTurns: 0,
   }),
 }) as BotWeights;
 
@@ -2680,6 +2703,69 @@ export const BOT_WEIGHTS_V28: BotWeights = Object.freeze({
 });
 
 /**
+ * MỘT ô đổi so **v21**: `conversation.replyReserveTurns` 0 -> 1.
+ *
+ * Nhánh từ v21 chứ không nối tiếp v28, và đó là chủ ý. v23–v28 là một thang
+ * cộng dồn sáu ô của tầng GIAO TIẾP; đo được rằng cả thang không cải thiện
+ * được chỉ số hội thoại nào một cách nhất quán. Nối v29 vào cuối thang ấy thì
+ * hiệu ứng của ô này sẽ trộn lẫn với sáu ô chưa chứng minh được gì. Đứng cạnh
+ * v21 thì nó so thẳng với cấu hình ĐANG CHẠY, và đó là câu hỏi thật.
+ *
+ * Cùng quy ước nhánh của v22 (mốc A/B rời khỏi v21).
+ *
+ * Ô này khác hẳn sáu ô kia ở một điểm: nó có sẵn một chỉ số đích ĐÃ ĐO ĐƯỢC và
+ * chỉ đúng một chiều - `directQuestionOutcomes.NO_TURN = 22,9%`. Xem chú thích
+ * ở `replyReserveTurns` và nhánh giữ lượt trong `planSpeech`.
+ *
+ * Cái giá phải theo dõi: giữ một lượt mà không ai hỏi tới thì lượt đó mất
+ * trắng, nên `silenceRate` sẽ lên và tổng số câu sẽ xuống. Bench phải đọc
+ * `NO_TURN` và `silenceRate` CÙNG nhau, không đọc riêng.
+ *
+ * KHÔNG mặc định - bench v29 so v21 trước, kỷ luật v19.
+ */
+export const BOT_WEIGHTS_V29: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V21,
+  version: "29.0.0",
+
+  conversation: Object.freeze({
+    ...BOT_WEIGHTS_V21.conversation,
+    replyReserveTurns: 1,
+  }),
+});
+
+/**
+ * HAI ô đổi so v21: `replyReserveTurns` 0 -> 1 VÀ `urgencyBoost` 0 -> 0.35.
+ *
+ * Đúng hai knob duy nhất đo được là có lãi, ghép lại. Mọi preset khác trong
+ * repo đổi đúng một ô vì đó là cách quy trách nhiệm; ở đây trách nhiệm đã quy
+ * xong (v29 cho ô đầu, v23 cho ô sau), và câu hỏi còn lại là câu hỏi CHỈ trả
+ * lời được bằng cách bật cả hai: hai ô này CỘNG DỒN hay CHỒNG LẤN?
+ *
+ * Lý do phải hỏi: cả hai cùng đẩy `directQuestionOutcomes.NO_TURN` xuống,
+ * nhưng bằng hai đường khác nhau — `urgencyBoost` làm BOT mở lời nhiều hơn khi
+ * tình thế đáng nói (đo được NO_TURN −0,86, silence −1,32), còn
+ * `replyReserveTurns` giữ lại một lượt để CÒN chỗ mà đáp (NO_TURN −7,43,
+ * silence ±0). Đường thứ nhất tiêu lượt, đường thứ hai giữ lượt. Chúng có thể
+ * triệt tiêu nhau, và không có phép cộng nào trên giấy nói trước được điều đó.
+ *
+ * Cả hai đều KHÔNG đổi số lần rút RNG: `urgencyBoost` cộng vào NGƯỠNG của lượt
+ * rút `talkativeness`, `replyReserveTurns` đứng SAU lượt rút đó. Nên v30 so
+ * được với v21/v23/v29 trên đúng cùng một tập ván.
+ *
+ * KHÔNG mặc định - bench v30 so v21 trước, kỷ luật v19.
+ */
+export const BOT_WEIGHTS_V30: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V21,
+  version: "30.0.0",
+
+  conversation: Object.freeze({
+    ...BOT_WEIGHTS_V21.conversation,
+    replyReserveTurns: 1,
+    urgencyBoost: 0.35,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
@@ -2706,5 +2792,48 @@ export const BOT_WEIGHTS_V28: BotWeights = Object.freeze({
   * mốc A/B (futureRisk gộp / wolfSideGain), chưa có protocol.
   * v1-v4 không bị ảnh hưởng - test tái lập của chúng luôn truyền preset đích
   * danh, không bao giờ dựa vào hằng số này.
+  *
+  * v29.0.0 (COMMUNICATION) bật `conversation.replyReserveTurns = 1`: giữ lại
+  * một lượt nói mỗi vòng chỉ để ĐÁP người khác. Protocol 5×1.000 ván paired
+  * seeds so v21:
+  *
+  * ```text
+  * directQuestionOutcomes.NO_TURN   22.92% -> 15.50%  (-7,43 điểm, z = -35,6)
+  * directQuestionOutcomes.ANSWERED  55.36% -> 61.90%  (+6,54 điểm, z = +18,0)
+  * replyRate                        40.42% -> 43.60%  (+3,18 điểm, z = +31,6)
+  * semanticRepetitionRate            0.88% ->  0.63%  (-0,25 điểm, z = -26,4)
+  * consecutiveSameTargetRate        25.75% -> 24.74%  (-1,01 điểm, z = -23,4)
+  * silenceRate                      21.83% -> 21.64%  (-0,19 điểm, z =  -1,3)
+  * casualToneRate                   59.02% -> 57.35%  (-1,67 điểm, z = -14,3)
+  * villageWinRate                   50.74% -> 51.92%  (+1,18 điểm, z =  +1,2)
+  * ```
+  *
+  * **Bản này KHÔNG đạt §40, và được nâng lên có ý thức về điều đó.** §40 chấm
+  * bằng `villageWinRate`, mà v29 trung tính ở đó (z = +1,2, 5 batch chạy từ
+  * -0,70 tới +4,20). Lý do vẫn nâng: §40 là tiêu chí cho tầng QUYẾT ĐỊNH, và
+  * đo được rằng nó gần như mù trước tầng LỜI NÓI - cả thang v23..v28 (sáu ô
+  * giao tiếp, cộng dồn) không có ô nào vượt |z| = 2,0 trên win-rate, trong khi
+  * chúng dịch chỉ số hội thoại theo cả hai chiều. Chấm một thay đổi lời nói
+  * bằng win-rate là chấm sai môn.
+  *
+  * Thước dùng để nâng bản này là chỉ số hội thoại mà `metrics.ts` vốn đã tính:
+  * `NO_TURN` là ngăn "bị hỏi thẳng mà không còn lượt để đáp", và nó lớn hơn
+  * mọi hiệu ứng khác từng đo ở tầng này **8,8 lần**. Điều kiện kèm theo: không
+  * đánh đổi win-rate (đạt: +1,18, không batch nào tụt quá -0,70) và không siết
+  * miệng BOT (đạt: `silenceRate` z = -1,3, tức lượt giữ lại ĐƯỢC DÙNG chứ
+  * không phí).
+  *
+  * Giá phải trả, ghi ra để không ai phải tự phát hiện lại: `casualToneRate`
+  * -1,67. Đáp nhiều hơn thì câu mang hình dạng câu đáp, ít đời thường hơn.
+  *
+  * v30 (thêm `urgencyBoost`) đo được cộng dồn gần như hoàn hảo với ô này
+  * (`NO_TURN` -8,10, đúng bằng tổng hai ô rời), nhưng chỉ mua thêm 0,67 điểm
+  * `NO_TURN` trong khi trả lại 0,42 điểm `consecutiveSameTargetRate` - đổi
+  * chác hai chiều, nên để lại làm mốc A/B chứ không nâng.
+  *
+  * v23..v28 giữ nguyên làm mốc so sánh. Đo được: v25 (`narrativeMemoryRounds`)
+  * không dịch một chỉ số nào; v28 (`redirectCandidates`) làm XẤU
+  * `semanticRepetitionRate` (+0,11, z = +10,7) - đúng chỉ số §24 sinh ra nó để
+  * chữa.
   */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V21;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V29;

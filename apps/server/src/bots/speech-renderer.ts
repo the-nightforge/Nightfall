@@ -158,7 +158,23 @@ async function renderUnmeasured(
   // phải khác nhau.
   const source = first ? "gate_rejected" : "provider_failed";
   const template = speechTemplate(request);
-  if (template !== null && echoesRecentOwnLine(request, template)) {
+
+  // HAI đường dẫn tới im lặng, và cả hai đều là `template_silent`.
+  //
+  // `null` là bảng mẫu TỪ CHỐI dựng câu: một ý định thuộc `NEEDS_SOMEONE` mà
+  // không có ai để nói tới (xem `speechTemplate`). Trước đây nhánh đó rơi xuống
+  // dòng cuối và trả về `text: null` mang nhãn `provider_failed`/`gate_rejected`
+  // - tức một lượt IM bị đếm y như một lượt CÓ phát câu mẫu. `template_silent`
+  // vì thế đếm thiếu, và `bySource` trên `/api/health` nói sai về chuyện bot có
+  // mở miệng hay không - đúng thứ mà `speech-stats` tồn tại để trả lời.
+  //
+  // Hai nguyên nhân KHÁC nhau (không có mục tiêu / cả bảng đều vừa nói) nhưng
+  // dùng CHUNG một nhãn, và đó là chủ ý: nhãn này trả lời "bot có nói không",
+  // còn nhánh `null` thì theo chú thích của `speechTemplate` là phòng thủ cho
+  // một tình huống lõi không được phép tạo ra. Nó nổ lên khác 0 nghĩa là có lỗi
+  // ở LÕI, và chỗ để nhìn thấy điều đó là con số này khác 0 - không phải một
+  // nhãn thứ sáu cho một nhánh lẽ ra không bao giờ chạy.
+  if (template === null || echoesRecentOwnLine(request, template)) {
     return { text: null, fromTemplate: true, source: "template_silent" };
   }
   return { text: template, fromTemplate: true, source };

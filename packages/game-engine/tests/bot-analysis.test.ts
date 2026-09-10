@@ -177,6 +177,37 @@ describe("vote recap analysis", () => {
     );
   });
 
+  it("summary là câu NÓI ĐƯỢC: parser không đọc ra bằng chứng nào từ nó", () => {
+    // `fillSpeechTemplate` ghép `summary` thẳng vào chỗ `{evidence}`, và
+    // `buildDaySpeechPrompt` đưa nguyên văn cho nhà cung cấp - nên mọi chuỗi ở
+    // đây đều được PHÁT ra phòng, rồi bị chính các BOT khác `analyzeChat` đọc
+    // lại. Một summary tình cờ khớp mẫu buộc tội hay khai vai là một nước đi mà
+    // lõi chưa bao giờ chốt, và nó đi vòng qua `targetSurvivesRoundTrip`: cổng
+    // đó chỉ gác đường NHÀ CUNG CẤP, không gác bảng mẫu.
+    //
+    // Đọc summary từ bằng chứng THẬT do `analyzeVoteRecap` sinh ra, không chép
+    // lại chuỗi vào test: một bản sao sẽ vẫn xanh sau khi ai đó sửa chuỗi gốc.
+    const chatPlayers: BotPlayerKnowledge[] = [
+      { id: "a", name: "An", alive: true },
+      { id: "b", name: "Bình", alive: true },
+      { id: "c", name: "Chi", alive: true },
+    ];
+    const summaries = [
+      ...analyzeVoteRecap(decisiveLateSwitchRecap(), 1, alwaysNotice),
+      ...analyzeVoteRecap(saveVoteRecap(), 1, alwaysNotice),
+      ...analyzeVoteRecap(bandwagonRecap(), 1, alwaysNotice),
+    ].map((item) => item.summary);
+
+    expect(summaries.length).toBeGreaterThan(0);
+    for (const summary of summaries) {
+      const spoken = analyzeChat(
+        [{ id: "m1", actorId: "a", text: summary, at: 0 }],
+        chatPlayers,
+      );
+      expect(spoken, summary).toEqual([]);
+    }
+  });
+
   it("weighs a bandwagon below a tie break and a save vote", () => {
     const bandwagon = analyzeVoteRecap(bandwagonRecap(), 1, alwaysNotice).find(
       (item) => item.kind === "BANDWAGON",
@@ -489,17 +520,21 @@ describe("conservative chat analysis", () => {
     expect(memories).toEqual([]);
   });
 
-  it("ignores negated accusations instead of inverting them", () => {
+  it("negated LABEL flips polarity; negated VERB stays silent", () => {
     const memories = analyzeChat(
       [
+        // Nh\u00e3n: "s\u00f3i" b\u1ecb ph\u1ee7 \u0111\u1ecbnh -> b\u00eanh B\u00ecnh. Ng\u01b0\u1eddi Vi\u1ec7t b\u00eanh nhau b\u1eb1ng c\u00e1ch
+        // ph\u1ee7 \u0111\u1ecbnh l\u1eddi t\u1ed1 nhi\u1ec1u h\u01a1n l\u00e0 b\u1eb1ng c\u00e1ch khen.
         message("m1", "a", "B\u00ecnh kh\u00f4ng th\u1ec3 l\u00e0 s\u00f3i"),
+        // \u0110\u1ed9ng t\u1eeb: c\u1ea3 hai c\u00e2u d\u01b0\u1edbi n\u00f3i v\u1ec1 tr\u1ea1ng th\u00e1i c\u1ee7a NG\u01af\u1edcI N\u00d3I, kh\u00f4ng ph\u1ea3i
+        // v\u1ec1 ng\u01b0\u1eddi b\u1ecb n\u00eau t\u00ean. "T\u00f4i kh\u00f4ng nghi Chi" kh\u00f4ng ngh\u0129a l\u00e0 Chi d\u00e2n.
         message("m2", "b", "T\u00f4i kh\u00f4ng nghi Chi"),
         message("m3", "c", "T\u00f4i kh\u00f4ng tin An"),
       ],
       players,
     );
 
-    expect(memories).toEqual([]);
+    expect(memories.map((item) => [item.type, item.targetId])).toEqual([["DEFEND", "b"]]);
   });
 
   it("does not confuse the verb nghi with the verb nghi-tilde", () => {
@@ -640,10 +675,14 @@ describe("conservative chat analysis", () => {
         analyzeChat([message("m1", "a", text)], withNam).filter(
           (item) => item.type !== "DIRECT_QUESTION" && item.type !== "DIRECT_ADDRESS",
         );
-      expect(substantive("Nam không thể là sói")).toEqual([]);
+      // Bênh Nam, KHÔNG phải phản bác: `parseCounterClaim` đòi cả vế "tôi mới
+      // là", và không có vế đó thì đây chỉ là một lời nói hộ.
+      const seen = (text: string) =>
+        substantive(text).map((item) => [item.type, item.targetId]);
+      expect(seen("Nam không thể là sói")).toEqual([["DEFEND", "n"]]);
       // "đâu" cuối câu vẫn bị đọc là từ để hỏi nhắm vào Nam - đó là chuyện của
       // parseDirectAddress, không phải của phần cáo buộc/khai vai đang kiểm.
-      expect(substantive("Nam ko thể là sói đâu")).toEqual([]);
+      expect(seen("Nam ko thể là sói đâu")).toEqual([["DEFEND", "n"]]);
     });
 
     it("phủ định teencode k/ko/hok giết mệnh đề như không", () => {
@@ -813,19 +852,27 @@ describe("conservative chat analysis", () => {
       }
     });
 
-    it("phủ định teencode giết cả mẫu mới", () => {
-      for (const text of [
-        "ko nghi Bình",
-        "k vote Bình",
-        "hok treo Bình",
-        "Bình ko sói",
-        "Bình hem sói đâu",
-        "t k tin Bình",
-        "Bình đếch phải dân",
-        "Bình éo sạch",
-      ]) {
+    it("phủ định teencode một ĐỘNG TỪ giết cả mẫu mới", () => {
+      for (const text of ["ko nghi Bình", "k vote Bình", "hok treo Bình", "t k tin Bình"]) {
         expect(substantive(text), text).toEqual([]);
       }
+    });
+
+    it("phủ định teencode một NHÃN đảo cực thay vì giết mệnh đề", () => {
+      for (const text of ["Bình ko sói", "Bình hem sói đâu", "Bình ko sói đâu"]) {
+        expect(substantive(text), text).toEqual([["DEFEND", "b"]]);
+      }
+      for (const text of ["Bình đếch phải dân", "Bình éo sạch"]) {
+        expect(substantive(text), text).toEqual([["ACCUSE", "b"]]);
+      }
+    });
+
+    it("phủ định ở ĐUÔI HỎI không đảo cực: đó là câu hỏi, không phải lời bênh", () => {
+      // "Bình là sói đúng không" nghiêng về phía TỐ, nên đọc nó thành lời bênh
+      // Bình là đảo ngược hẳn nghĩa - tệ hơn im lặng. Từ phủ định phải nằm CHEN
+      // GIỮA tên và nhãn thì mới đảo cực.
+      expect(substantive("Bình là sói đúng không")).toEqual([]);
+      expect(substantive("Bình sói phải ko")).toEqual([]);
     });
 
     it("mẫu mới vẫn chỉ nhận ở đầu mệnh đề", () => {
@@ -906,7 +953,7 @@ describe("conservative chat analysis", () => {
     it("chắc/chào/chạy không phải phủ định dù chứa chả khi bỏ dấu", () => {
       expect(substantive("Bình là sói chắc luôn")).toEqual([["ACCUSE", "b"]]);
       expect(substantive("Binh la soi chac luon")).toEqual([["ACCUSE", "b"]]);
-      expect(substantive("Bình chả phải sói")).toEqual([]);
+      expect(substantive("Bình chả phải sói")).toEqual([["DEFEND", "b"]]);
       // "cha" không dấu là cha xứ/cha nội, không phải "chả".
       expect(substantive("cha noi Binh la soi")).toEqual([["ACCUSE", "b"]]);
     });

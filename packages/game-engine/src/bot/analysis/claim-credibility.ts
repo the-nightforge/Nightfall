@@ -243,8 +243,12 @@ export function claimEvidence(
         -reward,
         confidence,
         distrust > 0
-          ? "Công khai nhận một vai, nhưng đã từng khai sai nên được tin ít hơn."
-          : "Công khai nhận một vai và chịu rủi ro đi kèm.",
+          ? // KHÔNG mở đầu bằng "nhận ": đó là một `FIRST_PERSON_MARKERS` của
+            // `chat-analysis`, và chuỗi này được NÓI RA nên nó sẽ bị chính các
+            // BOT khác đọc lại. Mở đầu như thế là mời parser đi tìm một lời
+            // khai vai trong câu.
+            "Người này có khai vai, mà trước từng khai sai."
+          : "Người này dám đứng ra khai vai giữa bàn.",
       ),
     );
   }

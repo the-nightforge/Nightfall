@@ -137,11 +137,13 @@ export function analyzeVoteRecap(
           mutation.voterId,
           target,
           recap.round,
-          // Nội suy từ chính trọng số: đây là lý do BOT nói ra cho người chơi
-          // nghe, nên nó không được mâu thuẫn với ngưỡng đã dùng để kết luận.
-          `Đổi phiếu trong ${Math.round(
-            (1 - weights.voteHistory.lateSwitchRatio) * 100,
-          )}% thời gian cuối của vòng đề cử.`,
+          // KHÔNG nêu con số nữa. `summary` là thứ BOT NÓI RA giữa phòng -
+          // `fillSpeechTemplate` ghép thẳng nó vào chỗ `{evidence}`, và prompt
+          // đưa nguyên văn cho nhà cung cấp. Một tỉ lệ phần trăm trong câu chat
+          // đọc ra như máy đọc báo cáo; và "sát giờ chốt" thì đúng ở MỌI giá
+          // trị của `lateSwitchRatio`, nên nó cũng không thể mâu thuẫn với
+          // ngưỡng đã dùng để kết luận - đúng điều bản cũ đi vòng để bảo đảm.
+          "Đổi phiếu sát giờ chốt.",
         ),
       );
     }
@@ -155,7 +157,7 @@ export function analyzeVoteRecap(
           mutation.voterId,
           target,
           recap.round,
-          "Lá phiếu này phá thế hoà và tự mình chọn ra người dẫn đầu.",
+          "Phiếu đó bẻ thế hoà, dựng luôn người dẫn đầu.",
         ),
       );
     }
@@ -174,7 +176,7 @@ export function analyzeVoteRecap(
           mutation.voterId,
           target,
           recap.round,
-          "Rời người đang dẫn đầu và đẩy một người khác vượt lên.",
+          "Bỏ người đang dẫn phiếu để kéo người khác lên.",
         ),
       );
     }
@@ -194,7 +196,7 @@ export function analyzeVoteRecap(
           mutation.voterId,
           target,
           recap.round,
-          "Nhảy vào bỏ phiếu cho người đã dẫn phiếu sẵn.",
+          "Thấy ai dẫn phiếu là nhảy vào theo.",
         ),
       );
     }

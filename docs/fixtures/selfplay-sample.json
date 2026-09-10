@@ -303,14 +303,14 @@
       "denominator": 0
     },
     "humanAccuseSeenRate": {
-      "value": 0.8787878787878788,
-      "numerator": 58,
-      "denominator": 66
+      "value": 0.8823529411764706,
+      "numerator": 60,
+      "denominator": 68
     },
     "humanDefendSeenRate": {
-      "value": 0.8846153846153846,
-      "numerator": 23,
-      "denominator": 26
+      "value": 0.967741935483871,
+      "numerator": 30,
+      "denominator": 31
     },
     "humanClaimSeenRate": {
       "value": 1,
@@ -319,8 +319,8 @@
     },
     "humanTrapIgnoredRate": {
       "value": 1,
-      "numerator": 34,
-      "denominator": 34
+      "numerator": 27,
+      "denominator": 27
     },
     "humanQuestionSeenRate": {
       "value": 0.896551724137931,

@@ -27,7 +27,11 @@
  *   hết ngân sách, hoặc không cấu hình) - rơi về bảng mẫu.
  * - `gate_rejected`: nhà cung cấp trả câu nhưng cả hai lượt đều trượt cổng
  *   (nhại lại chính mình, mở đầu trùng, nói sai lời khai) - rơi về bảng mẫu.
- * - `template_silent`: bảng mẫu cũng không có câu nào không trùng, bot im.
+ * - `template_silent`: bot IM. Hai nguyên nhân: bảng mẫu không còn câu nào
+ *   không trùng, hoặc ý định không có ai để nói tới nên bảng mẫu từ chối dựng
+ *   câu. Cái sau là nhánh phòng thủ của `speechTemplate` - lõi không được phép
+ *   tạo ra tình huống đó, nên nhãn này khác 0 bất thường là dấu hiệu lỗi LÕI,
+ *   không phải lỗi nhà cung cấp.
  */
 export type SpeechSource =
   | "provider"

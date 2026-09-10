@@ -208,6 +208,27 @@ const LABEL_INTENSIFIERS = new Set([
   "đích", "thị", "cũng", "đang", "vẫn", "mới",
 ]);
 
+/**
+ * Từ được phép chen giữa TÊN và NHÃN trong một mệnh đề phủ định.
+ *
+ * "Bình không phải sói", "Bình ko thể là sói", "Bình chả phải dân": chính từ
+ * phủ định đứng chen vào đó, nên không lùi qua nó thì không bao giờ với tới
+ * được cái tên. `phải`/`thể` đi kèm vì chúng chỉ xuất hiện ở đúng chỗ này -
+ * không có mẫu khẳng định nào của parser dùng tới hai từ ấy.
+ *
+ * `LABEL_INTENSIFIERS` gộp vào để "Bình ko đúng là sói" vẫn đọc được.
+ */
+const NEGATED_LABEL_FILLERS = new Set([
+  ...LABEL_INTENSIFIERS,
+  ...NEGATION_TOKENS,
+  ...NEGATIONS,
+  "phải",
+  "thể",
+]);
+
+/** Từ phủ định ở dạng MỘT token, để hỏi "có phủ định chen vào đây không". */
+const NEGATION_WORDS = new Set([...NEGATIONS, ...NEGATION_TOKENS]);
+
 function importanceTable(weights: BotWeights): Partial<Record<BotMemoryType, number>> {
   const table = weights.memoryImportance;
   return {
@@ -629,7 +650,9 @@ function parseClause(
   players: readonly BotPlayerKnowledge[],
 ): ParsedSpeech | null {
   if (raw.plain.length === 0) return null;
-  if (hasNegation(raw)) return null;
+  // Phủ định rẽ sang một đường RIÊNG, hẹp hơn hẳn: chỉ nhãn, và ngược cực.
+  // Không mẫu khẳng định nào chạy được ở đó - xem `parseNegatedClause`.
+  if (hasNegation(raw)) return parseNegatedClause(raw, players);
   // Bỏ "ok"/"ủa"/"kk" đứng trước câu chính. Phủ định đã được xét trên mệnh đề
   // ĐẦY ĐỦ ở trên, nên bước này không mở đường cho "ko" lọt qua.
   const clause = stripLeadingInterjections(raw);
@@ -702,10 +725,10 @@ function parseClause(
   }
 
   const accused = labelledTarget(clause, ACCUSE_LABELS, players);
-  if (accused) return { type: "ACCUSE", targetId: accused.id, data: {} };
+  if (accused) return { type: "ACCUSE", targetId: accused.target.id, data: {} };
 
   const cleared = labelledTarget(clause, DEFEND_LABELS, players);
-  if (cleared) return { type: "DEFEND", targetId: cleared.id, data: {} };
+  if (cleared) return { type: "DEFEND", targetId: cleared.target.id, data: {} };
 
   return null;
 }
@@ -717,11 +740,20 @@ function parseClause(
  * có "dân" ở cuối nhưng token trước nó là "ra", nên không ai được bênh cả.
  * So trên dạng `plain` (giữ dấu) - xem chú thích ở `ACCUSE_LABELS`.
  */
+interface LabelMatch {
+  target: BotPlayerKnowledge;
+  /** Vị trí token của TÊN. */
+  head: number;
+  /** Vị trí token đầu tiên của NHÃN. */
+  index: number;
+}
+
 function labelledTarget(
   clause: Clause,
   labels: readonly string[],
   players: readonly BotPlayerKnowledge[],
-): BotPlayerKnowledge | null {
+  fillers: ReadonlySet<string> = LABEL_INTENSIFIERS,
+): LabelMatch | null {
   const tokens = clause.plain.split(" ").filter(Boolean);
   for (const label of labels) {
     const needle = label.split(" ");
@@ -729,11 +761,69 @@ function labelledTarget(
       if (!needle.every((token, offset) => tokens[index + offset] === token)) continue;
       // Lùi qua tiếng đệm nhấn mạnh: "Bình đúng là sói" -> "bình".
       let head = index - 1;
-      while (head > 0 && LABEL_INTENSIFIERS.has(tokens[head]!)) head -= 1;
+      while (head > 0 && fillers.has(tokens[head]!)) head -= 1;
       const target = resolveTarget(tokens[head]!, players);
-      if (target) return target;
+      if (target) return { target, head, index };
     }
   }
+  return null;
+}
+
+/**
+ * Mệnh đề PHỦ ĐỊNH: chỉ đọc NHÃN, và đọc ngược cực.
+ *
+ * "Bình không phải sói" là một lời bênh vực, không phải một câu vô nghĩa - và
+ * người Việt bênh nhau bằng cách phủ định lời tố nhiều hơn là bằng cách khen.
+ * Trước đây `parseClause` nuốt trọn mọi mệnh đề phủ định, nên cả nhóm câu ấy
+ * vô hình với bot.
+ *
+ * Chỉ NHÃN, không động từ, và đó là ranh giới quan trọng nhất ở đây:
+ *
+ * - Nhãn là một khẳng định VỀ NGƯỜI ("Bình là sói"), nên phủ định nó cũng là
+ *   một khẳng định về người, chỉ ngược cực.
+ * - Động từ là trạng thái của NGƯỜI NÓI ("tôi không nghi Bình", "t k tin
+ *   Bình"). "Tôi không nghi Bình" không có nghĩa là Bình dân - nó chỉ nghĩa là
+ *   người nói chưa nghi. Đọc nó thành bênh vực là suy diễn, và đó đúng là thứ
+ *   parser này cố tình không làm. Cả nhóm đó vẫn trả `null`, và vẫn nằm trong
+ *   `HUMAN_TRAPS`.
+ *
+ * Mọi mẫu khẳng định (khai vai, `nghi`, `vote`, `treo`, `tin`, `là sói`,
+ * `là dân`) đều KHÔNG được chạy ở đây: một mệnh đề phủ định đi qua chúng là
+ * đúng cái lỗi mà cổng `hasNegation` được dựng để chặn.
+ */
+function parseNegatedClause(
+  clause: Clause,
+  players: readonly BotPlayerKnowledge[],
+): ParsedSpeech | null {
+  const tokens = clause.plain.split(" ").filter(Boolean);
+
+  /**
+   * Từ phủ định phải nằm CHEN GIỮA tên và nhãn, không chỉ đâu đó trong câu.
+   *
+   * Đây là ranh giới giữa "Bình không phải sói" (bênh Bình) và "An là sói đúng
+   * không" (một câu HỎI). Cả hai đều có "không" nên `hasNegation` gật cả hai,
+   * nhưng ở câu sau, phủ định nằm ở ĐUÔI HỎI phía sau nhãn - nó không phủ định
+   * cái nhãn, nó biến cả câu thành câu hỏi. Đọc nó thành lời bênh An là đảo
+   * ngược hẳn nghĩa, tệ hơn im lặng.
+   *
+   * Cũng chính điều kiện này loại luôn lối phủ định bằng tiểu từ cuối câu mà
+   * `hasNegation` nhận ("Bình sói đâu", "Bình mà sói gì"): ở đó không có gì
+   * chen giữa tên và nhãn cả. Chúng mơ hồ thật - "Bình mà tt gì, sói thì có"
+   * là một lời TỐ - nên chúng ở lại phía im lặng.
+   */
+  const negatedBetween = (match: LabelMatch): boolean =>
+    tokens.slice(match.head + 1, match.index).some((token) => NEGATION_WORDS.has(token));
+
+  const cleared = labelledTarget(clause, ACCUSE_LABELS, players, NEGATED_LABEL_FILLERS);
+  if (cleared && negatedBetween(cleared)) {
+    return { type: "DEFEND", targetId: cleared.target.id, data: {} };
+  }
+
+  const accused = labelledTarget(clause, DEFEND_LABELS, players, NEGATED_LABEL_FILLERS);
+  if (accused && negatedBetween(accused)) {
+    return { type: "ACCUSE", targetId: accused.target.id, data: {} };
+  }
+
   return null;
 }
 
