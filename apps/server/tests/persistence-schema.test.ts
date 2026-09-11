@@ -95,6 +95,13 @@ describe("schema snapshot phòng", () => {
     ]);
   });
 
+  it("Sói Alpha (xóa cứng) đọc lại thành WEREWOLF, không rơi về VILLAGER", () => {
+    const input = validEnvelope();
+    input.room.engineState.players[0]!.role = "ALPHA_WOLF" as never;
+    const parsed = roomEnvelopeSchema.parse(input);
+    expect(parsed.room.engineState!.players[0]!.role).toBe("WEREWOLF");
+  });
+
   it("brain mang vai cũ và lượt đêm cũ (HOLY_WATER/PRIEST_BLESS) vẫn đọc được", () => {
     const input = validEnvelope();
     input.room.botSession.brains = {

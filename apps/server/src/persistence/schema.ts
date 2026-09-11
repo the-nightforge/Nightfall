@@ -76,8 +76,15 @@ const gamePhaseSchema = oneOf<GamePhase>(PHASES.filter((phase) => phase !== "LOB
  * `personalWins`, `knownRoles` và `myClaim`. Ném ở đây là đưa cả phòng vào
  * `quarantine` trước cả khi guard VILLAGER của engine kịp chạy - guard đó giữ
  * nguyên như một lớp dự phòng.
+ *
+ * Sói Alpha (xóa cứng 2026-09-11) là ngoại lệ: rơi về VILLAGER là đổi phe một
+ * con Sói giữa ván. Nó cắn cùng bầy nên WEREWOLF là lá còn lại đúng nghĩa -
+ * người cầm chỉ mất khiên soi.
  */
-const roleSchema = oneOf<Role>(ROLES).catch("VILLAGER");
+const roleSchema = z.preprocess(
+  (value) => (value === "ALPHA_WOLF" ? "WEREWOLF" : value),
+  oneOf<Role>(ROLES).catch("VILLAGER"),
+) as z.ZodType<Role>;
 const teamSchema = oneOf<Team>(["wolves", "village", "neutral"]);
 const personalWinConditionSchema = oneOf<PersonalWin["condition"]>(PERSONAL_WIN_CONDITIONS);
 /**
