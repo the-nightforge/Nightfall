@@ -181,9 +181,13 @@ describe("chỉnh từng lá một trên bàn đã đủ người", () => {
   it("thêm Sói vào bàn 11 vẫn bị cân bằng chặn, nhưng nói ra thành câu", () => {
     // Không phải im lặng: đây là luật cân bằng làm đúng việc của nó. Host mở
     // rộng bàn trước rồi thêm Sói sau - đường đó đi được, xem test kế tiếp.
-    expect(() => roomService.updateConfig("host", { ...P11, werewolves: 3 })).toThrow(
-      /BALANCE_UNSTABLE/,
-    );
+    //
+    // Đổi Thị Trưởng lấy Sói để bộ bài GIỮ 11 lá (điểm 30.5). Chỉ thêm Sói thì
+    // bộ bài thành 12 lá và được chấm bằng preset 12 (`sized = deckSize`); từ
+    // khi preset 12 nhận Kẻ Nguyền Rủa (2026-09-11) nó ra 53 và không bị chặn.
+    expect(() =>
+      roomService.updateConfig("host", { ...P11, werewolves: 3, mayor: false }),
+    ).toThrow(/BALANCE_UNSTABLE/);
   });
 
   it("nới bàn rộng ra rồi mới thêm Sói thì đi được tới đích", () => {

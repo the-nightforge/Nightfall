@@ -484,26 +484,73 @@ function preset(overrides: Partial<RoomConfig>): RoomConfig {
  * Preset 6 và 7 đã GỠ HẲN: `MIN_PLAYERS_TO_START` lên 8 nên không phòng nào với
  * tới chúng nữa, và cả hai đều không cân bằng được (xem chú thích ở hằng số đó).
  *
- * Deck details:
+ * Deck details (hiện hành, sau lần đo 2026-09-11 ngay dưới):
  * 8: WEREWOLF x2, SEER, WITCH, GUARD, HUNTER, DETECTIVE, VILLAGER
- * 9: WEREWOLF, WOLF_CUB, SEER, WITCH, GUARD, DETECTIVE, HUNTER, VILLAGER x2
- * 10: WEREWOLF, WOLF_CUB, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, HUNTER, VILLAGER x2
+ * 9: WEREWOLF, WOLF_CUB, CURSED, SEER, WITCH, GUARD, DETECTIVE, HUNTER, VILLAGER
+ * 10: WEREWOLF, WOLF_CUB, CURSED, SEER, DETECTIVE, WITCH, GUARD, HUNTER, VILLAGER x2
  * 11: xem khối chú thích ngay trên `11: preset(...)` - đã đổi 2026-09-04
- * 12: xem khối chú thích ngay trên `11: preset(...)` - đã đổi 2026-09-04
- * 13: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x3
- * 14: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x4
- * 15: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x3
+ * 12: WEREWOLF x2, TRAITOR, CURSED, SEER, WITCH, GUARD, HUNTER, MAYOR, VILLAGER x3
+ * 13: WEREWOLF x3, CURSED, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x2
+ * 14: WEREWOLF x3, CURSED, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x3
+ * 15: WEREWOLF x3, SORCERER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x3
+ */
+
+/*
+ * ĐO LẠI 2026-09-11 - BẢNG CHỐT HIỆN HÀNH. Đọc khối này trước mọi bảng số khác
+ * trong file: các khối cũ hơn giữ lại làm lịch sử, con số của chúng hết hiệu lực.
+ *
+ * Lần đầu đo ĐÚNG ván xếp hạng thật: speech bật, pha DEFENSE bật, events tắt,
+ * 500 ván mỗi bộ bài, seed `balance:<n>:<shard>` - preset và ứng viên cùng cỡ
+ * chạy chung một bộ seed. Công cụ: `.github/workflows/preset-balance.yml`
+ * (chạy tay), script `apps/server/scripts/preset-balance.ts`.
+ *
+ *   n  | preset cũ | bộ chọn                          | phe làng
+ *    8 |   53.8    | giữ nguyên                       |   53.8
+ *    9 |   59.0    | + Kẻ Nguyền Rủa                  |   48.4
+ *   10 |   57.8    | Tiên Tri Tập Sự -> Thám Tử       |   54.2
+ *   11 |   51.0    | giữ nguyên                       |   51.0
+ *   12 |   55.6    | Thám Tử -> Kẻ Nguyền Rủa         |   48.8
+ *   13 |   56.4    | + Kẻ Nguyền Rủa                  |   49.0
+ *   14 |   62.2    | + Kẻ Nguyền Rủa                  |   49.6
+ *   15 |   59.0    | Kẻ Nguyền Rủa -> Sói Pháp Sư     |   48.0
+ *   16 |   66.8    | Kẻ Nguyền Rủa -> Sói Pháp Sư     |   49.2
+ *   17 |   47.8    | 1 Sói thường -> Sói Con          |   51.4
+ *   18 |   42.4    | Sói Pháp Sư -> Kẻ Phản Bội       |   52.6
+ *   19 |   46.2    | giữ nguyên                       |   46.2
+ *   20 |   42.2    | - Kẻ Nguyền Rủa                  |   52.0
+ *
+ * Chọn qua hai lượt ứng viên, cùng seed với preset. ±95% của mọi ô ~4.4 điểm.
+ * Phân bố lá phe Sói sau lượt này: Sói Con 9/10/17, Sói Pháp Sư 15/16/17,
+ * Kẻ Phản Bội 11/12/18, Sói Alpha 19/20.
+ *
+ * Pha DEFENSE lật chiều bàn vừa: bảng cũ (không DEFENSE) cho 11-15 nghiêng Sói,
+ * đo đúng thì 9-16 nghiêng LÀNG (55-67%). Bị cáo được tự bào chữa là thứ phe
+ * làng hưởng nhiều hơn phe Sói.
+ *
+ * Một ghế Dân thường đáng nhiều hơn `ROLE_POWER` nghĩ: 14 = 13 + 1 Dân ra 62.2
+ * so với 56.4, 16 = 15 + 1 Dân ra 66.8 so với 59.0. Đó cũng chính là hai preset
+ * từng được miễn luật Dân<=Sói; bộ mới đưa cả hai về trong luật.
+ *
+ * Những gì hai lượt ứng viên nói về các lá phe Sói, trên bàn bot hiện tại:
+ * - Sói Pháp Sư mạnh hơn Kẻ Phản Bội 8-10 điểm (16: 41.8 so với 50.0; 18:
+ *   42.4 so với 52.6), nên ở 15/16 nó thay Kẻ Nguyền Rủa (đáng ~-10 cho làng:
+ *   gỡ khỏi bộ 15 cũ là 59.0 -> 69.2) chứ không thay Kẻ Phản Bội.
+ * - Sói Con KHÔNG trung tính ở bàn lớn như số đo speech-tắt ở `ROLE_POWER`
+ *   từng nói. Đổi 1 Sói thường lấy Sói Con: 17 +3.6, 19 -5.6, và trên bộ bài
+ *   cũ 18 -3.6, 20 -10.0. Chỉ 17 nhận nó.
+ * - Kẻ Phản Bội ở bàn 10 quá tay (thay Nguyền Rủa: 33.2, thêm vào: 22.6): ở
+ *   bàn nhỏ một ghế trong thế cân bằng nặng 25-35 điểm.
  */
 
 const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
   8: preset({ werewolves: 2, seer: true, witch: true, guard: true, hunter: true, detective: true }),
-  9: preset({ werewolves: 1, wolfCub: true, seer: true, witch: true, guard: true, detective: true, hunter: true }),
+  9: preset({ werewolves: 1, wolfCub: true, cursed: true, seer: true, witch: true, guard: true, detective: true, hunter: true }),
   10: preset({
     werewolves: 1,
     wolfCub: true,
     cursed: true,
     seer: true,
-    apprenticeSeer: true,
+    detective: true,
     witch: true,
     guard: true,
     hunter: true,
@@ -563,15 +610,16 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
   12: preset({
     werewolves: 2,
     traitor: true,
+    cursed: true,
     seer: true,
     witch: true,
     guard: true,
-    detective: true,
     hunter: true,
     mayor: true,
   }),
   13: preset({
     werewolves: 3,
+    cursed: true,
     seer: true,
     witch: true,
     guard: true,
@@ -582,6 +630,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
   }),
   14: preset({
     werewolves: 3,
+    cursed: true,
     seer: true,
     witch: true,
     guard: true,
@@ -592,7 +641,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
   }),
   15: preset({
     werewolves: 3,
-    cursed: true,
+    sorcerer: true,
     seer: true,
     apprenticeSeer: true,
     witch: true,
@@ -657,11 +706,12 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
    * không bị đụng tới ở đây vì bàn đông cần NHIỀU thời gian nói hơn chứ không
    * ít hơn, nhưng con số đó là một quyết định sản phẩm chưa ai ra.
    *
-   * 16: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x4
-   * 17: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, SORCERER, VILLAGER x3
-   * 18: WEREWOLF x4, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, SORCERER, VILLAGER x4
+   * Hiện hành (sau lần đo 2026-09-11, xem khối trên `RAW_PRESET_DECKS`):
+   * 16: WEREWOLF x3, SORCERER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x4
+   * 17: WEREWOLF x2, WOLF_CUB, SORCERER, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, VILLAGER x3
+   * 18: WEREWOLF x4, TRAITOR, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, VILLAGER x4
    * 19: WEREWOLF x4, DOPPELGANGER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, ALPHA_WOLF, VILLAGER x4
-   * 20: như trên thêm CURSED, VILLAGER x4
+   * 20: như 19, VILLAGER x5
    *
    * Đổi 2026-09-05 (SORCERER + ALPHA_WOLF thay MEDIUM + PRIEST, xóa cứng):
    * 14-16 trả ghế Linh Mục về Dân Làng (mỗi preset +1 Dân); 17-18 đổi
@@ -737,7 +787,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
    */
   16: preset({
     werewolves: 3,
-    cursed: true,
+    sorcerer: true,
     seer: true,
     apprenticeSeer: true,
     witch: true,
@@ -748,7 +798,8 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     tracker: true,
   }),
   17: preset({
-    werewolves: 3,
+    werewolves: 2,
+    wolfCub: true,
     cursed: true,
     seer: true,
     apprenticeSeer: true,
@@ -772,7 +823,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     mayor: true,
     tracker: true,
     elder: true,
-    sorcerer: true,
+    traitor: true,
   }),
   19: preset({
     werewolves: 4,
@@ -791,7 +842,6 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
   20: preset({
     werewolves: 4,
     doppelganger: true,
-    cursed: true,
     seer: true,
     apprenticeSeer: true,
     witch: true,
