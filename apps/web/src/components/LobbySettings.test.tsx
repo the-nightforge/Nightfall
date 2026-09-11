@@ -115,19 +115,19 @@ describe("Áp dụng đội hình chuẩn: khi nào có mặt", () => {
     await view.cleanup();
   });
 
-  // Bàn 10: bộ bài mặc định chấm 54.5, sát mép 55 - nhưng 9/10/11 là ba cỡ
-  // duy nhất nó không cảnh báo (bàn 12 cũ lên 65 khi preset 12 nhận Kẻ Nguyền
-  // Rủa, 2026-09-11), và cả ba đều cách mép đúng 0.5.
-  it("có mặt với bộ bài mặc định ở bàn 10 người (điểm trong dải, không cảnh báo)", async () => {
-    const view = await mount(10, DEFAULT_ROOM_CONFIG);
+  // Bàn 11: bộ bài mặc định chấm 51.5, cách mép 3.5. Cỡ bàn này dịch theo mỗi
+  // lần preset hoặc `ROLE_POWER` đổi (12 -> 10 -> 11 trong lượt 2026-09-11),
+  // vì điểm chấm theo độ lệch so với preset cùng cỡ.
+  it("có mặt với bộ bài mặc định ở bàn 11 người (điểm trong dải, không cảnh báo)", async () => {
+    const view = await mount(11, DEFAULT_ROOM_CONFIG);
     assert.equal(view.warning(), null);
     assert.ok(view.preset());
     await view.cleanup();
   });
 
   it("vẫn có mặt khi bộ bài lệch VÀ có cảnh báo", async () => {
-    const view = await mount(11, PRESET_DECKS[10]);
-    assert.ok(view.warning(), "tiền đề: preset 10 ở bàn 11 bị chặn");
+    const view = await mount(11, PRESET_DECKS[12]);
+    assert.ok(view.warning(), "tiền đề: preset 12 ở bàn 11 có cảnh báo (điểm 41)");
     assert.ok(view.preset());
     await view.cleanup();
   });

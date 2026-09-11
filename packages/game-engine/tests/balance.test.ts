@@ -97,22 +97,14 @@ describe("balance", () => {
       *   19     | 21.5 | 24   | -2.5  | 46.2
       *   20     | 22   | 24   | -2    | 52.0
       */
-    // Vẫn khoá chặt: đúng MỘT cảnh báo mỗi preset, và đúng cảnh báo đã được
-    // chẩn đoán (bảng chênh trong khối chú thích ngay trên).
-    const KNOWN_FALSE_ALARM: Record<number, string> = {
-      12: "Sức mạnh phe làng (12.5) thấp hơn phe Sói (13.5)",
-      17: "Sức mạnh phe làng (17.5) thấp hơn phe Sói (20)",
-      18: "Sức mạnh phe làng (21) thấp hơn phe Sói (23.5)",
-      19: "Sức mạnh phe làng (21.5) thấp hơn phe Sói (24)",
-      20: "Sức mạnh phe làng (22) thấp hơn phe Sói (24)",
-    };
+    /*
+     * KẾT 2026-09-11: phép kiểm "làng < Sói" đã GỠ khỏi `generateWarnings`.
+     * Chẩn đoán ở trên ("hai vế chưa từng nằm chung một thang") được số đo xác
+     * nhận: đo lại `ROLE_POWER` thì cả 13 preset đều kêu, dù đo ra 46-54% cho
+     * phe làng. Danh sách báo động giả vì thế rỗng; mốc tuyệt đối còn lại là
+     * ngân sách sai lầm. Regex vẫn bắt chuỗi cũ để nó không lẻn quay lại.
+     */
     for (const [count, deck] of Object.entries(PRESET_DECKS)) {
-      const warnings = absolute(deck, Number(count));
-      const diagnosed = KNOWN_FALSE_ALARM[Number(count)];
-      if (diagnosed !== undefined) {
-        expect(warnings).toEqual([diagnosed]);
-        continue;
-      }
       expect(absolute(deck, Number(count)), `preset ${count}`).toEqual([]);
     }
 
