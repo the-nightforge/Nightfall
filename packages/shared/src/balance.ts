@@ -188,7 +188,43 @@ export const ROLE_POWER: Record<Role, number> = {
    * cùng 4.0.
    */
   ALPHA_WOLF: 4,
-  SEER: 5,
+  /**
+   * 2, HẠ từ 5 - ĐO LẠI 2026-09-11, và lần đo này là nguồn của cả bốn dòng
+   * vừa đổi (SEER, GUARD, DETECTIVE, CURSED).
+   *
+   * `preset-balance.yml` với `role_power`: gỡ từng vai khỏi 13 preset hiện
+   * hành (ghế đó thành Dân Làng), speech + DEFENSE bật, 500 ván mỗi ô, cùng
+   * seed với preset. Thước đo ngay trong lượt: gỡ một Sói thường là đổi 4.5
+   * bậc và đo ra 20.9 điểm, tức 4.6 điểm thắng mỗi bậc.
+   *
+   *   vai              Δ thắng  đo được  đang dùng  mẫu
+   *   WOLF_CUB          +26.3     6.0       6        3
+   *   ALPHA_WOLF        +21.9     5.0       4        2
+   *   SORCERER          +21.1     5.0       4        3
+   *   WEREWOLF          +20.9     5.0       5       11   (thước)
+   *   TRAITOR           +17.0     4.0       3.5      3
+   *   WITCH              +7.9     2.0       3       13
+   *   SEER               +6.4     2.0       5       13   -> đổi
+   *   HUNTER             +4.3     1.5       2       13
+   *   ELDER              +4.1     1.5       0.5      4
+   *   APPRENTICE_SEER    +2.1     1.0       0.5      6
+   *   TRACKER            +1.4     1.0       2        9
+   *   GUARD              +0.6     0.5       2.5     13   -> đổi
+   *   MAYOR              +0.1     0.5       1.5     10
+   *   DOPPELGANGER       -0.6     0.5       0.5      2
+   *   DETECTIVE          -1.5     0.0       2       12   -> đổi
+   *   CURSED            -10.2    -1.5      -3        6   -> đổi
+   *
+   * Chỉ đổi dòng lệch QUÁ 1 bậc, đúng luật của bảng này; các dòng lệch đúng 1
+   * bậc (WITCH, TRACKER, MAYOR, ELDER, SORCERER, ALPHA_WOLF) giữ nguyên chờ
+   * thêm mẫu. Bot đánh bot: Tiên Tri trên bàn người đáng hơn +6.4 điểm, nhưng
+   * 13 mẫu nhất quán thì con số 5 cũ không còn đứng được.
+   *
+   * Hai hệ quả có chủ đích ở `generateWarnings`: phép kiểm "làng < Sói" đã gỡ
+   * (với bảng này cả 13 preset đều kêu), và ngưỡng chặn năng lực soi co từ 3
+   * xuống 1.5 theo thước mới.
+   */
+  SEER: 2,
   /**
    * 1, hạ từ 2. Đo lại 2026-09-04 bằng SO CẶP trên đúng bộ seed, speech BẬT,
    * 600 ván mỗi ô - tức đúng cách `role-power.ts` đo, chỉ khác là có lời nói:
@@ -229,9 +265,11 @@ export const ROLE_POWER: Record<Role, number> = {
    * này khai vai, mà 70.7% lời khai ở bàn bot bị tranh chấp.
    */
   APPRENTICE_SEER: 0.5,
-  DETECTIVE: 2,
-  GUARD: 2.5,
-  /** TẠM 2, ngang DETECTIVE (cùng hạng lá thông tin). Chốt lại sau sweep. */
+  /** 0, HẠ từ 2 (đo 2026-09-11: -1.5 điểm, 12 mẫu). Xem dòng SEER. */
+  DETECTIVE: 0,
+  /** 0.5, HẠ từ 2.5 (đo 2026-09-11: +0.6 điểm, 13 mẫu) - ngang một Dân Làng. Xem dòng SEER. */
+  GUARD: 0.5,
+  /** 2: đo 2026-09-11 ra 1.0 (9 mẫu), lệch đúng một bậc nên giữ. Xem dòng SEER. */
   TRACKER: 2,
   WITCH: 3,
   /**
@@ -267,12 +305,9 @@ export const ROLE_POWER: Record<Role, number> = {
   // Âm là có chủ ý, xem chú thích trên: bảng đo "đóng góp cho phe đang giữ lá
   // này", và lá này đóng góp âm cho phe làng.
   //
-  // Đừng thả nó xuống đúng số đo (-3.7 tới -4.6) mà không kiểm lại preset 10:
-  // bộ bài đó có cả Kẻ Nguyền Rủa lẫn Sói Con, và ở -3 nó đã sát mép với
-  // `villagePower` 12.5 so với `wolfPower` 12. Thêm một nấc âm nữa là chính
-  // preset tự kêu ở phép kiểm "sức mạnh làng thấp hơn phe Sói" - trong khi nó
-  // đo ra 45.0% cho phe làng, tức một báo động giả do bảng chứ không do bộ bài.
-  CURSED: -3,
+  // -1.5, NÂNG từ -3 (đo 2026-09-11: -10.2 điểm, 6 mẫu, thước 4.6 điểm/bậc).
+  // Vẫn là lá hại phe làng, chỉ nhẹ hơn bảng cũ nghĩ. Xem dòng SEER.
+  CURSED: -1.5,
   VILLAGER: 0.5,
   /**
    * 0, và con số này KHÔNG đi vào cả `villagePower` lẫn `wolfPower`: Thằng Hề
@@ -1116,9 +1151,14 @@ export function generateWarnings(config: RoomConfig, playerCount: number): Balan
       );
     }
   }
-  if (villagePower < wolfPower) {
-    warnings.push(`Sức mạnh phe làng (${villagePower}) thấp hơn phe Sói (${wolfPower})`);
-  }
+  /*
+   * Phép kiểm thứ hai từng ở đây - "sức mạnh phe làng thấp hơn phe Sói" - đã
+   * GỠ 2026-09-11. Nó cộng giá trị biên của hai phe rồi so với nhau, nhưng
+   * `ROLE_POWER` đo "đóng góp so với một lá Dân Làng", không phải một thang để
+   * hai vế cân nhau: sau lần đo lại, cả 13 preset đều kêu trong khi đo ra
+   * 46-54% cho phe làng. Độ lệch của bộ bài đã có `score` (so với preset cùng
+   * cỡ) chấm; `villagePower`/`wolfPower` vẫn trả ra để hiển thị.
+   */
 
   /*
    * Sát Nhân nằm NGOÀI thang đo, nên điểm số không được đứng ra bảo lãnh.
@@ -1186,7 +1226,9 @@ export function generateWarnings(config: RoomConfig, playerCount: number): Balan
     const cfgInfo = infoPower(deckRoles(config, playerCount));
     const presetInfo = infoPower(deckRoles(presetDeck, playerCount));
     const infoDiff = Math.abs(cfgInfo - presetInfo);
-    if (infoDiff >= 3) {
+    // 1.5, co từ 3 khi SEER đo lại 5 -> 2 (2026-09-11): gỡ Tiên Tri vẫn chặn,
+    // gỡ Tiên Tri Tập Sự hay Thám Tử thì không - cùng hành vi với ngưỡng cũ.
+    if (infoDiff >= 1.5) {
       warnings.push(`Năng lực soi lệch ${infoDiff.toFixed(1)} điểm so với preset chuẩn`);
       blocking = true;
     }

@@ -178,8 +178,10 @@ describe("Kẻ Theo Dõi", () => {
     expect(ROLE_META.TRACKER.nightOrder).toBe(3);
   });
 
-  it("có giá tạm bằng Thám Tử - cùng hạng lá thông tin", () => {
-    expect(ROLE_POWER.TRACKER).toBe(ROLE_POWER.DETECTIVE);
+  it("giá đã đo: nằm trong một bậc của số đo 2026-09-11 (1.0, 9 mẫu)", () => {
+    // Không còn là giá tạm "ngang Thám Tử": lượt đo đó hạ Thám Tử về 0 còn Kẻ
+    // Theo Dõi đo ra 1.0 - lệch đúng một bậc nên bảng giữ 2 theo luật của nó.
+    expect(Math.abs(ROLE_POWER.TRACKER - 1)).toBeLessThanOrEqual(1);
   });
 });
 
