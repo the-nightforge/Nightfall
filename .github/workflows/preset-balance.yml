@@ -1,0 +1,122 @@
+name: Preset balance
+
+# GỌI TAY, không chạy theo push/PR. Đo tỉ lệ thắng của preset 8-20 (và bộ bài
+# ứng viên) như ván xếp hạng thật, rồi in bảng ra trang tổng kết của lần chạy.
+#
+# Repo công khai nên phút Actions trên runner chuẩn là miễn phí; trần đáng để ý
+# là 6 giờ mỗi job và 20 job đồng thời. Mỗi bộ bài là một job, chia tiếp
+# `SHARDS` process trên 4 vCPU của runner.
+on:
+  workflow_dispatch:
+    inputs:
+      games:
+        description: Số ván mỗi bộ bài (500 = số chốt, 20 = thử đường ống)
+        required: true
+        default: "500"
+      presets:
+        description: 'Preset cần đo: "all", "none", hoặc danh sách như "18,20"'
+        required: true
+        default: all
+      candidates:
+        description: 'Bộ bài ứng viên (JSON), vd [{"label":"18-3W+NR","n":18,"override":{"werewolves":3,"cursed":true}}]'
+        required: false
+        default: "[]"
+
+permissions:
+  contents: read
+
+# Hai lượt đo cùng lúc chỉ tổ tranh runner của nhau.
+concurrency:
+  group: preset-balance-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # `prisma generate` chạy trong postinstall và cần biến này TỒN TẠI; không job
+  # nào ở đây chạm database.
+  DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+  # Cố định, KHÔNG lấy theo nproc: seed là `balance:<n>:<shard>` nên số shard
+  # phải giống nhau giữa các lần chạy thì preset và ứng viên mới so cặp được.
+  SHARDS: 4
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+      - run: npm ci
+      - run: npm run build:deps
+      - id: matrix
+        # Input đi qua env chứ không nội suy thẳng vào script: JSON có dấu nháy.
+        env:
+          PRESETS: ${{ inputs.presets }}
+          CANDIDATES: ${{ inputs.candidates }}
+        run: echo "matrix=$(npx tsx apps/server/scripts/preset-balance.ts matrix --presets "$PRESETS" --candidates "$CANDIDATES")" >> "$GITHUB_OUTPUT"
+
+  measure:
+    needs: plan
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      # Một bộ bài hỏng không kéo theo cả bảng - bước report nói ra hàng thiếu.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+      - run: npm ci
+      - run: npm run build:deps
+      - name: Self-play
+        env:
+          N: ${{ matrix.n }}
+          LABEL: ${{ matrix.label }}
+          OVERRIDE: ${{ matrix.override }}
+          GAMES: ${{ inputs.games }}
+        run: |
+          per=$(( (GAMES + SHARDS - 1) / SHARDS ))
+          seq 0 $((SHARDS - 1)) | xargs -P "$SHARDS" -I{} \
+            npx tsx apps/server/scripts/preset-balance.ts run \
+              --n "$N" --label "$LABEL" --games "$per" --shard {} --override "$OVERRIDE" --out out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: balance-${{ matrix.label }}
+          path: out/
+          retention-days: 14
+
+  report:
+    needs: measure
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+      - run: npm ci
+      - run: npm run build:deps
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: balance-*
+          path: out
+          merge-multiple: true
+      - name: Bảng kết quả
+        # Bảng đi thẳng vào trang tổng kết của lần chạy, đọc được ngay mà không
+        # phải tải artifact về.
+        run: npx tsx apps/server/scripts/preset-balance.ts merge out | tee preset-balance.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: preset-balance-report
+          path: preset-balance.md
+          retention-days: 90
