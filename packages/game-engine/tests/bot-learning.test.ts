@@ -322,6 +322,16 @@ describe("leak validator (§7, §42, §44)", () => {
     expect(validateTrajectoryLine(line({ reward: 0 })).valid).toBe(false);
     expect(validateTrajectoryLine("nope").valid).toBe(false);
   });
+
+  it("shaping: ±1/vắng hợp lệ, giá trị khác bị từ chối (spec 2026-09-11 D5)", () => {
+    expect(validateTrajectoryLine(line()).valid).toBe(true);
+    expect(validateTrajectoryLine(line({ shaping: 1 })).valid).toBe(true);
+    expect(validateTrajectoryLine(line({ shaping: -1 })).valid).toBe(true);
+    expect(validateTrajectoryLine(line({ shaping: null })).valid).toBe(true);
+    const bad = validateTrajectoryLine(line({ shaping: 0.5 }));
+    expect(bad.valid).toBe(false);
+    expect(bad.violations.some((v) => v.field === "shaping")).toBe(true);
+  });
 });
 
 describe("dataset stats + split (§15, §42, §43)", () => {
