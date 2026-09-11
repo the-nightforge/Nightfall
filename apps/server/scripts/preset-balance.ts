@@ -1,7 +1,8 @@
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { runBatch } from "@masoi/game-engine";
-import { PRESET_DECKS, specialRoleList, type RoomConfig } from "@masoi/shared";
+import { PRESET_DECKS, ROLE_POWER, roleTeam, specialRoleList, type Role, type RoomConfig } from "@masoi/shared";
+import { formatMarkdown, mergeShards, type ShardReport } from "./role-power-merge";
 
 /**
  * Đo tỉ lệ thắng của preset - và của bộ bài ứng viên - như một ván xếp hạng
@@ -10,9 +11,14 @@ import { PRESET_DECKS, specialRoleList, type RoomConfig } from "@masoi/shared";
  * Ba lệnh con, cùng một file để workflow `preset-balance.yml` và máy dev gọi y
  * hệt nhau:
  *
- *   matrix --presets all|none|18,20 --candidates '<json>'   JSON matrix cho Actions
+ *   matrix --presets all|none|18,20 --candidates '<json>' [--removals]   JSON matrix
  *   run --n 20 --label preset-20 --games 125 --shard 0 [--override '{..}'] --out dir
- *   merge <dir>                                             bảng markdown
+ *   merge <dir>                                             bảng tỉ lệ thắng
+ *   power <dir>                                             bảng ROLE_POWER (cần --removals)
+ *
+ * `--removals` thêm, cho mỗi preset được chọn, một bộ bài gỡ ĐÚNG một vai (ghế
+ * đó thành Dân Làng) - phép đo so cặp của `role-power.ts`, nhưng mỗi bộ bài là
+ * một job song song thay vì chạy nối tiếp trong một tiến trình.
  *
  * Ứng viên là một preset cộng phần ghi đè, ví dụ
  *   [{"label":"18-3W+NR","n":18,"override":{"werewolves":3,"cursed":true}}]
@@ -45,6 +51,43 @@ interface ShardResult {
 
 const presetLabel = (n: number): string => `preset-${n}`;
 
+/** Nhãn bộ bài `--removals`: `<n>-no-<VAI>`. */
+const REMOVAL_LABEL = /^(\d+)-no-([A-Z_]+)$/;
+
+/** Vai gỡ được bằng một cờ, cùng khoá cấu hình. Sói thường đếm bằng số nên xử lý riêng. */
+const REMOVABLE: ReadonlyArray<[Role, keyof RoomConfig]> = [
+  ["SEER", "seer"],
+  ["APPRENTICE_SEER", "apprenticeSeer"],
+  ["DETECTIVE", "detective"],
+  ["GUARD", "guard"],
+  ["TRACKER", "tracker"],
+  ["WITCH", "witch"],
+  ["HUNTER", "hunter"],
+  ["MAYOR", "mayor"],
+  ["ELDER", "elder"],
+  ["DOPPELGANGER", "doppelganger"],
+  ["CURSED", "cursed"],
+  ["WOLF_CUB", "wolfCub"],
+  ["TRAITOR", "traitor"],
+  ["SORCERER", "sorcerer"],
+  ["ALPHA_WOLF", "alphaWolf"],
+];
+
+/** Mỗi vai của preset `n` một bộ bài gỡ đúng lá đó; `buildConfig` biến ghế trống thành Dân Làng. */
+function removals(n: number): Deck[] {
+  const base = PRESET_DECKS[n];
+  const decks: Deck[] = REMOVABLE.filter(([, key]) => base[key] === true).map(([role, key]) => ({
+    label: `${n}-no-${role}`,
+    n,
+    override: { [key]: false },
+  }));
+  // Còn ít nhất một Sói thường: bầy chỉ toàn lá đặc biệt là một luật chơi khác.
+  if (base.werewolves >= 2) {
+    decks.push({ label: `${n}-no-WEREWOLF`, n, override: { werewolves: base.werewolves - 1 } });
+  }
+  return decks;
+}
+
 function flag(argv: readonly string[], name: string): string | undefined {
   const at = argv.indexOf(name);
   return at >= 0 ? argv[at + 1] : undefined;
@@ -73,6 +116,7 @@ function matrix(argv: readonly string[]): void {
         : presets.split(",").map((s) => Number(s.trim()));
 
   const decks: Deck[] = sizes.map((n) => ({ label: presetLabel(n), n, override: {} }));
+  if (argv.includes("--removals")) for (const n of sizes) decks.push(...removals(n));
   const candidates = JSON.parse(flag(argv, "--candidates") || "[]") as Deck[];
   for (const c of candidates) decks.push({ label: c.label, n: Number(c.n), override: c.override ?? {} });
 
@@ -134,8 +178,9 @@ function compactDeck(deck: readonly string[], villagers: number): string {
   return [...counts].map(([role, c]) => (c > 1 ? `${role}×${c}` : role)).join(", ");
 }
 
-function merge(argv: readonly string[]): void {
-  const dir = resolve(argv[0] ?? "preset-balance-out");
+/** Cộng các shard của cùng một nhãn lại thành một hàng. */
+function readTotals(dirArg: string | undefined): Map<string, ShardResult> {
+  const dir = resolve(dirArg ?? "preset-balance-out");
   const totals = new Map<string, ShardResult>();
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
     const r = JSON.parse(readFileSync(join(dir, file), "utf8")) as ShardResult;
@@ -149,9 +194,15 @@ function merge(argv: readonly string[]): void {
       acc.rounds += r.rounds;
     }
   }
+  return totals;
+}
+
+function merge(argv: readonly string[]): void {
+  const totals = readTotals(argv[0]);
 
   const rate = (r: ShardResult): number => (r.village / r.games) * 100;
-  const rows = [...totals.values()].sort(
+  // Hàng `--removals` là nguyên liệu của `power`, không phải bộ bài để chọn.
+  const rows = [...totals.values()].filter((r) => !REMOVAL_LABEL.test(r.label)).sort(
     (a, b) => a.n - b.n || Number(b.label === presetLabel(b.n)) - Number(a.label === presetLabel(a.n)) || a.label.localeCompare(b.label),
   );
 
@@ -177,11 +228,55 @@ function merge(argv: readonly string[]): void {
   process.stdout.write(`${lines.join("\n")}\n`);
 }
 
+/**
+ * Bảng `ROLE_POWER` từ các hàng `--removals`: chênh tỉ lệ thắng giữa preset và
+ * bộ gỡ một vai (cùng seed) là phần vai đó đóng góp so với một lá Dân Làng.
+ * Gộp và định dạng dùng lại `role-power-merge.ts`.
+ */
+function power(argv: readonly string[]): void {
+  const totals = readTotals(argv[0]);
+  const shards: ShardReport[] = [];
+  for (const preset of totals.values()) {
+    if (preset.label !== presetLabel(preset.n)) continue;
+    const base = preset.village / preset.games;
+    const deltas: ShardReport["deltas"] = [];
+    for (const row of totals.values()) {
+      const match = REMOVAL_LABEL.exec(row.label);
+      if (!match || Number(match[1]) !== preset.n) continue;
+      const role = match[2] as Role;
+      const delta = base - row.village / row.games;
+      // Đọc là "đóng góp cho phe sở hữu lá": gỡ lá phe Sói thì làng KHOẺ lên.
+      deltas.push({ role, playerCount: preset.n, delta: roleTeam(role) === "wolves" ? -delta : delta });
+    }
+    shards.push({ games: preset.games, presets: [{ playerCount: preset.n, villageWinRate: base }], deltas });
+  }
+  if (shards.length === 0) throw new Error("không có hàng preset-<n> nào làm mốc trừ");
+
+  /*
+   * Thước điểm-thắng -> bậc đo ngay trong lượt này, thay cho hằng số 6 của
+   * `role-power-merge`: gỡ một Sói thường là đổi đúng `WEREWOLF - VILLAGER` bậc.
+   */
+  const wolf = shards.flatMap((s) => s.deltas).filter((d) => d.role === "WEREWOLF");
+  const unit = ROLE_POWER.WEREWOLF - ROLE_POWER.VILLAGER;
+  const measured =
+    wolf.length > 0 ? ((wolf.reduce((sum, d) => sum + d.delta, 0) / wolf.length) * 100) / unit : undefined;
+  // Thước không dương là nhiễu (quá ít ván) hoặc thiếu job - dùng nó thì lật dấu cả bảng.
+  const perUnit = measured !== undefined && measured > 0 ? measured : undefined;
+  const scale =
+    perUnit !== undefined
+      ? `Thước ${perUnit.toFixed(1)} điểm thắng/bậc, đo từ ${wolf.length} lần gỡ một Sói thường (= ${unit} bậc).`
+      : measured === undefined
+        ? "Thước mặc định 6 điểm thắng/bậc (lượt này không gỡ Sói thường)."
+        : `Thước mặc định 6 điểm thắng/bậc: thước đo được (${measured.toFixed(1)}) không dương, tức nhiễu.`;
+  process.stdout.write(`${formatMarkdown(mergeShards(shards, perUnit))}\n${scale}\n`);
+}
+
 const [command, ...rest] = process.argv.slice(2);
 if (command === "matrix") matrix(rest);
 else if (command === "run") run(rest);
 else if (command === "merge") merge(rest);
+else if (command === "power") power(rest);
 else {
-  process.stderr.write("preset-balance.ts matrix | run | merge  (xem chú thích đầu file)\n");
+  process.stderr.write("preset-balance.ts matrix | run | merge | power  (xem chú thích đầu file)\n");
   process.exit(1);
 }
