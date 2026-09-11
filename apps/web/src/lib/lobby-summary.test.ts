@@ -221,33 +221,34 @@ describe("startBlock", () => {
    * bản cũ để nút sáng.
    *
    * Cặp số đổi từ (preset 7, bàn 8) sang (preset 10, bàn 9) vì preset 6 và 7
-   * đã gỡ khi `MIN_PLAYERS_TO_START` lên 8. Ngưỡng chặn giờ LỆCH VỀ MỘT PHÍA
-   * (xem chú thích "NGƯỠNG BẤT ĐỐI XỨNG" ở `generateWarnings`): chỉ điểm
-   * nghiêng về phe Sói (score < 40) mới khoá phòng, điểm nghiêng về phe Dân chỉ
-   * cảnh báo. Vì vậy cặp số ở đây PHẢI nghiêng về phe Sói - preset 9 dùng ở bàn
-   * 10 người giờ chấm 60.5 (nghiêng về làng) nên không còn `blocking` nữa;
-   * preset 10 dùng ở bàn 9 người chấm 39.5 (nghiêng về Sói) mới đúng kịch bản
-   * cần hồi quy.
+   * đã gỡ khi `MIN_PLAYERS_TO_START` lên 8, rồi sang (preset 12, bàn 11) khi
+   * bảng preset đổi theo lần đo 2026-09-11 - điểm chấm theo độ lệch so với
+   * preset cùng cỡ, nên mỗi lần preset đổi thì mốc so của cặp cũ dịch theo.
+   * Ngưỡng chặn LỆCH VỀ MỘT PHÍA (xem chú thích "NGƯỠNG BẤT ĐỐI XỨNG" ở
+   * `generateWarnings`): chỉ điểm nghiêng về phe Sói (score < 40) mới khoá
+   * phòng, điểm nghiêng về phe Dân chỉ cảnh báo. Vì vậy cặp số ở đây PHẢI
+   * nghiêng về phe Sói.
    */
-  it("bộ bài nghiêng về Sói ở phòng 9 người: Ranked chặn, Chaos cho qua", () => {
+  it("bộ bài nghiêng về Sói ở phòng 11 người: Ranked chặn, Chaos cho qua", () => {
     /*
-     * Bộ bài của preset 10 nhưng BỚT một Dân Làng, nên nó dày đúng 9.
+     * Bộ bài của preset 12 nhưng BỚT một Dân Làng, nên nó dày đúng 11 - đúng
+     * kịch bản "một người rời phòng" sau khi host chốt preset.
      *
-     * Bản cũ dùng thẳng `PRESET_DECKS[10]` ở phòng 9 người. Từ khi `villagers`
+     * Không dùng thẳng `PRESET_DECKS[12]` ở phòng 11 người: từ khi `villagers`
      * do host đặt, cỡ bộ bài lệch số người là một LỖI CẤU HÌNH - tiền đề "không
      * có lỗi nào khác" của test này vì thế không còn tồn tại được, và nó sẽ đo
-     * nhánh `config` thay cho nhánh `balance` mà nó muốn đo. Điểm cân bằng vẫn
-     * 36.5, tức vẫn nghiêng về Sói đúng như kịch bản cần.
+     * nhánh `config` thay cho nhánh `balance` mà nó muốn đo. Điểm cân bằng
+     * 30.5, xa dưới ngưỡng 40.
      */
     const config: RoomConfig = {
-      ...PRESET_DECKS[10],
-      villagers: (PRESET_DECKS[10].villagers ?? 0) - 1,
+      ...PRESET_DECKS[12],
+      villagers: (PRESET_DECKS[12].villagers ?? 0) - 1,
     };
-    const balance = generateWarnings(config, 9);
+    const balance = generateWarnings(config, 11);
     assert.equal(balance.blocking, true, "tiền đề: engine phải coi đây là mất cân bằng");
-    assert.equal(validateRoomConfig(config, 9), null, "tiền đề: cấu hình không có lỗi nào khác");
+    assert.equal(validateRoomConfig(config, 11), null, "tiền đề: cấu hình không có lỗi nào khác");
 
-    const shared = { playerCount: 9, configError: validateRoomConfig(config, 9), unreadyNames: [] };
+    const shared = { playerCount: 11, configError: validateRoomConfig(config, 11), unreadyNames: [] };
     assert.deepEqual(
       startBlock({ ...shared, balanceBlocking: balance.blocking, mode: "ranked" }),
       { kind: "balance" },

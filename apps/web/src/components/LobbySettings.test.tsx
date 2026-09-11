@@ -106,15 +106,20 @@ async function mount(count: number, config: RoomConfig, playerId = HOST_ID) {
 }
 
 describe("Áp dụng đội hình chuẩn: khi nào có mặt", () => {
-  it("có mặt khi bộ bài lệch preset dù engine không cảnh báo (preset 8 ở bàn 9)", async () => {
-    const view = await mount(9, PRESET_DECKS[8]);
+  // Cặp (preset 13, bàn 14) chấm đúng 50. Cặp cũ (preset 8, bàn 9) lên 63.5 khi
+  // preset 9 nhận Kẻ Nguyền Rủa (2026-09-11), và thẻ cảnh báo mọc ra.
+  it("có mặt khi bộ bài lệch preset dù engine không cảnh báo (preset 13 ở bàn 14)", async () => {
+    const view = await mount(14, PRESET_DECKS[13]);
     assert.equal(view.warning(), null, "tiền đề: điểm 50, không có thẻ cảnh báo");
     assert.ok(view.preset(), "nút phải có mặt - nút Bắt đầu đang xám vì thiếu một ghế");
     await view.cleanup();
   });
 
-  it("có mặt với bộ bài mặc định ở bàn 12 người (điểm trong dải, không cảnh báo)", async () => {
-    const view = await mount(12, DEFAULT_ROOM_CONFIG);
+  // Bàn 10: bộ bài mặc định chấm 54.5, sát mép 55 - nhưng 9/10/11 là ba cỡ
+  // duy nhất nó không cảnh báo (bàn 12 cũ lên 65 khi preset 12 nhận Kẻ Nguyền
+  // Rủa, 2026-09-11), và cả ba đều cách mép đúng 0.5.
+  it("có mặt với bộ bài mặc định ở bàn 10 người (điểm trong dải, không cảnh báo)", async () => {
+    const view = await mount(10, DEFAULT_ROOM_CONFIG);
     assert.equal(view.warning(), null);
     assert.ok(view.preset());
     await view.cleanup();

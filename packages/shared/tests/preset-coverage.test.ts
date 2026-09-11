@@ -60,7 +60,7 @@ describe("Phủ vai trong PRESET_DECKS", () => {
     }
   });
 
-  it("số Dân Làng không vượt quá số ghế phe Sói (trừ 14/16 hậu xóa Linh Mục)", () => {
+  it("số Dân Làng không vượt quá số ghế phe Sói", () => {
     /*
      * Luật thiết kế của bảng preset, không phải luật của engine.
      *
@@ -70,25 +70,17 @@ describe("Phủ vai trong PRESET_DECKS", () => {
      * sát thương ban đêm của `validateRoomConfig`. Sói Pháp Sư/Sói Alpha cũng
      * vào đây vì `team: "wolves"` (bầy thắng chung), nên 17-20 vẫn giữ luật.
      *
-     * NGOẠI LỆ 14/16 (+1 Dân): ghế Linh Mục trả về Dân sau xóa cứng, mà spec
-     * chỉ thêm sói mới ở 17-20 nên hai preset này không có lá thay thế. Không
-     * nhét bừa một vai chưa đo vào để giữ luật - Task 9 đo lại rồi chốt có bù
-     * gì không. Map này phải RỖNG dần chứ không được dài thêm: preset mới nào
-     * cũng phải giữ luật gốc.
+     * Ngoại lệ 14/16 (+1 Dân, hậu xoá Linh Mục) đã GỠ sau lần đo 2026-09-11:
+     * cả hai nhận thêm một lá (Nguyền Rủa / Phản Bội) và về lại trong luật.
      */
-    const ALLOWED_OVERFLOW: Record<string, number> = { "14": 1, "16": 1 };
     for (const [size, config] of Object.entries(PRESET_DECKS)) {
       const deck = specialRoleList(config);
       const wolfSeats = deck.filter((r) => ROLE_META[r].team === "wolves").length;
       const villagers = Number(size) - deck.length;
       expect(
         { size, villagers, wolfSeats },
-        `preset ${size} vượt luật Dân<=Sói quá mức cho phép`,
-      ).toEqual({
-        size,
-        villagers: Math.min(villagers, wolfSeats + (ALLOWED_OVERFLOW[size] ?? 0)),
-        wolfSeats,
-      });
+        `preset ${size} vượt luật Dân<=Sói`,
+      ).toEqual({ size, villagers: Math.min(villagers, wolfSeats), wolfSeats });
     }
   });
 });
