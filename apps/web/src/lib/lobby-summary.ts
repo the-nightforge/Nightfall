@@ -30,7 +30,12 @@ export const VILLAGE_ROLES: Role[] = [
   "CURSED",
 ];
 
-export const WOLF_SPECIAL_ROLES: Role[] = ["WOLF_CUB", "SORCERER"];
+/**
+ * Lá phe Sói bật/tắt được. Kẻ Phản Bội đứng đây dù KHÔNG thuộc bầy: host đọc
+ * nhóm này để biết phe Sói có những lá gì, và nó thắng cùng Sói. Luật đếm sức
+ * cắn (`deckWolfCount`) vẫn không tính nó - đây chỉ là chỗ hiển thị.
+ */
+export const WOLF_SPECIAL_ROLES: Role[] = ["WOLF_CUB", "SORCERER", "TRAITOR"];
 
 /**
  * Vai TRUNG LẬP, bày thành nhóm thứ ba trong bộ bài.
@@ -57,6 +62,7 @@ export const CONFIG_KEY: Record<string, keyof RoomConfig> = {
   CURSED: "cursed",
   WOLF_CUB: "wolfCub",
   SORCERER: "sorcerer",
+  TRAITOR: "traitor",
   JESTER: "jester",
   SERIAL_KILLER: "serialKiller",
   EXECUTIONER: "executioner",

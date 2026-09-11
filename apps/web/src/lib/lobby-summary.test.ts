@@ -99,6 +99,17 @@ describe("role lists", () => {
     assert.ok(!VILLAGE_ROLES.includes("SORCERER" as never));
     assert.ok(!NEUTRAL_ROLES.includes("SORCERER" as never));
   });
+
+  it("Kẻ Phản Bội là lá sói đặc biệt có công tắc sảnh chờ", () => {
+    assert.ok(WOLF_SPECIAL_ROLES.includes("TRAITOR"));
+    assert.equal(CONFIG_KEY["TRAITOR"], "traitor");
+  });
+
+  it("Kẻ Phản Bội tính vào cột Sói chứ không vào chức năng của làng", () => {
+    const counts = deckCounts(config({ werewolves: 1, traitor: true }), 8);
+    assert.equal(counts.wolves, 2);
+    assert.equal(counts.specials, deckCounts(config({ werewolves: 1 }), 8).specials);
+  });
 });
 
 describe("isPresetDeck", () => {
