@@ -80,6 +80,7 @@ def logits_case() -> None:
             "--epochs", "8",
             "--batch-size", "64",
             "--model-id", "t",
+            "--shaping-weight", "0",
         ]
         train_ppo.main()
 
@@ -121,6 +122,7 @@ def logits_case() -> None:
                 "--batch-size", "64",
                 "--model-id", f"t-{kind}",
                 "--baseline", kind,
+                "--shaping-weight", "0",
             ]
             train_ppo.main()
             report = json.loads((sub / "metrics.json").read_text(encoding="utf8"))
@@ -204,6 +206,7 @@ def residual_case() -> None:
             "--epochs", "8",
             "--batch-size", "64",
             "--model-id", "r",
+            "--shaping-weight", "0",
         ]
         train_ppo.main()
         m = json.loads((out / "metrics.json").read_text(encoding="utf8"))
@@ -229,14 +232,14 @@ def residual_case() -> None:
         (d / "meta.json").write_text(json.dumps(meta_side), encoding="utf8")
         side_out = Path(tmp) / "side"
         sys.argv = ["train_ppo", "--data", str(d), "--init", str(initp), "--out", str(side_out),
-                    "--epochs", "2", "--batch-size", "64", "--side", "wolves"]
+                    "--epochs", "2", "--batch-size", "64", "--side", "wolves", "--shaping-weight", "0"]
         train_ppo.main()
         ms = json.loads((side_out / "metrics.json").read_text(encoding="utf8"))
         assert ms["rows"] == int((roles == 1).sum()) and ms["side"] == "wolves", (ms["rows"], ms["side"])
         # Thiếu bảng thì phải dừng, không được lặng lẽ train cả bàn.
         (d / "meta.json").write_text(json.dumps(meta), encoding="utf8")
         sys.argv = ["train_ppo", "--data", str(d), "--init", str(initp), "--out", str(Path(tmp) / "y"),
-                    "--epochs", "1", "--side", "village"]
+                    "--epochs", "1", "--side", "village", "--shaping-weight", "0"]
         try:
             train_ppo.main()
         except ValueError:
@@ -247,7 +250,8 @@ def residual_case() -> None:
         # --target-kl: lr lớn đẩy KL vượt ngưỡng ngay → dừng sớm, ghi epochsRun.
         kl_out = Path(tmp) / "kl"
         sys.argv = ["train_ppo", "--data", str(d), "--init", str(initp), "--out", str(kl_out),
-                    "--epochs", "8", "--batch-size", "64", "--lr", "0.05", "--target-kl", "1e-4"]
+                    "--epochs", "8", "--batch-size", "64", "--lr", "0.05", "--target-kl", "1e-4",
+                    "--shaping-weight", "0"]
         train_ppo.main()
         mk = json.loads((kl_out / "metrics.json").read_text(encoding="utf8"))
         assert mk["epochsRun"] < 8 and len(mk["history"]) == mk["epochsRun"], (mk["epochsRun"], len(mk["history"]))
@@ -257,7 +261,8 @@ def residual_case() -> None:
         (d / "bases.f32.bin").unlink()
         meta.update({"policyKind": "logits", "beta": None})
         (d / "meta.json").write_text(json.dumps(meta), encoding="utf8")
-        sys.argv = ["train_ppo", "--data", str(d), "--init", str(initp), "--out", str(Path(tmp) / "x"), "--epochs", "1"]
+        sys.argv = ["train_ppo", "--data", str(d), "--init", str(initp), "--out", str(Path(tmp) / "x"),
+                    "--epochs", "1", "--shaping-weight", "0"]
         try:
             train_ppo.main()
         except ValueError:
@@ -266,9 +271,118 @@ def residual_case() -> None:
             raise AssertionError("init residual + rollout logits phải bị từ chối")
 
 
+def shaping_case() -> None:
+    """Shaping bonus (spec 2026-09-11 D1/D6): A += α·L trên hàng có nhãn.
+
+    Bốn bài kiểm: (a) α > 0 thiếu cột phải dừng; (b) α = 0 cho trọng số GIỐNG
+    HẰNG BYTE trên dataset có/không có cột; (c) nhãn +1 gắn hành động 0 phải
+    kéo xác suất của nó lên hơn chạy α = 0; (d) --shaping-decisions lọc đúng
+    và coverage trong metrics phản ánh đúng phần được giữ.
+    """
+    torch.manual_seed(2)
+    rng = np.random.default_rng(2)
+    init = PolicyValueNet(OBS, ACT, 8).eval()
+    feats = rng.random((ROWS, OBS), dtype=np.float32)
+    masks = np.zeros((ROWS, ACT), dtype=np.uint8)
+    masks[:, :4] = 1
+    with torch.no_grad():
+        lg, val = init(torch.from_numpy(feats))
+        lp = torch.log_softmax(masked_logits(lg, torch.from_numpy(masks.astype(bool))), 1)
+    actions = torch.distributions.Categorical(logits=lp).sample().numpy().astype("<i4")
+    logprobs = lp[np.arange(ROWS), actions].numpy().astype("<f4")
+    rewards = rng.choice(np.array([-1, 1], dtype=np.int8), ROWS)
+    roles = (np.arange(ROWS) % 2).astype(np.uint8)
+    decisions = (np.arange(ROWS) % 2).astype(np.uint8)  # meta: ["VOTE", "NIGHT"]
+    # Nhãn +1 cho hành động 0, −1 cho mọi hành động khác.
+    shaping = np.where(actions == 0, 1, -1).astype(np.int8)
+
+    def write(root: Path, with_shaping: bool) -> None:
+        root.mkdir(parents=True, exist_ok=True)
+        feats.astype("<f4").tofile(root / "features.f32.bin")
+        masks.tofile(root / "masks.u8.bin")
+        actions.tofile(root / "actions.i32.bin")
+        rewards.tofile(root / "rewards.i8.bin")
+        np.zeros(ROWS, np.uint8).tofile(root / "splits.u8.bin")
+        roles.tofile(root / "roles.u8.bin")
+        decisions.tofile(root / "decisions.u8.bin")
+        logprobs.tofile(root / "logprobs.f32.bin")
+        val.numpy().astype("<f4").tofile(root / "values.f32.bin")
+        if with_shaping:
+            shaping.tofile(root / "shaping.i8.bin")
+        meta = {
+            "rows": ROWS,
+            "obsSize": OBS,
+            "actionSize": ACT,
+            "datasetVersion": "rollout-test",
+            "roles": ["A", "B"],
+            "decisions": ["VOTE", "NIGHT"],
+            "featureNames": [f"f{i}" for i in range(OBS)],
+            "actionNames": [f"a{i}" for i in range(ACT)],
+        }
+        (root / "meta.json").write_text(json.dumps(meta), encoding="utf8")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        d_with = Path(tmp) / "enc-with"
+        d_without = Path(tmp) / "enc-without"
+        write(d_with, True)
+        write(d_without, False)
+
+        initp = Path(tmp) / "init.weights.json"
+        export_weights_json(init, json.loads((d_with / "meta.json").read_text(encoding="utf8")),
+                            initp, model_id="init", training_seed=0, hidden=8)
+        common = ["--init", str(initp), "--epochs", "6", "--batch-size", "64", "--model-id", "sh"]
+
+        # (a) α mặc định > 0 mà thiếu cột → dừng.
+        sys.argv = ["train_ppo", "--data", str(d_without), "--out", str(Path(tmp) / "reject"), *common]
+        try:
+            train_ppo.main()
+        except SystemExit:
+            pass
+        else:
+            raise AssertionError("thiếu shaping.i8.bin phải bị từ chối khi --shaping-weight > 0")
+
+        # (b) α = 0: dataset có/không có cột cho cùng trọng số — hành vi cũ byte một.
+        sys.argv = ["train_ppo", "--data", str(d_without), "--out", str(Path(tmp) / "base0"), *common,
+                    "--shaping-weight", "0"]
+        train_ppo.main()
+        sys.argv = ["train_ppo", "--data", str(d_with), "--out", str(Path(tmp) / "base1"), *common,
+                    "--shaping-weight", "0"]
+        train_ppo.main()
+        a_state = torch.load(Path(tmp) / "base0" / "model.pt")
+        b_state = torch.load(Path(tmp) / "base1" / "model.pt")
+        for key in a_state:
+            assert torch.equal(a_state[key], b_state[key]), f"α=0 phải byte một: lệch ở {key}"
+
+        # (c) shaping kéo P(action 0) lên hơn chạy không shaping.
+        sys.argv = ["train_ppo", "--data", str(d_with), "--out", str(Path(tmp) / "shaped"), *common]
+        train_ppo.main()
+        m = json.loads((Path(tmp) / "shaped" / "metrics.json").read_text(encoding="utf8"))
+        assert m["shapingCoverage"] == 1.0, m["shapingCoverage"]
+        assert m["config"]["shaping_weight"] == 1.0, m["config"]
+
+        def p0(model_dir: Path) -> float:
+            net = PolicyValueNet(OBS, ACT, 8)
+            net.load_state_dict(torch.load(model_dir / "model.pt"))
+            net.eval()
+            with torch.no_grad():
+                lg, _ = net(torch.from_numpy(feats))
+                probs = torch.softmax(masked_logits(lg, torch.from_numpy(masks.astype(bool))), 1)
+                return float(probs[:, 0].mean())
+
+        assert p0(Path(tmp) / "shaped") > p0(Path(tmp) / "base1"), (p0(Path(tmp) / "shaped"), p0(Path(tmp) / "base1"))
+
+        # (d) lọc theo loại quyết định: chỉ VOTE (chỉ số 0) giữ nhãn.
+        sys.argv = ["train_ppo", "--data", str(d_with), "--out", str(Path(tmp) / "filtered"), *common,
+                    "--shaping-decisions", "vote"]
+        train_ppo.main()
+        mf = json.loads((Path(tmp) / "filtered" / "metrics.json").read_text(encoding="utf8"))
+        assert abs(mf["shapingCoverage"] - float((decisions == 0).mean())) < 1e-3, mf["shapingCoverage"]
+
+
 def main() -> None:
     logits_case()
     residual_case()
+    shaping_case()
     print("ok")
 
 
