@@ -101,31 +101,6 @@ describe("registry Sói Pháp Sư", () => {
   it("SORCERER có chiến lược riêng mang đúng tên vai", () => {
     expect(strategyFor("SORCERER").role).toBe("SORCERER");
   });
-
-  it("ALPHA_WOLF cắn cùng bầy như Sói", () => {
-    const decision = strategyFor("ALPHA_WOLF").decideNight(
-      context({
-        selfRole: "ALPHA_WOLF",
-        knownRoles: { me: "ALPHA_WOLF" },
-        night: {
-          bonusSecondTargetFor: null,
-          canAct: true,
-          legalActions: ["KILL"],
-          legalTargets: { ...emptyTargets(), KILL: ["a", "b"] },
-          wolfTarget: null,
-          guardPrevious: null,
-          healUsed: false,
-          poisonUsed: false,
-          wolvesLocked: false,
-        },
-      }),
-      stateFor(),
-      createSeededRng("alpha"),
-    );
-
-    expect(decision?.action).toBe("KILL");
-    expect(["a", "b"]).toContain(decision?.targetId);
-  });
 });
 
 describe("chiến lược đêm Sói Pháp Sư", () => {

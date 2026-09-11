@@ -235,7 +235,7 @@ function rewardOf(game: SelfPlayGame, playerId: string): number {
   if (game.winner === null) return -1;
   const role = game.roles[playerId];
   if (role === undefined) return -1;
-  const wolf = role === "WEREWOLF" || role === "WOLF_CUB" || role === "ALPHA_WOLF";
+  const wolf = role === "WEREWOLF" || role === "WOLF_CUB";
   return (game.winner === "wolves") === wolf ? 1 : -1;
 }
 

@@ -67,7 +67,6 @@ function knowledgeFixture(phase: GamePhase = "VOTING") {
     hunterShots: [],
     // Cùng lý do với `night` ở trên: nhồi giá trị thật vào state của các vai mở
     // rộng để assert "không lộ" có thứ để lộ.
-    alphaShieldUsed: {},
     apprenticeAwakened: true,
     wolfCubRageNextNight: true,
     activeEvent: null,

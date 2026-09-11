@@ -93,8 +93,6 @@ export interface RoomConfig {
   tracker?: boolean;
   /** Sói Pháp Sư. Optional như mọi vai thêm sau. */
   sorcerer?: boolean;
-  /** Sói Alpha. Cắn được nên vào wolfCount (xem validateRoomConfig). */
-  alphaWolf?: boolean;
   mayor?: boolean;
   /**
    * Thằng Hề - vai TRUNG LẬP, tối đa một lá mỗi ván.

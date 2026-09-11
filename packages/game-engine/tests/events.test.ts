@@ -47,7 +47,6 @@ function createTestState(players: Partial<EnginePlayer>[], overrides?: Partial<G
     voteMutations: [],
     dayVoteHistory: [],
     guardPrevious: null,
-    alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
     healUsed: false,

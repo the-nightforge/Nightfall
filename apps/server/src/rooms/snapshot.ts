@@ -80,7 +80,7 @@ export function resolveChat(room: Room, senderId: string):
 
   if (view.phase === "NIGHT") {
     const role = view.you?.role;
-    // Mọi vai trong bầy (Sói, Sói Con, Sói Pháp Sư, Sói Alpha) chung một kênh
+    // Mọi vai trong bầy (Sói, Sói Con, Sói Pháp Sư) chung một kênh
     // đêm — kiểm bằng isWolfPack để vai sói mới không bị câm lặng.
     if (role !== undefined && isWolfPack(role)) {
       if (room.engine?.state.activeEvent?.id === "SILENT_NIGHT") {

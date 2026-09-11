@@ -70,7 +70,6 @@ const REMOVABLE: ReadonlyArray<[Role, keyof RoomConfig]> = [
   ["WOLF_CUB", "wolfCub"],
   ["TRAITOR", "traitor"],
   ["SORCERER", "sorcerer"],
-  ["ALPHA_WOLF", "alphaWolf"],
 ];
 
 /** Mỗi vai của preset `n` một bộ bài gỡ đúng lá đó; `buildConfig` biến ghế trống thành Dân Làng. */

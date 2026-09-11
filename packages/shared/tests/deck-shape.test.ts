@@ -35,6 +35,12 @@ describe("deckSeats / deckSize / deckWolfCount", () => {
     expect(deckWolfCount({ ...BASE, wolfCub: true })).toBe(3);
   });
 
+  it("Sói Pháp Sư chiếm ghế nhưng KHÔNG phải một con Sói cắn đêm", () => {
+    // Cùng cặp với Kẻ Phản Bội ở trên: nó soi dòng Tiên Tri, không cắn.
+    expect(deckSeats({ ...BASE, sorcerer: true })).toBe(SEATS + 1);
+    expect(deckWolfCount({ ...BASE, sorcerer: true })).toBe(deckWolfCount(BASE));
+  });
+
   it("cấu hình chưa khai villagers thì không có cỡ riêng", () => {
     const legacy: RoomConfig = { ...BASE };
     delete legacy.villagers;

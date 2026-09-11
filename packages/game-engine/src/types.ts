@@ -259,13 +259,6 @@ export interface GameState {
   guardSecondPrevious?: string | null;
   apprenticeAwakened: boolean;
   wolfCubRageNextNight: boolean;
-  /**
-   * Khiên soi của Sói Alpha đã dùng chưa: alphaId -> true sau lần SEE đầu tiên.
-   *
-   * Lần SEE đầu lên Alpha trả về làng; từ lần hai hiện nguyên hình. Chỉ hook
-   * case SEE trực tiếp, không chặn Detective sameFaction.
-   */
-  alphaShieldUsed: Record<string, boolean>;
   healUsed: boolean;
   poisonUsed: boolean;
   lastNightDeaths: PublicDeath[];
