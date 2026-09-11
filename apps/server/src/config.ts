@@ -191,6 +191,14 @@ export const config = {
   openaiModel: process.env.OPENAI_MODEL ?? "gpt-5.6-luna",
   botAiEnabled: process.env.BOT_AI_ENABLED !== "false",
   botAiMaxCallsPerGame: resolveBotAiMaxCallsPerGame(process.env),
+  /**
+   * Đường dẫn file weights của learned policy cho BOT (champion PPO). Không
+   * đặt = heuristic thuần, hành vi như mọi khi. Đặt mà file hỏng hoặc lệch
+   * schema encoder thì server NÉ lúc khởi động - lối `resolveVoiceConfig`:
+   * hỏng ồn ào còn hơn im lặng rơi về heuristic mà không ai hay. Việc đọc và
+   * kiểm tra nội dung thuộc `bots/learned-policy.ts`.
+   */
+  botPolicyFile: process.env.BOT_POLICY_FILE?.trim() || null,
 };
 
 export const isProd = config.nodeEnv === "production";
