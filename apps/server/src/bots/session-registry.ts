@@ -1,6 +1,8 @@
-import { BotRuntime, createSeededRng, type SeededRng } from "@masoi/game-engine";
+import { BotRuntime, createSeededRng, type BotRuntimeOptions, type SeededRng } from "@masoi/game-engine";
 import type { BotBrainState } from "@masoi/game-engine";
+import { isWolfPack } from "@masoi/shared";
 import type { Room } from "../rooms/store";
+import { botPolicy, learnedRuntimeOptions, policyAppliesToSeat } from "./learned-policy";
 
 /**
  * Ảnh chụp nhận thức của cả bàn BOT trong một ván.
@@ -11,6 +13,12 @@ import type { Room } from "../rooms/store";
  *
  * `cursors` lưu VỊ TRÍ của từng dòng RNG chứ không lưu số đã sinh: dòng số là
  * hàm thuần của (hạt, số lần gọi), nên một số nguyên là đủ để mở lại đúng chỗ.
+ *
+ * `wolfPack` ghi phe của từng ghế (`isWolfPack(role)`) - `BotRuntime` không biết
+ * vai trò của chính mình nên việc lọc learned policy theo phe phải làm ở tầng
+ * này. Không có `learnedPolicy` là đường heuristic, nên ảnh chụp cũ thiếu trường
+ * này đọc lên thành cả bàn heuristic: một ván sau restart chơi an toàn thay vì
+ * bị giao nhầm model phe làng cho ghế sói.
  */
 export interface PersistedBotSession {
   seed: string;
@@ -18,6 +26,7 @@ export interface PersistedBotSession {
   brains: Record<string, { state: BotBrainState; lastDecayRound: number }>;
   /** Khoá là `botId:channel`; kênh `brain` của runtime cũng nằm ở đây. */
   cursors: Record<string, number>;
+  wolfPack?: Record<string, boolean>;
 }
 
 /**
@@ -41,11 +50,33 @@ export class BotSession {
    * thì không.
    */
   private readonly brainRngs = new Map<string, SeededRng>();
+  /** Phe của từng ghế - xem `PersistedBotSession.wolfPack`. */
+  private readonly wolfPack = new Map<string, boolean>();
 
   constructor(
     readonly seed: string,
     private readonly playerIds: readonly string[],
-  ) {}
+    wolfPack?: Record<string, boolean>,
+  ) {
+    for (const [botId, isWolf] of Object.entries(wolfPack ?? {})) {
+      this.wolfPack.set(botId, isWolf);
+    }
+  }
+
+  /**
+   * Cấu hình runtime cho MỘT ghế: policy chỉ tới ghế thuộc phe được chọn.
+   *
+   * Ghế không thuộc phe nhận object rỗng chứ không nhận một policy bị vô hiệu
+   * hoá - cùng phía đối chứng với benchmark (xem `selfplay`). Chưa biết phe
+   * (session tạo ở sảnh chờ, ảnh chụp cũ) thì không giao cho ai: rủi ro duy
+   * nhất là bot đó chơi heuristic, an toàn hơn giao nhầm model phe làng cho
+   * ghế sói.
+   */
+  private runtimeOptions(botId: string): Partial<BotRuntimeOptions> {
+    return policyAppliesToSeat(botPolicy(), this.wolfPack.get(botId))
+      ? learnedRuntimeOptions(botPolicy())
+      : {};
+  }
 
   /** Runtime ổn định theo BOT: gọi lại nhiều lần trả về đúng một đối tượng. */
   runtimeFor(botId: string): BotRuntime {
@@ -57,6 +88,7 @@ export class BotSession {
       playerId: botId,
       rng,
       playerIds: this.playerIds,
+      ...this.runtimeOptions(botId),
     });
     this.brainRngs.set(botId, rng);
     this.runtimes.set(botId, runtime);
@@ -86,7 +118,15 @@ export class BotSession {
     for (const [key, rng] of this.channels) cursors[key] = rng.cursor;
     for (const [botId, rng] of this.brainRngs) cursors[`${botId}:brain`] = rng.cursor;
 
-    return { seed: this.seed, playerIds: [...this.playerIds], brains, cursors };
+    return {
+      seed: this.seed,
+      playerIds: [...this.playerIds],
+      brains,
+      cursors,
+      // Chỉ ghi khi có: ván chưa phân vai (sảnh chờ) thì ảnh chụp không cần
+      // thêm rác, và lọc ở `restore` trả object rỗng khi thiếu trường này.
+      ...(this.wolfPack.size > 0 ? { wolfPack: Object.fromEntries(this.wolfPack) } : {}),
+    };
   }
 
   /**
@@ -97,7 +137,7 @@ export class BotSession {
    * nhớ giữa ván là loại lỗi khó lần ra nhất trong cả hệ thống này.
    */
   static restore(data: PersistedBotSession): BotSession {
-    const session = new BotSession(data.seed, data.playerIds);
+    const session = new BotSession(data.seed, data.playerIds, data.wolfPack);
 
     for (const [botId, dumped] of Object.entries(data.brains)) {
       const rng = createSeededRng(
@@ -113,6 +153,7 @@ export class BotSession {
           playerIds: data.playerIds,
           state: dumped.state,
           lastDecayRound: dumped.lastDecayRound,
+          ...session.runtimeOptions(botId),
         }),
       );
     }
@@ -134,6 +175,17 @@ function createSession(room: Room): BotSession {
     ? room.engine.state.players.map((player) => player.id)
     : room.members.map((member) => member.playerId);
   /*
+   * Phe của từng ghế, gieo cùng lúc với playerIds. Engine chỉ tồn tại từ lúc
+   * bắt đầu ván - đúng lúc role đã phân xong - nên session gắn với ván luôn
+   * biết phe; session sảnh chờ thì không, và `runtimeOptions` xử lý đường
+   * "không biết" bằng cách không giao policy cho ai.
+   */
+  const wolfPack = room.engine
+    ? Object.fromEntries(
+        room.engine.state.players.map((player) => [player.id, isWolfPack(player.role)]),
+      )
+    : undefined;
+  /*
    * Hạt đi theo VÁN, không theo PHÒNG.
    *
    * `room.createdAt` bất biến suốt đời phòng, nên gieo bằng nó thì ván thứ hai
@@ -151,7 +203,7 @@ function createSession(room: Room): BotSession {
    * Rơi về `createdAt` khi chưa có gameId: phòng ở sảnh chờ và ảnh chụp ghi
    * trước khi có khoá này đều không mang nó.
    */
-  return new BotSession(`${room.code}:${room.gameId ?? room.createdAt}`, playerIds);
+  return new BotSession(`${room.code}:${room.gameId ?? room.createdAt}`, playerIds, wolfPack);
 }
 
 /** Bắt đầu một ván mới: session cũ của phòng bị bỏ hẳn. */
