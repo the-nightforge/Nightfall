@@ -30,7 +30,7 @@ export const VILLAGE_ROLES: Role[] = [
   "CURSED",
 ];
 
-export const WOLF_SPECIAL_ROLES: Role[] = ["WOLF_CUB", "SORCERER", "ALPHA_WOLF"];
+export const WOLF_SPECIAL_ROLES: Role[] = ["WOLF_CUB", "SORCERER"];
 
 /**
  * Vai TRUNG LẬP, bày thành nhóm thứ ba trong bộ bài.
@@ -57,7 +57,6 @@ export const CONFIG_KEY: Record<string, keyof RoomConfig> = {
   CURSED: "cursed",
   WOLF_CUB: "wolfCub",
   SORCERER: "sorcerer",
-  ALPHA_WOLF: "alphaWolf",
   JESTER: "jester",
   SERIAL_KILLER: "serialKiller",
   EXECUTIONER: "executioner",

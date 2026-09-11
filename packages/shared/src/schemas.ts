@@ -36,7 +36,6 @@ export const roomConfigSchema = z
     detective: bool.optional(),
     tracker: bool.optional(),
     sorcerer: bool.optional(),
-    alphaWolf: bool.optional(),
     mayor: bool.optional(),
     elder: bool.optional(),
     doppelganger: bool.optional(),
@@ -61,10 +60,10 @@ export const roomConfigSchema = z
  *
  * Gác luật "Sói phải ít hơn phe làng", và luật đó mô hình hoá SỨC SÁT THƯƠNG
  * BAN ĐÊM - bao nhiêu người chết mỗi đêm. Kẻ Phản Bội không giết ai nên không
- * nằm ở đây; xem `deckSeats`. Sói Alpha cắn cùng bầy nên vào đây.
+ * nằm ở đây; xem `deckSeats`.
  */
 export function deckWolfCount(config: RoomConfig): number {
-  return config.werewolves + (config.wolfCub ? 1 : 0) + (config.alphaWolf ? 1 : 0);
+  return config.werewolves + (config.wolfCub ? 1 : 0);
 }
 
 /**

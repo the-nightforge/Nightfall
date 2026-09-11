@@ -38,7 +38,6 @@ function config(patch: Partial<RoomConfig> = {}): RoomConfig {
     detective: false,
     tracker: false,
     sorcerer: false,
-    alphaWolf: false,
     mayor: false,
     ...patch,
   };
@@ -57,9 +56,9 @@ describe("deckCounts", () => {
     assert.equal(counts.villagers, 5);
   });
 
-  it("Sói Pháp Sư và Sói Alpha tính vào phe Sói chứ không phải vào chức năng của làng", () => {
-    const counts = deckCounts(config({ werewolves: 1, sorcerer: true, alphaWolf: true }), 8);
-    assert.equal(counts.wolves, 3);
+  it("Sói Pháp Sư tính vào phe Sói chứ không phải vào chức năng của làng", () => {
+    const counts = deckCounts(config({ werewolves: 1, sorcerer: true }), 8);
+    assert.equal(counts.wolves, 2);
     assert.equal(counts.specials, 0);
   });
 
@@ -94,13 +93,10 @@ describe("role lists", () => {
     assert.equal(CONFIG_KEY["MEDIUM"], undefined);
   });
 
-  it("Sói Pháp Sư và Sói Alpha là sói đặc biệt có công tắc sảnh chờ", () => {
+  it("Sói Pháp Sư là sói đặc biệt có công tắc sảnh chờ", () => {
     assert.ok(WOLF_SPECIAL_ROLES.includes("SORCERER"));
-    assert.ok(WOLF_SPECIAL_ROLES.includes("ALPHA_WOLF"));
     assert.equal(CONFIG_KEY["SORCERER"], "sorcerer");
-    assert.equal(CONFIG_KEY["ALPHA_WOLF"], "alphaWolf");
     assert.ok(!VILLAGE_ROLES.includes("SORCERER" as never));
-    assert.ok(!VILLAGE_ROLES.includes("ALPHA_WOLF" as never));
     assert.ok(!NEUTRAL_ROLES.includes("SORCERER" as never));
   });
 });

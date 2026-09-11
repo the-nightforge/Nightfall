@@ -169,26 +169,6 @@ export const ROLE_POWER: Record<Role, number> = {
    */
   SORCERER: 4,
   /**
-   * 4, ĐÃ ĐO - HẠ từ con số 6 tạm lúc dựng vai (ngang Sói Con là sai: premium
-   * của Sói Con là cơn phẫn nộ cắn đôi, đo bằng phép ĐỔI giữ nguyên số Sói;
-   * khiên miễn soi một lần không phải premium đó).
-   *
-   * Cùng lượt đo với Sói Pháp Sư (lượt B3, so cặp đúng seed, speech BẬT, 300
-   * ván mỗi ô, ghế gỡ ra thành Dân Làng):
-   *
-   *   n  | nguyên vẹn | Δ (đóng góp cho Sói, trung bình 2 mẫu)
-   *   19 |   38.7     |
-   *   20 |   33.7     |                Δ TB = +23.5 (SE ~2.9)
-   *
-   * Cùng thước toàn cục ~6 điểm/đơn vị: 23.5/6 ≈ 3.9, làm tròn lên 4.0. Lá này
-   * cắn cùng bầy mỗi đêm như Sói thường cộng khiên miễn soi lần đầu, và số đo
-   * (+23.5) so vừa khít với "một con Sói ở cỡ này đáng tới 22 điểm" - tức nó
-   * đáng ĐÚNG một con Sói, không hơn. 24.5 với 23.5 cách nhau 1.0, dưới một
-   * SE - Sói Pháp Sư và Sói Alpha trên bàn bot là hai lá ngang giá, nên cả hai
-   * cùng 4.0.
-   */
-  ALPHA_WOLF: 4,
-  /**
    * 2, HẠ từ 5 - ĐO LẠI 2026-09-11, và lần đo này là nguồn của cả bốn dòng
    * vừa đổi (SEER, GUARD, DETECTIVE, CURSED).
    *
@@ -432,7 +412,6 @@ function preset(overrides: Partial<RoomConfig>): RoomConfig {
     cursed: false,
     wolfCub: false,
     sorcerer: false,
-    alphaWolf: false,
     apprenticeSeer: false,
     detective: false,
     tracker: false,
@@ -556,7 +535,7 @@ function preset(overrides: Partial<RoomConfig>): RoomConfig {
  *
  * Chọn qua hai lượt ứng viên, cùng seed với preset. ±95% của mọi ô ~4.4 điểm.
  * Phân bố lá phe Sói sau lượt này: Sói Con 9/10/17, Sói Pháp Sư 15/16/17,
- * Kẻ Phản Bội 11/12/18, Sói Alpha 19/20.
+ * Kẻ Phản Bội 11/12/18/19/20 (19-20 thế ghế Sói Alpha, xóa cứng 2026-09-11).
  *
  * Pha DEFENSE lật chiều bàn vừa: bảng cũ (không DEFENSE) cho 11-15 nghiêng Sói,
  * đo đúng thì 9-16 nghiêng LÀNG (55-67%). Bị cáo được tự bào chữa là thứ phe
@@ -745,7 +724,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
    * 16: WEREWOLF x3, SORCERER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x4
    * 17: WEREWOLF x2, WOLF_CUB, SORCERER, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, VILLAGER x3
    * 18: WEREWOLF x4, TRAITOR, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, VILLAGER x4
-   * 19: WEREWOLF x4, DOPPELGANGER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, ALPHA_WOLF, VILLAGER x4
+   * 19: WEREWOLF x4, DOPPELGANGER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, TRAITOR, VILLAGER x4
    * 20: như 19, VILLAGER x5
    *
    * Đổi 2026-09-05 (SORCERER + ALPHA_WOLF thay MEDIUM + PRIEST, xóa cứng):
@@ -815,7 +794,8 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
    *    về làng là đúng luật engine, còn auditor đối chiếu với `roleTeam` mà
    *    không biết khiên. Tỉ lệ thắng không ảnh hưởng (bất biến chỉ kiểm sau
    *    ván), và harness đã được dạy khiên ngay trong Task 9 này - batch kiểm
-   *    lại ra 0 vi phạm. Xem `GroundTruth.alphaShieldedSeerResults`.
+   *    lại ra 0 vi phạm. Miễn trừ này đã xóa cứng cùng Sói Alpha ngày
+   *    2026-09-11 - khiên soi không còn tồn tại nên báo động giả cũng hết đất.
    * 2. Ba ván chạm trần vòng (17-t9a, 18-t9a, 18-t9c - mẫu số 199 thay vì
    *    200): ván 8 vòng ở bàn lớn thỉnh thoảng không phân thắng được trong
    *    20 vòng. Không đáng kể trên 2400 ván.
@@ -872,7 +852,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     mayor: true,
     tracker: true,
     elder: true,
-    alphaWolf: true,
+    traitor: true,
   }),
   20: preset({
     werewolves: 4,
@@ -886,7 +866,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     mayor: true,
     tracker: true,
     elder: true,
-    alphaWolf: true,
+    traitor: true,
   }),
 };
 
@@ -973,10 +953,9 @@ export function specialRoleList(config: RoomConfig): Role[] {
   if (config.wolfCub) roles.push("WOLF_CUB");
   // Tối đa một Kẻ Phản Bội mỗi ván; boolean nên "tối đa 1" là tính chất của kiểu.
   if (config.traitor) roles.push("TRAITOR");
-  // Hai sói mới, mỗi lá tối đa một như mọi cờ boolean khác. Sói Pháp Sư không
+  // Sói Pháp Sư, mỗi lá tối đa một như mọi cờ boolean khác. Sói Pháp Sư không
   // cắn nhưng vẫn thuộc bầy (isWolfPack) nên nó nằm trong bộ bài như một lá sói.
   if (config.sorcerer) roles.push("SORCERER");
-  if (config.alphaWolf) roles.push("ALPHA_WOLF");
   if (config.seer) roles.push("SEER");
   if (config.apprenticeSeer) roles.push("APPRENTICE_SEER");
   if (config.detective) roles.push("DETECTIVE");
@@ -1117,11 +1096,10 @@ export function generateWarnings(config: RoomConfig, playerCount: number): Balan
    * sẽ khoá luôn những phòng đang chạy được hôm nay.
    */
   /*
-   * Sói Alpha CẮN cùng bầy nên vào `wolfCount` như Sói Con - cùng phép đếm sát
-   * thương đêm của `validateRoomConfig`. Sói Pháp Sư thì KHÔNG (cùng cặp với Kẻ
-   * Phản Bội: chiếm ghế nhưng không cắn), nên nó vắng mặt ở đây một cách có chủ ý.
+   * Sói Pháp Sư thì KHÔNG (cùng cặp với Kẻ Phản Bội: chiếm ghế nhưng không cắn),
+   * nên nó vắng mặt ở đây một cách có chủ ý.
    */
-  const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0) + (config.alphaWolf ? 1 : 0);
+  const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0);
   if (wolfCount > 0) {
     /*
      * Ngân sách sai lầm của phe làng, chia cho số Sói phải treo.
@@ -1210,9 +1188,8 @@ export function generateWarnings(config: RoomConfig, playerCount: number): Balan
 
   const presetDeck = PRESET_DECKS[playerCount];
   if (presetDeck) {
-    // Cùng phép đếm với `wolfCount` ngay trên: preset 19-20 mang Sói Alpha.
-    const presetWolfCount =
-      presetDeck.werewolves + (presetDeck.wolfCub ? 1 : 0) + (presetDeck.alphaWolf ? 1 : 0);
+    // Cùng phép đếm với `wolfCount` ngay trên.
+    const presetWolfCount = presetDeck.werewolves + (presetDeck.wolfCub ? 1 : 0);
     const wolfRatio = playerCount > 0 ? wolfCount / playerCount : 0;
     const presetRatio = playerCount > 0 ? presetWolfCount / playerCount : 0;
     const ratioDiff = Math.abs(wolfRatio - presetRatio);

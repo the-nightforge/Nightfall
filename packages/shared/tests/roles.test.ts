@@ -12,7 +12,6 @@ describe("Shared Roles", () => {
       "WEREWOLF",
       "WOLF_CUB",
       "SORCERER",
-      "ALPHA_WOLF",
       "SEER",
       "APPRENTICE_SEER",
       "DETECTIVE",
@@ -46,7 +45,6 @@ describe("Shared Roles", () => {
     expect(roleTeam("WEREWOLF")).toBe("wolves");
     expect(roleTeam("WOLF_CUB")).toBe("wolves");
     expect(roleTeam("SORCERER")).toBe("wolves");
-    expect(roleTeam("ALPHA_WOLF")).toBe("wolves");
     expect(roleTeam("SEER")).toBe("village");
     expect(roleTeam("APPRENTICE_SEER")).toBe("village");
     expect(roleTeam("DETECTIVE")).toBe("village");
@@ -66,7 +64,6 @@ describe("Shared Roles", () => {
     expect(isWolfPack("WEREWOLF")).toBe(true);
     expect(isWolfPack("WOLF_CUB")).toBe(true);
     expect(isWolfPack("SORCERER")).toBe(true);
-    expect(isWolfPack("ALPHA_WOLF")).toBe(true);
     // Không trong bầy: Kẻ Phản Bội thắng cùng phe Sói nhưng không biết Sói là ai.
     expect(isWolfPack("TRAITOR")).toBe(false);
     expect(isWolfPack("SEER")).toBe(false);
@@ -83,7 +80,6 @@ describe("Shared Roles", () => {
     // Detective: 1.5
     // Werewolf: 2
     // Wolf Cub: 2
-    // Alpha Wolf: 2
     // Serial Killer: 2.2
     // Tracker: 3
     // Witch: 3
@@ -94,7 +90,6 @@ describe("Shared Roles", () => {
     expect(ROLE_META.DETECTIVE.nightOrder).toBe(1.5);
     expect(ROLE_META.WEREWOLF.nightOrder).toBe(2);
     expect(ROLE_META.WOLF_CUB.nightOrder).toBe(2);
-    expect(ROLE_META.ALPHA_WOLF.nightOrder).toBe(2);
     expect(ROLE_META.SERIAL_KILLER.nightOrder).toBe(2.2);
     expect(ROLE_META.TRACKER.nightOrder).toBe(3);
     expect(ROLE_META.WITCH.nightOrder).toBe(3);
@@ -109,8 +104,6 @@ describe("Shared Roles", () => {
       "DETECTIVE",
       "WEREWOLF",
       "WOLF_CUB",
-      // Sói Alpha cùng nightOrder 2 với bầy, đứng sau Sói Con theo thứ tự đọc đêm.
-      "ALPHA_WOLF",
       "SERIAL_KILLER",
       // Kẻ Theo Dõi cùng nightOrder 3 với Phù Thuỷ: cả hai chỉ đọc/tác động sau
       // khi mọi đòn đêm đã khoá, và Kẻ Theo Dõi đứng trước vì nó được khai báo

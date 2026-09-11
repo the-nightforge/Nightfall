@@ -67,8 +67,8 @@ describe("Phủ vai trong PRESET_DECKS", () => {
      * Ghế phe Sói đếm CẢ Kẻ Phản Bội: nó không cắn ai nhưng `checkWin` đếm nó
      * vào thế cân bằng, nên nó chiếm một ghế của phe đó theo đúng nghĩa quyết
      * định ván. Đây là cùng phép đếm mà `checkWin` dùng, không phải phép đếm
-     * sát thương ban đêm của `validateRoomConfig`. Sói Pháp Sư/Sói Alpha cũng
-     * vào đây vì `team: "wolves"` (bầy thắng chung), nên 17-20 vẫn giữ luật.
+     * sát thương ban đêm của `validateRoomConfig`. Sói Pháp Sư cũng vào đây vì
+     * `team: "wolves"` (bầy thắng chung), nên 17-20 vẫn giữ luật.
      *
      * Ngoại lệ 14/16 (+1 Dân, hậu xoá Linh Mục) đã GỠ sau lần đo 2026-09-11:
      * cả hai nhận thêm một lá (Nguyền Rủa / Phản Bội) và về lại trong luật.

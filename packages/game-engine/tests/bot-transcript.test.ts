@@ -141,7 +141,7 @@ describe("không câu chat nào chứa MÃ vai", () => {
    */
   it("quét mọi lời thoại của nhiều ván", () => {
     const codes = [
-      "WEREWOLF", "WOLF_CUB", "SORCERER", "ALPHA_WOLF", "TRAITOR",
+      "WEREWOLF", "WOLF_CUB", "SORCERER", "TRAITOR",
       "SEER", "APPRENTICE_SEER", "DETECTIVE", "GUARD", "TRACKER",
       "WITCH", "ELDER", "DOPPELGANGER", "HUNTER", "VILLAGER",
       "JESTER", "SERIAL_KILLER", "EXECUTIONER",

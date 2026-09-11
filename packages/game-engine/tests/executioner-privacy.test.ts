@@ -71,7 +71,6 @@ function state(over: Partial<GameState> = {}): GameState {
     lastEliminated: null,
     hunterReaction: null,
     hunterShots: [],
-    alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
     activeEvent: null,

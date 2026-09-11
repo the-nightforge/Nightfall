@@ -119,7 +119,6 @@ function makeHunterEngine(phase: GameState["phase"] = "NIGHT") {
     lastEliminated: null,
     hunterReaction: null,
     hunterShots: [],
-    alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
     activeEvent: null,

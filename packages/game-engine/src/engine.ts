@@ -305,7 +305,6 @@ export class GameEngine {
     // với `sorcererResults` ngay trên.
     this.state.night.trackerTargets ??= {};
     this.state.night.trackerResults ??= {};
-    this.state.alphaShieldUsed ??= {};
     // State lưu trước khi có Sát Nhân không có ba trường dưới. Mặc định an toàn
     // là "role tắt, đêm nay chưa ra tay": không ván cũ nào bỗng dưng mọc thêm
     // một nhát dao.
@@ -419,7 +418,6 @@ export class GameEngine {
       guardSecondPrevious: null,
       apprenticeAwakened: false,
       wolfCubRageNextNight: false,
-      alphaShieldUsed: {},
       healUsed: false,
       poisonUsed: false,
       lastNightDeaths: [],
@@ -868,16 +866,8 @@ export class GameEngine {
          */
         const seenTeam = (role: Role): Team =>
           role === "TRAITOR" ? "village" : roleTeam(role);
-        let team = flipTeam(seenTeam(target.role));
+        const team = flipTeam(seenTeam(target.role));
         if (secTeam !== undefined) secTeam = flipTeam(secTeam);
-        // Khiên Alpha ép về làng SAU khi Bóng Sói đã lật team thật.
-        // Lật trước rồi khiên đè lên nên lần SEE đầu lên Alpha luôn ra làng.
-        // Chỉ lừa lượt soi chính; mục tiêu phụ của Màn Sương Tan giữ nguyên.
-        const targetPlayer = this.player(targetId)!;
-        if (targetPlayer.role === "ALPHA_WOLF" && !st.alphaShieldUsed[targetId]) {
-          st.alphaShieldUsed[targetId] = true;
-          team = "village";
-        }
 
         const seerResult: GameState["night"]["seerResults"][string] = {
           targetId,

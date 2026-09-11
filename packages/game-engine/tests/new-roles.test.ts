@@ -65,7 +65,6 @@ function stateWith(players: Array<[string, Role, boolean?]>): GameState {
     lastEliminated: null,
     hunterReaction: null,
     hunterShots: [],
-    alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
     activeEvent: null,

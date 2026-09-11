@@ -209,9 +209,6 @@ export const gameStateSchema = z.object({
    */
   guardianAngelPrevious: z.string().nullable().optional(),
   guardianAngelCharges: z.record(z.string(), z.number()).optional(),
-  // `.default({})` cùng lý do với `sorcererResults` ngay trên: ảnh bản cũ
-  // thiếu khiên soi Alpha vẫn đọc được, output vẫn required cho tsc.
-  alphaShieldUsed: z.record(z.string(), z.boolean()).default({}),
   apprenticeAwakened: z.boolean(),
   wolfCubRageNextNight: z.boolean(),
   healUsed: z.boolean(),

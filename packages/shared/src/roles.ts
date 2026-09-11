@@ -3,7 +3,6 @@ export const ROLES = [
   "WEREWOLF",
   "WOLF_CUB",
   "SORCERER",
-  "ALPHA_WOLF",
   "TRAITOR",
   "SEER",
   "APPRENTICE_SEER",
@@ -84,13 +83,6 @@ export const ROLE_META: Record<Role, RoleMeta> = {
     id: "WOLF_CUB",
     name: "Sói Con",
     description: "Cùng thức dậy với Sói. Khi Sói Con chết, đêm kế tiếp bầy Sói được cắn 2 mục tiêu.",
-    team: "wolves",
-    nightOrder: 2,
-  },
-  ALPHA_WOLF: {
-    id: "ALPHA_WOLF",
-    name: "Sói Alpha",
-    description: "Cắn cùng bầy mỗi đêm. Lần bị Tiên Tri soi đầu tiên hiện ra là Dân, từ lần sau hiện nguyên hình.",
     team: "wolves",
     nightOrder: 2,
   },
@@ -321,7 +313,7 @@ export function sameFaction(a: Role, b: Role): boolean {
  * danh sách bầy.
  */
 export function isWolfPack(role: Role): boolean {
-  return role === "WEREWOLF" || role === "WOLF_CUB" || role === "SORCERER" || role === "ALPHA_WOLF";
+  return role === "WEREWOLF" || role === "WOLF_CUB" || role === "SORCERER";
 }
 
 /**

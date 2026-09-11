@@ -265,11 +265,10 @@ describe("tương thích ngược với ảnh chụp của bản cũ", () => {
     expect(roomEnvelopeSchema.safeParse(envelope).success).toBe(true);
   });
 
-  it("thiếu sorcererResults và alphaShieldUsed (ảnh bản cũ) vẫn đọc được", () => {
+  it("thiếu sorcererResults (ảnh bản cũ) vẫn đọc được", () => {
     const envelope = validEnvelope();
     const night = envelope.room.engineState.night as unknown as Record<string, unknown>;
     delete night.sorcererResults;
-    delete (envelope.room.engineState as unknown as Record<string, unknown>).alphaShieldUsed;
 
     const parsed = roomEnvelopeSchema.safeParse(envelope);
     if (!parsed.success) console.error(parsed.error.issues);

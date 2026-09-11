@@ -185,7 +185,7 @@ describe("planWolfTeam (PR5 — Wolf Team Planner)", () => {
 
   it("claimant khớp wolfBluffSeat (hash tất định): bầy tự đồng bộ", () => {
     const plan = planWolfTeam(input());
-    // Wolf Cub rage + Alpha cùng dùng plan này; hai lần gọi hai input riêng
+    // Wolf Cub rage cũng dùng plan này; hai lần gọi hai input riêng
     // (góc nhìn w1 và w2) phải ra cùng claimant.
     const second = knowledge("WEREWOLF", { botId: "w2" });
     const bot2 = new BotRuntime({

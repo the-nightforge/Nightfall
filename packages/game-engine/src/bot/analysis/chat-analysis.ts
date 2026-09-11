@@ -82,9 +82,6 @@ export const ROLE_PHRASES: ReadonlyArray<readonly [string, Role]> = [
   ["theo dõi", "TRACKER"],
   ["thị trưởng", "MAYOR"],
   ["sói con", "WOLF_CUB"],
-  // Trước "sói" để "sói alpha" không bị khớp thành "sói" thường - cùng lý do
-  // với "sói pháp sư" ngay trên. Nghe-hiểu cho parser đọc ngược lời khai.
-  ["sói alpha", "ALPHA_WOLF"],
   ["dân thường", "VILLAGER"],
   ["dân làng", "VILLAGER"],
   ["tiên tri", "SEER"],
@@ -400,7 +397,7 @@ export type QuestionType = (typeof QUESTION_TYPES)[number];
 const QUESTION_MARKERS: ReadonlyArray<readonly [QuestionType, readonly string[]]> = [
   // Trước ROLE: "mày là sói ko" có chữ vai, nhưng nó là một lời tố chứ không
   // phải một câu hỏi về vai. Chỉ dòng SÓI mới đảo được nghĩa như vậy.
-  ["ACCUSATION", ["sói", "ma sói", "sw", "sói con", "sói alpha", "phản bội", "sát nhân"]],
+  ["ACCUSATION", ["sói", "ma sói", "sw", "sói con", "phản bội", "sát nhân"]],
   ["ROLE", ["vai gì", "vai nào", "vai j", "role gì", "vai của", "tiên tri", "tt", "bảo vệ", "bv", "phù thuỷ", "phù thủy", "thợ săn", "thám tử", "dân làng", "dân"]],
   ["EVIDENCE", ["căn cứ", "bằng chứng", "dựa vào đâu", "dựa vào gì", "sao biết", "biết sao", "lý do", "chứng minh", "cơ sở"]],
   // Trước VOTE: "sao lúc nãy đổi phiếu" là câu hỏi về tính nhất quán, không

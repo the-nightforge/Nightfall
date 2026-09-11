@@ -237,10 +237,10 @@ describe("kênh người chết", () => {
 });
 
 /*
- * Sói Pháp Sư và Sói Alpha là bầy (isWolfPack): kênh Sói đêm phải mở cho
- * chúng như Sói thường — gửi được, nhận được, và thấy nhau trong payload.
+ * Sói Pháp Sư là bầy (isWolfPack): kênh Sói đêm phải mở cho nó như Sói
+ * thường — gửi được, nhận được, và thấy nhau trong payload.
  */
-describe("kênh phe Sói mở cho Sói Pháp Sư và Sói Alpha", () => {
+describe("kênh phe Sói mở cho Sói Pháp Sư", () => {
   function packRoom(): Room {
     const state: GameState = {
       ...GAME_STATE_SCAFFOLD,
@@ -249,7 +249,6 @@ describe("kênh phe Sói mở cho Sói Pháp Sư và Sói Alpha", () => {
       phaseEndsAt: null,
       players: [
         { id: "wolf", name: "Sói", role: "WEREWOLF", alive: true, isBot: false },
-        { id: "alpha", name: "Sói Alpha", role: "ALPHA_WOLF", alive: true, isBot: false },
         { id: "sorc", name: "Sói Pháp Sư", role: "SORCERER", alive: true, isBot: false },
         { id: "villager", name: "Dân", role: "VILLAGER", alive: true, isBot: false },
         { id: "seer", name: "Tiên Tri", role: "SEER", alive: true, isBot: false },
@@ -278,7 +277,7 @@ describe("kênh phe Sói mở cho Sói Pháp Sư và Sói Alpha", () => {
   }
 
   it("hai vai sói mới gửi vào cùng kênh với bầy", () => {
-    for (const id of ["wolf", "alpha", "sorc"]) {
+    for (const id of ["wolf", "sorc"]) {
       expect(resolveChat(packRoom(), id)).toMatchObject({ ok: true, channel: "wolves" });
     }
     expect(resolveChat(packRoom(), "villager")).toEqual({
@@ -293,7 +292,7 @@ describe("kênh phe Sói mở cho Sói Pháp Sư và Sói Alpha", () => {
     expect(resolved.ok).toBe(true);
     if (!resolved.ok) return;
     expect(resolved.channel).toBe("wolves");
-    for (const id of ["wolf", "alpha", "sorc"]) {
+    for (const id of ["wolf", "sorc"]) {
       expect(resolved.recipients).toContain(id);
     }
     for (const outsider of ["villager", "seer"]) {
@@ -307,18 +306,6 @@ describe("kênh phe Sói mở cho Sói Pháp Sư và Sói Alpha", () => {
 
     expect(channelsOf(view.chatLog)).toEqual(["wolves"]);
     expect(roles.wolf).toBe("WEREWOLF");
-    expect(roles.alpha).toBe("ALPHA_WOLF");
-    expect(roles.villager).toBeUndefined();
-    expect(roles.seer).toBeUndefined();
-  });
-
-  it("Sói Alpha đọc kênh Sói và thấy vai đồng bọn", () => {
-    const view = buildSnapshot(packRoom(), "alpha");
-    const roles = Object.fromEntries(view.players.map((p) => [p.id, p.role]));
-
-    expect(channelsOf(view.chatLog)).toEqual(["wolves"]);
-    expect(roles.wolf).toBe("WEREWOLF");
-    expect(roles.sorc).toBe("SORCERER");
     expect(roles.villager).toBeUndefined();
     expect(roles.seer).toBeUndefined();
   });
