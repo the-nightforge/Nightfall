@@ -29,6 +29,8 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from masoi_training.console import force_utf8_console
+
 ROOT = Path(__file__).resolve().parents[1]
 PY = sys.executable
 
@@ -106,6 +108,7 @@ def should_promote(scores: list[float], champion: float, margin: float) -> bool:
 
 
 def main() -> None:
+    force_utf8_console()
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--champion", required=True, help="model.weights.json xuất phát")
     p.add_argument("--iterations", type=int, default=3)

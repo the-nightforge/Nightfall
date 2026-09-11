@@ -33,6 +33,7 @@ import numpy as np
 import torch
 from torch import nn
 
+from .console import force_utf8_console
 from .data import load
 from .export import export_weights_json
 from .model import PolicyValueNet, masked_logits
@@ -46,10 +47,12 @@ def load_init(path: Path, obs: int, act: int) -> tuple[PolicyValueNet, int, dict
     epoch khác, và không có gì trong hai file nói ra điều đó.
     """
     w = json.loads(Path(path).read_text(encoding="utf8"))
-    assert w["format"] == "masoi-mlp-1", f"init không phải masoi-mlp-1: {w.get('format')!r}"
-    assert w["obsSize"] == obs and w["actionSize"] == act, (
-        f"init lệch schema: obs {w['obsSize']} vs {obs}, action {w['actionSize']} vs {act}"
-    )
+    if w["format"] != "masoi-mlp-1":
+        raise ValueError(f"init không phải masoi-mlp-1: {w.get('format')!r}")
+    if w["obsSize"] != obs or w["actionSize"] != act:
+        raise ValueError(
+            f"init lệch schema: obs {w['obsSize']} vs {obs}, action {w['actionSize']} vs {act}"
+        )
     hidden = int(w["hidden"])
     m = PolicyValueNet(obs, act, hidden)
     with torch.no_grad():
@@ -95,6 +98,7 @@ def baseline_for(kind: str, data, rewards: torch.Tensor) -> torch.Tensor:
 
 
 def main() -> None:
+    force_utf8_console()
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--data", required=True, help="Thư mục do `ai:encode --rollout` ghi ra")
     p.add_argument("--init", required=True, help="model.weights.json của champion")
@@ -129,10 +133,10 @@ def main() -> None:
     torch.manual_seed(a.seed)
 
     d = load(a.data).side(a.side)
-    assert d.logprobs is not None and d.values is not None, (
-        "dataset không phải rollout (thiếu logprobs/values) — encode với --rollout"
-    )
-    assert len(d) > 0, f"không còn hàng nào sau khi lọc --side {a.side}"
+    if d.logprobs is None or d.values is None:
+        raise ValueError("dataset không phải rollout (thiếu logprobs/values) — encode với --rollout")
+    if len(d) == 0:
+        raise ValueError(f"không còn hàng nào sau khi lọc --side {a.side}")
     model, hidden, init_residual = load_init(Path(a.init), d.obs_size, d.action_size)
     init_state = copy.deepcopy(model.state_dict())
     opt = torch.optim.Adam(model.parameters(), lr=a.lr)
@@ -149,20 +153,21 @@ def main() -> None:
     residual = d.meta.get("policyKind") == "residual"
     beta = tau = None
     if residual:
-        assert d.bases is not None, "meta nói residual nhưng thiếu bases.f32.bin"
+        if d.bases is None:
+            raise ValueError("meta nói residual nhưng thiếu bases.f32.bin")
         beta = float(d.meta["beta"])
         tau = float(d.meta["temperature"])
-        assert tau > 0, "rollout residual phải có temperature > 0"
-        assert init_residual is not None and abs(float(init_residual["beta"]) - beta) < 1e-9, (
-            f"β của init ({init_residual}) khác β của rollout ({beta})"
-        )
+        if tau <= 0:
+            raise ValueError("rollout residual phải có temperature > 0")
+        if init_residual is None or abs(float(init_residual["beta"]) - beta) >= 1e-9:
+            raise ValueError(f"β của init ({init_residual}) khác β của rollout ({beta})")
         BASES = torch.from_numpy(np.nan_to_num(d.bases, nan=0.0).astype(np.float32))
         CAND = torch.from_numpy(~np.isnan(d.bases))
-        assert bool(CAND[torch.arange(len(d)), A].all()), (
-            "có hàng mà hành động đã đi không nằm trong bảng ứng viên — tập không nhất quán"
-        )
+        if not bool(CAND[torch.arange(len(d)), A].all()):
+            raise ValueError("có hàng mà hành động đã đi không nằm trong bảng ứng viên — tập không nhất quán")
     else:
-        assert init_residual is None, "init là residual nhưng rollout không phải — hai policy khác nhau"
+        if init_residual is not None:
+            raise ValueError("init là residual nhưng rollout không phải — hai policy khác nhau")
 
     def policy_logp(logits: torch.Tensor, idx: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """(log-softmax toàn hàng, mask đang dùng) của policy trên batch `idx`."""

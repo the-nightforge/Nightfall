@@ -239,7 +239,7 @@ def residual_case() -> None:
                     "--epochs", "1", "--side", "village"]
         try:
             train_ppo.main()
-        except AssertionError:
+        except ValueError:
             pass
         else:
             raise AssertionError("--side không có wolfPack trong meta phải bị từ chối")
@@ -260,7 +260,7 @@ def residual_case() -> None:
         sys.argv = ["train_ppo", "--data", str(d), "--init", str(initp), "--out", str(Path(tmp) / "x"), "--epochs", "1"]
         try:
             train_ppo.main()
-        except AssertionError:
+        except ValueError:
             pass
         else:
             raise AssertionError("init residual + rollout logits phải bị từ chối")

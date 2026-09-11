@@ -68,9 +68,8 @@ class Dataset:
         if name not in ("wolves", "village"):
             raise ValueError(f"side không hợp lệ: {name!r} (có: all, wolves, village)")
         pack = self.meta.get("wolfPack")
-        assert isinstance(pack, list) and len(pack) == len(self.meta.get("roles", [])), (
-            "meta thiếu `wolfPack` (encode bằng bản cũ) — không lọc phe được"
-        )
+        if not isinstance(pack, list) or len(pack) != len(self.meta.get("roles", [])):
+            raise ValueError("meta thiếu `wolfPack` (encode bằng bản cũ) — không lọc phe được")
         is_wolf = np.asarray(pack, dtype=bool)[self.roles]
         return self.where(is_wolf if name == "wolves" else ~is_wolf)
 
