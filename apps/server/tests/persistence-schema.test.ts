@@ -164,6 +164,29 @@ describe("schema snapshot phòng", () => {
     expect(parsed.room.config.seer).toBe((input.room.config as { seer: boolean }).seer);
   });
 
+  it("phòng lưu trước khi xóa Sói Alpha: ghế Alpha dồn vào villagers, không mất ghế", () => {
+    const input = validEnvelope();
+    const legacyConfig = { ...input.room.config, alphaWolf: true, villagers: 3 };
+    input.room.config = legacyConfig as never;
+
+    const parsed = roomEnvelopeSchema.parse(input);
+
+    expect(parsed.room.config.villagers).toBe(4);
+    expect("alphaWolf" in parsed.room.config).toBe(false);
+  });
+
+  it("phòng lưu trước khi xóa Sói Alpha, chưa khai villagers: không tự bịa villagers", () => {
+    const input = validEnvelope();
+    const legacyConfig = { ...input.room.config, alphaWolf: true } as Record<string, unknown>;
+    delete legacyConfig.villagers;
+    input.room.config = legacyConfig as never;
+
+    const parsed = roomEnvelopeSchema.parse(input);
+
+    expect(parsed.room.config.villagers).toBeUndefined();
+    expect("alphaWolf" in parsed.room.config).toBe(false);
+  });
+
   it("từ chối bước chờ mang tên lạ", () => {
     const bad = validEnvelope();
     bad.room.pendingStep = { name: "danceParty", token: "x", runAt: 1 } as never;
