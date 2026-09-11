@@ -38,6 +38,7 @@ def write_dataset(root: Path, *, truncate_features: bool = False) -> None:
     np.array([0, 1, 0, 1, 0, 1], dtype=np.uint8).tofile(root / "decisions.u8.bin")
     np.tile(np.array([1, 1, 0], dtype=np.uint8), ROWS).tofile(root / "optimal.u8.bin")
     np.tile(np.array([7.5, 3.0, np.nan], dtype="<f4"), ROWS).tofile(root / "scores.f32.bin")
+    np.array([1, 0, -1, 1, 0, -1], dtype=np.int8).tofile(root / "shaping.i8.bin")
     (root / "meta.json").write_text(
         json.dumps(
             {
@@ -70,6 +71,8 @@ def main() -> None:
         assert np.isnan(data.scores[0, 2]) and data.scores[0, 0] == 7.5
         assert data.split("test").scores.shape == (1, ACT)
         assert data.features[1, 0] == 4.0, "reshape sai hàng"
+        assert data.shaping is not None and data.shaping.dtype == np.int8
+        assert data.shaping.tolist() == [1, 0, -1, 1, 0, -1]
 
         # §15: mỗi hàng thuộc đúng một phần, và ba phần cộng lại là cả tập.
         sizes = {name: len(data.split(name)) for name in ("train", "validation", "test")}
@@ -77,6 +80,10 @@ def main() -> None:
         assert sum(sizes.values()) == ROWS
         assert data.split("train").actions.tolist() == [0, 1, 0]
         assert data.split("validation").decisions.tolist() == [1, 0]
+
+        # where() phải mang theo cột optional — train lọc phe/loại mà mất nhãn
+        # là mất tín hiệu trong im lặng.
+        assert data.split("train").shaping.tolist() == [1, 0, -1]
 
         assert action_distribution(data) == {0: 3, 1: 3}
 

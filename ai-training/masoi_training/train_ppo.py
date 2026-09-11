@@ -33,6 +33,7 @@ import numpy as np
 import torch
 from torch import nn
 
+from .console import force_utf8_console
 from .data import load
 from .export import export_weights_json
 from .model import PolicyValueNet, masked_logits
@@ -46,10 +47,12 @@ def load_init(path: Path, obs: int, act: int) -> tuple[PolicyValueNet, int, dict
     epoch khác, và không có gì trong hai file nói ra điều đó.
     """
     w = json.loads(Path(path).read_text(encoding="utf8"))
-    assert w["format"] == "masoi-mlp-1", f"init không phải masoi-mlp-1: {w.get('format')!r}"
-    assert w["obsSize"] == obs and w["actionSize"] == act, (
-        f"init lệch schema: obs {w['obsSize']} vs {obs}, action {w['actionSize']} vs {act}"
-    )
+    if w["format"] != "masoi-mlp-1":
+        raise ValueError(f"init không phải masoi-mlp-1: {w.get('format')!r}")
+    if w["obsSize"] != obs or w["actionSize"] != act:
+        raise ValueError(
+            f"init lệch schema: obs {w['obsSize']} vs {obs}, action {w['actionSize']} vs {act}"
+        )
     hidden = int(w["hidden"])
     m = PolicyValueNet(obs, act, hidden)
     with torch.no_grad():
@@ -95,6 +98,7 @@ def baseline_for(kind: str, data, rewards: torch.Tensor) -> torch.Tensor:
 
 
 def main() -> None:
+    force_utf8_console()
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--data", required=True, help="Thư mục do `ai:encode --rollout` ghi ra")
     p.add_argument("--init", required=True, help="model.weights.json của champion")
@@ -125,14 +129,25 @@ def main() -> None:
         default="role",
         help="`b` trong A = R − b. Mặc định `role`; `value` là value head (xem baseline_for)",
     )
+    p.add_argument(
+        "--shaping-weight",
+        type=float,
+        default=1.0,
+        help="α trong A = R − b + α·L (spec 2026-09-11 D1). 0 = tắt, hành vi cũ byte một",
+    )
+    p.add_argument(
+        "--shaping-decisions",
+        default="",
+        help="Chỉ shaping các loại quyết định này (CSV, viết thường: vote,final_vote). Rỗng = tất cả hàng có nhãn",
+    )
     a = p.parse_args()
     torch.manual_seed(a.seed)
 
     d = load(a.data).side(a.side)
-    assert d.logprobs is not None and d.values is not None, (
-        "dataset không phải rollout (thiếu logprobs/values) — encode với --rollout"
-    )
-    assert len(d) > 0, f"không còn hàng nào sau khi lọc --side {a.side}"
+    if d.logprobs is None or d.values is None:
+        raise ValueError("dataset không phải rollout (thiếu logprobs/values) — encode với --rollout")
+    if len(d) == 0:
+        raise ValueError(f"không còn hàng nào sau khi lọc --side {a.side}")
     model, hidden, init_residual = load_init(Path(a.init), d.obs_size, d.action_size)
     init_state = copy.deepcopy(model.state_dict())
     opt = torch.optim.Adam(model.parameters(), lr=a.lr)
@@ -149,20 +164,39 @@ def main() -> None:
     residual = d.meta.get("policyKind") == "residual"
     beta = tau = None
     if residual:
-        assert d.bases is not None, "meta nói residual nhưng thiếu bases.f32.bin"
+        if d.bases is None:
+            raise ValueError("meta nói residual nhưng thiếu bases.f32.bin")
         beta = float(d.meta["beta"])
         tau = float(d.meta["temperature"])
-        assert tau > 0, "rollout residual phải có temperature > 0"
-        assert init_residual is not None and abs(float(init_residual["beta"]) - beta) < 1e-9, (
-            f"β của init ({init_residual}) khác β của rollout ({beta})"
-        )
+        if tau <= 0:
+            raise ValueError("rollout residual phải có temperature > 0")
+        if init_residual is None or abs(float(init_residual["beta"]) - beta) >= 1e-9:
+            raise ValueError(f"β của init ({init_residual}) khác β của rollout ({beta})")
         BASES = torch.from_numpy(np.nan_to_num(d.bases, nan=0.0).astype(np.float32))
         CAND = torch.from_numpy(~np.isnan(d.bases))
-        assert bool(CAND[torch.arange(len(d)), A].all()), (
-            "có hàng mà hành động đã đi không nằm trong bảng ứng viên — tập không nhất quán"
-        )
+        if not bool(CAND[torch.arange(len(d)), A].all()):
+            raise ValueError("có hàng mà hành động đã đi không nằm trong bảng ứng viên — tập không nhất quán")
     else:
-        assert init_residual is None, "init là residual nhưng rollout không phải — hai policy khác nhau"
+        if init_residual is not None:
+            raise ValueError("init là residual nhưng rollout không phải — hai policy khác nhau")
+
+    # Shaping (spec 2026-09-11 D1/D6): nhãn ±1 từ luật game, cộng vào advantage
+    # TRƯỚC chuẩn hoá. α = 0 → không đụng cột, dataset cũ vẫn train được.
+    shaping: torch.Tensor | None = None
+    if a.shaping_weight > 0:
+        if d.shaping is None:
+            raise ValueError("--shaping-weight cần shaping.i8.bin — encode lại dataset bằng bản mới")
+        raw = d.shaping.astype(np.float32).copy()
+        if a.shaping_decisions:
+            wanted = {name.strip().lower() for name in a.shaping_decisions.split(",") if name.strip()}
+            valid = {str(name).lower() for name in d.meta["decisions"]}
+            unknown = wanted - valid
+            if unknown:
+                raise ValueError(f"--shaping-decisions có tên lạ {sorted(unknown)} — hợp lệ: {sorted(valid)}")
+            names = np.array([str(d.meta["decisions"][int(i)]).lower() for i in d.decisions])
+            raw[~np.isin(names, sorted(wanted))] = 0.0
+        shaping = torch.from_numpy(raw)
+    shaping_coverage = round(float((shaping.numpy() != 0).mean()), 4) if shaping is not None else None
 
     def policy_logp(logits: torch.Tensor, idx: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """(log-softmax toàn hàng, mask đang dùng) của policy trên batch `idx`."""
@@ -183,6 +217,8 @@ def main() -> None:
     # Chuẩn hoá advantage: reward ±1 làm A dồn về hai cụm, và bước cập nhật khi
     # đó phụ thuộc tỉ lệ thắng của batch chứ không phụ thuộc nước đi nào tốt hơn.
     adv = R - base
+    if shaping is not None:
+        adv = adv + a.shaping_weight * shaping
     adv = (adv - adv.mean()) / (adv.std() + 1e-8)
 
     gen = torch.Generator().manual_seed(a.seed)
@@ -276,6 +312,9 @@ def main() -> None:
                 "baseline": a.baseline,
                 # `baselineMse` > `constantMse` nghĩa là baseline đang LÀM HẠI.
                 "baselineMse": round(baseline_mse, 4),
+                "shapingWeight": a.shaping_weight,
+                "shapingDecisions": a.shaping_decisions or None,
+                "shapingCoverage": shaping_coverage,
                 "constantMse": round(constant_mse, 4),
                 "policyKind": "residual" if residual else "logits",
                 "beta": beta,

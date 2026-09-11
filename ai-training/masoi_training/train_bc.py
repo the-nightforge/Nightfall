@@ -20,6 +20,7 @@ import numpy as np
 import torch
 from torch import nn
 
+from .console import force_utf8_console
 from .data import SPLIT_NAMES, action_distribution, load
 from .export import export_weights_json
 from .model import PolicyValueNet, masked_logits
@@ -94,6 +95,7 @@ def evaluate(model: PolicyValueNet, data, device: torch.device) -> dict:
 
 
 def main() -> None:
+    force_utf8_console()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", required=True, help="Thư mục do ai:encode ghi ra")
     parser.add_argument("--out", required=True, help="Thư mục nhận model + metrics")
@@ -247,7 +249,9 @@ def main() -> None:
             out / "model.onnx",
             input_names=["observation"],
             output_names=["policyLogits", "value"],
-            dynamic_axes={"observation": {0: "batch"}},
+            # Khoá là tên tham số của forward, không phải tên input ONNX —
+            # exporter dynamo của torch từ chối dict lệch tên ngay ở bước export.
+            dynamic_shapes={"features": {0: "batch"}},
         )
     except Exception as error:  # pragma: no cover - phụ thuộc bản torch
         onnx_error = str(error)

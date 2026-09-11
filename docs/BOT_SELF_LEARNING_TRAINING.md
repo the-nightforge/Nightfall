@@ -432,6 +432,20 @@ ghi — cùng predicate `isWolfPack` mà `--learned-seats` của benchmark dùng
 Kèm `--target-kl 0.01` và `--lr 1e-4` để mỗi bước giữ `agreementWithInit`
 ≥ 0,97, và `--bench-every` ≥ số vòng để các vòng nối tiếp nhau.
 
+### Shaping reward: nhãn trúng-phe-địch (2026-09-11)
+
+Spike 500 ván đo thấy nhãn "nước đi có trúng phe địch không" mang tín hiệu
+từng-quyết-định mà reward ±1 cấp-ván không có (VOTE làng: E[L|win] − E[L|loss]
+= +0.34 ± 0.02; FINAL_VOTE Sói: im lặng). PPO nhận nó dưới dạng bonus
+advantage: `A = R − b + α·L` — objective thật vẫn nằm trong gradient. Chi
+tiết: `docs/superpowers/specs/2026-09-11-shaping-reward-design.md`.
+
+- Mặc định α = 1. Rollout encode bằng bản mới tự có cột `shaping.i8.bin`.
+- Dataset cũ không có cột: `train_ppo` từ chối khi α > 0 — encode lại.
+- `--shaping-decisions vote` cho chạy `--side wolves`: FINAL_VOTE của Sói đã
+  đo là im lặng, đừng shaping nó.
+- `--shaping-weight 0` = hành vi cũ byte một (rollback).
+
 ### Ngắt lúc nào cũng được
 
 `--resume` (mặc định bật) đọc `state.json` và bỏ qua mọi vòng đã hoàn tất; trong
@@ -542,6 +556,7 @@ chi tiết và số liệu ở `reports/train-policy-0002.md`.
 | Vòng lặp RL | `python rl_loop.py --champion W.json --iterations 20 --games 3000 --bench-every 5 --out .tmp/rl` |
 | Champion residual | `python -m masoi_training.init_residual --from W.json --out R.json --beta 10` rồi `rl_loop.py --champion R.json --temperature 5` |
 | RL một phe | `python rl_loop.py --champion R.json --side wolves --lr 1e-4 --target-kl 0.01 --bench-every 5 --iterations 5` |
+| RL shaping | `python rl_loop.py --champion R.json --side village --shaping-alpha 1.0 --lr 1e-4 --target-kl 0.01 --bench-every 5 --iterations 5` |
 | Self-check Python | `python tests/test_data.py && python tests/test_train_smoke.py && python tests/test_ppo.py` |
 | Test TS | `npm test` |
 

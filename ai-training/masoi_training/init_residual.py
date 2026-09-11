@@ -14,10 +14,12 @@ from pathlib import Path
 
 import torch
 
+from .console import force_utf8_console
 from .model import PolicyValueNet
 
 
 def main() -> None:
+    force_utf8_console()
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--from", dest="source", required=True, help="model.weights.json nguồn (schema encoder hiện tại)")
     p.add_argument("--out", required=True)
@@ -25,7 +27,8 @@ def main() -> None:
     p.add_argument("--model-id", default="residual-0000")
     p.add_argument("--fresh", action="store_true", help="trunk ngẫu nhiên (seed 0) thay vì chép từ nguồn")
     a = p.parse_args()
-    assert a.beta > 0, "beta phải > 0"
+    if a.beta <= 0:
+        raise ValueError(f"beta phải > 0, nhận {a.beta}")
 
     w = json.loads(Path(a.source).read_text(encoding="utf8"))
     assert w["format"] == "masoi-mlp-1", w.get("format")
