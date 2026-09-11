@@ -98,6 +98,7 @@ function trajectoryLine(
     candidates: [{ targetId, score: 0, terms: [], evidenceIds: [] }],
     selectedAction: { decision: "VOTE", targetId, label: "bầu", kind: null },
     reward,
+    shaping: null,
     finalWinner: "village",
   };
 }

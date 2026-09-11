@@ -2,6 +2,7 @@ import { roleWonOutcome, type Role } from "@masoi/shared";
 import type { LearnedPick } from "../policy/learned-policy";
 import type { BotDecisionTrace } from "../trace/trace";
 import type { SelfPlayGame } from "./selfplay";
+import { shapingLabelFor } from "./shaping";
 
 /**
  * PR 7 của BOT_AI_CONTINUE_UPGRADE (§22): trajectory export — mỗi quyết định
@@ -82,6 +83,12 @@ export interface BotTrajectory {
   selectedAction: { decision: string; targetId: string | null; label: string; kind: string | null };
   /** +1 thắng / −1 thua theo đúng luật (kể cả thắng cá nhân vai trung lập). */
   reward: number;
+  /**
+   * Nhãn shaping ±1 (spec 2026-09-11 D2): nước có trúng phe địch không.
+   * `null` = không có nhãn (NIGHT/SPEECH, mục tiêu null, vai trung lập).
+   * Nhãn cho tầng train như `reward` — không bao giờ là observation.
+   */
+  shaping: number | null;
   finalWinner: string;
   /**
    * Có mặt khi nước này do policy học được LẤY MẪU ra (rollout RL). Nó không
@@ -262,6 +269,7 @@ export function gameToTrajectories(game: SelfPlayGame): BotTrajectory[] {
             : null,
       },
       reward: rewardFor(game, trace.botId, finalRole),
+      shaping: shapingLabelFor(game, trace),
       finalWinner: game.winner ?? "draw",
       // Khoá VẮNG hẳn ở nước heuristic, không phải `undefined`: dòng này đi
       // thẳng ra JSONL và một ván heuristic phải cho ra đúng byte như trước.

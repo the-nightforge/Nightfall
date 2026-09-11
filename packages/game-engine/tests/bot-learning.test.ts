@@ -74,6 +74,7 @@ function line(overrides: Partial<BotTrajectory> = {}): BotTrajectory {
     candidates: [],
     selectedAction: { decision: "VOTE", targetId: "p1", label: "bầu", kind: null },
     reward: 1,
+    shaping: null,
     finalWinner: "village",
   };
   return { ...base, ...overrides };
