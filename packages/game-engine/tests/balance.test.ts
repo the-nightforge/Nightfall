@@ -55,10 +55,11 @@ describe("balance", () => {
       * cách ngoại lệ trước đã được xử. Nó chỉ tan khi vế SÓI được đo lại trên
       * cùng một thang, và đó là việc chưa ai làm.
       *
-      * MỞ RỘNG 2026-09-06 (Task 9): đo xong, SORCERER = 4 và ALPHA_WOLF = 4,
-      * cả bốn preset 17-20 cùng kêu ở phép so này - cùng một nguyên nhân đã
-      * chẩn đoán (vế làng đo bằng "đóng góp so với Dân Làng" trên bàn bot,
-      * vế Sói 4x5=20 chưa từng qua phép đo đó):
+      * MỞ RỘNG 2026-09-06 (Task 9): đo xong, SORCERER = 4 và ALPHA_WOLF = 4 (lá
+      * sau đã xóa cứng cùng Sói Alpha ngày 2026-09-11 - con số này giờ chỉ còn
+      * là lịch sử của lần đo), cả bốn preset 17-20 cùng kêu ở phép so này - cùng
+      * một nguyên nhân đã chẩn đoán (vế làng đo bằng "đóng góp so với Dân Làng"
+      * trên bàn bot, vế Sói 4x5=20 chưa từng qua phép đo đó):
       *
       *   preset | làng  | Sói | chênh
       *   17     | 17.5  | 19  | -1.5
