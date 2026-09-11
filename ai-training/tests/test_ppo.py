@@ -336,7 +336,7 @@ def shaping_case() -> None:
         sys.argv = ["train_ppo", "--data", str(d_without), "--out", str(Path(tmp) / "reject"), *common]
         try:
             train_ppo.main()
-        except SystemExit:
+        except ValueError:
             pass
         else:
             raise AssertionError("thiếu shaping.i8.bin phải bị từ chối khi --shaping-weight > 0")
@@ -377,6 +377,16 @@ def shaping_case() -> None:
         train_ppo.main()
         mf = json.loads((Path(tmp) / "filtered" / "metrics.json").read_text(encoding="utf8"))
         assert abs(mf["shapingCoverage"] - float((decisions == 0).mean())) < 1e-3, mf["shapingCoverage"]
+
+        # (e) tên lạ trong --shaping-decisions phải bị chặn, không lặng lẽ zero hết nhãn.
+        sys.argv = ["train_ppo", "--data", str(d_with), "--out", str(Path(tmp) / "bogus"), *common,
+                    "--shaping-decisions", "votee,night"]
+        try:
+            train_ppo.main()
+        except ValueError as exc:
+            assert "votee" in str(exc), str(exc)
+        else:
+            raise AssertionError("--shaping-decisions có tên lạ phải bị từ chối")
 
 
 def main() -> None:

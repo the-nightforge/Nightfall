@@ -185,10 +185,14 @@ def main() -> None:
     shaping: torch.Tensor | None = None
     if a.shaping_weight > 0:
         if d.shaping is None:
-            raise SystemExit("--shaping-weight cần shaping.i8.bin — encode lại dataset bằng bản mới")
+            raise ValueError("--shaping-weight cần shaping.i8.bin — encode lại dataset bằng bản mới")
         raw = d.shaping.astype(np.float32).copy()
         if a.shaping_decisions:
             wanted = {name.strip().lower() for name in a.shaping_decisions.split(",") if name.strip()}
+            valid = {str(name).lower() for name in d.meta["decisions"]}
+            unknown = wanted - valid
+            if unknown:
+                raise ValueError(f"--shaping-decisions có tên lạ {sorted(unknown)} — hợp lệ: {sorted(valid)}")
             names = np.array([str(d.meta["decisions"][int(i)]).lower() for i in d.decisions])
             raw[~np.isin(names, sorted(wanted))] = 0.0
         shaping = torch.from_numpy(raw)
