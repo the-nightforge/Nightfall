@@ -100,6 +100,12 @@ export function validateTrajectoryLine(value: unknown): ObservationLeakReport {
   if (line.reward !== 1 && line.reward !== -1) {
     add("reward", "reward phải là +1 hoặc −1 (§20)", "schema");
   }
+  // Shaping là nhãn ±1 (spec 2026-09-11 D5). Validator chỉ thấy line nên không
+  // xác thực được semantics (không có vai thật của người khác) — semantics do
+  // test bảng của shaping.ts bảo vệ; ở đây chỉ chặn giá trị sai hình thức.
+  if (line.shaping !== undefined && line.shaping !== null && line.shaping !== 1 && line.shaping !== -1) {
+    add("shaping", "shaping phải là +1, −1, null hoặc vắng mặt", "schema");
+  }
   if (!isStringArray(line.legalActions)) add("legalActions", "phải là mảng chuỗi", "schema");
 
   const observation = line.observation;

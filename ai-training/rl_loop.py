@@ -29,6 +29,8 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from masoi_training.console import force_utf8_console
+
 ROOT = Path(__file__).resolve().parents[1]
 PY = sys.executable
 
@@ -106,6 +108,7 @@ def should_promote(scores: list[float], champion: float, margin: float) -> bool:
 
 
 def main() -> None:
+    force_utf8_console()
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--champion", required=True, help="model.weights.json xuất phát")
     p.add_argument("--iterations", type=int, default=3)
@@ -120,6 +123,10 @@ def main() -> None:
     p.add_argument("--side", default="all", choices=("all", "wolves", "village"),
                    help="Train residual cho MỘT phe; điểm thăng hạng = Δ của phe đó")
     p.add_argument("--target-kl", type=float, default=None, help="Xem train_ppo --target-kl")
+    p.add_argument("--shaping-alpha", type=float, default=1.0, dest="shaping_alpha",
+                   help="Xem train_ppo --shaping-weight; 0 = tắt shaping (dataset cũ)")
+    p.add_argument("--shaping-decisions", default="", dest="shaping_decisions",
+                   help="Xem train_ppo --shaping-decisions; ví dụ wolves-side: vote")
     p.add_argument("--confirm-seed", default="rl-conf",
                    help="Tiền tố seed ĐỘC LẬP để xác nhận trước khi thăng hạng; rỗng = tắt (không khuyến nghị)")
     p.add_argument("--lr", type=float, default=3e-4, help="Xem train_ppo --lr")
@@ -214,6 +221,8 @@ def main() -> None:
             [PY, "-m", "masoi_training.train_ppo", "--data", str(enc),
              "--init", str(champion), "--out", str(model_dir), "--model-id", model_id,
              "--baseline", a.baseline, "--side", a.side, "--lr", str(a.lr),
+             "--shaping-weight", str(a.shaping_alpha),
+             *(["--shaping-decisions", a.shaping_decisions] if a.shaping_decisions else []),
              *(["--target-kl", str(a.target_kl)] if a.target_kl is not None else [])],
             cwd=ROOT / "ai-training",
         )

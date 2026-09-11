@@ -129,6 +129,9 @@ async function main(): Promise<void> {
     masks: createWriteStream(join(outDir, "masks.u8.bin")),
     actions: createWriteStream(join(outDir, "actions.i32.bin")),
     rewards: createWriteStream(join(outDir, "rewards.i8.bin")),
+    // Nhãn shaping ±1 (spec 2026-09-11 D4); 0 = không nhãn. Luôn ghi: loader
+    // nhận diện bằng SỰ CÓ MẶT của file, dataset cũ không có là đúng.
+    shaping: createWriteStream(join(outDir, "shaping.i8.bin")),
     splits: createWriteStream(join(outDir, "splits.u8.bin")),
     roles: createWriteStream(join(outDir, "roles.u8.bin")),
     decisions: createWriteStream(join(outDir, "decisions.u8.bin")),
@@ -250,6 +253,7 @@ async function main(): Promise<void> {
     streams.masks.write(Buffer.from(Uint8Array.from(encoded.mask, (ok) => (ok ? 1 : 0))));
     streams.actions.write(Buffer.from(Int32Array.of(encoded.actionIndex).buffer));
     streams.rewards.write(Buffer.from(Int8Array.of(line.reward)));
+    streams.shaping.write(Buffer.from(Int8Array.of(line.shaping ?? 0)));
     streams.splits.write(Buffer.from(Uint8Array.of(SPLIT_CODE[split])));
     streams.roles.write(Buffer.from(Uint8Array.of(roleIndex.get(line.finalRole) ?? 255)));
     streams.decisions.write(Buffer.from(Uint8Array.of(decisionIndex.get(line.decision) ?? 255)));
