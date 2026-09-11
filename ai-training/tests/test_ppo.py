@@ -389,10 +389,128 @@ def shaping_case() -> None:
             raise AssertionError("--shaping-decisions có tên lạ phải bị từ chối")
 
 
+def train_decisions_case() -> None:
+    """--train-decisions: policy-loss chỉ tính trên loại quyết định được chọn.
+
+    Ba bài kiểm: (a) đảo reward của hàng NIGHT (giữ nguyên multiset để adv của
+    hàng VOTE không đổi) phải cho trọng số GIỐNG HẰNG BYTE khi mask vote - hàng
+    NIGHT không được rò một bit nào vào gradient của policy; (b) cùng hai
+    dataset đó mà KHÔNG mask thì trọng số phải khác nhau (chứng minh bài kiểm
+    (a) có khả năng phát hiện rò rỉ); (c) tên lạ bị từ chối, tên hợp lệ nhưng
+    không khớp hàng nào cũng bị từ chối thay vì mean() trên rỗng ra NaN.
+    """
+    torch.manual_seed(3)
+    rng = np.random.default_rng(3)
+    init = PolicyValueNet(OBS, ACT, 8).eval()
+    feats = rng.random((ROWS, OBS), dtype=np.float32)
+    masks = np.zeros((ROWS, ACT), dtype=np.uint8)
+    masks[:, :4] = 1
+    with torch.no_grad():
+        lg, val = init(torch.from_numpy(feats))
+        lp = torch.log_softmax(masked_logits(lg, torch.from_numpy(masks.astype(bool))), 1)
+    actions = torch.distributions.Categorical(logits=lp).sample().numpy().astype("<i4")
+    logprobs = lp[np.arange(ROWS), actions].numpy().astype("<f4")
+    # Một vai duy nhất: baseline `role` rút về trung bình chung, và đảo reward
+    # trong hàng NIGHT (giữ multiset) không đổi adv của hàng VOTE một bit nào.
+    roles = np.zeros(ROWS, np.uint8)
+    decisions = (np.arange(ROWS) % 2).astype(np.uint8)  # meta: ["VOTE", "NIGHT"]
+    night = np.nonzero(decisions == 1)[0]
+    rewards_a = rng.choice(np.array([-1, 1], dtype=np.int8), ROWS)
+    perm = rng.permutation(len(night))
+    rewards_b = rewards_a.copy()
+    rewards_b[night] = rewards_a[night[perm]]
+
+    def write(root: Path, rewards: np.ndarray, kinds: np.ndarray = decisions) -> None:
+        root.mkdir(parents=True, exist_ok=True)
+        feats.astype("<f4").tofile(root / "features.f32.bin")
+        masks.tofile(root / "masks.u8.bin")
+        actions.tofile(root / "actions.i32.bin")
+        rewards.tofile(root / "rewards.i8.bin")
+        np.zeros(ROWS, np.uint8).tofile(root / "splits.u8.bin")
+        roles.tofile(root / "roles.u8.bin")
+        kinds.tofile(root / "decisions.u8.bin")
+        logprobs.tofile(root / "logprobs.f32.bin")
+        val.numpy().astype("<f4").tofile(root / "values.f32.bin")
+        meta = {
+            "rows": ROWS,
+            "obsSize": OBS,
+            "actionSize": ACT,
+            "datasetVersion": "rollout-test",
+            "roles": ["A"],
+            "decisions": ["VOTE", "NIGHT"],
+            "featureNames": [f"f{i}" for i in range(OBS)],
+            "actionNames": [f"a{i}" for i in range(ACT)],
+        }
+        (root / "meta.json").write_text(json.dumps(meta), encoding="utf8")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        da, db = Path(tmp) / "enc-a", Path(tmp) / "enc-b"
+        write(da, rewards_a)
+        write(db, rewards_b)
+
+        initp = Path(tmp) / "init.weights.json"
+        export_weights_json(init, json.loads((da / "meta.json").read_text(encoding="utf8")),
+                            initp, model_id="init", training_seed=0, hidden=8)
+        # value_coef = entropy = 0: value head và entropy không được rò tín
+        # hiệu hàng NIGHT vào trọng số chung qua trunk, nếu không bài kiểm (a)
+        # đo cả thứ không thuộc về mask.
+        common = ["--init", str(initp), "--epochs", "4", "--batch-size", "64",
+                  "--model-id", "td", "--shaping-weight", "0",
+                  "--value-coef", "0", "--entropy", "0"]
+
+        def train(data: Path, out: Path, *extra: str) -> dict:
+            sys.argv = ["train_ppo", "--data", str(data), "--out", str(out),
+                        *common, *extra]
+            train_ppo.main()
+            return json.loads((out / "metrics.json").read_text(encoding="utf8"))
+
+        def state(out: Path) -> dict:
+            return torch.load(out / "model.pt")
+
+        # (a) mask vote: đảo reward NIGHT không được đổi trọng số một bit nào.
+        ma = train(da, Path(tmp) / "ma", "--train-decisions", "vote")
+        mb = train(db, Path(tmp) / "mb", "--train-decisions", "vote")
+        assert ma["trainDecisions"] == "vote", ma.get("trainDecisions")
+        sa, sb = state(Path(tmp) / "ma"), state(Path(tmp) / "mb")
+        assert sa.keys() == sb.keys()
+        for key in sa:
+            assert torch.equal(sa[key], sb[key]), f"mask rò rỉ: lệch ở {key}"
+
+        # (b) đối chứng: không mask thì hai dataset phải cho trọng số khác nhau.
+        fa = train(da, Path(tmp) / "fa")
+        fb = train(db, Path(tmp) / "fb")
+        assert any(not torch.equal(fa_state, fb_state)
+                   for fa_state, fb_state in zip(state(Path(tmp) / "fa").values(),
+                                                 state(Path(tmp) / "fb").values())), \
+            "đối chứng phải khác nhau — nếu không bài kiểm (a) vô nghĩa"
+        assert fa.get("trainDecisions") is None, fa.get("trainDecisions")
+
+        # (c) tên lạ bị từ chối; tên hợp lệ nhưng không khớp hàng nào cũng vậy.
+        sys.argv = ["train_ppo", "--data", str(da), "--out", str(Path(tmp) / "bogus"),
+                    *common, "--train-decisions", "votee,night"]
+        try:
+            train_ppo.main()
+        except ValueError as exc:
+            assert "votee" in str(exc), str(exc)
+        else:
+            raise AssertionError("--train-decisions có tên lạ phải bị từ chối")
+        dv = Path(tmp) / "enc-voteonly"
+        write(dv, rewards_a, np.zeros(ROWS, np.uint8))
+        sys.argv = ["train_ppo", "--data", str(dv), "--out", str(Path(tmp) / "empty"),
+                    *common, "--train-decisions", "night"]
+        try:
+            train_ppo.main()
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("--train-decisions không khớp hàng nào phải bị từ chối")
+
+
 def main() -> None:
     logits_case()
     residual_case()
     shaping_case()
+    train_decisions_case()
     print("ok")
 
 
