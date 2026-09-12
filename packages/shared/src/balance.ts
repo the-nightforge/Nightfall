@@ -535,7 +535,29 @@ function preset(overrides: Partial<RoomConfig>): RoomConfig {
  *
  * Chọn qua hai lượt ứng viên, cùng seed với preset. ±95% của mọi ô ~4.4 điểm.
  * Phân bố lá phe Sói sau lượt này: Sói Con 9/10/17, Sói Pháp Sư 15/16/17,
- * Kẻ Phản Bội 11/12/18/19/20 (19-20 thế ghế Sói Alpha, xóa cứng 2026-09-11).
+ * Kẻ Phản Bội 11/12/18, Sói Alpha 19/20 - hai ô cuối đã đổi, xem đoạn
+ * 2026-09-12 ngay dưới.
+ *
+ * ĐO BÙ 2026-09-12 sau khi xóa cứng Sói Alpha (cùng công cụ, cùng seed, 500
+ * ván mỗi bộ bài). Thế ghế Alpha bằng Kẻ Phản Bội làm 19-20 lệch hẳn về làng:
+ * 19 ra 57.2, 20 ra 64.6 (bộ còn Alpha đo trên máy: 43.8 / 52.0) - bầy mất một
+ * con cắn, mà Kẻ Phản Bội không bù được. Hai lượt ứng viên:
+ *
+ *   n  | ứng viên                                | phe làng |   Δ
+ *   19 | Kẻ Phản Bội -> Sói Con                  |   44.0   | -13.2
+ *   19 | Kẻ Phản Bội -> Sói Pháp Sư              |   44.0   | -13.2
+ *   19 | + Sói Pháp Sư (giữ Kẻ Phản Bội)         |   31.6   | -25.6
+ *   19 | 1 Sói thường -> Sói Con (giữ Phản Bội)  |   53.6   |  -3.6  <- chọn
+ *   20 | Kẻ Phản Bội -> Sói Con                  |   51.8   | -12.8  <- chọn
+ *   20 | Kẻ Phản Bội -> Sói Pháp Sư              |   52.6   | -12.0
+ *   20 | + Sói Pháp Sư (giữ Kẻ Phản Bội)         |   40.2   | -24.4
+ *   20 | 1 Sói thường -> Sói Con (giữ Phản Bội)  |   60.0   |  -4.6
+ *
+ * Ở 20, Sói Con và Sói Pháp Sư ngang nhau trong nhiễu; chọn Sói Con vì 0 ván
+ * chạm trần vòng (Pháp Sư: 2) và ván ngắn hơn (8.6 so với 9.0 vòng) - bàn 20
+ * người vốn đã 25-30 phút. Giữ Kẻ Phản Bội ở 20 thì kẹt mép 60.0, nên nó chỉ
+ * còn ở 19. Phân bố lá phe Sói hiện hành: Sói Con 9/10/17/19/20, Sói Pháp Sư
+ * 15/16/17, Kẻ Phản Bội 11/12/18/19.
  *
  * Pha DEFENSE lật chiều bàn vừa: bảng cũ (không DEFENSE) cho 11-15 nghiêng Sói,
  * đo đúng thì 9-16 nghiêng LÀNG (55-67%). Bị cáo được tự bào chữa là thứ phe
@@ -720,12 +742,12 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
    * không bị đụng tới ở đây vì bàn đông cần NHIỀU thời gian nói hơn chứ không
    * ít hơn, nhưng con số đó là một quyết định sản phẩm chưa ai ra.
    *
-   * Hiện hành (sau lần đo 2026-09-11, xem khối trên `RAW_PRESET_DECKS`):
+   * Hiện hành (sau lần đo 2026-09-11 và đo bù 2026-09-12, xem khối trên `RAW_PRESET_DECKS`):
    * 16: WEREWOLF x3, SORCERER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x4
    * 17: WEREWOLF x2, WOLF_CUB, SORCERER, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, VILLAGER x3
    * 18: WEREWOLF x4, TRAITOR, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, VILLAGER x4
-   * 19: WEREWOLF x4, DOPPELGANGER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, TRAITOR, VILLAGER x4
-   * 20: như 19, VILLAGER x5
+   * 19: WEREWOLF x3, WOLF_CUB, TRAITOR, DOPPELGANGER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, VILLAGER x4
+   * 20: WEREWOLF x4, WOLF_CUB, DOPPELGANGER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, VILLAGER x5
    *
    * Đổi 2026-09-05 (SORCERER + ALPHA_WOLF thay MEDIUM + PRIEST, xóa cứng):
    * 14-16 trả ghế Linh Mục về Dân Làng (mỗi preset +1 Dân); 17-18 đổi
@@ -841,7 +863,8 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     traitor: true,
   }),
   19: preset({
-    werewolves: 4,
+    werewolves: 3,
+    wolfCub: true,
     doppelganger: true,
     seer: true,
     apprenticeSeer: true,
@@ -856,6 +879,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
   }),
   20: preset({
     werewolves: 4,
+    wolfCub: true,
     doppelganger: true,
     seer: true,
     apprenticeSeer: true,
@@ -866,7 +890,6 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     mayor: true,
     tracker: true,
     elder: true,
-    traitor: true,
   }),
 };
 
