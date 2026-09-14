@@ -1,0 +1,126 @@
+# ops/vps/docker-compose.prod.yml — Production override for the VPS.
+#
+# Single instance backend only. Used TOGETHER with the base file:
+#
+#   docker compose -f docker-compose.yml -f ops/vps/docker-compose.prod.yml ...
+#
+# What this override does:
+#   - postgres (postgres:16-alpine) + redis (redis:7-alpine): NO published
+#     ports (cleared via `!reset`; the base dev mappings 5433/6380 must NOT
+#     reach the Internet). Named volumes masoi_pgdata / masoi_redisdata.
+#   - server: builds Dockerfile.server, ONE container (container_name +
+#     deploy.replicas 1, never --scale), restart unless-stopped. Inherits the
+#     image CMD (prisma migrate + node) — no `command:` here on purpose.
+#     Reads runtime config from /opt/masoi/.env (see
+#     ops/vps/.env.production.example). Starts only after postgres AND redis
+#     are healthy.
+#   - minio/minio-init (avatars): moved to the `avatars` profile, i.e. OFF by
+#     default. Plain `up` never starts them; enable explicitly only when
+#     OBJECT_STORAGE_* is fully configured.
+#
+# PORT NOTE (read before "fixing" the numbers below): the app listens on
+# $PORT (config.ts: PORT wins over SERVER_PORT, default 4000), and production
+# sets PORT=4100 in /opt/masoi/.env. Dockerfile.server still says EXPOSE 4000
+# — that line is a stale no-op default (EXPOSE never publishes anything) and
+# is ignored at runtime. The compose mapping below uses the SAME $PORT on both
+# sides (127.0.0.1:${PORT:-4100}:${PORT:-4100}) so the container port always
+# equals what the app actually listens on. Nginx proxies 80/443 -> 127.0.0.1:$PORT.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: masoi-postgres
+    restart: unless-stopped
+    env_file:
+      - /opt/masoi/.env
+    environment:
+      POSTGRES_USER: masoi
+      POSTGRES_DB: masoi
+      # Overrides the dev password from the base file. Fails fast at
+      # `config`/`up` time if the operator forgot to set it.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in /opt/masoi/.env — copy ops/vps/.env.production.example and replace every REPLACE_ME}
+    # Clear the base dev port mapping (5433:5432). NOTE: plain `ports: []`
+    # would CONCATENATE with the base list under multi-file merge, leaving
+    # Postgres reachable — `!reset` (compose v2.24+, VPS gets latest via
+    # 02-docker.sh) is what actually drops it.
+    ports: !reset []
+    volumes:
+      - masoi_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U masoi"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: masoi-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    # Clear the base dev port mapping (6380:6379) — see `!reset` note above.
+    ports: !reset []
+    volumes:
+      - masoi_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build:
+      # Resolved against the PROJECT directory (first -f file = repo root),
+      # NOT this file's directory — so `.` is the repo root both on the VPS
+      # (/opt/masoi/app) and locally. Do NOT use ../.. here: under multi-file
+      # merge that escapes to the parent of the repo and the Dockerfile is
+      # not found.
+      context: .
+      dockerfile: Dockerfile.server
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-}
+    image: masoi-server:prod
+    container_name: masoi-server
+    restart: unless-stopped
+    env_file:
+      - /opt/masoi/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "4100"
+    # Localhost-bound only: the outside world reaches the app through Nginx
+    # (80/443 -> 127.0.0.1:$PORT), never directly.
+    ports:
+      - "127.0.0.1:${PORT:-4100}:${PORT:-4100}"
+    # Single instance: exactly one container. `deploy.replicas` is
+    # documentation for swarm readers; what actually enforces it under
+    # `docker compose up` is container_name + never passing --scale.
+    deploy:
+      replicas: 1
+    # No `command:` — inherit the image CMD (prisma migrate && node server).
+    # Dependency-free healthcheck (node 20 has global fetch; no curl in the
+    # image). Reads $PORT inside the container, defaulting to 4100.
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"var p=process.env.PORT||'4100';fetch('http://127.0.0.1:'+p+'/api/health').then(function(r){process.exit(r.ok?0:1)}).catch(function(){process.exit(1)})\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # Avatars OFF by default: `docker compose up` without --profile never
+  # starts these. To opt in: fill ALL OBJECT_STORAGE_* keys in /opt/masoi/.env
+  # and pass `--profile avatars` (or list the services explicitly).
+  minio:
+    profiles: ["avatars"]
+  minio-init:
+    profiles: ["avatars"]
+
+volumes:
+  masoi_pgdata:
+  masoi_redisdata:

@@ -78,3 +78,58 @@ only),
 
 Afterwards `deploy` must log out and back in (or run `newgrp docker`)
 before running `docker` without `sudo`.
+
+## 03 — Production env + deploy (`03-deploy.sh`, `docker-compose.prod.yml`)
+
+Idempotent: safe to re-run. Run **on the VPS** as `root` or `deploy`
+(after `01` + `02`):
+
+```bash
+# one-time: checkout + env file
+sudo mkdir -p /opt/masoi
+sudo git clone <repo-url> --branch chore/vps-backend /opt/masoi/app
+sudo cp /opt/masoi/app/ops/vps/.env.production.example /opt/masoi/.env
+sudo chmod 600 /opt/masoi/.env
+sudo nano /opt/masoi/.env   # replace EVERY REPLACE_ME (see below)
+
+# every deploy (pulls, rebuilds server with GIT_COMMIT, restarts, health-checks)
+/opt/masoi/app/ops/vps/03-deploy.sh
+```
+
+What it needs in `/opt/masoi/.env` (all from `.env.production.example`):
+
+- `POSTGRES_PASSWORD` — strong random (`openssl rand -base64 32`); the
+  same password must appear inside `DATABASE_URL`. The script refuses to
+  deploy if `masoi_dev_password` is still present.
+- `DATABASE_URL=postgresql://masoi:<STRONG>@postgres:5432/masoi?schema=public`
+  (`postgres` = compose service DNS, NOT localhost).
+- `REDIS_URL=redis://redis:6379`, `PORT=4100`, `NODE_ENV=production`,
+  `CORS_ORIGIN=https://<your-app>.vercel.app` (exact origin, never `*` —
+  the server throws at startup otherwise), `TRUST_PROXY=1` (behind Nginx).
+- Optional sections (BOT/LiveKit/object-storage) stay commented/empty =
+  disabled. Half-filled LiveKit or object-storage config makes the server
+  FAIL at startup (fail-fast by design, same as dev).
+
+What the prod compose file does
+(`docker compose -f docker-compose.yml -f ops/vps/docker-compose.prod.yml`):
+
+- `postgres` (`postgres:16-alpine`) + `redis` (`redis:7-alpine`): published
+  ports CLEARED (`ports: !reset []` — plain `ports: []` would merge with the
+  base dev mappings under multi-file merge and leave them reachable).
+  Named volumes `masoi_pgdata` / `masoi_redisdata`.
+- `server`: builds `Dockerfile.server`, exactly ONE container
+  (`container_name` + `deploy.replicas: 1`, never `--scale`),
+  `restart: unless-stopped`, `env_file: /opt/masoi/.env`, starts only after
+  postgres AND redis are healthy. No `command:` — inherits the image CMD
+  (`prisma migrate deploy` + `node`), so schema migrations run on every deploy.
+- `minio`/`minio-init` (avatars): OFF by default (`avatars` profile). Plain
+  `up` never starts them.
+- Health: `GET /api/health` → `{ok:true, db:true}` when live (the script
+  polls `http://127.0.0.1:$PORT/api/health` until both are true).
+
+PORT note: the app listens on `$PORT` (`apps/server/src/config.ts`: `PORT`
+wins over `SERVER_PORT`, default `4000`); production sets `PORT=4100`.
+`Dockerfile.server`'s `EXPOSE 4000` is a stale no-op default (EXPOSE never
+publishes) and is ignored at runtime — the compose mapping
+`127.0.0.1:${PORT:-4100}:${PORT:-4100}` deliberately uses the same `$PORT`
+on both sides. Nginx (later step) proxies `80/443 -> 127.0.0.1:4100`.
