@@ -11,7 +11,7 @@ import {
 } from "@masoi/shared";
 import { GameEngine } from "../../engine";
 import { detectCoalitions } from "../analysis/coalition";
-import { BotRuntime, type LearnedDecisions } from "../BotRuntime";
+import { BotRuntime, isDefaultLearnedDecisions, type LearnedDecisions } from "../BotRuntime";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
 import type { LearnedPolicy } from "../learning/mlp";
 import { judgeChainPosition, type ChainBlockReason } from "../conversation/chain-limits";
@@ -537,7 +537,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
           learnedSeats: input.learnedSeats ?? "all",
           learnedTemperature: input.learnedTemperature ?? 0,
           // Chỉ ghi khi KHÁC mặc định: record là hợp đồng JSON có test canh khoá.
-          ...(input.learnedDecisions && input.learnedDecisions !== "both"
+          ...(input.learnedDecisions && !isDefaultLearnedDecisions(input.learnedDecisions)
             ? { learnedDecisions: input.learnedDecisions }
             : {}),
         }

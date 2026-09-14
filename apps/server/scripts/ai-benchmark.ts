@@ -63,7 +63,7 @@ function usage(): string {
     "  --seed <text>        Tiền tố seed (mặc định: bench)",
     "  --players <n>        Số người mỗi bàn (mặc định: 8)",
     `  --setups <a,b,...>   Trong ${SETUP_NAMES.join(", ")} (mặc định: baseline,village,wolves)`,
-    "  --learned-decisions  vote | night | both (mặc định both) — ablation theo lượt",
+    "  --learned-decisions  vote | night | final | both, hoặc danh sách cách nhau bằng dấu phẩy (mặc định both) — ablation theo lượt",
     "  --no-preset          Không dùng bộ bài chuẩn của số người đó",
     "  --no-defense         Tắt vòng bào chữa",
     "  --out <path>         Ghi kết quả thô ra JSON",
@@ -107,10 +107,26 @@ function parseArgs(argv: readonly string[]): Options {
         });
     } else if (a === "--learned-decisions") {
       const value = next();
-      if (value !== "vote" && value !== "night" && value !== "both") {
-        throw new Error(`--learned-decisions cần vote | night | both, nhận "${value}"`);
+      // Tập cờ (spec 2026-09-14 D6): ablation một-lượt-một ("final" riêng)
+      // không được bật lẫn vote/night — điều mà union cũ làm im lặng.
+      if (value === "both") {
+        o.learnedDecisions = "both";
+      } else {
+        const flags = value
+          .split(",")
+          .map((flag) => flag.trim())
+          .filter((flag) => flag !== "");
+        for (const flag of flags) {
+          if (flag !== "vote" && flag !== "night" && flag !== "final") {
+            throw new Error(
+              `--learned-decisions cần vote | night | final | both (cách nhau bằng dấu phẩy), nhận "${value}"`,
+            );
+          }
+        }
+        if (flags.length === 0) throw new Error("--learned-decisions rỗng");
+        const valid = flags as Array<"vote" | "night" | "final">;
+        o.learnedDecisions = valid.length === 1 ? valid[0]! : [...new Set(valid)];
       }
-      o.learnedDecisions = value;
     } else throw new Error(`Tham số không nhận ra: ${a}\n\n${usage()}`);
   }
   if (!o.model) throw new Error(usage());

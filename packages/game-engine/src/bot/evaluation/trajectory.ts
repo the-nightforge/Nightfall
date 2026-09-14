@@ -77,8 +77,10 @@ export interface BotTrajectory {
   candidates: BotDecisionTrace["candidates"];
   /**
    * `kind` là `NightActionKind` với quyết định NIGHT (`null` = bot không làm
-   * gì), và `null` với mọi quyết định khác. Nhãn train là cặp (kind, target):
-   * HEAL và POISON cùng một người là hai nước đi khác nhau.
+   * gì), `"FINAL"` với quyết định FINAL_VOTE (hai nước treo/tha cùng
+   * `targetId` là bị cáo, phân biệt bằng `label` — hợp đồng dữ liệu D8 của
+   * spec 2026-09-14), và `null` với mọi quyết định khác. Nhãn train là cặp
+   * (kind, target): HEAL và POISON cùng một người là hai nước đi khác nhau.
    */
   selectedAction: { decision: string; targetId: string | null; label: string; kind: string | null };
   /** +1 thắng / −1 thua theo đúng luật (kể cả thắng cá nhân vai trung lập). */
@@ -104,8 +106,11 @@ export interface BotTrajectory {
  * `legalChoices` là tập BAN NGÀY; đọc nó cho một quyết định NIGHT sẽ ra mảng
  * rỗng và biến mọi hành động đêm thành "ngoài luật" với tầng kiểm dataset
  * (BOT_SELF_LEARNING §42). Ba loại quyết định CHỌN MỤC TIÊU có ba tập riêng;
- * `FINAL_VOTE` (treo/tha) và `SPEECH` không chọn mục tiêu trong không gian này
- * nên vẫn mang tập ban ngày để tham khảo, và tầng kiểm không ép luật cho chúng.
+ * `SPEECH` không chọn mục tiêu trong không gian này nên vẫn mang tập ban ngày
+ * để tham khảo, và tầng kiểm không ép luật cho nó. `FINAL_VOTE` (treo/tha)
+ * cũng mang tập ban ngày ở đây — có chủ đích: mask không đọc nó, và đổi tập
+ * này là đổi cả nguồn dữ liệu của validator (spec 2026-09-14 D2; nghi can đầu
+ * tiên nếu agreement treo/tha thấp).
  *
  * Đêm gộp mục tiêu của MỌI loại hành động bot có: nó chọn cả loại lẫn mục tiêu
  * trong một lượt, nên hợp của các tập chính là tập nó được chọn.
@@ -259,14 +264,19 @@ export function gameToTrajectories(game: SelfPlayGame): BotTrajectory[] {
         targetId: trace.chosen.targetId,
         label: trace.chosen.label,
         // Trace cũ không có `actionKind`: với NIGHT thì `label` chính là kind
-        // (BotRuntime ghi `night.action`), trừ "bỏ lượt" là không làm gì.
+        // (BotRuntime ghi `night.action`), trừ "bỏ lượt" là không làm gì; với
+        // FINAL_VOTE thì kind là "FINAL" (BotRuntime ghi tường minh từ spec
+        // 2026-09-14 D8), để `scoredSlots`/validator đọc kind thay vì suy ra
+        // từ decision.
         kind:
           trace.decision === "NIGHT"
             ? (trace.chosen.actionKind ??
               (trace.chosen.targetId === null && trace.chosen.label === "bỏ lượt"
                 ? null
                 : trace.chosen.label))
-            : null,
+            : trace.decision === "FINAL_VOTE"
+              ? (trace.chosen.actionKind ?? "FINAL")
+              : null,
       },
       reward: rewardFor(game, trace.botId, finalRole),
       shaping: shapingLabelFor(game, trace),

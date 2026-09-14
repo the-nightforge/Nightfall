@@ -1,6 +1,10 @@
 import { PHASES, ROLE_META, ROLES, isRole, type Role, type Team } from "@masoi/shared";
 import { MAX_ROUNDS } from "../evaluation/selfplay";
 import type { ObservationInput } from "../evaluation/trajectory";
+import {
+  FINAL_VOTE_GUILTY_LABEL,
+  FINAL_VOTE_SPARE_LABEL,
+} from "../decision/trial-decision";
 import type { NightActionKind } from "../types";
 
 /**
@@ -29,18 +33,21 @@ export const DECISION_KINDS = [
 ] as const;
 
 /**
- * Ba loại quyết định CHỌN MỘT NƯỚC ĐI — đúng những loại mà không gian hành động
- * ở đây mô tả được.
+ * Những loại quyết định mà không gian hành động ở đây mô tả được.
  *
- * `FINAL_VOTE` là treo/tha và `SPEECH` là một hành vi lời nói: cả hai có
- * `targetId` nhưng targetId ấy KHÔNG phải một nước đi trong không gian này. Ánh
- * xạ chúng vào ghế sẽ sinh ra nhãn train nói "bot đã bầu người này" cho một
- * lượt bot chỉ vừa nhắc tên người đó — sai theo đúng cách khó phát hiện nhất.
+ * `VOTE`/`HUNTER_SHOT` chọn trong loại `CHOOSE`, `NIGHT` chọn cặp (loại đêm,
+ * mục tiêu), `FINAL_VOTE` chọn trong loại `FINAL` (ô ghế bị cáo = treo, ô
+ * không-mục-tiêu = tha — hợp đồng dữ liệu D8 của spec 2026-09-14). Chỉ
+ * `SPEECH` là hành vi lời nói: nó có `targetId` nhưng targetId ấy KHÔNG phải
+ * một nước đi trong không gian này, và ánh xạ nó vào ghế sẽ sinh nhãn train
+ * nói "bot đã bầu người này" cho một lượt bot chỉ vừa nhắc tên người đó — sai
+ * theo đúng cách khó phát hiện nhất.
  */
 export const TARGETING_DECISIONS: ReadonlySet<string> = new Set([
   "VOTE",
   "NIGHT",
   "HUNTER_SHOT",
+  "FINAL_VOTE",
 ]);
 
 /**
@@ -74,6 +81,18 @@ const NIGHT_KIND_TABLE = {
 export const NIGHT_ACTION_KINDS = Object.keys(NIGHT_KIND_TABLE) as NightActionKind[];
 
 /**
+ * Loại hành động của PHIÊN TOÀ (treo/tha — spec 2026-09-14 D1): ô ghế của bị
+ * cáo = treo, ô không-mục-tiêu = tha. Append CUỐI `ACTION_KINDS` để mọi chỉ số
+ * cũ (0–186) giữ nguyên; chỉ số observation thì không giữ được (chiều
+ * `legalKind:FINAL` chèn giữa global features) nên dataset lên dataset-0004 và
+ * không transfer weights.
+ *
+ * Không tái dùng CHOOSE (trộn semantics bầu/treo), không đầu nhị phân riêng
+ * (nhân đôi train/runtime/benchmark).
+ */
+export const FINAL_ACTION_KIND = "FINAL";
+
+/**
  * Trục "loại" của không gian hành động: ban ngày + mọi loại đêm.
  *
  * Không gian hành động là tích (loại × ô): chỉ số = `kind × (maxSeats + 1) + ô`,
@@ -83,7 +102,11 @@ export const NIGHT_ACTION_KINDS = Object.keys(NIGHT_KIND_TABLE) as NightActionKi
  * trục này: một policy chỉ chọn ghế thì khi cắm vào runtime không nói được nó
  * muốn LÀM GÌ với ghế đó.
  */
-export const ACTION_KINDS: readonly string[] = [DAY_ACTION_KIND, ...NIGHT_ACTION_KINDS];
+export const ACTION_KINDS: readonly string[] = [
+  DAY_ACTION_KIND,
+  ...NIGHT_ACTION_KINDS,
+  FINAL_ACTION_KIND,
+];
 
 /**
  * Trần số ghế của một vector.
@@ -144,9 +167,10 @@ export interface EncodedObservation {
   /**
    * Chỉ số hành động bot đã chọn — nhãn cho behavior cloning.
    *
-   * `null` khi hành động không ánh xạ được vào không gian này (SPEECH,
-   * FINAL_VOTE, hoặc một nước đi ngoài tập hợp lệ). `null` là "không có nhãn",
-   * không phải "hành động 0": một nhãn bịa ra sẽ dạy model chính xác điều sai.
+   * `null` khi hành động không ánh xạ được vào không gian này (SPEECH, hoặc
+   * một nước đi ngoài tập hợp lệ — gồm cả FINAL_VOTE vắng bị cáo). `null` là
+   * "không có nhãn", không phải "hành động 0": một nhãn bịa ra sẽ dạy model
+   * chính xác điều sai.
    */
   actionIndex: number | null;
 }
@@ -307,21 +331,32 @@ export function selfRoleOf(line: ObservationInput): Role | null {
 /**
  * Mục tiêu hợp lệ THEO LOẠI cho line này — nguồn của mask và của nhãn.
  *
- * Ban ngày (VOTE/HUNTER_SHOT) chỉ có một loại `CHOOSE`; ban đêm là bảng
- * `nightLegalTargets` của observation, với hai quy ước engine không viết vào
- * bảng: HEAL không kèm mục tiêu (engine tự cứu nạn nhân bầy — bot thấy nạn
- * nhân qua `nightWolfTarget`, và `BotNightIntention` của Phù Thuỷ gửi
- * `targetId: null`), và SKIP là "không mục tiêu". "Không mục tiêu" của ban
- * ngày là `NO_ELIMINATION`; Thợ Săn luôn được không bắn.
+ * Ban ngày (VOTE/HUNTER_SHOT) chỉ có một loại `CHOOSE`; phiên toà FINAL_VOTE
+ * chỉ có một loại `FINAL` (đúng một entry — ghế bị cáo + ô tha — và `return`
+ * ngay, TRƯỚC fallthrough CHOOSE: rơi xuống nhánh CHOOSE sẽ mở mask theo
+ * `legalChoices` ban ngày và nhãn train nói "bot này bầu người kia" ở một
+ * lượt treo/tha); ban đêm là bảng `nightLegalTargets` của observation, với hai
+ * quy ước engine không viết vào bảng: HEAL không kèm mục tiêu (engine tự cứu
+ * nạn nhân bầy — bot thấy nạn nhân qua `nightWolfTarget`, và
+ * `BotNightIntention` của Phù Thuỷ gửi `targetId: null`), và SKIP là
+ * "không mục tiêu". "Không mục tiêu" của ban ngày là `NO_ELIMINATION`;
+ * Thợ Săn luôn được không bắn.
  *
  * Map rỗng = line này KHÔNG có lượt (vai không có hành động đêm vẫn được gọi
- * `decideNight`, và ghi một trace "bỏ lượt"): không phải một nước đi, không
- * có nhãn, và cũng không phải vi phạm.
+ * `decideNight`, và ghi một trace "bỏ lượt"; phiên toà vắng bị cáo): không
+ * phải một nước đi, không có nhãn, và cũng không phải vi phạm.
  */
 export function legalMoves(
   line: ObservationInput,
 ): Map<string, { targets: Set<string>; none: boolean }> {
   const moves = new Map<string, { targets: Set<string>; none: boolean }>();
+  if (line.decision === "FINAL_VOTE") {
+    const accused = line.observation.trialAccusedId;
+    // Vắng bị cáo → mask rỗng → `actionIndex null` (quy ước "không nhãn").
+    if (!accused) return moves;
+    moves.set(FINAL_ACTION_KIND, { targets: new Set([accused]), none: true });
+    return moves;
+  }
   if (line.decision === "NIGHT") {
     const table = line.observation.nightLegalTargets;
     if (!table) return moves;
@@ -467,6 +502,25 @@ function encodeAction(
   // Không có nhãn thì không có chỉ số: `ObservationInput` dùng lúc CHƠI chỉ
   // mang câu hỏi, và một `0` bịa ra ở đây sẽ thành nhãn train sai.
   if (!line.selectedAction) return null;
+  if (line.decision === "FINAL_VOTE") {
+    // `targetId` một mình không phân biệt treo/tha (cả hai đều là bị cáo —
+    // hợp đồng dữ liệu D8), nên nhánh này đọc verdict. Label lạ → null (tầng
+    // dataset siết thành violation, không im lặng).
+    const accused = line.observation.trialAccusedId;
+    if (!accused || !moves.has(FINAL_ACTION_KIND)) return null;
+    const kindIndex = ACTION_KINDS.indexOf(FINAL_ACTION_KIND);
+    if (kindIndex < 0) return null;
+    const label = line.selectedAction.label;
+    const slot =
+      label === FINAL_VOTE_GUILTY_LABEL
+        ? seats.indexOf(accused)
+        : label === FINAL_VOTE_SPARE_LABEL
+          ? maxSeats
+          : -1;
+    if (slot < 0 || slot > maxSeats) return null;
+    const index = kindIndex * slotsPerKind(maxSeats) + slot;
+    return mask[index] === true ? index : null;
+  }
   const target = line.selectedAction.targetId;
   let kind: string;
   if (line.decision === "NIGHT") {

@@ -10,16 +10,22 @@ import { BotSession } from "../src/bots/session-registry";
  * không set path = heuristic; set mà hỏng thì NÉ ngay lúc boot (pattern
  * resolveVoiceConfig: hỏng ồn ào, không bao giờ im lặng rơi về heuristic).
  *
- * Mock config trỏ champion đóng gói trong repo để cả đường `botPolicy()`
+ * Mock config trỏ model đóng gói trong repo để cả đường `botPolicy()`
  * (cache) lẫn đường BotSession lọc phe chạy đúng như production khi bật.
+ *
+ * Model đóng gói hiện là BC clone parity trên dataset-0004
+ * (village-bc-0001, modelId final-bc-0001 — spec 2026-09-14 D4/D5: action
+ * space đổi nên champion PPO cũ village-ppo-0009 hết load được và đã gỡ).
+ * Nó là bản sao trung thành của teacher (Δ≈0), KHÔNG phải bản tăng lực:
+ * champion PPO thật trên dataset-0004 là việc của v2.
  */
 vi.mock("../src/config", () => ({
   config: {
-    botPolicyFile: join(__dirname, "..", "assets", "models", "village-ppo-0009.weights.json"),
+    botPolicyFile: join(__dirname, "..", "assets", "models", "village-bc-0001.weights.json"),
   },
 }));
 
-const CHAMPION = join(__dirname, "..", "assets", "models", "village-ppo-0009.weights.json");
+const CHAMPION = join(__dirname, "..", "assets", "models", "village-bc-0001.weights.json");
 
 describe("resolveBotPolicy", () => {
   it("path null/rỗng → disabled, không đụng file hệ thống", () => {
@@ -56,12 +62,14 @@ describe("resolveBotPolicy", () => {
     }
   });
 
-  it("champion đóng gói trong repo phải load được — model phe làng, residual", () => {
+  it("model đóng gói trong repo phải load được — BC clone phe làng, logits thuần", () => {
     const resolved = resolveBotPolicy(CHAMPION);
     if (!resolved.enabled) throw new Error("champion phải enabled");
-    expect(resolved.modelId).toBe("ppo-0009");
+    expect(resolved.modelId).toBe("final-bc-0001");
     expect(resolved.seats).toBe("village");
-    expect(resolved.policy.residual).toEqual({ beta: 10 });
+    // BC-logits thuần (v1 dừng ở parity, không PPO — spec 2026-09-14 D5):
+    // không có residual.beta.
+    expect(resolved.policy.residual).toBeUndefined();
   });
 });
 
@@ -73,7 +81,7 @@ describe("learnedRuntimeOptions", () => {
       learnedTemperature: 0,
       learnedDecisions: "both",
     });
-    expect(options.learnedPolicy?.id).toBe("ppo-0009");
+    expect(options.learnedPolicy?.id).toBe("final-bc-0001");
   });
 
   it("disabled → object rỗng, BotRuntime giữ heuristic y nguyên", () => {
