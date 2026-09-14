@@ -707,6 +707,10 @@ function TimingConfig({
           </label>
         ))}
       </div>
+      {/* Khớp `discussionSecondsFor` ở @masoi/shared. */}
+      <p className="mt-2 text-xs text-mist/85">
+        Thảo luận là thời gian cho bàn 8 người sống; mỗi người sống thêm được cộng 5 giây (tối đa 300 giây).
+      </p>
       <button
         className="btn-primary mt-3 w-full sm:w-auto"
         disabled={!dirty}

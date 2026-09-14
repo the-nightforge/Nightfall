@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { gameActionPayload, roomConfigSchema } from "../src/schemas";
-import { DEFAULT_ROOM_CONFIG } from "../src/phases";
+import { DEFAULT_ROOM_CONFIG, discussionSecondsFor } from "../src/phases";
+
+describe("discussionSecondsFor", () => {
+  it("bàn ≤ 8 người sống giữ đúng số host chỉnh, mỗi người thêm 5s, trần 300", () => {
+    expect(discussionSecondsFor(60, 5)).toBe(60);
+    expect(discussionSecondsFor(60, 8)).toBe(60);
+    expect(discussionSecondsFor(60, 12)).toBe(80);
+    expect(discussionSecondsFor(60, 20)).toBe(120);
+    expect(discussionSecondsFor(280, 20)).toBe(300);
+  });
+});
 
 describe("RoomConfig voice mặc định", () => {
   it("phòng mới bật voice chat ngay từ đầu", () => {

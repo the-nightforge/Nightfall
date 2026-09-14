@@ -2,7 +2,7 @@
 
 # 🐺 Ma Sói Online
 
-**A real-time multiplayer Werewolf (Mafia) game — 20 roles, 17 dynamic events, voice chat, and AI bots that actually reason.**
+**A real-time multiplayer Werewolf (Mafia) game — 19 roles, 17 dynamic events, voice chat, and AI bots that actually reason.**
 
 [![CI](https://github.com/the-nightforge/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/the-nightforge/ma-soi-online/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-4739%20passing-brightgreen)](#testing)
@@ -51,7 +51,7 @@ The interesting parts are not the CRUD. They are:
 
 |  | Feature |
 |---|---|
-| 🎭 | **20 roles** across village, wolves, and three neutrals who each win alone |
+| 🎭 | **19 roles** across village, wolves, and three neutrals who each win alone |
 | 🎲 | **17 dynamic events** that reshape a round in chaos rooms (Curfew, Blood Moon, Secret Ballot, …) |
 | ⚖️ | **Balance analyzer** that scores a deck against per-player-count presets and blocks unfair ranked configs |
 | 🗳️ | **Two-stage voting** — nomination, defense speech, then a final Hang/Spare trial |
@@ -265,6 +265,7 @@ Village wins by eliminating every wolf. Wolves win once they equal or outnumber 
 |---|---|---|
 | Werewolf | Ma Sói | Collectively choose one victim each night |
 | Wolf Cub | Sói Con | Wakes with the pack. When it dies, the pack bites **two** targets the following night |
+| Sorcerer | Sói Pháp Sư | Wakes with the pack. Also checks one living player each night to learn whether they are in the Seer line (Seer or Apprentice Seer) |
 | Traitor | Kẻ Phản Bội | Wins **with** the wolves without being in the pack: no night action, no wolf chat, does not know the wolves and they do not know it, and the Seer reads it as **not a wolf**. When the last pack wolf dies, it becomes a Werewolf |
 
 </details>
@@ -275,17 +276,15 @@ Village wins by eliminating every wolf. Wolves win once they equal or outnumber 
 | Role | Vietnamese | Ability |
 |---|---|---|
 | Seer | Tiên Tri | Inspect one player's team each night |
-| Apprentice Seer | Tiên Tri Tập Sự | Powerless until the Seer dies, then inherits the inspection |
-| Medium | Bà Đồng | Inspect one **dead** player's true role each night |
+| Apprentice Seer | Tiên Tri Tập Sự | Knows who the Seer is from the start. Powerless until the Seer dies, then inherits the inspection from the next night |
 | Detective | Thám Tử | Check whether two **other** living players are on the same team — it cannot put itself in the pair |
 | Guard | Bảo Vệ | Shield one player from every night kill; never itself, and cannot repeat the same target two nights running |
-| Guardian Angel | Thiên Thần Hộ Mệnh | Two shields per match against any night kill; never itself, no consecutive repeats |
-| Priest | Linh Mục | One vial of holy water: kills a wolf, but backfires and kills the Priest if used on anyone who is not a wolf |
+| Tracker | Kẻ Theo Dõi | Follows one player each night and learns next morning whether they **acted** that night — not whom they targeted |
 | Witch | Phù Thủy | One heal and one poison, each usable once per match |
 | Hunter | Thợ Săn | On death, may shoot one living player — or nobody |
 | Mayor | Thị Trưởng | Daytime votes count double |
 | Cursed | Kẻ Nguyền Rủa | No night action. Surviving a first wolf bite turns them **into a wolf** |
-| Elder | Trưởng Lão | Survives the pack's first bite. But if the *village* kills it — a lynch, the Witch's poison, the Hunter's bullet — every village special ability stops working for the rest of the match |
+| Elder | Trưởng Lão | Survives the pack's first bite. But if the *village* kills it — a lynch, the Witch's poison, the Hunter's bullet — every village special ability stops working for the following night and day |
 | Doppelganger | Kẻ Song Trùng | Becomes the exact role of the **first player to die**, wolf roles included |
 | Villager | Dân Làng | No ability — discussion and voting only |
 
@@ -304,7 +303,7 @@ Four cards **overwrite their own `role` mid-match** instead of carrying a specia
 
 `neutral` is a **label, not a faction.** It says only "neither village nor wolves" — the three neutral roles share no win condition and are not on each other's side. `sameFaction()` encodes that: the Detective comparing any two neutrals reads **different**, even though `roleTeam()` returns `"neutral"` for all three. That holds for two players who hold the *same* neutral role too — which is reachable, because an Executioner can turn into a second Jester mid-match.
 
-**Jester.** Wins only by dying to a **lynch verdict** — dying to wolves, a knife, poison, holy water or the Hunter does not count, and surviving to the end is a loss. Its win is a *personal* win: the match keeps going and the overall winner is still decided by the usual rule, and the achievement survives whatever that turns out to be — including a draw.
+**Jester.** Wins only by dying to a **lynch verdict** — dying to wolves, a knife, poison or the Hunter does not count, and surviving to the end is a loss. Its win is a *personal* win: the match keeps going and the overall winner is still decided by the usual rule, and the achievement survives whatever that turns out to be — including a draw.
 
 **Serial Killer.** Strikes alone every night with its own action and its own night state; it never shares the pack's bite or its target. It has no immunity, learns nobody's role, and never sees wolf chat. It may target wolves — it has no allies. Unlike the Jester's, its win is an **overall** outcome that ends the match.
 
@@ -312,11 +311,11 @@ Four cards **overwrite their own `role` mid-match** instead of carrying a specia
 
 It wins the moment its target actually dies to a **lynch verdict**, provided the Executioner is alive at that moment. It does not have to nominate or vote guilty itself. Like the Jester's, the win is a *personal* win recorded under its own condition (`EXECUTIONER_TARGET_LYNCHED`): the match keeps going, there is no "executioner" overall outcome, and the achievement survives the Executioner's own later death and a draw alike.
 
-If the target dies to **anything else** first — a bite, poison, holy water, a Hunter's shot — an Executioner who is still alive and has not already won **turns into a Jester**, and from then on wins only by being lynched itself. Turning grants no win of its own, and no new target is issued. The turn is settled after the whole death batch *and* its Hunter chain resolve, immediately before the match result is checked: if the target and the Executioner fall together, there is no turn, and a Hunter's bullet that lands on the Executioner in the same batch keeps it an Executioner. A win already recorded is never revoked — a lynched Hunter who was the target gets the Executioner its win *before* firing back.
+If the target dies to **anything else** first — a bite, poison, a Hunter's shot — an Executioner who is still alive and has not already won **turns into a Jester**, and from then on wins only by being lynched itself. Turning grants no win of its own, and no new target is issued. The turn is settled after the whole death batch *and* its Hunter chain resolve, immediately before the match result is checked: if the target and the Executioner fall together, there is no turn, and a Hunter's bullet that lands on the Executioner in the same batch keeps it an Executioner. A win already recorded is never revoked — a lynched Hunter who was the target gets the Executioner its win *before* firing back.
 
 That means a table can hold **two Jesters** at once, one dealt and one turned, and they are still independent: neither wins with the other, and the Detective reads them as different sides. It also means a Jester can appear in a match whose deck had `jester` off.
 
-The Seer reading any neutral role sees **"Phe trung lập"** — neutral team, not the specific role, so it cannot tell the harmless ones from the killer. Holy water thrown at either backfires and kills the Priest, exactly as it would on any non-wolf. A Serial Killer's knife on the Cursed **kills** them: only a valid wolf bite triggers the turn.
+The Seer reading any neutral role sees **"Phe trung lập"** — neutral team, not the specific role, so it cannot tell the harmless ones from the killer. A Serial Killer's knife on the Cursed **kills** them: only a valid wolf bite triggers the turn.
 
 All three are **off by default and in no preset deck** — the host has to enable them in a custom deck, and at most one of each may be in play.
 
@@ -354,6 +353,8 @@ LOBBY → ROLE_REVEAL → NIGHT → NIGHT_RESULT → CHECK_WIN
 ```
 
 Countdowns are driven by `phaseEndsAt`, an epoch timestamp issued by the server. Clients only render it — they never decide when a phase ends, and the snapshot carries the server clock so device clock skew cannot desynchronise a match.
+
+**Discussion scales with the table.** The host's `discussionSeconds` is the time for 8 living players; every living player above 8 adds 5 s, capped at 300 s (`discussionSecondsFor` in `@masoi/shared`). A 20-player table opens with 120 s instead of 60 s and shortens itself as players die. Curfew halves the scaled value.
 
 ### Voting rules
 
