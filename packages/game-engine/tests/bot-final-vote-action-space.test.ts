@@ -53,7 +53,6 @@ function stateFor(seed = "final-space"): BotBrainState {
 function context(over: Partial<BotKnowledgeView> = {}): BotDecisionContext {
   return {
     knowledge: {
-      dayOfTruthClaims: {},
       neutralRolesInPlay: [],
       activeEventId: null,
       botId: "me",
