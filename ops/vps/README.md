@@ -133,3 +133,54 @@ wins over `SERVER_PORT`, default `4000`); production sets `PORT=4100`.
 publishes) and is ignored at runtime — the compose mapping
 `127.0.0.1:${PORT:-4100}:${PORT:-4100}` deliberately uses the same `$PORT`
 on both sides. Nginx (later step) proxies `80/443 -> 127.0.0.1:4100`.
+
+## 04 — Nginx + HTTPS (`04-nginx.sh`, `nginx-masoi-api.conf.template`)
+
+Idempotent: safe to re-run. Run as **root**, after `03` (the backend must
+already answer locally):
+
+```bash
+scp ops/vps/04-nginx.sh ops/vps/nginx-masoi-api.conf.template root@160.191.244.11:/root/
+ssh root@160.191.244.11 'chmod +x /root/04-nginx.sh; API_DOMAIN=api.example.com EMAIL=ops@example.com PORT=4100 /root/04-nginx.sh'
+```
+
+First, create the DNS record (do this BEFORE running the script — certbot's
+HTTP challenge must reach the VPS under the requested name):
+
+- `A` record `api -> 160.191.244.11` (replace `api.example.com` with your
+  real `API_DOMAIN` everywhere; the repo contains no real domain or email).
+- Wait for propagation: `nslookup api.example.com` should return
+  `160.191.244.11` before you run certbot.
+
+What the script does: installs `nginx`, `certbot`,
+`python3-certbot-nginx` (if missing) and enables nginx; renders the template
+to `/etc/nginx/sites-available/masoi-api` with `server_name=$API_DOMAIN`
+and `proxy_pass http://127.0.0.1:$PORT` (default `4100`, must match the
+`PORT` in `/opt/masoi/.env`) including WebSocket `Upgrade`/`Connection`
+headers, `X-Forwarded-Proto`, `client_max_body_size 5m`, and a long
+`proxy_read_timeout 86400s` on `/socket.io/`; enables the site, runs
+`nginx -t`, reloads; then runs
+`certbot --nginx --non-interactive --agree-tos -m $EMAIL -d $API_DOMAIN`
+only when `/etc/letsencrypt/live/$API_DOMAIN` does not exist yet (renewals
+afterwards run via the certbot systemd timer).
+
+No-domain checkpoint (DNS not ready yet, or no domain at all): verify the
+backend directly on the box — the compose mapping binds loopback only, so
+run this **on the VPS**, not from your workstation:
+
+```bash
+ssh root@160.191.244.11 'curl -fsS http://127.0.0.1:4100/api/health'
+# expect {"ok":true,"db":true,...}
+```
+
+After DNS + script, verify from anywhere:
+
+```bash
+curl -fsS https://api.example.com/api/health
+```
+
+Validation note: `bash -n` passes on this workstation; `nginx -t` can only
+meaningfully run on the VPS (no nginx here), so the script itself runs
+`nginx -t` before every reload. Re-runs never clobber certbot's TLS blocks:
+once the vhost contains `managed by Certbot`, the script keeps it (unless
+the domain changed).
