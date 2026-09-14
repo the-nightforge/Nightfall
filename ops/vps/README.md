@@ -160,7 +160,7 @@ and `proxy_pass http://127.0.0.1:$PORT` (default `4100`, must match the
 headers, `X-Forwarded-Proto`, `client_max_body_size 5m`, and a long
 `proxy_read_timeout 86400s` on `/socket.io/`; enables the site, runs
 `nginx -t`, reloads; then runs
-`certbot --nginx --non-interactive --agree-tos -m $EMAIL -d $API_DOMAIN`
+`certbot --nginx --non-interactive --agree-tos --redirect -m $EMAIL -d $API_DOMAIN`
 only when `/etc/letsencrypt/live/$API_DOMAIN` does not exist yet (renewals
 afterwards run via the certbot systemd timer).
 
@@ -184,3 +184,50 @@ meaningfully run on the VPS (no nginx here), so the script itself runs
 `nginx -t` before every reload. Re-runs never clobber certbot's TLS blocks:
 once the vhost contains `managed by Certbot`, the script keeps it (unless
 the domain changed).
+
+## 05 — Verify + end-to-end checklist + backups (`05-verify.sh`, `backup-cron.sh`)
+
+`05-verify.sh` is read-only: run **on the VPS** as `root` or `deploy` after
+`03` (+ `04` once Nginx exists):
+
+```bash
+/opt/masoi/app/ops/vps/05-verify.sh [API_DOMAIN]
+# e.g. API_DOMAIN=api.example.com /opt/masoi/app/ops/vps/05-verify.sh
+```
+
+It checks: `postgres`/`redis` healthy, exactly ONE running `server`
+container, local `GET http://127.0.0.1:$PORT/api/health` reports
+`{"ok":true,"db":true}`, `nginx -t` passes, UFW allows 22/80/443 and hides
+5432/6379 — plus the public `https://$API_DOMAIN/api/health` when a domain
+is given. First failure exits non-zero with a `FAIL:` message.
+
+End-to-end checklist (frontend on Vercel, backend on this VPS):
+
+1. Vercel env: `NEXT_PUBLIC_SERVER_URL=https://api.example.com` with NO
+   trailing slash (a trailing `/` breaks API/socket URL joining).
+2. Open the app, create a room, add 8 bots, press Start — the game should
+   deal roles and advance past Night 1 without errors.
+3. WSS check: with the page open, the socket must stay on `wss://`
+   (browser devtools → Network → WS → `socket.io` frames flowing); if it
+   falls back to polling-only or drops, re-check the `/socket.io/`
+   `Upgrade`/`Connection` headers and `proxy_read_timeout` in the vhost.
+4. Re-run `05-verify.sh` with the domain — local AND public health green.
+
+Nightly backups (`backup-cron.sh`): logical `pg_dump` (gzip) of the `masoi`
+database to `/opt/masoi/backup-YYYY-MM-DD.sql.gz` (`chmod 600`), pruning
+files older than 7 days. Live data lives in the `masoi_pgdata` docker
+volume — the dump is portable SQL, not a volume snapshot; Redis
+(ephemeral) and avatars (external object storage) are intentionally not
+included. Install:
+
+```bash
+(crontab -l 2>/dev/null; echo "0 2 * * * /opt/masoi/app/ops/vps/backup-cron.sh") | crontab -
+crontab -l | grep backup-cron
+```
+
+Restore (on the VPS, `masoi-postgres` running):
+
+```bash
+gunzip -c /opt/masoi/backup-YYYY-MM-DD.sql.gz \
+  | docker exec -i masoi-postgres psql -U masoi -d masoi
+```

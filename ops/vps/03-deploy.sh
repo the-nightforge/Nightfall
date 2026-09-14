@@ -34,7 +34,7 @@ set -euo pipefail
 
 APP_DIR="/opt/masoi/app"
 ENV_FILE="/opt/masoi/.env"
-HEALTH_TIMEOUT_S=120
+: "${HEALTH_TIMEOUT_S:=120}"
 
 log() { echo "[03-deploy] $*"; }
 die() { echo "[03-deploy] ERROR: $*" >&2; exit 1; }

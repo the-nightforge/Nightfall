@@ -88,8 +88,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # Follows $PORT (same default as the mapping below); EXPOSE-style
+    # metadata only, never published.
     expose:
-      - "4100"
+      - "${PORT:-4100}"
     # Localhost-bound only: the outside world reaches the app through Nginx
     # (80/443 -> 127.0.0.1:$PORT), never directly.
     ports:
