@@ -1,0 +1,55 @@
+# ops/vps/nginx-masoi-api.conf.template — Nginx vhost for the ma-soi backend.
+#
+# Placeholders (substituted by 04-nginx.sh, never commit real values):
+#   API_DOMAIN placeholder — public API hostname, e.g. api.example.com
+#   PORT placeholder       — backend port on loopback (production default 4100)
+#
+# All other $variables ($host, $remote_addr, ...) are literal Nginx variables
+# and MUST be left untouched. 04-nginx.sh renders this with envsubst limited
+# to the API_DOMAIN and PORT variables (or a sed fallback covering only
+# these two tokens) so Nginx variables survive rendering.
+#
+# TLS is appended in place by certbot --nginx on first run; re-runs of
+# 04-nginx.sh detect the "managed by Certbot" marker and keep those blocks.
+
+server {
+    listen 80;
+    server_name ${API_DOMAIN};
+
+    # Socket.IO polling can carry large payloads; image uploads go to object
+    # storage, but keep a sane cap on direct API bodies.
+    client_max_body_size 5m;
+
+    # Regular API traffic (short timeouts).
+    location / {
+        proxy_pass http://127.0.0.1:${PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # WebSocket upgrade headers: harmless for plain HTTP, required when
+        # the client upgrades (Socket.IO prefers websocket transport).
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    # Socket.IO endpoint: long-lived websocket/polling connections must not
+    # be cut by the default 60s read timeout.
+    location /socket.io/ {
+        proxy_pass http://127.0.0.1:${PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 86400s;
+        proxy_read_timeout 86400s;
+    }
+}
