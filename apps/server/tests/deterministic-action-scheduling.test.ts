@@ -3,7 +3,7 @@ import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
 import { clearBotSession } from "../src/bots/session-registry";
-import { scheduleNightBots } from "../src/game/machine";
+import { scheduleNightBots } from "../src/game/bot-scheduler";
 import { ROOM_SCAFFOLD } from "./helpers/room";
 import { NIGHT_SCAFFOLD } from "./helpers/night";
 import { GAME_STATE_SCAFFOLD } from "./helpers/game-state";

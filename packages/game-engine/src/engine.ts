@@ -28,6 +28,7 @@ import {
   type Winner,
 } from "@masoi/shared";
 import { selectEvent } from "./events/eventManager";
+import { applyDayEventStart } from "./events/day-start";
 import { assignRoles, type AssignInput } from "./assignRoles";
 import { buildBotKnowledgeView, buildLegalVoteChoices } from "./bot/knowledge";
 import type { BotKnowledgeView, NightActionKind, NightKnowledge } from "./bot/types";
@@ -609,87 +610,7 @@ export class GameEngine {
       actualDuration = Math.floor(durationMs / 2);
     }
     this.setPhase("DAY_DISCUSSION", actualDuration, now);
-    let activeEvent = event;
-    if (event?.id === "JUDGMENT_DAY") {
-      const detectiveEntries = Object.values(this.state.night.detectiveResults);
-      const lastResult = detectiveEntries.at(-1);
-      if (lastResult) {
-        const target1Name = this.player(lastResult.target1Id)?.name ?? "?";
-        const target2Name = this.player(lastResult.target2Id)?.name ?? "?";
-        const announcement = `Kết quả Thám Tử: ${target1Name} và ${target2Name} là ${lastResult.sameTeam ? "CÙNG PHE" : "KHÁC PHE"}!`;
-        activeEvent = { ...event, announcement };
-      }
-    } else if (event?.id === "MORNING_REPORT") {
-      /*
-       * Bản tin nói NGUYÊN NHÂN, không đọc lại danh sách người chết.
-       *
-       * `lastNightDeaths` đã công khai cho cả phòng suốt NIGHT_RESULT lẫn
-       * DAY_DISCUSSION, nên một bản tin đọc lại tên người chết là hai điểm
-       * `power` đổi lấy một dòng chữ ai cũng đang nhìn thấy. `cause` thì ngược
-       * lại: `nightHistory` chỉ lộ ra client ở GAME_OVER, nên giữa ván nó là bí
-       * mật thật - và nó tách được nhát cắn của bầy Sói khỏi Bình Độc của Phù
-       * Thuỷ hay nhát dao trong đêm.
-       *
-       * `midGameDeathCauseClause` chứ không phải bảng vế đầy đủ: hai cause của
-       * Linh Mục xác nhận một lá bài chứ không tả một cái chết - xem chú thích
-       * ở chính hàm đó.
-       *
-       * Trung lập thật chứ không phải nhãn dán: làng đọc được bàn cờ, nhưng bầy
-       * Sói cũng biết cú cắn của mình có trúng không hay vừa bị một tay giết
-       * khác cướp mất mục tiêu.
-       */
-      const lastNight = this.state.nightHistory.at(-1);
-      let announcement: string;
-      if (!lastNight) {
-        announcement = `Bản tin bình minh: không có dữ liệu đêm trước.`;
-      } else if (lastNight.deaths.length === 0) {
-        announcement = `Đêm ${lastNight.round}: không ai thiệt mạng.`;
-      } else {
-        const clauses = lastNight.deaths.map(
-          (death) => `${death.player.name} ${midGameDeathCauseClause(death.cause)}`,
-        );
-        announcement = `Đêm ${lastNight.round}: ${clauses.join("; ")}.`;
-      }
-      activeEvent = { ...event, announcement };
-    } else if (event?.id === "OBITUARY") {
-      /*
-       * Bốc MỘT người đã chết và công khai vai của họ.
-       *
-       * Bốc bằng `rng` được truyền vào chứ không phải `Math.random`: mọi thứ
-       * trong engine phải phát lại được từ seed, và `replayGame` của harness
-       * đo lường dựa vào đúng tính chất đó.
-       *
-       * `selectEvent` đã đòi có người chết, nhưng `customEvent` đi vòng qua nó
-       * (test dùng chính đường đó), nên nhánh rỗng vẫn phải trả lời tử tế.
-       */
-      const dead = this.state.players.filter((p) => !p.alive);
-      const chosen = dead[Math.floor(rng() * dead.length)];
-      let announcement: string;
-      if (!chosen) {
-        announcement = `Sổ Tang: chưa có ai để ghi.`;
-      } else {
-        this.state.obituaryRevealedId = chosen.id;
-        announcement = `Sổ Tang: ${chosen.name} là ${ROLE_META[chosen.role].name}.`;
-      }
-      activeEvent = { ...event, announcement };
-    } else if (event?.id === "DEAD_CAN_SPEAK") {
-      const announcement = `Tiếng Vọng Người Chết: một linh hồn có thể gửi lời nhắn ${DEAD_MESSAGE_MAX_LENGTH} ký tự ẩn danh.`;
-      activeEvent = { ...event, announcement };
-      // Bốc linh hồn NGAY tại đây thay vì để ai nhanh tay thì được: một cuộc
-      // đua giữa người thật và BOT thì BOT luôn thắng, và người thắng đua lại
-      // đổi theo độ trễ mạng chứ không theo ván đấu.
-      //
-      // `selectEvent` đã đòi có người chết, nhưng `customEvent` đi vòng qua nó
-      // nên hàng rào phải nằm ở đây.
-      const ghosts = this.state.players.filter((player) => !player.alive);
-      this.state.deadCanSpeakChosenId =
-        ghosts.length > 0 ? ghosts[Math.floor(rng() * ghosts.length)].id : null;
-    } else if (event?.id === "HOWL_OF_THE_PACK") {
-      this.state.howlBonusDay = this.state.round + 1;
-    } else if (event?.id === "DAY_OF_TRUTH") {
-      // initialize claims map for this day
-      this.state.dayOfTruthClaims = {};
-    }
+    const activeEvent = applyDayEventStart(this.state, event, rng);
     this.state.activeEvent = activeEvent;
     if (activeEvent) {
       this.state.eventHistory.push(activeEvent);

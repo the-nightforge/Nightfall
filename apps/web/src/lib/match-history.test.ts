@@ -1,6 +1,53 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { formatDurationClock, formatWhen, readStoredCaseFile } from "./match-history";
+import {
+  formatDurationClock,
+  formatWhen,
+  mergeArchivedChat,
+  readStoredCaseFile,
+} from "./match-history";
+
+describe("mergeArchivedChat", () => {
+  const entry = (seq: number, at: number) => ({
+    seq,
+    channel: seq === 1 ? "wolves" : "day",
+    actorId: `p${seq}`,
+    actorName: `P${seq}`,
+    text: `t${seq}`,
+    round: 1,
+    phase: "DAY_DISCUSSION",
+    at,
+  });
+  const live = (id: string, at: number) => ({
+    id,
+    channel: "day",
+    playerId: "p9",
+    playerName: "P9",
+    text: id,
+    at,
+  });
+
+  it("sổ đầy đủ thay phần trong ván, giữ lại tin nói sau ván", () => {
+    const merged = mergeArchivedChat(
+      [entry(0, 100), entry(1, 200), entry(2, 300)],
+      // 60 tin cuối của snapshot trùng phần đuôi sổ; tin 400 nói sau GAME_OVER.
+      [live("a", 200), live("b", 300), live("after", 400)],
+    );
+    assert.deepEqual(
+      merged.map((m) => m.text),
+      ["t0", "t1", "t2", "after"],
+    );
+    assert.equal(merged[1].channel, "wolves");
+    assert.equal(merged[0].playerName, "P0");
+  });
+
+  it("ván không ai nói: giữ nguyên chat trực tiếp", () => {
+    assert.deepEqual(
+      mergeArchivedChat([], [live("x", 1)]).map((m) => m.id),
+      ["x"],
+    );
+  });
+});
 
 describe("readStoredCaseFile", () => {
   const valid = {

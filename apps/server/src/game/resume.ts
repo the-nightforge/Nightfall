@@ -10,7 +10,7 @@ import {
   scheduleHunterBot,
   scheduleNightBots,
   scheduleVoteBots,
-} from "./machine";
+} from "./bot-scheduler";
 import type { PendingStepName } from "./pending-step";
 import { armStep, runPendingStep } from "./steps";
 

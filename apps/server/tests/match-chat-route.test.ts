@@ -30,6 +30,8 @@ const db = vi.hoisted(() => ({
       createdAt: Date;
     }>
   >(),
+  /** gameId -> matchId: màn kết thúc hỏi bằng `room.gameId`, không phải id. */
+  gameIds: new Map<string, string>(),
   sql: [] as string[],
 }));
 
@@ -44,17 +46,17 @@ vi.mock("../src/db", () => ({
     $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const sql = strings.join("?");
       db.sql.push(sql);
+      // Tham số đầu là khoá người hỏi đưa (id hoặc gameId), tham số cuối là JSON người xem.
+      const key = values[0] as string;
+      const matchId = db.gameIds.get(key) ?? key;
+      const viewerId = (JSON.parse(values.at(-1) as string) as Array<{ id: string }>)[0]!.id;
 
       if (sql.includes('FROM "MatchChatMessage"')) {
-        const [matchId, viewerJson] = values as [string, string];
-        const viewerId = (JSON.parse(viewerJson) as Array<{ id: string }>)[0]!.id;
         if (!(db.matches.get(matchId) ?? []).includes(viewerId)) return [];
         return [...(db.chat.get(matchId) ?? [])].sort((a, b) => a.seq - b.seq);
       }
 
       if (sql.includes('FROM "GameResult"')) {
-        const [matchId, viewerJson] = values as [string, string];
-        const viewerId = (JSON.parse(viewerJson) as Array<{ id: string }>)[0]!.id;
         return (db.matches.get(matchId) ?? []).includes(viewerId) ? [{ one: 1 }] : [];
       }
 
@@ -112,6 +114,7 @@ db.chat.set("m1", [
   },
 ]);
 db.matches.set("m-empty", ["in-match"]);
+db.gameIds.set("g1", "m1");
 
 describe("GET /players/me/matches/:id/chat", () => {
   it("người trong ván đọc được TOÀN BỘ kênh, đúng thứ tự seq", async () => {
@@ -151,6 +154,21 @@ describe("GET /players/me/matches/:id/chat", () => {
     // Hai câu trả lời phải GIỐNG HỆT nhau: khác nhau là một đường dò xem một
     // matchId có thật hay không, và ai đã chơi ván đó.
     expect(outsider.body).toEqual(ghost.body);
+  });
+
+  it("hỏi bằng gameId (màn kết thúc) ra đúng log như hỏi bằng id, cùng một chốt quyền", async () => {
+    db.sql.length = 0;
+    const byGameId = await request(app)
+      .get("/api/players/me/matches/g1/chat")
+      .set("authorization", "Bearer token-in");
+    const outsider = await request(app)
+      .get("/api/players/me/matches/g1/chat")
+      .set("authorization", "Bearer token-out");
+
+    expect(byGameId.status).toBe(200);
+    expect(byGameId.body.messages.map((m: { seq: number }) => m.seq)).toEqual([0, 1, 2]);
+    expect(outsider.status).toBe(404);
+    expect(db.sql[0]).toContain('"gameId" =');
   });
 
   it("thiếu token thì 401, không đụng tới DB", async () => {

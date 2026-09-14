@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GameEngine, type GameState } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
-import { scheduleVoteBots } from "../src/game/machine";
+import { scheduleVoteBots } from "../src/game/bot-scheduler";
 import { DISCONNECT_GRACE_MS } from "../src/game/discussion-skip";
 import { ROOM_SCAFFOLD } from "./helpers/room";
 import { NIGHT_SCAFFOLD } from "./helpers/night";

@@ -3,7 +3,8 @@ import { GameEngine, GAME_EVENTS } from "@masoi/game-engine";
 import { DEFAULT_ROOM_CONFIG, GHOST_AUTHOR_ID, GHOST_AUTHOR_NAME } from "@masoi/shared";
 import type { Room } from "../src/rooms/store";
 import { clearBotSession } from "../src/bots/session-registry";
-import { scheduleDeadCanSpeakBot, submitGhostMessage } from "../src/game/machine";
+import { scheduleDeadCanSpeakBot } from "../src/game/bot-scheduler";
+import { submitGhostMessage } from "../src/game/machine";
 import { ROOM_SCAFFOLD } from "./helpers/room";
 
 /**
