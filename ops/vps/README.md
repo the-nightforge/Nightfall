@@ -57,3 +57,24 @@ type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh deploy@160.191.244.11 "mkdir -p 
 
 > WARNING: closing your last working root session before testing key login
 > can permanently lock you out of the VPS. Always test a new session first.
+
+## 02 — Docker Engine (`02-docker.sh`)
+
+Idempotent: safe to re-run. Run as **root**, after `01`:
+
+```bash
+scp ops/vps/02-docker.sh root@160.191.244.11:/root/
+ssh root@160.191.244.11 'chmod +x /root/02-docker.sh; /root/02-docker.sh'
+```
+
+It does: add Docker's official apt repo for Ubuntu 24.04 (noble) with
+keyring `/etc/apt/keyrings/docker.asc`, install `docker-ce`,
+`docker-ce-cli`, `containerd.io`, `docker-buildx-plugin`,
+`docker-compose-plugin` (never the distro-packaged Docker; official repo
+only),
+`systemctl enable --now docker`, verify with
+`docker --version && docker compose version`, and add `deploy` to the
+`docker` group (if the user exists).
+
+Afterwards `deploy` must log out and back in (or run `newgrp docker`)
+before running `docker` without `sudo`.
