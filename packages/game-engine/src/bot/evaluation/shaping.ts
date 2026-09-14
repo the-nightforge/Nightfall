@@ -1,6 +1,7 @@
 import { ROLE_META, sameFaction, type Role } from "@masoi/shared";
 import type { BotDecisionTrace } from "../trace/trace";
 import type { SelfPlayGame } from "./selfplay";
+import { FINAL_VOTE_GUILTY_LABEL } from "../decision/trial-decision";
 
 /**
  * Nhãn shaping (spec 2026-09-11-shaping-reward-design D2): "nước đi có trúng
@@ -36,8 +37,9 @@ export function shapingLabelFor(game: SelfPlayGame, trace: BotDecisionTrace): nu
   const enemy = !sameFaction(actorRole, targetRole);
   if (trace.decision === "FINAL_VOTE") {
     // Bị cáo cố định; quyết định là treo/tha. Thưởng sự NHẤT QUÁN giữa phán
-    // quyết và phe của bị cáo (BotRuntime.decideFinalVote ghi label "treo"/"tha").
-    return (trace.chosen.label === "treo") === enemy ? 1 : -1;
+    // quyết và phe của bị cáo (`BotRuntime.decideFinalVote` ghi label treo/tha
+    // — hằng số dùng chung, xem D8 spec 2026-09-14).
+    return (trace.chosen.label === FINAL_VOTE_GUILTY_LABEL) === enemy ? 1 : -1;
   }
   return enemy ? 1 : -1;
 }

@@ -5,6 +5,7 @@ import {
   ACTION_KINDS,
   DAY_ACTION_KIND,
   DEFAULT_MAX_SEATS,
+  FINAL_ACTION_KIND,
   NO_TARGET_ACTION,
   TARGETING_DECISIONS,
   actionIndexOf,
@@ -14,6 +15,10 @@ import {
   type EncodeOptions,
   type EncodedObservation,
 } from "./observation";
+import {
+  FINAL_VOTE_GUILTY_LABEL,
+  FINAL_VOTE_SPARE_LABEL,
+} from "../decision/trial-decision";
 
 /**
  * BOT_SELF_LEARNING §7 + §15 + §42: leak validator, dataset stats, game-level split.
@@ -267,11 +272,32 @@ export function validateTrajectoryLine(value: unknown): ObservationLeakReport {
       add("selectedAction.kind", "phải là chuỗi hoặc null", "schema");
     } else if (violations.length === 0 && TARGETING_DECISIONS.has(String(line.decision))) {
       // §42 "action belongs to legal set", kiểm theo CẶP (loại, mục tiêu) bằng
-      // đúng bảng mà encoder dựng mask. FINAL_VOTE (treo/tha) và SPEECH không
-      // chọn mục tiêu trong không gian này nên không bị ép luật.
+      // đúng bảng mà encoder dựng mask. SPEECH không chọn mục tiêu trong không
+      // gian này nên không bị ép luật; FINAL_VOTE (treo/tha) chọn trong loại
+      // FINAL (spec 2026-09-14 D1).
+      const decision = String(line.decision);
+      if (decision === "FINAL_VOTE") {
+        // Verdict là hợp đồng dữ liệu (D8): có bị cáo mà label không thuộc hai
+        // giá trị "treo"/"tha" là line hỏng — violation, không phải
+        // `actionIndex null` im lặng.
+        const accused = (line as unknown as ObservationInput).observation?.trialAccusedId;
+        const label = (selected as { label?: unknown }).label;
+        if (
+          accused !== null &&
+          accused !== undefined &&
+          label !== FINAL_VOTE_GUILTY_LABEL &&
+          label !== FINAL_VOTE_SPARE_LABEL
+        ) {
+          add("selectedAction.label", "phán quyết phiên toà phải là treo hoặc tha", "action");
+        }
+      }
       const moves = legalMoves(line as unknown as ObservationInput);
       const moveKind =
-        String(line.decision) === "NIGHT" ? ((kind as string | null | undefined) ?? "SKIP") : "CHOOSE";
+        decision === "NIGHT"
+          ? ((kind as string | null | undefined) ?? "SKIP")
+          : decision === "FINAL_VOTE"
+            ? FINAL_ACTION_KIND
+            : "CHOOSE";
       const move = moves.get(moveKind);
       if (moves.size === 0 && target === null) {
         // Không có lượt (vai không có hành động đêm): không phải nước đi.
@@ -504,8 +530,14 @@ export function splitTrajectories(
  * điểm cao nhất, ánh xạ vào ô của loại hành động đã chọn. Khi bot không chọn
  * ai (SKIP/NO_ELIMINATION) hoặc không có bảng ứng viên, tập = { ô đã chọn }.
  *
- * Lý do tồn tại: `argmax == chosen` chấm oan 28% nước hoà điểm (48% ở đêm)
- * — teacher phá hoà bằng id thô mà §9 cố tình giấu khỏi observation.
+ * Hàng FINAL_VOTE đi one-hot thuần (spec 2026-09-14 D7): `targetId` LUÔN là
+ * bị cáo kể cả khi bot bỏ THA, nên không chặn thì một hàng "tha" sẽ rơi vào
+ * nhánh tie-aware và bật ô "treo" thành optimal. Vì vậy với FINAL_VOTE, tập
+ * tối ưu = đúng một ô đã chọn.
+ *
+ * Lý do tồn tại của nhánh tie-aware: `argmax == chosen` chấm oan 28% nước hoà
+ * điểm (48% ở đêm) — teacher phá hoà bằng id thô mà §9 cố tình giấu khỏi
+ * observation.
  */
 export function optimalActionMask(
   line: BotTrajectory,
@@ -515,6 +547,7 @@ export function optimalActionMask(
   const mask = new Array<boolean>(actionSize(maxSeats)).fill(false);
   if (encoded.actionIndex === null) return mask;
   mask[encoded.actionIndex] = true;
+  if (line.decision === "FINAL_VOTE") return mask;
   if (line.selectedAction.targetId === null) return mask;
   const scored = scoredSlots(line, encoded, maxSeats);
   let best = Number.NEGATIVE_INFINITY;
@@ -576,6 +609,10 @@ function scoredSlots(
 ): Map<number, number> {
   const out = new Map<number, number>();
   if (line.candidates.length === 0) return out;
+  // Hàng FINAL đi one-hot thuần (spec 2026-09-14 D7): không scores, không
+  // bases — `candidateScores`/`candidateBases` ra NaN toàn phần. Chặn ở đầu
+  // hàm là đủ cho cả ba (hàm này cũng hard-code kind CHOOSE cho non-NIGHT).
+  if (line.decision === "FINAL_VOTE") return out;
   const kind = line.decision === "NIGHT" ? (line.selectedAction.kind ?? "SKIP") : DAY_ACTION_KIND;
   if (!ACTION_KINDS.includes(kind)) return out;
   for (const candidate of line.candidates) {

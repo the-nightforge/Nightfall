@@ -127,6 +127,8 @@ def main() -> None:
                    help="Xem train_ppo --shaping-weight; 0 = tắt shaping (dataset cũ)")
     p.add_argument("--shaping-decisions", default="", dest="shaping_decisions",
                    help="Xem train_ppo --shaping-decisions; ví dụ wolves-side: vote")
+    p.add_argument("--train-decisions", default="", dest="train_decisions",
+                   help="Xem train_ppo --train-decisions; ví dụ village-side: vote")
     p.add_argument("--confirm-seed", default="rl-conf",
                    help="Tiền tố seed ĐỘC LẬP để xác nhận trước khi thăng hạng; rỗng = tắt (không khuyến nghị)")
     p.add_argument("--lr", type=float, default=3e-4, help="Xem train_ppo --lr")
@@ -223,6 +225,7 @@ def main() -> None:
              "--baseline", a.baseline, "--side", a.side, "--lr", str(a.lr),
              "--shaping-weight", str(a.shaping_alpha),
              *(["--shaping-decisions", a.shaping_decisions] if a.shaping_decisions else []),
+             *(["--train-decisions", a.train_decisions] if a.train_decisions else []),
              *(["--target-kl", str(a.target_kl)] if a.target_kl is not None else [])],
             cwd=ROOT / "ai-training",
         )

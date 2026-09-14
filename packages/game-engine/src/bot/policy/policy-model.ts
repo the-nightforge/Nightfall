@@ -77,3 +77,28 @@ export interface NightPolicyModel {
     candidates: ReadonlyArray<NightCandidate>,
   ): string | null;
 }
+
+/** Phán quyết của policy ở phiên toà: treo hay tha. */
+export interface FinalVoteDecision {
+  guilty: boolean;
+}
+
+/**
+ * Seam CHỌN cho phiên toà FINAL_VOTE (spec 2026-09-14 D3) — cùng hình dạng với
+ * seam `PolicyModel` của lượt bầu: nhận bảng ứng viên đã chấm (ở đây luôn một
+ * dòng — bị cáo — với điểm `suspicion + spareTrustMargin − trust`, dương là
+ * treo), không tự chấm lại, tất định theo đầu vào trừ RNG lấy mẫu ở rollout.
+ *
+ * Khác ở đầu ra: trả `{ guilty }` thay vì `targetId`, vì `targetId` của cả hai
+ * nước đều là bị cáo (hợp đồng dữ liệu D8). Trả `null` hoặc ném = giữ teacher
+ * (fail-closed): vòng gọi (`decideFinalVote`) không bao giờ để policy làm hỏng
+ * một lượt mà nó không hiểu.
+ */
+export interface FinalVotePolicyModel {
+  readonly name: string;
+  selectVerdict(
+    candidates: ReadonlyArray<{ targetId: string; score: number }>,
+    context: StrategyContext<{ accusedId: string }>,
+    probe?: DecisionProbe,
+  ): FinalVoteDecision | null;
+}

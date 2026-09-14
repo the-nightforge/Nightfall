@@ -30,10 +30,12 @@ import {
   type BotLastLetterIntention,
 } from "./decision/last-letter-decision";
 import { selectVote } from "./decision/vote-decision";
-import type { PolicyModel } from "./policy/policy-model";
+import type { PolicyModel, FinalVotePolicyModel } from "./policy/policy-model";
 import {
   decideFinalVote,
   decideHunterShot,
+  FINAL_VOTE_GUILTY_LABEL,
+  FINAL_VOTE_SPARE_LABEL,
   type BotFinalVoteIntention,
   type BotHunterShotIntention,
 } from "./decision/trial-decision";
@@ -48,8 +50,9 @@ import { deriveSpeechStyle, type BotSpeechStyle } from "./personality/speech-sty
 import { strategyFor } from "./roles/registry";
 import type { LearnedPolicy } from "./learning/mlp";
 import { buildLiveObservation } from "./learning/live-observation";
-import { DAY_ACTION_KIND } from "./learning/observation";
+import { DAY_ACTION_KIND, FINAL_ACTION_KIND } from "./learning/observation";
 import {
+  learnedFinalVotePolicy,
   learnedPolicyModel,
   selectLearnedNight,
   type LearnedDecided,
@@ -150,15 +153,60 @@ export interface BotRuntimeOptions {
    */
   learnedTemperature?: number;
   /**
-   * Lượt nào giao cho `learnedPolicy`. Mặc định `"both"`. Chỉ dành cho
-   * ablation: đo xem điểm mất ở lượt bầu hay lượt đêm — lượt còn lại đi đúng
-   * đường heuristic hiện hành, byte một, như thể không có policy.
+   * Lượt nào giao cho `learnedPolicy`. Mặc định `"both"` (= vote+night).
+   * Tập cờ `"vote" | "night" | "final"` (mảng); `"both"` giữ làm alias tương
+   * thích = vote+night — KHÔNG gồm final. Chỉ dành cho ablation: đo xem điểm
+   * mất ở lượt bầu, lượt đêm hay phiên toà — lượt còn lại đi đúng đường
+   * heuristic hiện hành, byte một, như thể không có policy.
    */
   learnedDecisions?: LearnedDecisions;
+  /**
+   * Policy thay heuristic mặc định của phần belief-driven ở PHIÊN TOÀ
+   * (spec 2026-09-14 D3): seam `FinalVotePolicyModel`, cùng hình dạng với seam
+   * `PolicyModel` của lượt bầu. Năm nhánh hard-rule đứng trước và không đổi —
+   * policy chỉ quyết `trust < suspicion + spareTrustMargin`; thiếu policy hoặc
+   * lỗi → rơi về teacher.
+   *
+   * Bỏ trống = heuristic thuần, hành vi production hiện hành.
+   *
+   * Nếu cấp cả `learnedPolicy` (có cờ final) thì policy tường minh này thắng,
+   * cùng luật ưu tiên với `votePolicy` ở lượt bầu.
+   */
+  finalVotePolicy?: FinalVotePolicyModel;
 }
 
-/** Xem `BotRuntimeOptions.learnedDecisions`. */
-export type LearnedDecisions = "vote" | "night" | "both";
+/**
+ * Một lượt mà policy học được được phép quyết.
+ *
+ * Xem `BotRuntimeOptions.learnedDecisions`.
+ */
+export type LearnedDecision = "vote" | "night" | "final";
+/**
+ * Tập lượt giao cho `learnedPolicy` (spec 2026-09-14 D6): một cờ, một mảng
+ * cờ, hoặc `"both"` (= vote+night, alias tương thích — KHÔNG gồm final).
+ *
+ * Phải là tập hợp chứ không thêm giá trị vào union `"vote" | "night" |
+ * "both"`: hai call site đọc bằng PHỦ ĐỊNH (`!== "night"` bật vote,
+ * `!== "vote"` bật night), nên thêm `"final"` vào union đó sẽ bật CẢ vote lẫn
+ * night policy khi chỉ xin final — đúng cấu hình ablation mà spec dựa vào lại
+ * thành cấu hình bị nhiễm, và nó im lặng.
+ */
+export type LearnedDecisions = LearnedDecision | "both" | readonly LearnedDecision[];
+
+/** Lượt `flag` có giao cho policy không. Vắng = `"both"` = vote+night. */
+export function learnedHas(
+  decisions: LearnedDecisions | undefined,
+  flag: LearnedDecision,
+): boolean {
+  const d = decisions ?? "both";
+  if (d === "both") return flag === "vote" || flag === "night";
+  return (d as readonly LearnedDecision[]).includes(flag);
+}
+
+/** Có phải cấu hình mặc định (không ghi vào record) không. */
+export function isDefaultLearnedDecisions(decisions: LearnedDecisions | undefined): boolean {
+  return decisions === undefined || decisions === "both";
+}
 
 interface MemoryDraft {
   type: BotMemoryType;
@@ -229,6 +277,8 @@ export class BotRuntime {
   private readonly trace: BotTraceSink | undefined;
   /** Policy lượt VOTE; `undefined` = heuristic thuần. Xem `BotRuntimeOptions.votePolicy`. */
   private readonly votePolicy: PolicyModel | undefined;
+  /** Policy phiên toà; `undefined` = heuristic thuần. Xem `BotRuntimeOptions.finalVotePolicy`. */
+  private readonly finalVotePolicy: FinalVotePolicyModel | undefined;
   /** Xem `BotRuntimeOptions.traceLiveInput`. */
   private readonly traceLiveInput: boolean;
   /** Xem `BotRuntimeOptions.learnedPolicy`. */
@@ -262,9 +312,10 @@ export class BotRuntime {
     this.learnedDecisions = options.learnedDecisions ?? "both";
     this.weights = options.weights ?? DEFAULT_BOT_WEIGHTS;
     // CHỈ policy người dùng cấp tường minh. Bản learned được dựng theo từng
-    // lượt trong `decideVote`, vì nó cần `run.onPick` — thứ chỉ tồn tại bên
-    // trong một lượt quyết định.
+    // lượt trong `decideVote`/`decideFinalVote`, vì nó cần `run.onPick` — thứ
+    // chỉ tồn tại bên trong một lượt quyết định.
     this.votePolicy = options.votePolicy;
+    this.finalVotePolicy = options.finalVotePolicy;
 
     // Kiểm ngay tại constructor, không phải ở vòng 7 của ván thứ 214. Một NaN
     // lọt qua sẽ không ném - nó chỉ làm mọi phép so sánh trả về false, và BOT
@@ -401,7 +452,7 @@ export class BotRuntime {
     const learnedOptions = { temperature: this.learnedTemperature, belief: () => this.beliefAfter };
     const votePolicy =
       this.votePolicy ??
-      (this.learnedPolicy && this.learnedDecisions !== "night"
+      (this.learnedPolicy && learnedHas(this.learnedDecisions, "vote")
         ? this.learnedPolicy.residual
           ? residualVotePolicy(this.learnedPolicy, this.weights, learnedOptions, run.onPick)
           : learnedPolicyModel(this.learnedPolicy, this.weights, learnedOptions, run.onPick)
@@ -510,7 +561,7 @@ export class BotRuntime {
   decideNight(context: BotDecisionContext): BotNightIntention | null {
     const run = this.beginTracedDecision();
     const learnedNight =
-      this.learnedPolicy && this.learnedDecisions !== "vote" ? this.learnedPolicy : undefined;
+      this.learnedPolicy && learnedHas(this.learnedDecisions, "night") ? this.learnedPolicy : undefined;
     const learnedOptions = { temperature: this.learnedTemperature, belief: () => this.beliefAfter };
     // Residual đi TRONG strategy (seam `rankNightTargets`), không phải sau nó:
     // nó hiệu chỉnh bảng điểm trước khi vai chọn, và mọi cổng phía sau của vai
@@ -580,15 +631,42 @@ export class BotRuntime {
     return night;
   }
 
-  /** Phán quyết Treo/Tha ở phiên toà. */
+  /**
+   * Phán quyết Treo/Tha ở phiên toà.
+   *
+   * Năm nhánh hard-rule đứng trước và không đổi (`finalVoteHardRule`); policy
+   * (`finalVotePolicy` tường minh thắng, rồi learned với cờ final) chỉ quyết
+   * phần belief-driven cuối. Thiếu policy hoặc lỗi → teacher. Observation lúc
+   * chơi dựng bằng `buildLiveObservation` với ảnh belief chụp CUỐI `observe`
+   * (`this.beliefAfter`), không tính lại tại chỗ.
+   */
   decideFinalVote(context: BotDecisionContext): BotFinalVoteIntention {
     const run = this.beginTracedDecision();
-    const verdict = decideFinalVote(context, this.state, run.rng, this.weights, run.probe);
+    // Policy tường minh thắng (để test/ablation còn cắm được); nếu không,
+    // learned model dựng ở đây để `onPick` của đúng lượt này nghe được — cùng
+    // luật ưu tiên với lượt bầu. Không có policy thì tham số là `undefined` và
+    // teacher đi đúng đường cũ, byte một.
+    const learnedOptions = { temperature: this.learnedTemperature, belief: () => this.beliefAfter };
+    const policy =
+      this.finalVotePolicy ??
+      (this.learnedPolicy && learnedHas(this.learnedDecisions, "final")
+        ? learnedFinalVotePolicy(this.learnedPolicy, this.weights, learnedOptions, run.onPick)
+        : undefined);
+    const verdict = decideFinalVote(
+      context,
+      this.state,
+      run.rng,
+      this.weights,
+      run.probe,
+      policy,
+    );
     run.finish(
       context,
       "FINAL_VOTE",
       context.knowledge.trialAccusedId,
-      verdict.guilty ? "treo" : "tha",
+      verdict.guilty ? FINAL_VOTE_GUILTY_LABEL : FINAL_VOTE_SPARE_LABEL,
+      undefined,
+      FINAL_ACTION_KIND,
     );
     return verdict;
   }
@@ -672,6 +750,12 @@ export class BotRuntime {
         // hysteresis và hai cổng "không treo ai" phía sau nó, và `decideNight`
         // có thể rơi về heuristic sau khi policy đã nói — giữ `logProb` của một
         // nước bị ghi đè là dạy PPO cập nhật theo hành động chưa từng xảy ra.
+        //
+        // Giới hạn đã biết (spec 2026-09-14 v2 phải sửa trước rollout): hai
+        // nước FINAL cùng `targetId` (bị cáo) và `kind` ở đây tính ra "CHOOSE",
+        // nên một pick FINAL không bao giờ khớp guard này và rollout PPO bỏ
+        // qua hàng FINAL (fail-closed — v1 không hỏng gì, nhưng v2 muốn học
+        // phiên toà thì phải sửa guard này trước).
         if (learnedPick && learnedDecided) {
           const kind = decision === "NIGHT" ? (actionKind ?? "SKIP") : DAY_ACTION_KIND;
           if (kind === learnedDecided.kind && targetId === learnedDecided.targetId) {

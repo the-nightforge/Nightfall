@@ -191,8 +191,8 @@ async function main(): Promise<void> {
 
     const line = parsed as BotTrajectory;
     const encoded = encodeObservation(line, { maxSeats: options.maxSeats });
-    // Không có nhãn hành động (SPEECH/FINAL_VOTE) thì không phải mẫu behavior
-    // cloning. Bỏ qua, không bịa nhãn.
+    // Không có nhãn hành động (SPEECH, FINAL_VOTE vắng bị cáo) thì không phải
+    // mẫu behavior cloning. Bỏ qua, không bịa nhãn.
     if (encoded.actionIndex === null) {
       unlabelled += 1;
       continue;
@@ -289,7 +289,10 @@ async function main(): Promise<void> {
   const meta = {
     // Tăng khi ĐỊNH DẠNG đổi (chiều vector, không gian hành động), để một
     // model cũ không bao giờ được nạp lên tensor mới mà không ai biết.
-    datasetVersion: options.rollout ? "rollout-0001" : "dataset-0003",
+    // dataset-0004: thêm kind FINAL cho phiên toà (spec 2026-09-14) — model
+    // dataset-0003 (obsSize 413, actionSize 187) hết load được, phải sinh
+    // dataset và BC lại từ đầu, không transfer weights.
+    datasetVersion: options.rollout ? "rollout-0001" : "dataset-0004",
     rollout: options.rollout,
     temperature,
     // Loại policy đã sinh tập: `residual` (có `bases.f32.bin`, `beta`) hay

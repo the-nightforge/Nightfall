@@ -79,7 +79,7 @@ describe("pickResidual", () => {
 describe("residualRows", () => {
   it("adjusted = score + β·logits[ô]; ứng viên không có ghế → []", () => {
     const seats = ["me", "p2", "p3"];
-    const logits = new Array<number>(187).fill(0);
+    const logits = new Array<number>(actionSize()).fill(0);
     logits[actionIndexOf("KILL", 2)] = 0.5;
     const rows = residualRows(
       [

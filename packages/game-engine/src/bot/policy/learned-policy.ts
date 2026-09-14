@@ -6,6 +6,7 @@ import {
   ACTION_KINDS,
   DAY_ACTION_KIND,
   DEFAULT_MAX_SEATS,
+  FINAL_ACTION_KIND,
   NO_TARGET_ACTION,
   decodeAction,
   encodeObservation,
@@ -21,7 +22,7 @@ import type {
   BotRng,
   NightActionKind,
 } from "../types";
-import { heuristicPolicyModel, type PolicyModel } from "./policy-model";
+import { heuristicPolicyModel, type FinalVotePolicyModel, type PolicyModel } from "./policy-model";
 
 /**
  * Nước đi policy đã LẤY MẪU, kèm đúng hai con số PPO cần: `logProb` của chính
@@ -190,6 +191,64 @@ export function learnedPolicyModel(
         { kind: DAY_ACTION_KIND, targetId: decoded.targetId },
       );
       return { targetId: decoded.targetId };
+    },
+  };
+}
+
+/**
+ * `FinalVotePolicyModel` cho phiên toà, chọn bằng policy học được (spec
+ * 2026-09-14 D3).
+ *
+ * Dựng observation lúc chơi bằng `buildLiveObservation` với ảnh belief chụp ở
+ * CUỐI `observe` (qua `options.belief`) — đúng vector model đã thấy lúc train;
+ * tính lại tại chỗ là một vector khác, sai nhỏ và đều. Lấy mẫu trên đúng hai
+ * ô FINAL (ghế bị cáo = treo, ô tha = tha); không ô hợp lệ, hoặc decode ra
+ * loại khác FINAL, thì trả `null` để vòng gọi giữ teacher — không bao giờ ném
+ * giữa ván.
+ */
+export function learnedFinalVotePolicy(
+  policy: LearnedPolicy,
+  weights: BotWeights,
+  options: LearnedPolicyOptions = {},
+  onPick?: LearnedPickSink,
+): FinalVotePolicyModel {
+  const maxSeats = options.maxSeats ?? DEFAULT_MAX_SEATS;
+  const slots = slotsPerKind(maxSeats);
+  const finalKind = ACTION_KINDS.indexOf(FINAL_ACTION_KIND);
+  return {
+    name: `learned-final:${policy.id}`,
+    selectVerdict(candidates, context, probe) {
+      void probe;
+      if (candidates.length === 0) return null;
+      const live = buildLiveObservation(
+        context.context.knowledge,
+        context.state,
+        weights,
+        "FINAL_VOTE",
+        options.belief?.(),
+      );
+      const encoded = encodeObservation(live, { maxSeats });
+      const mask = encoded.mask.map(
+        (on, index) => on && Math.floor(index / slots) === finalKind,
+      );
+      const temperature = options.temperature ?? 0;
+      const features = encoded.features;
+      const picked = sampleMasked(policy.logits(features), mask, temperature, context.rng);
+      if (!picked) return null;
+      const decoded = decodeAction(picked.index, encoded.seats, maxSeats);
+      if (decoded.kind !== FINAL_ACTION_KIND) return null;
+      // Chỉ báo khi nước NÀY thật sự là nước đi: một `logProb` của nước bị bỏ
+      // đi là một mẫu dạy PPO cập nhật theo hành động chưa từng xảy ra.
+      onPick?.(
+        {
+          actionIndex: picked.index,
+          logProb: picked.logProb,
+          value: policy.value(features),
+          temperature,
+        },
+        { kind: FINAL_ACTION_KIND, targetId: decoded.targetId },
+      );
+      return { guilty: decoded.targetId !== null };
     },
   };
 }

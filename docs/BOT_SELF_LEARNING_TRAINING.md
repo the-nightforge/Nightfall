@@ -446,6 +446,15 @@ tiết: `docs/superpowers/specs/2026-09-11-shaping-reward-design.md`.
   đo là im lặng, đừng shaping nó.
 - `--shaping-weight 0` = hành vi cũ byte một (rollback).
 
+### Mask loss theo luật: chỉ học nước đi có tín hiệu (2026-09-11)
+
+Ablation champion-0009 (900 ván/ô): vote-only cho +2,0/+3,0 trên hai bộ seed,
+night-only cho +1,22/−2,67 (đổi dấu theo seed = nhiễu). Gradient đêm pha loãng
+update nên `--train-decisions vote` giới hạn POLICY-LOSS ở hàng được chọn —
+value và entropy vẫn tính trên mọi hàng. Rỗng = hành vi cũ byte một. Tên lạ
+hoặc không khớp hàng nào đều bị từ chối ngay (mean() trên rỗng ra NaN là cách
+hỏng trong im lặng). `rl_loop` có passthrough `--train-decisions`.
+
 ### Ngắt lúc nào cũng được
 
 `--resume` (mặc định bật) đọc `state.json` và bỏ qua mọi vòng đã hoàn tất; trong

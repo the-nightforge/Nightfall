@@ -1,5 +1,6 @@
 import { MAX_BELIEF_SCORE } from "../belief/evidence";
 import { DEFAULT_BOT_WEIGHTS, type BotWeights } from "../config/weights";
+import type { FinalVotePolicyModel } from "../policy/policy-model";
 import type { DecisionProbe } from "../trace/trace";
 import type {
   BotBrainState,
@@ -23,6 +24,22 @@ export interface BotHunterShotIntention {
   evidence: BotEvidence[];
 }
 
+/**
+ * Hợp đồng dữ liệu của phiên toà (spec 2026-09-14-final-vote-action-space D8):
+ * `BotRuntime.decideFinalVote` ghi `chosen.targetId = trialAccusedId` cho CẢ hai
+ * nước và phân biệt bằng `chosen.label` — encoder và shaping là consumer của
+ * hai chuỗi này. Tách thành hằng số dùng chung: một lần đổi chữ hiển thị mà
+ * quên một chỗ sẽ lật toàn bộ nhãn sang "tha" mà không ai thấy.
+ */
+export const FINAL_VOTE_GUILTY_LABEL = "treo";
+export const FINAL_VOTE_SPARE_LABEL = "tha";
+
+/** Một nhánh hard-rule của phiên toà đã chốt đáp án, trước mọi phép đọc belief. */
+export interface FinalVoteHardRule {
+  guilty: boolean;
+  reason: string;
+}
+
 function isKnownAlly(context: BotDecisionContext, playerId: string): boolean {
   const knowledge = context.knowledge;
   const selfIsWolf = knowledge.knownRoles[knowledge.botId] === "WEREWOLF";
@@ -30,42 +47,24 @@ function isKnownAlly(context: BotDecisionContext, playerId: string): boolean {
 }
 
 /**
- * Treo hay Tha.
+ * Năm nhánh hard-rule của phiên toà, đứng TRƯỚC mọi phép đọc belief và không
+ * đổi (spec 2026-09-14 D3): Sói không treo đồng bọn, Hề luôn tha, Sát Nhân luôn
+ * treo, Báo Thù theo mục tiêu, không bị cáo → tha. Policy học được chỉ quyết
+ * phần belief-driven cuối; `null` ở đây nghĩa là "tới lượt policy/teacher".
  *
- * Mặc định là TREO, và mặc định đó được đổi lại sau khi có dữ liệu.
- *
- * Thiết kế ban đầu của Phase 2 chọn mặc định THA, với lý do "mặc định Treo biến
- * mỗi phiên toà thành một vụ hành quyết". Harness ở Task 9 bác bỏ điều đó: với
- * mặc định THA, phe làng thua 30/30 ván. Lý do là một vòng lặp chết - không ai
- * bị kết án, nên không có lịch sử phiếu để sinh bằng chứng, nên nghi ngờ mãi
- * bằng 0, nên không ai bị kết án.
- *
- * Điều bị bỏ sót: tới được phiên toà nghĩa là đa số làng ĐÃ chỉ vào người này.
- * Tha vì bản thân mình chưa có bằng chứng riêng là vứt bỏ phán đoán tập thể và
- * tiêu một ngày, trong khi mỗi đêm làng vẫn mất một người.
- *
- * Nên luật đúng là: TREO, trừ khi có lý do TÍCH CỰC để tin người này vô tội -
- * Tiên Tri đã soi sạch, hoặc đó là đồng đội mình.
+ * Tách khỏi `decideFinalVote` để `BotRuntime` biết khi nào được hỏi policy mà
+ * không phải đọc probe (probe vắng mặt khi trace tắt).
  */
-export function decideFinalVote(
-  context: BotDecisionContext,
-  state: BotBrainState,
-  rng: BotRng,
-  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
-  probe?: DecisionProbe,
-): BotFinalVoteIntention {
+export function finalVoteHardRule(context: BotDecisionContext): FinalVoteHardRule | null {
   const accusedId = context.knowledge.trialAccusedId;
-  void rng;
 
   if (!accusedId) {
-    probe?.fallback("không có bị cáo nào đang bị xử");
-    return { kind: "FINAL_VOTE", guilty: false, confidence: 1, evidence: [] };
+    return { guilty: false, reason: "không có bị cáo nào đang bị xử" };
   }
 
   // Sói không bao giờ giúp treo đồng bọn, bất kể bằng chứng công khai nói gì.
   if (isKnownAlly(context, accusedId)) {
-    probe?.fallback("bị cáo là đồng đội Sói do engine xác nhận");
-    return { kind: "FINAL_VOTE", guilty: false, confidence: 1, evidence: [] };
+    return { guilty: false, reason: "bị cáo là đồng đội Sói do engine xác nhận" };
   }
 
   /*
@@ -81,8 +80,11 @@ export function decideFinalVote(
    * công khai nói gì cũng không đổi được câu trả lời.
    */
   if (context.knowledge.selfRole === "JESTER") {
-    probe?.fallback("Thằng Hề không giúp treo ai khác: mỗi phiên toà của người khác là một ngày mất trắng");
-    return { kind: "FINAL_VOTE", guilty: false, confidence: 1, evidence: [] };
+    return {
+      guilty: false,
+      reason:
+        "Thằng Hề không giúp treo ai khác: mỗi phiên toà của người khác là một ngày mất trắng",
+    };
   }
 
   /*
@@ -102,8 +104,10 @@ export function decideFinalVote(
    * cũng không đổi được câu trả lời.
    */
   if (context.knowledge.selfRole === "SERIAL_KILLER") {
-    probe?.fallback("Sát Nhân bỏ Treo: mỗi bản án là một người bớt đi mà nó không phải tự tay giết");
-    return { kind: "FINAL_VOTE", guilty: true, confidence: 1, evidence: [] };
+    return {
+      guilty: true,
+      reason: "Sát Nhân bỏ Treo: mỗi bản án là một người bớt đi mà nó không phải tự tay giết",
+    };
   }
 
   /*
@@ -130,21 +134,57 @@ export function decideFinalVote(
     context.knowledge.selfRole === "EXECUTIONER" &&
     context.knowledge.executionerTargetId === accusedId
   ) {
-    probe?.fallback("Kẻ Báo Thù kết tội mục tiêu của mình: đây là toàn bộ điều kiện thắng của nó");
-    return { kind: "FINAL_VOTE", guilty: true, confidence: 1, evidence: [] };
+    return {
+      guilty: true,
+      reason: "Kẻ Báo Thù kết tội mục tiêu của mình: đây là toàn bộ điều kiện thắng của nó",
+    };
   }
 
-  const entry = state.suspicion[accusedId];
+  return null;
+}
+/**
+ * Treo hay Tha — teacher heuristic của phiên toà.
+ *
+ * Mặc định là TREO (harness Task 9: mặc định THA làm làng thua 30/30 vì vòng
+ * lặp chết — không ai bị kết án nên không có lịch sử phiếu để sinh bằng chứng).
+ * Tới được phiên toà nghĩa là đa số làng ĐÃ chỉ vào người này, nên luật đúng
+ * là TREO trừ khi có lý do TÍCH CỰC để tin người này vô tội.
+ *
+ * Năm nhánh hard-rule (`finalVoteHardRule`) đứng trước và không đổi; phần
+ * belief-driven cuối (`trust < suspicion + spareTrustMargin`) là phần duy nhất
+ * policy học được được phép quyết — qua `policy`, thiếu hoặc lỗi thì teacher
+ * này chính là nước lui (fail-closed).
+ */
+export function decideFinalVote(
+  context: BotDecisionContext,
+  state: BotBrainState,
+  rng: BotRng,
+  weights: BotWeights = DEFAULT_BOT_WEIGHTS,
+  probe?: DecisionProbe,
+  policy?: FinalVotePolicyModel,
+): BotFinalVoteIntention {
+  const accusedId = context.knowledge.trialAccusedId;
+  void rng;
+
+  const hard = finalVoteHardRule(context);
+  if (hard) {
+    probe?.fallback(hard.reason);
+    return { kind: "FINAL_VOTE", guilty: hard.guilty, confidence: 1, evidence: [] };
+  }
+  // Tới đây `accusedId` chắc chắn khác null (nhánh "không bị cáo" đã return).
+  const accused = accusedId as string;
+
+  const entry = state.suspicion[accused];
   const suspicion = entry?.score ?? 0;
-  const trust = state.trust[accusedId]?.score ?? 0;
+  const trust = state.trust[accused]?.score ?? 0;
 
   // Chỉ tin tưởng CÓ CƠ SỞ mới cứu được bị cáo. `trust` chỉ lên cao khi có
   // nguồn thật: kết quả soi, hoặc nhiều lần được người khác bênh.
-  const guilty = trust < suspicion + weights.confidence.spareTrustMargin;
+  const teacherGuilty = trust < suspicion + weights.confidence.spareTrustMargin;
 
   if (probe) {
     probe.candidate({
-      targetId: accusedId,
+      targetId: accused,
       score: suspicion + weights.confidence.spareTrustMargin - trust,
       terms: [
         { name: "suspicion", value: suspicion },
@@ -153,6 +193,22 @@ export function decideFinalVote(
       ],
       evidenceIds: (entry?.reasons ?? []).map((item) => item.id),
     });
+  }
+
+  // Policy chỉ quyết phần belief-driven này; mọi nhánh hard-rule đã đứng trước
+  // và không tới được đây. `null` hoặc ném = giữ teacher.
+  let guilty = teacherGuilty;
+  if (policy) {
+    try {
+      const picked = policy.selectVerdict(
+        [{ targetId: accused, score: suspicion + weights.confidence.spareTrustMargin - trust }],
+        { context, state, rng },
+        probe,
+      );
+      if (picked !== null && picked !== undefined) guilty = picked.guilty;
+    } catch {
+      guilty = teacherGuilty;
+    }
   }
 
   return {

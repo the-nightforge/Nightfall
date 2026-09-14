@@ -97,6 +97,21 @@ def baseline_for(kind: str, data, rewards: torch.Tensor) -> torch.Tensor:
     return base
 
 
+def wanted_decision_names(flag: str, flag_name: str, meta: dict) -> set[str] | None:
+    """Tập tên quyết định từ flag CSV, hoặc None khi flag rỗng (= mọi hàng).
+
+    Tên lạ bị từ chối ngay: lặng lẽ zero/mask hết là cách học sai trong im lặng.
+    """
+    if not flag:
+        return None
+    wanted = {name.strip().lower() for name in flag.split(",") if name.strip()}
+    valid = {str(name).lower() for name in meta["decisions"]}
+    unknown = wanted - valid
+    if unknown:
+        raise ValueError(f"{flag_name} có tên lạ {sorted(unknown)} — hợp lệ: {sorted(valid)}")
+    return wanted
+
+
 def main() -> None:
     force_utf8_console()
     p = argparse.ArgumentParser(description=__doc__)
@@ -139,6 +154,12 @@ def main() -> None:
         "--shaping-decisions",
         default="",
         help="Chỉ shaping các loại quyết định này (CSV, viết thường: vote,final_vote). Rỗng = tất cả hàng có nhãn",
+    )
+    p.add_argument(
+        "--train-decisions",
+        default="",
+        help="Chỉ tính POLICY-LOSS trên các loại quyết định này (CSV, viết thường: vote). "
+        "Rỗng = mọi hàng (hành vi cũ byte một). Value và entropy vẫn tính trên mọi hàng.",
     )
     a = p.parse_args()
     torch.manual_seed(a.seed)
@@ -187,16 +208,28 @@ def main() -> None:
         if d.shaping is None:
             raise ValueError("--shaping-weight cần shaping.i8.bin — encode lại dataset bằng bản mới")
         raw = d.shaping.astype(np.float32).copy()
-        if a.shaping_decisions:
-            wanted = {name.strip().lower() for name in a.shaping_decisions.split(",") if name.strip()}
-            valid = {str(name).lower() for name in d.meta["decisions"]}
-            unknown = wanted - valid
-            if unknown:
-                raise ValueError(f"--shaping-decisions có tên lạ {sorted(unknown)} — hợp lệ: {sorted(valid)}")
+        shaping_wanted = wanted_decision_names(a.shaping_decisions, "--shaping-decisions", d.meta)
+        if shaping_wanted is not None:
             names = np.array([str(d.meta["decisions"][int(i)]).lower() for i in d.decisions])
-            raw[~np.isin(names, sorted(wanted))] = 0.0
+            raw[~np.isin(names, sorted(shaping_wanted))] = 0.0
         shaping = torch.from_numpy(raw)
     shaping_coverage = round(float((shaping.numpy() != 0).mean()), 4) if shaping is not None else None
+
+    # Mask loss theo luật (ablation 2026-09-11: luật đêm của champion-0009 cho
+    # +1,2/−2,7 theo seed - nhiễu, trong khi luật phiếu cho +2,0/+3,0. Gradient
+    # đêm pha loãng update nên policy-loss chỉ ăn hàng được chọn. Value và
+    # entropy giữ nguyên trên mọi hàng: value head cần hiệu chỉnh trên toàn ván,
+    # entropy là điều chuẩn chung. Rỗng = hành vi cũ byte một.
+    train_wanted = wanted_decision_names(a.train_decisions, "--train-decisions", d.meta)
+    train_rows: torch.Tensor | None = None
+    if train_wanted is not None:
+        names = np.array([str(d.meta["decisions"][int(i)]).lower() for i in d.decisions])
+        train_rows = torch.from_numpy(np.isin(names, sorted(train_wanted)))
+        if not bool(train_rows.any()):
+            raise ValueError(
+                f"--train-decisions {sorted(train_wanted)} không khớp hàng nào — "
+                "policy-loss sẽ mean() trên rỗng ra NaN"
+            )
 
     def policy_logp(logits: torch.Tensor, idx: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """(log-softmax toàn hàng, mask đang dùng) của policy trên batch `idx`."""
@@ -236,7 +269,14 @@ def main() -> None:
             ratio = torch.exp(logp - OLD[idx])
             unclipped = ratio * adv[idx]
             clipped = torch.clamp(ratio, 1 - a.clip, 1 + a.clip) * adv[idx]
-            policy_loss = -torch.min(unclipped, clipped).mean()
+            selected = torch.min(unclipped, clipped)
+            if train_rows is None:
+                policy_loss = -selected.mean()
+            else:
+                sel = selected[train_rows[idx]]
+                # Batch có thể không chứa hàng được chọn (hiếm khi batch nhỏ):
+                # loss 0, không NaN. Cấu hình sai toàn cục đã bị chặn ở trên.
+                policy_loss = -sel.mean() if sel.numel() > 0 else torch.zeros((), device=selected.device)
             value_loss = nn.functional.mse_loss(value, R[idx])
             probs = logp_all.exp()
             # Chỉ cộng entropy của các ô ĐANG BẬT: ô bị che có logp = log(0) và
@@ -315,7 +355,7 @@ def main() -> None:
                 "shapingWeight": a.shaping_weight,
                 "shapingDecisions": a.shaping_decisions or None,
                 "shapingCoverage": shaping_coverage,
-                "constantMse": round(constant_mse, 4),
+                "trainDecisions": a.train_decisions or None,                "constantMse": round(constant_mse, 4),
                 "policyKind": "residual" if residual else "logits",
                 "beta": beta,
                 "temperature": d.meta.get("temperature"),
