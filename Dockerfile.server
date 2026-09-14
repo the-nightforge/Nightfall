@@ -44,6 +44,9 @@ COPY --from=builder /app/packages/game-engine/dist ./packages/game-engine/dist
 COPY --from=builder /app/apps/server/package.json ./apps/server/package.json
 COPY --from=builder /app/apps/server/dist ./apps/server/dist
 COPY --from=builder /app/apps/server/prisma ./apps/server/prisma
+# Learned policy (champion PPO) đóng gói cùng image: BOT_POLICY_FILE trỏ vào
+# đây, WORKDIR là /app nên đường dẫn là apps/server/assets/models/...
+COPY --from=builder /app/apps/server/assets ./apps/server/assets
 
 EXPOSE 4000
 CMD ["sh", "-c", "npm run db:migrate --workspace @masoi/server && node apps/server/dist/index.js"]

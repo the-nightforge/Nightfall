@@ -17,9 +17,20 @@ import { initObjectStorage } from "./storage";
 import { apiErrorFallback } from "./error-middleware";
 import { securityHeaders } from "./security";
 import { attachExpressErrorReporter, flushObservability, observabilityEnabled } from "./observability";
+import { botPolicy } from "./bots/learned-policy";
 
 async function main(): Promise<void> {
   const corsOrigin = config.corsOrigin === "*" ? true : config.corsOrigin.split(",");
+
+  // Nạp learned policy của BOT ngay cửa main(): file đặt mà hỏng thì server
+  // không lên, đúng quy ước config hỏng - ồn ào ở cửa, không im lặng giữa ván.
+  // `botPolicy()` cache ở module, `session-registry` tái dùng kết quả này.
+  const policy = botPolicy();
+  if (policy.enabled) {
+    console.log(
+      `[policy] learned policy ${policy.modelId} enabled (seats=${policy.seats}, decisions=both)`,
+    );
+  }
 
   const app = express();
   // Rate limit của /api/players khoá theo req.ip, mà sau proxy của Render thì
