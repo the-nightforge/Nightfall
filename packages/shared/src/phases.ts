@@ -217,6 +217,21 @@ export const DEFAULT_ROOM_CONFIG: RoomConfig = {
  * Khai báo tách đôi thì sửa một bên là đồng hồ client và lịch server lệch nhau,
  * và người chơi thấy đồng hồ về 0 trong khi pha vẫn chưa đổi.
  */
+/**
+ * Thời lượng thảo luận THẬT của một ngày.
+ *
+ * `configured` (số host chỉnh) là thời gian cho bàn `MIN_PLAYERS_TO_START` người
+ * sống; mỗi người sống vượt mốc đó được thêm 5 giây. Bàn 20 người mở ván với
+ * 120s thay vì 60s (3s mỗi người), rồi tự ngắn lại khi người chết dần - nên ván
+ * dài thêm ít hơn nhiều so với nâng thẳng con số cho cả ván.
+ *
+ * Trần 300 là trần `discussionSeconds` của `roomConfigSchema`. Lệnh Giới Nghiêm
+ * cắt đôi TRÊN con số này (`startDay`), không phải trên số host chỉnh.
+ */
+export function discussionSecondsFor(configured: number, alivePlayers: number): number {
+  return Math.min(300, configured + 5 * Math.max(0, alivePlayers - MIN_PLAYERS_TO_START));
+}
+
 export const ROLE_REVEAL_MS = 10_000;
 export const RESULT_MS = 8_000;
 

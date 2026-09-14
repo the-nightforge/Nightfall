@@ -8,6 +8,7 @@ import {
   type Role,
   type RoomConfig,
   type Winner,
+  discussionSecondsFor,
 } from "@masoi/shared";
 import { GameEngine } from "../../engine";
 import { detectCoalitions } from "../analysis/coalition";
@@ -1228,11 +1229,14 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     if (finished()) break;
 
     // ---- NGÀY ----
+    // Cùng công thức với server (`beginDiscussion`), để số đo là số của ván thật.
+    const discussionMs =
+      discussionSecondsFor(config.discussionSeconds, engine.alivePlayers().length) * 1_000;
     if (record.events) {
-      engine.startDay(config.discussionSeconds * 1_000, tick(1_000), roundRng);
+      engine.startDay(discussionMs, tick(1_000), roundRng);
       log.push({ kind: "PHASE", round: engine.state.round, phase: "DAY_DISCUSSION" });
     } else {
-      enterPhase("DAY_DISCUSSION", config.discussionSeconds * 1_000);
+      enterPhase("DAY_DISCUSSION", discussionMs);
     }
     observeAll();
 

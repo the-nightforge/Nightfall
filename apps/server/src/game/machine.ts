@@ -5,6 +5,7 @@ import {
   RESULT_MS,
   ROLE_REVEAL_MS,
   SERVER_EVENTS,
+  discussionSecondsFor,
 } from "@masoi/shared";
 import type { Room } from "../rooms/store";
 import { clearRoomTimers, persistRoom, setRoomTimer } from "../rooms/store";
@@ -234,8 +235,9 @@ function beginDiscussion(room: Room): void {
   clearRoomTimers(room.code);
   clearDiscussionSkipVotes(room.code);
   const e = engine(room);
-  const event = e.startDay(room.config.discussionSeconds * 1000);
-  const durationMs = (e.state.phaseEndsAt ?? (Date.now() + room.config.discussionSeconds * 1000)) - Date.now();
+  const discussionMs = discussionSecondsFor(room.config.discussionSeconds, e.alivePlayers().length) * 1000;
+  const event = e.startDay(discussionMs);
+  const durationMs = (e.state.phaseEndsAt ?? (Date.now() + discussionMs)) - Date.now();
 
   if (event?.id === "AMNESTY_DAY") {
     // Ngày Hòa Hoãn: sau thảo luận chuyển thẳng sang Đêm

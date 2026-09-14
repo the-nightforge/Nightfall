@@ -740,7 +740,9 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
    * Ván ở cỡ này DÀI: 7.0 vòng ở 16 người tới 8.8 vòng ở 20, so với 3.3 vòng ở
    * 8 người. Với `BASE_TIMINGS` thì một ván 20 người chạm 25-30 phút. Timing
    * không bị đụng tới ở đây vì bàn đông cần NHIỀU thời gian nói hơn chứ không
-   * ít hơn, nhưng con số đó là một quyết định sản phẩm chưa ai ra.
+   * ít hơn. Chốt 2026-09-14: thảo luận co theo số người sống
+   * (`discussionSecondsFor` ở phases.ts) - các số đo ở file này có trước thay
+   * đổi đó, cần đo lại.
    *
    * Hiện hành (sau lần đo 2026-09-11 và đo bù 2026-09-12, xem khối trên `RAW_PRESET_DECKS`):
    * 16: WEREWOLF x3, SORCERER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x4
