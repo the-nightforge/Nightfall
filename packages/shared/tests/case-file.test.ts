@@ -17,9 +17,10 @@ function cast(): PlayerView[] {
     { id: "p-phuthuy", name: "Phù Thuỷ", alive: true, isBot: false, role: "WITCH" },
     { id: "p-thosan", name: "Thợ Săn", alive: false, isBot: false, role: "HUNTER" },
     { id: "p-baove", name: "Bảo Vệ", alive: true, isBot: false, role: "GUARD" },
-    // Vai đã bị xóa cứng (Linh Mục thay bằng Sói Pháp Sư/Sói Alpha): ván cũ vẫn
-    // mang chuỗi này trong JSON. Giữ nguyên để khóa đường `isRole` fallback -
-    // buildCast phải loại khỏi cast thay vì ném lỗi khi tra `ROLE_META`.
+    // Vai đã bị xóa cứng (Linh Mục thay bằng Sói Pháp Sư, rồi Sói Alpha - cũng
+    // xóa cứng 2026-09-11): ván cũ vẫn mang chuỗi này trong JSON. Giữ nguyên để
+    // khóa đường `isRole` fallback - buildCast phải loại khỏi cast thay vì ném
+    // lỗi khi tra `ROLE_META`.
     { id: "p-linhmuc", name: "Linh Mục", alive: false, isBot: false, role: "PRIEST" as unknown as Role },
     { id: "p-dan", name: "Dân Làng", alive: false, isBot: false, role: "VILLAGER" },
     { id: "p-he", name: "Thằng Hề", alive: true, isBot: false, role: "JESTER" },

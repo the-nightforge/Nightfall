@@ -76,8 +76,15 @@ const gamePhaseSchema = oneOf<GamePhase>(PHASES.filter((phase) => phase !== "LOB
  * `personalWins`, `knownRoles` và `myClaim`. Ném ở đây là đưa cả phòng vào
  * `quarantine` trước cả khi guard VILLAGER của engine kịp chạy - guard đó giữ
  * nguyên như một lớp dự phòng.
+ *
+ * Sói Alpha (xóa cứng 2026-09-11) là ngoại lệ: rơi về VILLAGER là đổi phe một
+ * con Sói giữa ván. Nó cắn cùng bầy nên WEREWOLF là lá còn lại đúng nghĩa -
+ * người cầm chỉ mất khiên soi.
  */
-const roleSchema = oneOf<Role>(ROLES).catch("VILLAGER");
+const roleSchema = z.preprocess(
+  (value) => (value === "ALPHA_WOLF" ? "WEREWOLF" : value),
+  oneOf<Role>(ROLES).catch("VILLAGER"),
+) as z.ZodType<Role>;
 const teamSchema = oneOf<Team>(["wolves", "village", "neutral"]);
 const personalWinConditionSchema = oneOf<PersonalWin["condition"]>(PERSONAL_WIN_CONDITIONS);
 /**
@@ -94,7 +101,24 @@ const winnerSchema = z.union([oneOf<Exclude<Winner, null>>(WINNERS), z.null()]) 
  * khi `validateRoomConfig` kịp nhìn nó. Key lạ bị lược, và host chỉnh lại bộ
  * bài ở lần mở ván tiếp theo nếu số ghế lệch.
  */
-const storedRoomConfigSchema = roomConfigSchema.strip() as unknown as z.ZodType<RoomConfig>;
+/**
+ * Sói Alpha (xóa cứng 2026-09-11): ghế của nó phải sống sót như một GHẾ, không
+ * chỉ đổi tên vai. Dồn sang `werewolves` là sai vì trần đã là 4 và preset
+ * 19/20 sẵn 4 Sói - cộng thêm là trượt schema, đưa cả phòng vào `quarantine`.
+ * Dồn sang `villagers` (+1) trước khi `.strip()` xoá `alphaWolf` là cách duy
+ * nhất giữ đủ sĩ số; bot của ván đang chạy vẫn tưởng thiếu một con Sói - chấp
+ * nhận, vì đó là quyết định ở `roleSchema` phía trên. `villagers` vắng mặt
+ * (config cũ chưa khai, lấp ghế còn lại tự động) thì để nguyên, không bịa ra.
+ */
+const storedRoomConfigSchema = z.preprocess((value) => {
+  if (value && typeof value === "object") {
+    const raw = value as Record<string, unknown>;
+    if (raw.alphaWolf === true && typeof raw.villagers === "number") {
+      return { ...raw, villagers: raw.villagers + 1 };
+    }
+  }
+  return value;
+}, roomConfigSchema.strip()) as unknown as z.ZodType<RoomConfig>;
 
 /**
  * `null` là một lá phiếu THẬT ("không treo ai"), khác hẳn key vắng mặt ("chưa
@@ -202,9 +226,6 @@ export const gameStateSchema = z.object({
    */
   guardianAngelPrevious: z.string().nullable().optional(),
   guardianAngelCharges: z.record(z.string(), z.number()).optional(),
-  // `.default({})` cùng lý do với `sorcererResults` ngay trên: ảnh bản cũ
-  // thiếu khiên soi Alpha vẫn đọc được, output vẫn required cho tsc.
-  alphaShieldUsed: z.record(z.string(), z.boolean()).default({}),
   apprenticeAwakened: z.boolean(),
   wolfCubRageNextNight: z.boolean(),
   healUsed: z.boolean(),

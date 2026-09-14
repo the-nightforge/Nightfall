@@ -45,7 +45,6 @@ function truth(over: Partial<GroundTruth> = {}): GroundTruth {
     activeEventId: over.activeEventId,
     shadowedSeerResults: over.shadowedSeerResults,
     roleChangedIds: over.roleChangedIds,
-    alphaShieldedSeerResults: over.alphaShieldedSeerResults,
   };
 }
 
@@ -338,56 +337,6 @@ describe("từng bất biến đều bắt được lỗi cố ý", () => {
           knowledge({ seerResult: { targetId: "ally", targetName: "A", isWolf: true, team: "wolves" } }),
           state(),
           truth({ shadowedSeerResults: new Set(["me:ally"]) }),
-        ),
-      ),
-    ).toContain("SEER_RESULT_SCOPE");
-  });
-
-  /*
-   * Khiên Alpha: lượt SEE đầu lên Sói Alpha bị ép về làng, ĐÚNG luật engine.
-   *
-   * Đo 1200 ván preset 19-20 (Task 9): ~20% số ván nổ SEER_RESULT_SCOPE "báo
-   * isWolf=false", toàn ở lượt soi trúng Alpha khi khiên còn nguyên. Auditor
-   * đối chiếu với `roleTeam` mà không biết khiên - cùng lớp báo động giả với
-   * Bóng Sói ngay trên, nên miễn trừ cũng đi đúng đường tập khóa cặp đó.
-   */
-  it("Sói Alpha: lượt SEE đầu bị khiên ép về làng được miễn trừ", () => {
-    expect(
-      idsFrom((a) =>
-        a.checkKnowledge(
-          knowledge({
-            botId: "seer",
-            selfRole: "SEER",
-            knownRoles: { seer: "SEER" },
-            seerResult: { targetId: "ally", targetName: "A", isWolf: false, team: "village" },
-          }),
-          state(),
-          truth({
-            roles: { ally: "ALPHA_WOLF" },
-            alphaShieldedSeerResults: new Set(["seer:ally"]),
-          }),
-        ),
-      ),
-    ).not.toContain("SEER_RESULT_SCOPE");
-  });
-
-  it("Sói Alpha: miễn trừ khiên chỉ áp cho ĐÚNG cặp đã ghi", () => {
-    // Không được biến miễn trừ thành công tắc tắt cả bất biến: cùng kết quả
-    // đó nhưng khóa cho cặp khác thì vẫn phải kêu.
-    expect(
-      idsFrom((a) =>
-        a.checkKnowledge(
-          knowledge({
-            botId: "seer",
-            selfRole: "SEER",
-            knownRoles: { seer: "SEER" },
-            seerResult: { targetId: "ally", targetName: "A", isWolf: false, team: "village" },
-          }),
-          state(),
-          truth({
-            roles: { ally: "ALPHA_WOLF" },
-            alphaShieldedSeerResults: new Set(["seer:someone-else"]),
-          }),
         ),
       ),
     ).toContain("SEER_RESULT_SCOPE");

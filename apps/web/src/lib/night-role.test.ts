@@ -13,7 +13,6 @@ describe("night-role canActAtNight", () => {
     expectAct("TRACKER", true);
     expectAct("DETECTIVE", true);
     expectAct("SORCERER", true);
-    expectAct("ALPHA_WOLF", true);
     expectAct("WITCH", true);
   });
 

@@ -47,7 +47,6 @@ function createTestState(players: Partial<EnginePlayer>[]): GameState {
     voteMutations: [],
     dayVoteHistory: [],
     guardPrevious: null,
-    alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
     healUsed: false,

@@ -67,7 +67,6 @@ function discussionRoom(code = "ROOMR"): Room {
     voteMutations: [],
     dayVoteHistory: [],
     guardPrevious: null,
-    alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
     healUsed: false,

@@ -903,16 +903,6 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
    */
   const shadowedSeerResults = new Set<string>();
 
-  /**
-   * Lượt SEE đã rút khiên Alpha, khoá `"${ownerId}:${targetId}"`.
-   *
-   * Khiên ép lượt SEE đầu lên Sói Alpha về làng, và auditor không biết khiên
-   * nên tố cáo oan (xem `GroundTruth.alphaShieldedSeerResults`). Chụp tình
-   * trạng khiên trước mỗi lần nộp và đối chiếu sau: khiên rút đồng bộ trong
-   * `submitNightAction`, nên "chưa vỡ trước, vỡ sau" là đúng lượt này rút.
-   */
-  const alphaShieldedSeerResults = new Set<string>();
-
   const groundTruth = (): GroundTruth => {
     const roles: Record<string, Role> = {};
     const alive: Record<string, boolean> = {};
@@ -925,7 +915,6 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       alive,
       activeEventId: engine.state.activeEvent?.id ?? null,
       shadowedSeerResults,
-      alphaShieldedSeerResults,
       // Suy từ chính state của engine, không phải một bản ghi chép tay ở
       // harness: ba cờ dưới đều được bật CÙNG LÚC với dòng ghi đè `player.role`,
       // nên chúng không thể lệch khỏi vai. Xem `GroundTruth.roleChangedIds`.
@@ -1149,16 +1138,6 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       }
       auditor.checkNightAction(nightContext.knowledge, decision, groundTruth());
 
-      // Khiên Alpha rút NGAY trong `submitNightAction` (kết quả soi hiện ra
-      // trong snapshot của chính lần nộp), nên phải chụp tình trạng khiên
-      // TRƯỚC khi nộp rồi mới biết lượt này có rút khiên không. Đọc sau khi
-      // nộp thì khiên đã vỡ và mọi lượt soi lên Alpha đều trông như "đã có
-      // người rút trước" - đúng lỗi mà bản đầu của hook này mắc phải.
-      const seeConsumesAlphaShield =
-        decision.action === "SEE" &&
-        decision.targetId &&
-        engine.state.players.find((p) => p.id === decision.targetId)?.role === "ALPHA_WOLF" &&
-        !engine.state.alphaShieldUsed[decision.targetId];
       try {
         // `secondaryTargetId` là BẮT BUỘC với Thám Tử: engine đòi đúng hai người.
         // Harness Phase 2 bỏ quên tham số này, nhưng không ván mô phỏng nào bật
@@ -1188,13 +1167,6 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
           for (const targetId of [decision.targetId, decision.secondaryTargetId]) {
             if (targetId) shadowedSeerResults.add(`${player.id}:${targetId}`);
           }
-        }
-        // Khiên Alpha: lượt SEE này vừa rút khiên và bị ép về làng trong
-        // chính lần nộp. Chỉ mục tiêu chính (khiên không đè lên mục tiêu
-        // phụ của Màn Sương Tan). Khoá thừa vô hại (kết quả đúng không bao
-        // giờ chạm phép so với sự thật), khoá thiếu thì thành báo động giả.
-        if (seeConsumesAlphaShield && decision.targetId) {
-          alphaShieldedSeerResults.add(`${player.id}:${decision.targetId}`);
         }
         log.push({
           kind: "NIGHT_ACTION",

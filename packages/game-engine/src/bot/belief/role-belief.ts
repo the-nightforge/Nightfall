@@ -158,7 +158,7 @@ function uncertainBelief(
   const probabilities: Record<string, number> = {};
   if (wolfMass > 0 && wolfRoles.length > 0) {
     // Khối lượng Sói chia giữa các vai phe Sói theo composition (WEREWOLF nhiều
-    // ghế hơn ALPHA_WOLF thì nhận phần lớn hơn).
+    // ghế hơn SORCERER thì nhận phần lớn hơn).
     const wolfWeight = wolfRoles.reduce((sum, role) => sum + pool[role]!, 0);
     for (const role of wolfRoles) {
       probabilities[role] = wolfMass * (pool[role]! / wolfWeight);

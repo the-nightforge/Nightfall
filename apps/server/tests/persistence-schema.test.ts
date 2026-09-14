@@ -95,6 +95,13 @@ describe("schema snapshot phòng", () => {
     ]);
   });
 
+  it("Sói Alpha (xóa cứng) đọc lại thành WEREWOLF, không rơi về VILLAGER", () => {
+    const input = validEnvelope();
+    input.room.engineState.players[0]!.role = "ALPHA_WOLF" as never;
+    const parsed = roomEnvelopeSchema.parse(input);
+    expect(parsed.room.engineState!.players[0]!.role).toBe("WEREWOLF");
+  });
+
   it("brain mang vai cũ và lượt đêm cũ (HOLY_WATER/PRIEST_BLESS) vẫn đọc được", () => {
     const input = validEnvelope();
     input.room.botSession.brains = {
@@ -155,6 +162,29 @@ describe("schema snapshot phòng", () => {
     expect("medium" in parsed.room.engineState!.config).toBe(false);
     // Key thật còn nguyên: lược key lạ chứ không thay cả config.
     expect(parsed.room.config.seer).toBe((input.room.config as { seer: boolean }).seer);
+  });
+
+  it("phòng lưu trước khi xóa Sói Alpha: ghế Alpha dồn vào villagers, không mất ghế", () => {
+    const input = validEnvelope();
+    const legacyConfig = { ...input.room.config, alphaWolf: true, villagers: 3 };
+    input.room.config = legacyConfig as never;
+
+    const parsed = roomEnvelopeSchema.parse(input);
+
+    expect(parsed.room.config.villagers).toBe(4);
+    expect("alphaWolf" in parsed.room.config).toBe(false);
+  });
+
+  it("phòng lưu trước khi xóa Sói Alpha, chưa khai villagers: không tự bịa villagers", () => {
+    const input = validEnvelope();
+    const legacyConfig = { ...input.room.config, alphaWolf: true } as Record<string, unknown>;
+    delete legacyConfig.villagers;
+    input.room.config = legacyConfig as never;
+
+    const parsed = roomEnvelopeSchema.parse(input);
+
+    expect(parsed.room.config.villagers).toBeUndefined();
+    expect("alphaWolf" in parsed.room.config).toBe(false);
   });
 
   it("từ chối bước chờ mang tên lạ", () => {
@@ -258,11 +288,10 @@ describe("tương thích ngược với ảnh chụp của bản cũ", () => {
     expect(roomEnvelopeSchema.safeParse(envelope).success).toBe(true);
   });
 
-  it("thiếu sorcererResults và alphaShieldUsed (ảnh bản cũ) vẫn đọc được", () => {
+  it("thiếu sorcererResults (ảnh bản cũ) vẫn đọc được", () => {
     const envelope = validEnvelope();
     const night = envelope.room.engineState.night as unknown as Record<string, unknown>;
     delete night.sorcererResults;
-    delete (envelope.room.engineState as unknown as Record<string, unknown>).alphaShieldUsed;
 
     const parsed = roomEnvelopeSchema.safeParse(envelope);
     if (!parsed.success) console.error(parsed.error.issues);

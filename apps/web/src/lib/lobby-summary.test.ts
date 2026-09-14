@@ -38,7 +38,6 @@ function config(patch: Partial<RoomConfig> = {}): RoomConfig {
     detective: false,
     tracker: false,
     sorcerer: false,
-    alphaWolf: false,
     mayor: false,
     ...patch,
   };
@@ -57,9 +56,9 @@ describe("deckCounts", () => {
     assert.equal(counts.villagers, 5);
   });
 
-  it("Sói Pháp Sư và Sói Alpha tính vào phe Sói chứ không phải vào chức năng của làng", () => {
-    const counts = deckCounts(config({ werewolves: 1, sorcerer: true, alphaWolf: true }), 8);
-    assert.equal(counts.wolves, 3);
+  it("Sói Pháp Sư tính vào phe Sói chứ không phải vào chức năng của làng", () => {
+    const counts = deckCounts(config({ werewolves: 1, sorcerer: true }), 8);
+    assert.equal(counts.wolves, 2);
     assert.equal(counts.specials, 0);
   });
 
@@ -94,14 +93,22 @@ describe("role lists", () => {
     assert.equal(CONFIG_KEY["MEDIUM"], undefined);
   });
 
-  it("Sói Pháp Sư và Sói Alpha là sói đặc biệt có công tắc sảnh chờ", () => {
+  it("Sói Pháp Sư là sói đặc biệt có công tắc sảnh chờ", () => {
     assert.ok(WOLF_SPECIAL_ROLES.includes("SORCERER"));
-    assert.ok(WOLF_SPECIAL_ROLES.includes("ALPHA_WOLF"));
     assert.equal(CONFIG_KEY["SORCERER"], "sorcerer");
-    assert.equal(CONFIG_KEY["ALPHA_WOLF"], "alphaWolf");
     assert.ok(!VILLAGE_ROLES.includes("SORCERER" as never));
-    assert.ok(!VILLAGE_ROLES.includes("ALPHA_WOLF" as never));
     assert.ok(!NEUTRAL_ROLES.includes("SORCERER" as never));
+  });
+
+  it("Kẻ Phản Bội là lá sói đặc biệt có công tắc sảnh chờ", () => {
+    assert.ok(WOLF_SPECIAL_ROLES.includes("TRAITOR"));
+    assert.equal(CONFIG_KEY["TRAITOR"], "traitor");
+  });
+
+  it("Kẻ Phản Bội tính vào cột Sói chứ không vào chức năng của làng", () => {
+    const counts = deckCounts(config({ werewolves: 1, traitor: true }), 8);
+    assert.equal(counts.wolves, 2);
+    assert.equal(counts.specials, deckCounts(config({ werewolves: 1 }), 8).specials);
   });
 });
 
@@ -221,33 +228,35 @@ describe("startBlock", () => {
    * bản cũ để nút sáng.
    *
    * Cặp số đổi từ (preset 7, bàn 8) sang (preset 10, bàn 9) vì preset 6 và 7
-   * đã gỡ khi `MIN_PLAYERS_TO_START` lên 8. Ngưỡng chặn giờ LỆCH VỀ MỘT PHÍA
-   * (xem chú thích "NGƯỠNG BẤT ĐỐI XỨNG" ở `generateWarnings`): chỉ điểm
-   * nghiêng về phe Sói (score < 40) mới khoá phòng, điểm nghiêng về phe Dân chỉ
-   * cảnh báo. Vì vậy cặp số ở đây PHẢI nghiêng về phe Sói - preset 9 dùng ở bàn
-   * 10 người giờ chấm 60.5 (nghiêng về làng) nên không còn `blocking` nữa;
-   * preset 10 dùng ở bàn 9 người chấm 39.5 (nghiêng về Sói) mới đúng kịch bản
-   * cần hồi quy.
+   * đã gỡ khi `MIN_PLAYERS_TO_START` lên 8, rồi sang (preset 18, bàn 16) khi
+   * bảng preset và `ROLE_POWER` đổi theo lần đo 2026-09-11 - điểm chấm theo độ
+   * lệch so với preset cùng cỡ, nên mỗi lần một trong hai đổi thì mốc so của
+   * cặp cũ dịch theo. Sau lần đo đó không còn cặp "một người rời" nào bị chặn.
+   * Ngưỡng chặn LỆCH VỀ MỘT PHÍA (xem chú thích "NGƯỠNG BẤT ĐỐI XỨNG" ở
+   * `generateWarnings`): chỉ điểm nghiêng về phe Sói (score < 40) mới khoá
+   * phòng, điểm nghiêng về phe Dân chỉ cảnh báo. Vì vậy cặp số ở đây PHẢI
+   * nghiêng về phe Sói.
    */
-  it("bộ bài nghiêng về Sói ở phòng 9 người: Ranked chặn, Chaos cho qua", () => {
+  it("bộ bài nghiêng về Sói ở phòng 16 người: Ranked chặn, Chaos cho qua", () => {
     /*
-     * Bộ bài của preset 10 nhưng BỚT một Dân Làng, nên nó dày đúng 9.
+     * Bộ bài của preset 18 nhưng BỚT hai Dân Làng, nên nó dày đúng 16 - kịch
+     * bản "hai người rời phòng" sau khi host chốt preset.
      *
-     * Bản cũ dùng thẳng `PRESET_DECKS[10]` ở phòng 9 người. Từ khi `villagers`
+     * Không dùng thẳng `PRESET_DECKS[18]` ở phòng 16 người: từ khi `villagers`
      * do host đặt, cỡ bộ bài lệch số người là một LỖI CẤU HÌNH - tiền đề "không
      * có lỗi nào khác" của test này vì thế không còn tồn tại được, và nó sẽ đo
-     * nhánh `config` thay cho nhánh `balance` mà nó muốn đo. Điểm cân bằng vẫn
-     * 36.5, tức vẫn nghiêng về Sói đúng như kịch bản cần.
+     * nhánh `config` thay cho nhánh `balance` mà nó muốn đo. Điểm cân bằng 35,
+     * và đó là cảnh báo duy nhất của bộ bài.
      */
     const config: RoomConfig = {
-      ...PRESET_DECKS[10],
-      villagers: (PRESET_DECKS[10].villagers ?? 0) - 1,
+      ...PRESET_DECKS[18],
+      villagers: (PRESET_DECKS[18].villagers ?? 0) - 2,
     };
-    const balance = generateWarnings(config, 9);
+    const balance = generateWarnings(config, 16);
     assert.equal(balance.blocking, true, "tiền đề: engine phải coi đây là mất cân bằng");
-    assert.equal(validateRoomConfig(config, 9), null, "tiền đề: cấu hình không có lỗi nào khác");
+    assert.equal(validateRoomConfig(config, 16), null, "tiền đề: cấu hình không có lỗi nào khác");
 
-    const shared = { playerCount: 9, configError: validateRoomConfig(config, 9), unreadyNames: [] };
+    const shared = { playerCount: 16, configError: validateRoomConfig(config, 16), unreadyNames: [] };
     assert.deepEqual(
       startBlock({ ...shared, balanceBlocking: balance.blocking, mode: "ranked" }),
       { kind: "balance" },

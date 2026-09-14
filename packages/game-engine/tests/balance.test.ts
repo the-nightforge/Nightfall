@@ -55,10 +55,11 @@ describe("balance", () => {
       * cách ngoại lệ trước đã được xử. Nó chỉ tan khi vế SÓI được đo lại trên
       * cùng một thang, và đó là việc chưa ai làm.
       *
-      * MỞ RỘNG 2026-09-06 (Task 9): đo xong, SORCERER = 4 và ALPHA_WOLF = 4,
-      * cả bốn preset 17-20 cùng kêu ở phép so này - cùng một nguyên nhân đã
-      * chẩn đoán (vế làng đo bằng "đóng góp so với Dân Làng" trên bàn bot,
-      * vế Sói 4x5=20 chưa từng qua phép đo đó):
+      * MỞ RỘNG 2026-09-06 (Task 9): đo xong, SORCERER = 4 và ALPHA_WOLF = 4 (lá
+      * sau đã xóa cứng cùng Sói Alpha ngày 2026-09-11 - con số này giờ chỉ còn
+      * là lịch sử của lần đo), cả bốn preset 17-20 cùng kêu ở phép so này - cùng
+      * một nguyên nhân đã chẩn đoán (vế làng đo bằng "đóng góp so với Dân Làng"
+      * trên bàn bot, vế Sói 4x5=20 chưa từng qua phép đo đó):
       *
       *   preset | làng  | Sói | chênh
       *   17     | 17.5  | 19  | -1.5
@@ -84,22 +85,27 @@ describe("balance", () => {
       *    vào bộ bài (thực tế SÓI = 26, LÀNG = 18): nó chỉ chưa đỏ vì vòng lặp
       *    chưa bao giờ tới được đó. Bài học: một vòng lặp assert-ngừng-khi-đỏ
       *    che được cả những kỳ vọng thiu đằng sau điểm đỏ đầu tiên.
+      *
+      * MỞ RỘNG 2026-09-11: bảng preset đổi theo lần đo ván thật (speech +
+      * DEFENSE, 500 ván/bộ, xem khối trên `RAW_PRESET_DECKS`). Kẻ Phản Bội
+      * vào 18, Nguyền Rủa vào 12 và rời 20, Sói Con vào 17. Cùng chẩn đoán,
+      * và số đo lại càng rõ là báo động giả - cả năm đo ra 46-53 cho phe làng:
+      *
+      *   preset | làng | Sói  | chênh | đo được
+      *   12     | 12.5 | 13.5 | -1    | 48.8
+      *   17     | 17.5 | 20   | -2.5  | 51.4
+      *   18     | 21   | 23.5 | -2.5  | 52.6
+      *   19     | 21.5 | 24   | -2.5  | 46.2
+      *   20     | 22   | 24   | -2    | 52.0
       */
-    // Vẫn khoá chặt: đúng MỘT cảnh báo mỗi preset, và đúng cảnh báo đã được
-    // chẩn đoán (bảng chênh trong khối chú thích ngay trên).
-    const KNOWN_FALSE_ALARM: Record<number, string> = {
-      17: "Sức mạnh phe làng (17.5) thấp hơn phe Sói (19)",
-      18: "Sức mạnh phe làng (21) thấp hơn phe Sói (24)",
-      19: "Sức mạnh phe làng (21.5) thấp hơn phe Sói (24)",
-      20: "Sức mạnh phe làng (18.5) thấp hơn phe Sói (24)",
-    };
+    /*
+     * KẾT 2026-09-11: phép kiểm "làng < Sói" đã GỠ khỏi `generateWarnings`.
+     * Chẩn đoán ở trên ("hai vế chưa từng nằm chung một thang") được số đo xác
+     * nhận: đo lại `ROLE_POWER` thì cả 13 preset đều kêu, dù đo ra 46-54% cho
+     * phe làng. Danh sách báo động giả vì thế rỗng; mốc tuyệt đối còn lại là
+     * ngân sách sai lầm. Regex vẫn bắt chuỗi cũ để nó không lẻn quay lại.
+     */
     for (const [count, deck] of Object.entries(PRESET_DECKS)) {
-      const warnings = absolute(deck, Number(count));
-      const diagnosed = KNOWN_FALSE_ALARM[Number(count)];
-      if (diagnosed !== undefined) {
-        expect(warnings).toEqual([diagnosed]);
-        continue;
-      }
       expect(absolute(deck, Number(count)), `preset ${count}`).toEqual([]);
     }
 

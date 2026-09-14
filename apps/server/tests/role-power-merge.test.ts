@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ROLE_POWER } from "@masoi/shared";
 import { mergeShards, type ShardReport } from "../scripts/role-power-merge";
 
 /**
@@ -44,12 +45,15 @@ describe("mergeShards", () => {
   });
 
   it("chỉ gắn cờ SUSPECT khi lệch quá 1.0 so với bảng đang dùng", () => {
-    // GUARD đang dùng 2.5. delta 0.12 -> implied 2.5, gap 0.
-    // SEER đang dùng 5. delta 0.12 -> implied 2.5, gap -2.5.
+    // Delta dựng TỪ bảng đang dùng, để test sống qua mỗi lần hiệu chỉnh
+    // `ROLE_POWER`: nghịch đảo của implied = 0.5 + Δ_điểm/6.
+    const deltaFor = (implied: number): number => ((implied - 0.5) * 6) / 100;
     const merged = mergeShards([
       shard({ deltas: [
-        { role: "GUARD", playerCount: 8, delta: 0.12 },
-        { role: "SEER", playerCount: 8, delta: 0.12 },
+        // Đo ra đúng giá đang dùng: lệch 0.
+        { role: "GUARD", playerCount: 8, delta: deltaFor(ROLE_POWER.GUARD) },
+        // Đo ra cao hơn 2.5 bậc: lệch quá ngưỡng.
+        { role: "SEER", playerCount: 8, delta: deltaFor(ROLE_POWER.SEER + 2.5) },
       ] }),
     ]);
 

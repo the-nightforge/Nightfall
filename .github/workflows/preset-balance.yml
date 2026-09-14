@@ -1,4 +1,5 @@
 name: Preset balance
+run-name: ${{ inputs.role_power && 'Role power' || 'Preset balance' }} · ${{ inputs.games }} ván
 
 # GỌI TAY, không chạy theo push/PR. Đo tỉ lệ thắng của preset 8-20 (và bộ bài
 # ứng viên) như ván xếp hạng thật, rồi in bảng ra trang tổng kết của lần chạy.
@@ -21,6 +22,10 @@ on:
         description: 'Bộ bài ứng viên (JSON), vd [{"label":"18-3W+NR","n":18,"override":{"werewolves":3,"cursed":true}}]'
         required: false
         default: "[]"
+      role_power:
+        description: Đo lại ROLE_POWER - gỡ từng vai khỏi mỗi preset đã chọn (presets=all ≈ 136 job, ~1 giờ)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -57,7 +62,8 @@ jobs:
         env:
           PRESETS: ${{ inputs.presets }}
           CANDIDATES: ${{ inputs.candidates }}
-        run: echo "matrix=$(npx tsx apps/server/scripts/preset-balance.ts matrix --presets "$PRESETS" --candidates "$CANDIDATES")" >> "$GITHUB_OUTPUT"
+          REMOVALS: ${{ inputs.role_power && '--removals' || '' }}
+        run: echo "matrix=$(npx tsx apps/server/scripts/preset-balance.ts matrix --presets "$PRESETS" --candidates "$CANDIDATES" $REMOVALS)" >> "$GITHUB_OUTPUT"
 
   measure:
     needs: plan
@@ -115,8 +121,13 @@ jobs:
         # Bảng đi thẳng vào trang tổng kết của lần chạy, đọc được ngay mà không
         # phải tải artifact về.
         run: npx tsx apps/server/scripts/preset-balance.ts merge out | tee preset-balance.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Bảng ROLE_POWER
+        if: inputs.role_power
+        run: npx tsx apps/server/scripts/preset-balance.ts power out | tee role-power.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: preset-balance-report
-          path: preset-balance.md
+          path: |
+            preset-balance.md
+            role-power.md
           retention-days: 90

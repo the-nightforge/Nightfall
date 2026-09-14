@@ -142,7 +142,6 @@ export function NightPanel({ snapshot, onAction }: Props) {
     acted &&
     role !== "WEREWOLF" &&
     role !== "WOLF_CUB" &&
-    role !== "ALPHA_WOLF" &&
     role !== "SORCERER" &&
     role !== "SERIAL_KILLER";
 
@@ -221,9 +220,9 @@ export function NightPanel({ snapshot, onAction }: Props) {
         </div>
 
         {/*
-          * Mọi vai trong bầy Sói cắn chung một phiếu: Ma Sói, Sói Con, Sói
-          * Alpha và Sói Pháp Sư. Sói Pháp Sư ngoài phiếu cắn còn có một lượt
-          * kiểm tra dòng Tiên Tri riêng ở khối bên dưới.
+          * Mọi vai trong bầy Sói cắn chung một phiếu: Ma Sói, Sói Con và Sói
+          * Pháp Sư. Sói Pháp Sư ngoài phiếu cắn còn có một lượt kiểm tra dòng
+          * Tiên Tri riêng ở khối bên dưới.
           */}
         {role && isWolfPack(role) && (
           <>

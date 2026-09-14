@@ -47,7 +47,14 @@ const POINTS_PER_UNIT = 6;
 /** Lệch quá ngần này so với bảng đang dùng thì con số cũ đáng bị nghi. */
 const SUSPECT_GAP = 1;
 
-export function mergeShards(shards: readonly ShardReport[]): MergedReport {
+/**
+ * `pointsPerUnit` mặc định là hằng số neo ở trên; `preset-balance.ts power` đưa
+ * vào thước đo ngay trong lượt chạy (từ phép gỡ một Sói thường).
+ */
+export function mergeShards(
+  shards: readonly ShardReport[],
+  pointsPerUnit: number = POINTS_PER_UNIT,
+): MergedReport {
   const games = shards[0]?.games ?? 0;
   for (const item of shards) {
     if (item.games !== games) {
@@ -89,7 +96,7 @@ export function mergeShards(shards: readonly ShardReport[]): MergedReport {
       const meanDelta = sum / samples;
       const using = ROLE_POWER[role];
       // Làm tròn 0.5 vì bảng `ROLE_POWER` chỉ nói bằng nửa bậc.
-      const implied = Math.round((0.5 + (meanDelta * 100) / POINTS_PER_UNIT) * 2) / 2;
+      const implied = Math.round((0.5 + (meanDelta * 100) / pointsPerUnit) * 2) / 2;
       const gap = implied - using;
       return { role, meanDelta, samples, implied, using, gap, suspect: Math.abs(gap) > SUSPECT_GAP };
     })

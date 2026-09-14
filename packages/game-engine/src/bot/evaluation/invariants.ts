@@ -104,23 +104,6 @@ export interface GroundTruth {
    */
   shadowedSeerResults?: ReadonlySet<string>;
   /**
-   * Lượt SEE đã bị khiên Alpha ép về làng, khoá `"${ownerId}:${targetId}"`.
-   *
-   * Cùng lớp với `shadowedSeerResults` ngay trên: engine thi hành đúng luật
-   * của nó (lượt SEE đầu lên Sói Alpha luôn ra làng, xem `alphaShieldUsed`
-   * trong `engine.ts`), còn auditor đối chiếu với `roleTeam` nên tố cáo oan -
-   * đo được ~40 báo động giả mỗi 200 ván preset 19-20. Miễn trừ này CHỈ tắt
-   * phép so sánh với sự thật cho đúng cặp đã bị khiên, và câu hỏi "ai được
-   * phép cầm kết quả này" không có ngoại lệ nào - cùng ranh giới với Bóng Sói.
-   *
-   * ponytail cùng loại đã ghi ở `roleChangedIds`: miễn trừ theo cặp nên nó
-   * cũng tha luôn một lượt soi LẶP lên cùng cặp mà engine trả sai (lẽ ra sau
-   * khi khiên vỡ phải ra Sói). Mất đúng một lượt soi sai, chỉ trong bộ bài có
-   * Sói Alpha. Harness chỉ khoá đúng lượt SEE đã thật sự rút khiên (xem hook
-   * trong `selfplay.ts`), nên không có bản ghi chép tay nào để trôi lệch.
-   */
-  alphaShieldedSeerResults?: ReadonlySet<string>;
-  /**
    * Những người đã bị GHI ĐÈ vai giữa ván: Kẻ Nguyền Rủa hoá Sói, Kẻ Phản Bội
    * thăng cấp khi bầy sạch, Kẻ Song Trùng hoá theo người chết đầu tiên.
    *
@@ -385,9 +368,6 @@ export function createInvariantAuditor(record: SelfPlayRecord): InvariantAuditor
         const seerResultMayLie =
           truth.activeEventId === "WOLF_SHADOW" ||
           (truth.shadowedSeerResults?.has(`${self}:${result.targetId}`) ?? false) ||
-          // Khiên Alpha ép lượt SEE đầu về làng - engine làm đúng luật của nó,
-          // không phải nói dối. Chỉ đúng cặp đã bị khiên, xem `GroundTruth`.
-          (truth.alphaShieldedSeerResults?.has(`${self}:${result.targetId}`) ?? false) ||
           // Sự thật đã dịch chỗ dưới chân kết quả này, xem `roleChangedIds`.
           (truth.roleChangedIds?.has(result.targetId) ?? false);
         if (!seerResultMayLie && result.isWolf !== seerReadsAsWolf(truth.roles[result.targetId])) {

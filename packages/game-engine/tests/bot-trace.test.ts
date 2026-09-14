@@ -398,7 +398,6 @@ function rolesMentionedIn(trace: BotDecisionTrace): string[] {
     "CURSED",
     "DETECTIVE",
     "SORCERER",
-    "ALPHA_WOLF",
     "MAYOR",
     "VILLAGER",
   ];

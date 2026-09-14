@@ -24,7 +24,7 @@ const HOST_ID = "host-1";
 
 /**
  * Mọi vai bật/tắt được đều BẬT: 14 lá đặc biệt phe Dân/trung lập + 5 ghế Sói
- * (2 Sói + Sói Con + Sói Alpha + Sói Pháp Sư) = 19 ghế.
+ * (2 Sói + Sói Con + Kẻ Phản Bội + Sói Pháp Sư) = 19 ghế.
  *
  * Cộng 3 Dân Làng là 22, tức bộ bài đã vượt `MAX_PLAYERS_PER_ROOM` (20) - đúng
  * cái trạng thái mà host rơi vào khi đặt số Dân Làng trước rồi bật thêm vai.
@@ -33,7 +33,7 @@ const PACKED: RoomConfig = {
   ...DEFAULT_ROOM_CONFIG,
   werewolves: 2,
   wolfCub: true,
-  alphaWolf: true,
+  traitor: true,
   sorcerer: true,
   seer: true,
   guard: true,

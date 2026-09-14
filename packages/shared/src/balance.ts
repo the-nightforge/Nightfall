@@ -169,26 +169,42 @@ export const ROLE_POWER: Record<Role, number> = {
    */
   SORCERER: 4,
   /**
-   * 4, ĐÃ ĐO - HẠ từ con số 6 tạm lúc dựng vai (ngang Sói Con là sai: premium
-   * của Sói Con là cơn phẫn nộ cắn đôi, đo bằng phép ĐỔI giữ nguyên số Sói;
-   * khiên miễn soi một lần không phải premium đó).
+   * 2, HẠ từ 5 - ĐO LẠI 2026-09-11, và lần đo này là nguồn của cả bốn dòng
+   * vừa đổi (SEER, GUARD, DETECTIVE, CURSED).
    *
-   * Cùng lượt đo với Sói Pháp Sư (lượt B3, so cặp đúng seed, speech BẬT, 300
-   * ván mỗi ô, ghế gỡ ra thành Dân Làng):
+   * `preset-balance.yml` với `role_power`: gỡ từng vai khỏi 13 preset hiện
+   * hành (ghế đó thành Dân Làng), speech + DEFENSE bật, 500 ván mỗi ô, cùng
+   * seed với preset. Thước đo ngay trong lượt: gỡ một Sói thường là đổi 4.5
+   * bậc và đo ra 20.9 điểm, tức 4.6 điểm thắng mỗi bậc.
    *
-   *   n  | nguyên vẹn | Δ (đóng góp cho Sói, trung bình 2 mẫu)
-   *   19 |   38.7     |
-   *   20 |   33.7     |                Δ TB = +23.5 (SE ~2.9)
+   *   vai              Δ thắng  đo được  đang dùng  mẫu
+   *   WOLF_CUB          +26.3     6.0       6        3
+   *   ALPHA_WOLF        +21.9     5.0       4        2
+   *   SORCERER          +21.1     5.0       4        3
+   *   WEREWOLF          +20.9     5.0       5       11   (thước)
+   *   TRAITOR           +17.0     4.0       3.5      3
+   *   WITCH              +7.9     2.0       3       13
+   *   SEER               +6.4     2.0       5       13   -> đổi
+   *   HUNTER             +4.3     1.5       2       13
+   *   ELDER              +4.1     1.5       0.5      4
+   *   APPRENTICE_SEER    +2.1     1.0       0.5      6
+   *   TRACKER            +1.4     1.0       2        9
+   *   GUARD              +0.6     0.5       2.5     13   -> đổi
+   *   MAYOR              +0.1     0.5       1.5     10
+   *   DOPPELGANGER       -0.6     0.5       0.5      2
+   *   DETECTIVE          -1.5     0.0       2       12   -> đổi
+   *   CURSED            -10.2    -1.5      -3        6   -> đổi
    *
-   * Cùng thước toàn cục ~6 điểm/đơn vị: 23.5/6 ≈ 3.9, làm tròn lên 4.0. Lá này
-   * cắn cùng bầy mỗi đêm như Sói thường cộng khiên miễn soi lần đầu, và số đo
-   * (+23.5) so vừa khít với "một con Sói ở cỡ này đáng tới 22 điểm" - tức nó
-   * đáng ĐÚNG một con Sói, không hơn. 24.5 với 23.5 cách nhau 1.0, dưới một
-   * SE - Sói Pháp Sư và Sói Alpha trên bàn bot là hai lá ngang giá, nên cả hai
-   * cùng 4.0.
+   * Chỉ đổi dòng lệch QUÁ 1 bậc, đúng luật của bảng này; các dòng lệch đúng 1
+   * bậc (WITCH, TRACKER, MAYOR, ELDER, SORCERER, ALPHA_WOLF) giữ nguyên chờ
+   * thêm mẫu. Bot đánh bot: Tiên Tri trên bàn người đáng hơn +6.4 điểm, nhưng
+   * 13 mẫu nhất quán thì con số 5 cũ không còn đứng được.
+   *
+   * Hai hệ quả có chủ đích ở `generateWarnings`: phép kiểm "làng < Sói" đã gỡ
+   * (với bảng này cả 13 preset đều kêu), và ngưỡng chặn năng lực soi co từ 3
+   * xuống 1.5 theo thước mới.
    */
-  ALPHA_WOLF: 4,
-  SEER: 5,
+  SEER: 2,
   /**
    * 1, hạ từ 2. Đo lại 2026-09-04 bằng SO CẶP trên đúng bộ seed, speech BẬT,
    * 600 ván mỗi ô - tức đúng cách `role-power.ts` đo, chỉ khác là có lời nói:
@@ -229,9 +245,11 @@ export const ROLE_POWER: Record<Role, number> = {
    * này khai vai, mà 70.7% lời khai ở bàn bot bị tranh chấp.
    */
   APPRENTICE_SEER: 0.5,
-  DETECTIVE: 2,
-  GUARD: 2.5,
-  /** TẠM 2, ngang DETECTIVE (cùng hạng lá thông tin). Chốt lại sau sweep. */
+  /** 0, HẠ từ 2 (đo 2026-09-11: -1.5 điểm, 12 mẫu). Xem dòng SEER. */
+  DETECTIVE: 0,
+  /** 0.5, HẠ từ 2.5 (đo 2026-09-11: +0.6 điểm, 13 mẫu) - ngang một Dân Làng. Xem dòng SEER. */
+  GUARD: 0.5,
+  /** 2: đo 2026-09-11 ra 1.0 (9 mẫu), lệch đúng một bậc nên giữ. Xem dòng SEER. */
   TRACKER: 2,
   WITCH: 3,
   /**
@@ -267,12 +285,9 @@ export const ROLE_POWER: Record<Role, number> = {
   // Âm là có chủ ý, xem chú thích trên: bảng đo "đóng góp cho phe đang giữ lá
   // này", và lá này đóng góp âm cho phe làng.
   //
-  // Đừng thả nó xuống đúng số đo (-3.7 tới -4.6) mà không kiểm lại preset 10:
-  // bộ bài đó có cả Kẻ Nguyền Rủa lẫn Sói Con, và ở -3 nó đã sát mép với
-  // `villagePower` 12.5 so với `wolfPower` 12. Thêm một nấc âm nữa là chính
-  // preset tự kêu ở phép kiểm "sức mạnh làng thấp hơn phe Sói" - trong khi nó
-  // đo ra 45.0% cho phe làng, tức một báo động giả do bảng chứ không do bộ bài.
-  CURSED: -3,
+  // -1.5, NÂNG từ -3 (đo 2026-09-11: -10.2 điểm, 6 mẫu, thước 4.6 điểm/bậc).
+  // Vẫn là lá hại phe làng, chỉ nhẹ hơn bảng cũ nghĩ. Xem dòng SEER.
+  CURSED: -1.5,
   VILLAGER: 0.5,
   /**
    * 0, và con số này KHÔNG đi vào cả `villagePower` lẫn `wolfPower`: Thằng Hề
@@ -397,7 +412,6 @@ function preset(overrides: Partial<RoomConfig>): RoomConfig {
     cursed: false,
     wolfCub: false,
     sorcerer: false,
-    alphaWolf: false,
     apprenticeSeer: false,
     detective: false,
     tracker: false,
@@ -484,26 +498,95 @@ function preset(overrides: Partial<RoomConfig>): RoomConfig {
  * Preset 6 và 7 đã GỠ HẲN: `MIN_PLAYERS_TO_START` lên 8 nên không phòng nào với
  * tới chúng nữa, và cả hai đều không cân bằng được (xem chú thích ở hằng số đó).
  *
- * Deck details:
+ * Deck details (hiện hành, sau lần đo 2026-09-11 ngay dưới):
  * 8: WEREWOLF x2, SEER, WITCH, GUARD, HUNTER, DETECTIVE, VILLAGER
- * 9: WEREWOLF, WOLF_CUB, SEER, WITCH, GUARD, DETECTIVE, HUNTER, VILLAGER x2
- * 10: WEREWOLF, WOLF_CUB, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, HUNTER, VILLAGER x2
+ * 9: WEREWOLF, WOLF_CUB, CURSED, SEER, WITCH, GUARD, DETECTIVE, HUNTER, VILLAGER
+ * 10: WEREWOLF, WOLF_CUB, CURSED, SEER, DETECTIVE, WITCH, GUARD, HUNTER, VILLAGER x2
  * 11: xem khối chú thích ngay trên `11: preset(...)` - đã đổi 2026-09-04
- * 12: xem khối chú thích ngay trên `11: preset(...)` - đã đổi 2026-09-04
- * 13: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x3
- * 14: WEREWOLF x3, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x4
- * 15: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x3
+ * 12: WEREWOLF x2, TRAITOR, CURSED, SEER, WITCH, GUARD, HUNTER, MAYOR, VILLAGER x3
+ * 13: WEREWOLF x3, CURSED, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x2
+ * 14: WEREWOLF x3, CURSED, SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x3
+ * 15: WEREWOLF x3, SORCERER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x3
+ */
+
+/*
+ * ĐO LẠI 2026-09-11 - BẢNG CHỐT HIỆN HÀNH. Đọc khối này trước mọi bảng số khác
+ * trong file: các khối cũ hơn giữ lại làm lịch sử, con số của chúng hết hiệu lực.
+ *
+ * Lần đầu đo ĐÚNG ván xếp hạng thật: speech bật, pha DEFENSE bật, events tắt,
+ * 500 ván mỗi bộ bài, seed `balance:<n>:<shard>` - preset và ứng viên cùng cỡ
+ * chạy chung một bộ seed. Công cụ: `.github/workflows/preset-balance.yml`
+ * (chạy tay), script `apps/server/scripts/preset-balance.ts`.
+ *
+ *   n  | preset cũ | bộ chọn                          | phe làng
+ *    8 |   53.8    | giữ nguyên                       |   53.8
+ *    9 |   59.0    | + Kẻ Nguyền Rủa                  |   48.4
+ *   10 |   57.8    | Tiên Tri Tập Sự -> Thám Tử       |   54.2
+ *   11 |   51.0    | giữ nguyên                       |   51.0
+ *   12 |   55.6    | Thám Tử -> Kẻ Nguyền Rủa         |   48.8
+ *   13 |   56.4    | + Kẻ Nguyền Rủa                  |   49.0
+ *   14 |   62.2    | + Kẻ Nguyền Rủa                  |   49.6
+ *   15 |   59.0    | Kẻ Nguyền Rủa -> Sói Pháp Sư     |   48.0
+ *   16 |   66.8    | Kẻ Nguyền Rủa -> Sói Pháp Sư     |   49.2
+ *   17 |   47.8    | 1 Sói thường -> Sói Con          |   51.4
+ *   18 |   42.4    | Sói Pháp Sư -> Kẻ Phản Bội       |   52.6
+ *   19 |   46.2    | giữ nguyên                       |   46.2
+ *   20 |   42.2    | - Kẻ Nguyền Rủa                  |   52.0
+ *
+ * Chọn qua hai lượt ứng viên, cùng seed với preset. ±95% của mọi ô ~4.4 điểm.
+ * Phân bố lá phe Sói sau lượt này: Sói Con 9/10/17, Sói Pháp Sư 15/16/17,
+ * Kẻ Phản Bội 11/12/18, Sói Alpha 19/20 - hai ô cuối đã đổi, xem đoạn
+ * 2026-09-12 ngay dưới.
+ *
+ * ĐO BÙ 2026-09-12 sau khi xóa cứng Sói Alpha (cùng công cụ, cùng seed, 500
+ * ván mỗi bộ bài). Thế ghế Alpha bằng Kẻ Phản Bội làm 19-20 lệch hẳn về làng:
+ * 19 ra 57.2, 20 ra 64.6 (bộ còn Alpha đo trên máy: 43.8 / 52.0) - bầy mất một
+ * con cắn, mà Kẻ Phản Bội không bù được. Hai lượt ứng viên:
+ *
+ *   n  | ứng viên                                | phe làng |   Δ
+ *   19 | Kẻ Phản Bội -> Sói Con                  |   44.0   | -13.2
+ *   19 | Kẻ Phản Bội -> Sói Pháp Sư              |   44.0   | -13.2
+ *   19 | + Sói Pháp Sư (giữ Kẻ Phản Bội)         |   31.6   | -25.6
+ *   19 | 1 Sói thường -> Sói Con (giữ Phản Bội)  |   53.6   |  -3.6  <- chọn
+ *   20 | Kẻ Phản Bội -> Sói Con                  |   51.8   | -12.8  <- chọn
+ *   20 | Kẻ Phản Bội -> Sói Pháp Sư              |   52.6   | -12.0
+ *   20 | + Sói Pháp Sư (giữ Kẻ Phản Bội)         |   40.2   | -24.4
+ *   20 | 1 Sói thường -> Sói Con (giữ Phản Bội)  |   60.0   |  -4.6
+ *
+ * Ở 20, Sói Con và Sói Pháp Sư ngang nhau trong nhiễu; chọn Sói Con vì 0 ván
+ * chạm trần vòng (Pháp Sư: 2) và ván ngắn hơn (8.6 so với 9.0 vòng) - bàn 20
+ * người vốn đã 25-30 phút. Giữ Kẻ Phản Bội ở 20 thì kẹt mép 60.0, nên nó chỉ
+ * còn ở 19. Phân bố lá phe Sói hiện hành: Sói Con 9/10/17/19/20, Sói Pháp Sư
+ * 15/16/17, Kẻ Phản Bội 11/12/18/19.
+ *
+ * Pha DEFENSE lật chiều bàn vừa: bảng cũ (không DEFENSE) cho 11-15 nghiêng Sói,
+ * đo đúng thì 9-16 nghiêng LÀNG (55-67%). Bị cáo được tự bào chữa là thứ phe
+ * làng hưởng nhiều hơn phe Sói.
+ *
+ * Một ghế Dân thường đáng nhiều hơn `ROLE_POWER` nghĩ: 14 = 13 + 1 Dân ra 62.2
+ * so với 56.4, 16 = 15 + 1 Dân ra 66.8 so với 59.0. Đó cũng chính là hai preset
+ * từng được miễn luật Dân<=Sói; bộ mới đưa cả hai về trong luật.
+ *
+ * Những gì hai lượt ứng viên nói về các lá phe Sói, trên bàn bot hiện tại:
+ * - Sói Pháp Sư mạnh hơn Kẻ Phản Bội 8-10 điểm (16: 41.8 so với 50.0; 18:
+ *   42.4 so với 52.6), nên ở 15/16 nó thay Kẻ Nguyền Rủa (đáng ~-10 cho làng:
+ *   gỡ khỏi bộ 15 cũ là 59.0 -> 69.2) chứ không thay Kẻ Phản Bội.
+ * - Sói Con KHÔNG trung tính ở bàn lớn như số đo speech-tắt ở `ROLE_POWER`
+ *   từng nói. Đổi 1 Sói thường lấy Sói Con: 17 +3.6, 19 -5.6, và trên bộ bài
+ *   cũ 18 -3.6, 20 -10.0. Chỉ 17 nhận nó.
+ * - Kẻ Phản Bội ở bàn 10 quá tay (thay Nguyền Rủa: 33.2, thêm vào: 22.6): ở
+ *   bàn nhỏ một ghế trong thế cân bằng nặng 25-35 điểm.
  */
 
 const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
   8: preset({ werewolves: 2, seer: true, witch: true, guard: true, hunter: true, detective: true }),
-  9: preset({ werewolves: 1, wolfCub: true, seer: true, witch: true, guard: true, detective: true, hunter: true }),
+  9: preset({ werewolves: 1, wolfCub: true, cursed: true, seer: true, witch: true, guard: true, detective: true, hunter: true }),
   10: preset({
     werewolves: 1,
     wolfCub: true,
     cursed: true,
     seer: true,
-    apprenticeSeer: true,
+    detective: true,
     witch: true,
     guard: true,
     hunter: true,
@@ -563,15 +646,16 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
   12: preset({
     werewolves: 2,
     traitor: true,
+    cursed: true,
     seer: true,
     witch: true,
     guard: true,
-    detective: true,
     hunter: true,
     mayor: true,
   }),
   13: preset({
     werewolves: 3,
+    cursed: true,
     seer: true,
     witch: true,
     guard: true,
@@ -582,6 +666,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
   }),
   14: preset({
     werewolves: 3,
+    cursed: true,
     seer: true,
     witch: true,
     guard: true,
@@ -592,7 +677,7 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
   }),
   15: preset({
     werewolves: 3,
-    cursed: true,
+    sorcerer: true,
     seer: true,
     apprenticeSeer: true,
     witch: true,
@@ -657,11 +742,12 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
    * không bị đụng tới ở đây vì bàn đông cần NHIỀU thời gian nói hơn chứ không
    * ít hơn, nhưng con số đó là một quyết định sản phẩm chưa ai ra.
    *
-   * 16: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x4
-   * 17: WEREWOLF x3, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, SORCERER, VILLAGER x3
-   * 18: WEREWOLF x4, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, SORCERER, VILLAGER x4
-   * 19: WEREWOLF x4, DOPPELGANGER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, ALPHA_WOLF, VILLAGER x4
-   * 20: như trên thêm CURSED, VILLAGER x4
+   * Hiện hành (sau lần đo 2026-09-11 và đo bù 2026-09-12, xem khối trên `RAW_PRESET_DECKS`):
+   * 16: WEREWOLF x3, SORCERER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, VILLAGER x4
+   * 17: WEREWOLF x2, WOLF_CUB, SORCERER, CURSED, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, VILLAGER x3
+   * 18: WEREWOLF x4, TRAITOR, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, VILLAGER x4
+   * 19: WEREWOLF x3, WOLF_CUB, TRAITOR, DOPPELGANGER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, VILLAGER x4
+   * 20: WEREWOLF x4, WOLF_CUB, DOPPELGANGER, SEER, APPRENTICE_SEER, WITCH, GUARD, DETECTIVE, HUNTER, MAYOR, TRACKER, ELDER, VILLAGER x5
    *
    * Đổi 2026-09-05 (SORCERER + ALPHA_WOLF thay MEDIUM + PRIEST, xóa cứng):
    * 14-16 trả ghế Linh Mục về Dân Làng (mỗi preset +1 Dân); 17-18 đổi
@@ -730,14 +816,15 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
    *    về làng là đúng luật engine, còn auditor đối chiếu với `roleTeam` mà
    *    không biết khiên. Tỉ lệ thắng không ảnh hưởng (bất biến chỉ kiểm sau
    *    ván), và harness đã được dạy khiên ngay trong Task 9 này - batch kiểm
-   *    lại ra 0 vi phạm. Xem `GroundTruth.alphaShieldedSeerResults`.
+   *    lại ra 0 vi phạm. Miễn trừ này đã xóa cứng cùng Sói Alpha ngày
+   *    2026-09-11 - khiên soi không còn tồn tại nên báo động giả cũng hết đất.
    * 2. Ba ván chạm trần vòng (17-t9a, 18-t9a, 18-t9c - mẫu số 199 thay vì
    *    200): ván 8 vòng ở bàn lớn thỉnh thoảng không phân thắng được trong
    *    20 vòng. Không đáng kể trên 2400 ván.
    */
   16: preset({
     werewolves: 3,
-    cursed: true,
+    sorcerer: true,
     seer: true,
     apprenticeSeer: true,
     witch: true,
@@ -748,7 +835,8 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     tracker: true,
   }),
   17: preset({
-    werewolves: 3,
+    werewolves: 2,
+    wolfCub: true,
     cursed: true,
     seer: true,
     apprenticeSeer: true,
@@ -772,10 +860,11 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     mayor: true,
     tracker: true,
     elder: true,
-    sorcerer: true,
+    traitor: true,
   }),
   19: preset({
-    werewolves: 4,
+    werewolves: 3,
+    wolfCub: true,
     doppelganger: true,
     seer: true,
     apprenticeSeer: true,
@@ -786,12 +875,12 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     mayor: true,
     tracker: true,
     elder: true,
-    alphaWolf: true,
+    traitor: true,
   }),
   20: preset({
     werewolves: 4,
+    wolfCub: true,
     doppelganger: true,
-    cursed: true,
     seer: true,
     apprenticeSeer: true,
     witch: true,
@@ -801,7 +890,6 @@ const RAW_PRESET_DECKS: Record<number, RoomConfig> = {
     mayor: true,
     tracker: true,
     elder: true,
-    alphaWolf: true,
   }),
 };
 
@@ -888,10 +976,9 @@ export function specialRoleList(config: RoomConfig): Role[] {
   if (config.wolfCub) roles.push("WOLF_CUB");
   // Tối đa một Kẻ Phản Bội mỗi ván; boolean nên "tối đa 1" là tính chất của kiểu.
   if (config.traitor) roles.push("TRAITOR");
-  // Hai sói mới, mỗi lá tối đa một như mọi cờ boolean khác. Sói Pháp Sư không
+  // Sói Pháp Sư, mỗi lá tối đa một như mọi cờ boolean khác. Sói Pháp Sư không
   // cắn nhưng vẫn thuộc bầy (isWolfPack) nên nó nằm trong bộ bài như một lá sói.
   if (config.sorcerer) roles.push("SORCERER");
-  if (config.alphaWolf) roles.push("ALPHA_WOLF");
   if (config.seer) roles.push("SEER");
   if (config.apprenticeSeer) roles.push("APPRENTICE_SEER");
   if (config.detective) roles.push("DETECTIVE");
@@ -1032,11 +1119,10 @@ export function generateWarnings(config: RoomConfig, playerCount: number): Balan
    * sẽ khoá luôn những phòng đang chạy được hôm nay.
    */
   /*
-   * Sói Alpha CẮN cùng bầy nên vào `wolfCount` như Sói Con - cùng phép đếm sát
-   * thương đêm của `validateRoomConfig`. Sói Pháp Sư thì KHÔNG (cùng cặp với Kẻ
-   * Phản Bội: chiếm ghế nhưng không cắn), nên nó vắng mặt ở đây một cách có chủ ý.
+   * Sói Pháp Sư thì KHÔNG (cùng cặp với Kẻ Phản Bội: chiếm ghế nhưng không cắn),
+   * nên nó vắng mặt ở đây một cách có chủ ý.
    */
-  const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0) + (config.alphaWolf ? 1 : 0);
+  const wolfCount = config.werewolves + (config.wolfCub ? 1 : 0);
   if (wolfCount > 0) {
     /*
      * Ngân sách sai lầm của phe làng, chia cho số Sói phải treo.
@@ -1066,9 +1152,14 @@ export function generateWarnings(config: RoomConfig, playerCount: number): Balan
       );
     }
   }
-  if (villagePower < wolfPower) {
-    warnings.push(`Sức mạnh phe làng (${villagePower}) thấp hơn phe Sói (${wolfPower})`);
-  }
+  /*
+   * Phép kiểm thứ hai từng ở đây - "sức mạnh phe làng thấp hơn phe Sói" - đã
+   * GỠ 2026-09-11. Nó cộng giá trị biên của hai phe rồi so với nhau, nhưng
+   * `ROLE_POWER` đo "đóng góp so với một lá Dân Làng", không phải một thang để
+   * hai vế cân nhau: sau lần đo lại, cả 13 preset đều kêu trong khi đo ra
+   * 46-54% cho phe làng. Độ lệch của bộ bài đã có `score` (so với preset cùng
+   * cỡ) chấm; `villagePower`/`wolfPower` vẫn trả ra để hiển thị.
+   */
 
   /*
    * Sát Nhân nằm NGOÀI thang đo, nên điểm số không được đứng ra bảo lãnh.
@@ -1120,9 +1211,8 @@ export function generateWarnings(config: RoomConfig, playerCount: number): Balan
 
   const presetDeck = PRESET_DECKS[playerCount];
   if (presetDeck) {
-    // Cùng phép đếm với `wolfCount` ngay trên: preset 19-20 mang Sói Alpha.
-    const presetWolfCount =
-      presetDeck.werewolves + (presetDeck.wolfCub ? 1 : 0) + (presetDeck.alphaWolf ? 1 : 0);
+    // Cùng phép đếm với `wolfCount` ngay trên.
+    const presetWolfCount = presetDeck.werewolves + (presetDeck.wolfCub ? 1 : 0);
     const wolfRatio = playerCount > 0 ? wolfCount / playerCount : 0;
     const presetRatio = playerCount > 0 ? presetWolfCount / playerCount : 0;
     const ratioDiff = Math.abs(wolfRatio - presetRatio);
@@ -1136,7 +1226,9 @@ export function generateWarnings(config: RoomConfig, playerCount: number): Balan
     const cfgInfo = infoPower(deckRoles(config, playerCount));
     const presetInfo = infoPower(deckRoles(presetDeck, playerCount));
     const infoDiff = Math.abs(cfgInfo - presetInfo);
-    if (infoDiff >= 3) {
+    // 1.5, co từ 3 khi SEER đo lại 5 -> 2 (2026-09-11): gỡ Tiên Tri vẫn chặn,
+    // gỡ Tiên Tri Tập Sự hay Thám Tử thì không - cùng hành vi với ngưỡng cũ.
+    if (infoDiff >= 1.5) {
       warnings.push(`Năng lực soi lệch ${infoDiff.toFixed(1)} điểm so với preset chuẩn`);
       blocking = true;
     }

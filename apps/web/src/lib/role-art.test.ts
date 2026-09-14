@@ -25,7 +25,7 @@ describe("role-art", () => {
   });
 
   it("new wolves have hand-drawn art, no emoji", () => {
-    for (const role of ["SORCERER", "ALPHA_WOLF"] as Role[]) {
+    for (const role of ["SORCERER"] as Role[]) {
       const path = ROLE_ICON_PATHS[role];
       assert.ok(path.length > 20, `Path too short for role: ${role}`);
       for (const ch of path) {

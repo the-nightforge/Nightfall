@@ -85,7 +85,6 @@ function killerState(over: Partial<GameState> = {}, seats: Seat[] = DEFAULT_SEAT
     lastEliminated: null,
     hunterReaction: null,
     hunterShots: [],
-    alphaShieldUsed: {},
     apprenticeAwakened: false,
     wolfCubRageNextNight: false,
     activeEvent: null,

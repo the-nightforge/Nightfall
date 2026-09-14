@@ -191,34 +191,6 @@ describe("Extended Roles and Events Server Flow Integration", () => {
     });
   });
 
-  it("handles Alpha Wolf seer shield on first SEE, exposed on second", () => {
-    const room = setupRoomWithRoles([
-      { id: "seer", name: "Seer", role: "SEER" },
-      { id: "alpha", name: "Alpha", role: "ALPHA_WOLF" },
-      { id: "w1", name: "Wolf", role: "WEREWOLF" },
-      { id: "v1", name: "Villager", role: "VILLAGER" },
-    ]);
-    const engine = room.engine!;
-    engine.setPhase("NIGHT", 30000);
-
-    // First SEE on Alpha reads as village and burns the shield.
-    engine.submitNightAction("seer", "SEE", "alpha");
-    expect(engine.state.night.seerResults["seer"]).toMatchObject({
-      targetId: "alpha",
-      isWolf: false,
-    });
-    expect(engine.state.alphaShieldUsed["alpha"]).toBe(true);
-
-    // Second night the same SEE exposes the wolf.
-    engine.setPhase("DAY_DISCUSSION", 30000);
-    engine.setPhase("NIGHT", 30000);
-    engine.submitNightAction("seer", "SEE", "alpha");
-    expect(engine.state.night.seerResults["seer"]).toMatchObject({
-      targetId: "alpha",
-      isWolf: true,
-    });
-  });
-
   it("handles Wolf Cub rage triggering double bite next night", () => {
     const room = setupRoomWithRoles([
       { id: "w1", name: "Wolf", role: "WEREWOLF" },

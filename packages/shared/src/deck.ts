@@ -40,7 +40,6 @@ export const DECK_KEYS = [
   "sorcerer",
   "mayor",
   "elder",
-  "alphaWolf",
   "doppelganger",
   "jester",
   "serialKiller",
