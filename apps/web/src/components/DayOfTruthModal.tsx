@@ -1,6 +1,6 @@
 "use client";
-import { ROLE_META } from "@masoi/shared";
-import type { RoomSnapshot } from "@masoi/shared";
+import { ROLE_META, isRole } from "@masoi/shared";
+import type { Role, RoomSnapshot } from "@masoi/shared";
 
 interface Props {
   snapshot: RoomSnapshot;
@@ -9,14 +9,13 @@ interface Props {
 
 export function DayOfTruthModal({ snapshot, onClaim }: Props) {
   if (snapshot.activeEvent?.id !== "DAY_OF_TRUTH") return null;
-  const roles = ["WEREWOLF","SEER","GUARD","WITCH","HUNTER","VILLAGER","WOLF_CUB","DETECTIVE","MAYOR"];
+  const roles: Role[] = ["WEREWOLF","SEER","GUARD","WITCH","HUNTER","VILLAGER","WOLF_CUB","DETECTIVE","MAYOR"];
   const myClaim = snapshot.dayOfTruthClaims?.[snapshot.you?.id ?? ""];
   const hasClaimed = myClaim !== undefined;
   const claimLabel = (claim: string | null | undefined) => {
     if (claim === null) return "Không tiết lộ";
     if (claim === undefined) return "Chưa claim";
-    const meta = (ROLE_META as any)[claim];
-    return meta?.name ?? claim;
+    return isRole(claim) ? ROLE_META[claim].name : claim;
   };
   return (
     <div className="card border-amber-500/30 bg-amber-950/20">
@@ -27,7 +26,7 @@ export function DayOfTruthModal({ snapshot, onClaim }: Props) {
       )}
       <div className="mt-2 flex flex-wrap gap-1.5">
         {roles.map((r) => {
-          const label = (ROLE_META as any)[r]?.name ?? r;
+          const label = ROLE_META[r].name;
           return (
             <button key={r} onClick={() => onClaim(r)} className={`rounded px-2 py-1 text-xs font-semibold transition ${myClaim===r ? "bg-amber-500 text-white" : "bg-white/10 text-white hover:bg-white/15"}`}>{label}</button>
           );

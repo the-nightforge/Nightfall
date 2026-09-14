@@ -7,9 +7,10 @@ import { useMemo } from "react";
 
 export function OpenVotePanel({ snapshot }: { snapshot: RoomSnapshot }) {
   const openBallots = snapshot.openBallots ?? [];
-  if (openBallots.length === 0) return null;
   const playerMap = useMemo(() => new Map(snapshot.players.map((p) => [p.id, p])), [snapshot.players]);
   const avatars = useMemo(() => assignAvatars(snapshot.players.map((p) => p.id)), [snapshot.players]);
+  // Return sớm đứng SAU mọi hook (rules-of-hooks).
+  if (openBallots.length === 0) return null;
 
   return (
     <div className="mt-3 border-t border-white/[0.08] pt-3">

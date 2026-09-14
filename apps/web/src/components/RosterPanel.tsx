@@ -6,6 +6,7 @@ import {
   MAX_PLAYERS_PER_ROOM,
   MIN_PLAYERS_TO_START,
   ROLE_META,
+  isRole,
   type RoomSnapshot,
 } from "@masoi/shared";
 import { assignAvatars, breathOffsetFor, tintFor } from "@/lib/avatar";
@@ -370,7 +371,9 @@ export function RosterPanel({ snapshot, lobby }: Props) {
                       <span aria-hidden="true">🔍</span>{" "}
                       {claim == null
                         ? "Không tiết lộ"
-                        : ((ROLE_META as any)[claim]?.name ?? claim)}
+                        : isRole(claim)
+                          ? ROLE_META[claim].name
+                          : claim}
                     </span>
                   )}
                   {offline && (
