@@ -69,7 +69,6 @@ function spoke(actorId: string, round: number, seq: number): BotMemory {
 function context(over: Partial<BotKnowledgeView> = {}): BotDecisionContext {
   return {
     knowledge: {
-      dayOfTruthClaims: {},
       neutralRolesInPlay: [],
       activeEventId: null,
       botId: "me",

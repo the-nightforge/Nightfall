@@ -507,8 +507,6 @@ export interface RoomSnapshot {
   log: string[];
   /** Cảnh báo cân bằng lobby; null khi chưa tính hoặc cân bằng. */
   balanceWarning?: BalanceWarningView | null;
-  /** Claim Ngày Sự Thật: playerId -> role claim hoặc null là không tiết lộ */
-  dayOfTruthClaims?: Record<string, string | null>;
   /** Tử Thủ: nạn nhân đang được hoãn chết tới hết ngày sau */
   pendingLastStandVictim?: { playerId: string; name: string } | null;
   /**

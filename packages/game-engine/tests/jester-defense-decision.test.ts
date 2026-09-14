@@ -45,7 +45,6 @@ function contextFor(selfRole: Role): BotDecisionContext {
       legalVoteChoices: [],
       lastNightDeaths: [],
       activeEventId: null,
-      dayOfTruthClaims: {},
       neutralRolesInPlay: [],
     },
     visibleChat: [],

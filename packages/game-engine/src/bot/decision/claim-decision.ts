@@ -5,89 +5,10 @@ import { isHumanTable } from "../knowledge";
 import type { BotBrainState, BotDecisionContext, BotMemory, BotRng } from "../types";
 
 /**
- * Vai BOT công khai nhận trong Ngày Sự Thật.
- *
- * `null` là "không tiết lộ" - engine chấp nhận, nhưng lõi hiện không bao giờ
- * chọn nó: im lặng giữa một ngày cả làng cùng khai là tự chỉ vào mình, và nó
- * làm sự kiện mất hết sức nặng trong bàn nhiều BOT.
- */
-export interface BotClaimIntention {
-  role: Role | null;
-  reason: string;
-}
-
-/**
  * Vai an toàn để nấp sau. Đây là lời nói dối của Sói và cũng là sự thật của
  * Dân Làng - đó chính là lý do nó nấp được.
  */
 const COVER: Role = "VILLAGER";
-
-/**
- * Ngày Sự Thật KHÔNG xác thực gì cả: engine chỉ ghi lại chuỗi người chơi gửi
- * lên. Nên câu hỏi ở đây không phải "vai của tôi là gì" mà là "nói ra thì được
- * gì và mất gì".
- *
- * Mặc định là giấu. Khai một vai chức năng ban ngày đồng nghĩa với việc chỉ cho
- * bầy Sói biết đêm nay cắn ai, và đổi lại làng chẳng có cách nào kiểm chứng.
- *
- * Ngoại lệ duy nhất là Tiên Tri đang CẦM một kết quả soi trúng Sói. Lúc đó lời
- * khai không còn là thông tin về bản thân mà là bằng chứng để treo đúng người
- * ngay hôm nay, và cái giá phải trả - chết đêm nay - đến sau khi đã thu được
- * giá trị. Soi ra người sạch thì không đủ: nó không chỉ được ai cả.
- */
-export function decideRoleClaim(
-  context: BotDecisionContext,
-  state: BotBrainState,
-): BotClaimIntention {
-  const role = context.knowledge.selfRole;
-
-  if (roleTeam(role) === "wolves") {
-    return { role: COVER, reason: "Sói không bao giờ tự khai" };
-  }
-
-  /*
-   * Thằng Hề khai một vai CHỨC NĂNG, ngược hẳn logic của mọi vai khác ở hàm này.
-   *
-   * Lý lẽ nền của hàm - "khai vai chức năng là chỉ cho bầy Sói biết đêm nay cắn
-   * ai" - vẫn đúng, chỉ là cái giá đó không còn là giá với Hề: bị chú ý là điều
-   * nó muốn, và một cái chết ban đêm thì dù sao cũng không tính cho nó. Đổi lại
-   * nó nhận đúng thứ cần: một lời khai kiểm chứng được, mà người thật sẽ đứng
-   * lên phản bác.
-   */
-  if (role === "JESTER") {
-    return { role: "SEER", reason: "Thằng Hề khai láo một vai chức năng để bị phản bác và bị treo" };
-  }
-
-  /*
-   * Sát Nhân nấp sau Dân Làng, ngược hẳn Thằng Hề ngay trên.
-   *
-   * Cùng một lý lẽ nền của hàm này, đọc theo đúng chiều của nó: khai một vai
-   * chức năng là tự chỉ vào mình, và Sát Nhân là vai duy nhất trên bàn KHÔNG
-   * được để ai chỉ vào mình - nó phải sống tới người cuối cùng. Nó cũng không
-   * có kết quả nào để đem ra đổi lấy sự chú ý đó.
-   *
-   * Nhánh tường minh dù kết quả trùng với đường mặc định ở cuối hàm: lý do khác
-   * hẳn ("giấu vai chức năng khỏi bầy Sói" là lo lắng của phe làng), và một lý
-   * do đúng là thứ người sửa sau đọc trước khi đổi luật.
-   */
-  if (role === "SERIAL_KILLER") {
-    return { role: COVER, reason: "Sát Nhân phải sống tới cuối, nên nó nấp sau lá bài nhạt nhất bàn" };
-  }
-
-  const canSee = role === "SEER" || role === "APPRENTICE_SEER";
-  const foundWolf = state.knownInformation.seerResults.some(
-    (memory) => memory.data.isWolf === true,
-  );
-  if (canSee && foundWolf) {
-    return { role, reason: "đang cầm một kết quả soi trúng Sói nên khai để làng dùng được" };
-  }
-
-  if (role === COVER) {
-    return { role: COVER, reason: "nói thật vì sự thật cũng chính là chỗ nấp" };
-  }
-
-  return { role: COVER, reason: "giấu vai chức năng để không thành mục tiêu cắn đêm nay" };
-}
 
 export type ClaimKind = "PROACTIVE" | "UNDER_FIRE" | "COUNTER";
 
@@ -227,10 +148,8 @@ export function wolfBluffSeat(
 /**
  * Lời khai tự phát trong khung chat.
  *
- * Tách khỏi `decideRoleClaim` (Ngày Sự Thật) vì hai câu hỏi khác nhau: sự kiện
- * hỏi "bị bắt khai thì khai gì", còn hàm này hỏi "có đáng mở miệng lúc này
- * không". Nhưng chúng chia sẻ đúng một lý lẽ nền — vai chức năng khai ban ngày
- * là tự xin bị cắn đêm nay — nên hai chỗ không được mâu thuẫn nhau.
+ * Câu hỏi là "có đáng mở miệng lúc này không", và lý lẽ nền là: vai chức năng
+ * khai ban ngày là tự xin bị cắn đêm nay.
  *
  * `null` là kết quả thường gặp nhất và là kết quả đúng: im lặng.
  */

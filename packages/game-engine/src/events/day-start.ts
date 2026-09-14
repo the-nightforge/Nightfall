@@ -99,11 +99,6 @@ const DAY_START: Partial<Record<GameEventId, DayStartHandler>> = {
     state.howlBonusDay = state.round + 1;
     return event;
   },
-
-  DAY_OF_TRUTH: (state, event) => {
-    state.dayOfTruthClaims = {};
-    return event;
-  },
 };
 
 export function applyDayEventStart(

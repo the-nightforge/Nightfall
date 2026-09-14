@@ -123,7 +123,6 @@ describe("BotRuntime chấm lại phán quyết", () => {
   ): BotDecisionContext {
     return {
       knowledge: {
-        dayOfTruthClaims: {},
         activeEventId: null,
         // Bàn của bộ test này không có vai trung lập nào; xem `neutralRolesInPlay`.
         neutralRolesInPlay: [],

@@ -44,7 +44,6 @@ function knowledgeWithSeerResult(
     legalVoteChoices: [],
     lastNightDeaths: [],
     activeEventId: null,
-    dayOfTruthClaims: {},
     // Bộ bài của những ván này chỉ có Thằng Hề. Đó là điều kiện để mọi khẳng
     // định bên dưới còn đúng: một ván CÓ Sát Nhân đọc cùng kết quả soi ấy theo
     // hướng ngược lại, và bộ test đó nằm riêng ở `serial-killer-bot.test.ts`.

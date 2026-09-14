@@ -53,7 +53,6 @@ function knowledge(over: Partial<BotKnowledgeView> = {}): BotKnowledgeView {
     ],
     lastNightDeaths: [],
     activeEventId: null,
-    dayOfTruthClaims: {},
     ...over,
   };
 }

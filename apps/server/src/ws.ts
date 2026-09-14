@@ -21,7 +21,6 @@ import {
   skipDiscussionPayload,
   addBotPayload,
   hunterShotPayload,
-  dayOfTruthClaimPayload,
   deadMessagePayload,
   lastLetterSetPayload,
   updateAvatarPayload,
@@ -404,18 +403,6 @@ export function setupSocket(io: SocketServer): void {
       if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
 
       submitHunterShot(room, playerId, targetId);
-    });
-
-    handler(CLIENT_EVENTS.GAME_DAY_OF_TRUTH_CLAIM, async (payload) => {
-      const { role } = dayOfTruthClaimPayload.parse(payload);
-      if (!allowAction(`day-of-truth:${playerId}`, 5, 3_000)) throw new RoomError("Thao tác quá nhanh");
-      const roomCode = getRoomSyncByPlayer(playerId);
-      if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
-      const room = getRoom(roomCode);
-      if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
-      room.engine.submitDayOfTruthClaim(playerId, role);
-      broadcastRoom(roomCode);
-      void persistRoom(room);
     });
 
     handler(CLIENT_EVENTS.GAME_DEAD_MESSAGE, async (payload) => {

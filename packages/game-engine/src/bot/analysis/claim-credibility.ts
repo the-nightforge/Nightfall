@@ -51,10 +51,9 @@ function roleLabel(role: string): string {
  * Dùng ở ba chỗ: nửa tin cậy của S1, toàn bộ S2, và toàn bộ S3. Cả ba đọc CÙNG
  * một câu hỏi - "lời khai này có cõng rủi ro thật không".
  *
- * RULING (task 6): `decideRoleClaim` ("Ngày Sự Thật") làm gần cả bàn khai
- * VILLAGER - Sói lẫn vai quyền lực đều nấp sau nó, trừ đúng Tiên Tri đang cầm
- * kết quả soi trúng Sói. Một bàn 12 người vì vậy sinh ra ~12 `ROLE_CLAIM` cùng
- * khai VILLAGER. Không có cổng này, S2 sẽ đọc mười hai lời khai giống hệt nhau
+ * RULING (task 6): VILLAGER là chỗ nấp chung của Sói lẫn vai quyền lực, nên
+ * nhiều người cùng khai VILLAGER là chuyện thường. Không có cổng này, S2 sẽ đọc
+ * các lời khai giống hệt nhau đó
  * là "va chạm" và nghi ngờ cả bàn vì một sự kiện hoàn toàn bình thường, còn S1
  * sẽ thưởng tin cậy cho một lời khai không hề đặt cược gì. Nửa BUỘC TỘI của S1
  * không đi qua cổng này: nó đo việc lời khai có chỉ mặt ai không, chứ không đo

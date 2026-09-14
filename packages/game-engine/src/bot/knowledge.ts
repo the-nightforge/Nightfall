@@ -120,8 +120,6 @@ export interface BotKnowledgeInput {
   lastNightDeaths: readonly BotKnowledgeView["lastNightDeaths"][number][];
   /** Công khai với cả phòng; engine chỉ chuyển tiếp chứ không lọc gì thêm. */
   activeEventId: BotKnowledgeView["activeEventId"];
-  /** Đã được engine lọc bỏ giá trị không phải vai hợp lệ. */
-  dayOfTruthClaims: BotKnowledgeView["dayOfTruthClaims"];
 }
 
 export function buildBotKnowledgeView(input: BotKnowledgeInput): BotKnowledgeView {
@@ -163,7 +161,6 @@ export function buildBotKnowledgeView(input: BotKnowledgeInput): BotKnowledgeVie
     legalVoteChoices: input.legalVoteChoices.map((choice) => ({ ...choice })),
     lastNightDeaths: input.lastNightDeaths.map((death) => ({ ...death })),
     activeEventId: input.activeEventId,
-    dayOfTruthClaims: { ...input.dayOfTruthClaims },
   };
 }
 

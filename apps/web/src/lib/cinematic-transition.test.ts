@@ -196,13 +196,12 @@ describe("cinematicFor: chữ trên màn hình", () => {
     assert.equal(played?.label, "Luật làng thay đổi");
   });
 
-  it("năm sự kiện cùng họ RULE_CHANGE cho ra năm tiêu đề khác nhau", () => {
+  it("bốn sự kiện cùng họ RULE_CHANGE cho ra bốn tiêu đề khác nhau", () => {
     const family: Array<[GameEventId, string]> = [
       ["CURFEW", "Giới Nghiêm"],
       ["SILENT_NIGHT", "Đêm Câm Lặng"],
       ["AMNESTY_DAY", "Ngày Ân Xá"],
       ["LAST_STAND", "Kháng Cự Cuối Cùng"],
-      ["DAY_OF_TRUTH", "Ngày Sự Thật"],
     ];
     const titles = new Set<string>();
     for (const [id, name] of family) {

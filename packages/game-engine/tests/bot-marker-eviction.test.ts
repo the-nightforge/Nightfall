@@ -127,7 +127,6 @@ function context(options: {
       ],
       lastNightDeaths: [],
       activeEventId: null,
-      dayOfTruthClaims: {},
     },
     visibleChat: [],
   };

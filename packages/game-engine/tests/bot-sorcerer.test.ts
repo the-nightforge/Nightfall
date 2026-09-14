@@ -34,7 +34,6 @@ function emptyTargets(): NightKnowledge["legalTargets"] {
 
 function knowledge(over: Partial<BotKnowledgeView> = {}): BotKnowledgeView {
   return {
-    dayOfTruthClaims: {},
     neutralRolesInPlay: [],
     activeEventId: null,
     botId: "me",

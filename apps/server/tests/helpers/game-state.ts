@@ -45,5 +45,4 @@ export const GAME_STATE_SCAFFOLD: GameState = {
   deadCanSpeakUsed: false,
   deadCanSpeakChosenId: null,
   howlBonusDay: null,
-  dayOfTruthClaims: {},
 };

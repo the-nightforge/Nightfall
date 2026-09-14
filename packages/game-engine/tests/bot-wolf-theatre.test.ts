@@ -63,7 +63,6 @@ function players(humans: readonly string[] = []): BotKnowledgeView["players"] {
 function context(over: Partial<BotKnowledgeView> = {}): BotDecisionContext {
   return {
     knowledge: {
-      dayOfTruthClaims: {},
       neutralRolesInPlay: [],
       activeEventId: null,
       botId: "me",

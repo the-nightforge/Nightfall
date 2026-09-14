@@ -80,7 +80,6 @@ function context(over: Partial<BotKnowledgeView> = {}, chat: BotChatObservation[
       legalVoteChoices: [],
       lastNightDeaths: [],
       activeEventId: null,
-      dayOfTruthClaims: {},
       ...over,
     },
     visibleChat: chat,

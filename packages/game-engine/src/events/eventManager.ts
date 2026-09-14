@@ -86,14 +86,6 @@ export const GAME_EVENTS: Record<GameEventId, GameEventDefinition> = {
     beneficiary: "village",
     power: 3,
   },
-  DAY_OF_TRUTH: {
-    id: "DAY_OF_TRUTH",
-    name: "Ngày Sự Thật",
-    description: "Mỗi người công khai claim vai (không xác thực) trong ngày.",
-    targetPhase: "DAY",
-    beneficiary: "village",
-    power: 2,
-  },
   MOONLESS_NIGHT: {
     id: "MOONLESS_NIGHT",
     name: "Đêm Không Trăng",

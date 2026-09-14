@@ -68,7 +68,6 @@ function createTestState(players: Partial<EnginePlayer>[]): GameState {
     bloodMoonUsed: false,
     deadCanSpeakUsed: false,
     howlBonusDay: null,
-    dayOfTruthClaims: {},
   };
 }
 

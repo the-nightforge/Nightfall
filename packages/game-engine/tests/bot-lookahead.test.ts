@@ -66,7 +66,6 @@ function context(selfRole: Role = "VILLAGER"): BotDecisionContext {
       legalVoteChoices: ["b", "c"].map((targetId) => ({ type: "PLAYER" as const, targetId })),
       lastNightDeaths: [],
       activeEventId: null,
-      dayOfTruthClaims: {},
     },
     visibleChat: [],
   };

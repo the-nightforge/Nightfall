@@ -129,7 +129,6 @@ function makeHunterEngine(phase: GameState["phase"] = "NIGHT") {
     bloodMoonUsed: false,
     deadCanSpeakUsed: false,
     howlBonusDay: null,
-    dayOfTruthClaims: {},
   };
   return new GameEngine(state);
 }

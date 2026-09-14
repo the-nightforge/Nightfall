@@ -88,7 +88,6 @@ function knowledge(
     legalVoteChoices: [],
     lastNightDeaths: [],
     activeEventId: null,
-    dayOfTruthClaims: {},
     ...overrides,
   };
 }

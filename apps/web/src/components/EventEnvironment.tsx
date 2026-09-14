@@ -66,7 +66,6 @@ function StaticTint({ eventId }: { eventId: string }) {
     PEACEFUL_NIGHT: "bg-emerald-900/20",
     LAST_STAND: "bg-amber-900/18",
     HOWL_OF_THE_PACK: "bg-blood-900/15",
-    DAY_OF_TRUTH: "bg-sky-900/15",
     JUDGMENT_DAY: "bg-amber-900/18",
     AMNESTY_DAY: "bg-white/8",
     MORNING_REPORT: "bg-sky-900/12",
@@ -354,29 +353,6 @@ function EventLayer({ id }: { id: string }) {
               transition={{ duration: 2, repeat: Infinity, delay: i * 0.6 }}
             />
           ))}
-        </>
-      );
-    case "DAY_OF_TRUTH":
-      return (
-        <>
-          <div className="absolute inset-0 bg-sky-900/12 backdrop-contrast-110" />
-          <m.div
-            className={`absolute ${EDGE.topRight} h-28 w-28 rounded-full border border-sky-400/10`}
-            animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.5, 0.3] }}
-            transition={{ duration: 3, repeat: Infinity }}
-          />
-          <m.div
-            className={`absolute ${EDGE.topRight} h-28 w-28 p-7 text-sky-200/14`}
-            animate={{ scale: [1, 1.08, 1] }}
-            transition={{ duration: 2, repeat: Infinity }}
-          >
-            <EventGlyph name="eye" className="h-full w-full" />
-          </m.div>
-          <m.div
-            className="absolute left-0 top-1/2 h-px w-full bg-gradient-to-r from-transparent via-sky-400/30 to-transparent"
-            animate={{ y: [-60, 60, -60] }}
-            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-          />
         </>
       );
     case "JUDGMENT_DAY":

@@ -81,7 +81,6 @@ function knowledge(
     legalVoteChoices: ["b", "c"].map((targetId) => ({ type: "PLAYER" as const, targetId })),
     lastNightDeaths: [],
     activeEventId: null,
-    dayOfTruthClaims: {},
     roleComposition: DECK_8,
     ...overrides,
   };

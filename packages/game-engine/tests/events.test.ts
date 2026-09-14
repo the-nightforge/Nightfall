@@ -66,7 +66,6 @@ function createTestState(players: Partial<EnginePlayer>[], overrides?: Partial<G
     bloodMoonUsed: false,
     deadCanSpeakUsed: false,
     howlBonusDay: null,
-    dayOfTruthClaims: {},
     ...overrides,
   };
 }
@@ -457,9 +456,10 @@ describe("Event Modifiers in GameEngine", () => {
   it("migrate cứng xóa SHROUDED_ECLIPSE", () => {
     expect((GAME_EVENTS as any)["SHROUDED_ECLIPSE"]).toBeUndefined();
     expect(GAME_EVENTS["WOLF_SHADOW"]).toBeDefined();
-    // Đếm cứng để một lần thêm nhầm SHROUDED_ECLIPSE trở lại bị bắt ngay; cộng
-    // một mỗi khi thêm sự kiện mới (18 = 17 cũ + Sổ Tang).
-    expect(Object.keys(GAME_EVENTS)).toHaveLength(18);
+    expect((GAME_EVENTS as any)["DAY_OF_TRUTH"]).toBeUndefined();
+    // Đếm cứng để một lần thêm nhầm sự kiện đã xoá trở lại bị bắt ngay; đổi
+    // mỗi khi thêm/bớt sự kiện (17 = 17 cũ + Sổ Tang - Ngày Sự Thật).
+    expect(Object.keys(GAME_EVENTS)).toHaveLength(17);
   });
 });
 
@@ -538,7 +538,6 @@ describe("Bộ chọn sự kiện cân theo độ nghiêng", () => {
       "AMNESTY_DAY",
       "MORNING_REPORT",
       "DEAD_CAN_SPEAK",
-      "DAY_OF_TRUTH",
     ]);
     const ids = reachable(state, "DAY");
     expect(ids).toContain("HOWL_OF_THE_PACK");

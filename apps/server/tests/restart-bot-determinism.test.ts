@@ -98,11 +98,9 @@ function decisions(room: Room, modules: Modules): string[] {
       const runtime = session.runtimeFor(member.playerId);
       const context = modules.buildBotDecisionContext(room, member.playerId);
       const vote = runtime.decideVote(context);
-      const claim = runtime.decideRoleClaim(context);
       return JSON.stringify({
         bot: member.playerId,
         vote: vote.choice,
-        claim: claim.role,
         confidence: runtime.state.confidence,
         suspicion: Object.entries(runtime.state.suspicion)
           .map(([id, entry]) => `${id}:${entry.score.toFixed(6)}`)

@@ -6,7 +6,6 @@ import { OpenVotePanel } from "./OpenVotePanel";
 import { WeightDecidedNote } from "./WeightDecidedNote";
 import { PlayerGrid } from "./PlayerGrid";
 import { VoteHistoryPanel } from "./VoteHistoryPanel";
-import { DayOfTruthModal } from "./DayOfTruthModal";
 import { DeadWhisperPanel } from "./DeadWhisperPanel";
 import { LastLetterComposer } from "./LastLetterComposer";
 import { discussionSkipCopy } from "@/lib/discussion-skip-copy";
@@ -18,7 +17,6 @@ interface Props {
   /** null nghĩa là "Không treo ai" - một lựa chọn, không phải huỷ phiếu. */
   onVote: (targetId: string | null) => void;
   onSkipDiscussion: (skip: boolean) => void;
-  onDayOfTruthClaim?: (role: string | null) => void;
   onDeadMessage?: (text: string) => void;
   /** `null` là lệnh xoá thư. Vắng mặt nghĩa là trang chưa nối sự kiện này. */
   onLastLetter?: (text: string | null) => void;
@@ -28,7 +26,6 @@ export function DayView({
   snapshot,
   onVote,
   onSkipDiscussion,
-  onDayOfTruthClaim,
   onDeadMessage,
   onLastLetter,
 }: Props) {
@@ -336,9 +333,6 @@ export function DayView({
             </div>
           )}
         </div>
-      )}
-      {snapshot.activeEvent?.id === "DAY_OF_TRUTH" && onDayOfTruthClaim && (
-        <DayOfTruthModal snapshot={snapshot} onClaim={onDayOfTruthClaim} />
       )}
       {onDeadMessage && <DeadWhisperPanel snapshot={snapshot} onSend={onDeadMessage} />}
       {/* Hai cơ chế RỜI NHAU, dù đứng cạnh nhau ở đây: Tiếng Vọng là một lượt
