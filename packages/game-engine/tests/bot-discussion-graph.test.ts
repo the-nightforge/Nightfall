@@ -70,7 +70,6 @@ function knowledge(overrides: Partial<BotKnowledgeView> = {}): BotKnowledgeView 
     legalVoteChoices: [],
     lastNightDeaths: [],
     activeEventId: null,
-    dayOfTruthClaims: {},
     ...overrides,
   };
 }

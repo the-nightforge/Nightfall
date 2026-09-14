@@ -57,7 +57,6 @@ function context(): BotDecisionContext {
       ],
       lastNightDeaths: [],
       activeEventId: null,
-      dayOfTruthClaims: {},
     },
     visibleChat: [],
   };

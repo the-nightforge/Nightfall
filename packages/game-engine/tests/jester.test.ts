@@ -81,7 +81,6 @@ function jesterState(over: Partial<GameState> = {}): GameState {
     deadCanSpeakUsed: false,
     deadCanSpeakChosenId: null,
     howlBonusDay: null,
-    dayOfTruthClaims: {},
     personalWins: [],
     ...over,
   };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BOT_WEIGHTS_V4, BOT_WEIGHTS_V6, DEFAULT_BOT_WEIGHTS } from "../src/bot/config/weights";
-import { decideChatClaim, decideRoleClaim } from "../src/bot/decision/claim-decision";
+import { decideChatClaim } from "../src/bot/decision/claim-decision";
 import { decideFinalVote } from "../src/bot/decision/trial-decision";
 import { selectVote } from "../src/bot/decision/vote-decision";
 import { createBotBrainState } from "../src/bot/memory/memory-store";
@@ -41,7 +41,6 @@ function contextFor(
       legalVoteChoices: IDS.map((targetId) => ({ type: "PLAYER" as const, targetId })),
       lastNightDeaths: [],
       activeEventId: null,
-      dayOfTruthClaims: {},
       neutralRolesInPlay: [],
       ...overrides,
     },
@@ -175,14 +174,6 @@ describe("BOT Thằng Hề - phiên toà", () => {
 });
 
 describe("BOT Thằng Hề - lời khai", () => {
-  it("Ngày Sự Thật: khai một vai CHỨC NĂNG chứ không nấp sau Dân Làng", () => {
-    const claim = decideRoleClaim(contextFor(), stateFor());
-    expect(claim.role).toBe("SEER");
-    // Đối chứng: một Dân Làng thật khai đúng vai mình, và một con Sói nấp.
-    expect(decideRoleClaim(contextFor({ selfRole: "VILLAGER" }), stateFor()).role).toBe("VILLAGER");
-    expect(decideRoleClaim(contextFor({ selfRole: "WEREWOLF" }), stateFor()).role).toBe("VILLAGER");
-  });
-
   it("tự mở màn bằng Tiên Tri khi chưa ai khai gì", () => {
     const state = stateFor();
     // deceptionSkill × riskTolerance nhân vào `bluffChance`, nên một rng luôn

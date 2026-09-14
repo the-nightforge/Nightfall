@@ -370,7 +370,7 @@ Countdowns are driven by `phaseEndsAt`, an epoch timestamp issued by the server.
 
 17 events can fire to reshape a round, each with a beneficiary and a power rating the balance analyzer accounts for:
 
-`CURFEW` · `SILENT_NIGHT` · `AMNESTY_DAY` · `CLEARING_MIST` · `PEACEFUL_NIGHT` · `JUDGMENT_DAY` · `LAST_STAND` · `DAY_OF_TRUTH` · `MOONLESS_NIGHT` · `BLOODY_HUNT` · `HOWL_OF_THE_PACK` · `BLOOD_MOON` · `WOLF_SHADOW` · `MORNING_REPORT` · `DEAD_CAN_SPEAK` · `SECRET_BALLOT` · `VIGILANT_NIGHT`
+`CURFEW` · `SILENT_NIGHT` · `AMNESTY_DAY` · `CLEARING_MIST` · `PEACEFUL_NIGHT` · `JUDGMENT_DAY` · `LAST_STAND` · `MOONLESS_NIGHT` · `BLOODY_HUNT` · `HOWL_OF_THE_PACK` · `BLOOD_MOON` · `WOLF_SHADOW` · `MORNING_REPORT` · `DEAD_CAN_SPEAK` · `SECRET_BALLOT` · `VIGILANT_NIGHT` · `OBITUARY`
 
 ## Voice chat
 
@@ -491,7 +491,6 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `game:final-vote` | `{ guilty }` | Alive, not the defendant, during `FINAL_VOTE` |
 | `game:hunter-shot` | `{ targetId }` | The Hunter, during `HUNTER_SHOT` |
 | `game:skip-discussion` | `{ skip }` | Alive, during `DAY_DISCUSSION`; unanimous consent ends the phase |
-| `game:day-of-truth-claim` | `{ role }` | During the `DAY_OF_TRUTH` event |
 | `game:dead-message` | `{ text }` | The chosen ghost, during `DEAD_CAN_SPEAK` |
 | `game:last-letter-set` | `{ text }` | Alive, add-on enabled, during `DAY_DISCUSSION`. `null` clears the draft. A draft travels back only inside its own author's snapshot |
 | `chat:send` | `{ text }` | Channel chosen server-side from phase and alive state |

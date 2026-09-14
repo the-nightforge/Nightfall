@@ -96,7 +96,6 @@ function killerState(over: Partial<GameState> = {}, seats: Seat[] = DEFAULT_SEAT
     deadCanSpeakUsed: false,
     deadCanSpeakChosenId: null,
     howlBonusDay: null,
-    dayOfTruthClaims: {},
     personalWins: [],
     ...over,
   };

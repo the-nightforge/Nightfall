@@ -60,7 +60,6 @@ function night(over: Partial<NightKnowledge> = {}): NightKnowledge {
 function context(over: Partial<BotKnowledgeView> = {}): BotDecisionContext {
   return {
     knowledge: {
-      dayOfTruthClaims: {},
       neutralRolesInPlay: [],
       activeEventId: null,
       botId: "wolf",

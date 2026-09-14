@@ -20,7 +20,6 @@ const PLAYERS: BotPlayerKnowledge[] = [
 function context(chat: BotChatObservation[], round = 1): BotDecisionContext {
   return {
     knowledge: {
-      dayOfTruthClaims: {},
       activeEventId: null,
       neutralRolesInPlay: [],
       botId: "me",

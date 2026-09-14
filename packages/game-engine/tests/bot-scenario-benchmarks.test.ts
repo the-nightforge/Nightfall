@@ -68,7 +68,6 @@ function baseKnowledge(selfRole: Role = "VILLAGER"): BotKnowledgeView {
     ),
     lastNightDeaths: [],
     activeEventId: null,
-    dayOfTruthClaims: {},
   };
 }
 

@@ -229,7 +229,6 @@ describe("BotRuntime.votePolicy (inject qua seam M7)", () => {
         })),
         lastNightDeaths: [],
         activeEventId: null,
-        dayOfTruthClaims: {},
       },
       visibleChat: [],
     };

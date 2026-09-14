@@ -87,7 +87,6 @@ function discussionRoom(code = "ROOMR"): Room {
     deadCanSpeakUsed: false,
     deadCanSpeakChosenId: null,
     howlBonusDay: null,
-    dayOfTruthClaims: {},
   } as unknown as GameState;
 
   return {

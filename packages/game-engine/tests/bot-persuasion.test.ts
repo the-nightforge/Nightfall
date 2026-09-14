@@ -78,7 +78,6 @@ function ctx(over: Partial<BotKnowledgeView>, chat: BotChatObservation[]): BotDe
       ),
       lastNightDeaths: [],
       activeEventId: null,
-      dayOfTruthClaims: {},
       ...over,
     },
     visibleChat: chat,

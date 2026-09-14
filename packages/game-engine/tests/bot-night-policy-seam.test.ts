@@ -41,7 +41,6 @@ function context(
 ): BotDecisionContext {
   return {
     knowledge: {
-      dayOfTruthClaims: {},
       neutralRolesInPlay: [],
       activeEventId: null,
       botId: "me",

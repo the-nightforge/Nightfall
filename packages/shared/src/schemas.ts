@@ -292,7 +292,6 @@ export const hunterShotPayload = z.object({ targetId: z.string().min(1).nullable
 export const skipDiscussionPayload = z.object({ skip: z.boolean() }).strict();
 export const voiceTokenPayload = z.object({}).strict();
 export const voiceReadyPayload = z.object({}).strict();
-export const dayOfTruthClaimPayload = z.object({ role: z.string().min(1).nullable() }).strict();
 
 /**
  * Lời nhắn của Tiếng Vọng Người Chết.

@@ -40,7 +40,6 @@ function context(options: {
   const myVote = options.myVote ?? null;
   return {
     knowledge: {
-      dayOfTruthClaims: {},
       neutralRolesInPlay: [],
       activeEventId: null,
       botId: "me",

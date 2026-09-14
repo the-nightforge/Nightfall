@@ -586,17 +586,6 @@ export interface BotKnowledgeView {
    * chỉ có MỘT đường - mọi thứ BOT biết đều đi qua bộ lọc của engine.
    */
   activeEventId: GameEventId | null;
-  /**
-   * Lời khai của Ngày Sự Thật, `playerId` -> vai, hoặc `null` là không tiết lộ.
-   *
-   * Công khai y như `activeEventId`: cả phòng nhìn cùng một bảng. Đi đường CẤU
-   * TRÚC chứ không qua chat có chủ đích - claim vốn đã là dữ liệu có cấu trúc,
-   * và đẩy nó qua parser tiếng Việt chỉ để đọc lại là tự thêm một tầng mất mát.
-   *
-   * Giữ lại sau khi sự kiện tắt: một lời khai hôm qua vẫn là bằng chứng hôm
-   * nay, và engine chỉ xoá bảng khi một Ngày Sự Thật MỚI bắt đầu.
-   */
-  dayOfTruthClaims: Record<string, Role | null>;
 }
 
 export interface BotChatObservation {

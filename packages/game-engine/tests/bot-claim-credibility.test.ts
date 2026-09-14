@@ -274,7 +274,7 @@ describe("claimEvidence", () => {
   it("RULING: khai VILLAGER hàng loạt ở Ngày Sự Thật không tự sinh nghi ngờ va chạm hay thưởng tin cậy", () => {
     const roster = ["p1", "p2", "p3", "p4", "p5", "p6"];
     const claims = roster.map((id, index) =>
-      claim(id, "VILLAGER", 1, `day-of-truth:${id}:VILLAGER`),
+      claim(id, "VILLAGER", 1, `chat:${id}:VILLAGER`),
     );
     const found = claimEvidence(
       {
@@ -303,11 +303,10 @@ const BALANCED: BotPersonality = {
   stubbornness: 0.5,
 };
 
-/** Ngày Sự Thật: `p1` khai SEER, không đổi qua các lần `observe()`. */
-function dayOfTruthContext(round: number): BotDecisionContext {
+/** `p1` khai SEER trong chat, không đổi qua các lần `observe()`. */
+function claimContext(round: number): BotDecisionContext {
   return {
     knowledge: {
-      dayOfTruthClaims: { p1: "SEER" },
       activeEventId: null,
       neutralRolesInPlay: [],
       botId: "me",
@@ -335,7 +334,7 @@ function dayOfTruthContext(round: number): BotDecisionContext {
       legalVoteChoices: [],
       lastNightDeaths: [],
     },
-    visibleChat: [],
+    visibleChat: [{ id: "chat-p1", actorId: "p1", text: "tôi là tiên tri", at: 0 }],
   };
 }
 
@@ -416,7 +415,7 @@ describe("BotRuntime.observe — claimEvidence không bị áp lại", () => {
 
     // Lượt quan sát đầu tiên: lời khai của p1 vào state.claims, sinh bằng
     // chứng S1 (nửa tin cậy, vì SEER là vai quyền lực).
-    runtime.observe(dayOfTruthContext(1));
+    runtime.observe(claimContext(1));
     const afterFirst = {
       suspicion: runtime.state.suspicion.p1?.score ?? 0,
       trust: runtime.state.trust.p1?.score ?? 0,
@@ -427,7 +426,7 @@ describe("BotRuntime.observe — claimEvidence không bị áp lại", () => {
     // trong CÙNG một vòng - đúng như game engine làm ở mỗi checkpoint (vào
     // ngày, mỗi lượt thảo luận, mỗi lượt bỏ phiếu) - bốn lượt gọi thêm dưới
     // đây sẽ cộng dồn cùng một mảnh bằng chứng bốn lần nữa.
-    for (let i = 0; i < 4; i += 1) runtime.observe(dayOfTruthContext(1));
+    for (let i = 0; i < 4; i += 1) runtime.observe(claimContext(1));
 
     const afterFifth = {
       suspicion: runtime.state.suspicion.p1?.score ?? 0,
@@ -458,11 +457,10 @@ describe("BotRuntime.observe — claimEvidence không bị áp lại", () => {
         personality: BALANCED,
         weights: BOT_WEIGHTS_V4,
       });
-      const base = dayOfTruthContext(3);
+      const base = claimContext(3);
       runtime.observe({
         knowledge: {
           ...base.knowledge,
-          dayOfTruthClaims: {},
           players: [
             { id: "me", name: "ME", alive: true },
             { id: "p1", name: "P1", alive: true },
@@ -494,7 +492,7 @@ describe("BotRuntime.observe — claimEvidence không bị áp lại", () => {
       personality: BALANCED,
       weights: BOT_WEIGHTS_V4,
     });
-    solo.observe(dayOfTruthContext(1));
+    solo.observe(claimContext(1));
 
     // p1 VÀ p2 cùng khai SEER: thêm S2 va chạm (weight > 0 cho cả hai, buộc
     // tội - không gỡ tội), chồng lên đúng S1 nửa tin cậy ở trên.
@@ -506,10 +504,13 @@ describe("BotRuntime.observe — claimEvidence không bị áp lại", () => {
       weights: BOT_WEIGHTS_V4,
     });
     collided.observe({
-      ...dayOfTruthContext(1),
+      ...claimContext(1),
+      visibleChat: [
+        { id: "chat-p1", actorId: "p1", text: "tôi là tiên tri", at: 0 },
+        { id: "chat-p2", actorId: "p2", text: "tôi là tiên tri", at: 1 },
+      ],
       knowledge: {
-        ...dayOfTruthContext(1).knowledge,
-        dayOfTruthClaims: { p1: "SEER", p2: "SEER" },
+        ...claimContext(1).knowledge,
         players: [
           { id: "me", name: "ME", alive: true },
           { id: "p1", name: "P1", alive: true },

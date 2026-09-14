@@ -34,7 +34,6 @@ import {
 import { clearLastLetters, openLastLettersForDeaths } from "./last-letter";
 import {
   scheduleDayBots,
-  scheduleDayOfTruthBots,
   scheduleDeadCanSpeakBot,
   scheduleFinalVoteBots,
   scheduleHunterBot,
@@ -245,7 +244,6 @@ function beginDiscussion(room: Room): void {
     armStep(room, { name: "beginVoting" }, durationMs + 500);
   }
   scheduleDayBots(room);
-  scheduleDayOfTruthBots(room);
   scheduleDeadCanSpeakBot(room);
   scheduleLastLetterBots(room);
   sync(room);

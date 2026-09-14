@@ -121,7 +121,6 @@ const EVENT_FAMILY: Record<GameEventId, CinematicKind> = {
   SILENT_NIGHT: "RULE_CHANGE",
   AMNESTY_DAY: "RULE_CHANGE",
   LAST_STAND: "RULE_CHANGE",
-  DAY_OF_TRUTH: "RULE_CHANGE",
 
   DEAD_CAN_SPEAK: "SPIRIT",
 };
@@ -302,7 +301,7 @@ export function cinematicFor(prev: RoomSnapshot | null, next: RoomSnapshot): Cin
 
   const activeKey = eventKey(next.activeEvent);
   if (next.activeEvent && activeKey && activeKey !== eventKey(prev.activeEvent)) {
-    return build(EVENT_FAMILY[next.activeEvent.id], `event:${activeKey}`, next.activeEvent);
+    return build(EVENT_FAMILY[next.activeEvent.id] ?? "RULE_CHANGE", `event:${activeKey}`, next.activeEvent);
   }
 
   const kind = phaseKind(prev, next);

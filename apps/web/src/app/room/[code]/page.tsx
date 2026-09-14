@@ -214,7 +214,6 @@ export default function RoomPage() {
             snapshot={snapshot}
             onVote={(targetId: string | null) => room.emit("game:vote", { targetId })}
             onSkipDiscussion={(skip) => room.emit("game:skip-discussion", { skip })}
-            onDayOfTruthClaim={(role) => room.emit("game:day-of-truth-claim", { role })}
             onDeadMessage={(text) => room.emit("game:dead-message", { text })}
             onLastLetter={(text) => room.emit("game:last-letter-set", { text })}
           />

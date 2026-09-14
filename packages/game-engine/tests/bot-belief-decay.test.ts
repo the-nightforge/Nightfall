@@ -23,7 +23,6 @@ function stateFor(seed = "decay"): BotBrainState {
 
 function knowledge(over: Partial<BotKnowledgeView> = {}): BotKnowledgeView {
   return {
-    dayOfTruthClaims: {},
     activeEventId: null,
     neutralRolesInPlay: [],
     botId: "me",

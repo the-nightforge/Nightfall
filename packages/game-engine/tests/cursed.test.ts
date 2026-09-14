@@ -73,7 +73,6 @@ function cursedState(over: Partial<GameState> = {}): GameState {
     bloodMoonUsed: false,
     deadCanSpeakUsed: false,
     howlBonusDay: null,
-    dayOfTruthClaims: {},
     ...over,
   };
 }

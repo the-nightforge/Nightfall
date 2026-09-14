@@ -75,7 +75,6 @@ function stateWith(players: Array<[string, Role, boolean?]>): GameState {
     bloodMoonUsed: false,
     deadCanSpeakUsed: false,
     howlBonusDay: null,
-    dayOfTruthClaims: {},
   } as GameState;
 }
 

@@ -49,14 +49,13 @@ const EVENT_GLYPHS: Record<GameEventId, EventGlyphName> = {
   CURFEW: "clock",
   SILENT_NIGHT: "silence",
   AMNESTY_DAY: "flag",
-  // Sương tan = nhìn thấy, cùng hình với Ngày Sự Thật vì cùng một ý.
+  // Sương tan = nhìn thấy.
   CLEARING_MIST: "eye",
   VIGILANT_NIGHT: "shield",
   SECRET_BALLOT: "flag",
   PEACEFUL_NIGHT: "moon",
   JUDGMENT_DAY: "scales",
   LAST_STAND: "shield",
-  DAY_OF_TRUTH: "eye",
   MOONLESS_NIGHT: "moon",
   BLOODY_HUNT: "blood",
   HOWL_OF_THE_PACK: "wolf",

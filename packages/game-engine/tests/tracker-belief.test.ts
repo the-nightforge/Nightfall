@@ -13,7 +13,6 @@ const PLAYERS = ["me", "a", "b", "c"];
 // hai file test; thêm `trackerResult` cho đúng nhu cầu của file này.
 function knowledge(over: Partial<BotKnowledgeView> = {}): BotKnowledgeView {
   return {
-    dayOfTruthClaims: {},
     neutralRolesInPlay: [],
     activeEventId: null,
     botId: "me",

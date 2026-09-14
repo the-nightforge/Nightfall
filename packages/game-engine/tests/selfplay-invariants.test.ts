@@ -76,7 +76,6 @@ function night(over: Partial<NightKnowledge> = {}): NightKnowledge {
 
 function knowledge(over: Partial<BotKnowledgeView> = {}): BotKnowledgeView {
   return {
-    dayOfTruthClaims: {},
     neutralRolesInPlay: [],
     activeEventId: null,
     botId: "me",

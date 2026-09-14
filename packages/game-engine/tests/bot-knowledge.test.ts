@@ -77,7 +77,6 @@ function knowledgeFixture(phase: GamePhase = "VOTING") {
     bloodMoonUsed: false,
     deadCanSpeakUsed: false,
     howlBonusDay: null,
-    dayOfTruthClaims: {},
   };
   return new GameEngine(state);
 }
@@ -281,7 +280,6 @@ describe("bot knowledge security boundary", () => {
         // ở đây là chuyển tiếp chứ không phải rò rỉ.
         "activeEventId",
         // Lời khai của Ngày Sự Thật: cùng lý do, cả phòng nhìn chung một bảng.
-        "dayOfTruthClaims",
         "currentVoteCounts",
         "hasVoted",
         "knownRoles",

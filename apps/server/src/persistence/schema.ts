@@ -280,7 +280,8 @@ export const gameStateSchema = z.object({
    */
   obituaryRevealedId: z.string().nullable().optional(),
   howlBonusDay: z.number().nullable(),
-  dayOfTruthClaims: z.record(z.string(), z.string().nullable()),
+  /** GIỮ cho ván CŨ: sự kiện Ngày Sự Thật đã bị xoá, nhưng snapshot trên Redis lúc deploy vẫn mang trường này. */
+  dayOfTruthClaims: z.record(z.string(), z.string().nullable()).optional(),
   /**
    * STRICT chứ không phải `objectOf`: đây là dữ liệu MANG QUYẾT ĐỊNH - nó là
    * kết quả cuối cùng của một người chơi, và một mục méo sẽ hiện ra ở màn kết

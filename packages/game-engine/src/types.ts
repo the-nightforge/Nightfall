@@ -322,7 +322,6 @@ export interface GameState {
    */
   obituaryRevealedId?: string | null;
   howlBonusDay: number | null;
-  dayOfTruthClaims: Record<string, string | null>;
   /**
    * Thắng lợi CÁ NHÂN đã ghi nhận trong ván, theo thứ tự xảy ra.
    *

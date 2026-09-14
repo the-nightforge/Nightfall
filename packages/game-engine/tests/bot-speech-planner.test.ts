@@ -45,7 +45,6 @@ function bot(seed: string, traits: Partial<BotPersonality> = {}): BotRuntime {
 function context(chat: BotChatObservation[], round = 1): BotDecisionContext {
   return {
     knowledge: {
-      dayOfTruthClaims: {},
       neutralRolesInPlay: [],
       activeEventId: null,
       botId: "me",

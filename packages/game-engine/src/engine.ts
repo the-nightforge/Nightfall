@@ -141,7 +141,6 @@ export interface PlayerGameView {
   hunterShots: HunterShotRecap[];
   dayVoteHistory: DayVoteRecap[];
   log: string[];
-  dayOfTruthClaims?: Record<string, string | null>;
   pendingLastStandVictim?: { playerId: string; name: string } | null;
   /** Lượt nói của linh hồn, tính riêng cho người xem. Xem RoomSnapshot. */
   deadCanSpeak: { canAct: boolean } | null;
@@ -325,7 +324,6 @@ export class GameEngine {
     this.state.deadCanSpeakUsed ??= false;
     this.state.deadCanSpeakChosenId ??= null;
     this.state.howlBonusDay ??= null;
-    this.state.dayOfTruthClaims ??= {};
     // State lưu trước khi có vai trung lập không có hai trường dưới. Mặc định
     // an toàn là "role tắt, chưa ai thắng cá nhân": không ván cũ nào bỗng dưng
     // mọc thêm một thành tích.
@@ -440,7 +438,6 @@ export class GameEngine {
       deadCanSpeakUsed: false,
       deadCanSpeakChosenId: null,
       howlBonusDay: null,
-      dayOfTruthClaims: {},
       // Ván mới, sổ thành tích trắng. Không đọc lại từ đâu cả: một thắng lợi cá
       // nhân thuộc về ĐÚNG một ván.
       personalWins: [],
@@ -1887,19 +1884,6 @@ export class GameEngine {
     return reaction.source;
   }
 
-  submitDayOfTruthClaim(playerId: string, claim: string | null): void {
-    const st = this.state;
-    if (st.activeEvent?.id !== "DAY_OF_TRUTH") throw new GameError("Không trong Ngày Sự Thật");
-    const p = this.mustPlayer(playerId);
-    if (!p.alive) throw new GameError("Người chết không thể claim");
-    if (claim !== null && !Object.values(ROLE_META).some((m) => m.id === claim)) {
-      throw new GameError("Role claim không hợp lệ");
-    }
-    st.dayOfTruthClaims ??= {};
-    st.dayOfTruthClaims[playerId] = claim;
-    st.log.push(`${p.name} claim: ${claim ?? "Không tiết lộ"}`);
-  }
-
   /**
    * Lượt nói của linh hồn, tính riêng cho người xem.
    *
@@ -2635,7 +2619,6 @@ export class GameEngine {
       })),
       lastEliminated: st.phase === "ELIMINATION" || st.phase === "CHECK_WIN" ? st.lastEliminated : null,
       log: st.log.slice(-10),
-      dayOfTruthClaims: st.dayOfTruthClaims ? { ...st.dayOfTruthClaims } : undefined,
       pendingLastStandVictim: st.pendingLastStandVictim
         ? { playerId: st.pendingLastStandVictim.playerId, name: this.player(st.pendingLastStandVictim.playerId)?.name ?? "?" }
         : null,
@@ -2803,7 +2786,6 @@ export class GameEngine {
       // Công khai với cả phòng qua `RoomSnapshot.activeEvent`, nên không có gì
       // để lọc; lõi BOT cần nó để biết luật hôm nay đã đổi.
       activeEventId: st.activeEvent?.id ?? null,
-      dayOfTruthClaims: this.publicRoleClaims(),
     });
   }
 
@@ -2927,26 +2909,6 @@ export class GameEngine {
       wolvesLocked: st.night.wolvesLocked,
       bonusSecondTargetFor: this.bonusSecondTargetFor(viewer, isWolf, canSee && !seerBlocked),
     };
-  }
-
-  /**
-   * Bảng claim Ngày Sự Thật, đã lọc về đúng kiểu.
-   *
-   * `GameState` giữ claim là `string` vì nó đi thẳng từ payload socket. Lọc ở
-   * đây chứ không ép kiểu: một phòng phục hồi từ Redis có thể mang state của
-   * phiên bản khác, và truy một memory bịa ra từ chuỗi lạ tốn hơn nhiều so với
-   * một lần kiểm ở đúng ranh giới kiểu.
-   */
-  private publicRoleClaims(): Record<string, Role | null> {
-    const claims: Record<string, Role | null> = {};
-    for (const [playerId, claim] of Object.entries(this.state.dayOfTruthClaims ?? {})) {
-      if (claim === null) {
-        claims[playerId] = null;
-      } else if (claim in ROLE_META) {
-        claims[playerId] = claim as Role;
-      }
-    }
-    return claims;
   }
 
   /**

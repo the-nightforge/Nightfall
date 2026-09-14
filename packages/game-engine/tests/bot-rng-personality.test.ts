@@ -114,7 +114,6 @@ describe("bot seeded randomness and personality", () => {
     };
     const context: BotDecisionContext = {
       knowledge: {
-        dayOfTruthClaims: {},
         neutralRolesInPlay: [],
         activeEventId: null,
         botId: "a",

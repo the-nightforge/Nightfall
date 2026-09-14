@@ -82,7 +82,6 @@ function state(over: Partial<GameState> = {}): GameState {
     deadCanSpeakUsed: false,
     deadCanSpeakChosenId: null,
     howlBonusDay: null,
-    dayOfTruthClaims: {},
     personalWins: [],
     executionerTargets: { exec: "target" },
     ...over,

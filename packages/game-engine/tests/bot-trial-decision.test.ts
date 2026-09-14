@@ -21,7 +21,6 @@ function stateFor(seed = "trial"): BotBrainState {
 function context(over: Partial<BotKnowledgeView> = {}): BotDecisionContext {
   return {
     knowledge: {
-      dayOfTruthClaims: {},
       neutralRolesInPlay: [],
       activeEventId: null,
       botId: "me",

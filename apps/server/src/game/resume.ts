@@ -4,7 +4,6 @@ import { serializeDiscussionRun, runDiscussionScheduler } from "./discussion-sch
 import type { PersistedDiscussionRun } from "./discussion-scheduler";
 import { writeGameResultOnce } from "./game-result";
 import {
-  scheduleDayOfTruthBots,
   scheduleDeadCanSpeakBot,
   scheduleFinalVoteBots,
   scheduleHunterBot,
@@ -50,7 +49,6 @@ function rescheduleBots(room: Room, resumeRun: PersistedDiscussionRun | null): v
       break;
     case "DAY_DISCUSSION":
       runDiscussionScheduler(room, resumeRun);
-      scheduleDayOfTruthBots(room);
       scheduleDeadCanSpeakBot(room);
       break;
     case "VOTING":

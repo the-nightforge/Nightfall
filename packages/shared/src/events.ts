@@ -18,7 +18,6 @@ export const CLIENT_EVENTS = {
   GAME_FINAL_VOTE: "game:final-vote",
   GAME_HUNTER_SHOT: "game:hunter-shot",
   GAME_SKIP_DISCUSSION: "game:skip-discussion",
-  GAME_DAY_OF_TRUTH_CLAIM: "game:day-of-truth-claim",
   GAME_DEAD_MESSAGE: "game:dead-message",
   GAME_LAST_LETTER_SET: "game:last-letter-set",
   ROOM_UPDATE_AVATAR: "room:update-avatar",
@@ -61,7 +60,6 @@ export type GameEventId =
   | "PEACEFUL_NIGHT"
   | "JUDGMENT_DAY"
   | "LAST_STAND"
-  | "DAY_OF_TRUTH"
   | "MOONLESS_NIGHT"
   | "BLOODY_HUNT"
   | "HOWL_OF_THE_PACK"

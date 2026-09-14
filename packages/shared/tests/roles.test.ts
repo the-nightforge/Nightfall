@@ -131,7 +131,6 @@ describe("Shared Game Events", () => {
       "PEACEFUL_NIGHT",
       "JUDGMENT_DAY",
       "LAST_STAND",
-      "DAY_OF_TRUTH",
       "MOONLESS_NIGHT",
       "BLOODY_HUNT",
       "HOWL_OF_THE_PACK",
@@ -140,7 +139,7 @@ describe("Shared Game Events", () => {
       "MORNING_REPORT",
       "DEAD_CAN_SPEAK",
     ];
-    expect(events.length).toBe(15);
+    expect(events.length).toBe(14);
   });
 });
 

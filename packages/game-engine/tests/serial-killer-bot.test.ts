@@ -3,7 +3,7 @@ import { applySocialEvidence } from "../src/bot/analysis/social-analysis";
 import { applyPrivateInformation } from "../src/bot/belief/private-info";
 import { MAX_BELIEF_SCORE } from "../src/bot/belief/evidence";
 import { BOT_WEIGHTS_V7, BOT_WEIGHTS_V8, DEFAULT_BOT_WEIGHTS } from "../src/bot/config/presets";
-import { decideChatClaim, decideRoleClaim } from "../src/bot/decision/claim-decision";
+import { decideChatClaim } from "../src/bot/decision/claim-decision";
 import { decideFinalVote } from "../src/bot/decision/trial-decision";
 import { createBotBrainState } from "../src/bot/memory/memory-store";
 import { createBotPersonality } from "../src/bot/personality/personality";
@@ -74,7 +74,6 @@ function knowledge(over: Partial<BotKnowledgeView> = {}): BotKnowledgeView {
     legalVoteChoices: [],
     lastNightDeaths: [],
     activeEventId: null,
-    dayOfTruthClaims: {},
     ...over,
   };
 }
@@ -312,17 +311,6 @@ describe("cổng tái lập: v7 không đổi một bit nào", () => {
 });
 
 describe("Sát Nhân ban ngày", () => {
-  it("Ngày Sự Thật: nấp sau Dân Làng, không khai vai chức năng", () => {
-    const claim = decideRoleClaim(contextFor(knowledge({ phase: "DAY_DISCUSSION" })), stateFor());
-    expect(claim.role).toBe("VILLAGER");
-    // Ngược hẳn Thằng Hề, vai duy nhất khai láo một vai chức năng để bị soi.
-    const jester = decideRoleClaim(
-      contextFor(knowledge({ phase: "DAY_DISCUSSION", selfRole: "JESTER" })),
-      stateFor(),
-    );
-    expect(jester.role).toBe("SEER");
-  });
-
   it("bị dồn thì lôi một lá bài cuối ra để sống - ngược hẳn Thằng Hề", () => {
     const view = knowledge({
       phase: "VOTING",

@@ -34,18 +34,9 @@ const HUNTER_BOT_DEADLINE_BUFFER_MS = 1_000;
 const FINAL_VOTE_BOT_DEADLINE_BUFFER_MS = 1_500;
 
 /**
- * Cửa sổ rải claim của Ngày Sự Thật.
- *
- * Claim phải nằm ở ĐẦU ngày để cả làng còn thời gian bàn về nó; rải hết cả pha
- * thì con cuối cùng khai xong là vừa lúc chuyển sang bỏ phiếu. Vẫn bị kẹp lại
- * theo cửa sổ thật ở dưới, vì Lệnh Giới Nghiêm cắt đôi pha thảo luận.
- */
-const DAY_OF_TRUTH_SPREAD_MS = 6_000;
-
-/**
  * Cửa sổ rải lời nhắn của linh hồn.
  *
- * Muộn hơn claim một chút để lời nhắn rơi vào lúc cuộc thảo luận đã có gì đó để
+ * Rải muộn để lời nhắn rơi vào lúc cuộc thảo luận đã có gì đó để
  * bám vào, nhưng vẫn còn đủ ngày để làng phản ứng. Cũng bị kẹp theo cửa sổ thật.
  */
 const GHOST_WHISPER_SPREAD_MS = 10_000;
@@ -53,7 +44,7 @@ const GHOST_WHISPER_SPREAD_MS = 10_000;
 /**
  * Cửa sổ rải lượt viết Phong thư của BOT.
  *
- * Muộn hơn claim, sớm hơn lời nhắn của linh hồn - và lý do là ở chỗ nó KHÔNG
+ * Sớm hơn lời nhắn của linh hồn - và lý do là ở chỗ nó KHÔNG
  * hiện ra: lá thư chỉ được lưu vào sổ, không ai thấy gì cả. Rải ra chỉ để mười
  * lăm con bot không cùng ghi vào một lượt event loop, và để một bot bị chết
  * ngay sau đó vẫn kịp có thư. Vẫn bị kẹp theo cửa sổ thật vì Lệnh Giới Nghiêm
@@ -104,67 +95,6 @@ export function scheduleHunterBot(room: Room): void {
       /* state đổi sát lúc nộp thì để timeout toàn cục xử lý như một lượt skip */
     }
   }, delay);
-}
-
-/**
- * Claim của BOT trong Ngày Sự Thật.
- *
- * Trước đây `submitDayOfTruthClaim` chỉ có một chỗ gọi là handler socket, nên
- * sự kiện này không tồn tại với BOT: banner hiện lên, bảng claim rỗng, và cả
- * làng nhìn nhau. Đây là sự kiện DUY NHẤT đòi một thao tác chủ động, nên nó là
- * sự kiện duy nhất cần một scheduler riêng.
- *
- * Quyết định khai gì là của lõi deterministic, giống mọi nước đi khác: nhà cung
- * cấp không được đụng vào.
- */
-export function scheduleDayOfTruthBots(room: Room): void {
-  const scheduledEngine = room.engine;
-  if (!scheduledEngine) return;
-  // Ngoài sự kiện thì engine ném ở mọi lời gọi; xếp lịch mù biến mỗi ngày
-  // thường thành một chuỗi ngoại lệ bị nuốt.
-  if (scheduledEngine.state.activeEvent?.id !== "DAY_OF_TRUTH") return;
-
-  const session = botSessionFor(room);
-  const scheduledRound = scheduledEngine.state.round;
-
-  const stillOpen = (): boolean =>
-    room.engine === scheduledEngine &&
-    scheduledEngine.state.phase === "DAY_DISCUSSION" &&
-    scheduledEngine.state.round === scheduledRound &&
-    scheduledEngine.state.activeEvent?.id === "DAY_OF_TRUTH";
-
-  // Kẹp theo cửa sổ CÒN LẠI chứ không theo `discussionSeconds`: Lệnh Giới
-  // Nghiêm cắt đôi pha, và một hằng số cứng sẽ xếp claim ra ngoài pha.
-  const remaining = Math.max(0, (scheduledEngine.state.phaseEndsAt ?? Date.now()) - Date.now());
-  const spread = Math.min(DAY_OF_TRUTH_SPREAD_MS, Math.floor(remaining * 0.4));
-
-  for (const member of room.members) {
-    if (!member.isBot) continue;
-    // Người chết không claim được - engine ném - và người thật tự bấm lấy.
-    const player = scheduledEngine.state.players.find((p) => p.id === member.playerId);
-    if (!player?.alive) continue;
-
-    const rng = session.rngFor(member.playerId, "day-of-truth");
-    const delay = Math.floor(rng() * spread);
-
-    setRoomTimer(room.code, () => {
-      try {
-        if (!stillOpen()) return;
-
-        const runtime = session.runtimeFor(member.playerId);
-        const context = buildBotDecisionContext(room, member.playerId);
-        runtime.observe(context);
-
-        scheduledEngine.submitDayOfTruthClaim(
-          member.playerId,
-          runtime.decideRoleClaim(context).role,
-        );
-        sync(room);
-      } catch {
-        /* state đổi sát lúc nộp thì bỏ lượt claim, không kéo sập tiến trình */
-      }
-    }, delay);
-  }
 }
 
 /**
