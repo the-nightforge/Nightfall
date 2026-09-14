@@ -61,7 +61,7 @@ vi.mock("../src/rooms/broadcast", () => ({
 
 vi.mock("../src/db", () => ({ prisma: {} }));
 
-const machine = await import("../src/game/machine");
+const bots = await import("../src/game/bot-scheduler");
 const { armStep, runPendingStep } = await import("../src/game/steps");
 const { clearBotSession, startBotSession } = await import("../src/bots/session-registry");
 
@@ -134,7 +134,7 @@ describe("lá phiếu của BOT Kẻ Báo Thù đi qua scheduler thật", () => 
     // trong quá khứ và không mốc nào được xếp.
     room.engine!.setPhase("VOTING", 30_000);
 
-    machine.scheduleVoteBots(room);
+    bots.scheduleVoteBots(room);
     drainTimers();
 
     expect(room.engine!.state.votes.p2).toBe("p4");
@@ -154,7 +154,7 @@ describe("lá phiếu của BOT Kẻ Báo Thù đi qua scheduler thật", () => 
     // trong quá khứ và không mốc nào được xếp.
     room.engine!.setPhase("VOTING", 30_000);
 
-    machine.scheduleVoteBots(room);
+    bots.scheduleVoteBots(room);
     drainTimers();
 
     // Đòi CÓ một lá phiếu rồi mới xét nó bầu ai: `not.toBe("p4")` một mình

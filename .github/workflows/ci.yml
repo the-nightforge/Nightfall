@@ -99,8 +99,8 @@ jobs:
           # lựa chọn cho mới. Mã server không có phần nào phụ thuộc phiên bản,
           # còn bộ test thì có.
           #
-          # Nếu sau này muốn khớp lại: nâng Dockerfile.server lên node:24-alpine
-          # cùng lúc, đừng hạ dòng này xuống một mình.
+          # Dockerfile.server đã lên node:24-alpine để e2e ở dưới chạy đúng
+          # runtime production. Đổi dòng này thì đổi Dockerfile cùng lúc.
           node-version: 24.x
           cache: npm
 

@@ -498,6 +498,12 @@ export interface RoomSnapshot {
    */
   executioner?: ExecutionerView | null;
   chatLog: ChatMessage[];
+  /**
+   * Khoá của ván, CHỈ có ở GAME_OVER: để client hỏi tiếp log chat đầy đủ qua
+   * `GET /players/me/matches/:id/chat` (`chatLog` chỉ giữ 60 tin cuối).
+   * Optional vì web và server deploy rời nhau.
+   */
+  gameId?: string | null;
   log: string[];
   /** Cảnh báo cân bằng lobby; null khi chưa tính hoặc cân bằng. */
   balanceWarning?: BalanceWarningView | null;

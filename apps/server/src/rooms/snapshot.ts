@@ -281,6 +281,7 @@ export function buildSnapshot(room: Room, viewerId: string): RoomSnapshot {
     // với `personalWins` ngay trên.
     executioner: gameView?.executioner ?? null,
     chatLog: visibleChatLog(room, viewerId),
+    gameId: gameView?.phase === "GAME_OVER" ? room.gameId : null,
     log: gameView?.log ?? [],
     dayOfTruthClaims: gameView?.dayOfTruthClaims ?? {},
     pendingLastStandVictim: gameView?.pendingLastStandVictim ?? null,

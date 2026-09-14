@@ -14,7 +14,7 @@ import { renderBotSpeech } from "../bots/speech-renderer";
 import { emitToPlayers } from "../rooms/broadcast";
 import { pushChat, resolveChat } from "../rooms/snapshot";
 import { persistRoom, setRoomTimer, type Room } from "../rooms/store";
-import { toSpeechRequest } from "./machine";
+import { toSpeechRequest } from "./bot-scheduler";
 import { noteBotBlocked, noteBotObserved, noteBotSpeechTurn, noteBotSpoke } from "./bot-speech-log";
 import type { BotSpeechIntention } from "@masoi/game-engine";
 import type { SpeechRequest } from "../bots/types";

@@ -252,6 +252,10 @@ apiRouter.get("/leaderboard", optionalPlayer, async (req, res) => {
  *
  * Ván cũ ghi trước khi `id` được lưu vào `playerRoles` không khớp được với ai:
  * chúng trả 404 chứ không rơi vào một nhánh "cho qua vì không biết".
+ *
+ * `:matchId` nhận cả `GameResult.id` (màn lịch sử) lẫn `gameId` (màn kết thúc
+ * trong phòng - snapshot chỉ biết `room.gameId`). Cả hai đều ngẫu nhiên và cùng
+ * đi qua đúng một chốt `playerRoles` ở trên.
  */
 apiRouter.get("/players/me/matches/:matchId/chat", requirePlayer, async (req, res) => {
   const player = (req as PlayerRequest).player!;
@@ -262,12 +266,9 @@ apiRouter.get("/players/me/matches/:matchId/chat", requirePlayer, async (req, re
       SELECT m."seq", m."channel", m."actorId", m."actorName", m."text",
              m."round", m."phase", m."createdAt"
       FROM "MatchChatMessage" m
-      WHERE m."matchId" = ${matchId}
-        AND EXISTS (
-          SELECT 1 FROM "GameResult" g
-          WHERE g."id" = m."matchId"
-            AND g."playerRoles" @> ${JSON.stringify([{ id: player.id }])}::jsonb
-        )
+      JOIN "GameResult" g ON g."id" = m."matchId"
+      WHERE (g."id" = ${matchId} OR g."gameId" = ${matchId})
+        AND g."playerRoles" @> ${JSON.stringify([{ id: player.id }])}::jsonb
       ORDER BY m."seq" ASC
     `;
 
@@ -283,7 +284,7 @@ apiRouter.get("/players/me/matches/:matchId/chat", requirePlayer, async (req, re
        */
       const visible = await prisma.$queryRaw<Array<{ one: number }>>`
         SELECT 1 AS one FROM "GameResult"
-        WHERE "id" = ${matchId}
+        WHERE ("id" = ${matchId} OR "gameId" = ${matchId})
           AND "playerRoles" @> ${JSON.stringify([{ id: player.id }])}::jsonb
         LIMIT 1
       `;

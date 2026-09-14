@@ -18,7 +18,7 @@ vi.mock("../src/rooms/broadcast", () => ({
 
 vi.mock("../src/db", () => ({ prisma: {} }));
 
-const { scheduleLastLetterBots } = await import("../src/game/machine");
+const { scheduleLastLetterBots } = await import("../src/game/bot-scheduler");
 const { lastLetterStateOf } = await import("../src/game/last-letter");
 const { clearBotSession, startBotSession } = await import("../src/bots/session-registry");
 

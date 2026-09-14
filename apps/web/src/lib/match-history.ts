@@ -1,5 +1,5 @@
 import { isPersonalWinCondition } from "@masoi/shared";
-import type { CaseFile, MatchHistoryEntry } from "@masoi/shared";
+import type { CaseFile, ChatMessage, MatchChatEntry, MatchHistoryEntry } from "@masoi/shared";
 import { getIdentity } from "./identity";
 
 const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL ?? "http://localhost:4000";
@@ -35,6 +35,60 @@ export async function fetchMatchHistory(signal?: AbortSignal): Promise<HistoryOu
   } catch {
     return { kind: "error" };
   }
+}
+
+/**
+ * Log chat ĐẦY ĐỦ của một ván đã xong (`id` hoặc `gameId`); `null` khi không lấy được.
+ *
+ * Kết quả ván được ghi xuống DB KHÔNG đồng bộ ở GAME_OVER, nên màn kết thúc hỏi
+ * sớm có thể nhận 404 - thử lại vài nhịp rồi thôi. Hỏng hẳn thì màn kết thúc
+ * giữ `chatLog` của snapshot như trước.
+ */
+export async function fetchMatchChat(
+  matchId: string,
+  signal?: AbortSignal,
+  delaysMs: readonly number[] = [0, 1_500, 4_000],
+): Promise<MatchChatEntry[] | null> {
+  const identity = getIdentity();
+  if (!identity) return null;
+
+  for (const delay of delaysMs) {
+    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+    if (signal?.aborted) return null;
+    try {
+      const res = await fetch(
+        `${SERVER_URL}/api/players/me/matches/${encodeURIComponent(matchId)}/chat`,
+        { headers: { Authorization: `Bearer ${identity.token}` }, signal },
+      );
+      if (res.ok) return ((await res.json()) as { messages?: MatchChatEntry[] }).messages ?? [];
+      if (res.status !== 404) return null;
+    } catch {
+      if (signal?.aborted) return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Ghép log đầy đủ với chat trực tiếp của phòng.
+ *
+ * Sổ của ván dừng ghi ở GAME_OVER, nên tin trực tiếp nào mới hơn tin cuối của
+ * sổ là tin nói SAU ván và phải giữ lại. Hai bên không chung id (sổ không lưu
+ * id tin nhắn), nên ranh giới là mốc thời gian.
+ */
+export function mergeArchivedChat(archive: MatchChatEntry[], live: ChatMessage[]): ChatMessage[] {
+  const lastAt = archive.length > 0 ? archive[archive.length - 1].at : -Infinity;
+  return [
+    ...archive.map((m) => ({
+      id: `archive-${m.seq}`,
+      channel: m.channel,
+      playerId: m.actorId,
+      playerName: m.actorName,
+      text: m.text,
+      at: m.at,
+    })),
+    ...live.filter((m) => m.at > lastAt),
+  ];
 }
 
 /**

@@ -76,7 +76,7 @@ vi.mock("../src/db", () => ({ prisma: {} }));
 
 // Nạp machine để nó ĐĂNG KÝ bảng xử lý bước chuyển pha; đây cũng chính là thứ
 // đang được kiểm, nên nó phải là module thật.
-const machine = await import("../src/game/machine");
+const bots = await import("../src/game/bot-scheduler");
 const { armStep, runPendingStep } = await import("../src/game/steps");
 const { clearBotSession, startBotSession } = await import("../src/bots/session-registry");
 
@@ -141,7 +141,7 @@ describe("lượt đêm của BOT Sát Nhân đi qua scheduler thật", () => {
     const room = killerRoom("SKF01");
     room.engine!.setPhase("NIGHT", 30_000, 2_000);
 
-    machine.scheduleNightBots(room);
+    bots.scheduleNightBots(room);
     drainTimers();
 
     /*
@@ -161,12 +161,12 @@ describe("lượt đêm của BOT Sát Nhân đi qua scheduler thật", () => {
     const room = killerRoom("SKF02");
     room.engine!.setPhase("NIGHT", 30_000, 2_000);
 
-    machine.scheduleNightBots(room);
+    bots.scheduleNightBots(room);
     drainTimers();
     const first = room.engine!.state.night.serialKillerTarget;
     // `lockWolves` gọi `scheduleNightBots` lần nữa để mở cửa sổ Phù Thuỷ; cờ
     // `acted` là thứ chặn việc hỏi lại một BOT đã hành động.
-    machine.scheduleNightBots(room);
+    bots.scheduleNightBots(room);
     drainTimers();
 
     expect(room.engine!.state.night.serialKillerTarget).toBe(first);
