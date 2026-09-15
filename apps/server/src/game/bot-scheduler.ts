@@ -3,12 +3,13 @@
  * pha; mọi lượt nộp của BOT vẫn đi qua đúng các hàm công khai của `machine.ts`.
  */
 import type { BotDecisionContext, BotSpeechIntention } from "@masoi/game-engine";
-import { describeSpeechStyle, recentOpenings, recentSpeechSourceIds } from "@masoi/game-engine";
-import { DEAD_MESSAGE_MAX_LENGTH } from "@masoi/shared";
+import { describeSpeechStyle, fnv1a32, recentOpenings, recentSpeechSourceIds } from "@masoi/game-engine";
+import { DEAD_MESSAGE_MAX_LENGTH, SERVER_EVENTS, isWolfPack } from "@masoi/shared";
 import type { PublicVoteChoice } from "@masoi/shared";
-import type { Room } from "../rooms/store";
+import type { Room, RoomMember } from "../rooms/store";
 import { persistRoom, setRoomTimer } from "../rooms/store";
-import { buildSnapshot } from "../rooms/snapshot";
+import { buildSnapshot, pushChat, resolveChat } from "../rooms/snapshot";
+import { emitToPlayers } from "../rooms/broadcast";
 import { botBrain } from "../bots";
 import { buildBotDecisionContext } from "../bots/context";
 import { renderBotSpeech, speechTemplate } from "../bots/speech-renderer";
@@ -308,18 +309,179 @@ export function scheduleNightBots(room: Room): void {
         const decision = runtime.decideNight(context);
         if (!decision) return;
 
-        applyNight(room, member.playerId, {
+        const nightDecision: NightDecision = {
           action: decision.action,
           targetId: decision.targetId,
           // Thám Tử so hai người; bỏ trường này thì engine ném "cần đủ 2 người"
           // và lượt điều tra mất trắng.
           secondaryTargetId: decision.secondaryTargetId,
-        });
+        };
+        if (!isPackVote(room, member.playerId, nightDecision) || humanPack(room).length === 0) {
+          applyNight(room, member.playerId, nightDecision);
+          return;
+        }
+
+        // Bầy có người thật: nói ra lựa chọn của mình trong hang, rồi CHỜ người
+        // quyết. Quyết định chỉ rút một lần - mốc muộn dùng lại đúng nó.
+        sayInDen(room, member, "suggest", nightDecision.targetId);
+        const scheduledEngine = room.engine;
+        setRoomTimer(
+          room.code,
+          () => castPackVote(room, scheduledEngine, member, nightDecision),
+          Math.max(0, Math.floor(HUMAN_PACK_WAIT_SHARE * remainingMs) - delay),
+        );
       } catch {
         /* lõi bot lỗi không được kéo sập cả tiến trình */
       }
     }, delay);
   }
+}
+
+/**
+ * Bầy có người thật thì bot Sói bỏ phiếu ở mốc này của phần đêm còn lại.
+ *
+ * Mốc cũ (10-30%) cộng với luật chốt sớm 800ms sau khi cả bầy đã bỏ nghĩa là
+ * phiếu của người đứng cạnh hai bot thua 1-2 ở mọi đêm, và người vừa bấm xong
+ * thì phiếu đã chốt - bot không kịp theo. Chừa 25% cuối để đêm không trôi mất
+ * khi người không bấm gì.
+ */
+const HUMAN_PACK_WAIT_SHARE = 0.75;
+
+/** Người chơi này đang sống và thuộc bầy (Sói, Sói Con, Sói Pháp Sư). */
+function isPackPlayer(room: Room, playerId: string): boolean {
+  const player = room.engine?.state.players.find((candidate) => candidate.id === playerId);
+  return player !== undefined && player.alive && isWolfPack(player.role);
+}
+
+/**
+ * Phiếu cắn của bầy, không phải lượt soi của Sói Pháp Sư. `SKIP` chỉ là phiếu
+ * "không cắn" khi người gửi thuộc bầy - Phù Thuỷ cũng gửi `SKIP`.
+ */
+function isPackVote(room: Room, playerId: string, decision: NightDecision): boolean {
+  return isPackPlayer(room, playerId) && (decision.action === "KILL" || decision.action === "SKIP");
+}
+
+/** Sói người còn sống và đang tự cầm ghế. Ghế đã bị máy cầm hộ không tính. */
+function humanPack(room: Room): string[] {
+  return room.members
+    .filter((member) => !isBotControlled(member) && isPackPlayer(room, member.playerId))
+    .map((member) => member.playerId);
+}
+
+/**
+ * Phiếu mà mọi Sói người ĐÃ bỏ cùng đồng ý: id nạn nhân, `null` là không cắn.
+ *
+ * `undefined` khi chưa người nào bỏ, hoặc khi họ bất đồng - người phải tự thống
+ * nhất với nhau, bot không đứng về phía ai.
+ */
+function humanPackVote(room: Room): string | null | undefined {
+  const cast = humanPack(room)
+    .map((id) => room.engine!.state.night.wolfVotes[id])
+    .filter((vote): vote is string | null => vote !== undefined);
+  if (cast.length === 0) return undefined;
+  return cast.every((vote) => vote === cast[0]) ? cast[0] : undefined;
+}
+
+/** Bỏ lại phiếu theo người; chỉ lên tiếng khi engine đã thật sự nhận phiếu mới. */
+function followAs(room: Room, member: RoomMember, vote: string | null): void {
+  const votes = room.engine!.state.night.wolfVotes;
+  if (votes[member.playerId] === vote) return;
+  applyNight(
+    room,
+    member.playerId,
+    vote === null ? { action: "SKIP", targetId: null } : { action: "KILL", targetId: vote },
+  );
+  if (votes[member.playerId] === vote) sayInDen(room, member, "follow", vote);
+}
+
+/**
+ * Mốc muộn của một bot Sói trong bầy có người: theo người nếu họ đã quyết, giữ
+ * phiếu đang có nếu đã bỏ rồi, và chỉ khi chưa có gì mới dùng lựa chọn riêng.
+ */
+function castPackVote(
+  room: Room,
+  scheduledEngine: Room["engine"],
+  member: RoomMember,
+  own: NightDecision,
+): void {
+  try {
+    const engine = room.engine;
+    if (!engine || engine !== scheduledEngine || engine.state.phase !== "NIGHT") return;
+    if (engine.state.night.wolvesLocked || !isBotControlled(member)) return;
+
+    const follow = humanPackVote(room);
+    if (follow !== undefined) return followAs(room, member, follow);
+    if (engine.state.night.wolfVotes[member.playerId] !== undefined) return;
+    applyNight(room, member.playerId, own);
+  } catch {
+    /* lõi bot lỗi không được kéo sập cả tiến trình */
+  }
+}
+
+/**
+ * Gọi sau MỖI lần người thật nộp hành động đêm: nếu Sói người đã thống nhất
+ * một phiếu, mọi bot trong bầy bỏ lại đúng phiếu đó - ngay lập tức, tức trước
+ * mốc chốt sớm 800ms mà `maybeLockWolvesEarly` sắp hẹn.
+ *
+ * Chỉ chép phiếu CHÍNH. Mục tiêu phụ (Sói Con nổi giận, Cuộc Săn Đẫm Máu) là ô
+ * chung của cả bầy và engine chỉ ghi nó khi được gửi kèm, nên phiếu của người
+ * đã đặt thì còn nguyên.
+ */
+export function followHumanWolfVote(room: Room): void {
+  const engine = room.engine;
+  if (!engine || engine.state.phase !== "NIGHT" || engine.state.night.wolvesLocked) return;
+  const vote = humanPackVote(room);
+  if (vote === undefined) return;
+  for (const member of room.members) {
+    if (isBotControlled(member) && isPackPlayer(room, member.playerId)) followAs(room, member, vote);
+  }
+}
+
+/**
+ * Câu của bot trong hang Sói. Bảng mẫu nhỏ, không LLM: đây là thông báo một
+ * lựa chọn, không phải một lượt tranh luận.
+ */
+const DEN_LINES = {
+  suggest: {
+    target: ["t tính cắn {who}", "cắn {who} nhé?", "t nghĩ nên xử {who}"],
+    skip: ["đêm nay t nghĩ khỏi cắn", "hay nghỉ một đêm?"],
+  },
+  follow: {
+    target: ["ok, cắn {who}", "theo, {who}", "được, {who} đi"],
+    skip: ["ok, nghỉ", "ừ, đêm nay khỏi cắn"],
+  },
+} as const;
+
+/**
+ * Đăng một câu vào hang Sói, qua đúng `resolveChat` như người thật: Đêm Tĩnh
+ * Lặng và luật kênh được tôn trọng mà không chép lại ở đây.
+ *
+ * ID TẤT ĐỊNH theo (vòng, bot, loại, mục tiêu), vì cùng lý do với
+ * `discussion-scheduler`: sau restart, `scheduleNightBots` chạy lại, và một ID
+ * đã có trong log nghĩa là câu đó đã nói rồi.
+ */
+function sayInDen(room: Room, member: RoomMember, kind: keyof typeof DEN_LINES, targetId: string | null): void {
+  const engine = room.engine;
+  if (!engine) return;
+  const resolved = resolveChat(room, member.playerId);
+  if (!resolved.ok || resolved.channel !== "wolves") return;
+
+  const id = `den:${engine.state.round}:${member.playerId}:${kind}:${targetId ?? "skip"}`;
+  if (room.chatLog.some((message) => message.id === id)) return;
+
+  const pool = DEN_LINES[kind][targetId === null ? "skip" : "target"];
+  const name = engine.state.players.find((player) => player.id === targetId)?.name ?? "người đó";
+  const message = {
+    id,
+    channel: resolved.channel,
+    playerId: member.playerId,
+    playerName: member.name,
+    text: pool[fnv1a32(id) % pool.length]!.replace("{who}", name),
+    at: Date.now(),
+  };
+  pushChat(room, message);
+  emitToPlayers(resolved.recipients, SERVER_EVENTS.CHAT_NEW, message);
+  void persistRoom(room);
 }
 
 /** `PublicVoteChoice` của engine sang hình dạng phiếu mà scheduler đang dùng. */

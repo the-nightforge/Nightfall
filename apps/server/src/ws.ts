@@ -49,6 +49,7 @@ import {
   submitHunterShot,
 } from "./game/machine";
 import { submitLastLetter } from "./game/last-letter";
+import { followHumanWolfVote } from "./game/bot-scheduler";
 import { getPlayerRoom, updateSessionRoom } from "./redis";
 import { reconnectPlayer } from "./rooms/reconnect";
 import { allowAction } from "./rate-limit";
@@ -342,6 +343,9 @@ export function setupSocket(io: SocketServer): void {
         primaryTarget,
         secondaryTarget,
       );
+      // Bầy có bot: bot bỏ lại phiếu theo Sói người NGAY, trước mốc chốt sớm mà
+      // `maybeLockWolvesEarly` sắp hẹn. Không phải phiếu Sói thì không làm gì.
+      followHumanWolfVote(room);
       // Sau `submitNightAction`, nên một lượt bị từ chối đã ném ra trước khi
       // tới đây. Hai hàm phủ hai chặng của đêm và loại trừ nhau qua
       // `wolvesLocked`.
