@@ -1,0 +1,72 @@
+# Web (Next.js) cho self-host trên VPS. Vercel không dùng file này — nó build
+# theo vercel.json.
+#
+# QUAN TRỌNG: NEXT_PUBLIC_SERVER_URL được nướng vào bundle LÚC BUILD
+# (apps/web/src/lib/socket.ts và 4 chỗ khác đọc process.env trực tiếp, không có
+# fallback same-origin). Đổi domain = phải build lại image, không sửa env runtime
+# được.
+#
+#   docker build -f Dockerfile.web \
+#     --build-arg NEXT_PUBLIC_SERVER_URL=https://masoi.duckdns.org -t masoi-web .
+
+FROM node:24-alpine AS builder
+
+WORKDIR /app
+
+# npm ci với workspaces cần ĐỦ manifest của mọi workspace, kể cả apps/server
+# dù bản build này không dùng tới nó.
+COPY package.json package-lock.json ./
+COPY apps/server/package.json apps/server/package.json
+COPY packages/shared/package.json packages/shared/package.json
+COPY packages/game-engine/package.json packages/game-engine/package.json
+COPY apps/web/package.json apps/web/package.json
+RUN npm ci
+
+COPY tsconfig.base.json ./
+COPY packages/shared packages/shared
+COPY packages/game-engine packages/game-engine
+COPY apps/web apps/web
+
+ARG NEXT_PUBLIC_SERVER_URL=""
+ARG NEXT_PUBLIC_SENTRY_DSN=""
+ARG CSP_CONNECT_SRC_EXTRA=""
+ENV NEXT_PUBLIC_SERVER_URL=$NEXT_PUBLIC_SERVER_URL
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
+ENV CSP_CONNECT_SRC_EXTRA=$CSP_CONNECT_SRC_EXTRA
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN npm run build:shared
+RUN npm run build:engine
+RUN npm run build:web
+
+RUN npm prune --omit=dev
+
+FROM node:24-alpine AS runner
+
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+COPY --from=builder /app/package.json /app/package-lock.json ./
+COPY --from=builder /app/node_modules ./node_modules
+
+# @masoi/shared và @masoi/game-engine là symlink trong node_modules trỏ về đây,
+# nên thiếu dist là runtime gãy.
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/game-engine/package.json ./packages/game-engine/package.json
+COPY --from=builder /app/packages/game-engine/dist ./packages/game-engine/dist
+
+COPY --from=builder /app/apps/web/package.json ./apps/web/package.json
+COPY --from=builder /app/apps/web/.next ./apps/web/.next
+COPY --from=builder /app/apps/web/public ./apps/web/public
+COPY --from=builder /app/apps/web/next.config.ts ./apps/web/next.config.ts
+# next.config.ts import "./src/lib/security-headers" LÚC CHẠY, không phải chỉ
+# lúc build: `next start` biên dịch config thành next.config.compiled.js rồi
+# require nó từ thư mục apps/web. Thiếu src/ thì container chết ngay khi khởi
+# động với MODULE_NOT_FOUND, dù build đã xanh.
+COPY --from=builder /app/apps/web/src ./apps/web/src
+COPY --from=builder /app/apps/web/tsconfig.json ./apps/web/tsconfig.json
+
+EXPOSE 3000
+CMD ["npm", "run", "start", "--workspace", "@masoi/web"]
