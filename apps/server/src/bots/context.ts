@@ -25,6 +25,7 @@ export function buildBotDecisionContext(room: Room, botId: string): BotDecisionC
       actorId: message.playerId,
       text: message.text,
       at: message.at,
+      channel: message.channel,
     })),
     balanceScore: balance.score,
     pendingLastStand: room.engine.state.pendingLastStandVictim ?? null,

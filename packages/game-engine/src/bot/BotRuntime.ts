@@ -1336,7 +1336,12 @@ export class BotRuntime {
     const fresh = context.visibleChat.filter((message) => !seen.has(message.id));
     if (fresh.length === 0) return;
 
-    const memories = analyzeChat(fresh, knowledge.players, {
+    // Chỉ kênh `day` là lời nói trước làng. Hang Sói (bot Sói ban đêm) và kênh
+    // người chết (bot đã chết) vẫn được đánh dấu đã đọc ở dưới nhưng không parse:
+    // mọi thứ `analyzeChat` sinh ra đều được ghi như một phát ngôn công khai.
+    // Vắng `channel` là self-play và fixture, nơi chỉ có chat ban ngày.
+    const spoken = fresh.filter((message) => (message.channel ?? "day") === "day");
+    const memories = analyzeChat(spoken, knowledge.players, {
       round: knowledge.round,
       phase: knowledge.phase,
       weights: this.weights,
