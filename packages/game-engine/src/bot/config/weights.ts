@@ -2504,7 +2504,8 @@ export const BOT_WEIGHTS_V31: BotWeights = Object.freeze({
  * Bỏ qua tên v32: nó từng là bản đo "v31 + tám ô" đã bị xoá cùng thang v23–v28
  * (xem khối trên `DEFAULT_BOT_WEIGHTS`), và dùng lại tên đó là lẫn với report cũ.
  *
- * CHƯA mặc định: nâng theo thước chỉ số hội thoại, như v29 và v31.
+ * Mặc định từ bản này, sau protocol 5×1.000 ván - xem khối trên
+ * `DEFAULT_BOT_WEIGHTS`.
  */
 export const BOT_WEIGHTS_V33: BotWeights = Object.freeze({
   ...BOT_WEIGHTS_V31,
@@ -2637,5 +2638,32 @@ export const BOT_WEIGHTS_V33: BotWeights = Object.freeze({
   * câu trong 12 câu gần nhất **6,5% -> 0,0%**, tức đúng chỗ nó nhắm thì sạch
   * hẳn; phần dư là khung dùng lại cách nhau nhiều vòng, thứ cửa sổ 12 câu cố
   * tình không gác.
+  *
+  * v33.0.0 (COMMUNICATION) bật `conversation.answerWithSuspect = 1`: bị hỏi
+  * "nghi ai / bầu ai / vote ai" mà còn căn cứ chưa nói thì đáp bằng chính lá
+  * phiếu, thay vì một câu đáp rỗng. Protocol 5×1.000 ván paired seeds
+  * (`ans-a1..5`, `--players 12 --preset --defense`) so v31, tiêu chí KHÔNG GÂY
+  * HẠI chốt trước khi xem số:
+  *
+  * ```text
+  * villageWinRate                   45.40% -> 45.74%  (+0,34 điểm, z = +0,3)
+  * directQuestionOutcomes.ANSWERED  60.71% -> 60.68%  (-0,03 điểm, z = -0,1)
+  * consecutiveSameTargetRate        39.92% -> 39.93%  (+0,01 điểm, z = +0,2)
+  * semanticRepetitionRate           11.35% -> 11.34%  (-0,01 điểm, z = -0,2)
+  * casualToneRate                   77.10% -> 77.04%  (-0,07 điểm, z = -0,9)
+  * ```
+  *
+  * Làng thắng dương ở cả 5 batch (+0,2 tới +0,7), 0 violation trên 10 batch.
+  *
+  * Nâng vì một lý do KHÔNG có trong bảng: lợi ích nằm ở câu hỏi của NGƯỜI
+  * THẬT, và self-play không đo được nó. Bot gần như không tự hỏi câu TARGET/
+  * VOTE - bảng mẫu QUESTION có 2/78 mẫu parser đọc ra TARGET - nên nhánh này
+  * chỉ nổ ~7 lần mỗi 50 ván. Trong kho câu hỏi người thật, 4/29 câu đi đường
+  * này ("An nghi ai", "An ơi, bầu ai?"...). Bảng trên chỉ chứng minh nó không
+  * phá gì; nó KHÔNG chứng minh nó hay hơn.
+  *
+  * Bản đầu (còn đáp câu GENERAL, còn tố trần không căn cứ) trượt ngay ở 1.000
+  * ván: làng thắng -4,9 (z -2,2), bám mục tiêu +5,9 điểm (z +31). Xem chú thích
+  * `ANSWERED_BY_VOTE` trong `speech-planner.ts`.
   */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V31;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V33;
