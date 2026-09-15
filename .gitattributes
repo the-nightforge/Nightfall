@@ -1,0 +1,2 @@
+# Script deploy chay tren Linux. CRLF lot vao la bash bao "bad interpreter".
+deploy/*.sh text eol=lf
