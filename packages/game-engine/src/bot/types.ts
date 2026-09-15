@@ -593,6 +593,11 @@ export interface BotChatObservation {
   actorId: string;
   text: string;
   at: number;
+  /**
+   * Kênh của câu chat. Chỉ `day` (hoặc vắng) mới là lời nói trước làng - xem
+   * `ingestChat`. Vắng trong self-play và fixture, nơi chỉ có chat ban ngày.
+   */
+  channel?: string;
 }
 
 export interface BotDecisionContext {

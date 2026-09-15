@@ -139,11 +139,14 @@ describe("bot decision context", () => {
     expect(context.visibleChat.map((item) => item.id)).not.toContain("dead-1");
   });
 
-  it("maps chat into the bot observation shape without the channel", () => {
+  it("maps chat into the bot observation shape, keeping the channel", () => {
     const context = buildBotDecisionContext(secretRoleRoom(), "villager-bot");
 
+    // `channel` phải đi theo: `ingestChat` chỉ coi kênh `day` là lời nói trước
+    // làng, còn hang Sói và kênh người chết thì bot thấy nhưng không được đọc
+    // thành lời khai hay cáo buộc công khai.
     expect(context.visibleChat).toEqual([
-      { id: "day-1", actorId: "witch", text: "Tôi nghi Sói A", at: 1 },
+      { id: "day-1", actorId: "witch", text: "Tôi nghi Sói A", at: 1, channel: "day" },
     ]);
   });
 
