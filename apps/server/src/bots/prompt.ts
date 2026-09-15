@@ -152,14 +152,19 @@ function intentLine(request: SpeechRequest): string {
 
   switch (request.intention.kind) {
     case "ACCUSE":
-      return `Bạn nghi ${who}. Nói ra.`;
+      // Có `replyTo` là đang ĐÁP một câu hỏi "nghi ai" (`answerWithSuspect`).
+      return request.replyTo
+        ? `${author} vừa hỏi bạn. Trả lời thẳng: bạn nghi ${who}.`
+        : `Bạn nghi ${who}. Nói ra.`;
     case "QUESTION":
       // Không giả định đã có lịch sử để hỏi về: ý định này xuất hiện nhiều nhất
       // ở vòng thảo luận đầu, khi chưa ai bỏ phiếu. Lúc đó câu hỏi phải là câu
       // dò, không phải câu chất vấn về một sự kiện chưa xảy ra.
       return `Bạn để ý ${who}. Hỏi một câu cho họ nói.`;
     case "WITHHOLD":
-      return "Bạn chưa đủ căn cứ chỉ ai. Nói đúng vậy thôi.";
+      return request.replyTo
+        ? `${author} vừa hỏi bạn nghi ai. Trả lời thật: bạn chưa đủ căn cứ chỉ ai.`
+        : "Bạn chưa đủ căn cứ chỉ ai. Nói đúng vậy thôi.";
     case "REPLY":
       return `Bạn trả lời ${author} về câu họ vừa nói.`;
     case "AGREE":

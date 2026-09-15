@@ -729,6 +729,21 @@ export interface ConversationWeights {
    * quét nghiêm ngặt chỉ chạy khi còn `avoidOpenings` — y như trước.
    */
   roomShapeWindow: number;
+  /**
+   * Bị hỏi thẳng kiểu "nghi ai" / "vote ai" thì đáp bằng CHÍNH lá phiếu:
+   * `ACCUSE` mục tiêu phiếu kèm căn cứ chưa nói (hoặc `WITHHOLD` khi phiếu
+   * không nhắm ai), gắn `replyTo` là câu hỏi. `0` TẮT.
+   *
+   * Vấn đề nó chữa: câu đáp theo trigger không mang mục tiêu hay bằng chứng
+   * nào, nên "Bình nghi ai nhất?" nhận về "Về câu của An thì tôi thấy thường
+   * thôi". `question-policy.ts` (v24, đã xoá) chỉ đổi NHÃN của câu đáp - topic,
+   * tone - còn mục tiêu vẫn là người hỏi, nên câu chữ không đổi và không trục
+   * nào nhúc nhích. Ô này đổi NỘI DUNG.
+   *
+   * Câu hỏi về vai, câu tố mặc áo câu hỏi, câu đòi căn cứ và câu hỏi nhất quán
+   * KHÔNG đi đường này - xem `suspectAnswer` trong `speech-planner.ts`.
+   */
+  answerWithSuspect: number;
 }
 
 /**
@@ -1313,6 +1328,7 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     selfPlayTurnsPerRound: 1,
     replyReserveTurns: 0,
     roomShapeWindow: 0,
+    answerWithSuspect: 0,
   }),
 
   /**
@@ -1575,6 +1591,7 @@ export const BOT_WEIGHTS_V3: BotWeights = Object.freeze({
     selfPlayTurnsPerRound: 4,
     replyReserveTurns: 0,
     roomShapeWindow: 0,
+    answerWithSuspect: 0,
   }),
 }) as BotWeights;
 
@@ -2477,6 +2494,25 @@ export const BOT_WEIGHTS_V31: BotWeights = Object.freeze({
   conversation: Object.freeze({
     ...BOT_WEIGHTS_V29.conversation,
     roomShapeWindow: 12,
+  }),
+});
+
+/**
+ * v33.0.0 (COMMUNICATION): v31 + `conversation.answerWithSuspect = 1`. Bị hỏi
+ * "nghi ai" thì nói ra lá phiếu thay vì một câu đáp rỗng.
+ *
+ * Bỏ qua tên v32: nó từng là bản đo "v31 + tám ô" đã bị xoá cùng thang v23–v28
+ * (xem khối trên `DEFAULT_BOT_WEIGHTS`), và dùng lại tên đó là lẫn với report cũ.
+ *
+ * CHƯA mặc định: nâng theo thước chỉ số hội thoại, như v29 và v31.
+ */
+export const BOT_WEIGHTS_V33: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V31,
+  version: "33.0.0",
+
+  conversation: Object.freeze({
+    ...BOT_WEIGHTS_V31.conversation,
+    answerWithSuspect: 1,
   }),
 });
 

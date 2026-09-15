@@ -56,6 +56,29 @@ function defenseRequest(over: Partial<SpeechRequest> = {}): SpeechRequest {
   });
 }
 
+describe("câu dẫn khi đang đáp một câu hỏi (answerWithSuspect)", () => {
+  const question = { messageId: "q1", actorName: "An", text: "Vân nghi ai?" };
+  const firstLine = (request: SpeechRequest) => buildDaySpeechPrompt(request).user.split("\n")[0];
+
+  it("ACCUSE có replyTo nói rõ là đang trả lời người hỏi", () => {
+    expect(firstLine(speechRequest({ replyTo: question }))).toBe("An vừa hỏi bạn. Trả lời thẳng: bạn nghi Wolf.");
+  });
+
+  it("ACCUSE tự mở lời giữ nguyên câu dẫn cũ", () => {
+    expect(firstLine(speechRequest())).toBe("Bạn nghi Wolf. Nói ra.");
+  });
+
+  it("WITHHOLD có replyTo trả lời là chưa chốt được ai", () => {
+    const request = speechRequest({
+      intention: { kind: "WITHHOLD", topic: "PROCESS", confidence: 0.5, evidence: [], tone: "NEUTRAL" },
+      evidence: [],
+      targetName: null,
+      replyTo: question,
+    });
+    expect(firstLine(request)).toBe("An vừa hỏi bạn nghi ai. Trả lời thật: bạn chưa đủ căn cứ chỉ ai.");
+  });
+});
+
 describe("ranh giới bảo mật của prompt", () => {
   it("prompt ban ngày không chứa vai trò của bất kỳ ai, kể cả của chính bot", () => {
     const spec = buildDaySpeechPrompt(speechRequest());
