@@ -698,8 +698,14 @@ describe("v2 là cấu hình production", () => {
     // +0,50 (z=+0,8). v29 phải trả 1,67 điểm `casualToneRate`; ô này không trả
     // gì, vì nó không đụng lượt rút RNG nào và không đổi việc bot nói LÚC NÀO
     // hay nói VỚI AI — chỉ đổi mẫu câu trong cùng một bể cho cùng một ý định.
-    expect(DEFAULT_BOT_WEIGHTS.version).toBe("31.0.0");
-    expect(weightsPreset("31.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    //
+    // v33 (COMMUNICATION) đáp câu hỏi "nghi ai" bằng chính lá phiếu
+    // (`conversation.answerWithSuspect = 1`). Nâng theo tiêu chí KHÔNG GÂY HẠI:
+    // 5×1.000 ván paired seeds, mọi chỉ số hội thoại và win-rate có |z| < 1,
+    // làng thắng dương ở cả 5 batch. Lợi ích nằm ở câu hỏi của người thật, thứ
+    // self-play không đo được - xem docstring của `DEFAULT_BOT_WEIGHTS`.
+    expect(DEFAULT_BOT_WEIGHTS.version).toBe("33.0.0");
+    expect(weightsPreset("33.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
     expect(weightsPreset("29.0.0")).toBe(BOT_WEIGHTS_V29);
     expect(weightsPreset("21.0.0")).toBe(BOT_WEIGHTS_V21);
     expect(weightsPreset("18.0.0")).toBe(BOT_WEIGHTS_V18);

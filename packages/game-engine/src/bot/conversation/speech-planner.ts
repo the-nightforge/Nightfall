@@ -161,6 +161,69 @@ function responseProbability(
 }
 
 /**
+ * Loại câu hỏi được đáp bằng lá phiếu (`conversation.answerWithSuspect`).
+ *
+ * KHÔNG có `ROLE` (một câu hỏi không được moi ra lời khai - đó là việc của
+ * `decideChatClaim`), `ACCUSATION` ("mày là sói à" đáp bằng một lời tố người
+ * khác là lảng), `EVIDENCE` và `CONSISTENCY` (hỏi về câu đã nói, không hỏi mình
+ * nghi ai).
+ *
+ * `GENERAL` cũng KHÔNG: "X có gì chưa?", "sao X im thế" chiếm phần lớn lưu
+ * lượng câu hỏi, và đáp chúng bằng một lời tố làm số lời tố tăng vọt. Bench
+ * 1.000 ván đầu của v33 (còn GENERAL, còn tố không bằng chứng) so v31: làng
+ * thắng -4,9 (z -2,2), bám một mục tiêu +5,9 điểm (z +31), đáp câu hỏi -1,1.
+ */
+const ANSWERED_BY_VOTE: ReadonlySet<NonNullable<ConversationTrigger["questionType"]>> = new Set([
+  "TARGET",
+  "VOTE",
+]);
+
+/**
+ * Câu đáp mang NỘI DUNG cho một câu hỏi "nghi ai", hoặc `null`.
+ *
+ * Nội dung chính là lá phiếu lõi đã chốt, nên câu đáp không thể nói khác lá
+ * phiếu, và cổng lệch mục tiêu phía server cho qua vì mục tiêu là mục tiêu đã
+ * duyệt. Bằng chứng là `usable` - đã qua luật giữ kết quả soi của Tiên Tri.
+ *
+ * Nghi một người mà KHÔNG còn căn cứ nào chưa nói thì không đi đường này: lời
+ * tố trần ra câu kiểu "Người 3, hết. tôi thấy hơi lạ", và nó chỉ thêm một lời
+ * tố cho cả bàn bám theo. Rơi về câu đáp cũ. Phiếu không nhắm ai thì vẫn đáp
+ * `WITHHOLD` - "chưa rõ ai" là câu trả lời thật, không phải một lời tố.
+ *
+ * THUẦN: không rút số.
+ */
+function suspectAnswer(
+  trigger: ConversationTrigger,
+  vote: BotVoteIntention,
+  usable: BotSpeechIntention["evidence"],
+  style: BotSpeechStyle,
+  weights: BotWeights,
+): BotSpeechIntention | null {
+  if (weights.conversation.answerWithSuspect <= 0) return null;
+  if (trigger.kind !== "QUESTIONED_ME") return null;
+  if (!trigger.questionType || !ANSWERED_BY_VOTE.has(trigger.questionType)) return null;
+
+  const reply = {
+    replyToMessageId: trigger.messageId,
+    replyToActorId: trigger.actorId,
+    confidence: vote.confidence,
+    reason: `đáp câu hỏi ${trigger.questionType} bằng lá phiếu`,
+  };
+  if (vote.choice.type !== "PLAYER") {
+    return { ...reply, kind: "WITHHOLD", topic: "PROCESS", evidence: [], tone: "NEUTRAL" };
+  }
+  if (usable.length === 0) return null;
+  return {
+    ...reply,
+    kind: "ACCUSE",
+    targetId: vote.choice.targetId,
+    topic: "SUSPICION",
+    evidence: usable.map((item) => ({ ...item })),
+    tone: toneFor("ACCUSE", style),
+  };
+}
+
+/**
  * Bằng chứng BOT được phép nói RA lượt này.
  *
  * Ba bộ lọc, theo thứ tự: đã nói rồi thì thôi, bằng chứng soi bị giữ tới lúc
@@ -269,6 +332,16 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
 
   // ---- 1. Có ai đang nói với mình không ----
   for (const trigger of findConversationTriggers(context, state, weights)) {
+    // Bị hỏi "nghi ai" thì đáp bằng chính lá phiếu, trước mọi câu đáp rỗng.
+    // Cùng MỘT lượt rút như vòng dưới, và không đáp thì cũng bỏ cả câu hỏi đó
+    // như vòng dưới. Knob tắt thì `answer` luôn null: chuỗi RNG không lệch bit nào.
+    const answer = suspectAnswer(trigger, vote, usable, style, weights);
+    const answerIntention = answer ? fresh(answer) : null;
+    if (answerIntention) {
+      if (rng() < responseProbability(trigger, style, weights)) return answerIntention;
+      continue;
+    }
+
     for (const kind of candidatesFor(trigger, style)) {
       const candidate = fresh({
         kind,

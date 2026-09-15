@@ -404,7 +404,10 @@ const QUESTION_MARKERS: ReadonlyArray<readonly [QuestionType, readonly string[]]
   // phải một câu hỏi về lá phiếu hôm nay.
   ["CONSISTENCY", ["lúc nãy", "hồi nãy", "vừa nãy", "hôm qua", "vòng trước", "đổi ý", "đổi phiếu", "quay xe", "lúc trước", "ban nãy", "mới nói", "vừa bảo"]],
   ["VOTE", ["vote", "phiếu", "bỏ phiếu", "treo ai", "treo ", "vót"]],
-  ["TARGET", ["nghi ai", "nghi ng nào", "ai lạ", "chọn ai", "theo ai", "nhắm ai", "ai nhất"]],
+  // "bầu ai" ở đây chứ không ở VOTE: nó hỏi đang nghi ai, y như "chọn ai" - và
+  // cả kho câu hỏi người thật ("An ơi, bầu ai?") lẫn bảng mẫu QUESTION của bot
+  // đều dùng nó. Thiếu nó thì hai câu đó rơi về GENERAL.
+  ["TARGET", ["nghi ai", "nghi ng nào", "ai lạ", "chọn ai", "bầu ai", "theo ai", "nhắm ai", "ai nhất"]],
 ];
 
 /**
