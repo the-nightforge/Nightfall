@@ -790,6 +790,13 @@ export interface ClaimWeights {
   knownBluffPenalty: number;
   /** Prior của `profileStrength`: hồ sơ phải có bấy nhiêu mẫu mới nặng bằng nửa. */
   profilePriorStrength: number;
+  /**
+   * Giọng lời khai theo LOẠI lời khai thay vì theo tính cách: tự khai và phản
+   * bác dùng giọng chắc/trung tính, chỉ lời khai lúc bị dồn mới được căng.
+   * `0` TẮT - giọng là `toneFor("ACCUSE", style)` như cũ, nên một bot gắt tự
+   * khai vẫn ra "Ép tôi lộ ra thì đây" dù chưa ai ép.
+   */
+  claimToneByKind: number;
 }
 
 export interface LookAheadWeights {
@@ -1354,6 +1361,8 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     // Tắt ở v1..v11; v12 bật. Không đổi một bit của preset cũ vì cổng `0`.
     knownBluffPenalty: 0,
     profilePriorStrength: 2,
+    // Tắt ở mọi bản tới v33; v37 bật. Xem `ClaimWeights`.
+    claimToneByKind: 0,
   }),
 
   /**
@@ -1629,6 +1638,8 @@ export const BOT_WEIGHTS_V4: BotWeights = Object.freeze({
     wolfBluffFromRound: 2,
     knownBluffPenalty: 0,
     profilePriorStrength: 2,
+    // Tắt ở mọi bản tới v33; v37 bật. Xem `ClaimWeights`.
+    claimToneByKind: 0,
   }),
 });
 
@@ -2518,6 +2529,43 @@ export const BOT_WEIGHTS_V33: BotWeights = Object.freeze({
 });
 
 /**
+ * v37.0.0 (COMMUNICATION): v33 + `claim.claimToneByKind = 1`.
+ *
+ * Lời tự khai và lời phản bác thôi đọc như bị ép ("Ép tôi lộ ra thì đây", "Bắt
+ * tôi khai à"); chỉ lời khai lúc bị dồn mới được căng. Giọng không nằm trong
+ * vân tay ngữ nghĩa, nên ô này chỉ đổi câu chữ.
+ *
+ * Ba bản cùng đợt đã đo (5×1.000 ván paired seeds so v33) và bị XOÁ cùng knob
+ * của chúng - ghi lại để khỏi thử lại mù:
+ *
+ * - v34: lời khai dòng Tiên Tri nói tên người bị chỉ mặt ("soi ra X là sói")
+ *   VÀ parser gắn người đó vào lời khai, tức bật nửa buộc tội của S1 và S4 trong
+ *   `claim-credibility` vốn chưa từng chạy ngoài test dựng tay.
+ *   `wolfBluffBelievedRate` 18,35% -> 60,71%, `claimAccuracy` 55,75% -> 28,78%,
+ *   làng thắng -2,56 (z -2,6).
+ * - v35: v34 + chỉ tính "sắp bị treo" từ 3 phiếu. Bớt lời khai (5,50 -> 4,88
+ *   mỗi ván) nhưng làng thắng thêm -4,68 (z -4,8), cả 5 batch âm - vai chức năng
+ *   thật bị dồn 1-2 phiếu mất đường lộ vai để thoát.
+ * - v36: nói tên CHỈ trong câu chữ, parser không gắn. Nhẹ hơn nhiều nhưng cùng
+ *   kiểu hỏng: `wolfBluffBelievedRate` -> 29,67% (z +16), `claimAccuracy` ->
+ *   48,33% (z -6,2), `consecutiveSameTargetRate` z +3,4. Vế "X là sói" vẫn là
+ *   một lời tố, từ người vừa được thưởng tin cậy vì dám khai.
+ *
+ * Gốc rễ không ở câu chữ: bot tin lời khai quá dễ, và Sói khai láo Tiên Tri
+ * nhiều gấp ~4 lần Tiên Tri thật tự khai. Nói tên người bị chỉ mặt chỉ nên thử
+ * lại SAU khi nhóm `claim` được hiệu chỉnh lại.
+ */
+export const BOT_WEIGHTS_V37: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V33,
+  version: "37.0.0",
+
+  claim: Object.freeze({
+    ...BOT_WEIGHTS_V33.claim,
+    claimToneByKind: 1,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
@@ -2665,5 +2713,22 @@ export const BOT_WEIGHTS_V33: BotWeights = Object.freeze({
   * Bản đầu (còn đáp câu GENERAL, còn tố trần không căn cứ) trượt ngay ở 1.000
   * ván: làng thắng -4,9 (z -2,2), bám mục tiêu +5,9 điểm (z +31). Xem chú thích
   * `ANSWERED_BY_VOTE` trong `speech-planner.ts`.
+  *
+  * v37.0.0 (COMMUNICATION) bật `claim.claimToneByKind = 1`: lời tự khai và lời
+  * phản bác thôi đọc như bị ép ("Bắt tôi khai à", "Đừng ép nữa"). Protocol
+  * 5×1.000 ván paired seeds so v33, cùng 7 tiêu chí không gây hại chốt trước:
+  *
+  * ```text
+  * villageWinRate                   45.74% -> 45.78%  (+0,04 điểm, z = +0,0)
+  * directQuestionOutcomes.ANSWERED  60.68% -> 60.72%  (+0,04 điểm, z = +0,2)
+  * consecutiveSameTargetRate        39.93% -> 39.93%  (-0,00 điểm, z = -0,0)
+  * semanticRepetitionRate           11.34% -> 11.33%  (-0,01 điểm, z = -0,2)
+  * claimAccuracy                    55.75% -> 55.75%  ( 0,00 điểm, z =  0,0)
+  * wolfBluffBelievedRate            18.35% -> 18.38%  (+0,03 điểm, z = +0,1)
+  * ```
+  *
+  * Mọi chỉ số |z| < 1, 0 violation trên 10 batch - đúng như một ô chỉ đổi câu
+  * chữ phải cho ra. Ba bản cùng đợt (nói tên người bị chỉ mặt, ngưỡng "sắp bị
+  * treo") đã trượt và bị xoá; xem chú thích `BOT_WEIGHTS_V37`.
   */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V33;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V37;
