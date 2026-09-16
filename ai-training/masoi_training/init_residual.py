@@ -15,7 +15,7 @@ from pathlib import Path
 import torch
 
 from .console import force_utf8_console
-from .model import PolicyValueNet
+from .model import PolicyValueNet, norm_layers, trunk_linears, value_norm_layers, value_trunk_linears
 
 
 def main() -> None:
@@ -31,14 +31,37 @@ def main() -> None:
         raise ValueError(f"beta phải > 0, nhận {a.beta}")
 
     w = json.loads(Path(a.source).read_text(encoding="utf8"))
-    assert w["format"] == "masoi-mlp-1", w.get("format")
+    assert w["format"] in ("masoi-mlp-1", "masoi-mlp-2"), w.get("format")
     obs, act, hidden = int(w["obsSize"]), int(w["actionSize"]), int(w["hidden"])
     if a.fresh:
+        # Trunk mới phải CÙNG kiến trúc với source — nếu không các keys v2 còn
+        # lại (activation/norm/valueLayers) sẽ mô tả sai trọng số mới sinh.
         torch.manual_seed(0)
-        m = PolicyValueNet(obs, act, hidden)
+        m = PolicyValueNet(
+            obs, act, hidden,
+            activation=w.get("activation", "relu"),
+            norm=w.get("norm", "none"),
+            value_trunk=w.get("valueTrunk", "shared"),
+        )
         w["layers"] = [
-            {"w": layer.weight.tolist(), "b": layer.bias.tolist()} for layer in (m.trunk[0], m.trunk[2])
+            {"w": layer.weight.tolist(), "b": layer.bias.tolist()}
+            for layer in trunk_linears(m)
         ]
+        if w.get("normLayers") is not None:
+            w["normLayers"] = [
+                {"w": layer.weight.tolist(), "b": layer.bias.tolist()}
+                for layer in norm_layers(m)
+            ]
+        if w.get("valueLayers") is not None:
+            w["valueLayers"] = [
+                {"w": layer.weight.tolist(), "b": layer.bias.tolist()}
+                for layer in value_trunk_linears(m)
+            ]
+        if w.get("valueNormLayers") is not None:
+            w["valueNormLayers"] = [
+                {"w": layer.weight.tolist(), "b": layer.bias.tolist()}
+                for layer in value_norm_layers(m)
+            ]
         w["valueHead"] = {"w": m.value_head[0].weight.tolist(), "b": m.value_head[0].bias.tolist()}
     w["policyHead"] = {"w": [[0.0] * hidden for _ in range(act)], "b": [0.0] * act}
     w["residual"] = {"beta": a.beta}

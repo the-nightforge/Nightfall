@@ -92,20 +92,38 @@ def test_patience_stops_early_on_noise() -> None:
 
 
 def test_non_engine_config_rejected_fast() -> None:
-    """silu/LN chưa có engine: từ chối ngay khi parse, không train rồi mới rớt."""
+    """Tên activation lạ: từ chối ngay khi parse, không train rồi mới rớt."""
     with tempfile.TemporaryDirectory() as tmp:
         data, out = Path(tmp) / "enc", Path(tmp) / "model"
         data.mkdir()
         write_dataset(data)
         sys.argv = [
             "train_bc", "--data", str(data), "--out", str(out),
-            "--epochs", "1", "--activation", "silu",
+            "--epochs", "1", "--activation", "gelu",
         ]
         try:
             train_bc.main()
         except ValueError:
             return
-    raise AssertionError("--activation silu phải bị từ chối trước khi train")
+    raise AssertionError("--activation lạ phải bị từ chối trước khi train")
+
+
+def test_silu_trains_and_exports_v2() -> None:
+    """P1-1: silu train được và export ra masoi-mlp-2 (engine đã hỗ trợ)."""
+    import json as _json
+
+    with tempfile.TemporaryDirectory() as tmp:
+        data, out = Path(tmp) / "enc", Path(tmp) / "model"
+        data.mkdir()
+        write_dataset(data)
+        sys.argv = [
+            "train_bc", "--data", str(data), "--out", str(out),
+            "--epochs", "1", "--batch-size", "16", "--hidden", "8",
+            "--activation", "silu",
+        ]
+        train_bc.main()
+        w = _json.loads((out / "model.weights.json").read_text(encoding="utf8"))
+        assert w["format"] == "masoi-mlp-2" and w["activation"] == "silu", w.get("format")
 
 
 def main() -> None:
@@ -113,6 +131,7 @@ def main() -> None:
     test_new_flags_run_and_recorded()
     test_patience_stops_early_on_noise()
     test_non_engine_config_rejected_fast()
+    test_silu_trains_and_exports_v2()
     print("ok")
 
 

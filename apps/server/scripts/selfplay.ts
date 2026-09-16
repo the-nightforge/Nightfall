@@ -68,7 +68,7 @@ interface Options {
    * benchmark champion/challenger: bot thật vẫn có jitter.
    */
   noJitter: boolean;
-  /** `model.weights.json` (masoi-mlp-1) cắm vào bot; `null` = heuristic thuần. */
+  /** `model.weights.json` (masoi-mlp-1/2) cắm vào bot; `null` = heuristic thuần. */
   policy: string | null;
   /**
    * Nhiệt độ lấy mẫu của policy. 0 = argmax (đo), 1 = lấy mẫu (rollout RL).
@@ -111,7 +111,7 @@ function usage(): string {
     "  --speech-dataset <dir> Ghi dataset speech policy (COMMUNICATION §26) ra JSONL (mặc định: tắt)",
     `  --trace-games <số>  Số ván đầu được ghi trace (mặc định: ${DEFAULT_TRACE_GAMES})`,
     "  --no-jitter         Tắt term jitter (teacher tất định cho behavior cloning; xem BOT_SELF_LEARNING_TRAINING.md)",
-    "  --policy <file>     model.weights.json (masoi-mlp-1) cắm vào bot; xem --learned-seats, --temperature",
+    "  --policy <file>     model.weights.json (masoi-mlp-1/2) cắm vào bot; xem --learned-seats, --temperature",
     "  --temperature <t>   0 = argmax (mặc định); 1 = lấy mẫu cho rollout RL",
     "  --learned-seats <s> all | village | wolves (mặc định all)",
     "  --quiet             Chỉ in JSON, không in bản tóm tắt",

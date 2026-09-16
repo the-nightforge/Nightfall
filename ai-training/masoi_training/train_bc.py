@@ -181,10 +181,13 @@ def main() -> None:
                         help="0 = tắt (cũ); > 0 = clip grad norm mỗi batch")
     parser.add_argument("--patience", type=int, default=0,
                         help="0 = tắt (cũ); > 0 = dừng khi val không cải thiện N epoch liền")
-    # P0-1: kiến trúc (silu/LN fail fast ở dưới vì engine chưa chạy được).
+    # P0-1: kiến trúc (silu/LN export ra masoi-mlp-2, engine P1-1 đã chạy được).
     parser.add_argument("--activation", default="relu")
     parser.add_argument("--norm", default="none")
     parser.add_argument("--init", choices=("default", "orthogonal"), default="default")
+    # Tách trunk value: value loss không giành sức chứa của policy; --value-weight
+    # dương chỉ có ý nghĩa với separate (shared giữ mặc định 0 như cũ).
+    parser.add_argument("--value-trunk", choices=("shared", "separate"), default="shared")
     args = parser.parse_args()
 
     check_engine_config(args.activation, args.norm)
@@ -207,6 +210,7 @@ def main() -> None:
     model = PolicyValueNet(
         full.obs_size, full.action_size, args.hidden,
         activation=args.activation, norm=args.norm, init=args.init,
+        value_trunk=args.value_trunk,
     ).to(device)
     if args.optimizer == "adamw":
         optimiser = torch.optim.AdamW(
@@ -372,6 +376,7 @@ def main() -> None:
             "activation": args.activation,
             "norm": args.norm,
             "init": args.init,
+            "valueTrunk": args.value_trunk,
         },
         "obsSize": full.obs_size,
         "actionSize": full.action_size,

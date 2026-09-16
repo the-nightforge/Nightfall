@@ -36,7 +36,7 @@ from torch import nn
 from .console import force_utf8_console
 from .data import load
 from .export import export_weights_json
-from .model import PolicyValueNet, masked_logits
+from .model import PolicyValueNet, masked_logits, norm_layers, trunk_linears, value_norm_layers, value_trunk_linears
 
 
 def load_init(path: Path, obs: int, act: int) -> tuple[PolicyValueNet, int, dict | None]:
@@ -47,22 +47,45 @@ def load_init(path: Path, obs: int, act: int) -> tuple[PolicyValueNet, int, dict
     epoch khác, và không có gì trong hai file nói ra điều đó.
     """
     w = json.loads(Path(path).read_text(encoding="utf8"))
-    if w["format"] != "masoi-mlp-1":
-        raise ValueError(f"init không phải masoi-mlp-1: {w.get('format')!r}")
+    if w["format"] not in ("masoi-mlp-1", "masoi-mlp-2"):
+        raise ValueError(f"init không phải masoi-mlp-1/2: {w.get('format')!r}")
     if w["obsSize"] != obs or w["actionSize"] != act:
         raise ValueError(
             f"init lệch schema: obs {w['obsSize']} vs {obs}, action {w['actionSize']} vs {act}"
         )
     hidden = int(w["hidden"])
-    m = PolicyValueNet(obs, act, hidden)
+    activation = w.get("activation", "relu")
+    norm = w.get("norm", "none")
+    if activation not in ("relu", "silu") or norm not in ("none", "layernorm"):
+        raise ValueError(f"init có cấu hình lạ: {activation}/{norm}")
+    norms = w.get("normLayers") or []
+    if norm == "layernorm" and len(norms) != 2:
+        raise ValueError(f"init layernorm thiếu normLayers (có {len(norms)}, cần 2)")
+    value_trunk = w.get("valueTrunk", "shared")
+    if value_trunk not in ("shared", "separate"):
+        raise ValueError(f"init có valueTrunk lạ: {value_trunk!r}")
+    value_layers = w.get("valueLayers") or []
+    if value_trunk == "separate" and len(value_layers) != 2:
+        raise ValueError(f"init separate thiếu valueLayers (có {len(value_layers)}, cần 2)")
+    value_norms = w.get("valueNormLayers") or []
+    if value_trunk == "separate" and norm == "layernorm" and len(value_norms) != 2:
+        raise ValueError("init separate+layernorm thiếu valueNormLayers (cần 2)")
+    m = PolicyValueNet(obs, act, hidden, activation=activation, norm=norm, value_trunk=value_trunk)
     with torch.no_grad():
-        for layer, src in (
-            (m.trunk[0], w["layers"][0]),
-            (m.trunk[2], w["layers"][1]),
-            (m.policy_head, w["policyHead"]),
-        ):
+        for layer, src in zip(trunk_linears(m), w["layers"]):
             layer.weight.copy_(torch.tensor(src["w"]))
             layer.bias.copy_(torch.tensor(src["b"]))
+        for layer, src in zip(norm_layers(m), norms):
+            layer.weight.copy_(torch.tensor(src["w"]))
+            layer.bias.copy_(torch.tensor(src["b"]))
+        for layer, src in zip(value_trunk_linears(m), value_layers):
+            layer.weight.copy_(torch.tensor(src["w"]))
+            layer.bias.copy_(torch.tensor(src["b"]))
+        for layer, src in zip(value_norm_layers(m), value_norms):
+            layer.weight.copy_(torch.tensor(src["w"]))
+            layer.bias.copy_(torch.tensor(src["b"]))
+        m.policy_head.weight.copy_(torch.tensor(w["policyHead"]["w"]))
+        m.policy_head.bias.copy_(torch.tensor(w["policyHead"]["b"]))
         if w.get("valueHead"):
             m.value_head[0].weight.copy_(torch.tensor(w["valueHead"]["w"]))
             m.value_head[0].bias.copy_(torch.tensor(w["valueHead"]["b"]))

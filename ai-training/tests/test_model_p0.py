@@ -71,8 +71,8 @@ def test_orthogonal_init() -> None:
     assert float(m.policy_head.weight.detach().std()) < 0.05, "policy head phải khởi nhỏ"
 
 
-def test_export_rejects_non_engine_configs() -> None:
-    """Engine chạy ReLU thuần: model silu/LN xuất ra JSON sẽ chạy SAI trong im lặng."""
+def test_export_v2_accepted() -> None:
+    """P1-1: silu/LN export ra masoi-mlp-2 (engine đã hỗ trợ), không từ chối nữa."""
     import json
     import tempfile
     from masoi_training.export import export_weights_json
@@ -81,14 +81,12 @@ def test_export_rejects_non_engine_configs() -> None:
     for kwargs in ({"activation": "silu"}, {"norm": "layernorm"}):
         m = PolicyValueNet(OBS, ACT, HIDDEN, **kwargs)
         with tempfile.TemporaryDirectory() as tmp:
-            try:
-                export_weights_json(
-                    m, meta, Path(tmp) / "w.json",
-                    model_id="x", training_seed=0, hidden=HIDDEN,
-                )
-            except ValueError:
-                continue
-        raise AssertionError(f"export phải từ chối {kwargs} — engine chưa chạy được")
+            export_weights_json(
+                m, meta, Path(tmp) / "w.json",
+                model_id="x", training_seed=0, hidden=HIDDEN,
+            )
+            w = json.loads((Path(tmp) / "w.json").read_text(encoding="utf8"))
+        assert w["format"] == "masoi-mlp-2", w.get("format")
 
 
 def main() -> None:
@@ -98,7 +96,7 @@ def main() -> None:
     test_unknown_norm_rejected()
     test_default_byte_identical()
     test_orthogonal_init()
-    test_export_rejects_non_engine_configs()
+    test_export_v2_accepted()
     print("ok")
 
 

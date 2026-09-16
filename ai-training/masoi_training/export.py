@@ -13,22 +13,32 @@ from pathlib import Path
 
 from torch import nn
 
-from .model import PolicyValueNet
+from .model import PolicyValueNet, norm_layers, trunk_linears, value_norm_layers, value_trunk_linears
 
-FORMAT = "masoi-mlp-1"
+FORMAT_V1 = "masoi-mlp-1"
+FORMAT_V2 = "masoi-mlp-2"
+FORMAT = FORMAT_V1
+
+ACTIVATIONS = ("relu", "silu")
+NORMS = ("none", "layernorm")
 
 
 def check_engine_config(activation: str, norm: str) -> None:
-    """Engine chạy forward ReLU thuần — cấu hình khác bị từ chối ngay (fail fast),
-    thay vì train xong mới rớt ở export, hoặc ra file JSON chạy sai trong im lặng."""
-    if activation != "relu" or norm != "none":
-        raise ValueError(
-            f"engine chỉ chạy relu/none, nhận {activation}/{norm} — "
-            "train với cấu hình mặc định hoặc chờ P1 (engine hỗ trợ)"
-        )
+    """Tên lạ bị từ chối ngay — lặng lẽ xuất sai là học sai trong im lặng."""
+    if activation not in ACTIVATIONS:
+        raise ValueError(f"activation không hợp lệ: {activation!r} (có: {ACTIVATIONS})")
+    if norm not in NORMS:
+        raise ValueError(f"norm không hợp lệ: {norm!r} (có: {NORMS})")
 
 
 def _linear(layer: nn.Linear) -> dict:
+    return {
+        "w": layer.weight.detach().cpu().tolist(),
+        "b": layer.bias.detach().cpu().tolist(),
+    }
+
+
+def _norm(layer: nn.LayerNorm) -> dict:
     return {
         "w": layer.weight.detach().cpu().tolist(),
         "b": layer.bias.detach().cpu().tolist(),
@@ -49,12 +59,19 @@ def export_weights_json(
     đi đường hiệu chỉnh điểm heuristic thay vì thay teacher. Model thường KHÔNG
     mang trường này.
 
-    Engine chạy forward ReLU thuần nên chỉ model `activation="relu",
-    norm="none"` mới xuất được — cấu hình khác bị từ chối ngay, thay vì ra một
-    file JSON mà engine chạy ra số sai trong im lặng (việc hỗ trợ thuộc P1)."""
-    check_engine_config(getattr(model, "activation", "relu"), getattr(model, "norm", "none"))
+    Cấu hình mặc định (relu/none/shared) ra `masoi-mlp-1` byte-một với bản cũ —
+    không có keys mới. Cấu hình khác ra `masoi-mlp-2` thêm `activation`/`norm` (+
+    `normLayers` khi layernorm) và `valueTrunk`/`valueLayers` (+ `valueNormLayers`
+    khi layernorm) để engine chạy đúng forward đã train."""
+    activation = getattr(model, "activation", "relu")
+    norm = getattr(model, "norm", "none")
+    separate = getattr(model, "value_trunk_kind", "shared") == "separate"
+    check_engine_config(activation, norm)
+    linears = trunk_linears(model)
     payload = {
-        "format": FORMAT,
+        "format": FORMAT_V1
+        if (activation == "relu" and norm == "none" and not separate)
+        else FORMAT_V2,
         "modelId": model_id,
         "gitCommit": meta.get("gitCommit"),
         "datasetVersion": meta.get("datasetVersion"),
@@ -64,10 +81,24 @@ def export_weights_json(
         "hidden": hidden,
         "featureNames": list(meta.get("featureNames", [])),
         "actionNames": list(meta.get("actionNames", [])),
-        "layers": [_linear(model.trunk[0]), _linear(model.trunk[2])],
+        "layers": [_linear(linears[0]), _linear(linears[1])],
         "policyHead": _linear(model.policy_head),
         "valueHead": _linear(model.value_head[0]),
     }
+    if payload["format"] == FORMAT_V2:
+        payload["activation"] = activation
+        payload["norm"] = norm
+        if norm == "layernorm":
+            payload["normLayers"] = [_norm(layer) for layer in norm_layers(model)]
+        payload["valueTrunk"] = "separate" if separate else "shared"
+        if separate:
+            payload["valueLayers"] = [
+                _linear(layer) for layer in value_trunk_linears(model)
+            ]
+            if norm == "layernorm":
+                payload["valueNormLayers"] = [
+                    _norm(layer) for layer in value_norm_layers(model)
+                ]
     if residual is not None:
         payload["residual"] = {"beta": float(residual["beta"])}
     Path(path).write_text(json.dumps(payload), encoding="utf8")

@@ -11,7 +11,7 @@ import {
  * Vì sao không nạp ONNX ở runtime: package này phải thuần (không I/O),
  * `onnxruntime-node` chỉ có API bất đồng bộ trong khi `BotRuntime.decide*` là
  * đồng bộ, và model chỉ là ba phép nhân ma trận (~94k tham số). Định dạng
- * `masoi-mlp-1` do `ai-training/masoi_training/export.py` xuất.
+ * `masoi-mlp-1`/`masoi-mlp-2` do `ai-training/masoi_training/export.py` xuất.
  */
 
 export interface MlpLinear {
@@ -20,8 +20,14 @@ export interface MlpLinear {
   b: number[];
 }
 
+/** Tham số một LayerNorm: `gamma` (`w`) và `beta` (`b`), dài `hidden`. */
+export interface MlpNormLayer {
+  w: number[];
+  b: number[];
+}
+
 export interface MlpWeightsJson {
-  format: "masoi-mlp-1";
+  format: "masoi-mlp-1" | "masoi-mlp-2";
   modelId: string;
   gitCommit?: string | null;
   datasetVersion?: string | null;
@@ -34,6 +40,31 @@ export interface MlpWeightsJson {
   layers: MlpLinear[];
   policyHead: MlpLinear;
   valueHead?: MlpLinear;
+  /**
+   * Vắng = `"relu"` (file v1). v2 ghi rõ để forward không bao giờ đoán.
+   */
+  activation?: "relu" | "silu";
+  /**
+   * Vắng = `"none"` (file v1). `"layernorm"` đòi `normLayers` kèm theo.
+   */
+  norm?: "none" | "layernorm";
+  /**
+   * Vắng = `"shared"` — value đọc từ trunk chính. `"separate"` đòi `valueLayers`
+   * (và `valueNormLayers` khi `norm` là layernorm).
+   */
+  valueTrunk?: "shared" | "separate";
+  /**
+   * Trunk riêng của value, cùng cấu trúc `layers`: Linear → (LN) → Act mỗi block.
+   * Chỉ có khi `valueTrunk === "separate"`.
+   */
+  valueLayers?: MlpLinear[];
+  /** Gamma/beta cho `valueLayers`, một mục mỗi block khi layernorm. */
+  valueNormLayers?: MlpNormLayer[];
+  /**
+   * Một mục mỗi trunk block, theo đúng thứ tự `layers`. Chỉ có khi
+   * `norm === "layernorm"`.
+   */
+  normLayers?: MlpNormLayer[];
   /**
    * Có mặt = model là RESIDUAL (spec 2026-09-09-residual-policy D2): logits là
    * phần hiệu chỉnh cộng vào điểm heuristic với hệ số `beta`, không phải
@@ -70,14 +101,75 @@ function relu(x: number[]): number[] {
   return x;
 }
 
+function silu(x: number[]): number[] {
+  for (let i = 0; i < x.length; i += 1) x[i] = x[i]! / (1 + Math.exp(-x[i]!));
+  return x;
+}
+
+/** Khớp `torch.nn.LayerNorm` mặc định (eps 1e-5), tính trên toàn hàng. */
+const LAYER_NORM_EPS = 1e-5;
+
+function layerNorm(x: number[], gamma: readonly number[], beta: readonly number[]): number[] {
+  let mean = 0;
+  for (const v of x) mean += v;
+  mean /= x.length;
+  let variance = 0;
+  for (const v of x) variance += (v - mean) * (v - mean);
+  variance /= x.length;
+  const inv = 1 / Math.sqrt(variance + LAYER_NORM_EPS);
+  for (let i = 0; i < x.length; i += 1) {
+    x[i] = (x[i]! - mean) * inv * gamma[i]! + beta[i]!;
+  }
+  return x;
+}
+
+function forwardBlocks(
+  layers: readonly MlpLinear[],
+  norms: readonly MlpNormLayer[],
+  useNorm: boolean,
+  activation: "relu" | "silu",
+  x: readonly number[],
+): number[] {
+  let h: number[] = [...x];
+  for (let i = 0; i < layers.length; i += 1) {
+    h = linear(layers[i]!, h);
+    if (useNorm) {
+      const nl = norms[i]!;
+      h = layerNorm(h, nl.w, nl.b);
+    }
+    h = activation === "silu" ? silu(h) : relu(h);
+  }
+  return h;
+}
+
 export function mlpForward(
   weights: MlpWeightsJson,
   x: readonly number[],
 ): { logits: number[]; value: number | null } {
-  let h: number[] = [...x];
-  for (const layer of weights.layers) h = relu(linear(layer, h));
+  const activation = weights.activation ?? "relu";
+  const useNorm = weights.norm === "layernorm";
+  const h = forwardBlocks(
+    weights.layers,
+    useNorm ? (weights.normLayers ?? []) : [],
+    useNorm,
+    activation,
+    x,
+  );
   const logits = linear(weights.policyHead, h);
-  const value = weights.valueHead ? Math.tanh(linear(weights.valueHead, h)[0]!) : null;
+  let value: number | null = null;
+  if (weights.valueHead) {
+    const vh =
+      weights.valueTrunk === "separate"
+        ? forwardBlocks(
+            weights.valueLayers ?? [],
+            useNorm ? (weights.valueNormLayers ?? []) : [],
+            useNorm,
+            activation,
+            x,
+          )
+        : h;
+    value = Math.tanh(linear(weights.valueHead, vh)[0]!);
+  }
   return { logits, value };
 }
 
@@ -93,6 +185,17 @@ function checkLinear(name: string, layer: unknown, rows: number, cols: number): 
     }
   }
   return l as MlpLinear;
+}
+
+function checkNormLayer(name: string, nl: unknown, dim: number): MlpNormLayer {
+  const n = nl as Partial<MlpNormLayer> | null;
+  if (!n || !Array.isArray(n.w) || !Array.isArray(n.b)) {
+    throw new Error(`${name}: thiếu w/b`);
+  }
+  if (n.w.length !== dim || n.b.length !== dim) {
+    throw new Error(`${name}: chờ ${dim} chiều`);
+  }
+  return n as MlpNormLayer;
 }
 
 function sameList(name: string, got: unknown, want: readonly string[]): void {
@@ -112,7 +215,9 @@ export function loadMlpPolicy(
   options: { maxSeats?: number } = {},
 ): LearnedPolicy {
   const w = json as Partial<MlpWeightsJson> | null;
-  if (!w || w.format !== "masoi-mlp-1") throw new Error("format không phải masoi-mlp-1");
+  if (!w || (w.format !== "masoi-mlp-1" && w.format !== "masoi-mlp-2")) {
+    throw new Error("format không phải masoi-mlp-1/2");
+  }
   const obs = observationSize(options.maxSeats);
   const act = actionSize(options.maxSeats);
   if (w.obsSize !== obs) throw new Error(`obsSize ${w.obsSize} ≠ encoder ${obs}`);
@@ -120,6 +225,20 @@ export function loadMlpPolicy(
   sameList("featureNames", w.featureNames, observationFeatureNames(options.maxSeats));
   sameList("actionNames", w.actionNames, actionNames(options.maxSeats));
   if (!Array.isArray(w.layers) || w.layers.length === 0) throw new Error("layers rỗng");
+  const activation = w.activation ?? "relu";
+  if (activation !== "relu" && activation !== "silu") {
+    throw new Error(`activation lạ: ${String(w.activation)}`);
+  }
+  const norm = w.norm ?? "none";
+  if (norm !== "none" && norm !== "layernorm") {
+    throw new Error(`norm lạ: ${String(w.norm)}`);
+  }
+  let normLayers: MlpNormLayer[] | undefined;
+  if (norm === "layernorm") {
+    if (!Array.isArray(w.normLayers) || w.normLayers.length !== w.layers.length) {
+      throw new Error("normLayers phải có một mục mỗi trunk block");
+    }
+  }
   let width = obs;
   const layers = w.layers.map((layer, i) => {
     const rows = (layer as MlpLinear).w?.length ?? 0;
@@ -127,8 +246,38 @@ export function loadMlpPolicy(
     width = rows;
     return checked;
   });
+  if (norm === "layernorm") {
+    normLayers = w.normLayers!.map((nl, i) => checkNormLayer(`normLayers[${i}]`, nl, layers[i]!.w.length));
+  }
   const policyHead = checkLinear("policyHead", w.policyHead, act, width);
   const valueHead = w.valueHead ? checkLinear("valueHead", w.valueHead, 1, width) : undefined;
+  const valueTrunk = w.valueTrunk ?? "shared";
+  if (valueTrunk !== "shared" && valueTrunk !== "separate") {
+    throw new Error(`valueTrunk lạ: ${String(w.valueTrunk)}`);
+  }
+  let valueLayers: MlpLinear[] | undefined;
+  let valueNormLayers: MlpNormLayer[] | undefined;
+  if (valueTrunk === "separate") {
+    if (!Array.isArray(w.valueLayers) || w.valueLayers.length !== layers.length) {
+      throw new Error("valueLayers phải có một mục mỗi trunk block");
+    }
+    valueLayers = w.valueLayers.map((layer, i) =>
+      checkLinear(
+        `valueLayers[${i}]`,
+        layer,
+        layers[i]!.w.length,
+        i === 0 ? obs : layers[i - 1]!.w.length,
+      ),
+    );
+    if (norm === "layernorm") {
+      if (!Array.isArray(w.valueNormLayers) || w.valueNormLayers.length !== layers.length) {
+        throw new Error("valueNormLayers phải có một mục mỗi trunk block");
+      }
+      valueNormLayers = w.valueNormLayers.map((nl, i) =>
+        checkNormLayer(`valueNormLayers[${i}]`, nl, layers[i]!.w.length),
+      );
+    }
+  }
   let residual: { beta: number } | undefined;
   if (w.residual !== undefined) {
     const beta = (w.residual as { beta?: unknown } | null)?.beta;
@@ -137,7 +286,18 @@ export function loadMlpPolicy(
     }
     residual = { beta };
   }
-  const weights: MlpWeightsJson = { ...(w as MlpWeightsJson), layers, policyHead, valueHead };
+  const weights: MlpWeightsJson = {
+    ...(w as MlpWeightsJson),
+    layers,
+    policyHead,
+    valueHead,
+    activation,
+    norm,
+    ...(normLayers ? { normLayers } : {}),
+    valueTrunk,
+    ...(valueLayers ? { valueLayers } : {}),
+    ...(valueNormLayers ? { valueNormLayers } : {}),
+  };
   const id = typeof w.modelId === "string" ? w.modelId : "unnamed";
 
   const guard = (x: readonly number[]): void => {
