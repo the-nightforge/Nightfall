@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import math
 import subprocess
 from pathlib import Path
 
@@ -22,7 +23,7 @@ from torch import nn
 
 from .console import force_utf8_console
 from .data import SPLIT_NAMES, action_distribution, load
-from .export import export_weights_json
+from .export import check_engine_config, export_weights_json
 from .model import PolicyValueNet, masked_logits
 
 
@@ -39,12 +40,57 @@ def batches(count: int, size: int, generator: torch.Generator):
         yield order[start : start + size]
 
 
+def lr_factor(epoch: int, total: int, warmup: int) -> float:
+    """Hệ số lr của epoch `epoch` (đếm từ 1): warmup tuyến tính rồi cosine về 0.
+
+    `scheduler=none` không gọi hàm này (hệ số luôn 1) — đường cũ byte-một.
+    """
+    if warmup > 0 and epoch <= warmup:
+        return epoch / warmup
+    span = total - warmup
+    if span <= 0:
+        return 0.0
+    return 0.5 * (1 + math.cos(math.pi * (epoch - warmup) / span))
+
+
 def _group_means(correct: np.ndarray, groups: np.ndarray, names: list[str]) -> dict[str, float]:
     out: dict[str, float] = {}
     for index in np.unique(groups):
         keep = groups == index
         name = names[int(index)] if int(index) < len(names) else str(index)
         out[name] = round(float(correct[keep].mean()), 4)
+    return out
+
+
+def expected_calibration_error(
+    confidences: np.ndarray, correct: np.ndarray, bins: int = 10
+) -> float:
+    """ECE: trung bình |(độ đúng − độ tự tin)| theo bin, trọng số theo số mẫu.
+
+    Agreement cao nhưng ECE cao nghĩa là model quá tự tin vào nước sai — PPO lấy
+    mẫu ở T=1 sẽ đi sai nhiều hơn con số agreement gợi ý.
+    """
+    confidences = np.asarray(confidences, dtype=np.float64)
+    correct = np.asarray(correct, dtype=np.float64)
+    if confidences.size == 0:
+        return 0.0
+    edges = np.clip((confidences * bins).astype(int), 0, bins - 1)
+    total = 0.0
+    for b in range(bins):
+        keep = edges == b
+        if keep.any():
+            total += keep.mean() * abs(correct[keep].mean() - confidences[keep].mean())
+    return float(total)
+
+
+def _group_ece(
+    confidences: np.ndarray, correct: np.ndarray, groups: np.ndarray, names: list[str]
+) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for index in np.unique(groups):
+        keep = groups == index
+        name = names[int(index)] if int(index) < len(names) else str(index)
+        out[name] = round(expected_calibration_error(confidences[keep], correct[keep]), 4)
     return out
 
 
@@ -71,6 +117,7 @@ def evaluate(model: PolicyValueNet, data, device: torch.device) -> dict:
         correct = (predicted == actions).cpu().numpy()
         top2 = logits.topk(2, dim=1).indices
         in_top2 = (top2 == actions.unsqueeze(1)).any(dim=1).cpu().numpy()
+        confidences = torch.softmax(logits, dim=1).max(dim=1).values.cpu().numpy()
 
     # `agreementTieAware`: chấm đúng khi nước model chọn HOÀ đỉnh với teacher.
     # `agreement` chấm oan mọi nước hoà điểm mà teacher phá hoà bằng id thô —
@@ -90,6 +137,10 @@ def evaluate(model: PolicyValueNet, data, device: torch.device) -> dict:
         "agreementByRole": _group_means(correct, data.roles, data.meta["roles"]),
         "agreementByDecision": _group_means(
             correct, data.decisions, data.meta.get("decisions", [])
+        ),
+        "ece": round(expected_calibration_error(confidences, correct), 4),
+        "eceByDecision": _group_ece(
+            confidences, correct, data.decisions, data.meta.get("decisions", [])
         ),
     }
 
@@ -120,7 +171,30 @@ def main() -> None:
     parser.add_argument("--distill-tau", type=float, default=3.0)
     parser.add_argument("--seed", type=int, default=12345)
     parser.add_argument("--model-id", default="policy-v001")
+    # P0-2: tối ưu. Mặc định giữ hành vi cũ byte-một (adam, không lịch,
+    # không clip, không dừng sớm).
+    parser.add_argument("--optimizer", choices=("adam", "adamw"), default="adam")
+    parser.add_argument("--weight-decay", type=float, default=0.0)
+    parser.add_argument("--scheduler", choices=("none", "cosine"), default="none")
+    parser.add_argument("--warmup-epochs", type=int, default=0)
+    parser.add_argument("--grad-clip", type=float, default=0.0,
+                        help="0 = tắt (cũ); > 0 = clip grad norm mỗi batch")
+    parser.add_argument("--patience", type=int, default=0,
+                        help="0 = tắt (cũ); > 0 = dừng khi val không cải thiện N epoch liền")
+    # P0-1: kiến trúc (silu/LN export ra masoi-mlp-2, engine P1-1 đã chạy được).
+    parser.add_argument("--activation", default="relu")
+    parser.add_argument("--norm", default="none")
+    parser.add_argument("--init", choices=("default", "orthogonal"), default="default")
+    # Tách trunk value: value loss không giành sức chứa của policy; --value-weight
+    # dương chỉ có ý nghĩa với separate (shared giữ mặc định 0 như cũ).
+    parser.add_argument("--value-trunk", choices=("shared", "separate"), default="shared")
     args = parser.parse_args()
+
+    check_engine_config(args.activation, args.norm)
+    if args.scheduler == "cosine" and not (0 <= args.warmup_epochs < args.epochs):
+        raise ValueError(
+            f"--warmup-epochs phải trong [0, epochs): {args.warmup_epochs}/{args.epochs}"
+        )
 
     # §45/§46: cùng seed + cùng dataset phải cho cùng model.
     torch.manual_seed(args.seed)
@@ -133,8 +207,17 @@ def main() -> None:
     if len(train) == 0:
         raise SystemExit("tập train rỗng — kiểm lại ai:encode")
 
-    model = PolicyValueNet(full.obs_size, full.action_size, args.hidden).to(device)
-    optimiser = torch.optim.Adam(model.parameters(), lr=args.lr)
+    model = PolicyValueNet(
+        full.obs_size, full.action_size, args.hidden,
+        activation=args.activation, norm=args.norm, init=args.init,
+        value_trunk=args.value_trunk,
+    ).to(device)
+    if args.optimizer == "adamw":
+        optimiser = torch.optim.AdamW(
+            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+        )
+    else:
+        optimiser = torch.optim.Adam(model.parameters(), lr=args.lr)
     generator = torch.Generator().manual_seed(args.seed)
 
     features = torch.from_numpy(train.features).to(device)
@@ -169,7 +252,12 @@ def main() -> None:
     best_state = copy.deepcopy(model.state_dict())
     best_epoch = 0
     best_agreement = -1.0
+    since_best = 0
     for epoch in range(1, args.epochs + 1):
+        if args.scheduler == "cosine":
+            factor = lr_factor(epoch, args.epochs, args.warmup_epochs)
+            for group in optimiser.param_groups:
+                group["lr"] = args.lr * factor
         model.train()
         total = 0.0
         seen = 0
@@ -198,6 +286,8 @@ def main() -> None:
 
             optimiser.zero_grad()
             loss.backward()
+            if args.grad_clip > 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
             optimiser.step()
 
             total += float(loss.item()) * len(index)
@@ -215,11 +305,17 @@ def main() -> None:
             best_agreement = agreement
             best_epoch = epoch
             best_state = copy.deepcopy(model.state_dict())
+            since_best = 0
+        else:
+            since_best += 1
         print(
             f"epoch {epoch:>3}  loss {row['trainLoss']:.4f}"
             f"  val agreement {row.get('val_agreement', float('nan'))}"
             f"  tie-aware {row.get('val_agreementTieAware')}"
         )
+        if args.patience > 0 and since_best >= args.patience:
+            print(f"dừng sớm: val không cải thiện {since_best} epoch liền (patience {args.patience})")
+            break
 
     if best_epoch > 0:
         model.load_state_dict(best_state)
@@ -271,6 +367,16 @@ def main() -> None:
             "valueWeight": args.value_weight,
             "distillAlpha": args.distill_alpha,
             "distillTau": args.distill_tau,
+            "optimizer": args.optimizer,
+            "weightDecay": args.weight_decay,
+            "scheduler": args.scheduler,
+            "warmupEpochs": args.warmup_epochs,
+            "gradClip": args.grad_clip,
+            "patience": args.patience,
+            "activation": args.activation,
+            "norm": args.norm,
+            "init": args.init,
+            "valueTrunk": args.value_trunk,
         },
         "obsSize": full.obs_size,
         "actionSize": full.action_size,

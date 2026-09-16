@@ -36,3 +36,33 @@ with torch.no_grad():
 w["parity"] = {"input": x, "logits": logits[0].tolist(), "value": float(value[0])}
 out.write_text(json.dumps(w, indent=1), encoding="utf8")
 print("wrote", out)
+
+# P1-1: fixture v2 (silu + layernorm) — test TS so outputs torch 1e-6.
+torch.manual_seed(2027)
+model2 = PolicyValueNet(4, 5, 3, activation="silu", norm="layernorm").eval()
+out2 = out.parent / "mlp-parity-v2.json"
+tmp2 = out2.with_suffix(".tmp.json")
+export_weights_json(model2, meta, tmp2, model_id="fixture-v2", training_seed=2027, hidden=3)
+w2 = json.loads(tmp2.read_text(encoding="utf8"))
+tmp2.unlink()
+assert w2["format"] == "masoi-mlp-2", w2.get("format")
+with torch.no_grad():
+    logits2, value2 = model2(torch.tensor([x]))
+w2["parity"] = {"input": x, "logits": logits2[0].tolist(), "value": float(value2[0])}
+out2.write_text(json.dumps(w2, indent=1), encoding="utf8")
+print("wrote", out2)
+
+# Tách trunk value: value đi đường riêng — test TS so outputs torch 1e-6.
+torch.manual_seed(2028)
+model3 = PolicyValueNet(4, 5, 3, value_trunk="separate").eval()
+out3 = out.parent / "mlp-parity-v3.json"
+tmp3 = out3.with_suffix(".tmp.json")
+export_weights_json(model3, meta, tmp3, model_id="fixture-v3", training_seed=2028, hidden=3)
+w3 = json.loads(tmp3.read_text(encoding="utf8"))
+tmp3.unlink()
+assert w3["format"] == "masoi-mlp-2" and w3.get("valueTrunk") == "separate", w3
+with torch.no_grad():
+    logits3, value3 = model3(torch.tensor([x]))
+w3["parity"] = {"input": x, "logits": logits3[0].tolist(), "value": float(value3[0])}
+out3.write_text(json.dumps(w3, indent=1), encoding="utf8")
+print("wrote", out3)

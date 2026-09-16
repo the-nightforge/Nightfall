@@ -13,6 +13,16 @@ const fixture = JSON.parse(
   readFileSync(resolve(__dirname, "fixtures/mlp-parity.json"), "utf8"),
 ) as MlpWeightsJson & { parity: { input: number[]; logits: number[]; value: number } };
 
+/** P1-1: fixture silu + layernorm do `tests/make_mlp_fixture.py` sinh. */
+const fixtureV2 = JSON.parse(
+  readFileSync(resolve(__dirname, "fixtures/mlp-parity-v2.json"), "utf8"),
+) as MlpWeightsJson & { parity: { input: number[]; logits: number[]; value: number } };
+
+/** Tách trunk value: value đi đường riêng. */
+const fixtureV3 = JSON.parse(
+  readFileSync(resolve(__dirname, "fixtures/mlp-parity-v3.json"), "utf8"),
+) as MlpWeightsJson & { parity: { input: number[]; logits: number[]; value: number } };
+
 /** Trọng số 0 với đúng chiều của encoder hiện tại — chỉ để kiểm validate. */
 function zeroWeights(): MlpWeightsJson {
   const obs = observationSize();
@@ -48,6 +58,20 @@ describe("mlpForward", () => {
     expect(mlpForward(fixture, fixture.parity.input)).toEqual(
       mlpForward(fixture, fixture.parity.input),
     );
+  });
+
+  it("v2 khớp torch trên fixture silu+layernorm (sai số 1e-6)", () => {
+    const { logits, value } = mlpForward(fixtureV2, fixtureV2.parity.input);
+    expect(logits).toHaveLength(5);
+    for (let i = 0; i < 5; i += 1) expect(logits[i]).toBeCloseTo(fixtureV2.parity.logits[i]!, 6);
+    expect(value).toBeCloseTo(fixtureV2.parity.value, 6);
+  });
+
+  it("v2-separate khớp torch khi value đi trunk riêng (sai số 1e-6)", () => {
+    const { logits, value } = mlpForward(fixtureV3, fixtureV3.parity.input);
+    expect(logits).toHaveLength(5);
+    for (let i = 0; i < 5; i += 1) expect(logits[i]).toBeCloseTo(fixtureV3.parity.logits[i]!, 6);
+    expect(value).toBeCloseTo(fixtureV3.parity.value, 6);
   });
 });
 
@@ -87,5 +111,55 @@ describe("loadMlpPolicy", () => {
   it("TỪ CHỐI input sai chiều lúc gọi", () => {
     const policy = loadMlpPolicy(zeroWeights());
     expect(() => policy.logits([1, 2, 3])).toThrow(/chiều/);
+  });
+
+  it("v2: nạp silu+layernorm, activation/norm lạ hoặc thiếu normLayers thì TỪ CHỐI", () => {
+    // Fixture parity (obs 4) không qua được schema-check của encoder thật theo
+    // thiết kế — dựng weights v2 đúng chiều encoder để kiểm loadMlpPolicy.
+    const v2weights = (): MlpWeightsJson => ({
+      ...zeroWeights(),
+      format: "masoi-mlp-2",
+      activation: "silu",
+      norm: "layernorm",
+      normLayers: [
+        { w: [1, 1], b: [0, 0] },
+        { w: [1, 1], b: [0, 0] },
+      ],
+    });
+    const v2 = loadMlpPolicy(v2weights());
+    expect(v2.logits(new Array<number>(observationSize()).fill(0))).toHaveLength(actionSize());
+    expect(() => loadMlpPolicy({ ...v2weights(), activation: "gelu" })).toThrow(/activation/);
+    expect(() => loadMlpPolicy({ ...v2weights(), norm: "batchnorm" })).toThrow(/norm/);
+    const noNorm = { ...v2weights() } as Record<string, unknown>;
+    delete noNorm["normLayers"];
+    expect(() => loadMlpPolicy(noNorm)).toThrow(/normLayers/);
+  });
+
+  it("v2-separate: thiếu/sai valueLayers (hoặc valueNormLayers khi layernorm) thì TỪ CHỐI", () => {
+    const sep = (): MlpWeightsJson => {
+      const base = zeroWeights();
+      const zeros = (rows: number, cols: number): number[][] =>
+        Array.from({ length: rows }, () => new Array<number>(cols).fill(0));
+      return {
+        ...base,
+        format: "masoi-mlp-2",
+        valueTrunk: "separate",
+        valueLayers: [
+          { w: zeros(2, base.obsSize), b: [0, 0] },
+          { w: zeros(2, 2), b: [0, 0] },
+        ],
+      };
+    };
+    const loaded = loadMlpPolicy(sep());
+    expect(loaded.logits(new Array<number>(observationSize()).fill(0))).toHaveLength(
+      actionSize(),
+    );
+    const missing = { ...sep() } as Record<string, unknown>;
+    delete missing["valueLayers"];
+    expect(() => loadMlpPolicy(missing)).toThrow(/valueLayers/);
+    const bad = sep();
+    bad.valueLayers = [{ w: [[1]], b: [0] }, bad.valueLayers![1]!];
+    expect(() => loadMlpPolicy(bad)).toThrow(/valueLayers/);
+    expect(() => loadMlpPolicy({ ...sep(), valueTrunk: "split" })).toThrow(/valueTrunk/);
   });
 });
