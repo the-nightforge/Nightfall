@@ -624,28 +624,101 @@ function markerIndex(clause: Clause, marker: string): { index: number; text: str
   return asciiIndex === -1 ? null : { index: asciiIndex, text: clause.ascii };
 }
 
+/** Cụm phủ định mở một lời phản bác. Dạng CŨ, nhận ở mọi cấu hình. */
+const COUNTER_DENIALS: readonly string[] = [" không thể là "];
+
+/**
+ * Cụm phủ định chỉ nhận khi `claim.counterClaimLoose` bật.
+ *
+ * Đây là những gì người thật gõ ("An đâu phải tt"), và cũng là thứ cho phép lời
+ * phản bác thôi là một khuôn duy nhất. Dạng không dấu do `markerIndex` lo.
+ */
+const COUNTER_DENIALS_LOOSE: readonly string[] = [
+  " không phải là ",
+  " không phải ",
+  " đâu phải là ",
+  " đâu phải ",
+  " ko phải là ",
+  " ko phải ",
+  " k phải ",
+  " hok phải ",
+];
+
+/** Cụm tự nhận RÕ RÀNG: chỉ có một nghĩa, nên không đòi vai trùng. */
+const COUNTER_SELF: readonly string[] = ["tôi mới là "];
+
+/** Cùng nghĩa, chỉ nhận khi nới. */
+const COUNTER_SELF_LOOSE: readonly string[] = [
+  "t mới là ",
+  "tui mới là ",
+  "mình mới là ",
+  "tớ mới là ",
+  "tôi mới đúng là ",
+  "chính tôi là ",
+];
+
+/**
+ * Cụm tự nhận MƠ HỒ: "tôi là" cũng là cách khai vai bình thường, nên nó chỉ
+ * thành phản bác khi vai bị phủ định TRÙNG vai tự nhận. Không có luật đó thì
+ * "An không phải sói, tôi là dân" - bênh người rồi khai vai - đọc thành một lời
+ * phản bác nhắm An.
+ */
+const COUNTER_SELF_AMBIGUOUS: readonly string[] = ["tôi là ", "t là ", "mình là "];
+
+/** Mẫu ĐẦU TIÊN trong danh sách có mặt trong câu, kèm chính mẫu đó. */
+function firstMarker(
+  whole: Clause,
+  markers: readonly string[],
+): { index: number; text: string; marker: string } | null {
+  for (const marker of markers) {
+    const found = markerIndex(whole, marker);
+    if (found) return { ...found, marker };
+  }
+  return null;
+}
+
+/** Vai nêu NGAY SAU một mẫu, hoặc `null`. */
+function roleAfter(found: { index: number; text: string; marker: string }): Role | null {
+  return roleAtStart(clauseOf(found.text.slice(found.index + found.marker.length).trim()));
+}
+
 /**
  * Phản bác: "<tên> không thể là <role>, tôi mới là <role>".
  *
  * Mẫu này được so trên CẢ tin nhắn chứ không theo mệnh đề, vì hai vế của nó nằm
  * hai bên dấu phẩy. Nó cũng là mẫu duy nhất được phép chứa từ phủ định, vì phủ
  * định chính là nội dung của nó.
+ *
+ * `claim.counterClaimLoose` nới danh sách cụm được nhận - xem bốn hằng số trên.
+ * Tắt thì hàm này đọc đúng một khuôn như trước, từng bit.
  */
 function parseCounterClaim(
   whole: Clause,
   players: readonly BotPlayerKnowledge[],
+  weights: BotWeights,
 ): ParsedSpeech | null {
-  const denied = markerIndex(whole, " không thể là ");
-  if (!denied) return null;
-  const counter = markerIndex(whole, "tôi mới là ");
-  if (!counter) return null;
+  const loose = weights.claim.counterClaimLoose > 0;
 
+  const denied = firstMarker(
+    whole,
+    loose ? [...COUNTER_DENIALS, ...COUNTER_DENIALS_LOOSE] : COUNTER_DENIALS,
+  );
+  if (!denied) return null;
   const target = resolveTarget(denied.text.slice(0, denied.index), players);
-  const rest = counter.text.slice(counter.index + "tôi mới là ".length).trim();
-  const role = roleAtStart({ plain: rest, ascii: asciiForm(rest) });
-  return target && role
-    ? { type: "COUNTER_CLAIM", targetId: target.id, data: { role } }
-    : null;
+  if (!target) return null;
+
+  const explicit = firstMarker(whole, loose ? [...COUNTER_SELF, ...COUNTER_SELF_LOOSE] : COUNTER_SELF);
+  const ambiguous = explicit !== null || !loose ? null : firstMarker(whole, COUNTER_SELF_AMBIGUOUS);
+  const self = explicit ?? ambiguous;
+  if (!self) return null;
+
+  const role = roleAfter(self);
+  if (!role) return null;
+  // Chỉ cụm mơ hồ mới đòi vai trùng; cụm rõ ràng giữ nguyên nghĩa cũ, kể cả khi
+  // người phản bác nhận một vai khác vai vừa bị phủ định.
+  if (ambiguous !== null && roleAfter(denied) !== role) return null;
+
+  return { type: "COUNTER_CLAIM", targetId: target.id, data: { role } };
 }
 
 function parseClause(
@@ -889,7 +962,7 @@ export function analyzeChat(
     const addressed = parseDirectAddress(whole, message.text, message.actorId, players);
     if (addressed) push(message, addressed);
 
-    const counterClaim = parseCounterClaim(whole, players);
+    const counterClaim = parseCounterClaim(whole, players, weights);
     if (counterClaim) {
       push(message, counterClaim);
       continue;

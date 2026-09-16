@@ -797,6 +797,16 @@ export interface ClaimWeights {
    * khai vẫn ra "Ép tôi lộ ra thì đây" dù chưa ai ép.
    */
   claimToneByKind: number;
+  /**
+   * Nới danh sách cụm mà `parseCounterClaim` đọc được. `0` TẮT - đúng một khuôn,
+   * " không thể là " cộng "tôi mới là ".
+   *
+   * Khuôn duy nhất đó là lý do mọi lời phản bác của bot đọc lên y như nhau: câu
+   * dẫn trong prompt phải ép đúng dạng ấy, nếu không cổng
+   * `claimSurvivesRoundTrip` từ chối chính câu nó vừa gợi ý. Nó cũng là lý do
+   * "An đâu phải tt, t mới là tt" của người thật không bot nào đọc ra.
+   */
+  counterClaimLoose: number;
 }
 
 export interface LookAheadWeights {
@@ -1363,6 +1373,8 @@ export const BOT_WEIGHTS_V1: BotWeights = Object.freeze({
     profilePriorStrength: 2,
     // Tắt ở mọi bản tới v33; v37 bật. Xem `ClaimWeights`.
     claimToneByKind: 0,
+    // Tắt tới v37; v38 bật.
+    counterClaimLoose: 0,
   }),
 
   /**
@@ -1640,6 +1652,8 @@ export const BOT_WEIGHTS_V4: BotWeights = Object.freeze({
     profilePriorStrength: 2,
     // Tắt ở mọi bản tới v33; v37 bật. Xem `ClaimWeights`.
     claimToneByKind: 0,
+    // Tắt tới v37; v38 bật.
+    counterClaimLoose: 0,
   }),
 });
 
@@ -2566,6 +2580,33 @@ export const BOT_WEIGHTS_V37: BotWeights = Object.freeze({
 });
 
 /**
+ * v38.0.0 (COMMUNICATION): v37 + `claim.counterClaimLoose = 1`.
+ *
+ * `parseCounterClaim` thôi đòi đúng một khuôn. Phủ định nhận thêm "không phải",
+ * "đâu phải", "ko/k/hok phải"; vế tự nhận nhận thêm "t mới là", "mình mới là",
+ * "chính tôi là"; và "tôi là" cũng thành phản bác khi vai bị phủ định TRÙNG vai
+ * tự nhận.
+ *
+ * Hai thứ nó mở ra. Một, người thật gõ "An đâu phải tt, t mới là tt" thì bot đọc
+ * ra - trước đây câu đó vô hình. Hai, câu dẫn trong prompt thôi phải ép một khuôn
+ * duy nhất, thứ làm mọi lời phản bác của bot đọc lên y như nhau; cổng
+ * `claimSurvivesRoundTrip` đọc lại bằng `analyzeChat` với bộ trọng số MẶC ĐỊNH,
+ * nên prompt chỉ được nới sau khi bản này thành mặc định.
+ *
+ * Bảng mẫu câu giữ nguyên khuôn cũ, nên ván bot-đấu-bot gần như không đổi: đo
+ * 5×1.000 ván chỉ để chứng minh không gây hại.
+ */
+export const BOT_WEIGHTS_V38: BotWeights = Object.freeze({
+  ...BOT_WEIGHTS_V37,
+  version: "38.0.0",
+
+  claim: Object.freeze({
+    ...BOT_WEIGHTS_V37.claim,
+    counterClaimLoose: 1,
+  }),
+});
+
+/**
  * Cấu hình đang dùng cho production.
  *
  * Mọi API nhận `weights` đều mặc định về hằng số này, nên không call site nào
@@ -2730,5 +2771,18 @@ export const BOT_WEIGHTS_V37: BotWeights = Object.freeze({
   * Mọi chỉ số |z| < 1, 0 violation trên 10 batch - đúng như một ô chỉ đổi câu
   * chữ phải cho ra. Ba bản cùng đợt (nói tên người bị chỉ mặt, ngưỡng "sắp bị
   * treo") đã trượt và bị xoá; xem chú thích `BOT_WEIGHTS_V37`.
+  *
+  * v38.0.0 (COMMUNICATION) bật `claim.counterClaimLoose = 1`: `parseCounterClaim`
+  * thôi đòi đúng một khuôn (" không thể là " + "tôi mới là "). Nó nhận thêm
+  * "không phải", "đâu phải", "ko/k/hok phải" ở vế phủ định; "t mới là",
+  * "mình mới là", "chính tôi là" ở vế tự nhận; và "tôi là" khi vai bị phủ định
+  * TRÙNG vai tự nhận.
+  *
+  * Protocol 5×1.000 ván paired seeds so v37: MỌI chỉ số delta đúng 0,00, cả 5
+  * batch 0,00. Đó là kết quả đúng chứ không phải một lần đo hỏng - bảng mẫu câu
+  * của bot vẫn viết khuôn cũ, nên ván bot-đấu-bot không đổi một bit. Ô này mở ra
+  * hai thứ mà self-play không đo được: người thật gõ "An đâu phải tt, t mới là
+  * tt" thì bot đọc ra (probe 9/9 cách gõ, 0 ca đọc nhầm trên 7 câu không phải
+  * phản bác), và câu dẫn trong prompt thôi phải ép một khuôn duy nhất.
   */
-export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V37;
+export const DEFAULT_BOT_WEIGHTS: BotWeights = BOT_WEIGHTS_V38;

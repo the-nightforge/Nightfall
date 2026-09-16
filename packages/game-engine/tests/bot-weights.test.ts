@@ -708,8 +708,13 @@ describe("v2 là cấu hình production", () => {
     // v37 (COMMUNICATION) cho lời tự khai và lời phản bác thôi đọc như bị ép
     // (`claim.claimToneByKind = 1`). Chỉ đổi câu chữ: 5×1.000 ván paired seeds
     // so v33, mọi chỉ số |z| < 1.
-    expect(DEFAULT_BOT_WEIGHTS.version).toBe("37.0.0");
-    expect(weightsPreset("37.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
+    //
+    // v38 (COMMUNICATION) nới cách gõ phản bác mà parser đọc được
+    // (`claim.counterClaimLoose = 1`). Self-play không đổi một bit - bảng mẫu
+    // câu vẫn viết khuôn cũ - nên 5×1.000 ván cho delta 0,00 ở mọi chỉ số; cái
+    // nó mở ra là câu của NGƯỜI THẬT và câu ngắn hơn cho nhà cung cấp.
+    expect(DEFAULT_BOT_WEIGHTS.version).toBe("38.0.0");
+    expect(weightsPreset("38.0.0")).toBe(DEFAULT_BOT_WEIGHTS);
     expect(weightsPreset("29.0.0")).toBe(BOT_WEIGHTS_V29);
     expect(weightsPreset("21.0.0")).toBe(BOT_WEIGHTS_V21);
     expect(weightsPreset("18.0.0")).toBe(BOT_WEIGHTS_V18);
