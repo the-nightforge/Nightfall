@@ -311,6 +311,14 @@ export function formatReportText(report: SelfPlayReport): string {
     `  Im lặng                  ${pct(m.silenceRate)}`,
     `  Dùng mẫu câu             ${pct(m.fromTemplateRate)}`,
     `  Giọng chat               ${pct(m.casualToneRate)}${flag(m.casualToneRate, 0.7, "dưới")}`,
+    // Ngưỡng 0,95 chứ không 0,8: đây không phải một chỉ số CHẤT LƯỢNG có vùng
+    // xám, nó là một hợp đồng. Một lượt nói không đọc ngược được là một lượt
+    // nói KHÔNG XẢY RA với phần còn lại của bàn, và bảng mẫu đã có test khoá ở
+    // 1,0 - nên bất cứ con số nào dưới đây cũng là một câu hỏi cần trả lời.
+    `  Người nghe đọc ra        ${pct(m.speechHeardRate)}${flag(m.speechHeardRate, 0.95, "dưới")}`,
+    ...Object.entries(m.speechHeardByKind)
+      .filter(([, value]) => (value.value ?? 1) < 1)
+      .map(([kind, value]) => `    ${kind.toLowerCase().padEnd(22)} ${pct(value)}`),
     `  Tin/BOT/ngày             ${m.messagesPerBotPerDay === null ? "n/a" : m.messagesPerBotPerDay.toFixed(2)}${
       (m.messagesPerBotPerDay ?? 0) > 3 ? "  ⚠ vượt hạn mức" : ""
     }`,

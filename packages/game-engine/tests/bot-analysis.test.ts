@@ -1258,3 +1258,87 @@ describe("DEFENSE_QUALITY: chất lượng lời bào chữa", () => {
     expect(draws).toBe(0);
   });
 });
+
+/**
+ * Câu BOT tự phát ra có được chính parser đọc lại thành đúng loại không.
+ *
+ * Đây là hợp đồng mà cả hai đầu của hệ đều dựa vào, và trước đây không ai canh:
+ * bot khác chỉ biết một lời tố qua `analyzeChat`, không qua `BotSpeechIntention`.
+ * Một câu ACCUSE không đọc ngược ra `ACCUSE` là một lời tố không ai nghe thấy -
+ * belief không dịch, và vector observation mà tầng train đọc được dựng từ đúng
+ * belief đó.
+ *
+ * Đo trên 60 ván self-play trước khi nới bảng từ: ACCUSE 16%, DEFEND 39%.
+ * Mỗi `it` dưới đây là một nhóm câu có thật trong log ván.
+ */
+describe("lời bot phát ra phải đọc ngược được", () => {
+  const players: BotPlayerKnowledge[] = [
+    { id: "a", name: "An", alive: true },
+    { id: "b", name: "Bình", alive: true },
+    { id: "c", name: "Chi", alive: true },
+  ];
+
+  function read(text: string) {
+    return analyzeChat([{ id: "m1", actorId: "a", text, at: 0 }], players);
+  }
+
+  function types(text: string): string[] {
+    return read(text).map((item) => item.type);
+  }
+
+  it("tiếng lóng 'lươn' là một lời tố", () => {
+    for (const text of ["Bình lươn vl", "Bình đang lươn quá đấy", "Bình lươn lẹo"]) {
+      expect(read(text), text).toEqual([
+        expect.objectContaining({ type: "ACCUSE", targetId: "b" }),
+      ]);
+    }
+  });
+
+  it("'chứ ai nữa' là một lời tố", () => {
+    // Có "ai" - một `QUESTION_WORD` - nên trước đây câu này CHỈ đọc ra
+    // DIRECT_QUESTION: một lời tố biến thành một câu hỏi.
+    //
+    // `toContainEqual` chứ không `toEqual`: `analyzeChat` vẫn kèm memory của
+    // `parseDirectAddress` như với mọi câu nêu tên. Hợp đồng ở đây là "lời tố
+    // có được nghe không", không phải "câu này sinh ra đúng một memory".
+    expect(read("Bình chứ ai nữa")).toContainEqual(
+      expect.objectContaining({ type: "ACCUSE", targetId: "b" }),
+    );
+  });
+
+  it("'bầu' và 'chọn' là hai cách nói phiếu, ngang với 'vote'", () => {
+    for (const text of ["tôi bầu Bình", "tôi chọn Bình", "bầu Bình đi"]) {
+      expect(read(text), text).toContainEqual(
+        expect.objectContaining({ type: "ACCUSE", targetId: "b" }),
+      );
+    }
+  });
+
+  it("'ổn' / 'hiền' là lời bênh, và phủ định chúng là lời tố", () => {
+    for (const text of ["tôi thấy Bình ổn mà", "Bình hiền mà"]) {
+      expect(read(text), text).toEqual([
+        expect.objectContaining({ type: "DEFEND", targetId: "b" }),
+      ]);
+    }
+    expect(read("Bình không ổn")).toEqual([
+      expect.objectContaining({ type: "ACCUSE", targetId: "b" }),
+    ]);
+  });
+
+  it("'chưa có gì lạ' là lời bênh, không phải câu hỏi", () => {
+    // Trước đây "gì" bật `asking` nên cả nhóm câu này đọc thành DIRECT_QUESTION
+    // nhắm vào chính người đang được bênh - đảo hẳn dấu của tín hiệu.
+    for (const text of ["Bình chưa có gì lạ", "Bình chưa có gì đâu"]) {
+      expect(types(text), text).not.toContain("DIRECT_QUESTION");
+    }
+  });
+
+  it("nhưng 'gì' ở CUỐI câu vẫn là từ để hỏi", () => {
+    // Ranh giới của cổng trên. `hasNegation` coi "gì" cuối câu là tiểu từ phủ
+    // định, nên hỏi nó ở đây là tự hỏi chính "gì"; cổng phải hỏi
+    // `hasNegationWord`. Dùng nhầm hàm thì 9% QUESTION im tiếng.
+    for (const text of ["Bình kể xem thấy gì", "Bình nghĩ gì"]) {
+      expect(types(text), text).toContain("DIRECT_QUESTION");
+    }
+  });
+});

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ROLES, ROLE_META, type Role } from "@masoi/shared";
 import { analyzeChat } from "../src/bot/analysis/chat-analysis";
+import { HEARD_AS, speechIsHeard } from "../src/bot/analysis/speech-heard";
 import { BOT_WEIGHTS_V3, BOT_WEIGHTS_V4 } from "../src/bot/config/weights";
 import { SPEECH_TEMPLATES, renderSpeechTemplate } from "../src/bot/conversation/templates";
 import { planSpeech } from "../src/bot/conversation/speech-planner";
@@ -14,6 +15,7 @@ import {
   type BotDecisionContext,
   type BotMemory,
   type BotSpeechIntention,
+  type BotSpeechKind,
 } from "../src/bot/types";
 
 const PLAYERS = [
@@ -103,6 +105,68 @@ describe("mẫu câu khai vai đọc ngược được", () => {
 function fillRaw(template: string, role: Role, target = "Bình"): string {
   return template.replaceAll("{role}", ROLE_META[role].name).replaceAll("{target}", target);
 }
+
+/**
+ * Sáu loại nói còn lại có mục tiêu, và cùng một hợp đồng với CLAIM_ROLE /
+ * COUNTER_CLAIM ở khối dưới: câu phát ra phải đọc ngược được thành đúng loại
+ * memory mà lõi vừa chốt.
+ *
+ * Vì sao hợp đồng này bắt buộc: BOT khác chỉ biết một lời tố qua `analyzeChat`,
+ * không qua `BotSpeechIntention`. Một mẫu ACCUSE mà parser đọc ra rỗng là một
+ * lời tố KHÔNG AI NGHE THẤY - belief cả bàn không dịch, và vector observation
+ * mà tầng train đọc được dựng từ đúng belief đó. Trước khi có khối này, đo trên
+ * 60 ván self-play: ACCUSE 16%, DEFEND 39%, REPLY 23%.
+ *
+ * Quét THẲNG bảng mẫu, không qua `renderSpeechTemplate`: chỉ số mẫu là hash
+ * nên đi đường đó thì phần lớn bể không bao giờ được chạm. Độ phủ ở đây là
+ * CẤU TRÚC - thêm một mẫu vào bảng là tự động bị quét.
+ */
+/**
+ * Hai chuỗi bằng chứng, và chuỗi thứ hai KHÔNG phải để cho đủ bộ.
+ *
+ * `{evidence}` là văn bản tự do do `analyzeVoteRecap` sinh, và một phần trong
+ * đó mang từ phủ định ("3 vòng liền KHÔNG ai đụng tới"). Một mệnh đề có phủ
+ * định thì `parseClause` nhường cho `parseNegatedClause`, mà hàm đó chỉ đọc
+ * nhãn có phủ định chen GIỮA tên và nhãn - nên một dấu hiệu tố nằm CÙNG mệnh
+ * đề với `{evidence}` bị nuốt theo, dù bản thân mẫu hoàn toàn đúng.
+ *
+ * Quét với một chuỗi bằng chứng "hiền" thì cả bảng xanh và lỗi này vô hình.
+ * Nó đã lọt ra tới một batch 10.002 ván thật: 40/257.516 lượt ACCUSE mất
+ * tiếng, tất cả từ 4 mẫu có `{evidence}` chung mệnh đề với nhãn.
+ */
+const EVIDENCE_FILLERS = [
+  "đổi phiếu sát giờ chót",
+  "3 vòng liền không ai đụng tới",
+] as const;
+
+function fillTargeted(template: string, evidence: string): string {
+  return template
+    .replaceAll("{target}", "Bình")
+    .replaceAll("{author}", "Bình")
+    .replaceAll("{evidence}", evidence);
+}
+
+describe("mẫu của loại nói CÓ MỤC TIÊU đọc ngược được, quét trực tiếp", () => {
+  // Bảng "loại nói -> loại memory" KHÔNG chép lại ở đây: `speechIsHeard` là
+  // cùng hàm mà self-play đóng dấu `heard` và server chấm câu của nhà cung
+  // cấp. Một bản sao trong test sẽ xanh trong khi ba nơi kia đã trôi đi mất.
+  for (const kind of Object.keys(HEARD_AS) as BotSpeechKind[]) {
+    if (kind === "CLAIM_ROLE" || kind === "COUNTER_CLAIM") continue; // đã quét ở khối dưới
+    for (const [tone, pool] of Object.entries(SPEECH_TEMPLATES[kind])) {
+      (pool ?? []).forEach((template: string, index: number) => {
+        it(`${kind} ${tone}[${index}] đọc ngược ra ${HEARD_AS[kind]!.join("/")}`, () => {
+          for (const evidence of EVIDENCE_FILLERS) {
+            const text = fillTargeted(template, evidence);
+            // `speechIsHeard` đã tự loại chiều NGƯỢC DẤU: một mẫu BÊNH mà đọc
+            // ra lời TỐ trả `false` kể cả khi nó cũng đọc ra `DEFEND`. Đã bắt
+            // được một mẫu thật theo đúng đường đó.
+            expect(speechIsHeard(kind, text, "p1", PLAYERS), text).toBe(true);
+          }
+        });
+      });
+    }
+  }
+});
 
 describe("mọi mẫu trong SPEECH_TEMPLATES đọc ngược được, quét trực tiếp", () => {
   for (const role of ROLES) {

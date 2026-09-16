@@ -328,6 +328,23 @@
       "numerator": 0,
       "denominator": 0
     },
+    "speechHeardRate": {
+      "value": 1,
+      "numerator": 126,
+      "denominator": 126
+    },
+    "speechHeardByKind": {
+      "ACCUSE": {
+        "value": 1,
+        "numerator": 61,
+        "denominator": 61
+      },
+      "QUESTION": {
+        "value": 1,
+        "numerator": 65,
+        "denominator": 65
+      }
+    },
     "claimsPerGame": 0,
     "counterClaimRate": {
       "value": 0,
@@ -350,8 +367,8 @@
       "denominator": 0
     },
     "humanAccuseSeenRate": {
-      "value": 0.8823529411764706,
-      "numerator": 60,
+      "value": 0.8970588235294118,
+      "numerator": 61,
       "denominator": 68
     },
     "humanDefendSeenRate": {

@@ -321,7 +321,14 @@ export function planSpeech(input: SpeechPlanInput): BotSpeechIntention | null {
         .filter((item) => item.kind === "SEER_RESULT_WOLF")
         .slice(0, weights.limits.intentionEvidence)
         .map((item) => ({ ...item })),
-      tone: toneFor("ACCUSE", style),
+      // `claimToneByKind`: chỉ lời khai lúc bị dồn mới được căng. Giọng không nằm
+      // trong vân tay ngữ nghĩa nên ô này chỉ đổi câu chữ, không đổi lượt rút nào.
+      tone:
+        weights.claim.claimToneByKind > 0 && claim.kind !== "UNDER_FIRE"
+          ? style.harshness >= 0.6
+            ? "FIRM"
+            : "NEUTRAL"
+          : toneFor("ACCUSE", style),
       reason: claim.reason,
     });
     if (intention) return intention;

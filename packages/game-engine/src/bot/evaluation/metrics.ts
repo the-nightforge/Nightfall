@@ -308,6 +308,24 @@ export interface SelfPlayMetrics {
    * chết. Self-play toàn bảng mẫu nên `null`.
    */
   casualToneRateProvider: Ratio;
+  /**
+   * Câu mà một người NGHE đọc ra đúng việc lõi vừa chốt - trên những loại nói
+   * có mục tiêu (xem `analysis/speech-heard.ts`; các loại khác không vào mẫu số).
+   *
+   * Vì sao nó phải nằm trong báo cáo chứ không chỉ trong test: BOT khác biết
+   * một lời tố qua `analyzeChat`, không qua `BotSpeechIntention`. Con số này
+   * tụt nghĩa là cả tầng thảo luận đang tắt tiếng - belief không dịch, phiếu
+   * không đổi - trong khi mọi chỉ số còn lại của báo cáo vẫn đẹp, vì người đọc
+   * chat vẫn thấy BOT nói.
+   *
+   * Đo được trước khi bảng mẫu được sửa: ACCUSE 0,16 · DEFEND 0,39 · REPLY 0,23.
+   * Test sweep đã khoá bảng mẫu ở 1,0, nhưng nó quét mẫu THÔ với một bộ tên cố
+   * định; con số này đi qua `humanize` (typo, rớt dấu) và tên thật của ván -
+   * đúng hai thứ đã từng làm một lượt ACCUSE đi lạc mà không test nào thấy.
+   */
+  speechHeardRate: Ratio;
+  /** `speechHeardRate` tách theo loại nói. Ô vắng mặt = loại đó không có mẫu nào. */
+  speechHeardByKind: Record<string, Ratio>;
 
   // ---- Lời khai vai (Phase 5) ----
 
@@ -509,6 +527,9 @@ export function collectMetrics(
   let openingRepeats = 0;
   let distinctOpenings = 0;
   let fromTemplateCount = 0;
+  let heardTotal = 0;
+  let heardCount = 0;
+  const heardByKind = new Map<string, { heard: number; total: number }>();
   let sameTargetRuns = 0;
   let replies = 0;
   // Mẫu số / tử số của `wolfBluffBelievedRate` (§17).
@@ -972,6 +993,17 @@ export function collectMetrics(
         // self-play cũ, tức bảng mẫu.
         if (event.fromTemplate !== false) fromTemplateCount += 1;
         if (looksCasual(event.text)) casualLines += 1;
+        // `null` = loại nói không nói thay lõi; `undefined` = bản ghi cũ chưa
+        // có trường này. Cả hai đều KHÔNG vào mẫu số: một ô trống đếm thành 0
+        // sẽ báo "bot đang tắt tiếng" cho một báo cáo chỉ đơn giản là cũ.
+        if (event.heard !== null && event.heard !== undefined) {
+          heardTotal += 1;
+          if (event.heard) heardCount += 1;
+          const bucket = heardByKind.get(event.speech) ?? { heard: 0, total: 0 };
+          bucket.total += 1;
+          if (event.heard) bucket.heard += 1;
+          heardByKind.set(event.speech, bucket);
+        }
         if (event.fromTemplate === false) {
           providerLines += 1;
           if (looksCasual(event.text)) casualProviderLines += 1;
@@ -1160,6 +1192,12 @@ export function collectMetrics(
     fromTemplateRate: ratio(fromTemplateCount, speechTotal),
     casualToneRate: ratio(casualLines, speechTotal),
     casualToneRateProvider: ratio(casualProviderLines, providerLines),
+    speechHeardRate: ratio(heardCount, heardTotal),
+    speechHeardByKind: Object.fromEntries(
+      [...heardByKind.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([kind, bucket]) => [kind, ratio(bucket.heard, bucket.total)]),
+    ),
 
     claimsPerGame: mean(claimCounts),
     counterClaimRate: ratio(counterClaimGames, games.length),

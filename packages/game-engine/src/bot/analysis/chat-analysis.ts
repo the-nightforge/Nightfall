@@ -174,7 +174,7 @@ const SUSPECT_MARKERS = ["tôi nghi ", "t nghi ", "tui nghi ", "mình nghi ", "t
 const INNOCENCE_ASCII = ["dan", "sach", "vo toi", "trong", "ok", "oke", "tot", "an toan", "uy tin", "that"];
 
 /** Cách người thật nói "tôi bỏ phiếu cho X"; mỗi mẫu có thêm dạng có chủ ngữ. */
-const PUSH_VERBS = ["vote ", "treo ", "chốt ", "up ", "đẩy ", "lynch ", "kill ", "bỏ phiếu "];
+const PUSH_VERBS = ["vote ", "treo ", "chốt ", "up ", "đẩy ", "lynch ", "kill ", "bỏ phiếu ", "bầu ", "chọn "];
 const SUBJECT_PREFIXES = ["", "tôi ", "t ", "tui ", "mình ", "tớ "];
 const PUSH_MARKERS = SUBJECT_PREFIXES.flatMap((subject) =>
   PUSH_VERBS.map((verb) => `${subject}${verb}`),
@@ -193,8 +193,21 @@ const SPARE_MARKERS = ["đừng treo ", "đừng vote ", "đừng chốt ", "đ�
  * động từ soi của Tiên Tri ("Bình soi Chi"), và "dan"/"sach" nằm trong đủ thứ
  * tên và chữ khác. Cụm nhiều tiếng so theo dãy token.
  */
-const ACCUSE_LABELS = ["sói", "sủa", "fake", "giả", "khả nghi", "đáng nghi", "đáng ngờ", "xạo", "nói dối", "láo"];
-const DEFEND_LABELS = ["dân", "sạch", "trong sạch", "vô tội", "ok", "oke", "uy tín", "an toàn"];
+const ACCUSE_LABELS = [
+  "sói", "sủa", "fake", "giả", "khả nghi", "đáng nghi", "đáng ngờ", "xạo", "nói dối", "láo",
+  // Tiếng lóng trong phòng, đo từ log self-play và từ `missed` của corpus
+  // người: "Bình lươn lẹo", "Người 5 lươn vl". Cả hai bảng đều trượt cùng một từ.
+  "lươn lẹo", "lươn",
+  // Thành ngữ tố, nhãn đứng sau tên: "Người 5 chứ ai nữa". Có "ai" nên trước
+  // đây nó đọc thành một câu HỎI nhắm vào chính người bị tố.
+  "chứ ai nữa",
+];
+const DEFEND_LABELS = [
+  "dân", "sạch", "trong sạch", "vô tội", "ok", "oke", "uy tín", "an toàn",
+  // "tôi thấy X ổn mà", "X hiền mà" - hai cách bênh phổ biến nhất trong log.
+  // Qua `parseNegatedClause` chúng cũng cho chiều ngược: "X không ổn" là một lời tố.
+  "ổn", "hiền",
+];
 
 /**
  * Tiếng đệm được phép chen giữa tên và nhãn: "Bình đúng sói rồi", "Bình chắc
@@ -457,10 +470,29 @@ function parseDirectAddress(
 
   // "đâu" vừa là từ để hỏi ("An đâu rồi") vừa là tiểu từ phủ định cuối câu
   // ("tôi ko tin An đâu"). Trong một câu đã có phủ định thì nó là vế sau.
+  //
+  // "gì" cũng có hai vai, nhưng KHÔNG dùng chung được cổng với "đâu". Nó là
+  // lượng từ khi đứng GIỮA một mệnh đề đã có từ phủ định ("An chưa có gì lạ",
+  // "An không làm gì sai") - hai câu BÊNH, mà trước đây cả hai đều đọc thành
+  // một câu HỎI nhắm vào đúng người vừa được bênh, tức đảo hẳn dấu tín hiệu.
+  // Đo trên 40 ván self-play: 59 lượt DEFEND đi lạc theo đúng đường này.
+  //
+  // Cổng phải hỏi `hasNegationWord` chứ KHÔNG hỏi `hasNegation`: hàm sau còn
+  // nhận "gì" ở CUỐI câu làm tiểu từ phủ định, nên hỏi nó ở đây là tự hỏi
+  // chính "gì" rồi lấy câu trả lời để loại nó - và mọi câu hỏi kết thúc bằng
+  // "gì" ("An kể xem thấy gì") sẽ tắt tiếng theo. Đo được: 9% QUESTION và
+  // ASK_EVIDENCE biến mất khi dùng nhầm hàm.
+  //
+  // Điều kiện "không phải token cuối" giữ nốt nửa còn lại: "An nghĩ gì" vẫn là
+  // câu hỏi kể cả khi câu có một từ phủ định ở đâu đó.
   const negated = hasNegation(whole);
+  const negatedByWord = hasNegationWord(whole);
+  const lastToken = whole.plain.split(" ").filter(Boolean).at(-1);
+  const suppressed = (word: string): boolean =>
+    (word === "đâu" && negated) || (word === "gì" && negatedByWord && lastToken !== "gì");
   const asking =
     raw.includes("?") ||
-    QUESTION_WORDS.some((word) => (word === "đâu" && negated ? false : includesWord(whole.plain, word))) ||
+    QUESTION_WORDS.some((word) => (suppressed(word) ? false : includesWord(whole.plain, word))) ||
     endsWithYesNoTail(raw) ||
     requestsOpinion(raw);
   if (asking) {
@@ -484,11 +516,12 @@ export interface Clause {
 }
 
 /**
- * `export` để công cụ đào alias loại đúng những mệnh đề mà parser cũng loại.
- * Không dùng chung hàm này thì đề xuất sẽ đầy alias rút ra từ "tôi không phải
- * sói" - tức những câu mà parser sẽ không bao giờ đọc tới.
+ * Mệnh đề này có một TỪ phủ định không - không tính tiểu từ cuối câu.
+ *
+ * Nửa dưới của `hasNegation`, tách ra vì `parseDirectAddress` cần đúng nửa này:
+ * xem chú thích ở `hasNegation`.
  */
-export function hasNegation(clause: Clause): boolean {
+export function hasNegationWord(clause: Clause): boolean {
   // So theo TOKEN ở cả hai dạng, không so chuỗi con. Trước đây dạng ascii so
   // chuỗi con, nên "chả" (-> "cha") nuốt luôn "chắc", "chào", "chạy"...: mọi
   // câu "Bình là sói chắc luôn" đều bị coi là phủ định và bot điếc hẳn.
@@ -504,10 +537,26 @@ export function hasNegation(clause: Clause): boolean {
   ) {
     return true;
   }
-  if (NEGATION_TOKENS.some((word) => plainTokens.includes(word))) return true;
-  // "Bình sói đâu" / "Bình mà tt gì": "đâu"/"gì" ở CUỐI câu là phủ định
-  // theo lối nói, không phải từ để hỏi. Một mình "đâu" ("Bình đâu") thì
-  // không phải câu nào để mà phủ định.
+  return NEGATION_TOKENS.some((word) => plainTokens.includes(word));
+}
+
+/**
+ * Mệnh đề này có phủ định không, kể cả bằng tiểu từ cuối câu.
+ *
+ * "Bình sói đâu" / "Bình mà tt gì": "đâu"/"gì" ở CUỐI câu là phủ định theo lối
+ * nói, không phải từ để hỏi. Một mình "đâu" ("Bình đâu") thì không phải câu
+ * nào để mà phủ định.
+ *
+ * `export` để công cụ đào alias loại đúng những mệnh đề mà parser cũng loại.
+ * Không dùng chung hàm này thì đề xuất sẽ đầy alias rút ra từ "tôi không phải
+ * sói" - tức những câu mà parser sẽ không bao giờ đọc tới.
+ *
+ * `parseDirectAddress` thì hỏi `hasNegationWord` chứ không hỏi hàm này: hỏi
+ * hàm này để quyết định "gì" có phải từ hỏi không là tự hỏi chính "gì".
+ */
+export function hasNegation(clause: Clause): boolean {
+  if (hasNegationWord(clause)) return true;
+  const plainTokens = clause.plain.split(" ").filter(Boolean);
   const last = plainTokens.at(-1);
   return plainTokens.length > 1 && (last === "đâu" || last === "gì");
 }
@@ -624,28 +673,101 @@ function markerIndex(clause: Clause, marker: string): { index: number; text: str
   return asciiIndex === -1 ? null : { index: asciiIndex, text: clause.ascii };
 }
 
+/** Cụm phủ định mở một lời phản bác. Dạng CŨ, nhận ở mọi cấu hình. */
+const COUNTER_DENIALS: readonly string[] = [" không thể là "];
+
+/**
+ * Cụm phủ định chỉ nhận khi `claim.counterClaimLoose` bật.
+ *
+ * Đây là những gì người thật gõ ("An đâu phải tt"), và cũng là thứ cho phép lời
+ * phản bác thôi là một khuôn duy nhất. Dạng không dấu do `markerIndex` lo.
+ */
+const COUNTER_DENIALS_LOOSE: readonly string[] = [
+  " không phải là ",
+  " không phải ",
+  " đâu phải là ",
+  " đâu phải ",
+  " ko phải là ",
+  " ko phải ",
+  " k phải ",
+  " hok phải ",
+];
+
+/** Cụm tự nhận RÕ RÀNG: chỉ có một nghĩa, nên không đòi vai trùng. */
+const COUNTER_SELF: readonly string[] = ["tôi mới là "];
+
+/** Cùng nghĩa, chỉ nhận khi nới. */
+const COUNTER_SELF_LOOSE: readonly string[] = [
+  "t mới là ",
+  "tui mới là ",
+  "mình mới là ",
+  "tớ mới là ",
+  "tôi mới đúng là ",
+  "chính tôi là ",
+];
+
+/**
+ * Cụm tự nhận MƠ HỒ: "tôi là" cũng là cách khai vai bình thường, nên nó chỉ
+ * thành phản bác khi vai bị phủ định TRÙNG vai tự nhận. Không có luật đó thì
+ * "An không phải sói, tôi là dân" - bênh người rồi khai vai - đọc thành một lời
+ * phản bác nhắm An.
+ */
+const COUNTER_SELF_AMBIGUOUS: readonly string[] = ["tôi là ", "t là ", "mình là "];
+
+/** Mẫu ĐẦU TIÊN trong danh sách có mặt trong câu, kèm chính mẫu đó. */
+function firstMarker(
+  whole: Clause,
+  markers: readonly string[],
+): { index: number; text: string; marker: string } | null {
+  for (const marker of markers) {
+    const found = markerIndex(whole, marker);
+    if (found) return { ...found, marker };
+  }
+  return null;
+}
+
+/** Vai nêu NGAY SAU một mẫu, hoặc `null`. */
+function roleAfter(found: { index: number; text: string; marker: string }): Role | null {
+  return roleAtStart(clauseOf(found.text.slice(found.index + found.marker.length).trim()));
+}
+
 /**
  * Phản bác: "<tên> không thể là <role>, tôi mới là <role>".
  *
  * Mẫu này được so trên CẢ tin nhắn chứ không theo mệnh đề, vì hai vế của nó nằm
  * hai bên dấu phẩy. Nó cũng là mẫu duy nhất được phép chứa từ phủ định, vì phủ
  * định chính là nội dung của nó.
+ *
+ * `claim.counterClaimLoose` nới danh sách cụm được nhận - xem bốn hằng số trên.
+ * Tắt thì hàm này đọc đúng một khuôn như trước, từng bit.
  */
 function parseCounterClaim(
   whole: Clause,
   players: readonly BotPlayerKnowledge[],
+  weights: BotWeights,
 ): ParsedSpeech | null {
-  const denied = markerIndex(whole, " không thể là ");
-  if (!denied) return null;
-  const counter = markerIndex(whole, "tôi mới là ");
-  if (!counter) return null;
+  const loose = weights.claim.counterClaimLoose > 0;
 
+  const denied = firstMarker(
+    whole,
+    loose ? [...COUNTER_DENIALS, ...COUNTER_DENIALS_LOOSE] : COUNTER_DENIALS,
+  );
+  if (!denied) return null;
   const target = resolveTarget(denied.text.slice(0, denied.index), players);
-  const rest = counter.text.slice(counter.index + "tôi mới là ".length).trim();
-  const role = roleAtStart({ plain: rest, ascii: asciiForm(rest) });
-  return target && role
-    ? { type: "COUNTER_CLAIM", targetId: target.id, data: { role } }
-    : null;
+  if (!target) return null;
+
+  const explicit = firstMarker(whole, loose ? [...COUNTER_SELF, ...COUNTER_SELF_LOOSE] : COUNTER_SELF);
+  const ambiguous = explicit !== null || !loose ? null : firstMarker(whole, COUNTER_SELF_AMBIGUOUS);
+  const self = explicit ?? ambiguous;
+  if (!self) return null;
+
+  const role = roleAfter(self);
+  if (!role) return null;
+  // Chỉ cụm mơ hồ mới đòi vai trùng; cụm rõ ràng giữ nguyên nghĩa cũ, kể cả khi
+  // người phản bác nhận một vai khác vai vừa bị phủ định.
+  if (ambiguous !== null && roleAfter(denied) !== role) return null;
+
+  return { type: "COUNTER_CLAIM", targetId: target.id, data: { role } };
 }
 
 function parseClause(
@@ -889,7 +1011,7 @@ export function analyzeChat(
     const addressed = parseDirectAddress(whole, message.text, message.actorId, players);
     if (addressed) push(message, addressed);
 
-    const counterClaim = parseCounterClaim(whole, players);
+    const counterClaim = parseCounterClaim(whole, players, weights);
     if (counterClaim) {
       push(message, counterClaim);
       continue;

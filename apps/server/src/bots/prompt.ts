@@ -112,13 +112,15 @@ export const VOICE_HINTS: Readonly<Record<BotSpeechKind, readonly string[]>> = O
   // dạng phải khai được. "t là"/"mình là"/"nhận" đều được parser nhận, nên
   // lời khai KHÔNG cần viết trang trọng để qua cổng.
   CLAIM_ROLE: ["t là {role}", "mình là {role} nè", "nhận {role} đây", "tôi là {role}"],
-  // Dài hơn hẳn phần còn lại, và đó là giới hạn của PARSER chứ không phải một
-  // lựa chọn về giọng: `parseCounterClaim` chỉ nhận đúng cặp mẫu "không thể
-  // là ... tôi mới là ...". Nới được mẫu đó thì rút ngắn được mấy câu này.
+  // Đã ngắn lại: `claim.counterClaimLoose` (mặc định từ v38) cho parser đọc
+  // được nhiều cách phủ định và nhiều cách tự nhận, nên bảng này thôi phải chép
+  // đúng một khuôn. Cổng `claimSurvivesRoundTrip` đọc lại bằng bộ trọng số MẶC
+  // ĐỊNH, nên mọi câu ở đây vẫn phải qua được parser - có test quét cả bảng.
   COUNTER_CLAIM: [
+    "{who} đâu phải {role}, t mới là {role}",
+    "{who} ko phải {role}, chính tôi là {role}",
     "{who} không thể là {role}, tôi mới là {role}",
-    "{who} không thể là {role} được, tôi mới là {role}",
-    "khoan, {who} không thể là {role}, tôi mới là {role}",
+    "khoan, {who} không phải {role}, mình mới là {role}",
   ],
 });
 
@@ -203,7 +205,7 @@ function intentLine(request: SpeechRequest): string {
     case "COUNTER_CLAIM":
       return [
         `Bạn phản bác ${who}: họ nhận là ${roleName(request.intention.claimedRole)} nhưng bạn mới là.`,
-        `Viết đúng dạng \"<tên> không thể là <vai>, tôi mới là <vai>.\"`,
+        `Hai vế: phủ định ("${who} đâu phải <vai>" hay "${who} không thể là <vai>"), rồi tự nhận ("t mới là <vai>").`,
       ].join(" ");
     default: {
       const unreachable: never = request.intention.kind;

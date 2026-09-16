@@ -82,12 +82,45 @@ export interface SpeechStatsSnapshot {
    * không có câu nào để chấm nên nó luôn bằng 0 ở đây.
    */
   casualBySource: Record<SpeechSource, number>;
+  /**
+   * Câu mà một người NGHE đọc ra đúng việc lõi vừa chốt, chia theo nguồn.
+   *
+   * Câu hỏi TỐI NHẤT còn lại trong cả hệ, và là câu hỏi mà bốn cổng của
+   * `speech-renderer` KHÔNG hỏi: cả bốn đều hỏi "câu này có nói SAI không", và
+   * `targetSurvivesRoundTrip` dùng `.every()` nên một câu không đọc ra memory
+   * NÀO cũng qua. Một câu mơ hồ của nhà cung cấp vì thế đi thẳng ra phòng, và
+   * với mọi BOT khác nó là một lượt nói KHÔNG XẢY RA - belief không dịch.
+   *
+   * Self-play đo được 1,0 (bảng mẫu có test sweep khoá), nhưng self-play không
+   * có nhà cung cấp. Con số cho `provider`/`provider_retry` ở đây là con số
+   * duy nhất nói được điều đó về production.
+   *
+   * Mẫu số là `heardEligibleBySource`, KHÔNG phải `bySource`: chỉ những loại
+   * nói có mục tiêu mới có việc để mà nghe ra (xem `HEARD_AS`), và một lượt im
+   * không có câu nào để chấm.
+   */
+  heardBySource: Record<SpeechSource, number>;
+  /** Số lượt CÓ phát câu và thuộc một loại nói có mục tiêu, chia theo nguồn. */
+  heardEligibleBySource: Record<SpeechSource, number>;
+  /** `heard / eligible` gộp mọi nguồn; `null` khi chưa có lượt nào chấm được. */
+  heardRate: number | null;
   bySource: Record<SpeechSource, number>;
   /** Số lượt rơi vào từng ngăn của `DURATION_BUCKETS_MS`, cộng một ngăn "trên hết". */
   durationHistogramMs: Array<{ upTo: number | null; count: number }>;
   /** Thời gian trung bình một lượt, ms; `null` khi chưa có lượt nào. */
   meanDurationMs: number | null;
   maxDurationMs: number;
+}
+
+/** Tổng hai bảng theo nguồn thành một tỉ lệ; `null` khi mẫu số bằng 0. */
+function heardRateOf(
+  heard: Record<SpeechSource, number>,
+  eligible: Record<SpeechSource, number>,
+): number | null {
+  const sum = (table: Record<SpeechSource, number>): number =>
+    Object.values(table).reduce((total, value) => total + value, 0);
+  const denominator = sum(eligible);
+  return denominator === 0 ? null : sum(heard) / denominator;
 }
 
 const emptyBySource = (): Record<SpeechSource, number> => ({
@@ -107,6 +140,8 @@ export class SpeechStats {
   private maxMs = 0;
   private readonly bySource: Record<SpeechSource, number> = emptyBySource();
   private readonly casualBySource: Record<SpeechSource, number> = emptyBySource();
+  private readonly heardBySource: Record<SpeechSource, number> = emptyBySource();
+  private readonly heardEligibleBySource: Record<SpeechSource, number> = emptyBySource();
   private readonly buckets: number[] = new Array(DURATION_BUCKETS_MS.length + 1).fill(0);
 
   /**
@@ -121,7 +156,12 @@ export class SpeechStats {
    * KHÔNG lưu `text` - xem ranh giới ở đầu file. Nó chỉ đi qua một hàm thuần
    * rồi thành một số đếm.
    */
-  record(source: SpeechSource, durationMs: number, text: string | null): void {
+  record(
+    source: SpeechSource,
+    durationMs: number,
+    text: string | null,
+    heard: boolean | null = null,
+  ): void {
     const ms = Number.isFinite(durationMs) && durationMs >= 0 ? durationMs : 0;
     this.total += 1;
     this.bySource[source] += 1;
@@ -131,6 +171,14 @@ export class SpeechStats {
       if (looksCasual(text)) {
         this.casual += 1;
         this.casualBySource[source] += 1;
+      }
+      // `null` = loại nói này không nói thay lõi, nên nó không vào mẫu số.
+      // Đếm nó thành 0 sẽ kéo tỉ lệ xuống theo tỉ trọng của `AGREE`/`REACTION`
+      // trong ván, tức con số sẽ đổi khi tính cách bot đổi chứ không khi tầng
+      // diễn đạt hỏng - đúng thứ nó sinh ra để phát hiện.
+      if (heard !== null) {
+        this.heardEligibleBySource[source] += 1;
+        if (heard) this.heardBySource[source] += 1;
       }
     }
     this.sumMs += ms;
@@ -149,6 +197,9 @@ export class SpeechStats {
       casual: this.casual,
       casualToneRate: this.spoken === 0 ? null : this.casual / this.spoken,
       casualBySource: { ...this.casualBySource },
+      heardBySource: { ...this.heardBySource },
+      heardEligibleBySource: { ...this.heardEligibleBySource },
+      heardRate: heardRateOf(this.heardBySource, this.heardEligibleBySource),
       bySource: { ...this.bySource },
       durationHistogramMs: this.buckets.map((count, index) => ({
         upTo: index < DURATION_BUCKETS_MS.length ? DURATION_BUCKETS_MS[index]! : null,
@@ -170,6 +221,8 @@ export class SpeechStats {
     for (const key of Object.keys(this.bySource) as SpeechSource[]) {
       this.bySource[key] = 0;
       this.casualBySource[key] = 0;
+      this.heardBySource[key] = 0;
+      this.heardEligibleBySource[key] = 0;
     }
     this.buckets.fill(0);
   }
