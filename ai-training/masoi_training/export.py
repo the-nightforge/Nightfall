@@ -18,6 +18,16 @@ from .model import PolicyValueNet
 FORMAT = "masoi-mlp-1"
 
 
+def check_engine_config(activation: str, norm: str) -> None:
+    """Engine chạy forward ReLU thuần — cấu hình khác bị từ chối ngay (fail fast),
+    thay vì train xong mới rớt ở export, hoặc ra file JSON chạy sai trong im lặng."""
+    if activation != "relu" or norm != "none":
+        raise ValueError(
+            f"engine chỉ chạy relu/none, nhận {activation}/{norm} — "
+            "train với cấu hình mặc định hoặc chờ P1 (engine hỗ trợ)"
+        )
+
+
 def _linear(layer: nn.Linear) -> dict:
     return {
         "w": layer.weight.detach().cpu().tolist(),
@@ -37,7 +47,12 @@ def export_weights_json(
 ) -> None:
     """`residual={"beta": β}` đánh dấu model RESIDUAL: engine đọc trường này để
     đi đường hiệu chỉnh điểm heuristic thay vì thay teacher. Model thường KHÔNG
-    mang trường này."""
+    mang trường này.
+
+    Engine chạy forward ReLU thuần nên chỉ model `activation="relu",
+    norm="none"` mới xuất được — cấu hình khác bị từ chối ngay, thay vì ra một
+    file JSON mà engine chạy ra số sai trong im lặng (việc hỗ trợ thuộc P1)."""
+    check_engine_config(getattr(model, "activation", "relu"), getattr(model, "norm", "none"))
     payload = {
         "format": FORMAT,
         "modelId": model_id,

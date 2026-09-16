@@ -112,6 +112,52 @@ def wanted_decision_names(flag: str, flag_name: str, meta: dict) -> set[str] | N
     return wanted
 
 
+def clipped_value_loss(
+    values: torch.Tensor, old_values: torch.Tensor, returns: torch.Tensor, clip: float
+) -> torch.Tensor:
+    """Loss value PPO2: max(MSE mới, MSE đã clip quanh giá trị cũ).
+
+    `clip <= 0` = MSE thường (hành vi cũ byte-một). Clip chặn value head nhảy xa
+    trong một batch khi advantage nhiễu — cùng lý do với clip của policy.
+    """
+    if clip <= 0:
+        return nn.functional.mse_loss(values, returns)
+    v_clipped = old_values + torch.clamp(values - old_values, -clip, clip)
+    return torch.maximum(
+        nn.functional.mse_loss(values, returns, reduction="none"),
+        nn.functional.mse_loss(v_clipped, returns, reduction="none"),
+    ).mean()
+
+
+def entropy_coef(base: float, epoch: int, total: int, schedule: str) -> float:
+    """Hệ số entropy của epoch `epoch` (đếm từ 1).
+
+    - `const`: hằng số (cũ). `linear`: giảm tuyến tính về 0 ở epoch cuối —
+      đầu train cần entropy để thoát argmax của champion, cuối cần tắt để hội tụ.
+    """
+    if schedule == "const":
+        return base
+    if schedule == "linear":
+        return base * (1 - (epoch - 1) / max(total, 1))
+    raise ValueError(f"entropy schedule không hợp lệ: {schedule!r} (có: const, linear)")
+
+
+def normalize_adv_by_role(adv: torch.Tensor, roles: np.ndarray) -> torch.Tensor:
+    """Chuẩn hoá advantage TRONG từng vai thay vì toàn cục.
+
+    Vai có tỉ lệ thắng lệch nhau (Sói 45%, Dân 60%) thì chuẩn hoá chung trộn hai
+    phân phối khác mốc vào một; chuẩn hoá riêng giữ mỗi phe mean 0 / std 1.
+    """
+    out = torch.empty_like(adv)
+    for index in np.unique(roles):
+        keep = torch.from_numpy(roles == index)
+        group = adv[keep]
+        # unbiased=False: nhóm 1 phần tử có std = 0 (ra 0), chứ không phải NaN
+        # lan vào gradient của cả batch.
+        out[keep] = (group - group.mean()) / (group.std(unbiased=False) + 1e-8)
+    return out
+
+
 def main() -> None:
     force_utf8_console()
     p = argparse.ArgumentParser(description=__doc__)
@@ -124,6 +170,12 @@ def main() -> None:
     p.add_argument("--clip", type=float, default=0.2)
     p.add_argument("--entropy", type=float, default=0.01)
     p.add_argument("--value-coef", type=float, default=0.5)
+    # P0-3: mặc định giữ hành vi cũ byte-một (clip 0/const/global).
+    p.add_argument("--value-clip", type=float, default=0.0,
+                   help="0 = MSE thường (cũ); > 0 = clip value quanh giá trị rollout")
+    p.add_argument("--entropy-schedule", choices=("const", "linear"), default="const")
+    p.add_argument("--adv-norm", choices=("global", "role"), default="global",
+                   help="Chuẩn hoá advantage toàn cục (cũ) hay trong từng vai")
     p.add_argument("--model-id", default="ppo-0001")
     p.add_argument("--seed", type=int, default=12345)
     p.add_argument(
@@ -252,7 +304,17 @@ def main() -> None:
     adv = R - base
     if shaping is not None:
         adv = adv + a.shaping_weight * shaping
-    adv = (adv - adv.mean()) / (adv.std() + 1e-8)
+    if a.adv_norm == "role":
+        adv = normalize_adv_by_role(adv, d.roles)
+    else:
+        adv = (adv - adv.mean()) / (adv.std() + 1e-8)
+
+    # Value-clip cần giá trị cũ của CHÍNH policy đã rollout — thiếu cột thì dừng.
+    old_values: torch.Tensor | None = None
+    if a.value_clip > 0:
+        if d.values is None:
+            raise ValueError("--value-clip cần cột values (encode --rollout)")
+        old_values = torch.from_numpy(d.values.astype(np.float32))
 
     gen = torch.Generator().manual_seed(a.seed)
     history = []
@@ -277,12 +339,15 @@ def main() -> None:
                 # Batch có thể không chứa hàng được chọn (hiếm khi batch nhỏ):
                 # loss 0, không NaN. Cấu hình sai toàn cục đã bị chặn ở trên.
                 policy_loss = -sel.mean() if sel.numel() > 0 else torch.zeros((), device=selected.device)
-            value_loss = nn.functional.mse_loss(value, R[idx])
+            value_loss = clipped_value_loss(
+                value, old_values[idx], R[idx], a.value_clip
+            ) if old_values is not None else nn.functional.mse_loss(value, R[idx])
             probs = logp_all.exp()
             # Chỉ cộng entropy của các ô ĐANG BẬT: ô bị che có logp = log(0) và
             # tích `0 * -inf` là NaN, thứ sẽ lan ra toàn bộ gradient.
             entropy = -(probs * logp_all.masked_fill(~used, 0.0)).sum(1).mean()
-            loss = policy_loss + a.value_coef * value_loss - a.entropy * entropy
+            ent_coef = entropy_coef(a.entropy, epoch, a.epochs, a.entropy_schedule)
+            loss = policy_loss + a.value_coef * value_loss - ent_coef * entropy
             opt.zero_grad()
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 0.5)
@@ -355,7 +420,11 @@ def main() -> None:
                 "shapingWeight": a.shaping_weight,
                 "shapingDecisions": a.shaping_decisions or None,
                 "shapingCoverage": shaping_coverage,
-                "trainDecisions": a.train_decisions or None,                "constantMse": round(constant_mse, 4),
+                "trainDecisions": a.train_decisions or None,
+                "constantMse": round(constant_mse, 4),
+                "valueClip": a.value_clip,
+                "entropySchedule": a.entropy_schedule,
+                "advNorm": a.adv_norm,
                 "policyKind": "residual" if residual else "logits",
                 "beta": beta,
                 "temperature": d.meta.get("temperature"),
