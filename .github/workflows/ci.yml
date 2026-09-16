@@ -374,15 +374,31 @@ jobs:
         # bên ngoài, đi qua đúng đường mà người chơi đi: DNS -> Nginx -> TLS ->
         # container. Nginx hỏng hoặc cert hết hạn chỉ lộ ra ở đây.
         run: |
-          set -euo pipefail
+          # KHÔNG dùng `set -e`: `curl -f` trả khác 0 khi gặp 502, và ở đây 502
+          # tạm thời là chuyện bình thường chứ không phải lỗi - vòng lặp dưới lo
+          # việc đó. Bản đầu tiên của bước này kiểm đúng MỘT lần và đỏ ngay lần
+          # chạy thật đầu tiên với `curl: (22) ... error: 502`.
+          set -uo pipefail
           url=https://masoionline.duckdns.org
 
-          health=$(curl -fsS --max-time 20 "$url/api/health")
+          health=""
+          for i in $(seq 1 30); do
+            health=$(curl -fsS --max-time 15 "$url/api/health" 2>/dev/null) && break
+            sleep 5
+          done
+          test -n "$health" || { echo "health không phản hồi sau 150s"; exit 1; }
           echo "$health"
           echo "$health" | grep -q '"ok":true' || { echo "health không ok"; exit 1; }
 
-          code=$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 30 "$url/")
-          test "$code" = "200" || { echo "trang chủ trả $code"; exit 1; }
+          # Thử lại thay vì kiểm một phát: container web vừa bị thay luôn có một
+          # khoảng đầu chưa nhận request, và Nginx trả 502 trong khoảng đó.
+          code=""
+          for i in $(seq 1 30); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$url/" 2>/dev/null || true)
+            test "$code" = "200" && break
+            sleep 5
+          done
+          test "$code" = "200" || { echo "trang chủ trả $code sau 150s"; exit 1; }
 
           # Socket.IO phải lên WebSocket thật. Thiếu hai header Upgrade trong
           # Nginx thì client vẫn chạy được bằng long-polling - chậm hơn nhiều mà

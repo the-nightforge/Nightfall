@@ -56,6 +56,22 @@ echo "==> Health:"
 curl -sS http://127.0.0.1:4100/api/health
 echo
 
+# Web khởi động SAU server (depends_on: service_healthy), nên lúc vòng lặp trên
+# vừa xanh thì `next start` mới đang bật. Không chờ nó thì `deploy.sh` trả về
+# trong khi Nginx vẫn 502 cho mọi request vào `/` - deploy coi như xong mà trang
+# chưa lên. Đã gặp thật: CI đỏ ở bước kiểm tra ngoài với curl 502.
+echo "==> Chờ web (tối đa 120s)"
+deadline=$((SECONDS + 120))
+until curl -fsS -o /dev/null http://127.0.0.1:3000/ 2>/dev/null; do
+    if (( SECONDS > deadline )); then
+        echo "LỖI: web không phục vụ sau 120s. Log 100 dòng cuối:" >&2
+        docker logs masoi-web --tail 100 >&2
+        exit 1
+    fi
+    sleep 5
+done
+echo "    web sẵn sàng"
+
 echo "==> Dọn image cũ"
 docker image prune -f
 
