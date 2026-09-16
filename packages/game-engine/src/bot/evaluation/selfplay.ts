@@ -39,6 +39,7 @@ import {
 } from "./question-ledger";
 import { recentOpenings, recentTextFingerprints } from "../conversation/speech-memory";
 import { renderSpeechTemplate } from "../conversation/templates";
+import { speechIsHeard } from "../analysis/speech-heard";
 import { createSeededRng } from "../rng";
 import type { BotDecisionTrace, BotTraceSink } from "../trace/trace";
 import { createTraceCollector } from "../trace/trace";
@@ -262,6 +263,21 @@ export type SelfPlayEvent =
        * hằng số, và để một bản ghi nhập từ production đọc được cùng một số đo.
        */
       fromTemplate: boolean;
+      /**
+       * Người nghe có đọc ra ĐÚNG việc lõi vừa chốt từ câu này không.
+       *
+       * `null` = loại nói này không nói thay lõi (`AGREE`, `REACTION`, ...),
+       * nên câu hỏi không áp dụng. Xem `analysis/speech-heard.ts`.
+       *
+       * Đóng dấu Ở ĐÂY chứ không để `metrics.ts` tự tính, cùng lý do với
+       * `shapeFingerprint`: chỉ chỗ này mới có danh sách TÊN của ván, mà
+       * `analyzeChat` không đọc được câu nào nếu không có tên để khớp. Một
+       * phép tính lại ở tầng đo sẽ phải dựng bảng tên lần hai, và bản sao đó
+       * sẽ trôi lệch.
+       *
+       * Báo cáo JSON cũ không mang trường này; thiếu nó thì bỏ qua câu đó.
+       */
+      heard?: boolean | null;
       /**
        * Vai mà ý định `CLAIM_ROLE`/`COUNTER_CLAIM` này khai, hoặc `null` với mọi
        * speech act khác.
@@ -797,6 +813,18 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
       shapeFingerprint: speechShapeFingerprint(text, allNames),
       semanticFingerprint: speechSemanticFingerprint(speech),
       evidenceSourceIds: speech.evidence.map((item) => item.sourceId),
+      // Hỏi trên ĐÚNG bàn của ván, vì `resolveTarget` khớp theo tên thật:
+      // cùng một câu trong một phòng khác có thể không đọc ra ai cả.
+      heard: speechIsHeard(
+        speech.kind,
+        text,
+        playerId,
+        engine.state.players.map((player) => ({
+          id: player.id,
+          name: player.name,
+          alive: player.alive,
+        })),
+      ),
       fromTemplate: true,
       claimedRole: speech.claimedRole ?? null,
     });

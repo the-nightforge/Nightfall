@@ -174,7 +174,7 @@ const SUSPECT_MARKERS = ["tôi nghi ", "t nghi ", "tui nghi ", "mình nghi ", "t
 const INNOCENCE_ASCII = ["dan", "sach", "vo toi", "trong", "ok", "oke", "tot", "an toan", "uy tin", "that"];
 
 /** Cách người thật nói "tôi bỏ phiếu cho X"; mỗi mẫu có thêm dạng có chủ ngữ. */
-const PUSH_VERBS = ["vote ", "treo ", "chốt ", "up ", "đẩy ", "lynch ", "kill ", "bỏ phiếu "];
+const PUSH_VERBS = ["vote ", "treo ", "chốt ", "up ", "đẩy ", "lynch ", "kill ", "bỏ phiếu ", "bầu ", "chọn "];
 const SUBJECT_PREFIXES = ["", "tôi ", "t ", "tui ", "mình ", "tớ "];
 const PUSH_MARKERS = SUBJECT_PREFIXES.flatMap((subject) =>
   PUSH_VERBS.map((verb) => `${subject}${verb}`),
@@ -193,8 +193,21 @@ const SPARE_MARKERS = ["đừng treo ", "đừng vote ", "đừng chốt ", "đ�
  * động từ soi của Tiên Tri ("Bình soi Chi"), và "dan"/"sach" nằm trong đủ thứ
  * tên và chữ khác. Cụm nhiều tiếng so theo dãy token.
  */
-const ACCUSE_LABELS = ["sói", "sủa", "fake", "giả", "khả nghi", "đáng nghi", "đáng ngờ", "xạo", "nói dối", "láo"];
-const DEFEND_LABELS = ["dân", "sạch", "trong sạch", "vô tội", "ok", "oke", "uy tín", "an toàn"];
+const ACCUSE_LABELS = [
+  "sói", "sủa", "fake", "giả", "khả nghi", "đáng nghi", "đáng ngờ", "xạo", "nói dối", "láo",
+  // Tiếng lóng trong phòng, đo từ log self-play và từ `missed` của corpus
+  // người: "Bình lươn lẹo", "Người 5 lươn vl". Cả hai bảng đều trượt cùng một từ.
+  "lươn lẹo", "lươn",
+  // Thành ngữ tố, nhãn đứng sau tên: "Người 5 chứ ai nữa". Có "ai" nên trước
+  // đây nó đọc thành một câu HỎI nhắm vào chính người bị tố.
+  "chứ ai nữa",
+];
+const DEFEND_LABELS = [
+  "dân", "sạch", "trong sạch", "vô tội", "ok", "oke", "uy tín", "an toàn",
+  // "tôi thấy X ổn mà", "X hiền mà" - hai cách bênh phổ biến nhất trong log.
+  // Qua `parseNegatedClause` chúng cũng cho chiều ngược: "X không ổn" là một lời tố.
+  "ổn", "hiền",
+];
 
 /**
  * Tiếng đệm được phép chen giữa tên và nhãn: "Bình đúng sói rồi", "Bình chắc
@@ -457,10 +470,29 @@ function parseDirectAddress(
 
   // "đâu" vừa là từ để hỏi ("An đâu rồi") vừa là tiểu từ phủ định cuối câu
   // ("tôi ko tin An đâu"). Trong một câu đã có phủ định thì nó là vế sau.
+  //
+  // "gì" cũng có hai vai, nhưng KHÔNG dùng chung được cổng với "đâu". Nó là
+  // lượng từ khi đứng GIỮA một mệnh đề đã có từ phủ định ("An chưa có gì lạ",
+  // "An không làm gì sai") - hai câu BÊNH, mà trước đây cả hai đều đọc thành
+  // một câu HỎI nhắm vào đúng người vừa được bênh, tức đảo hẳn dấu tín hiệu.
+  // Đo trên 40 ván self-play: 59 lượt DEFEND đi lạc theo đúng đường này.
+  //
+  // Cổng phải hỏi `hasNegationWord` chứ KHÔNG hỏi `hasNegation`: hàm sau còn
+  // nhận "gì" ở CUỐI câu làm tiểu từ phủ định, nên hỏi nó ở đây là tự hỏi
+  // chính "gì" rồi lấy câu trả lời để loại nó - và mọi câu hỏi kết thúc bằng
+  // "gì" ("An kể xem thấy gì") sẽ tắt tiếng theo. Đo được: 9% QUESTION và
+  // ASK_EVIDENCE biến mất khi dùng nhầm hàm.
+  //
+  // Điều kiện "không phải token cuối" giữ nốt nửa còn lại: "An nghĩ gì" vẫn là
+  // câu hỏi kể cả khi câu có một từ phủ định ở đâu đó.
   const negated = hasNegation(whole);
+  const negatedByWord = hasNegationWord(whole);
+  const lastToken = whole.plain.split(" ").filter(Boolean).at(-1);
+  const suppressed = (word: string): boolean =>
+    (word === "đâu" && negated) || (word === "gì" && negatedByWord && lastToken !== "gì");
   const asking =
     raw.includes("?") ||
-    QUESTION_WORDS.some((word) => (word === "đâu" && negated ? false : includesWord(whole.plain, word))) ||
+    QUESTION_WORDS.some((word) => (suppressed(word) ? false : includesWord(whole.plain, word))) ||
     endsWithYesNoTail(raw) ||
     requestsOpinion(raw);
   if (asking) {
@@ -484,11 +516,12 @@ export interface Clause {
 }
 
 /**
- * `export` để công cụ đào alias loại đúng những mệnh đề mà parser cũng loại.
- * Không dùng chung hàm này thì đề xuất sẽ đầy alias rút ra từ "tôi không phải
- * sói" - tức những câu mà parser sẽ không bao giờ đọc tới.
+ * Mệnh đề này có một TỪ phủ định không - không tính tiểu từ cuối câu.
+ *
+ * Nửa dưới của `hasNegation`, tách ra vì `parseDirectAddress` cần đúng nửa này:
+ * xem chú thích ở `hasNegation`.
  */
-export function hasNegation(clause: Clause): boolean {
+export function hasNegationWord(clause: Clause): boolean {
   // So theo TOKEN ở cả hai dạng, không so chuỗi con. Trước đây dạng ascii so
   // chuỗi con, nên "chả" (-> "cha") nuốt luôn "chắc", "chào", "chạy"...: mọi
   // câu "Bình là sói chắc luôn" đều bị coi là phủ định và bot điếc hẳn.
@@ -504,10 +537,26 @@ export function hasNegation(clause: Clause): boolean {
   ) {
     return true;
   }
-  if (NEGATION_TOKENS.some((word) => plainTokens.includes(word))) return true;
-  // "Bình sói đâu" / "Bình mà tt gì": "đâu"/"gì" ở CUỐI câu là phủ định
-  // theo lối nói, không phải từ để hỏi. Một mình "đâu" ("Bình đâu") thì
-  // không phải câu nào để mà phủ định.
+  return NEGATION_TOKENS.some((word) => plainTokens.includes(word));
+}
+
+/**
+ * Mệnh đề này có phủ định không, kể cả bằng tiểu từ cuối câu.
+ *
+ * "Bình sói đâu" / "Bình mà tt gì": "đâu"/"gì" ở CUỐI câu là phủ định theo lối
+ * nói, không phải từ để hỏi. Một mình "đâu" ("Bình đâu") thì không phải câu
+ * nào để mà phủ định.
+ *
+ * `export` để công cụ đào alias loại đúng những mệnh đề mà parser cũng loại.
+ * Không dùng chung hàm này thì đề xuất sẽ đầy alias rút ra từ "tôi không phải
+ * sói" - tức những câu mà parser sẽ không bao giờ đọc tới.
+ *
+ * `parseDirectAddress` thì hỏi `hasNegationWord` chứ không hỏi hàm này: hỏi
+ * hàm này để quyết định "gì" có phải từ hỏi không là tự hỏi chính "gì".
+ */
+export function hasNegation(clause: Clause): boolean {
+  if (hasNegationWord(clause)) return true;
+  const plainTokens = clause.plain.split(" ").filter(Boolean);
   const last = plainTokens.at(-1);
   return plainTokens.length > 1 && (last === "đâu" || last === "gì");
 }

@@ -1,5 +1,6 @@
 import {
   analyzeChat,
+  speechIsHeard,
   openingOf,
   renderSpeechTemplate,
   speechShapeFingerprint,
@@ -117,7 +118,26 @@ export async function renderBotSpeech(
   // dù đi đường nào; `source` nói đường đó là đường nào.
   const startedAt = now();
   const rendered = await renderUnmeasured(request, brain, chatMaxLength);
-  stats.record(rendered.source, now() - startedAt, rendered.text);
+  // Chấm trên `rendered.text` - bản ĐÃ cắt theo `chatMaxLength`, tức đúng
+  // chuỗi căn phòng nhìn thấy. Một câu bị cắt mất vế mang lời tố là một câu
+  // không ai nghe thấy, và chấm bản chưa cắt sẽ báo "nghe được" cho đúng
+  // những lượt hỏng đó.
+  //
+  // ĐẾM, không CHẶN. Bốn cổng phía trên từ chối câu nói SAI; cổng thứ năm sẽ
+  // từ chối câu không nói được GÌ, và nó đẩy thêm bao nhiêu lượt về bảng mẫu
+  // thì chưa ai biết - `heardBySource` sinh ra để trả lời đúng câu đó trước.
+  // Bật một cổng dựa trên một con số chưa đo là đổi hành vi production bằng
+  // phỏng đoán.
+  const heard =
+    rendered.text === null
+      ? null
+      : speechIsHeard(
+          request.intention.kind,
+          rendered.text,
+          request.speaker.id,
+          request.players,
+        );
+  stats.record(rendered.source, now() - startedAt, rendered.text, heard);
   return rendered;
 }
 

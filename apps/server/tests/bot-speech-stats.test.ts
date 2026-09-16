@@ -293,6 +293,63 @@ describe("renderBotSpeech ghi giọng của câu đã phát", () => {
     expect(snap.casualToneRate).toBe(0);
   });
 
+  it("đếm câu nhà cung cấp mà cả bàn KHÔNG đọc ra việc gì", async () => {
+    // Lỗ hổng mà bộ đếm này soi vào: bốn cổng của `renderUnmeasured` đều hỏi
+    // "câu này có nói SAI không". `targetSurvivesRoundTrip` dùng `.every()`,
+    // nên một câu không đọc ra memory NÀO cũng qua sạch cả bốn - và với mọi
+    // BOT khác, lượt nói đó không xảy ra.
+    //
+    // "Chi đi, rõ rồi còn gì" là một câu hợp lệ, đúng người, không nhại lại ai,
+    // không khai vai sai. Nó chỉ không phải một lời tố.
+    const vague: BotBrain = {
+      name: "vague",
+      renderDaySpeech: async () => decided({ think: "", chat: "Chi đi, rõ rồi còn gì" }),
+    };
+    const stats = new SpeechStats();
+    const result = await renderBotSpeech(request(), vague, 300, stats);
+
+    expect(result.source).toBe("provider");
+    const snap = stats.snapshot();
+    expect(snap.heardEligibleBySource.provider).toBe(1);
+    expect(snap.heardBySource.provider).toBe(0);
+    expect(snap.heardRate).toBe(0);
+  });
+
+  it("câu nhà cung cấp đọc ngược được thì vào tử số", async () => {
+    const clear: BotBrain = {
+      name: "clear",
+      renderDaySpeech: async () => decided({ think: "", chat: "Tôi nghi Chi" }),
+    };
+    const stats = new SpeechStats();
+    await renderBotSpeech(request(), clear, 300, stats);
+
+    const snap = stats.snapshot();
+    expect(snap.heardBySource.provider).toBe(1);
+    expect(snap.heardRate).toBe(1);
+  });
+
+  it("loại nói không nói thay lõi không vào mẫu số", async () => {
+    // `AGREE` không có memory type tương ứng. Đếm nó thành "không nghe được"
+    // sẽ làm tỉ lệ đổi theo tính cách bot chứ không theo sức khoẻ của tầng
+    // diễn đạt - đúng thứ bộ đếm này sinh ra để phát hiện.
+    const clear: BotBrain = {
+      name: "clear",
+      renderDaySpeech: async () => decided({ think: "", chat: "Ừ, đúng đấy" }),
+    };
+    const stats = new SpeechStats();
+    await renderBotSpeech(
+      request({ intention: { ...request().intention, kind: "AGREE" } }),
+      clear,
+      300,
+      stats,
+    );
+
+    const snap = stats.snapshot();
+    expect(snap.spoken).toBe(1);
+    expect(snap.heardEligibleBySource.provider).toBe(0);
+    expect(snap.heardRate).toBeNull();
+  });
+
   it("lượt IM không kéo tỉ lệ giọng xuống", async () => {
     // `template_silent` không có câu nào; tính nó vào mẫu số sẽ biến một BOT
     // đang im lặng đúng luật thành một BOT đang viết văn.
