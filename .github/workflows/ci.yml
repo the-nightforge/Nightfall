@@ -266,10 +266,10 @@ jobs:
         if: always()
         run: kill "$(cat server.pid)" 2>/dev/null || true
 
-  # Render build image này từ Dockerfile.server và KHÔNG chạy qua CI, nên một
-  # Dockerfile hỏng chỉ lộ ra ở Render - sau khi Vercel đã ship frontend mới.
-  # Frontend đọc trường mà backend mới phải cấp; web mới + server cũ là kiểu
-  # hỏng lặng lẽ nhất của repo này. Build thử ở đây để chặn nó trước deploy.
+  # VPS build image này từ Dockerfile.server lúc deploy. Không build thử ở đây
+  # thì một Dockerfile hỏng chỉ lộ ra GIỮA lúc deploy, khi `deploy.sh` đã kịp
+  # `git pull` - máy nằm ở trạng thái nửa vời, code mới mà image cũ. Build thử
+  # trước để cổng deploy đóng lại trước khi chạm vào máy thật.
   docker-server:
     needs: changes
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.docker == 'true'
@@ -302,108 +302,104 @@ jobs:
           #
           # Đánh đổi: khi cache hỏng thì lần build sau mất ~4 phút thay vì ~1.
           # Chậm hơn nhưng THẤY được ở thời gian job, còn một Dockerfile hỏng lọt
-          # qua đây thì chỉ lộ ra ở Render, sau khi Vercel đã ship frontend mới.
+          # qua đây thì chỉ lộ ra giữa lúc deploy, khi VPS đã kịp `git pull`.
           cache-from: type=gha
           cache-to: type=gha,mode=max,ignore-error=true
 
-  # Vercel Hobby chỉ cho deploy commit mà git author là chủ account. Commit của
-  # người khác không "fail" - deployment vào thẳng trạng thái BLOCKED, bỏ qua
-  # build, và `vercel deploy` không coi BLOCKED là trạng thái kết thúc nên nó
-  # chờ vô hạn. VERCEL_TOKEN KHÔNG cứu được: Vercel xét metadata git mà CLI đọc
-  # từ cây làm việc, không xét chủ sở hữu token. Xem bước "Stage source" bên
-  # dưới để biết cách đi vòng.
+  # Deploy lên VPS tự host (160.191.244.11). Trước đây job này deploy web lên
+  # Vercel và backend do Render tự kéo; cả hai đã bỏ - toàn bộ app giờ chạy
+  # trên một VPS sau Nginx. Xem deploy/README.md.
   #
-  # `git.deploymentEnabled: false` trong vercel.json đã tắt auto-deploy của Git
-  # integration - nếu bật lại thì mỗi commit sẽ deploy hai lần.
+  # Không có job deploy-preview nữa: preview là dịch vụ của Vercel, tự host
+  # thì không có sẵn thứ tương đương. PR vẫn được `verify`/`e2e`/`docker-server`
+  # gác, chỉ là không có URL xem thử.
   #
-  # Cần ba secrets ở repo: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID.
-  # Build vẫn chạy trên hạ tầng Vercel với env vars của project, ở đây chỉ upload
-  # source rồi chờ kết quả.
-
-  deploy-preview:
-    needs: verify
-    # PR từ fork KHÔNG được cấp secrets (GitHub cố ý), nên job này ở đó chỉ có
-    # thể đỏ với token rỗng. Nó cũng không nên chạy: deploy preview một PR lạ là
-    # đem mã của người ngoài lên hạ tầng Vercel của mình. Chỉ PR mở từ nhánh
-    # trong chính repo này mới được preview.
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    # Build của project này mất ~35s và Vercel cắt mọi build ở 45 phút, nên bất
-    # cứ thứ gì vượt mốc dưới đây là hỏng chứ không phải chậm. Không có dòng này
-    # thì job treo đủ 6 tiếng theo mặc định của GitHub.
-    timeout-minutes: 15
-
-    env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20.19.x
-
-      - name: Install Vercel CLI
-        run: npm i -g vercel@59
-
-      # CLI đọc .git của cây làm việc rồi đính kèm tác giả commit vào deployment;
-      # đó chính là thứ khiến Vercel Hobby chặn commit của người ngoài. `git
-      # archive` cho ra đúng cây file của commit này mà không kèm .git, nên CLI
-      # không có tác giả nào để đính kèm và không còn gì để chặn.
-      #
-      # Deploy từ thư mục khác thay vì xoá .git tại chỗ, để bước post của
-      # actions/checkout vẫn còn repo mà dọn credentials.
-      - name: Stage source without git metadata
-        run: |
-          mkdir -p /tmp/deploy
-          git archive --format=tar HEAD | tar -x -C /tmp/deploy
-
-      - name: Deploy preview
-        working-directory: /tmp/deploy
-        # --archive=tgz gửi một file nén thay vì vài nghìn file lẻ; monorepo này
-        # đủ lớn để cách upload từng file hay bị chậm và timeout.
-        #
-        # --logs đẩy log build của Vercel ra stderr; thiếu nó thì step chỉ in
-        # "Building…" rồi im lặng và không ai biết build đang ở đâu. stdout vẫn
-        # chỉ có mỗi URL nên $(...) dưới đây không bị lẫn log.
-        run: |
-          url=$(vercel deploy --archive=tgz --yes --logs --token="${{ secrets.VERCEL_TOKEN }}")
-          echo "Preview: $url" >> "$GITHUB_STEP_SUMMARY"
-
+  # BA SECRETS cần đặt ở repo (Settings -> Secrets and variables -> Actions):
+  #
+  #   VPS_SSH_KEY      private key của cặp DÀNH RIÊNG cho CI, không phải key cá
+  #                    nhân. Dán cả khối, kể cả dòng BEGIN/END.
+  #   VPS_HOST         user@host, ví dụ root@160.191.244.11
+  #   VPS_KNOWN_HOSTS  kết quả `ssh-keyscan -t ed25519 <host>`
+  #
+  # Phía VPS, key này bị ép forced-command trong authorized_keys:
+  #
+  #   command="bash /opt/masoi/app/deploy/deploy.sh",no-pty,... ssh-ed25519 AAAA...
+  #
+  # Gọi qua `bash` chứ không gọi thẳng script: bit thực thi của file do git
+  # quyết định, và một commit tạo trên Windows rất dễ vào repo với mode 100644.
+  # Lúc đó forced-command trả "Permission denied" (exit 126) - đã gặp thật.
+  #
+  # nên nó chỉ chạy được đúng script deploy. Lộ key cũng không chạy được lệnh
+  # tuỳ ý, không mở port forward, không mở shell. Đây là lý do bước "Deploy"
+  # bên dưới gửi một chuỗi vô nghĩa: sshd bỏ qua lệnh gửi kèm.
   deploy-production:
-    # Chờ cả ván khói lẫn build Docker: Vercel ship web trong khi Render không
-    # build nổi image mới là kiểu hỏng lặng lẽ đã ghi ở docker-server. Preview
-    # thì chỉ cần verify - đó là tiện ích cho PR, không phải cổng ra production.
-    # e2e/docker có thể `skipped` khi chỉ sửa web -> vẫn cho deploy (always() +
-    # kiểm result từng job). Không dùng `always()` thì deploy bị skip theo.
+    # Chờ cả ván khói lẫn build Docker. e2e/docker có thể `skipped` khi chỉ sửa
+    # web -> vẫn cho deploy (always() + kiểm result từng job). Không dùng
+    # `always()` thì deploy bị skip theo.
     needs: [verify, e2e, docker-server]
     if: always() && github.event_name == 'push' && needs.verify.result == 'success' && (needs.e2e.result == 'success' || needs.e2e.result == 'skipped') && (needs.docker-server.result == 'success' || needs.docker-server.result == 'skipped')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Build web trên VPS 2GB mất ~10 phút khi apps/web đổi, cộng build server và
+    # chờ health. 30 phút là rộng rãi; vượt mốc đó là hỏng chứ không phải chậm.
+    timeout-minutes: 30
 
-    env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    # Hai lần deploy chạy chồng lên nhau sẽ cùng `git pull` và cùng `up -d` trên
+    # một máy. Xếp hàng thay vì huỷ: huỷ giữa chừng có thể bỏ máy lại ở trạng
+    # thái code mới + image cũ.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20.19.x
-
-      - name: Install Vercel CLI
-        run: npm i -g vercel@59
-
-      # Xem giải thích ở job deploy-preview.
-      - name: Stage source without git metadata
+      - name: Nạp SSH key
         run: |
-          mkdir -p /tmp/deploy
-          git archive --format=tar HEAD | tar -x -C /tmp/deploy
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Ghim host key thay vì StrictHostKeyChecking=no. Không ghim thì lần
+          # đầu nối tới BẤT KỲ máy nào cũng được chấp nhận, và một kẻ chen giữa
+          # nhận là VPS sẽ nuốt trọn phiên deploy.
+          printf '%s\n' "${{ secrets.VPS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
-      - name: Deploy production
-        working-directory: /tmp/deploy
+      - name: Deploy
+        # Chuỗi "deploy" chỉ để đọc cho dễ: forced-command phía server bỏ qua
+        # lệnh gửi kèm và luôn chạy deploy/deploy.sh. Script đó tự git pull,
+        # build, up -d, rồi chờ /api/health xanh trong 180 giây - không xanh thì
+        # nó in 100 dòng log cuối và thoát khác 0, kéo theo job này đỏ.
+        run: ssh -o BatchMode=yes -o ConnectTimeout=20 "${{ secrets.VPS_HOST }}" deploy
+
+      - name: Kiểm tra từ ngoài Internet
+        # deploy.sh đã kiểm health qua 127.0.0.1 ở trong máy. Bước này kiểm từ
+        # bên ngoài, đi qua đúng đường mà người chơi đi: DNS -> Nginx -> TLS ->
+        # container. Nginx hỏng hoặc cert hết hạn chỉ lộ ra ở đây.
         run: |
-          url=$(vercel deploy --prod --archive=tgz --yes --logs --token="${{ secrets.VERCEL_TOKEN }}")
-          echo "Production: $url" >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          url=https://masoionline.duckdns.org
+
+          health=$(curl -fsS --max-time 20 "$url/api/health")
+          echo "$health"
+          echo "$health" | grep -q '"ok":true' || { echo "health không ok"; exit 1; }
+
+          code=$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 30 "$url/")
+          test "$code" = "200" || { echo "trang chủ trả $code"; exit 1; }
+
+          # Socket.IO phải lên WebSocket thật. Thiếu hai header Upgrade trong
+          # Nginx thì client vẫn chạy được bằng long-polling - chậm hơn nhiều mà
+          # không có lỗi nào, nên phải kiểm riêng chứ không suy ra từ 200 ở trên.
+          ws=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
+            -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+            -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+            "$url/socket.io/?EIO=4&transport=websocket" || true)
+          test "$ws" = "101" || { echo "WebSocket trả $ws, đáng lẽ 101"; exit 1; }
+
+          version=$(echo "$health" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
+          echo "Đã deploy: $version" >> "$GITHUB_STEP_SUMMARY"
+          echo "Health: $url/api/health" >> "$GITHUB_STEP_SUMMARY"
+
+          # Commit đang chạy phải khớp commit vừa push. Lệch nghĩa là deploy.sh
+          # pull hụt hoặc container cũ chưa bị thay - kiểu hỏng im lặng nhất.
+          case "${{ github.sha }}" in
+            "$version"*) echo "khớp commit ${{ github.sha }}" ;;
+            *) echo "LỆCH: đang chạy $version, vừa push ${{ github.sha }}"; exit 1 ;;
+          esac
