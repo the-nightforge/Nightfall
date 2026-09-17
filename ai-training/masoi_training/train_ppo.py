@@ -92,6 +92,53 @@ def load_init(path: Path, obs: int, act: int) -> tuple[PolicyValueNet, int, dict
     return m, hidden, w.get("residual")
 
 
+def rows_mean(values: torch.Tensor, rows: torch.Tensor | None) -> torch.Tensor:
+    """Trung bình trên hàng được chọn; `rows=None` = mọi hàng; chọn rỗng = 0 (không NaN)."""
+    if rows is None:
+        return values.mean()
+    picked = values[rows]
+    return picked.mean() if picked.numel() > 0 else values.new_zeros(())
+
+
+def ppo_loss_terms(
+    logp_all: torch.Tensor,
+    used: torch.Tensor,
+    actions: torch.Tensor,
+    old_logp: torch.Tensor,
+    adv: torch.Tensor,
+    clip: float,
+    rows: torch.Tensor | None,
+    ref_logp_all: torch.Tensor | None,
+) -> dict[str, torch.Tensor]:
+    """Các số hạng loss PPO của một batch.
+
+    `rows` (--train-decisions) giới hạn policy-loss, entropy, approxKl và
+    clipFraction vào hàng được train: entropy trên hàng KHÔNG train là một lực
+    làm phẳng không có gradient nào cân lại, và approxKl trung bình cả hàng
+    FINAL_VOTE gần tất định thì cổng `--target-kl` không bao giờ thấy trôi
+    (giai đoạn 1, 2026-09-17: NIGHT còn 57 % argmax, làng −7 điểm).
+
+    `anchor` = KL(init ‖ mới) trên MỌI hàng — mỏ neo giữ lượt không train gần
+    hành vi xuất phát. `ref_logp_all=None` → 0.
+    """
+    logp = logp_all.gather(1, actions.unsqueeze(1)).squeeze(1)
+    ratio = torch.exp(logp - old_logp)
+    selected = torch.min(ratio * adv, torch.clamp(ratio, 1 - clip, 1 + clip) * adv)
+    # Chỉ cộng các ô ĐANG BẬT: ô bị che có logp = log(0) và `0 * -inf` là NaN.
+    entropy_rows = -(logp_all.exp() * logp_all.masked_fill(~used, 0.0)).sum(1)
+    terms = {
+        "policy": -rows_mean(selected, rows),
+        "entropy": rows_mean(entropy_rows, rows),
+        "approxKl": rows_mean((old_logp - logp).detach(), rows),
+        "clipFraction": rows_mean(((ratio - 1).abs() > clip).float().detach(), rows),
+        "anchor": logp_all.new_zeros(()),
+    }
+    if ref_logp_all is not None:
+        diff = (ref_logp_all - logp_all).masked_fill(~used, 0.0)
+        terms["anchor"] = (ref_logp_all.exp() * diff).sum(1).mean()
+    return terms
+
+
 BASELINES = ("role", "mean", "value")
 
 
@@ -192,6 +239,8 @@ def main() -> None:
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--clip", type=float, default=0.2)
     p.add_argument("--entropy", type=float, default=0.01)
+    p.add_argument("--anchor-kl", type=float, default=0.0, dest="anchor_kl",
+                   help="Hệ số KL(init ‖ mới) trên mọi hàng; 0 = tắt (hành vi cũ)")
     p.add_argument("--value-coef", type=float, default=0.5)
     # P0-3: mặc định giữ hành vi cũ byte-một (clip 0/const/global).
     p.add_argument("--value-clip", type=float, default=0.0,
@@ -245,7 +294,10 @@ def main() -> None:
     if len(d) == 0:
         raise ValueError(f"không còn hàng nào sau khi lọc --side {a.side}")
     model, hidden, init_residual = load_init(Path(a.init), d.obs_size, d.action_size)
-    init_state = copy.deepcopy(model.state_dict())
+    # Bản sao ĐÓNG BĂNG của init, cùng kiến trúc: mỏ neo KL và thước đo độ trôi.
+    ref = copy.deepcopy(model).eval()
+    for param in ref.parameters():
+        param.requires_grad_(False)
     opt = torch.optim.Adam(model.parameters(), lr=a.lr)
 
     X = torch.from_numpy(d.features)
@@ -253,6 +305,9 @@ def main() -> None:
     A = torch.from_numpy(d.actions)
     R = torch.from_numpy(d.rewards)
     OLD = torch.from_numpy(d.logprobs.astype(np.float32))
+    DEC = torch.from_numpy(d.decisions.astype(np.int64))
+    decision_names = [str(name) for name in d.meta["decisions"]]
+    present = sorted(int(k) for k in np.unique(d.decisions))
 
     # Residual: phân phối trên (bases + β·net)/τ, mask = tập ứng viên. Init và
     # rollout phải CÙNG loại và CÙNG β — hai policy khác nhau chung một ratio
@@ -344,56 +399,60 @@ def main() -> None:
     for epoch in range(1, a.epochs + 1):
         model.train()
         order = torch.randperm(len(d), generator=gen)
-        tot = {"policyLoss": 0.0, "valueLoss": 0.0, "entropy": 0.0, "approxKl": 0.0, "clipFraction": 0.0}
+        tot = {"policyLoss": 0.0, "valueLoss": 0.0, "entropy": 0.0, "anchor": 0.0, "approxKl": 0.0, "clipFraction": 0.0}
+        kl_sum = torch.zeros(len(decision_names), dtype=torch.float64)
+        kl_count = torch.zeros(len(decision_names), dtype=torch.float64)
         n = 0
         for s in range(0, len(d), a.batch_size):
             idx = order[s : s + a.batch_size]
             logits, value = model(X[idx])
             logp_all, used = policy_logp(logits, idx)
-            logp = logp_all.gather(1, A[idx].unsqueeze(1)).squeeze(1)
-            ratio = torch.exp(logp - OLD[idx])
-            unclipped = ratio * adv[idx]
-            clipped = torch.clamp(ratio, 1 - a.clip, 1 + a.clip) * adv[idx]
-            selected = torch.min(unclipped, clipped)
-            if train_rows is None:
-                policy_loss = -selected.mean()
-            else:
-                sel = selected[train_rows[idx]]
-                # Batch có thể không chứa hàng được chọn (hiếm khi batch nhỏ):
-                # loss 0, không NaN. Cấu hình sai toàn cục đã bị chặn ở trên.
-                policy_loss = -sel.mean() if sel.numel() > 0 else torch.zeros((), device=selected.device)
+            rows = train_rows[idx] if train_rows is not None else None
+            ref_logp_all = None
+            if a.anchor_kl > 0:
+                with torch.no_grad():
+                    ref_logp_all = policy_logp(ref(X[idx])[0], idx)[0]
+            terms = ppo_loss_terms(logp_all, used, A[idx], OLD[idx], adv[idx], a.clip, rows, ref_logp_all)
             value_loss = clipped_value_loss(
                 value, old_values[idx], R[idx], a.value_clip
             ) if old_values is not None else nn.functional.mse_loss(value, R[idx])
-            probs = logp_all.exp()
-            # Chỉ cộng entropy của các ô ĐANG BẬT: ô bị che có logp = log(0) và
-            # tích `0 * -inf` là NaN, thứ sẽ lan ra toàn bộ gradient.
-            entropy = -(probs * logp_all.masked_fill(~used, 0.0)).sum(1).mean()
             ent_coef = entropy_coef(a.entropy, epoch, a.epochs, a.entropy_schedule)
-            loss = policy_loss + a.value_coef * value_loss - ent_coef * entropy
+            loss = (
+                terms["policy"]
+                + a.value_coef * value_loss
+                - ent_coef * terms["entropy"]
+                + a.anchor_kl * terms["anchor"]
+            )
             opt.zero_grad()
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 0.5)
             opt.step()
             with torch.no_grad():
-                kl = (OLD[idx] - logp).mean().item()
-                cf = ((ratio - 1).abs() > a.clip).float().mean().item()
+                per_row = (OLD[idx] - logp_all.gather(1, A[idx].unsqueeze(1)).squeeze(1)).double()
+                kl_sum += torch.bincount(DEC[idx], weights=per_row, minlength=len(decision_names))
+                kl_count += torch.bincount(DEC[idx], minlength=len(decision_names)).double()
             b = len(idx)
             n += b
             for k, v in (
-                ("policyLoss", policy_loss.item()),
+                ("policyLoss", terms["policy"].item()),
                 ("valueLoss", value_loss.item()),
-                ("entropy", entropy.item()),
-                ("approxKl", kl),
-                ("clipFraction", cf),
+                ("entropy", terms["entropy"].item()),
+                ("anchor", terms["anchor"].item()),
+                ("approxKl", terms["approxKl"].item()),
+                ("clipFraction", terms["clipFraction"].item()),
             ):
                 tot[k] += v * b
         row = {"epoch": epoch, **{k: round(v / max(n, 1), 5) for k, v in tot.items()}}
+        row["approxKlByDecision"] = {
+            decision_names[k]: round(float(kl_sum[k] / kl_count[k]), 5) for k in present
+        }
         history.append(row)
         print(
             f"epoch {epoch}  policy {row['policyLoss']:.4f}  value {row['valueLoss']:.4f}"
-            f"  ent {row['entropy']:.3f}  kl {row['approxKl']:.5f}  clip {row['clipFraction']:.3f}"
+            f"  ent {row['entropy']:.3f}  anchor {row['anchor']:.5f}  kl {row['approxKl']:.5f}"
+            f"  clip {row['clipFraction']:.3f}"
         )
+        print("  kl theo loại: " + "  ".join(f"{k} {v:.5f}" for k, v in row["approxKlByDecision"].items()))
         # Cổng KL: một bước quá xa policy đã sinh rollout là một bước mà ratio
         # không còn nói đúng về nó — đo 2026-09-09: 4 epoch đổi 12,5 % argmax
         # trong khi advantage gần như nhiễu. Dừng ở epoch vượt ngưỡng (đã cập
@@ -406,14 +465,15 @@ def main() -> None:
     model.eval()
     with torch.no_grad():
         everything = torch.arange(len(d))
-        new = policy_logp(model(X)[0], everything)[0].argmax(1)
-        # Bản sao CÙNG kiến trúc với model (activation/norm/value trunk của init):
-        # dựng lại bằng cấu hình mặc định thì init mlp-2 không nạp được state.
-        ref = copy.deepcopy(model)
-        ref.load_state_dict(init_state)
-        ref.eval()
-        old = policy_logp(ref(X)[0], everything)[0].argmax(1)
-        agree_init = float((new == old).float().mean())
+        new_logp_all, used_all = policy_logp(model(X)[0], everything)
+        old_logp_all = policy_logp(ref(X)[0], everything)[0]
+        same = (new_logp_all.argmax(1) == old_logp_all.argmax(1)).float()
+        agree_init = float(same.mean())
+        kl_rows = (old_logp_all.exp() * (old_logp_all - new_logp_all).masked_fill(~used_all, 0.0)).sum(1)
+        # Theo từng loại quyết định: trung bình toàn bộ che mất lượt KHÔNG train
+        # đang trôi sau lượt FINAL_VOTE gần tất định.
+        agree_by_decision = {decision_names[k]: round(float(same[DEC == k].mean()), 4) for k in present}
+        kl_by_decision = {decision_names[k]: round(float(kl_rows[DEC == k].mean()), 5) for k in present}
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -439,6 +499,9 @@ def main() -> None:
                 "history": history,
                 "epochsRun": len(history),
                 "agreementWithInit": round(agree_init, 4),
+                "agreementWithInitByDecision": agree_by_decision,
+                "klToInitByDecision": kl_by_decision,
+                "anchorKl": a.anchor_kl,
                 "baseline": a.baseline,
                 # `baselineMse` > `constantMse` nghĩa là baseline đang LÀM HẠI.
                 "baselineMse": round(baseline_mse, 4),
