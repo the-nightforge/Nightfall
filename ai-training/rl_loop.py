@@ -217,6 +217,26 @@ def latest_champion_file(champions: Path) -> Path:
     return files[-1]
 
 
+def prune_iteration(it: Path) -> int:
+    """Xoá dữ liệu train của một vòng ĐÃ XONG, trả số byte đã giải phóng.
+
+    Chỉ `roll-*/`, `enc/`, `trajectories.jsonl` (~3 GB mỗi vòng 3000 ván; 10 vòng
+    v1 = 31 GB trên ổ còn 23 GB). Giữ `model/`, `bench*.json` và mọi dấu `.done`:
+    vòng đã nằm trong `state["done"]` bị bỏ qua cả vòng khi resume, nên không bước
+    nào cần đọc lại dữ liệu đã xoá. Gọi SAU `save_state()`, không bao giờ trước.
+    """
+    targets = [*sorted(it.glob("roll-*")), it / "enc", it / "trajectories.jsonl"]
+    freed = 0
+    for target in targets:
+        if target.is_dir():
+            freed += sum(f.stat().st_size for f in target.rglob("*") if f.is_file())
+            shutil.rmtree(target)
+        elif target.is_file():
+            freed += target.stat().st_size
+            target.unlink()
+    return freed
+
+
 def ppo_cmd(enc: Path, champion: Path, best: Path, model_dir: Path, model_id: str, a: argparse.Namespace) -> list[str]:
     """Lệnh PPO một vòng: init = điểm xuất phát vòng này, mỏ neo KL = champion chính thức `best`."""
     return [
@@ -277,6 +297,8 @@ def main() -> None:
                    help="Điểm phe KHÔNG train được tụt so với champion (--side village|wolves); âm = tắt (D4)")
     p.add_argument("--anchor-kl", type=float, default=0.1, dest="anchor_kl",
                    help="Xem train_ppo --anchor-kl: neo KL về champion chính thức gần nhất; 0 = tắt")
+    p.add_argument("--prune-rollouts", action=argparse.BooleanOptionalAction, default=True, dest="prune_rollouts",
+                   help="Xoá roll-*/enc/trajectories.jsonl của vòng đã xong (giữ model, bench, .done)")
     p.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     a = p.parse_args()
 
@@ -326,6 +348,9 @@ def main() -> None:
     for k in range(1, a.iterations + 1):
         if k in state["done"]:
             print(f"vòng {k}: đã xong, bỏ qua", flush=True)
+            # Lần trước có thể bị ngắt giữa save_state và bước dọn.
+            if a.prune_rollouts:
+                prune_iteration(out / f"iter-{k:04d}")
             continue
         it = out / f"iter-{k:04d}"
         it.mkdir(exist_ok=True)
@@ -423,6 +448,9 @@ def main() -> None:
         state["championOther"] = champ.other
         state["championImbalance"] = champ.imbalance
         save_state()
+        if a.prune_rollouts:
+            freed = prune_iteration(it)
+            print(f"vòng {k}: đã dọn rollout, giải phóng {freed / 1e9:.1f} GB", flush=True)
 
     print(f"xong. champion: {best} điểm {champ.score:+.1f}")
 

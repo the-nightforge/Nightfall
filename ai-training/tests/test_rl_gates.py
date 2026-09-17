@@ -25,6 +25,7 @@ from rl_loop import (  # noqa: E402
     next_start,
     passes_gates,
     ppo_cmd,
+    prune_iteration,
     read_bench,
     rollout_cmd,
 )
@@ -139,6 +140,24 @@ def main() -> None:
     assert ppo[ppo.index("--init") + 1] == "champ.json", ppo
     assert ppo[ppo.index("--train-decisions") + 1] == "vote,final_vote,hunter_shot", ppo
     assert "--shaping-decisions" not in ppo, ppo
+
+    # Dọn rollout của vòng đã xong (~3 GB/vòng 3000 ván): chỉ dữ liệu train,
+    # giữ model, benchmark và dấu .done để resume vẫn bỏ qua đúng các bước.
+    with tempfile.TemporaryDirectory() as tmp:
+        it = Path(tmp) / "iter-0001"
+        for sub in ("roll-all", "roll-village", "roll-wolves", "enc", "model"):
+            (it / sub).mkdir(parents=True)
+            (it / sub / "data.bin").write_bytes(b"x" * 100)
+        (it / "trajectories.jsonl").write_bytes(b"y" * 50)
+        (it / "bench.json").write_text("{}", encoding="utf8")
+        (it / "bench-confirm.json").write_text("{}", encoding="utf8")
+        (it / ".ppo.done").write_text("ok", encoding="utf8")
+        freed = prune_iteration(it)
+        assert freed == 3 * 100 + 100 + 50, freed
+        left = sorted(p.name for p in it.iterdir())
+        assert left == [".ppo.done", "bench-confirm.json", "bench.json", "model"], left
+        assert (it / "model" / "data.bin").exists()
+        assert prune_iteration(it) == 0  # chạy lại: không lỗi, không còn gì để xoá
 
     print("ok")
 
