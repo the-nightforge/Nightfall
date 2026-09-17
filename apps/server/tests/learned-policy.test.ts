@@ -63,11 +63,11 @@ describe("resolveBotPolicy", () => {
     }
   });
 
-  it("model đóng gói trong repo phải load được — BC clone phe làng, logits thuần", () => {
+  it("model đóng gói trong repo phải load được — cả bàn, logits thuần", () => {
     const resolved = resolveBotPolicy(CHAMPION);
     if (!resolved.enabled) throw new Error("champion phải enabled");
     expect(resolved.modelId).toBe("village-bc-0002");
-    expect(resolved.seats).toBe("village");
+    expect(resolved.seats).toBe("all");
     // BC-logits thuần (v1 dừng ở parity, không PPO — spec 2026-09-14 D5):
     // không có residual.beta.
     expect(resolved.policy.residual).toBeUndefined();
@@ -75,12 +75,12 @@ describe("resolveBotPolicy", () => {
 });
 
 describe("learnedRuntimeOptions", () => {
-  it("enabled → ghế làng, cả vote lẫn đêm, argmax như benchmark", () => {
+  it("enabled → vote, đêm, phiên toà, phát bắn; argmax như benchmark", () => {
     const resolved = resolveBotPolicy(CHAMPION);
     const options = learnedRuntimeOptions(resolved);
     expect(options).toMatchObject({
       learnedTemperature: 0,
-      learnedDecisions: "both",
+      learnedDecisions: ["vote", "night", "final", "hunter"],
     });
     expect(options.learnedPolicy?.id).toBe("village-bc-0002");
   });
@@ -93,14 +93,19 @@ describe("learnedRuntimeOptions", () => {
 describe("policyAppliesToSeat", () => {
   const enabled = resolveBotPolicy(CHAMPION);
 
-  it("phe làng với seats=village → chỉ ghế KHÔNG thuộc bầy sói được policy", () => {
+  it("seats=all (production) → mọi ghế được policy, kể cả sói và chưa biết phe", () => {
     if (!enabled.enabled) throw new Error("champion phải enabled");
     expect(policyAppliesToSeat(enabled, false)).toBe(true);
-    expect(policyAppliesToSeat(enabled, true)).toBe(false);
+    expect(policyAppliesToSeat(enabled, true)).toBe(true);
+    expect(policyAppliesToSeat(enabled, undefined)).toBe(true);
   });
 
-  it("chưa biết phe (sảnh chờ, ảnh chụp cũ) → KHÔNG giao: an toàn", () => {
-    expect(policyAppliesToSeat(enabled, undefined)).toBe(false);
+  it("seats=village → chỉ ghế BIẾT chắc không thuộc bầy sói", () => {
+    if (!enabled.enabled) throw new Error("champion phải enabled");
+    const village = { ...enabled, seats: "village" as const };
+    expect(policyAppliesToSeat(village, false)).toBe(true);
+    expect(policyAppliesToSeat(village, true)).toBe(false);
+    expect(policyAppliesToSeat(village, undefined)).toBe(false);
   });
 
   it("disabled → không ghế nào được giao", () => {
@@ -109,13 +114,13 @@ describe("policyAppliesToSeat", () => {
 });
 
 describe("BotSession lọc policy theo phe", () => {
-  it("ghế làng và ghế sói cùng dựng được runtime, sói bỏ qua policy", () => {
+  it("ghế làng và ghế sói cùng dựng được runtime có policy", () => {
     const session = new BotSession("seed-1", ["lang", "soi"], { lang: false, soi: true });
     expect(() => session.runtimeFor("lang")).not.toThrow();
     expect(() => session.runtimeFor("soi")).not.toThrow();
   });
 
-  it("session sảnh chờ (không biết phe) → mọi bot heuristic, không nổ", () => {
+  it("session sảnh chờ (không biết phe) → dựng runtime không nổ", () => {
     const session = new BotSession("seed-2", ["a", "b"]);
     expect(() => session.runtimeFor("a")).not.toThrow();
   });

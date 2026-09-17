@@ -40,7 +40,7 @@ export interface FinalVoteHardRule {
   reason: string;
 }
 
-function isKnownAlly(context: BotDecisionContext, playerId: string): boolean {
+export function isKnownAlly(context: BotDecisionContext, playerId: string): boolean {
   const knowledge = context.knowledge;
   const selfIsWolf = knowledge.knownRoles[knowledge.botId] === "WEREWOLF";
   return selfIsWolf && knowledge.knownRoles[playerId] === "WEREWOLF";

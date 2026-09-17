@@ -1,4 +1,5 @@
 import type { BotWeights } from "../config/weights";
+import { isKnownAlly, type BotHunterShotIntention } from "../decision/trial-decision";
 import type { VoteScoringFrame } from "../decision/vote-decision";
 import { buildLiveObservation } from "../learning/live-observation";
 import type { LearnedPolicy } from "../learning/mlp";
@@ -250,6 +251,75 @@ export function learnedFinalVotePolicy(
       );
       return { guilty: decoded.targetId !== null };
     },
+  };
+}
+
+/**
+ * Phát bắn cuối của Thợ Săn, chọn bằng policy học được, trên nền nước
+ * heuristic đã tính.
+ *
+ * Cùng loại `CHOOSE` với lượt bầu; ô "không mục tiêu" = không bắn, luôn hợp
+ * lệ. Mask giữ đúng cổng cứng của heuristic: chỉ ghế trong
+ * `hunterShot.legalTargets`, không phải chính mình, không phải đồng minh đã
+ * biết. Không ô hợp lệ hoặc decode lạ → heuristic, không bao giờ ném giữa ván.
+ */
+export function selectLearnedHunterShot(
+  policy: LearnedPolicy,
+  weights: BotWeights,
+  context: BotDecisionContext,
+  state: BotBrainState,
+  heuristic: BotHunterShotIntention,
+  rng: BotRng,
+  options: LearnedPolicyOptions = {},
+  onPick?: LearnedPickSink,
+): BotHunterShotIntention {
+  const shot = context.knowledge.hunterShot;
+  if (!shot || !shot.canAct) return heuristic;
+  const maxSeats = options.maxSeats ?? DEFAULT_MAX_SEATS;
+  const slots = slotsPerKind(maxSeats);
+  const dayKind = ACTION_KINDS.indexOf(DAY_ACTION_KIND);
+  const live = buildLiveObservation(
+    context.knowledge,
+    state,
+    weights,
+    "HUNTER_SHOT",
+    options.belief?.(),
+  );
+  const encoded = encodeObservation(live, { maxSeats });
+  const eligible = new Set(
+    shot.legalTargets.filter(
+      (id) => id !== context.knowledge.botId && !isKnownAlly(context, id),
+    ),
+  );
+  const mask = encoded.mask.map((on, index) => {
+    if (!on || Math.floor(index / slots) !== dayKind) return false;
+    const slot = index % slots;
+    return slot === maxSeats || eligible.has(encoded.seats[slot]!);
+  });
+  const temperature = options.temperature ?? 0;
+  const features = encoded.features;
+  const picked = sampleMasked(policy.logits(features), mask, temperature, rng);
+  if (!picked) return heuristic;
+  const decoded = decodeAction(picked.index, encoded.seats, maxSeats);
+  if (decoded.kind !== DAY_ACTION_KIND) return heuristic;
+  onPick?.(
+    {
+      actionIndex: picked.index,
+      logProb: picked.logProb,
+      value: policy.value(features),
+      temperature,
+    },
+    { kind: DAY_ACTION_KIND, targetId: decoded.targetId },
+  );
+  if (decoded.targetId === heuristic.targetId) return heuristic;
+  if (decoded.targetId === null) {
+    return { kind: "HUNTER_SHOT", targetId: null, confidence: 1, evidence: [] };
+  }
+  return {
+    kind: "HUNTER_SHOT",
+    targetId: decoded.targetId,
+    confidence: Math.exp(picked.logProb),
+    evidence: [],
   };
 }
 

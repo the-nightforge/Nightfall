@@ -11,10 +11,10 @@ import { config } from "../config";
  * Cầu nối giữa file weights huấn luyện (PPO) và bot production.
  *
  * Cấu hình nằm ở MỘT biến môi trường `BOT_POLICY_FILE`: không đặt là heuristic
- * thuần như mọi khi, đặt là làng dùng policy cho cả phiếu lẫn hành động đêm -
- * đúng cấu hình benchmark đã đo ở `.tmp/rl-village-shaping-long` (champion-0009:
- * rl-bench +3.44, rl-conf +2.78). Rollout lẫn rollback đều là việc của env,
- * không phải của code.
+ * thuần như mọi khi, đặt là CẢ BÀN (làng lẫn sói) dùng policy cho phiếu, hành
+ * động đêm, phiên toà và phát bắn Thợ Săn. village-bc-0002 đo cấu hình cả bàn
+ * (vote+night): làng +3.1 ± 0.4 điểm so với heuristic. Rollout lẫn rollback đều
+ * là việc của env, không phải của code.
  *
  * File đặt mà KHÔNG đọc được, KHÔNG phải JSON, hoặc LỆCH schema encoder thì
  * `resolveBotPolicy` ném ngay: gọi lúc boot, server không kịp lên là biết -
@@ -46,10 +46,10 @@ export function resolveBotPolicy(path: string | null | undefined): ResolvedBotPo
   // model huấn luyện trên một phiên bản quan sát khác sẽ bị từ chối ở cửa này
   // thay vì ra quyết định ngu ngơ giữa ván.
   const policy = loadMlpPolicy(json);
-  return { enabled: true, policy, modelId: policy.id, seats: "village" };
+  return { enabled: true, policy, modelId: policy.id, seats: "all" };
 }
 
-/** Ghế nào được giao policy. Chỉ có cấu hình benchmark đã đo: phe làng. */
+/** Ghế nào được giao policy. Production dùng "all"; "village" giữ cho rollback bằng code. */
 export type BotPolicySeats = "all" | "village";
 
 export type ResolvedBotPolicy =
@@ -83,8 +83,8 @@ export function learnedRuntimeOptions(
     learnedPolicy: resolved.policy,
     // 0 = argmax: cùng chế độ "hành vi đánh giá" khi benchmark thăng chức.
     learnedTemperature: 0,
-    // Cả phiếu lẫn hành động đêm - cấu hình mà +3.44/+2.78 đã đo.
-    learnedDecisions: "both" satisfies LearnedDecisions,
+    // Mọi lượt có nhãn trong dataset: phiếu, đêm, phiên toà, phát bắn.
+    learnedDecisions: ["vote", "night", "final", "hunter"] satisfies LearnedDecisions,
   };
 }
 
