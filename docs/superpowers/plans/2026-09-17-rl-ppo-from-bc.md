@@ -61,8 +61,10 @@ cd /d/Source/ma-soi-online
 git stash push -m runtime-hunter -- .env.example apps/server/scripts/ai-benchmark.ts apps/server/src/bots/learned-policy.ts apps/server/tests/learned-policy.test.ts packages/game-engine/src/bot/BotRuntime.ts packages/game-engine/src/bot/decision/trial-decision.ts packages/game-engine/src/bot/policy/learned-policy.ts packages/game-engine/tests/bot-final-vote-action-space.test.ts
 git fetch origin
 git switch -c feat/rl-ppo-from-bc origin/main
-git log --oneline feat/gameplay -3   # lấy hash commit spec và commit plan
-git cherry-pick <hash-spec> <hash-plan>
+# b4fedd6 = commit cuối của feat/gameplay đã merge vào main (PR #113); mọi
+# commit sau nó trên feat/gameplay là spec + plan của dự án này.
+git log --oneline b4fedd6..feat/gameplay
+git cherry-pick b4fedd6..feat/gameplay
 git stash pop
 ```
 
