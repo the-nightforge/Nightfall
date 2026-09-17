@@ -349,6 +349,60 @@ describe("BotRuntime.decideFinalVote — hook + trace (D3/D8)", () => {
     expect(t.chosen.actionKind).toBe("FINAL");
   });
 
+  it("cờ hunter: model thay mục tiêu bắn, mask chặn tự bắn; không cờ = heuristic", () => {
+    const hunterContext = context({
+      phase: "HUNTER_SHOT",
+      selfRole: "HUNTER",
+      knownRoles: { me: "HUNTER" },
+      trialAccusedId: null,
+      canFinalVote: false,
+      hunterShot: { canAct: true, legalTargets: ["me", "a", "b", "c"] },
+    });
+    const angry = (): BotBrainState => {
+      const s = stateFor("hunter");
+      s.suspicion.a = { score: 95, reasons: [], lastUpdatedRound: 2 };
+      return s;
+    };
+    const stub = (slots: number[]): LearnedPolicy => ({
+      id: "hunter-stub",
+      logits: () => {
+        const l = new Array<number>(actionSize()).fill(0);
+        for (const slot of slots) l[actionIndexOf("CHOOSE", slot)] = 10;
+        return l;
+      },
+      value: () => null,
+    });
+    const noneSlot = DEFAULT_MAX_SEATS;
+
+    const heuristic = runtimeWith({ state: angry() });
+    heuristic.observe(hunterContext);
+    expect(heuristic.decideHunterShot(hunterContext).targetId).toBe("a");
+
+    // Model thích "không bắn" → lật heuristic.
+    const holdFire = runtimeWith({ learnedPolicy: stub([noneSlot]), learnedDecisions: ["hunter"], state: angry() });
+    holdFire.observe(hunterContext);
+    expect(holdFire.decideHunterShot(hunterContext).targetId).toBeNull();
+
+    // Model thích mọi ghế → chọn một ghế hợp lệ, không bao giờ chính mình.
+    const anySeat = runtimeWith({
+      learnedPolicy: stub(Array.from({ length: DEFAULT_MAX_SEATS }, (_, i) => i)),
+      learnedDecisions: ["hunter"],
+      state: angry(),
+    });
+    anySeat.observe(hunterContext);
+    const target = anySeat.decideHunterShot(hunterContext).targetId;
+    expect(["a", "b", "c"]).toContain(target);
+
+    // Cờ khác (vote/night/final) không chạm phát bắn.
+    const otherFlags = runtimeWith({
+      learnedPolicy: stub([noneSlot]),
+      learnedDecisions: ["vote", "night", "final"],
+      state: angry(),
+    });
+    otherFlags.observe(hunterContext);
+    expect(otherFlags.decideHunterShot(hunterContext).targetId).toBe("a");
+  });
+
   it("finalVotePolicy tường minh thắng teacher; learned cờ final cũng thắng", () => {
     const trusting = stateFor();
     trusting.trust.a = { score: 100, reasons: [], lastUpdatedRound: 2 };
@@ -451,6 +505,9 @@ describe("D6 — LearnedDecisions là tập cờ", () => {
     expect(learnedHas("final", "final")).toBe(true);
     expect(learnedHas(["vote", "final"], "night")).toBe(false);
     expect(learnedHas(["vote", "final"], "final")).toBe(true);
+    expect(learnedHas("both", "hunter")).toBe(false);
+    expect(learnedHas(["hunter"], "hunter")).toBe(true);
+    expect(learnedHas(["hunter"], "vote")).toBe(false);
   });
 
   it("isDefaultLearnedDecisions: chỉ undefined/both là mặc định", () => {

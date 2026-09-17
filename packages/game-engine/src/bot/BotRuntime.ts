@@ -54,6 +54,7 @@ import { DAY_ACTION_KIND, FINAL_ACTION_KIND } from "./learning/observation";
 import {
   learnedFinalVotePolicy,
   learnedPolicyModel,
+  selectLearnedHunterShot,
   selectLearnedNight,
   type LearnedDecided,
   type LearnedPick,
@@ -154,8 +155,8 @@ export interface BotRuntimeOptions {
   learnedTemperature?: number;
   /**
    * Lượt nào giao cho `learnedPolicy`. Mặc định `"both"` (= vote+night).
-   * Tập cờ `"vote" | "night" | "final"` (mảng); `"both"` giữ làm alias tương
-   * thích = vote+night — KHÔNG gồm final. Chỉ dành cho ablation: đo xem điểm
+   * Tập cờ `"vote" | "night" | "final" | "hunter"` (mảng); `"both"` giữ làm
+   * alias tương thích = vote+night — KHÔNG gồm final/hunter. Chỉ dành cho ablation: đo xem điểm
    * mất ở lượt bầu, lượt đêm hay phiên toà — lượt còn lại đi đúng đường
    * heuristic hiện hành, byte một, như thể không có policy.
    */
@@ -180,7 +181,7 @@ export interface BotRuntimeOptions {
  *
  * Xem `BotRuntimeOptions.learnedDecisions`.
  */
-export type LearnedDecision = "vote" | "night" | "final";
+export type LearnedDecision = "vote" | "night" | "final" | "hunter";
 /**
  * Tập lượt giao cho `learnedPolicy` (spec 2026-09-14 D6): một cờ, một mảng
  * cờ, hoặc `"both"` (= vote+night, alias tương thích — KHÔNG gồm final).
@@ -694,7 +695,22 @@ export class BotRuntime {
   /** Phát bắn cuối của Thợ Săn; `targetId: null` là không bắn. */
   decideHunterShot(context: BotDecisionContext): BotHunterShotIntention {
     const run = this.beginTracedDecision();
-    const shot = decideHunterShot(context, this.state, run.rng, this.weights, run.probe);
+    const heuristic = decideHunterShot(context, this.state, run.rng, this.weights, run.probe);
+    // Heuristic tính trước làm nền (confidence/evidence) và đường lui; model
+    // chỉ thay mục tiêu. Không cờ hunter thì đúng đường cũ, byte một.
+    const shot =
+      this.learnedPolicy && learnedHas(this.learnedDecisions, "hunter")
+        ? selectLearnedHunterShot(
+            this.learnedPolicy,
+            this.weights,
+            context,
+            this.state,
+            heuristic,
+            run.rng,
+            { temperature: this.learnedTemperature, belief: () => this.beliefAfter },
+            run.onPick,
+          )
+        : heuristic;
     run.finish(context, "HUNTER_SHOT", shot.targetId, shot.targetId ? "bắn" : "không bắn");
     return shot;
   }
