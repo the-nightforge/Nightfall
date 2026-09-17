@@ -27,6 +27,7 @@ import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 
 from masoi_training.console import force_utf8_console
@@ -105,6 +106,71 @@ def should_promote(scores: list[float], champion: float, margin: float) -> bool:
     trường hợp đó, và cái giá là một lần benchmark thêm CHỈ khi có ứng viên.
     """
     return len(scores) > 0 and all(s > champion + margin for s in scores)
+
+
+OTHER_SIDE = {"village": "wolves", "wolves": "village"}
+
+
+def imbalance_of(bench_json: Path) -> float:
+    """Độ lệch cân bằng cả bàn: |tỉ lệ làng thắng khi CẢ BÀN dùng model − 50 %|,
+    bằng điểm phần trăm (spec 2026-09-17 D3). Thiếu cấu hình `all` thì ném: trả
+    0 im lặng là một cổng luôn mở."""
+    b = json.loads(bench_json.read_text(encoding="utf8"))
+    by = {s.get("setup"): s["villageWinMean"] for s in b["summary"]}
+    if "all" not in by:
+        raise ValueError(f"{bench_json}: thiếu cấu hình all — benchmark phải chạy baseline,village,wolves,all")
+    return abs(by["all"] - 0.5) * 100
+
+
+@dataclass(frozen=True)
+class BenchRead:
+    """Ba con số một lần benchmark quyết định thăng hạng."""
+
+    score: float
+    """`score_of(bench, side)` — sức mạnh phe đang train."""
+    other: float | None
+    """`score_of(bench, phe kia)`; None khi `--side all` (score đã gồm hai phe)."""
+    imbalance: float
+    """`imbalance_of(bench)`."""
+
+
+def read_bench(bench_json: Path, side: str) -> BenchRead:
+    other = OTHER_SIDE.get(side)
+    return BenchRead(
+        score=score_of(bench_json, side),
+        other=score_of(bench_json, other) if other else None,
+        imbalance=imbalance_of(bench_json),
+    )
+
+
+def champion_of(reads: list[BenchRead]) -> BenchRead:
+    """Điểm của champion mới = chiều BI QUAN trên mọi bộ seed đã đo: điểm và phe
+    kia lấy min, lệch cân bằng lấy max — cùng tinh thần `min(scores)` cũ."""
+    others = [r.other for r in reads if r.other is not None]
+    return BenchRead(
+        score=min(r.score for r in reads),
+        other=min(others) if others else None,
+        imbalance=max(r.imbalance for r in reads),
+    )
+
+
+def passes_gates(
+    reads: list[BenchRead],
+    champion: BenchRead,
+    margin: float,
+    balance_slack: float,
+    other_slack: float,
+) -> bool:
+    """Thăng hạng khi MỌI bộ seed qua CẢ BA cổng: điểm (`should_promote`), cân
+    bằng (D3) và phe kia (D4). Slack âm tắt cổng tương ứng."""
+    if not should_promote([r.score for r in reads], champion.score, margin):
+        return False
+    if balance_slack >= 0 and any(r.imbalance > champion.imbalance + balance_slack for r in reads):
+        return False
+    if other_slack >= 0 and champion.other is not None:
+        if any(r.other is None or r.other < champion.other - other_slack for r in reads):
+            return False
+    return True
 
 
 def main() -> None:
