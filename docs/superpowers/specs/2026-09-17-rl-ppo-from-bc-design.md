@@ -86,6 +86,20 @@ champion-0009 (900 ván/ô): night-only cho +1,22 / −2,67 trên hai bộ seed 
 trọng số BC trong rollout/benchmark; value và entropy vẫn tính trên mọi hàng
 (hành vi sẵn có của `--train-decisions`). Giai đoạn 3 thử riêng đêm.
 
+### D6. Sửa guard ghi `learned` cho FINAL_VOTE
+
+Phát hiện khi lập kế hoạch (probe 10 ván preset 8 người, cờ `final,hunter`,
+T=1): 378 trace FINAL_VOTE, **0** mang `learned`; HUNTER_SHOT có. Nguyên
+nhân là giới hạn đã ghi sẵn ở `BotRuntime.beginTracedDecision`: guard so
+`kind` với `DAY_ACTION_KIND` và so `targetId`, nhưng hai nước FINAL cùng
+`targetId` (bị cáo) và kind là `FINAL` → không bao giờ khớp → rollout bỏ mọi
+hàng FINAL_VOTE, PPO không học được phiên toà dù cờ đã bật.
+
+Sửa: với `decision === "FINAL_VOTE"`, khớp khi `learnedDecided.kind ===
+FINAL_ACTION_KIND` và "policy chọn treo" (`learnedDecided.targetId !== null`)
+trùng "nước đã đi là treo" (`label === FINAL_VOTE_GUILTY_LABEL`). Các lượt
+khác giữ guard cũ.
+
 ## Kế hoạch chạy
 
 Máy: i5-10300H 4 lõi/8 luồng, 24 GB, CPU-only (rollout là TypeScript nên GPU
@@ -117,9 +131,9 @@ Giai đoạn 3 chỉ chạy khi giai đoạn 1 VÀ 2 đều có ít nhất một
   thiếu khoá mới.
 - `apps/server/tests`: parse `--learned-decisions` dùng chung — hợp lệ, rỗng,
   tên lạ đều như `ai-benchmark` hiện tại.
-- Self-play TS: ván có `learnedDecisions: ["final","hunter"]` + trace sinh
-  trajectory có nhãn FINAL_VOTE/HUNTER_SHOT kèm `logProb` (không có cờ → không
-  có `logProb` ở hai lượt đó).
+- Self-play TS: ván preset 8 người có `learnedDecisions: ["final","hunter"]`,
+  T=1 + trace sinh trajectory có `learned` ở CẢ FINAL_VOTE lẫn HUNTER_SHOT, và
+  nhãn encoder trùng `learned.actionIndex` (khoá D6).
 - Giai đoạn 0 là kiểm chứng tích hợp của cả đường ống.
 
 ## Tiêu chí thành công & rollback
