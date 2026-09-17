@@ -100,6 +100,31 @@ FINAL_ACTION_KIND` và "policy chọn treo" (`learnedDecided.targetId !== null`)
 trùng "nước đã đi là treo" (`label === FINAL_VOTE_GUILTY_LABEL`). Các lượt
 khác giữ guard cũ.
 
+### D7–D10. Chống trôi lượt không train (sau giai đoạn 1 v1)
+
+Giai đoạn 1 v1 (10 vòng, `--side village`): làng +0,9 → −3,56 (vòng 5) → −7,0 ± 1,5
+(vòng 10). Ablation cùng seed: model vòng 10 với lượt đêm trả cho heuristic cho
++0,7 ± 1,0 → toàn bộ mức tụt đến từ NIGHT, lượt D5 đã loại khỏi policy-loss
+(argmax còn giống init 57 %, entropy 0,77 → 1,15; Bảo Vệ/Phù Thuỷ/Tiên Tri trôi
+nhất). Các lượt được train cũng không cho thấy tiến bộ (+0,7 so với +3,4 ± 4,0
+của model xuất phát, cùng cấu hình không-đêm).
+
+- **D7.** Entropy, `approxKl` (cổng `--target-kl`) và `clipFraction` chỉ tính trên
+  hàng `--train-decisions`. Trước đó entropy làm phẳng hàng không train mà không
+  gradient nào cân lại, và FINAL_VOTE gần tất định (43 % hàng) pha loãng KL.
+- **D8.** `train_ppo --anchor-kl` (mặc định 0 = cũ; `rl_loop` mặc định 0,1): cộng
+  `KL(neo ‖ mới)` trên MỌI hàng. `--anchor-model` = champion chính thức gần nhất
+  (`rl_loop` truyền `champions/` mới nhất), không phải init của vòng.
+- **D9.** `rl_loop`: vòng có benchmark mà không thăng hạng → vòng sau đi từ
+  champion chính thức (`next_start`), không đi tiếp dây chuyền challenger.
+- **D10.** `metrics.json` ghi `agreementWithInitByDecision`, `klToInitByDecision`,
+  `approxKlByDecision` theo epoch. Notebook 6.1 dừng nếu lượt không train còn
+  < 97 % argmax. Thư mục chạy đổi sang `*-v2`.
+
+Đo một vòng PPO trên rollout đúng policy (pilot iter-0001), NIGHT còn giống init:
+code cũ 97,5 % → entropy theo hàng train 99,0 % → thêm neo 0,1: 99,5 %; VOTE vẫn
+đổi 1,9 % (neo 1,0 bắt đầu kìm cả VOTE: 98,9 %).
+
 ## Kế hoạch chạy
 
 Máy: i5-10300H 4 lõi/8 luồng, 24 GB, CPU-only (rollout là TypeScript nên GPU
