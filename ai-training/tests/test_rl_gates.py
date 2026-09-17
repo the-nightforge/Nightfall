@@ -16,10 +16,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from rl_loop import (  # noqa: E402
     BenchRead,
+    bench_cmd,
+    champion_from_state,
     champion_of,
     imbalance_of,
     passes_gates,
     read_bench,
+    rollout_cmd,
 )
 
 
@@ -85,6 +88,26 @@ def main() -> None:
     new = champion_of([BenchRead(3.0, -0.5, 6.5), BenchRead(2.5, 0.2, 6.0)])
     assert new == BenchRead(2.5, -0.5, 6.5), new
     assert champion_of([BenchRead(3.0, None, 6.5)]).other is None
+
+    # State cũ (trước spec 2026-09-17) thiếu hai khoá mới → lấy từ bench champion-0000.
+    initial = BenchRead(score=0.0, other=-0.3, imbalance=5.8)
+    assert champion_from_state({"champion": None}, initial) == initial
+    legacy = {"champion": "x.json", "championScore": 2.4}
+    assert champion_from_state(legacy, initial) == BenchRead(2.4, -0.3, 5.8)
+    full = {"champion": "x.json", "championScore": 2.4, "championOther": 0.1, "championImbalance": 6.2}
+    assert champion_from_state(full, initial) == BenchRead(2.4, 0.1, 6.2)
+
+    # Mọi lệnh rollout/benchmark mang cùng một cờ bốn lượt (D2).
+    decisions = "vote,night,final,hunter"
+    bench = bench_cmd(Path("m.json"), "rl-bench", Path("b.json"), 300, 3, decisions)
+    assert bench[bench.index("--learned-decisions") + 1] == decisions, bench
+    assert bench[bench.index("--setups") + 1] == "baseline,village,wolves,all", bench
+    assert bench[bench.index("--seed") + 1] == "rl-bench", bench
+    roll = rollout_cmd(Path("m.json"), "village", 3, Path("part"), 1000, 1.0, decisions)
+    assert roll[roll.index("--learned-decisions") + 1] == decisions, roll
+    assert roll[roll.index("--learned-seats") + 1] == "village", roll
+    assert roll[roll.index("--seed") + 1] == "rl-3-village", roll
+    assert roll[roll.index("--trace-games") + 1] == "1000", roll
 
     print("ok")
 

@@ -455,6 +455,29 @@ value và entropy vẫn tính trên mọi hàng. Rỗng = hành vi cũ byte mộ
 hoặc không khớp hàng nào đều bị từ chối ngay (mean() trên rỗng ra NaN là cách
 hỏng trong im lặng). `rl_loop` có passthrough `--train-decisions`.
 
+### PPO logits thuần từ bản sao BC: cờ bốn lượt và hai cổng mới (2026-09-17)
+
+Spec: `docs/superpowers/specs/2026-09-17-rl-ppo-from-bc-design.md`.
+
+- `--learned-decisions` (mặc định `vote,night,final,hunter`) đi xuống MỌI
+  rollout (`selfplay.ts`) và MỌI benchmark — đúng cấu hình production. Trước
+  đây cả hai chạy mặc định vote+night và PPO không bao giờ thấy phiên toà.
+- **Cổng cân bằng** `--balance-slack` (mặc định 1,0): `|all − 50 %|` của
+  challenger không được hơn champion quá slack, trên mọi bộ seed. Âm = tắt.
+- **Cổng phe kia** `--other-side-slack` (mặc định 1,0, chỉ `--side
+  village|wolves`): model logits là một bộ trọng số cho cả hai phe, nên train
+  làng không được kéo sói tụt quá slack. Âm = tắt.
+- `state.json` lưu thêm `championOther`, `championImbalance`; state cũ thiếu
+  khoá thì lấy từ `bench-champion-0000.json`.
+
+```bash
+cd ai-training && PYTHONUTF8=1 ./.venv/Scripts/python.exe rl_loop.py \
+  --champion ../apps/server/assets/models/village-bc-0002.weights.json \
+  --side village --iterations 10 --games 3000 --bench-every 5 \
+  --temperature 1 --lr 1e-4 --target-kl 0.01 \
+  --train-decisions vote,final_vote,hunter_shot --out .tmp/rl-bc-village
+```
+
 ### Ngắt lúc nào cũng được
 
 `--resume` (mặc định bật) đọc `state.json` và bỏ qua mọi vòng đã hoàn tất; trong
