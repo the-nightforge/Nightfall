@@ -407,7 +407,9 @@ def main() -> None:
     with torch.no_grad():
         everything = torch.arange(len(d))
         new = policy_logp(model(X)[0], everything)[0].argmax(1)
-        ref = PolicyValueNet(d.obs_size, d.action_size, hidden)
+        # Bản sao CÙNG kiến trúc với model (activation/norm/value trunk của init):
+        # dựng lại bằng cấu hình mặc định thì init mlp-2 không nạp được state.
+        ref = copy.deepcopy(model)
         ref.load_state_dict(init_state)
         ref.eval()
         old = policy_logp(ref(X)[0], everything)[0].argmax(1)
