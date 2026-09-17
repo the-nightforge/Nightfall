@@ -128,6 +128,19 @@ def integration_case() -> None:
         free = run("free", 0.0)
         anchored = run("anchored", 5.0)
 
+        # --anchor-model: neo về model KHÁC init (rl_loop truyền champion chính
+        # thức). Neo về chính init phải cho đúng cùng kết quả với mặc định.
+        sys.argv = [
+            "train_ppo", "--data", str(data), "--init", str(initp), "--out", str(Path(tmp) / "explicit"),
+            "--epochs", "8", "--batch-size", "64", "--lr", "1e-2", "--entropy", "0.5",
+            "--model-id", "explicit", "--shaping-weight", "0",
+            "--train-decisions", "vote", "--anchor-kl", "5.0", "--anchor-model", str(initp),
+        ]
+        train_ppo.main()
+        explicit = json.loads((Path(tmp) / "explicit" / "metrics.json").read_text(encoding="utf8"))
+        assert explicit["klToInitByDecision"] == anchored["klToInitByDecision"], (explicit, anchored)
+        assert explicit["anchorModel"] == str(initp), explicit["anchorModel"]
+
         for m in (free, anchored):
             assert set(m["agreementWithInitByDecision"]) == {"VOTE", "NIGHT"}, m["agreementWithInitByDecision"]
             assert set(m["klToInitByDecision"]) == {"VOTE", "NIGHT"}, m["klToInitByDecision"]

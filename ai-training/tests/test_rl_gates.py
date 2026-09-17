@@ -7,6 +7,7 @@ này chặn đúng hai kiểu thăng hạng đó.
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 import tempfile
@@ -20,7 +21,10 @@ from rl_loop import (  # noqa: E402
     champion_from_state,
     champion_of,
     imbalance_of,
+    latest_champion_file,
+    next_start,
     passes_gates,
+    ppo_cmd,
     read_bench,
     rollout_cmd,
 )
@@ -108,6 +112,33 @@ def main() -> None:
     assert roll[roll.index("--learned-seats") + 1] == "village", roll
     assert roll[roll.index("--seed") + 1] == "rl-3-village", roll
     assert roll[roll.index("--trace-games") + 1] == "1000", roll
+
+    # Điểm xuất phát vòng sau (2026-09-17): giai đoạn 1 train tiếp vòng 6–10 từ
+    # model đã bị benchmark loại ở vòng 5 (−3,56) và kết thúc ở −7,0.
+    best = Path("champions/champion-0000.weights.json")
+    challenger = Path("iter-0005/model/model.weights.json")
+    assert next_start(False, challenger, best) == challenger  # vòng không đo: đi tiếp
+    assert next_start(True, challenger, best) == best  # vòng đo, không thăng hạng: quay về champion
+    promoted = Path("champions/champion-0005.weights.json")
+    assert next_start(True, challenger, promoted) == promoted  # thăng hạng: đi từ bản sao chính thức
+
+    with tempfile.TemporaryDirectory() as tmp:
+        champions = Path(tmp)
+        for name in ("champion-0000", "champion-0005", "champion-0010"):
+            (champions / f"{name}.weights.json").write_text("{}", encoding="utf8")
+        assert latest_champion_file(champions).name == "champion-0010.weights.json"
+
+    # Lệnh PPO mang hệ số neo (mặc định rl_loop 0,1) và các cờ train đi kèm.
+    args = argparse.Namespace(
+        baseline="role", side="village", lr=1e-4, shaping_alpha=1.0, shaping_decisions="",
+        train_decisions="vote,final_vote,hunter_shot", target_kl=0.01, anchor_kl=0.1,
+    )
+    ppo = ppo_cmd(Path("enc"), Path("champ.json"), Path("best.json"), Path("model"), "ppo-0001", args)
+    assert ppo[ppo.index("--anchor-kl") + 1] == "0.1", ppo
+    assert ppo[ppo.index("--anchor-model") + 1] == "best.json", ppo
+    assert ppo[ppo.index("--init") + 1] == "champ.json", ppo
+    assert ppo[ppo.index("--train-decisions") + 1] == "vote,final_vote,hunter_shot", ppo
+    assert "--shaping-decisions" not in ppo, ppo
 
     print("ok")
 

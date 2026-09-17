@@ -240,7 +240,9 @@ def main() -> None:
     p.add_argument("--clip", type=float, default=0.2)
     p.add_argument("--entropy", type=float, default=0.01)
     p.add_argument("--anchor-kl", type=float, default=0.0, dest="anchor_kl",
-                   help="Hệ số KL(init ‖ mới) trên mọi hàng; 0 = tắt (hành vi cũ)")
+                   help="Hệ số KL(neo ‖ mới) trên mọi hàng; 0 = tắt (hành vi cũ)")
+    p.add_argument("--anchor-model", default=None, dest="anchor_model",
+                   help="model.weights.json làm mỏ neo KL; mặc định = --init. rl_loop truyền champion chính thức")
     p.add_argument("--value-coef", type=float, default=0.5)
     # P0-3: mặc định giữ hành vi cũ byte-một (clip 0/const/global).
     p.add_argument("--value-clip", type=float, default=0.0,
@@ -298,6 +300,16 @@ def main() -> None:
     ref = copy.deepcopy(model).eval()
     for param in ref.parameters():
         param.requires_grad_(False)
+    # Mỏ neo KL: champion chính thức (đã benchmark) thay vì init của vòng này —
+    # qua các vòng không đo, init là challenger vòng trước và trôi cộng dồn.
+    anchor = ref
+    if a.anchor_model:
+        anchor, _, anchor_residual = load_init(Path(a.anchor_model), d.obs_size, d.action_size)
+        if (anchor_residual is None) != (init_residual is None):
+            raise ValueError("--anchor-model và --init phải cùng loại policy (residual hay logits)")
+        anchor.eval()
+        for param in anchor.parameters():
+            param.requires_grad_(False)
     opt = torch.optim.Adam(model.parameters(), lr=a.lr)
 
     X = torch.from_numpy(d.features)
@@ -411,7 +423,7 @@ def main() -> None:
             ref_logp_all = None
             if a.anchor_kl > 0:
                 with torch.no_grad():
-                    ref_logp_all = policy_logp(ref(X[idx])[0], idx)[0]
+                    ref_logp_all = policy_logp(anchor(X[idx])[0], idx)[0]
             terms = ppo_loss_terms(logp_all, used, A[idx], OLD[idx], adv[idx], a.clip, rows, ref_logp_all)
             value_loss = clipped_value_loss(
                 value, old_values[idx], R[idx], a.value_clip
@@ -502,6 +514,7 @@ def main() -> None:
                 "agreementWithInitByDecision": agree_by_decision,
                 "klToInitByDecision": kl_by_decision,
                 "anchorKl": a.anchor_kl,
+                "anchorModel": a.anchor_model or str(a.init),
                 "baseline": a.baseline,
                 # `baselineMse` > `constantMse` nghĩa là baseline đang LÀM HẠI.
                 "baselineMse": round(baseline_mse, 4),

@@ -198,6 +198,39 @@ def bench_cmd(model: Path, seed: str, dest: Path, games: int, repeat: int, decis
     ]
 
 
+def next_start(benched: bool, challenger: Path, best: Path) -> Path:
+    """Model xuất phát của vòng sau.
+
+    Vòng KHÔNG đo: đi tiếp từ challenger (một update thật, chưa có điểm để bác).
+    Vòng ĐÃ đo: đi từ champion chính thức `best` — bản vừa thăng hạng, hoặc bản
+    cũ nếu challenger bị loại. Giai đoạn 1 (2026-09-17) đi tiếp từ model bị loại
+    ở vòng 5 (−3,56) và trôi tới −7,0 ở vòng 10.
+    """
+    return best if benched else challenger
+
+
+def latest_champion_file(champions: Path) -> Path:
+    """Champion chính thức mới nhất trong `champions/` (champion-0000 = bản xuất phát)."""
+    files = sorted(champions.glob("champion-*.weights.json"))
+    if not files:
+        raise FileNotFoundError(f"{champions}: không có champion nào")
+    return files[-1]
+
+
+def ppo_cmd(enc: Path, champion: Path, best: Path, model_dir: Path, model_id: str, a: argparse.Namespace) -> list[str]:
+    """Lệnh PPO một vòng: init = điểm xuất phát vòng này, mỏ neo KL = champion chính thức `best`."""
+    return [
+        PY, "-m", "masoi_training.train_ppo", "--data", str(enc),
+        "--init", str(champion), "--out", str(model_dir), "--model-id", model_id,
+        "--baseline", a.baseline, "--side", a.side, "--lr", str(a.lr),
+        "--shaping-weight", str(a.shaping_alpha),
+        "--anchor-kl", str(a.anchor_kl), "--anchor-model", str(best),
+        *(["--shaping-decisions", a.shaping_decisions] if a.shaping_decisions else []),
+        *(["--train-decisions", a.train_decisions] if a.train_decisions else []),
+        *(["--target-kl", str(a.target_kl)] if a.target_kl is not None else []),
+    ]
+
+
 def rollout_cmd(
     source: Path, seats: str, iteration: int, part: Path, games: int, temperature: float, decisions: str
 ) -> list[str]:
@@ -242,6 +275,8 @@ def main() -> None:
                    help="Điểm lệch cân bằng |all − 50%%| challenger được hơn champion; âm = tắt (D3)")
     p.add_argument("--other-side-slack", type=float, default=1.0, dest="other_side_slack",
                    help="Điểm phe KHÔNG train được tụt so với champion (--side village|wolves); âm = tắt (D4)")
+    p.add_argument("--anchor-kl", type=float, default=0.1, dest="anchor_kl",
+                   help="Xem train_ppo --anchor-kl: neo KL về champion chính thức gần nhất; 0 = tắt")
     p.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     a = p.parse_args()
 
@@ -276,6 +311,7 @@ def main() -> None:
 
     # Khôi phục champion đã thăng hạng ở lần chạy trước. Đặt SAU bench0 để lần
     # chạy đầu vẫn có điểm xuất phát, và trước vòng lặp để rollout đi từ đúng nó.
+    best = latest_champion_file(champions)
     if state["champion"]:
         champion = Path(state["champion"])
         champ = champion_from_state(state, champ)
@@ -329,13 +365,7 @@ def main() -> None:
         model_dir = it / "model"
         step(
             done_marker(it, "ppo"),
-            [PY, "-m", "masoi_training.train_ppo", "--data", str(enc),
-             "--init", str(champion), "--out", str(model_dir), "--model-id", model_id,
-             "--baseline", a.baseline, "--side", a.side, "--lr", str(a.lr),
-             "--shaping-weight", str(a.shaping_alpha),
-             *(["--shaping-decisions", a.shaping_decisions] if a.shaping_decisions else []),
-             *(["--train-decisions", a.train_decisions] if a.train_decisions else []),
-             *(["--target-kl", str(a.target_kl)] if a.target_kl is not None else [])],
+            ppo_cmd(enc, champion, best, model_dir, model_id, a),
             cwd=ROOT / "ai-training",
         )
         challenger = model_dir / "model.weights.json"
@@ -346,7 +376,6 @@ def main() -> None:
         should_bench = (k % a.bench_every == 0) or (k == a.iterations)
         if not should_bench:
             print(f"vòng {k}: bỏ benchmark (--bench-every)", flush=True)
-            champion = challenger
         else:
             bench = it / "bench.json"
             step(
@@ -380,12 +409,13 @@ def main() -> None:
                 print(f"  xác nhận trên seed {a.confirm_seed}: {reads[-1].score:+.1f}", flush=True)
             state["scores"].append(row)
             if passes_gates(reads, champ, **gates):
-                champion = champions / f"champion-{k:04d}.weights.json"
-                shutil.copy(challenger, champion)
+                best = champions / f"champion-{k:04d}.weights.json"
+                shutil.copy(challenger, best)
                 champ = champion_of(reads)
-                print(f"THĂNG HẠNG → {champion.name}", flush=True)
+                print(f"THĂNG HẠNG → {best.name}", flush=True)
             else:
-                print("GIỮ champion", flush=True)
+                print(f"GIỮ champion — vòng sau quay về {best.name}", flush=True)
+        champion = next_start(should_bench, challenger, best)
 
         state["done"].append(k)
         state["champion"] = str(champion)
@@ -394,7 +424,7 @@ def main() -> None:
         state["championImbalance"] = champ.imbalance
         save_state()
 
-    print(f"xong. champion: {champion} điểm {champ.score:+.1f}")
+    print(f"xong. champion: {best} điểm {champ.score:+.1f}")
 
 
 if __name__ == "__main__":
