@@ -16,11 +16,13 @@ import {
   traceFileName,
   weightsPreset,
   type BotWeights,
+  type LearnedDecisions,
   type LearnedSeats,
   type SelfPlayBatchInput,
   type SelfPlayGame,
 } from "@masoi/game-engine";
 import { PRESET_DECKS, type RoomConfig } from "@masoi/shared";
+import { parseLearnedDecisions } from "./learned-decisions";
 
 /**
  * Runner self-play — vỏ I/O quanh một nhân THUẦN.
@@ -78,6 +80,8 @@ interface Options {
   temperature: number;
   /** Ghế nào dùng policy. Xem `SelfPlayInput.learnedSeats`. */
   learnedSeats: LearnedSeats;
+  /** Lượt giao cho policy. Xem `SelfPlayInput.learnedDecisions`. Mặc định `"both"`. */
+  learnedDecisions: LearnedDecisions;
 }
 
 /**
@@ -114,6 +118,7 @@ function usage(): string {
     "  --policy <file>     model.weights.json (masoi-mlp-1/2) cắm vào bot; xem --learned-seats, --temperature",
     "  --temperature <t>   0 = argmax (mặc định); 1 = lấy mẫu cho rollout RL",
     "  --learned-seats <s> all | village | wolves (mặc định all)",
+    "  --learned-decisions <d> both | CSV trong vote,night,final,hunter (mặc định both)",
     "  --quiet             Chỉ in JSON, không in bản tóm tắt",
     "",
     "Đọc trace:  npm run trace-view -- <file.jsonl> [--bot <id>]",
@@ -143,6 +148,7 @@ function parseArgs(argv: readonly string[]): Options {
     policy: null,
     temperature: 0,
     learnedSeats: "all",
+    learnedDecisions: "both",
   };
 
   const number = (raw: string | undefined, flag: string): number => {
@@ -231,6 +237,9 @@ function parseArgs(argv: readonly string[]): Options {
         options.learnedSeats = raw;
         break;
       }
+      case "--learned-decisions":
+        options.learnedDecisions = parseLearnedDecisions(argv[++i] ?? "");
+        break;
       case "--quiet":
         options.quiet = true;
         break;
@@ -395,6 +404,7 @@ function main(): void {
           learnedPolicy,
           learnedSeats: options.learnedSeats,
           learnedTemperature: options.temperature,
+          learnedDecisions: options.learnedDecisions,
         }
       : {}),
   };
