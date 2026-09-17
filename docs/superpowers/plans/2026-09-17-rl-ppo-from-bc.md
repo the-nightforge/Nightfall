@@ -20,7 +20,7 @@
 - Siêu tham số chung giai đoạn 1–3: `--temperature 1 --lr 1e-4 --target-kl 0.01 --shaping-alpha 1 --baseline role`.
 - Máy: i5-10300H 4 lõi/8 luồng, CPU-only. KHÔNG đưa rollout lên GitHub Actions.
 - KHÔNG ghi đè `apps/server/assets/models/village-bc-0002.weights.json`; model mới là file mới.
-- KHÔNG commit `ai-training/colab/train_bc_local.ipynb` (thay đổi của người dùng).
+- Train do NGƯỜI DÙNG chạy qua `ai-training/colab/train_bc_local.ipynb` mục 6; agent không tự chạy `rl_loop.py` giai đoạn 0–4.
 - Mọi chạy Python trong `ai-training/`: `PYTHONUTF8=1 ./.venv/Scripts/python.exe ...` (Git Bash).
 - Commit message kết thúc bằng dòng `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
 
@@ -39,7 +39,8 @@
 | `ai-training/rl_loop.py` | `imbalance_of`, `BenchRead`, `read_bench`, `champion_of`, `passes_gates`, `champion_from_state`, `bench_cmd`, `rollout_cmd`; nối vào `main` | 3, 4 |
 | `ai-training/tests/test_rl_gates.py` (mới) | Test cổng + state + lệnh | 3, 4 |
 | `docs/BOT_SELF_LEARNING_TRAINING.md` | Mục cổng mới + lệnh chạy | 4 |
-| `apps/server/assets/models/village-ppo-0001.weights.json` (mới, có điều kiện) | Model đóng gói | 9 |
+| `ai-training/colab/train_bc_local.ipynb` | Mục 6: các cell chạy giai đoạn 0–4 | 5 |
+| `apps/server/assets/models/village-ppo-0001.weights.json` (mới, có điều kiện) | Model đóng gói | 7 |
 
 ---
 
@@ -1011,220 +1012,101 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 5: Giai đoạn 0 — chạy thử đường ống (~45 phút)
+### Task 5: Mục 6 (RL) trong `train_bc_local.ipynb` — người dùng tự chạy train
 
-**Files:** không sửa code. Sản phẩm: `.tmp/rl-pilot/`.
-
-**Interfaces:**
-- Consumes: mọi thứ từ Task 0–4.
-- Produces: quyết định ĐI TIẾP / DỪNG, và thời gian thật mỗi bước (ghi vào báo cáo cuối Task 5).
-
-- [ ] **Step 1: Chạy**
-
-```bash
-cd /d/Source/ma-soi-online && npm run build:deps
-cd ai-training
-PYTHONUTF8=1 ./.venv/Scripts/python.exe rl_loop.py \
-  --champion ../apps/server/assets/models/village-bc-0002.weights.json \
-  --side village --iterations 2 --games 600 --bench-every 2 \
-  --temperature 1 --lr 1e-4 --target-kl 0.01 \
-  --train-decisions vote,final_vote,hunter_shot \
-  --out .tmp/rl-pilot 2>&1 | tee ../.tmp/rl-pilot.log
-```
-
-Expected: kết thúc bằng dòng `xong. champion: …`, exit 0.
-
-- [ ] **Step 2: Kiểm tập encode có hàng FINAL_VOTE và HUNTER_SHOT**
-
-```bash
-PYTHONUTF8=1 ./.venv/Scripts/python.exe -c "
-import numpy as np
-from masoi_training.data import load
-d = load('../.tmp/rl-pilot/iter-0001/enc')
-names = d.meta['decisions']
-counts = np.bincount(d.decisions, minlength=len(names))
-print({n: int(c) for n, c in zip(names, counts)})
-assert counts[names.index('FINAL_VOTE')] > 0, 'không có hàng FINAL_VOTE'
-assert counts[names.index('HUNTER_SHOT')] > 0, 'không có hàng HUNTER_SHOT'
-print('ok')
-"
-```
-
-Expected: in bảng đếm và `ok`.
-
-- [ ] **Step 3: Kiểm độ ổn định PPO vòng 1**
-
-```bash
-PYTHONUTF8=1 ./.venv/Scripts/python.exe -c "
-import json
-m = json.load(open('../.tmp/rl-pilot/iter-0001/model/metrics.json', encoding='utf8'))
-kl = max(row['approxKl'] for row in m['history'])
-print('approxKl max', kl, '| agreementWithInit', m['agreementWithInit'], '| epochsRun', m['epochsRun'])
-assert kl < 0.05, 'approxKl quá lớn'
-assert m['agreementWithInit'] >= 0.95, 'policy trôi quá xa champion sau MỘT vòng'
-print('ok')
-"
-```
-
-Expected: `ok`.
-
-- [ ] **Step 4: Đọc thời gian thật và quyết định**
-
-```bash
-grep -E "^\\$|iteration|champion điểm|THĂNG|GIỮ|xong" ../.tmp/rl-pilot.log
-```
-
-Ghi lại thời lượng rollout / encode+PPO / benchmark một vòng (theo dấu thời gian file `.done` nếu log không có: `ls -la --time-style=+%H:%M:%S ../.tmp/rl-pilot/iter-0001/.*.done`).
-
-ĐI TIẾP khi Step 1–3 đều đạt. Nếu một bước sai: DỪNG, báo lại lỗi kèm log — không chạy giai đoạn 1.
-
----
-
-### Task 6: Giai đoạn 1 — phe làng (~3 giờ, chạy qua đêm)
-
-**Files:** không sửa code. Sản phẩm: `.tmp/rl-bc-village/`.
-
-**Interfaces:**
-- Produces: `.tmp/rl-bc-village/state.json` với `champion` (đường dẫn champion cuối của phe làng) dùng làm `--champion` cho Task 7.
-
-- [ ] **Step 1: Chạy (ngắt lúc nào cũng được, chạy lại đúng lệnh này sẽ resume)**
-
-```bash
-cd /d/Source/ma-soi-online/ai-training
-PYTHONUTF8=1 ./.venv/Scripts/python.exe rl_loop.py \
-  --champion ../apps/server/assets/models/village-bc-0002.weights.json \
-  --side village --iterations 10 --games 3000 --bench-every 5 \
-  --temperature 1 --lr 1e-4 --target-kl 0.01 --shaping-alpha 1 --baseline role \
-  --train-decisions vote,final_vote,hunter_shot \
-  --out .tmp/rl-bc-village 2>&1 | tee -a ../.tmp/rl-bc-village.log
-```
-
-- [ ] **Step 2: Đọc kết quả**
-
-```bash
-PYTHONUTF8=1 ./.venv/Scripts/python.exe -c "
-import json
-s = json.load(open('../.tmp/rl-bc-village/state.json', encoding='utf8'))
-for row in s['scores']: print(row)
-print('champion', s['champion'], 'score', s['championScore'], 'other', s.get('championOther'), 'imbalance', s.get('championImbalance'))
-"
-```
-
-- [ ] **Step 3: Quyết định theo spec**
-
-- Có ít nhất một dòng `THĂNG HẠNG` trong log → sang Task 7.
-- Không có: chạy lại MỘT lần với `--lr 3e-4 --out .tmp/rl-bc-village-lr3` (các cờ khác giữ nguyên). Vẫn không → DỪNG dự án A, báo lại bảng `scores` để chuyển dự án con B.
-- Có ứng viên qua cổng điểm nhưng bị cổng cân bằng chặn liên tục (điểm `score` ≥ champion + 2 mà vẫn `GIỮ`, và `imbalance` > champion + 1): DỪNG, báo người dùng quyết định `--balance-slack`.
-
----
-
-### Task 7: Giai đoạn 2 — phe sói (~3 giờ)
-
-**Files:** không sửa code. Sản phẩm: `.tmp/rl-bc-wolves/`.
-
-**Interfaces:**
-- Consumes: `champion` trong `.tmp/rl-bc-village/state.json` (hoặc `-lr3` nếu Task 6 dùng lần chạy lại).
-- Produces: `.tmp/rl-bc-wolves/state.json` → champion ứng viên cuối.
-
-- [ ] **Step 1: Chạy**
-
-```bash
-cd /d/Source/ma-soi-online/ai-training
-CHAMP=$(PYTHONUTF8=1 ./.venv/Scripts/python.exe -c "import json;print(json.load(open('../.tmp/rl-bc-village/state.json',encoding='utf8'))['champion'])")
-echo "$CHAMP"
-PYTHONUTF8=1 ./.venv/Scripts/python.exe rl_loop.py \
-  --champion "$CHAMP" \
-  --side wolves --iterations 10 --games 3000 --bench-every 5 \
-  --temperature 1 --lr 1e-4 --target-kl 0.01 --shaping-alpha 1 --baseline role \
-  --shaping-decisions vote \
-  --train-decisions vote,final_vote,hunter_shot \
-  --out .tmp/rl-bc-wolves 2>&1 | tee -a ../.tmp/rl-bc-wolves.log
-```
-
-- [ ] **Step 2: Đọc kết quả** — như Task 6 Step 2, thay `rl-bc-village` bằng `rl-bc-wolves`.
-
-- [ ] **Step 3: Quyết định** — cùng luật Task 6 Step 3 (chạy lại `--lr 3e-4 --out .tmp/rl-bc-wolves-lr3` một lần nếu không thăng hạng). Nếu phe sói không thăng hạng sau lần chạy lại: champion ứng viên cuối = champion của Task 6, và giai đoạn 3 bị bỏ qua.
-
----
-
-### Task 8: Giai đoạn 3 — lượt đêm (tuỳ chọn, ~1,5 giờ/phe)
-
-Chỉ chạy khi Task 6 VÀ Task 7 đều có ít nhất một lần thăng hạng. Ngược lại đánh dấu task này là bỏ qua và sang Task 9.
-
-- [ ] **Step 1: Làng, chỉ đêm**
-
-```bash
-cd /d/Source/ma-soi-online/ai-training
-CHAMP=$(PYTHONUTF8=1 ./.venv/Scripts/python.exe -c "import json;print(json.load(open('../.tmp/rl-bc-wolves/state.json',encoding='utf8'))['champion'])")
-PYTHONUTF8=1 ./.venv/Scripts/python.exe rl_loop.py \
-  --champion "$CHAMP" --side village --iterations 5 --games 3000 --bench-every 5 \
-  --temperature 1 --lr 1e-4 --target-kl 0.01 --shaping-alpha 1 --baseline role \
-  --train-decisions night --out .tmp/rl-bc-night-village 2>&1 | tee -a ../.tmp/rl-bc-night-village.log
-```
-
-- [ ] **Step 2: Sói, chỉ đêm** — từ champion của Step 1:
-
-```bash
-CHAMP=$(PYTHONUTF8=1 ./.venv/Scripts/python.exe -c "import json;print(json.load(open('../.tmp/rl-bc-night-village/state.json',encoding='utf8'))['champion'])")
-PYTHONUTF8=1 ./.venv/Scripts/python.exe rl_loop.py \
-  --champion "$CHAMP" --side wolves --iterations 5 --games 3000 --bench-every 5 \
-  --temperature 1 --lr 1e-4 --target-kl 0.01 --shaping-alpha 1 --baseline role \
-  --shaping-decisions vote --train-decisions night \
-  --out .tmp/rl-bc-night-wolves 2>&1 | tee -a ../.tmp/rl-bc-night-wolves.log
-```
-
-- [ ] **Step 3: Ghi nhận** — không thăng hạng ở cả hai = lượt đêm đi ngang: ghi vào báo cáo Task 9 rằng nút thắt đêm là observation (dự án con B). Champion ứng viên cuối = champion mới nhất có thăng hạng qua Task 6–8.
-
----
-
-### Task 9: Giai đoạn 4 — xác nhận trên seed mới và đóng gói (có điều kiện)
+Người dùng tự chạy mọi lượt train qua notebook local. Mục 6 đã được thêm vào
+`ai-training/colab/train_bc_local.ipynb` (18 cell, sau mục 5); task này kiểm và
+commit nó.
 
 **Files:**
-- Create (có điều kiện): `apps/server/assets/models/village-ppo-0001.weights.json`
-- Modify (có điều kiện): `apps/server/tests/learned-policy.test.ts`, `.env.example`, `deploy/env.production.example`
-- Create: `ai-training/reports/rl-ppo-from-bc-2026-09.md`
+- Modify: `ai-training/colab/train_bc_local.ipynb` (đã có mục 6; commit gồm cả chỉnh sửa trước đó của người dùng ở mục 3)
 
 **Interfaces:**
-- Consumes: champion ứng viên cuối (Task 6–8).
-- Produces: model đóng gói hoặc quyết định giữ `village-bc-0002`, kèm báo cáo.
+- Consumes: `rl_loop.py` cờ `--learned-decisions/--balance-slack/--other-side-slack` (Task 4), `selfplay.ts --learned-decisions` (Task 2), guard FINAL_VOTE (Task 1); từ `rl_loop`: `score_of`, `imbalance_of`.
+- Produces: các cell người dùng chạy theo thứ tự
 
-- [ ] **Step 1: Benchmark xác nhận trên seed chưa dùng**
+| Cell | Việc | Giai đoạn spec |
+|---|---|---|
+| setup | `run_logged` (stream output vào notebook + `.tmp/rl/<run>.log`), `rl_loop(name, champion, side, iterations, games, extra)`, `latest_champion(out)`, `show_state(out)` | — |
+| 6.0 | `build:deps` + từ chối nếu thiếu cờ của Task 0–4 | — |
+| 6.1 | pilot 2 vòng × 600 ván + kiểm hàng FINAL_VOTE/HUNTER_SHOT, `approxKl` < 0,05, `agreementWithInit` ≥ 0,95 → in `PILOT OK` | 0 |
+| 6.2 | làng 10 × 3000, tự chạy lại `--lr 3e-4` một lần, dừng nếu không thăng hạng | 1 |
+| 6.3 | sói 10 × 3000 từ champion làng, `--shaping-decisions vote`, retry như trên | 2 |
+| 6.4 | đêm 5 vòng/phe nếu 6.2 và 6.3 cùng thăng hạng | 3 |
+| 6.5 | benchmark `confirm-0917` 5×300 cho `village-bc-0002` và `CANDIDATE`, in khối `VERDICT: PASS/FAIL` + `candidate:` | 4 |
+
+- [ ] **Step 1: Kiểm notebook parse được và cell 6.0 từ chối đúng khi thiếu code**
+
+Chạy TRƯỚC khi merge Task 1–4 (trên nhánh chưa có chúng) thì cell 6.0 phải in `missing [...]`; SAU Task 4 phải in `OK - pipeline has the four-decision flag and both new gates`.
+
+```bash
+cd /d/Source/ma-soi-online/ai-training/colab
+python -c "
+import json, ast
+nb = json.load(open('train_bc_local.ipynb', encoding='utf-8'))
+[ast.parse(''.join(c['source'])) for c in nb['cells'] if c['cell_type'] == 'code']
+assert any('## 6. RL: PPO from the BC clone' in ''.join(c['source']) for c in nb['cells'])
+print('ok', len(nb['cells']))
+"
+```
+
+Expected: `ok 33`.
+
+- [ ] **Step 2: Commit**
 
 ```bash
 cd /d/Source/ma-soi-online
-CAND=<đường dẫn champion ứng viên cuối>
-npm run ai:benchmark -- --model apps/server/assets/models/village-bc-0002.weights.json --games 300 --repeat 5 --seed confirm-0917 --setups baseline,village,wolves,all,teacher --learned-decisions vote,night,final,hunter --out .tmp/rl-confirm-bc0002.json 2>&1 | tail -12
-npm run ai:benchmark -- --model "$CAND" --games 300 --repeat 5 --seed confirm-0917 --setups baseline,village,wolves,all,teacher --learned-decisions vote,night,final,hunter --out .tmp/rl-confirm-candidate.json 2>&1 | tail -12
+git add ai-training/colab/train_bc_local.ipynb
+git commit -m "feat(training): RL PPO-from-BC section in local notebook
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 2: Chấm bốn tiêu chí bằng chính các hàm của `rl_loop`**
+---
+
+### Task 6: Người dùng chạy mục 6.0 → 6.5 (checkpoint, agent không làm gì)
+
+Agent DỪNG ở đây và chờ. Người dùng chạy notebook theo thứ tự (mỗi cell dài có thể ngắt và chạy lại, `rl_loop` resume). Agent tiếp tục khi nhận được MỘT trong các thông báo:
+
+- Log/lỗi của 6.0 hoặc `PILOT FAILED: ...` (6.1) → chẩn đoán bằng `.tmp/rl/pilot.log`, sửa code, người dùng chạy lại.
+- `Village never promoted ...` (6.2) → viết báo cáo FAIL theo Task 7 Step 1a, đề xuất dự án con B.
+- Người dùng hỏi vì cổng cân bằng chặn liên tục → trình bày bảng `show_state`, để người dùng quyết `--balance-slack`.
+- Khối `VERDICT` của 6.5 → Task 7.
+
+---
+
+### Task 7: Đóng gói hoặc báo cáo từ verdict của notebook (có điều kiện)
+
+**Files:**
+- Create (PASS): `apps/server/assets/models/village-ppo-0001.weights.json`
+- Modify (PASS): `apps/server/tests/learned-policy.test.ts`, `.env.example`, `deploy/env.production.example`
+- Create: `ai-training/reports/rl-ppo-from-bc-2026-09.md`
+
+**Interfaces:**
+- Consumes: khối verdict 6.5 (`VERDICT`, `candidate:` là đường dẫn tuyệt đối), `.tmp/rl/confirm-bc0002.json`, `.tmp/rl/confirm-candidate.json`, các `.tmp/rl/*/state.json`.
+- Produces: model đóng gói hoặc quyết định giữ `village-bc-0002`, kèm báo cáo.
+
+Trước khi làm, chấm lại verdict độc lập (không tin bản in):
 
 ```bash
-cd ai-training
+cd /d/Source/ma-soi-online/ai-training
 PYTHONUTF8=1 ./.venv/Scripts/python.exe -c "
 import json
 from pathlib import Path
 from rl_loop import imbalance_of, score_of
-base = Path('../.tmp/rl-confirm-bc0002.json'); cand = Path('../.tmp/rl-confirm-candidate.json')
-res = {}
+base = Path('../.tmp/rl/confirm-bc0002.json'); cand = Path('../.tmp/rl/confirm-candidate.json')
 for side in ('village', 'wolves'):
-    res[side] = (score_of(base, side), score_of(cand, side))
-    print(side, 'bc-0002 %+.2f  candidate %+.2f  delta %+.2f' % (res[side][0], res[side][1], res[side][1] - res[side][0]))
-imb = imbalance_of(cand); print('imbalance candidate %.2f (ngưỡng 6.8)' % imb)
-viol = sum(r['violations'] for r in json.load(open(cand, encoding='utf8'))['rows']); print('violations', viol)
-trained = [s for s in ('village', 'wolves') if res[s][1] - res[s][0] >= 2.0]
-ok = (len(trained) > 0
-      and all(res[s][1] - res[s][0] >= -1.0 for s in ('village', 'wolves'))
-      and imb <= 6.8 and viol == 0)
-print('ĐẠT' if ok else 'KHÔNG ĐẠT', '| phe mạnh lên >= +2:', trained)
+    print(side, '%+.2f' % (score_of(cand, side) - score_of(base, side)))
+print('imbalance %.2f' % imbalance_of(cand))
+print('violations', sum(r['violations'] for r in json.load(open(cand, encoding='utf8'))['rows']))
 "
 ```
 
-Tiêu chí (spec "Tiêu chí thành công"): (1) mỗi phe ĐÃ thăng hạng ở Task 6–8 phải nằm trong `trained`; (2) không phe nào delta < −1; (3) imbalance ≤ 6,8; (4) 0 vi phạm. Đối chiếu (1) bằng tay với các phe đã thăng hạng.
+Expected: trùng số trong khối verdict. Lệch → dừng, báo người dùng.
 
-- [ ] **Step 3a (KHÔNG ĐẠT): viết báo cáo, giữ production**
+- [ ] **Step 1a (FAIL): viết báo cáo, giữ production**
 
-Tạo `ai-training/reports/rl-ppo-from-bc-2026-09.md` gồm: lệnh đã chạy ở Task 5–9, bảng `scores` của từng lần chạy, output Step 1–2, thời gian thật mỗi giai đoạn, kết luận "giữ village-bc-0002" và gợi ý bước kế (dự án con B). Commit:
+Tạo `ai-training/reports/rl-ppo-from-bc-2026-09.md` gồm: các bảng `show_state` và khối verdict người dùng gửi, đường dẫn log `.tmp/rl/*.log`, thời gian thật mỗi giai đoạn, kết luận "giữ village-bc-0002" và gợi ý bước kế (dự án con B). Commit:
 
 ```bash
 cd /d/Source/ma-soi-online
@@ -1236,9 +1118,9 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 Dừng ở đây.
 
-- [ ] **Step 3b (ĐẠT): đóng gói model**
+- [ ] **Step 1b (PASS): đóng gói model**
 
-Shell mới không giữ biến: đặt lại `CAND` như Step 1 trước khi chạy.
+`CAND` = dòng `candidate:` trong khối verdict mà người dùng gửi.
 
 ```bash
 cd /d/Source/ma-soi-online/ai-training
@@ -1255,7 +1137,7 @@ print('ok', w['format'])
 
 Expected: `ok masoi-mlp-2`.
 
-- [ ] **Step 4 (ĐẠT): cập nhật test server — viết lỗi trước**
+- [ ] **Step 2 (PASS): cập nhật test server**
 
 Trong `apps/server/tests/learned-policy.test.ts`: đổi hai lần `"village-bc-0002.weights.json"` (trong `vi.mock` và hằng `CHAMPION`) thành `"village-ppo-0001.weights.json"`, và hai lần `toBe("village-bc-0002")` thành `toBe("village-ppo-0001")`. Sửa comment đầu file đoạn "Model đóng gói hiện là…" thành:
 
@@ -1273,19 +1155,19 @@ cd /d/Source/ma-soi-online/apps/server && npx vitest run tests/learned-policy.te
 
 Expected: PASS (file tồn tại, `modelId` đúng, `residual` undefined).
 
-- [ ] **Step 5 (ĐẠT): cập nhật env mẫu**
+- [ ] **Step 3 (PASS): cập nhật env mẫu**
 
 `deploy/env.production.example`: `BOT_POLICY_FILE=apps/server/assets/models/village-ppo-0001.weights.json`.
 
 `.env.example`: dòng `# Mo hinh dong goi san trong apps/server/assets/models/: village-bc-0002` thành `# Mo hinh dong goi san trong apps/server/assets/models/: village-ppo-0001 (PPO tu village-bc-0002; bc-0002 giu de rollback)`.
 
-- [ ] **Step 6 (ĐẠT): suite + báo cáo + commit**
+- [ ] **Step 4 (PASS): suite + báo cáo + commit**
 
 ```bash
 cd /d/Source/ma-soi-online/apps/server && npx vitest run
 ```
 
-Expected: PASS. Viết `ai-training/reports/rl-ppo-from-bc-2026-09.md` như Step 3a nhưng kết luận "đóng gói village-ppo-0001" kèm bảng delta từng phe và imbalance.
+Expected: PASS. Viết `ai-training/reports/rl-ppo-from-bc-2026-09.md` như Step 1a nhưng kết luận "đóng gói village-ppo-0001" kèm bảng delta từng phe và imbalance.
 
 ```bash
 cd /d/Source/ma-soi-online
@@ -1295,6 +1177,6 @@ git commit -m "feat(bot): ship village-ppo-0001 (PPO from BC clone)
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 7: Dừng trước deploy**
+- [ ] **Step 5: Dừng trước deploy**
 
-Không push, không mở PR, không đổi env production. Báo người dùng: kết quả Step 2, đường dẫn báo cáo, và rằng deploy cần họ duyệt (kèm việc đổi `BOT_POLICY_FILE` trong `/opt/masoi/.env` trên VPS).
+Không push, không mở PR, không đổi env production. Báo người dùng: số chấm lại verdict, đường dẫn báo cáo, và rằng deploy cần họ duyệt (kèm việc đổi `BOT_POLICY_FILE` trong `/opt/masoi/.env` trên VPS).

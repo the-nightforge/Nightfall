@@ -114,6 +114,10 @@ giai đoạn 0 đo số thật.
 | 3. Đêm (tuỳ chọn) | 5 vòng mỗi phe, `--train-decisions night` | ~1,5 giờ/phe |
 | 4. Xác nhận | 5 seed × 300 ván, seed MỚI chưa vòng nào dùng, cả 5 setup gồm `teacher` | ~40 phút |
 
+Người dùng tự chạy mọi giai đoạn qua mục 6 của
+`ai-training/colab/train_bc_local.ipynb` (mỗi giai đoạn một cell, resume được);
+kết quả gửi lại để đóng gói.
+
 Siêu tham số chung (giai đoạn 1–3): `--temperature 1`, `--lr 1e-4`,
 `--target-kl 0.01`, `--shaping-alpha 1`, `--baseline role`,
 `--promote-margin 2`, `--confirm-seed rl-conf`.
