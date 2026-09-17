@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isWolfPack } from "@masoi/shared";
+import { isWolfPack, PRESET_DECKS } from "@masoi/shared";
 import { replayGame, runSelfPlay } from "../src/bot/evaluation/selfplay";
 import { gameToTrajectories } from "../src/bot/evaluation/trajectory";
 import {
@@ -208,6 +208,37 @@ describe("lấy mẫu có nhiệt độ (rollout RL)", () => {
     const again = replayGame(game.record, undefined, policy);
     expect(again.actions).toBe(game.actions);
     expect(again.winner).toBe(game.winner);
+  });
+
+  it("rollout cờ final+hunter: FINAL_VOTE và HUNTER_SHOT mang learned, nhãn encoder khớp", () => {
+    // Policy đều: mọi ô bằng nhau, T=1 lấy mẫu → cả treo lẫn tha, bắn lẫn không.
+    const uniform: LearnedPolicy = {
+      id: "uniform",
+      logits: () => new Array<number>(actionSize()).fill(0),
+      value: () => null,
+    };
+    const seen = new Set<string>();
+    // Preset 8 người có Thợ Săn; defense bật phiên toà. Đo 2026-09-17: 10 ván
+    // cho 378 lượt FINAL_VOTE và 5 lượt HUNTER_SHOT, nên 40 ván là dư.
+    for (let i = 0; i < 40 && seen.size < 2; i += 1) {
+      const game = runSelfPlay({
+        seed: `rl-fh-${i}`,
+        playerCount: 8,
+        maxRounds: 20,
+        trace: true,
+        defense: true,
+        config: PRESET_DECKS[8],
+        learnedPolicy: uniform,
+        learnedTemperature: 1,
+        learnedDecisions: ["final", "hunter"],
+      });
+      for (const line of gameToTrajectories(game).filter((l) => l.learned)) {
+        expect(["FINAL_VOTE", "HUNTER_SHOT"]).toContain(line.decision);
+        expect(encodeObservation(line).actionIndex).toBe(line.learned!.actionIndex);
+        seen.add(line.decision);
+      }
+    }
+    expect([...seen].sort()).toEqual(["FINAL_VOTE", "HUNTER_SHOT"]);
   });
 });
 
