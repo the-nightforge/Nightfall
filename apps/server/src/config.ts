@@ -38,9 +38,15 @@ export function resolveBotAiMaxCallsPerGame(env: NodeJS.ProcessEnv): number {
 
 /**
  * Nhiệt độ lấy mẫu mặc định của learned policy trong production (dự án con C).
- * 0 = luôn nước tốt nhất (argmax) - đúng hành vi trước dự án C.
+ *
+ * Đo 2026-09-18 trên village-bc-0002, cả bàn, bốn lượt, 10 seed × 300 ván,
+ * ghép cặp với T=0: T=0,5 → làng −0,37 ± 1,20, sói −0,37 ± 1,06, lệch cân
+ * bằng 4,43 so với 4,13; ~4,4 % nước đi khác argmax. Luật chọn: T lớn nhất mà
+ * mỗi phe tụt ≤ 1 điểm và cân bằng không tệ hơn quá 1 điểm. T=0,3 (+1,97 /
+ * +0,30) là lựa chọn thận trọng hơn; 0 = argmax, hành vi trước dự án C.
+ * Lượt 3 seed trước đó cho làng −2,7 ở T=0,3 - nhiễu, đừng đo lại bằng 3 seed.
  */
-export const DEFAULT_BOT_POLICY_TEMPERATURE = 0;
+export const DEFAULT_BOT_POLICY_TEMPERATURE = 0.5;
 
 /**
  * `BOT_POLICY_TEMPERATURE`: 0 = argmax (rollback), > 0 = bot bớt tất định.
