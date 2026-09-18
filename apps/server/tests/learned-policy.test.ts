@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { learnedRuntimeOptions, policyAppliesToSeat, resolveBotPolicy } from "../src/bots/learned-policy";
 import { BotSession } from "../src/bots/session-registry";
+import { DEFAULT_BOT_POLICY_TEMPERATURE } from "../src/config";
 
 /**
  * Cấu hình learned policy cho bot prod (spec wiring 2026-09-11):
@@ -20,7 +21,8 @@ import { BotSession } from "../src/bots/session-registry";
  * Nó là bản sao trung thành của teacher (Δ≈0), KHÔNG phải bản tăng lực:
  * champion PPO thật trên dataset-0004 là việc của v2.
  */
-vi.mock("../src/config", () => ({
+vi.mock("../src/config", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/config")>()),
   config: {
     botPolicyFile: join(__dirname, "..", "assets", "models", "village-bc-0002.weights.json"),
   },
@@ -75,14 +77,21 @@ describe("resolveBotPolicy", () => {
 });
 
 describe("learnedRuntimeOptions", () => {
-  it("enabled → vote, đêm, phiên toà, phát bắn; argmax như benchmark", () => {
+  it("enabled → vote, đêm, phiên toà, phát bắn", () => {
     const resolved = resolveBotPolicy(CHAMPION);
     const options = learnedRuntimeOptions(resolved);
     expect(options).toMatchObject({
-      learnedTemperature: 0,
       learnedDecisions: ["vote", "night", "final", "hunter"],
     });
     expect(options.learnedPolicy?.id).toBe("village-bc-0002");
+  });
+
+  it("nhiệt độ đi từ resolveBotPolicy tới BotRuntime; mặc định là mức đã đo", () => {
+    expect(learnedRuntimeOptions(resolveBotPolicy(CHAMPION, 0.4)).learnedTemperature).toBe(0.4);
+    expect(learnedRuntimeOptions(resolveBotPolicy(CHAMPION, 0)).learnedTemperature).toBe(0);
+    expect(learnedRuntimeOptions(resolveBotPolicy(CHAMPION)).learnedTemperature).toBe(
+      DEFAULT_BOT_POLICY_TEMPERATURE,
+    );
   });
 
   it("disabled → object rỗng, BotRuntime giữ heuristic y nguyên", () => {

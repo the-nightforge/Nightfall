@@ -37,6 +37,28 @@ export function resolveBotAiMaxCallsPerGame(env: NodeJS.ProcessEnv): number {
 }
 
 /**
+ * Nhiệt độ lấy mẫu mặc định của learned policy trong production (dự án con C).
+ * 0 = luôn nước tốt nhất (argmax) - đúng hành vi trước dự án C.
+ */
+export const DEFAULT_BOT_POLICY_TEMPERATURE = 0;
+
+/**
+ * `BOT_POLICY_TEMPERATURE`: 0 = argmax (rollback), > 0 = bot bớt tất định.
+ * Trống/chưa đặt = mặc định (`.env.example` để trống biến tuỳ chọn). Âm, chữ,
+ * vô cực thì ném lúc boot: nhiệt độ NaN làm `sampleMasked` rơi vào ô cuối ở mọi
+ * lượt - bot chơi bừa mà không một dòng log.
+ */
+export function resolveBotPolicyTemperature(env: NodeJS.ProcessEnv): number {
+  const raw = env.BOT_POLICY_TEMPERATURE?.trim();
+  if (!raw) return DEFAULT_BOT_POLICY_TEMPERATURE;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`BOT_POLICY_TEMPERATURE phải là số >= 0, nhận "${raw}"`);
+  }
+  return value;
+}
+
+/**
  * Số hop proxy tin được cho `app.set("trust proxy", ...)`.
  *
  * KHÔNG ném lỗi như resolvePort: đặt sai biến này chỉ làm rate limit khoá nhầm
@@ -199,6 +221,7 @@ export const config = {
    * kiểm tra nội dung thuộc `bots/learned-policy.ts`.
    */
   botPolicyFile: process.env.BOT_POLICY_FILE?.trim() || null,
+  botPolicyTemperature: resolveBotPolicyTemperature(process.env),
 };
 
 export const isProd = config.nodeEnv === "production";

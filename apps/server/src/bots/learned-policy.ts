@@ -5,7 +5,7 @@ import {
   type LearnedDecisions,
   type LearnedPolicy,
 } from "@masoi/game-engine";
-import { config } from "../config";
+import { config, DEFAULT_BOT_POLICY_TEMPERATURE } from "../config";
 
 /**
  * Cầu nối giữa file weights huấn luyện (PPO) và bot production.
@@ -21,7 +21,10 @@ import { config } from "../config";
  * cùng kỷ luật với `resolveVoiceConfig`. Rơi im lặng về heuristic là cái bẫy
  * kinh điển ở đây: benchmark +3.44 biến mất mà không một dòng log nào than.
  */
-export function resolveBotPolicy(path: string | null | undefined): ResolvedBotPolicy {
+export function resolveBotPolicy(
+  path: string | null | undefined,
+  temperature: number = DEFAULT_BOT_POLICY_TEMPERATURE,
+): ResolvedBotPolicy {
   if (!path) return { enabled: false };
 
   let raw: string;
@@ -46,7 +49,7 @@ export function resolveBotPolicy(path: string | null | undefined): ResolvedBotPo
   // model huấn luyện trên một phiên bản quan sát khác sẽ bị từ chối ở cửa này
   // thay vì ra quyết định ngu ngơ giữa ván.
   const policy = loadMlpPolicy(json);
-  return { enabled: true, policy, modelId: policy.id, seats: "all" };
+  return { enabled: true, policy, modelId: policy.id, seats: "all", temperature };
 }
 
 /** Ghế nào được giao policy. Production dùng "all"; "village" giữ cho rollback bằng code. */
@@ -54,7 +57,14 @@ export type BotPolicySeats = "all" | "village";
 
 export type ResolvedBotPolicy =
   | { enabled: false }
-  | { enabled: true; policy: LearnedPolicy; modelId: string; seats: BotPolicySeats };
+  | {
+      enabled: true;
+      policy: LearnedPolicy;
+      modelId: string;
+      seats: BotPolicySeats;
+      /** Nhiệt độ lấy mẫu; 0 = argmax. Xem `BOT_POLICY_TEMPERATURE`. */
+      temperature: number;
+    };
 
 /**
  * Nạp policy từ `config` đúng một lần. `session-registry` dựng runtime cho từng
@@ -65,7 +75,7 @@ export type ResolvedBotPolicy =
 let cached: ResolvedBotPolicy | null = null;
 
 export function botPolicy(): ResolvedBotPolicy {
-  if (cached === null) cached = resolveBotPolicy(config.botPolicyFile);
+  if (cached === null) cached = resolveBotPolicy(config.botPolicyFile, config.botPolicyTemperature);
   return cached;
 }
 
@@ -81,8 +91,9 @@ export function learnedRuntimeOptions(
   if (!resolved.enabled) return {};
   return {
     learnedPolicy: resolved.policy,
-    // 0 = argmax: cùng chế độ "hành vi đánh giá" khi benchmark thăng chức.
-    learnedTemperature: 0,
+    // > 0 = lấy mẫu từ softmax (dự án con C: bot bớt tất định); 0 = argmax.
+    // RNG là RNG có seed của từng bot, nên ván vẫn replay được.
+    learnedTemperature: resolved.temperature,
     // Mọi lượt có nhãn trong dataset: phiếu, đêm, phiên toà, phát bắn.
     learnedDecisions: ["vote", "night", "final", "hunter"] satisfies LearnedDecisions,
   };
