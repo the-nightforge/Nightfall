@@ -58,6 +58,9 @@ CONFIRM = ["--games", "300", "--repeat", "5", "--seed", "confirm-0917",
            "--setups", "baseline,village,wolves,all,teacher",
            "--learned-decisions", "vote,night,final,hunter"]
 ENV = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
+# Python chạy rl_loop/train_ppo (cần torch). Terminal: chính venv đang chạy script này.
+# Notebook: kernel thường là Python hệ thống, nên notebook đặt lại thành python của .venv.
+PYTHON = sys.executable
 
 
 class OutOfTime(Exception):
@@ -123,13 +126,20 @@ def run_logged(cmd: list, log: Path, cwd: Path = TRAIN_DIR, deadline: float | No
             [str(c) for c in cmd], cwd=str(cwd), env=ENV, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf8", errors="replace", start_new_session=(os.name != "nt"),
         )
-        for line in proc.stdout:
-            print(line, end="", flush=True)
-            f.write(line)
-            if deadline is not None and time.time() > deadline:
-                _stop(proc)
-                f.write("\n[dừng ở giới hạn thời gian]\n")
-                raise OutOfTime()
+        try:
+            for line in proc.stdout:
+                print(line, end="", flush=True)
+                f.write(line)
+                if deadline is not None and time.time() > deadline:
+                    _stop(proc)
+                    f.write("\n[dừng ở giới hạn thời gian]\n")
+                    raise OutOfTime()
+        except KeyboardInterrupt:
+            # Jupyter "Interrupt" chỉ ngắt kernel: không dừng cây con thì rl_loop/node
+            # chạy ngầm tiếp và tranh CPU với lần chạy lại.
+            _stop(proc)
+            f.write("\n[đã ngắt]\n")
+            raise
         proc.wait()
     print(f"\n{time.time() - start:.0f}s | exit {proc.returncode}", flush=True)
     if proc.returncode != 0:
@@ -139,7 +149,7 @@ def run_logged(cmd: list, log: Path, cwd: Path = TRAIN_DIR, deadline: float | No
 def rl_loop(rl: Path, name: str, champion: Path, side: str, iterations: int, extra: list[str],
             deadline: float | None) -> Path:
     out = rl / name
-    run_logged([sys.executable, "rl_loop.py", "--champion", champion, "--side", side,
+    run_logged([PYTHON, "rl_loop.py", "--champion", champion, "--side", side,
                 "--iterations", iterations, "--games", 3000, "--out", out, *COMMON, *extra],
                rl / f"{name}.log", deadline=deadline)
     return out
@@ -223,6 +233,31 @@ class KeepAwake:
         return False
 
 
+def run_stage(stage: str, rl: Path, deadline: float | None = None) -> str:
+    """Chạy MỘT giai đoạn, trả gợi ý bước tiếp. Hết giờ hoặc bị ngắt: gợi ý chạy lại cùng stage."""
+    try:
+        if stage in STAGES:
+            name, side, iterations, extra = STAGES[stage]
+            out = rl_loop(rl, name, start_model(rl, stage), side, iterations, extra, deadline)
+            return next_hint(stage, show_state(out))
+        if stage == "night":
+            if not (promoted_champion(rl, VILLAGE_RUNS) and promoted_champion(rl, WOLVES_RUNS)):
+                raise SystemExit("night cần CẢ làng lẫn sói đã thăng hạng - chuyển sang 'confirm'")
+            show_state(rl_loop(rl, "bc-night-village-v3", candidate(rl), "village", 10,
+                               ["--train-decisions", "night", *SIDE_STAGE], deadline))
+            show_state(rl_loop(rl, "bc-night-wolves-v3", candidate(rl), "wolves", 10,
+                               ["--train-decisions", "night", "--shaping-decisions", "vote", *SIDE_STAGE], deadline))
+            return "confirm"
+        if stage == "confirm":
+            confirm(rl, deadline)
+            return "gửi khối VERDICT cho Claude"
+        raise SystemExit(f"stage lạ: {stage!r}")
+    except OutOfTime:
+        return f"CHẠY LẠI CÙNG STAGE ({stage}): hết giới hạn thời gian, các bước đã xong sẽ được bỏ qua"
+    except KeyboardInterrupt:
+        return f"đã ngắt - chạy lại cùng stage ({stage}) để tiếp tục"
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("stage", choices=[*STAGES, "night", "confirm", "status"])
@@ -240,29 +275,8 @@ def main() -> None:
     if not CHAMPION0.exists():
         raise SystemExit(f"thiếu {CHAMPION0}")
 
-    hint = None
     with KeepAwake():
-        try:
-            if a.stage in STAGES:
-                name, side, iterations, extra = STAGES[a.stage]
-                out = rl_loop(rl, name, start_model(rl, a.stage), side, iterations, extra, deadline)
-                hint = next_hint(a.stage, show_state(out))
-            elif a.stage == "night":
-                if not (promoted_champion(rl, VILLAGE_RUNS) and promoted_champion(rl, WOLVES_RUNS)):
-                    raise SystemExit("night cần CẢ làng lẫn sói đã thăng hạng - chuyển sang 'confirm'")
-                show_state(rl_loop(rl, "bc-night-village-v3", candidate(rl), "village", 10,
-                                   ["--train-decisions", "night", *SIDE_STAGE], deadline))
-                show_state(rl_loop(rl, "bc-night-wolves-v3", candidate(rl), "wolves", 10,
-                                   ["--train-decisions", "night", "--shaping-decisions", "vote", *SIDE_STAGE],
-                                   deadline))
-                hint = "confirm"
-            else:
-                confirm(rl, deadline)
-                hint = "gửi khối VERDICT cho Claude"
-        except OutOfTime:
-            hint = f"CHẠY LẠI CÙNG LỆNH ({a.stage}): hết giới hạn thời gian, các bước đã xong sẽ được bỏ qua"
-        except KeyboardInterrupt:
-            hint = f"đã ngắt (Ctrl+C) - chạy lại cùng lệnh ({a.stage}) để tiếp tục"
+        hint = run_stage(a.stage, rl, deadline)
 
     print("\n>>> NEXT:", hint)
     print(f">>> thời gian {(time.time() - t0) / 3600:.1f} giờ")

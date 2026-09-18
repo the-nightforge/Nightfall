@@ -77,6 +77,26 @@ def main() -> None:
         assert time.time() - start < 10, "dừng quá chậm"
         assert "[dừng ở giới hạn thời gian]" in log.read_text(encoding="utf8")
 
+    # Ngắt (Jupyter Interrupt) cũng dừng cây con, rồi mới ném tiếp KeyboardInterrupt.
+    import threading
+    import _thread
+
+    with tempfile.TemporaryDirectory() as tmp:
+        log = Path(tmp) / "i.log"
+        marker = Path(tmp) / "alive.txt"
+        child = ("import time, pathlib\np = pathlib.Path(r'" + str(marker) + "')\n"
+                 "for i in range(200):\n    p.write_text(str(i)); print(i, flush=True); time.sleep(0.1)")
+        threading.Timer(1.5, _thread.interrupt_main).start()
+        try:
+            rs.run_logged([sys.executable, "-c", child], log, cwd=Path(tmp))
+            raise AssertionError("KeyboardInterrupt không được ném tiếp")
+        except KeyboardInterrupt:
+            pass
+        seen = marker.read_text()
+        time.sleep(1.0)
+        assert marker.read_text() == seen, "tiến trình con vẫn chạy sau khi ngắt"
+        assert "[đã ngắt]" in log.read_text(encoding="utf8")
+
     print("ok")
 
 
