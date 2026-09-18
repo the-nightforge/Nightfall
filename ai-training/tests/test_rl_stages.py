@@ -23,7 +23,7 @@ def make_run(rl: Path, name: str, promoted: bool) -> Path:
     if promoted:
         (out / "champions" / "champion-0010.weights.json").write_text("{}", encoding="utf8")
     scores = [{"iteration": 10, "score": 3.1, "otherSide": 0.2, "imbalance": 6.0}]
-    (out / "state.json").write_text(json.dumps({"done": list(range(1, 11)), "scores": scores,
+    (out / "state.json").write_text(json.dumps({"done": list(range(1, 21)), "scores": scores,
                                                 "championScore": 3.1 if promoted else 0.9}), encoding="utf8")
     return out
 
@@ -46,6 +46,12 @@ def main() -> None:
             assert "village" in str(error)
 
         make_run(rl, "bc-village-v3", promoted=False)
+        assert rs.status(rl) == "village-lr3"
+        (rl / "bc-village-v3" / "state.json").write_text(json.dumps(
+            {"done": [1], "scores": [], "championScore": 0.9}), encoding="utf8")
+        assert rs.status(rl) == "village", "lượt dở phải chạy tiếp, không nhảy sang lr3"
+        (rl / "bc-village-v3" / "state.json").write_text(json.dumps(
+            {"done": list(range(1, 21)), "scores": [], "championScore": 0.9}), encoding="utf8")
         assert rs.status(rl) == "village-lr3"
         assert rs.candidate(rl) is None
 

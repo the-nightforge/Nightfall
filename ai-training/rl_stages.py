@@ -120,7 +120,7 @@ def run_logged(cmd: list, log: Path, cwd: Path = TRAIN_DIR, deadline: float | No
     """In ra màn hình + nối vào log. Quá `deadline` thì dừng cả cây và ném OutOfTime."""
     log.parent.mkdir(parents=True, exist_ok=True)
     start = time.time()
-    with log.open("a", encoding="utf8") as f:
+    with log.open("a", encoding="utf8", buffering=1) as f:  # từng dòng: log đọc được khi đang chạy
         f.write(f"\n$ {' '.join(map(str, cmd))}\n")
         proc = subprocess.Popen(
             [str(c) for c in cmd], cwd=str(cwd), env=ENV, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -208,6 +208,11 @@ def status(rl: Path) -> str:
         return "village"
     for run in runs:
         show_state(run)
+    for stage in ("village", "village-lr3", "wolves", "wolves-lr3"):  # lượt đang dở: chạy tiếp nó
+        name, _, iterations, _ = STAGES[stage]
+        state = rl / name / "state.json"
+        if state.exists() and len(json.loads(state.read_text(encoding="utf8"))["done"]) < iterations:
+            return stage
     if promoted_champion(rl, VILLAGE_RUNS) is None:
         return "village-lr3" if (rl / "bc-village-v3" / "state.json").exists() else "village"
     if promoted_champion(rl, WOLVES_RUNS) is None:
