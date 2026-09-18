@@ -27,6 +27,7 @@ import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 
 from masoi_training.console import force_utf8_console
@@ -107,6 +108,162 @@ def should_promote(scores: list[float], champion: float, margin: float) -> bool:
     return len(scores) > 0 and all(s > champion + margin for s in scores)
 
 
+OTHER_SIDE = {"village": "wolves", "wolves": "village"}
+
+
+def imbalance_of(bench_json: Path) -> float:
+    """Độ lệch cân bằng cả bàn: |tỉ lệ làng thắng khi CẢ BÀN dùng model − 50 %|,
+    bằng điểm phần trăm (spec 2026-09-17 D3). Thiếu cấu hình `all` thì ném: trả
+    0 im lặng là một cổng luôn mở."""
+    b = json.loads(bench_json.read_text(encoding="utf8"))
+    by = {s.get("setup"): s["villageWinMean"] for s in b["summary"]}
+    if "all" not in by:
+        raise ValueError(f"{bench_json}: thiếu cấu hình all — benchmark phải chạy baseline,village,wolves,all")
+    return abs(by["all"] - 0.5) * 100
+
+
+@dataclass(frozen=True)
+class BenchRead:
+    """Ba con số một lần benchmark quyết định thăng hạng."""
+
+    score: float
+    """`score_of(bench, side)` — sức mạnh phe đang train."""
+    other: float | None
+    """`score_of(bench, phe kia)`; None khi `--side all` (score đã gồm hai phe)."""
+    imbalance: float
+    """`imbalance_of(bench)`."""
+
+
+def read_bench(bench_json: Path, side: str) -> BenchRead:
+    other = OTHER_SIDE.get(side)
+    return BenchRead(
+        score=score_of(bench_json, side),
+        other=score_of(bench_json, other) if other else None,
+        imbalance=imbalance_of(bench_json),
+    )
+
+
+def champion_of(reads: list[BenchRead]) -> BenchRead:
+    """Điểm của champion mới = chiều BI QUAN trên mọi bộ seed đã đo: điểm và phe
+    kia lấy min, lệch cân bằng lấy max — cùng tinh thần `min(scores)` cũ."""
+    others = [r.other for r in reads if r.other is not None]
+    return BenchRead(
+        score=min(r.score for r in reads),
+        other=min(others) if others else None,
+        imbalance=max(r.imbalance for r in reads),
+    )
+
+
+def passes_gates(
+    reads: list[BenchRead],
+    champion: BenchRead,
+    margin: float,
+    balance_slack: float,
+    other_slack: float,
+) -> bool:
+    """Thăng hạng khi MỌI bộ seed qua CẢ BA cổng: điểm (`should_promote`), cân
+    bằng (D3) và phe kia (D4). Slack âm tắt cổng tương ứng."""
+    if not should_promote([r.score for r in reads], champion.score, margin):
+        return False
+    if balance_slack >= 0 and any(r.imbalance > champion.imbalance + balance_slack for r in reads):
+        return False
+    if other_slack >= 0 and champion.other is not None:
+        if any(r.other is None or r.other < champion.other - other_slack for r in reads):
+            return False
+    return True
+
+
+def champion_from_state(state: dict, initial: BenchRead) -> BenchRead:
+    """Champion khôi phục từ `state.json`. State ghi trước spec 2026-09-17 thiếu
+    `championOther`/`championImbalance`: lấy từ bench của champion-0000 thay vì
+    vứt cả một đêm chạy."""
+    if not state.get("champion"):
+        return initial
+    return BenchRead(
+        score=state["championScore"],
+        other=state.get("championOther", initial.other),
+        imbalance=state.get("championImbalance", initial.imbalance),
+    )
+
+
+def bench_cmd(model: Path, seed: str, dest: Path, games: int, repeat: int, decisions: str) -> list[str]:
+    """Lệnh benchmark DUY NHẤT của vòng lặp: champion-0000, mỗi challenger và bộ
+    xác nhận đo đúng cùng cấu hình — kể cả lượt policy (D2)."""
+    return [
+        tool("npm"), "run", "ai:benchmark", "--", "--model", str(model),
+        "--games", str(games), "--repeat", str(repeat),
+        "--setups", "baseline,village,wolves,all",
+        "--learned-decisions", decisions,
+        "--seed", seed, "--out", str(dest),
+    ]
+
+
+def next_start(benched: bool, challenger: Path, best: Path) -> Path:
+    """Model xuất phát của vòng sau.
+
+    Vòng KHÔNG đo: đi tiếp từ challenger (một update thật, chưa có điểm để bác).
+    Vòng ĐÃ đo: đi từ champion chính thức `best` — bản vừa thăng hạng, hoặc bản
+    cũ nếu challenger bị loại. Giai đoạn 1 (2026-09-17) đi tiếp từ model bị loại
+    ở vòng 5 (−3,56) và trôi tới −7,0 ở vòng 10.
+    """
+    return best if benched else challenger
+
+
+def latest_champion_file(champions: Path) -> Path:
+    """Champion chính thức mới nhất trong `champions/` (champion-0000 = bản xuất phát)."""
+    files = sorted(champions.glob("champion-*.weights.json"))
+    if not files:
+        raise FileNotFoundError(f"{champions}: không có champion nào")
+    return files[-1]
+
+
+def prune_iteration(it: Path) -> int:
+    """Xoá dữ liệu train của một vòng ĐÃ XONG, trả số byte đã giải phóng.
+
+    Chỉ `roll-*/`, `enc/`, `trajectories.jsonl` (~3 GB mỗi vòng 3000 ván; 10 vòng
+    v1 = 31 GB trên ổ còn 23 GB). Giữ `model/`, `bench*.json` và mọi dấu `.done`:
+    vòng đã nằm trong `state["done"]` bị bỏ qua cả vòng khi resume, nên không bước
+    nào cần đọc lại dữ liệu đã xoá. Gọi SAU `save_state()`, không bao giờ trước.
+    """
+    targets = [*sorted(it.glob("roll-*")), it / "enc", it / "trajectories.jsonl"]
+    freed = 0
+    for target in targets:
+        if target.is_dir():
+            freed += sum(f.stat().st_size for f in target.rglob("*") if f.is_file())
+            shutil.rmtree(target)
+        elif target.is_file():
+            freed += target.stat().st_size
+            target.unlink()
+    return freed
+
+
+def ppo_cmd(enc: Path, champion: Path, best: Path, model_dir: Path, model_id: str, a: argparse.Namespace) -> list[str]:
+    """Lệnh PPO một vòng: init = điểm xuất phát vòng này, mỏ neo KL = champion chính thức `best`."""
+    return [
+        PY, "-m", "masoi_training.train_ppo", "--data", str(enc),
+        "--init", str(champion), "--out", str(model_dir), "--model-id", model_id,
+        "--baseline", a.baseline, "--side", a.side, "--lr", str(a.lr),
+        "--shaping-weight", str(a.shaping_alpha),
+        "--anchor-kl", str(a.anchor_kl), "--anchor-model", str(best),
+        *(["--shaping-decisions", a.shaping_decisions] if a.shaping_decisions else []),
+        *(["--train-decisions", a.train_decisions] if a.train_decisions else []),
+        *(["--target-kl", str(a.target_kl)] if a.target_kl is not None else []),
+    ]
+
+
+def rollout_cmd(
+    source: Path, seats: str, iteration: int, part: Path, games: int, temperature: float, decisions: str
+) -> list[str]:
+    return [
+        tool("npx"), "tsx", "apps/server/scripts/selfplay.ts",
+        "--games", str(games), "--players", "8", "--preset", "--defense",
+        "--seed", f"rl-{iteration}-{seats}", "--policy", str(source),
+        "--temperature", str(temperature), "--learned-seats", seats,
+        "--learned-decisions", decisions,
+        "--trajectories", str(part), "--trace-games", str(games), "--quiet",
+    ]
+
+
 def main() -> None:
     force_utf8_console()
     p = argparse.ArgumentParser(description=__doc__)
@@ -132,6 +289,16 @@ def main() -> None:
     p.add_argument("--confirm-seed", default="rl-conf",
                    help="Tiền tố seed ĐỘC LẬP để xác nhận trước khi thăng hạng; rỗng = tắt (không khuyến nghị)")
     p.add_argument("--lr", type=float, default=3e-4, help="Xem train_ppo --lr")
+    p.add_argument("--learned-decisions", default="vote,night,final,hunter", dest="learned_decisions",
+                   help="Lượt giao cho policy trong rollout VÀ benchmark (spec 2026-09-17 D2)")
+    p.add_argument("--balance-slack", type=float, default=1.0, dest="balance_slack",
+                   help="Điểm lệch cân bằng |all − 50%%| challenger được hơn champion; âm = tắt (D3)")
+    p.add_argument("--other-side-slack", type=float, default=1.0, dest="other_side_slack",
+                   help="Điểm phe KHÔNG train được tụt so với champion (--side village|wolves); âm = tắt (D4)")
+    p.add_argument("--anchor-kl", type=float, default=0.1, dest="anchor_kl",
+                   help="Xem train_ppo --anchor-kl: neo KL về champion chính thức gần nhất; 0 = tắt")
+    p.add_argument("--prune-rollouts", action=argparse.BooleanOptionalAction, default=True, dest="prune_rollouts",
+                   help="Xoá roll-*/enc/trajectories.jsonl của vòng đã xong (giữ model, bench, .done)")
     p.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     a = p.parse_args()
 
@@ -159,39 +326,42 @@ def main() -> None:
     bench0 = out / "bench-champion-0000.json"
     step(
         done_marker(out, "bench-0000"),
-        [tool("npm"), "run", "ai:benchmark", "--", "--model", str(champion),
-         "--games", str(a.bench_games), "--repeat", str(a.bench_repeat),
-         "--setups", "baseline,village,wolves,all",
-         "--seed", "rl-bench", "--out", str(bench0)],
+        bench_cmd(champion, "rl-bench", bench0, a.bench_games, a.bench_repeat, a.learned_decisions),
     )
-    champion_score = score_of(bench0, a.side)
-    print(f"champion điểm {champion_score:+.1f}", flush=True)
+    champ = read_bench(bench0, a.side)
+    print(f"champion điểm {champ.score:+.1f}  lệch cân bằng {champ.imbalance:.1f}", flush=True)
 
     # Khôi phục champion đã thăng hạng ở lần chạy trước. Đặt SAU bench0 để lần
     # chạy đầu vẫn có điểm xuất phát, và trước vòng lặp để rollout đi từ đúng nó.
+    best = latest_champion_file(champions)
     if state["champion"]:
         champion = Path(state["champion"])
-        champion_score = state["championScore"]
-        print(f"tiếp tục từ {champion.name} điểm {champion_score:+.1f}", flush=True)
+        champ = champion_from_state(state, champ)
+        print(f"tiếp tục từ {champion.name} điểm {champ.score:+.1f}", flush=True)
+
+    gates = {
+        "margin": a.promote_margin,
+        "balance_slack": a.balance_slack,
+        "other_slack": a.other_side_slack,
+    }
 
     for k in range(1, a.iterations + 1):
         if k in state["done"]:
             print(f"vòng {k}: đã xong, bỏ qua", flush=True)
+            # Lần trước có thể bị ngắt giữa save_state và bước dọn.
+            if a.prune_rollouts:
+                prune_iteration(out / f"iter-{k:04d}")
             continue
         it = out / f"iter-{k:04d}"
         it.mkdir(exist_ok=True)
 
-        # Ba phần seats độc lập nhau → chạy cùng lúc. Máy 16 lõi; ĐỪNG đưa lên
-        # GitHub Actions (runner 2 lõi, đã gỡ role-power.yml vì đúng lý do đó).
+        # Ba phần seats độc lập nhau → chạy cùng lúc. ĐỪNG đưa lên GitHub
+        # Actions (runner 2 lõi, đã gỡ role-power.yml vì đúng lý do đó).
         def rollout_one(seats: str, iteration: int = k, source: Path = champion) -> None:
             part = it / f"roll-{seats}"
             step(
                 done_marker(it, f"roll-{seats}"),
-                [tool("npx"), "tsx", "apps/server/scripts/selfplay.ts",
-                 "--games", str(a.games // 3), "--players", "8", "--preset", "--defense",
-                 "--seed", f"rl-{iteration}-{seats}", "--policy", str(source),
-                 "--temperature", str(a.temperature), "--learned-seats", seats,
-                 "--trajectories", str(part), "--trace-games", str(a.games // 3), "--quiet"],
+                rollout_cmd(source, seats, iteration, part, a.games // 3, a.temperature, a.learned_decisions),
             )
 
         with ThreadPoolExecutor(max_workers=3) as pool:
@@ -220,67 +390,69 @@ def main() -> None:
         model_dir = it / "model"
         step(
             done_marker(it, "ppo"),
-            [PY, "-m", "masoi_training.train_ppo", "--data", str(enc),
-             "--init", str(champion), "--out", str(model_dir), "--model-id", model_id,
-             "--baseline", a.baseline, "--side", a.side, "--lr", str(a.lr),
-             "--shaping-weight", str(a.shaping_alpha),
-             *(["--shaping-decisions", a.shaping_decisions] if a.shaping_decisions else []),
-             *(["--train-decisions", a.train_decisions] if a.train_decisions else []),
-             *(["--target-kl", str(a.target_kl)] if a.target_kl is not None else [])],
+            ppo_cmd(enc, champion, best, model_dir, model_id, a),
             cwd=ROOT / "ai-training",
         )
         challenger = model_dir / "model.weights.json"
 
-        # Benchmark tốn 6/16 phút mỗi vòng. Vòng không đo: challenger vẫn thành
-        # điểm xuất phát của vòng sau (nó là kết quả của một update thật), nhưng
-        # KHÔNG vào `champions/` — champion chính thức chỉ đổi khi có điểm.
+        # Benchmark tốn thời gian nhất mỗi vòng. Vòng không đo: challenger vẫn
+        # thành điểm xuất phát của vòng sau (nó là kết quả của một update thật),
+        # nhưng KHÔNG vào `champions/` — champion chính thức chỉ đổi khi có điểm.
         should_bench = (k % a.bench_every == 0) or (k == a.iterations)
         if not should_bench:
             print(f"vòng {k}: bỏ benchmark (--bench-every)", flush=True)
-            champion = challenger
         else:
             bench = it / "bench.json"
             step(
                 done_marker(it, "bench"),
-                [tool("npm"), "run", "ai:benchmark", "--", "--model", str(challenger),
-                 "--games", str(a.bench_games), "--repeat", str(a.bench_repeat),
-                 "--setups", "baseline,village,wolves,all",
-                 "--seed", "rl-bench", "--out", str(bench)],
+                bench_cmd(challenger, "rl-bench", bench, a.bench_games, a.bench_repeat, a.learned_decisions),
             )
-            s = score_of(bench, a.side)
-            print(f"iteration {k}: challenger {s:+.1f} vs champion {champion_score:+.1f}", flush=True)
-            row = {"iteration": k, "modelId": model_id, "score": round(s, 2)}
-            scores = [s]
-            # Bộ seed thứ hai chỉ chạy khi bộ thứ nhất đã vượt ngưỡng: nó tốn
+            reads = [read_bench(bench, a.side)]
+            print(
+                f"iteration {k}: challenger {reads[0].score:+.1f} vs champion {champ.score:+.1f}"
+                f"  | lệch cân bằng {reads[0].imbalance:.1f} vs {champ.imbalance:.1f}",
+                flush=True,
+            )
+            row = {
+                "iteration": k,
+                "modelId": model_id,
+                "score": round(reads[0].score, 2),
+                "imbalance": round(reads[0].imbalance, 2),
+            }
+            if reads[0].other is not None:
+                row["otherSide"] = round(reads[0].other, 2)
+            # Bộ seed thứ hai chỉ chạy khi bộ thứ nhất đã qua MỌI cổng: nó tốn
             # thêm một lần benchmark, nhưng chỉ ở những vòng hiếm có ứng viên.
-            if a.confirm_seed and should_promote(scores, champion_score, a.promote_margin):
+            if a.confirm_seed and passes_gates(reads, champ, **gates):
                 conf = it / "bench-confirm.json"
                 step(
                     done_marker(it, "bench-confirm"),
-                    [tool("npm"), "run", "ai:benchmark", "--", "--model", str(challenger),
-                     "--games", str(a.bench_games), "--repeat", str(a.bench_repeat),
-                     "--setups", "baseline,village,wolves,all",
-                     "--seed", a.confirm_seed, "--out", str(conf)],
+                    bench_cmd(challenger, a.confirm_seed, conf, a.bench_games, a.bench_repeat, a.learned_decisions),
                 )
-                c = score_of(conf, a.side)
-                scores.append(c)
-                row["confirmScore"] = round(c, 2)
-                print(f"  xác nhận trên seed {a.confirm_seed}: {c:+.1f}", flush=True)
+                reads.append(read_bench(conf, a.side))
+                row["confirmScore"] = round(reads[-1].score, 2)
+                print(f"  xác nhận trên seed {a.confirm_seed}: {reads[-1].score:+.1f}", flush=True)
             state["scores"].append(row)
-            if should_promote(scores, champion_score, a.promote_margin):
-                champion = champions / f"champion-{k:04d}.weights.json"
-                shutil.copy(challenger, champion)
-                champion_score = min(scores)
-                print(f"THĂNG HẠNG → {champion.name}", flush=True)
+            if passes_gates(reads, champ, **gates):
+                best = champions / f"champion-{k:04d}.weights.json"
+                shutil.copy(challenger, best)
+                champ = champion_of(reads)
+                print(f"THĂNG HẠNG → {best.name}", flush=True)
             else:
-                print("GIỮ champion", flush=True)
+                print(f"GIỮ champion — vòng sau quay về {best.name}", flush=True)
+        champion = next_start(should_bench, challenger, best)
 
         state["done"].append(k)
         state["champion"] = str(champion)
-        state["championScore"] = champion_score
+        state["championScore"] = champ.score
+        state["championOther"] = champ.other
+        state["championImbalance"] = champ.imbalance
         save_state()
+        if a.prune_rollouts:
+            freed = prune_iteration(it)
+            print(f"vòng {k}: đã dọn rollout, giải phóng {freed / 1e9:.1f} GB", flush=True)
 
-    print(f"xong. champion: {champion} điểm {champion_score:+.1f}")
+    print(f"xong. champion: {best} điểm {champ.score:+.1f}")
 
 
 if __name__ == "__main__":

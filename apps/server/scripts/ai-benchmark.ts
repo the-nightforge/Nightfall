@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { PRESET_DECKS } from "@masoi/shared";
+import { parseLearnedDecisions } from "./learned-decisions";
 import {
   DEFAULT_BOT_WEIGHTS,
   loadMlpPolicy,
@@ -51,6 +52,8 @@ interface Options {
   out: string | null;
   setups: SetupName[];
   learnedDecisions: LearnedDecisions;
+  /** Nhiệt độ lấy mẫu của policy; 0 = argmax (mặc định). Dự án con C. */
+  temperature: number;
 }
 
 function usage(): string {
@@ -64,6 +67,7 @@ function usage(): string {
     "  --players <n>        Số người mỗi bàn (mặc định: 8)",
     `  --setups <a,b,...>   Trong ${SETUP_NAMES.join(", ")} (mặc định: baseline,village,wolves)`,
     "  --learned-decisions  vote | night | final | hunter | both, hoặc danh sách cách nhau bằng dấu phẩy (mặc định both) — ablation theo lượt",
+    "  --temperature <t>    Nhiệt độ lấy mẫu của policy: 0 = argmax (mặc định), > 0 = bớt tất định",
     "  --no-preset          Không dùng bộ bài chuẩn của số người đó",
     "  --no-defense         Tắt vòng bào chữa",
     "  --out <path>         Ghi kết quả thô ra JSON",
@@ -82,6 +86,7 @@ function parseArgs(argv: readonly string[]): Options {
     out: null,
     setups: ["baseline", "village", "wolves"],
     learnedDecisions: "both",
+    temperature: 0,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -106,27 +111,16 @@ function parseArgs(argv: readonly string[]): Options {
           return name as SetupName;
         });
     } else if (a === "--learned-decisions") {
-      const value = next();
-      // Tập cờ (spec 2026-09-14 D6): ablation một-lượt-một ("final" riêng)
-      // không được bật lẫn vote/night — điều mà union cũ làm im lặng.
-      if (value === "both") {
-        o.learnedDecisions = "both";
-      } else {
-        const flags = value
-          .split(",")
-          .map((flag) => flag.trim())
-          .filter((flag) => flag !== "");
-        for (const flag of flags) {
-          if (flag !== "vote" && flag !== "night" && flag !== "final" && flag !== "hunter") {
-            throw new Error(
-              `--learned-decisions cần vote | night | final | hunter | both (cách nhau bằng dấu phẩy), nhận "${value}"`,
-            );
-          }
-        }
-        if (flags.length === 0) throw new Error("--learned-decisions rỗng");
-        const valid = flags as Array<"vote" | "night" | "final" | "hunter">;
-        o.learnedDecisions = valid.length === 1 ? valid[0]! : [...new Set(valid)];
+      // Tập cờ (spec 2026-09-14 D6); parser chung với selfplay (spec 2026-09-17 D2).
+      o.learnedDecisions = parseLearnedDecisions(next());
+    } else if (a === "--temperature") {
+      const raw = next();
+      const value = Number(raw);
+      // 0 hợp lệ và là mặc định; NaN/âm thì dừng, không đo một cấu hình vô nghĩa.
+      if (raw.trim() === "" || !Number.isFinite(value) || value < 0) {
+        throw new Error(`--temperature cần một số >= 0, nhận "${raw}"`);
       }
+      o.temperature = value;
     } else throw new Error(`Tham số không nhận ra: ${a}\n\n${usage()}`);
   }
   if (!o.model) throw new Error(usage());
@@ -225,6 +219,7 @@ function main(): void {
         learnedPolicy: setup.seats ? policy : undefined,
         learnedSeats: setup.seats ?? undefined,
         learnedDecisions: setup.seats ? o.learnedDecisions : undefined,
+        learnedTemperature: setup.seats ? o.temperature : undefined,
       });
       const villageWin = villageWinRate(games);
       const violations = games.reduce((n, game) => n + game.violations.length, 0);

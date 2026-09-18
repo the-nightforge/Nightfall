@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { resolveCorsOrigin, resolvePositiveInt } from "../src/config";
+import {
+  DEFAULT_BOT_POLICY_TEMPERATURE,
+  resolveBotPolicyTemperature,
+  resolveCorsOrigin,
+  resolvePositiveInt,
+} from "../src/config";
 
 /*
  * `config.ts` đã có kỷ luật này cho PORT, LiveKit và object storage, kèm nguyên
@@ -52,5 +57,31 @@ describe("resolveCorsOrigin", () => {
     expect(resolveCorsOrigin({ NODE_ENV: "production", CORS_ORIGIN: "https://a.vercel.app" })).toBe(
       "https://a.vercel.app",
     );
+  });
+});
+
+/*
+ * Nhiệt độ lấy mẫu của learned policy (dự án con C): 0 = luôn nước tốt nhất,
+ * > 0 = bot bớt tất định. Hỏng thì NÉ lúc boot - một nhiệt độ NaN làm
+ * `sampleMasked` chọn ô cuối ở mọi lượt, tức bot chơi bừa mà không ai hay.
+ */
+describe("resolveBotPolicyTemperature", () => {
+  it("chưa đặt hoặc để trống → mặc định đã đo", () => {
+    expect(resolveBotPolicyTemperature({})).toBe(DEFAULT_BOT_POLICY_TEMPERATURE);
+    expect(resolveBotPolicyTemperature({ BOT_POLICY_TEMPERATURE: "" })).toBe(DEFAULT_BOT_POLICY_TEMPERATURE);
+    expect(resolveBotPolicyTemperature({ BOT_POLICY_TEMPERATURE: "  " })).toBe(DEFAULT_BOT_POLICY_TEMPERATURE);
+  });
+
+  it("0 = argmax (rollback) và số dương hợp lệ", () => {
+    expect(resolveBotPolicyTemperature({ BOT_POLICY_TEMPERATURE: "0" })).toBe(0);
+    expect(resolveBotPolicyTemperature({ BOT_POLICY_TEMPERATURE: "0.5" })).toBe(0.5);
+  });
+
+  it("âm, chữ, vô cực → ném", () => {
+    for (const bad of ["-0.1", "abc", "Infinity", "NaN"]) {
+      expect(() => resolveBotPolicyTemperature({ BOT_POLICY_TEMPERATURE: bad })).toThrow(
+        "BOT_POLICY_TEMPERATURE",
+      );
+    }
   });
 });

@@ -767,15 +767,23 @@ export class BotRuntime {
         // có thể rơi về heuristic sau khi policy đã nói — giữ `logProb` của một
         // nước bị ghi đè là dạy PPO cập nhật theo hành động chưa từng xảy ra.
         //
-        // Giới hạn đã biết (spec 2026-09-14 v2 phải sửa trước rollout): hai
-        // nước FINAL cùng `targetId` (bị cáo) và `kind` ở đây tính ra "CHOOSE",
-        // nên một pick FINAL không bao giờ khớp guard này và rollout PPO bỏ
-        // qua hàng FINAL (fail-closed — v1 không hỏng gì, nhưng v2 muốn học
-        // phiên toà thì phải sửa guard này trước).
+        // Phiên toà: hai nước FINAL cùng `targetId` (bị cáo), phân biệt bằng
+        // `label`. Policy nói "treo" khi `learnedDecided.targetId` khác null
+        // (spec 2026-09-17 D6) — so theo đó, không theo `targetId`.
         if (learnedPick && learnedDecided) {
-          const kind = decision === "NIGHT" ? (actionKind ?? "SKIP") : DAY_ACTION_KIND;
-          if (kind === learnedDecided.kind && targetId === learnedDecided.targetId) {
-            chosen.learned = learnedPick;
+          if (decision === "FINAL_VOTE") {
+            const pickedGuilty = learnedDecided.targetId !== null;
+            if (
+              learnedDecided.kind === FINAL_ACTION_KIND &&
+              pickedGuilty === (label === FINAL_VOTE_GUILTY_LABEL)
+            ) {
+              chosen.learned = learnedPick;
+            }
+          } else {
+            const kind = decision === "NIGHT" ? (actionKind ?? "SKIP") : DAY_ACTION_KIND;
+            if (kind === learnedDecided.kind && targetId === learnedDecided.targetId) {
+              chosen.learned = learnedPick;
+            }
           }
         }
         // Cùng knowledge, cùng belief mà dòng trace này mang: `liveInput` là
