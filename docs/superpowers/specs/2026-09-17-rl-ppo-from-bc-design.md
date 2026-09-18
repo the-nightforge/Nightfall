@@ -125,6 +125,35 @@ của model xuất phát, cùng cấu hình không-đêm).
 code cũ 97,5 % → entropy theo hàng train 99,0 % → thêm neo 0,1: 99,5 %; VOTE vẫn
 đổi 1,9 % (neo 1,0 bắt đầu kìm cả VOTE: 98,9 %).
 
+### D11. Tích luỹ rồi mới chấm; cân bằng chỉ gác ở giai đoạn 4 (v3)
+
+Giai đoạn 1 v2 (neo D7–D10 hoạt động: `agreementWithInit` 0,991 mỗi vòng, NIGHT
+không trôi) cho ba khối 5 vòng độc lập, làng so với champion +0,9:
+
+| Lần chạy | Làng | Hơn champion | Lệch cân bằng (champion 2,8) |
+|---|---|---|---|
+| local, vòng 5 | +2,11 | +1,2 | 3,9 |
+| local, vòng 10 | +2,22 | +1,3 | 6,1 |
+| Colab, vòng 5 | +1,6 | +0,7 | 5,0 |
+
+PPO có học (~+1 điểm mỗi 5 vòng, lặp lại được) nhưng không thể thăng hạng vì hai
+chỗ bế tắc do chính spec tạo ra:
+
+1. D9 quay về champion sau mỗi benchmark bị loại → mỗi khối 5 vòng bắt đầu lại từ
+   đầu; một khối cho ~+1 < ngưỡng +2 nên tiến bộ không bao giờ cộng dồn.
+2. D3 gác cân bằng ở từng phe: làng đã thắng > 50 %, nên MỌI tiến bộ của làng làm
+   `|all − 50 %|` tăng; slack 1 chặn đúng thứ đang được train.
+
+Sửa (v3, không đổi code — chỉ cờ trong notebook):
+
+- Giai đoạn 1–3 chạy `--bench-every 10` (20 vòng/giai đoạn, đêm 10 vòng/phe): 10
+  vòng tích luỹ trước khi bị chấm. An toàn vì neo KL (D8) đã giữ lượt không train.
+- Giai đoạn 1–3 chạy `--balance-slack -1`: không gác cân bằng khi train MỘT phe.
+  Cân bằng cả bàn chỉ gác ở giai đoạn 4 (tiêu chí 3, không đổi), sau khi cả hai
+  phe đã train — train sói kéo tỉ lệ làng thắng cả bàn về phía 50 %.
+- Giữ nguyên: +2 trên hai bộ seed, cổng phe kia (D4), fallback `--lr 3e-4`.
+- Thư mục chạy `*-v3`; file xác nhận `confirm-v3-*`.
+
 ## Kế hoạch chạy
 
 Máy: i5-10300H 4 lõi/8 luồng, 24 GB, CPU-only (rollout là TypeScript nên GPU
@@ -134,9 +163,9 @@ giai đoạn 0 đo số thật.
 | Giai đoạn | Cấu hình | Ước lượng |
 |---|---|---|
 | 0. Chạy thử | 2 vòng × 600 ván, `--side village`, bench ở vòng cuối | ~45 phút |
-| 1. Làng | 10 vòng × 3.000 ván, `--bench-every 5`, `--side village`, từ `village-bc-0002` | ~3 giờ |
-| 2. Sói | như 1, từ champion giai đoạn 1, `--side wolves`, `--shaping-decisions vote` | ~3 giờ |
-| 3. Đêm (tuỳ chọn) | 5 vòng mỗi phe, `--train-decisions night` | ~1,5 giờ/phe |
+| 1. Làng | 20 vòng × 3.000 ván, `--bench-every 10 --balance-slack -1` (D11), `--side village`, từ `village-bc-0002` | ~6 giờ local / ~9 giờ Colab |
+| 2. Sói | như 1, từ champion giai đoạn 1, `--side wolves`, `--shaping-decisions vote` | ~6 giờ local / ~9 giờ Colab |
+| 3. Đêm (tuỳ chọn) | 10 vòng mỗi phe, `--train-decisions night`, cờ D11 | ~3 giờ/phe local |
 | 4. Xác nhận | 5 seed × 300 ván, seed MỚI chưa vòng nào dùng, cả 5 setup gồm `teacher` | ~40 phút |
 
 Người dùng tự chạy mọi giai đoạn qua mục 6 của
