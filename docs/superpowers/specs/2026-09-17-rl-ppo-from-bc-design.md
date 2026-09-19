@@ -201,8 +201,8 @@ Champion cuối được đóng gói khi, trên bộ seed xác nhận của giai
 1. Phe được train mạnh hơn `village-bc-0002` ≥ +2 điểm (mỗi phe đã train).
 2. Không phe nào tụt quá 1 điểm so với `village-bc-0002`.
 3. `imbalance(all)` ≤ 5,8 + 1,0 điểm.
-   (2026-09-19: `village-ppo-0001` đạt 7,00 — người duyệt chấp nhận ngoại lệ, xem
-   mục Kết quả bên dưới.)
+   (2026-09-19: `village-ppo-0001` đạt 7,00 ở argmax nhưng 2,5 ở T=0,5 của
+   production — đạt; xem mục Kết quả bên dưới.)
 4. 0 vi phạm luật trong mọi lô.
 
 Đạt → `apps/server/assets/models/village-ppo-0001.weights.json` (modelId
@@ -251,7 +251,7 @@ Log: `.tmp/rl/bc-village-v3.log`, `.tmp/rl/bc-wolves-v3.log`, `.tmp/rl/confirm.l
 
 Heuristic thuần: làng thắng 53.5 % (lệch 3.5).
 
-### Ngoại lệ cân bằng (quyết định của người duyệt, 2026-09-19)
+### Ngoại lệ cân bằng (quyết định của người duyệt, 2026-09-19) — đã gỡ, xem mục kế
 
 Tiêu chí 3 (`imbalance ≤ 5.8 + 1.0`) trượt 0.2 điểm. Chấp nhận vì: hai phe mạnh
 hơn rõ (+4 / +15), 0 vi phạm; 7.00 so với 6.8 nằm trong nhiễu (sai số lệch ghép
@@ -259,7 +259,21 @@ theo seed so với bc-0002 ≈ ±1.3); ngưỡng 5.8 lấy từ bench cũ, trên
 xác nhận bc-0002 lệch 4.6. Cái giá thật: bàn toàn bot nghiêng về làng thêm ≈ +2.4
 điểm so với bc-0002.
 
-### Việc còn mở
+### Đo lại ở nhiệt độ production (2026-09-19): ngoại lệ không còn cần
 
-- `DEFAULT_BOT_POLICY_TEMPERATURE = 0.5` đo trên bc-0002; chưa đo lại trên ppo-0001.
+Confirm trên chạy argmax (T=0), nhưng production lấy mẫu ở T=0,5. Cùng seed
+`confirm-0917`, 5 × 300 ván, `--temperature 0.5` (`.tmp/diag-ppo/t05-*.json`):
+
+| | bc-0002 | ppo-0001 | Δ |
+|---|---|---|---|
+| Làng so với heuristic | +0.8 ± 1.8 | +4.7 ± 1.4 | **+3.9** |
+| Sói so với heuristic | +2.4 ± 1.3 | +16.1 ± 1.2 | **+13.7** |
+| Làng thắng, cả bàn | 54.1 % (lệch 4.1) | 52.5 % (lệch **2.5**) | |
+
+Ở T=0,5 ppo-0001 đạt cả bốn tiêu chí, cân bằng còn TỐT hơn bc-0002. Lệch 7,0 ở
+argmax là do hai phe PPO tất định bắt bài nhau (chẩn đoán self-play: làng bỏ
+phiếu trúng 55 % ở T=0 so với 49 % ở T=0,5). Bài học: confirm phải chạy ở nhiệt
+độ production — dự án B làm vậy (spec 2026-09-19 D7).
+
+### Việc còn mở
 - Dự án con B (observation đầy đủ hơn).
