@@ -1,9 +1,33 @@
+import type { DayVoteRecap } from "@masoi/shared";
 import { assessPlayers } from "../belief/player-assessment";
 import type { BotWeights } from "../config/weights";
 import { informationValue } from "../roles/uncertainty";
 import { powerRoleClaimOf } from "../roles/wolf-team-plan";
 import type { BotBrainState, BotKnowledgeView } from "../types";
-import type { BeliefSnapshot, TraceKnowledgeSnapshot } from "./trace";
+import type { BeliefSnapshot, TraceKnowledgeSnapshot, VoteDaySummary } from "./trace";
+
+/**
+ * Rút gọn một `DayVoteRecap` (đầy đủ, có timestamp từng lần đổi phiếu) thành
+ * `VoteDaySummary` — đúng thứ encoder đọc, không hơn (spec 2026-09-19 D2).
+ */
+export function summarizeVoteDay(recap: DayVoteRecap): VoteDaySummary {
+  const ballots: Record<string, string | null> = {};
+  for (const ballot of recap.finalBallots) {
+    ballots[ballot.voterId] = ballot.choice.type === "PLAYER" ? ballot.choice.targetId : null;
+  }
+  const changed = [
+    ...new Set(recap.mutations.filter((m) => m.previousChoice !== null).map((m) => m.voterId)),
+  ].sort();
+  const judged = recap.finalJudgment?.ballots ?? [];
+  return {
+    round: recap.round,
+    ballots,
+    changed,
+    accusedId: recap.nomination.kind === "TRIAL" ? recap.nomination.accusedId : null,
+    guilty: judged.filter((b) => b.guilty).map((b) => b.voterId).sort(),
+    innocent: judged.filter((b) => !b.guilty).map((b) => b.voterId).sort(),
+  };
+}
 
 /**
  * Hai ảnh chụp mà trace ghi và observation lúc chơi dùng CHUNG.
@@ -58,6 +82,7 @@ export function snapshotKnowledge(knowledge: BotKnowledgeView): TraceKnowledgeSn
       noElimination: knowledge.currentVoteCounts.noElimination,
     },
     trialAccusedId: knowledge.trialAccusedId,
+    voteHistory: knowledge.publicVoteHistory.map(summarizeVoteDay),
   };
 }
 

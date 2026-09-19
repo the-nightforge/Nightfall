@@ -23,6 +23,7 @@ describe("trace/snapshot", () => {
       lastNightDeaths: [],
       currentVoteCounts: { players: {}, noElimination: 0 },
       trialAccusedId: null,
+      publicVoteHistory: [],
     } as unknown as BotKnowledgeView;
     expect(snapshotKnowledge(minimal)).toMatchObject({
       aliveIds: ["a"],
@@ -39,6 +40,7 @@ describe("trace/snapshot", () => {
       lastNightDeaths: [],
       voteCounts: { players: {}, noElimination: 0 },
       trialAccusedId: null,
+      voteHistory: [],
     });
   });
 });

@@ -1,6 +1,6 @@
 import { roleWonOutcome, type Role } from "@masoi/shared";
 import type { LearnedPick } from "../policy/learned-policy";
-import type { BotDecisionTrace } from "../trace/trace";
+import type { BotDecisionTrace, VoteDaySummary } from "../trace/trace";
 import type { SelfPlayGame } from "./selfplay";
 import { shapingLabelFor } from "./shaping";
 
@@ -72,6 +72,8 @@ export interface BotTrajectory {
     lastNightDeaths: string[];
     voteCounts: { players: Record<string, number>; noElimination: number };
     trialAccusedId: string | null;
+    /** Lịch sử phiếu công khai (spec 2026-09-19). Vắng ở JSONL cũ. */
+    voteHistory?: VoteDaySummary[];
   };
   legalActions: string[];
   candidates: BotDecisionTrace["candidates"];
@@ -226,6 +228,14 @@ export function observationFromTrace(trace: TraceObservationSource): Observation
           }
         : { players: {}, noElimination: 0 },
       trialAccusedId: snapshot.trialAccusedId ?? null,
+      voteHistory: (snapshot.voteHistory ?? []).map((day) => ({
+        round: day.round,
+        ballots: { ...day.ballots },
+        changed: [...day.changed],
+        accusedId: day.accusedId,
+        guilty: [...day.guilty],
+        innocent: [...day.innocent],
+      })),
     },
     legalActions,
   };
