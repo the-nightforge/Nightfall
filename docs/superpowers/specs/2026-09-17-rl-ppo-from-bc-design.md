@@ -201,6 +201,8 @@ Champion cuối được đóng gói khi, trên bộ seed xác nhận của giai
 1. Phe được train mạnh hơn `village-bc-0002` ≥ +2 điểm (mỗi phe đã train).
 2. Không phe nào tụt quá 1 điểm so với `village-bc-0002`.
 3. `imbalance(all)` ≤ 5,8 + 1,0 điểm.
+   (2026-09-19: `village-ppo-0001` đạt 7,00 — người duyệt chấp nhận ngoại lệ, xem
+   `docs/superpowers/reports/2026-09-19-rl-ppo-from-bc.md`.)
 4. 0 vi phạm luật trong mọi lô.
 
 Đạt → `apps/server/assets/models/village-ppo-0001.weights.json` (modelId
