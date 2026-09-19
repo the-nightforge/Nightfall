@@ -168,11 +168,15 @@ def show_state(out: Path) -> bool:
     return promoted
 
 
-def confirm(rl: Path, deadline: float | None) -> None:
-    cand = candidate(rl)
+def confirm(rl: Path, deadline: float | None, model: Path | None = None) -> None:
+    """Xác nhận `model`, mặc định là `candidate(rl)`. Kết quả bc-0002 dùng lại giữa các lần."""
+    cand = model or candidate(rl)
     if cand is None:
         raise SystemExit("chưa có lượt chạy nào thăng hạng - không có gì để xác nhận")
-    base_json, cand_json = rl / "confirm-v3-bc0002.json", rl / "confirm-v3-candidate.json"
+    base_json = rl / "confirm-v3-bc0002.json"
+    # Model tự chọn có file kết quả riêng (theo đường dẫn), không đè/đọc nhầm của candidate.
+    cand_json = rl / ("confirm-v3-candidate.json" if model is None
+                      else f"confirm-v3-{'_'.join(Path(cand).resolve().parts[-3:])}")
     npm = shutil.which("npm") or "npm"
     for model, dest in ((CHAMPION0, base_json), (cand, cand_json)):
         if not dest.exists():
@@ -238,7 +242,7 @@ class KeepAwake:
         return False
 
 
-def run_stage(stage: str, rl: Path, deadline: float | None = None) -> str:
+def run_stage(stage: str, rl: Path, deadline: float | None = None, model: Path | None = None) -> str:
     """Chạy MỘT giai đoạn, trả gợi ý bước tiếp. Hết giờ hoặc bị ngắt: gợi ý chạy lại cùng stage."""
     try:
         if stage in STAGES:
@@ -254,7 +258,7 @@ def run_stage(stage: str, rl: Path, deadline: float | None = None) -> str:
                                ["--train-decisions", "night", "--shaping-decisions", "vote", *SIDE_STAGE], deadline))
             return "confirm"
         if stage == "confirm":
-            confirm(rl, deadline)
+            confirm(rl, deadline, model)
             return "gửi khối VERDICT cho Claude"
         raise SystemExit(f"stage lạ: {stage!r}")
     except OutOfTime:
@@ -269,6 +273,8 @@ def main() -> None:
     p.add_argument("--rl-dir", type=Path, default=ROOT / ".tmp" / "rl", help="thư mục các lượt chạy")
     p.add_argument("--budget-hours", type=float, default=None,
                    help="tự dừng sau số giờ này (chạy lại cùng lệnh để tiếp tục); mặc định không giới hạn")
+    p.add_argument("--model", type=Path, default=None,
+                   help="confirm: model cần xác nhận thay cho champion tự chọn (vd iter-0020/model/model.weights.json)")
     a = p.parse_args()
     rl = a.rl_dir.resolve()
     deadline = time.time() + a.budget_hours * 3600 if a.budget_hours else None
@@ -281,7 +287,7 @@ def main() -> None:
         raise SystemExit(f"thiếu {CHAMPION0}")
 
     with KeepAwake():
-        hint = run_stage(a.stage, rl, deadline)
+        hint = run_stage(a.stage, rl, deadline, a.model)
 
     print("\n>>> NEXT:", hint)
     print(f">>> thời gian {(time.time() - t0) / 3600:.1f} giờ")
