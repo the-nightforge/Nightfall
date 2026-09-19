@@ -14,21 +14,18 @@ import { DEFAULT_BOT_POLICY_TEMPERATURE } from "../src/config";
  * Mock config trỏ model đóng gói trong repo để cả đường `botPolicy()`
  * (cache) lẫn đường BotSession lọc phe chạy đúng như production khi bật.
  *
- * Model đóng gói hiện là BC clone parity trên dataset-0004
- * (village-bc-0002, thay village-bc-0001: masoi-mlp-2: SiLU + LayerNorm + value trunk riêng, AdamW +
- * cosine, test agreement 0.912 → 0.928 — spec 2026-09-14 D4/D5: action
- * space đổi nên champion PPO cũ village-ppo-0009 hết load được và đã gỡ).
- * Nó là bản sao trung thành của teacher (Δ≈0), KHÔNG phải bản tăng lực:
- * champion PPO thật trên dataset-0004 là việc của v2.
+ * Model đóng gói hiện là village-ppo-0001: PPO logits thuần từ village-bc-0002
+ * (spec 2026-09-17), cả bàn, bốn lượt. village-bc-0002 vẫn trong image để
+ * rollback bằng env.
  */
 vi.mock("../src/config", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/config")>()),
   config: {
-    botPolicyFile: join(__dirname, "..", "assets", "models", "village-bc-0002.weights.json"),
+    botPolicyFile: join(__dirname, "..", "assets", "models", "village-ppo-0001.weights.json"),
   },
 }));
 
-const CHAMPION = join(__dirname, "..", "assets", "models", "village-bc-0002.weights.json");
+const CHAMPION = join(__dirname, "..", "assets", "models", "village-ppo-0001.weights.json");
 
 describe("resolveBotPolicy", () => {
   it("path null/rỗng → disabled, không đụng file hệ thống", () => {
@@ -68,7 +65,7 @@ describe("resolveBotPolicy", () => {
   it("model đóng gói trong repo phải load được — cả bàn, logits thuần", () => {
     const resolved = resolveBotPolicy(CHAMPION);
     if (!resolved.enabled) throw new Error("champion phải enabled");
-    expect(resolved.modelId).toBe("village-bc-0002");
+    expect(resolved.modelId).toBe("village-ppo-0001");
     expect(resolved.seats).toBe("all");
     // BC-logits thuần (v1 dừng ở parity, không PPO — spec 2026-09-14 D5):
     // không có residual.beta.
@@ -83,7 +80,7 @@ describe("learnedRuntimeOptions", () => {
     expect(options).toMatchObject({
       learnedDecisions: ["vote", "night", "final", "hunter"],
     });
-    expect(options.learnedPolicy?.id).toBe("village-bc-0002");
+    expect(options.learnedPolicy?.id).toBe("village-ppo-0001");
   });
 
   it("nhiệt độ đi từ resolveBotPolicy tới BotRuntime; mặc định là mức đã đo", () => {
