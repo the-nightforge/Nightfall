@@ -202,7 +202,7 @@ Champion cuối được đóng gói khi, trên bộ seed xác nhận của giai
 2. Không phe nào tụt quá 1 điểm so với `village-bc-0002`.
 3. `imbalance(all)` ≤ 5,8 + 1,0 điểm.
    (2026-09-19: `village-ppo-0001` đạt 7,00 — người duyệt chấp nhận ngoại lệ, xem
-   `docs/superpowers/reports/2026-09-19-rl-ppo-from-bc.md`.)
+   mục Kết quả bên dưới.)
 4. 0 vi phạm luật trong mọi lô.
 
 Đạt → `apps/server/assets/models/village-ppo-0001.weights.json` (modelId
@@ -224,3 +224,42 @@ vẫn không → dừng A, chuyển dự án con B (observation).
 3. Thám Tử chọn hai người, nhãn chỉ giữ người đầu — PPO không cải thiện được
    phần đó (dự án con B).
 4. Mọi thời gian trong kế hoạch là ước lượng; giai đoạn 0 thay bằng số đo.
+
+## Kết quả (2026-09-19)
+
+**Kết luận: đóng gói `village-ppo-0001`** (= `bc-wolves-v3/iter-0020`), với một
+ngoại lệ có chủ ý ở tiêu chí cân bằng (xem dưới). `village-bc-0002` giữ trong
+image để rollback bằng `BOT_POLICY_FILE`.
+
+### Các giai đoạn (local, i5-10300H)
+
+| Lượt | Vòng | Vòng 10 (điểm / xác nhận / lệch) | Vòng 20 | Champion |
+|---|---|---|---|---|
+| `bc-village-v3` | 20 | +3.33 / +7.11 / 11.44 | +8.67 / +10.00 / 12.44 | champion-0020 |
+| `bc-wolves-v3` (từ champion làng) | 20 | +12.00 / +10.00 / 8.00 | +11.33 / – / 5.89 | champion-0010 |
+
+`night` bỏ qua: cả hai phe đã vượt xa +2, và `night` không gác cân bằng.
+Log: `.tmp/rl/bc-village-v3.log`, `.tmp/rl/bc-wolves-v3.log`, `.tmp/rl/confirm.log`.
+
+### Xác nhận (5 seed × 300 ván, seed `confirm-0917`, argmax)
+
+| | Làng so với bc-0002 | Sói so với bc-0002 | Làng thắng khi cả bàn dùng model | Lệch | Vi phạm | Verdict |
+|---|---|---|---|---|---|---|
+| bc-0002 | – | – | 54.6 % | 4.60 | 0 | – |
+| wolves champion-0010 | +6.27 | +12.40 | 57.7 % | 7.73 | 0 | FAIL (cân bằng) |
+| **wolves iter-0020** | **+4.00** | **+15.27** | 57.0 % | **7.00** | 0 | FAIL (cân bằng) |
+
+Heuristic thuần: làng thắng 53.5 % (lệch 3.5).
+
+### Ngoại lệ cân bằng (quyết định của người duyệt, 2026-09-19)
+
+Tiêu chí 3 (`imbalance ≤ 5.8 + 1.0`) trượt 0.2 điểm. Chấp nhận vì: hai phe mạnh
+hơn rõ (+4 / +15), 0 vi phạm; 7.00 so với 6.8 nằm trong nhiễu (sai số lệch ghép
+theo seed so với bc-0002 ≈ ±1.3); ngưỡng 5.8 lấy từ bench cũ, trên chính bộ seed
+xác nhận bc-0002 lệch 4.6. Cái giá thật: bàn toàn bot nghiêng về làng thêm ≈ +2.4
+điểm so với bc-0002.
+
+### Việc còn mở
+
+- `DEFAULT_BOT_POLICY_TEMPERATURE = 0.5` đo trên bc-0002; chưa đo lại trên ppo-0001.
+- Dự án con B (observation đầy đủ hơn).
