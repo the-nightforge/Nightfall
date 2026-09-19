@@ -103,6 +103,30 @@ def main() -> None:
         assert marker.read_text() == seen, "tiến trình con vẫn chạy sau khi ngắt"
         assert "[đã ngắt]" in log.read_text(encoding="utf8")
 
+    # Dự án B (spec 2026-09-19): hằng số riêng, stage làng có đối thủ ppo-0001.
+    rs.set_project("b")
+    try:
+        assert rs.CHAMPION0.name == "village-bc-0003.weights.json"
+        name, side, iterations, extra = rs.STAGES["village"]
+        assert name == "b-village" and side == "village" and iterations == 20
+        assert extra[extra.index("--opponent") + 1].endswith("village-ppo-0001.weights.json"), extra
+        assert "--opponent" not in rs.STAGES["wolves"][3]
+        with tempfile.TemporaryDirectory() as tmp:
+            rl = Path(tmp)
+            make_run(rl, "bc-village-v3", promoted=True)  # lượt của dự án A không được tính
+            assert rs.status(rl) == "village"
+            try:
+                rs.start_model(rl, "wolves")
+                raise AssertionError("wolves B phải đòi b-village đã thăng hạng")
+            except SystemExit:
+                pass
+            make_run(rl, "b-village", promoted=True)
+            assert rs.start_model(rl, "wolves").parent.parent.name == "b-village"
+            assert rs.status(rl) == "wolves"
+    finally:
+        rs.set_project("a")
+    assert rs.STAGES["village"][0] == "bc-village-v3"
+
     print("ok")
 
 

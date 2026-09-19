@@ -16,6 +16,9 @@ Dòng cuối luôn in `>>> NEXT:`.
 Tắt máy giữa chừng: chạy lại ĐÚNG lệnh đó. `rl_loop` bỏ qua mọi vòng và mọi bước
 đã xong (`state.json` + dấu `.done`); chỉ bước đang dở làm lại. Trong lúc chạy,
 script giữ Windows không ngủ (SetThreadExecutionState) và trả lại khi thoát.
+
+Dự án B (spec 2026-09-19): thêm `--project b` vào mọi lệnh, vd
+    ai-training/.venv/Scripts/python.exe ai-training/rl_stages.py --project b village
 """
 
 from __future__ import annotations
@@ -54,6 +57,38 @@ STAGES: dict[str, tuple[str, str, int, list[str]]] = {
 VILLAGE_RUNS = ("bc-village-v3-lr3", "bc-village-v3")
 WOLVES_RUNS = ("bc-wolves-v3-lr3", "bc-wolves-v3")
 NIGHT_RUNS = ("bc-night-wolves-v3", "bc-night-village-v3")
+
+PROJECT = "a"
+PPO1 = ROOT / "apps" / "server" / "assets" / "models" / "village-ppo-0001.weights.json"
+_PROJECT_A = (CHAMPION0, STAGES, VILLAGE_RUNS, WOLVES_RUNS, NIGHT_RUNS)
+_PROJECT_B = (
+    ROOT / "apps" / "server" / "assets" / "models" / "village-bc-0003.weights.json",
+    {
+        "village": ("b-village", "village", 20,
+                    ["--train-decisions", NO_NIGHT, *SIDE_STAGE, "--opponent", str(PPO1)]),
+        "village-lr3": ("b-village-lr3", "village", 20,
+                        ["--train-decisions", NO_NIGHT, *SIDE_STAGE, "--opponent", str(PPO1), "--lr", "3e-4"]),
+        "wolves": ("b-wolves", "wolves", 20,
+                   ["--train-decisions", NO_NIGHT, "--shaping-decisions", "vote", *SIDE_STAGE]),
+        "wolves-lr3": ("b-wolves-lr3", "wolves", 20,
+                       ["--train-decisions", NO_NIGHT, "--shaping-decisions", "vote", *SIDE_STAGE, "--lr", "3e-4"]),
+    },
+    ("b-village-lr3", "b-village"),
+    ("b-wolves-lr3", "b-wolves"),
+    ("b-night-wolves", "b-night-village"),
+)
+
+
+def set_project(name: str) -> None:
+    """'a' = spec 2026-09-17 (mặc định), 'b' = spec 2026-09-19. Mọi hàm đọc các
+    hằng số này lúc gọi, nên đổi ở đây là đổi cả status/run_stage/confirm."""
+    global PROJECT, CHAMPION0, STAGES, VILLAGE_RUNS, WOLVES_RUNS, NIGHT_RUNS
+    if name not in ("a", "b"):
+        raise SystemExit(f"dự án lạ: {name!r} (có: a, b)")
+    PROJECT = name
+    CHAMPION0, STAGES, VILLAGE_RUNS, WOLVES_RUNS, NIGHT_RUNS = _PROJECT_A if name == "a" else _PROJECT_B
+
+
 CONFIRM = ["--games", "300", "--repeat", "5", "--seed", "confirm-0917",
            "--setups", "baseline,village,wolves,all,teacher",
            "--learned-decisions", "vote,night,final,hunter"]
@@ -206,8 +241,57 @@ def confirm(rl: Path, deadline: float | None, model: Path | None = None) -> None
     print("=" * 60)
 
 
+CONFIRM_B = ["--games", "300", "--repeat", "5", "--seed", "confirm-0919", "--temperature", "0.5",
+             "--learned-decisions", "vote,night,final,hunter"]
+
+
+def confirm_b(rl: Path, deadline: float | None, model: Path | None = None) -> None:
+    """Tiêu chí spec 2026-09-19 (T=0,5, seed mới): đối đầu, không thụt lùi, cân bằng, 0 vi phạm."""
+    cand = model or candidate(rl)
+    if cand is None:
+        raise SystemExit("chưa có lượt chạy nào thăng hạng - không có gì để xác nhận")
+    ref_json = rl / "confirm-b-ppo0001.json"
+    cand_json = rl / ("confirm-b-candidate.json" if model is None
+                      else f"confirm-b-{'_'.join(Path(cand).resolve().parts[-3:])}")
+    npm = shutil.which("npm") or "npm"
+    runs = (
+        (PPO1, ref_json, ["--setups", "baseline,village,wolves,all"]),
+        (cand, cand_json, ["--opponent", PPO1,
+                           "--setups", "baseline,village,wolves,all,h2h-village,h2h-wolves,opponent"]),
+    )
+    for m, dest, extra in runs:
+        if not dest.exists():
+            run_logged([npm, "run", "ai:benchmark", "--", "--model", m, *CONFIRM_B, *extra, "--out", dest],
+                       rl / "confirm-b.log", cwd=ROOT, deadline=deadline)
+    sys.path.insert(0, str(TRAIN_DIR))
+    from rl_loop import imbalance_of, score_of
+
+    report = json.loads(cand_json.read_text(encoding="utf8"))
+    h2h = {s: report["paired"][f"h2h-{s}"]["mean"] for s in ("village", "wolves")}
+    delta = {s: score_of(cand_json, s) - score_of(ref_json, s) for s in ("village", "wolves")}
+    imbalance, ref_imbalance = imbalance_of(cand_json), imbalance_of(ref_json)
+    violations = sum(r["violations"] for r in report["rows"])
+    checks = {
+        "đối đầu: làng hơn làng ppo-0001 >= +2": h2h["village"] >= 2.0,
+        "không phe nào < ppo-0001 - 1": all(d >= -1.0 for d in delta.values()),
+        f"lệch cân bằng <= ppo-0001 ({ref_imbalance:.2f}) + 1": imbalance <= ref_imbalance + 1.0,
+        "0 vi phạm": violations == 0,
+    }
+    print("=" * 60)
+    print(f"đối đầu  làng {h2h['village']:+.2f} | sói {h2h['wolves']:+.2f} (theo dõi)")
+    for side, d in delta.items():
+        print(f"{side:<8} so với ppo-0001 (đều so heuristic) {d:+.2f}")
+    print(f"lệch cân bằng {imbalance:.2f} | vi phạm {violations}")
+    for name, ok in checks.items():
+        print(f"  [{'x' if ok else ' '}] {name}")
+    print("VERDICT:", "PASS" if all(checks.values()) else "FAIL")
+    print("candidate:", cand)
+    print("=" * 60)
+
+
 def status(rl: Path) -> str:
-    runs = sorted(p for p in rl.glob("*-v3*") if (p / "state.json").exists()) if rl.exists() else []
+    names = {v[0] for v in STAGES.values()} | set(NIGHT_RUNS)
+    runs = sorted(rl / n for n in names if (rl / n / "state.json").exists()) if rl.exists() else []
     if not runs:
         return "village"
     for run in runs:
@@ -218,9 +302,9 @@ def status(rl: Path) -> str:
         if state.exists() and len(json.loads(state.read_text(encoding="utf8"))["done"]) < iterations:
             return stage
     if promoted_champion(rl, VILLAGE_RUNS) is None:
-        return "village-lr3" if (rl / "bc-village-v3" / "state.json").exists() else "village"
+        return "village-lr3" if (rl / STAGES["village"][0] / "state.json").exists() else "village"
     if promoted_champion(rl, WOLVES_RUNS) is None:
-        return "wolves-lr3" if (rl / "bc-wolves-v3" / "state.json").exists() else "wolves"
+        return "wolves-lr3" if (rl / STAGES["wolves"][0] / "state.json").exists() else "wolves"
     return "night (tuỳ chọn) hoặc confirm"
 
 
@@ -252,13 +336,13 @@ def run_stage(stage: str, rl: Path, deadline: float | None = None, model: Path |
         if stage == "night":
             if not (promoted_champion(rl, VILLAGE_RUNS) and promoted_champion(rl, WOLVES_RUNS)):
                 raise SystemExit("night cần CẢ làng lẫn sói đã thăng hạng - chuyển sang 'confirm'")
-            show_state(rl_loop(rl, "bc-night-village-v3", candidate(rl), "village", 10,
+            show_state(rl_loop(rl, NIGHT_RUNS[1], candidate(rl), "village", 10,
                                ["--train-decisions", "night", *SIDE_STAGE], deadline))
-            show_state(rl_loop(rl, "bc-night-wolves-v3", candidate(rl), "wolves", 10,
+            show_state(rl_loop(rl, NIGHT_RUNS[0], candidate(rl), "wolves", 10,
                                ["--train-decisions", "night", "--shaping-decisions", "vote", *SIDE_STAGE], deadline))
             return "confirm"
         if stage == "confirm":
-            confirm(rl, deadline, model)
+            (confirm_b if PROJECT == "b" else confirm)(rl, deadline, model)
             return "gửi khối VERDICT cho Claude"
         raise SystemExit(f"stage lạ: {stage!r}")
     except OutOfTime:
@@ -275,7 +359,10 @@ def main() -> None:
                    help="tự dừng sau số giờ này (chạy lại cùng lệnh để tiếp tục); mặc định không giới hạn")
     p.add_argument("--model", type=Path, default=None,
                    help="confirm: model cần xác nhận thay cho champion tự chọn (vd iter-0020/model/model.weights.json)")
+    p.add_argument("--project", choices=("a", "b"), default="a",
+                   help="a = spec 2026-09-17; b = spec 2026-09-19 (lịch sử phiếu)")
     a = p.parse_args()
+    set_project(a.project)
     rl = a.rl_dir.resolve()
     deadline = time.time() + a.budget_hours * 3600 if a.budget_hours else None
     t0 = time.time()
