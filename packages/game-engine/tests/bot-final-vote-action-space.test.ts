@@ -157,7 +157,9 @@ describe("D1 — kind FINAL trong cùng action space", () => {
     // Observation thêm đúng một chiều legalKind:FINAL. (Số đo thực ở HEAD là
     // 412 → 413; spec ghi 413 → 414 theo model đã commit — model đó vốn đã
     // lệch encoder HEAD một chiều và loader từ chối nó từ trước spec này.)
-    expect(observationSize()).toBe(413);
+    // 413 → 797: spec 2026-09-19 D2 nối thêm 384 chiều lịch sử phiếu SAU khối
+    // theo ghế; phần đo ở đây (0–412) không đổi, chỉ tổng chiều đổi.
+    expect(observationSize()).toBe(797);
     expect(observationFeatureNames()).toContain("legalKind:FINAL");
   });
 
