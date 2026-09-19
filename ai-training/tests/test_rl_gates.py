@@ -113,6 +113,10 @@ def main() -> None:
     assert roll[roll.index("--learned-seats") + 1] == "village", roll
     assert roll[roll.index("--seed") + 1] == "rl-3-village", roll
     assert roll[roll.index("--trace-games") + 1] == "1000", roll
+    assert "--opponent-policy" not in roll, roll
+    opp = rollout_cmd(Path("m.json"), "village", 3, Path("part"), 1000, 1.0, decisions, Path("ppo1.json"))
+    assert opp[opp.index("--opponent-policy") + 1] == "ppo1.json", opp
+    assert opp[opp.index("--learned-seats") + 1] == "village", opp
 
     # Điểm xuất phát vòng sau (2026-09-17): giai đoạn 1 train tiếp vòng 6–10 từ
     # model đã bị benchmark loại ở vòng 5 (−3,56) và kết thúc ở −7,0.
