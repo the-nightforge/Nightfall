@@ -264,6 +264,14 @@ describe("leak validator (§7, §42, §44)", () => {
     expect(validateTrajectoryLine(dead).valid).toBe(true);
   });
 
+  it("CHO PHÉP lịch sử phiếu công khai (spec 2026-09-19), nhưng từ chối sai hình dạng", () => {
+    const day = { round: 1, ballots: { p1: "p3", p3: null }, changed: [], accusedId: "p3", guilty: ["p1"], innocent: [] };
+    const ok = line({ observation: { ...line().observation, voteHistory: [day] } });
+    expect(validateTrajectoryLine(ok)).toEqual({ valid: true, violations: [] });
+    const bad = line({ observation: { ...line().observation, voteHistory: [{ ...day, ballots: null }] } as never });
+    expect(validateTrajectoryLine(bad).valid).toBe(false);
+  });
+
   it("TỪ CHỐI seerResult ở một vai không có lượt soi", () => {
     const fake = line({
       observation: {
