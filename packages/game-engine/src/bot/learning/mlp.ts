@@ -206,9 +206,21 @@ function sameList(name: string, got: unknown, want: readonly string[]): void {
   }
 }
 
+/** `got` phải là TIỀN TỐ dài đúng `length` của `want` (spec 2026-09-19 D1). */
+function prefixList(name: string, got: unknown, want: readonly string[], length: number): void {
+  if (!Array.isArray(got) || got.length !== length || got.some((v, i) => v !== want[i])) {
+    throw new Error(
+      `${name} không khớp encoder hiện tại — model này train trên schema khác, từ chối nạp`,
+    );
+  }
+}
+
 /**
- * Nạp và KIỂM một model. Từ chối mọi lệch schema thay vì chạy sai: một model
- * 365 chiều nạp lên encoder 413 chiều sẽ ra số, và số đó không có nghĩa.
+ * Nạp và KIỂM một model. Từ chối mọi lệch schema thay vì chạy sai — trừ một
+ * ngoại lệ CÓ CHỦ Ý: `obsSize`/`featureNames` là TIỀN TỐ đúng của encoder
+ * hiện tại (spec 2026-09-19 D1), vì chiều mới chỉ nối cuối. Một model có
+ * `featureNames` lệch encoder ở bất kỳ vị trí nào (kể cả trong tiền tố) vẫn
+ * bị từ chối, vì số ra sẽ không có nghĩa.
  */
 export function loadMlpPolicy(
   json: unknown,
@@ -220,9 +232,14 @@ export function loadMlpPolicy(
   }
   const obs = observationSize(options.maxSeats);
   const act = actionSize(options.maxSeats);
-  if (w.obsSize !== obs) throw new Error(`obsSize ${w.obsSize} ≠ encoder ${obs}`);
+  // Chiều mới chỉ NỐI CUỐI (spec 2026-09-19 D1): model cũ đọc tiền tố của
+  // vector mới, nên rollback về model cũ vẫn chơi y hệt.
+  const input = w.obsSize;
+  if (typeof input !== "number" || !Number.isInteger(input) || input <= 0 || input > obs) {
+    throw new Error(`obsSize ${w.obsSize} ≠ encoder ${obs} (chỉ nhận tiền tố ≤ ${obs})`);
+  }
   if (w.actionSize !== act) throw new Error(`actionSize ${w.actionSize} ≠ encoder ${act}`);
-  sameList("featureNames", w.featureNames, observationFeatureNames(options.maxSeats));
+  prefixList("featureNames", w.featureNames, observationFeatureNames(options.maxSeats), input);
   sameList("actionNames", w.actionNames, actionNames(options.maxSeats));
   if (!Array.isArray(w.layers) || w.layers.length === 0) throw new Error("layers rỗng");
   const activation = w.activation ?? "relu";
@@ -239,7 +256,7 @@ export function loadMlpPolicy(
       throw new Error("normLayers phải có một mục mỗi trunk block");
     }
   }
-  let width = obs;
+  let width = input;
   const layers = w.layers.map((layer, i) => {
     const rows = (layer as MlpLinear).w?.length ?? 0;
     const checked = checkLinear(`layers[${i}]`, layer, rows, width);
@@ -266,7 +283,7 @@ export function loadMlpPolicy(
         `valueLayers[${i}]`,
         layer,
         layers[i]!.w.length,
-        i === 0 ? obs : layers[i - 1]!.w.length,
+        i === 0 ? input : layers[i - 1]!.w.length,
       ),
     );
     if (norm === "layernorm") {
@@ -300,19 +317,18 @@ export function loadMlpPolicy(
   };
   const id = typeof w.modelId === "string" ? w.modelId : "unnamed";
 
-  const guard = (x: readonly number[]): void => {
+  const fit = (x: readonly number[]): readonly number[] => {
     if (x.length !== obs) throw new Error(`features phải có ${obs} chiều, nhận ${x.length}`);
+    return input === obs ? x : x.slice(0, input);
   };
   return {
     id,
     ...(residual ? { residual } : {}),
     logits(features) {
-      guard(features);
-      return mlpForward(weights, features).logits;
+      return mlpForward(weights, fit(features)).logits;
     },
     value(features) {
-      guard(features);
-      return mlpForward(weights, features).value;
+      return mlpForward(weights, fit(features)).value;
     },
   };
 }
