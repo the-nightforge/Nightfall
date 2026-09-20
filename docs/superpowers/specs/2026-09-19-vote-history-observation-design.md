@@ -113,8 +113,14 @@ In hai hiệu ghép theo seed: **Δ làng đối đầu** = `h2h-village − opp
    `ai:validate-dataset` phải cho 0 lỗi và 384 chiều `hist:*` khác 0 ở ≥ 1 dòng
    (kiểm dây dẫn dữ liệu).
 2. **BC → `village-bc-0003`**: cờ P0 của `train_bc_local.ipynb`. Cổng:
-   `test.agreementTieAware` ≥ 0,923 (bc-0002 là 0,928, trừ 0,005) và benchmark
-   `all − teacher` không tệ hơn bc-0002 quá 1 điểm. Teacher là heuristic, vốn
+   `test.agreementTieAware` ≥ 0,923 (bc-0002 là 0,928, trừ 0,005) và ĐỐI ĐẦU
+   với bc-0002 (`--opponent`, 5 seed): mỗi phe ≥ −1 điểm.
+
+   (2026-09-20: cổng cũ là `all − teacher` không tệ hơn bc-0002 quá 1 điểm.
+   Bỏ vì nó đo SAI khi bản sao mạnh lên ở CẢ HAI phe: `all` là tỉ lệ làng
+   thắng, nên sói khoẻ hơn kéo nó xuống. bc-0003 trượt cổng cũ (−3,1 so với
+   +2,0) nhưng đối đầu trực tiếp lại hơn bc-0002: làng +0,7 ± 1,5, sói
+   +0,4 ± 1,4. Đối đầu là phép đo đúng, và cũng chính là tiêu chí của B.) Teacher là heuristic, vốn
    không dùng lịch sử phiếu trực tiếp: BC gần như bỏ qua chiều mới — nó chỉ là
    điểm xuất phát ngang bc-0002, cải thiện phải đến từ RL.
 3. **RL** (`rl_stages.py`, cờ v3/D11 của spec 2026-09-17 giữ nguyên):
