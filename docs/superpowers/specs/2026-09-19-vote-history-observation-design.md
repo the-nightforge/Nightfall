@@ -120,9 +120,12 @@ In hai hiệu ghép theo seed: **Δ làng đối đầu** = `h2h-village − opp
    Bỏ vì nó đo SAI khi bản sao mạnh lên ở CẢ HAI phe: `all` là tỉ lệ làng
    thắng, nên sói khoẻ hơn kéo nó xuống. bc-0003 trượt cổng cũ (−3,1 so với
    +2,0) nhưng đối đầu trực tiếp lại hơn bc-0002: làng +0,7 ± 1,5, sói
-   +0,4 ± 1,4. Đối đầu là phép đo đúng, và cũng chính là tiêu chí của B.) Teacher là heuristic, vốn
-   không dùng lịch sử phiếu trực tiếp: BC gần như bỏ qua chiều mới — nó chỉ là
-   điểm xuất phát ngang bc-0002, cải thiện phải đến từ RL.
+   +0,4 ± 1,4. Đối đầu là phép đo đúng, và cũng chính là tiêu chí của B.)
+
+   Teacher là heuristic, vốn không dùng lịch sử phiếu trực tiếp: BC gần như bỏ
+   qua chiều mới — nó chỉ là điểm xuất phát ngang bc-0002, cải thiện phải đến
+   từ RL. (2026-09-20 đo được: tieAware 0,9661 so với 0,928 của bc-0002, tức
+   chiều mới vẫn giúp bám teacher sát hơn.)
 3. **RL** (`rl_stages.py`, cờ v3/D11 của spec 2026-09-17 giữ nguyên):
    - `rl_loop --opponent <model>`: rollout của phe đang train (`--learned-seats
      village`/`wolves`) gặp đối thủ ở phe kia thay cho heuristic. Rollout `all`
