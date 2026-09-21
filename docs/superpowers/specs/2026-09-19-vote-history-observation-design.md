@@ -187,3 +187,34 @@ Không đạt → production giữ `village-ppo-0001`. Rollback sau deploy = đ�
 | `b-village` 20 vòng | ~6 giờ |
 | `b-wolves` 20 vòng | ~6 giờ |
 | Confirm (D7) | ~1–2 giờ |
+
+## Kết quả (2026-09-21)
+
+### Train
+
+| Lượt | Vòng 10 (điểm / xác nhận / phe kia / lệch) | Vòng 20 | Champion |
+|---|---|---|---|
+| `b-village` (từ bc-0003, đối thủ ppo-0001) | +8.56 / +13.67 / +5.11 / 14.67 | +8.33 / – / +4.67 / 16.22 | champion-0010 |
+| `b-wolves` (từ champion làng) | +12.44 / +9.22 / +8.33 / 12.89 | +12.78 / +11.44 / +7.78 / 8.67 | champion-0020 |
+
+`b-village` vòng 10 ban đầu bị loại oan: cổng phe kia so số của BỘ XÁC NHẬN
+(2,56) với champion chỉ đo trên bộ chính (5,78); trên cùng bộ chính là 5,11.
+Sửa ở `rl_loop.passes_gates` (commit 6fea564) — cổng phe kia/cân bằng chỉ chấm
+bộ seed đầu — rồi áp lại trên file bench đã có để thăng hạng champion-0010.
+
+### Confirm (T=0,5, seed `confirm-0919`, 5 × 300 ván) — FAIL
+
+| Tiêu chí | B (b-wolves champion-0020) | Ngưỡng | |
+|---|---|---|---|
+| 1. Đối đầu làng (cùng gặp sói ppo-0001) | −0,47 ± 1,7 | ≥ +2 | ✗ |
+| 2. So heuristic, trừ ppo-0001 | làng +7,47 / sói +1,80 | ≥ −1 | ✓ |
+| 3. Lệch cân bằng | 3,93 | ≤ 2,20 + 1 | ✗ |
+| 4. Vi phạm | 0 | 0 | ✓ |
+
+Theo dõi: đối đầu sói −3,93 ± 1,1 (sói B kém sói ppo-0001 khi gặp làng ppo-0001).
+
+Kết luận: production giữ `village-ppo-0001`. B mạnh hơn hẳn khi gặp heuristic
+(làng +12,8, sói +14,2) nhưng KHÔNG hơn ppo-0001 trong đúng thế trận nó được
+train để khai thác. Hai nguyên nhân khả dĩ: cổng thăng hạng trong vòng lặp so
+với heuristic (chọn champion khai thác heuristic), và rollout cho ppo-0001 chơi
+ở T=1 (tell của nó yếu hơn ở T=0,5 mà confirm đo).
