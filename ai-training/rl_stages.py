@@ -62,6 +62,8 @@ PROJECT = "a"
 PPO1 = ROOT / "apps" / "server" / "assets" / "models" / "village-ppo-0001.weights.json"
 _PROJECT_A = (CHAMPION0, STAGES, VILLAGE_RUNS, WOLVES_RUNS, NIGHT_RUNS)
 _PROJECT_B = (
+    # Dự án B đã đóng (spec 2026-09-19) và file đã gỡ khỏi assets. Chạy lại B:
+    #   git show 04360fb:apps/server/assets/models/village-bc-0003.weights.json > <file đó>
     ROOT / "apps" / "server" / "assets" / "models" / "village-bc-0003.weights.json",
     {
         "village": ("b-village", "village", 20,
