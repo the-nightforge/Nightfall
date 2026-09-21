@@ -218,3 +218,29 @@ Kết luận: production giữ `village-ppo-0001`. B mạnh hơn hẳn khi gặp
 train để khai thác. Hai nguyên nhân khả dĩ: cổng thăng hạng trong vòng lặp so
 với heuristic (chọn champion khai thác heuristic), và rollout cho ppo-0001 chơi
 ở T=1 (tell của nó yếu hơn ở T=0,5 mà confirm đo).
+
+### Chẩn đoán sau confirm và đóng dự án (2026-09-21)
+
+Self-play 1.000 ván mỗi cấu hình, T=0,5, cùng seed `diag-b` (`.tmp/diag-b/`):
+
+| | ppo cả bàn | B cả bàn | làng B × sói ppo | làng ppo × sói B | heuristic |
+|---|---|---|---|---|---|
+| Làng thắng | 52,8 % | 54,3 % | 52,8 % | 55,3 % | 50,9 % |
+| Làng bỏ phiếu trúng sói | 49,3 % | 50,5 % | 49,3 % | 50,5 % | 48,5 % |
+| Sói tố đồng bọn | 0,1 % | 0,3 % | 0,1 % | 0,5 % | 11,5 % |
+| Sói đánh nhau giả | 0 % | 0 % | 0 % | 0 % | 9,1 % |
+
+- Làng B KHÔNG bắt sói ppo-0001 giỏi hơn làng ppo-0001 (49,3 % cả hai) — lịch
+  sử phiếu không được dùng.
+- Sói B KHÔNG học ngụy trang (0,3–0,5 % so với 11,5 % của heuristic) — làng
+  không trừng phạt nên không có áp lực.
+- Giả thuyết (chưa kiểm): ván bot 8 người chỉ ~3,5 vòng, 2–3 ngày bầu, đồng
+  thuận ~65 % — "hai người chưa từng vote nhau" đúng với gần mọi cặp, nên tell
+  gần như không mang thông tin trong self-play. Người thật đọc tell kèm lời nói
+  (dự án D).
+
+**Dự án B đóng.** Production giữ `village-ppo-0001`. Không làm B v2 (sửa cổng /
+đối thủ T=0,5): chẩn đoán chỉ vấn đề ở tín hiệu, không ở quy trình train. Hạ
+tầng giữ lại vì dùng được về sau: loader tiền tố (D1), `opponentPolicy` + benchmark
+đối đầu (D4/D5), `rl_loop --opponent`, `rl_stages --project`, `make_dataset.py`,
+sửa cổng phe kia chỉ chấm bộ seed chính.
