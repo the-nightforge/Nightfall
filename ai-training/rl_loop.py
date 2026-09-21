@@ -162,13 +162,23 @@ def passes_gates(
     other_slack: float,
 ) -> bool:
     """Thăng hạng khi MỌI bộ seed qua CẢ BA cổng: điểm (`should_promote`), cân
-    bằng (D3) và phe kia (D4). Slack âm tắt cổng tương ứng."""
+    bằng (D3) và phe kia (D4). Slack âm tắt cổng tương ứng.
+
+    Cổng phe kia và cổng cân bằng chỉ chấm trên bộ seed ĐẦU — bộ duy nhất mà
+    champion cũng được đo. `champion.other`/`champion.imbalance` đến từ bench
+    của champion trên seed chính; đem chúng so với số của bộ xác nhận là so hai
+    bộ ván khác nhau, và riêng phe kia chênh vài điểm giữa hai bộ là bình
+    thường (2026-09-21: b-village vòng 10 bị loại vì 2,56 của bộ xác nhận so
+    với 5,78 của bộ chính, trong khi trên CÙNG bộ chính nó là 5,11 — tụt 0,7,
+    trong nhiễu). Cổng ĐIỂM vẫn đòi MỌI bộ seed: ở đó ngưỡng cao hơn chỉ làm
+    luật chặt hơn, không lệch."""
     if not should_promote([r.score for r in reads], champion.score, margin):
         return False
-    if balance_slack >= 0 and any(r.imbalance > champion.imbalance + balance_slack for r in reads):
+    primary = reads[0]
+    if balance_slack >= 0 and primary.imbalance > champion.imbalance + balance_slack:
         return False
     if other_slack >= 0 and champion.other is not None:
-        if any(r.other is None or r.other < champion.other - other_slack for r in reads):
+        if primary.other is None or primary.other < champion.other - other_slack:
             return False
     return True
 
