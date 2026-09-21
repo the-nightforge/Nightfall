@@ -320,6 +320,29 @@ describe("bàn lớn hơn DEFAULT_MAX_SEATS: bot chơi heuristic thay vì đứn
   });
 });
 
+describe("hành động đêm hai mục tiêu (cắn đôi sau khi Sói Con chết)", () => {
+  // 2026-09-22: model thay mục tiêu CHÍNH nhưng mục tiêu phụ lấy nguyên của
+  // heuristic; trùng nhau thì engine ném "Không thể cắn cùng một người 2 lần" và
+  // lượt cắn mất trắng (11 vi phạm / 60 ván 9 người với village-ppo-0001).
+  // Bộ seed này tái hiện lỗi trên code cũ (đỏ đúng câu lỗi trên, 2026-09-22):
+  // đêm cắn đôi có xảy ra ở đây, nên "không vi phạm" là một khẳng định có nghĩa.
+  it("model cắn đúng người heuristic định cắn phụ: không bao giờ trùng hai mục tiêu", () => {
+    for (let seat = 1; seat < 9; seat += 1) {
+      for (let s = 0; s < 6; s += 1) {
+        const game = runSelfPlay({
+          seed: `cub-${seat}-${s}`,
+          playerCount: 9,
+          config: PRESET_DECKS[9],
+          learnedPolicy: preferring(actionIndexOf("KILL", seat)),
+          learnedSeats: "wolves",
+          learnedDecisions: ["night"],
+        });
+        expect(game.violations.filter((v) => v.id === "ILLEGAL_ACTION")).toEqual([]);
+      }
+    }
+  });
+});
+
 describe("opponentPolicy — mỗi phe một model (spec 2026-09-19 D4)", () => {
   const mine = preferring(actionIndexOf("CHOOSE", DEFAULT_MAX_SEATS));
   const theirs = preferring(actionIndexOf("CHOOSE", 1));
