@@ -50,7 +50,7 @@ import { deriveSpeechStyle, type BotSpeechStyle } from "./personality/speech-sty
 import { strategyFor } from "./roles/registry";
 import type { LearnedPolicy } from "./learning/mlp";
 import { buildLiveObservation } from "./learning/live-observation";
-import { DAY_ACTION_KIND, FINAL_ACTION_KIND } from "./learning/observation";
+import { DAY_ACTION_KIND, DEFAULT_MAX_SEATS, FINAL_ACTION_KIND } from "./learning/observation";
 import {
   learnedFinalVotePolicy,
   learnedPolicyModel,
@@ -443,6 +443,21 @@ export class BotRuntime {
     if (this.trace || this.learnedPolicy) this.beliefAfter = this.snapshotBelief(knowledge);
   }
 
+  /**
+   * `learnedPolicy` nếu lượt này giao cho model VÀ bàn vừa encoder; không thì
+   * `undefined` — tức đường heuristic, byte một.
+   *
+   * Encoder chỉ mã hoá tối đa `DEFAULT_MAX_SEATS` ghế và NÉM khi vượt (cắt bớt
+   * người là hỏng dữ liệu train). Phòng production cho tới 20 người: trước bản
+   * này, bàn 17–20 người làm mọi lượt model ném lỗi, server nuốt lỗi, và bot
+   * không bầu, không hành động đêm, không bắn (2026-09-21). Bàn quá lớn chơi
+   * heuristic như trước khi có model.
+   */
+  private learnedFor(decision: LearnedDecision, context: BotDecisionContext): LearnedPolicy | undefined {
+    if (!this.learnedPolicy || !learnedHas(this.learnedDecisions, decision)) return undefined;
+    return context.knowledge.players.length <= DEFAULT_MAX_SEATS ? this.learnedPolicy : undefined;
+  }
+
   /** Chốt phiếu deterministic từ belief hiện tại. */
   decideVote(context: BotDecisionContext): BotVoteIntention {
     const run = this.beginTracedDecision();
@@ -451,12 +466,13 @@ export class BotRuntime {
     // Model residual (`residual.beta`) hiệu chỉnh bảng planner đã chấm; model
     // logits thuần chọn thẳng. Cả hai cùng seam `PolicyModel`.
     const learnedOptions = { temperature: this.learnedTemperature, belief: () => this.beliefAfter };
+    const learnedVote = this.learnedFor("vote", context);
     const votePolicy =
       this.votePolicy ??
-      (this.learnedPolicy && learnedHas(this.learnedDecisions, "vote")
-        ? this.learnedPolicy.residual
-          ? residualVotePolicy(this.learnedPolicy, this.weights, learnedOptions, run.onPick)
-          : learnedPolicyModel(this.learnedPolicy, this.weights, learnedOptions, run.onPick)
+      (learnedVote
+        ? learnedVote.residual
+          ? residualVotePolicy(learnedVote, this.weights, learnedOptions, run.onPick)
+          : learnedPolicyModel(learnedVote, this.weights, learnedOptions, run.onPick)
         : undefined);
     const vote = selectVote(context, this.state, run.rng, this.weights, run.probe, votePolicy);
     run.finish(context, "VOTE", vote.choice.type === "PLAYER" ? vote.choice.targetId : null, {
@@ -561,8 +577,7 @@ export class BotRuntime {
    */
   decideNight(context: BotDecisionContext): BotNightIntention | null {
     const run = this.beginTracedDecision();
-    const learnedNight =
-      this.learnedPolicy && learnedHas(this.learnedDecisions, "night") ? this.learnedPolicy : undefined;
+    const learnedNight = this.learnedFor("night", context);
     const learnedOptions = { temperature: this.learnedTemperature, belief: () => this.beliefAfter };
     // Residual đi TRONG strategy (seam `rankNightTargets`), không phải sau nó:
     // nó hiệu chỉnh bảng điểm trước khi vai chọn, và mọi cổng phía sau của vai
@@ -648,10 +663,11 @@ export class BotRuntime {
     // luật ưu tiên với lượt bầu. Không có policy thì tham số là `undefined` và
     // teacher đi đúng đường cũ, byte một.
     const learnedOptions = { temperature: this.learnedTemperature, belief: () => this.beliefAfter };
+    const learnedFinal = this.learnedFor("final", context);
     const policy =
       this.finalVotePolicy ??
-      (this.learnedPolicy && learnedHas(this.learnedDecisions, "final")
-        ? learnedFinalVotePolicy(this.learnedPolicy, this.weights, learnedOptions, run.onPick)
+      (learnedFinal
+        ? learnedFinalVotePolicy(learnedFinal, this.weights, learnedOptions, run.onPick)
         : undefined);
     const verdict = decideFinalVote(
       context,
@@ -698,10 +714,11 @@ export class BotRuntime {
     const heuristic = decideHunterShot(context, this.state, run.rng, this.weights, run.probe);
     // Heuristic tính trước làm nền (confidence/evidence) và đường lui; model
     // chỉ thay mục tiêu. Không cờ hunter thì đúng đường cũ, byte một.
+    const learnedHunter = this.learnedFor("hunter", context);
     const shot =
-      this.learnedPolicy && learnedHas(this.learnedDecisions, "hunter")
+      learnedHunter
         ? selectLearnedHunterShot(
-            this.learnedPolicy,
+            learnedHunter,
             this.weights,
             context,
             this.state,

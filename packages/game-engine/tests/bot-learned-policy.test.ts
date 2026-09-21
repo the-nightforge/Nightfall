@@ -283,6 +283,43 @@ describe("learnedDecisions — model chỉ quyết một trong hai lượt", () 
   });
 });
 
+describe("bàn lớn hơn DEFAULT_MAX_SEATS: bot chơi heuristic thay vì đứng hình", () => {
+  // 2026-09-21: bàn 17–20 người (MAX_PLAYERS_PER_ROOM = 20) làm encoder ném
+  // "observation có 17 ghế, vượt maxSeats=16"; server nuốt lỗi trong try/catch
+  // nên bot production không bầu, không hành động đêm, không bắn.
+  const policy = preferring(actionIndexOf("CHOOSE", DEFAULT_MAX_SEATS));
+  for (const size of [17, 20]) {
+    it(`${size} người: chạy hết ván, không vi phạm, bot vẫn bầu và hành động đêm`, () => {
+      const game = runSelfPlay({
+        seed: `big-${size}`,
+        playerCount: size,
+        config: PRESET_DECKS[size],
+        trace: true,
+        learnedPolicy: policy,
+        learnedDecisions: ["vote", "night", "final", "hunter"],
+      });
+      expect(game.violations).toEqual([]);
+      expect(game.traces.some((t) => t.decision === "VOTE")).toBe(true);
+      expect(game.traces.some((t) => t.decision === "NIGHT" && t.chosen.targetId !== null)).toBe(true);
+      // Không lượt nào mang `learned`: model không được hỏi ở bàn nó không mã hoá nổi.
+      expect(game.traces.some((t) => t.chosen.learned)).toBe(false);
+    });
+  }
+
+  it("16 người: model vẫn được dùng", () => {
+    const game = runSelfPlay({
+      seed: "big-16",
+      playerCount: 16,
+      config: PRESET_DECKS[16],
+      maxRounds: 3,
+      trace: true,
+      learnedPolicy: policy,
+      learnedTemperature: 1,
+    });
+    expect(game.traces.some((t) => t.chosen.learned)).toBe(true);
+  });
+});
+
 describe("opponentPolicy — mỗi phe một model (spec 2026-09-19 D4)", () => {
   const mine = preferring(actionIndexOf("CHOOSE", DEFAULT_MAX_SEATS));
   const theirs = preferring(actionIndexOf("CHOOSE", 1));
