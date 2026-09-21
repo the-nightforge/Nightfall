@@ -68,7 +68,26 @@ const OBSERVATION_KEYS = new Set([
   "lastNightDeaths",
   "voteCounts",
   "trialAccusedId",
+  // Lịch sử phiếu CÔNG KHAI (spec 2026-09-19 D3): mọi người chơi đều thấy.
+  "voteHistory",
 ]);
+
+/** Hình dạng một `VoteDaySummary` — chặn dữ liệu hỏng, không phải rò rỉ. */
+function isVoteDay(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const day = value as Record<string, unknown>;
+  const ballots = day.ballots;
+  return (
+    isFiniteNumber(day.round) &&
+    typeof ballots === "object" &&
+    ballots !== null &&
+    Object.values(ballots).every((target) => target === null || typeof target === "string") &&
+    isStringArray(day.changed) &&
+    (day.accusedId === null || typeof day.accusedId === "string") &&
+    isStringArray(day.guilty) &&
+    isStringArray(day.innocent)
+  );
+}
 
 /** Chỉ hai vai này có `seerResult` — xem case `SEE` trong engine. */
 const CAN_SCRY: ReadonlySet<string> = new Set(["SEER", "APPRENTICE_SEER"]);
@@ -127,6 +146,9 @@ export function validateTrajectoryLine(value: unknown): ObservationLeakReport {
     }
   }
 
+  if (obs.voteHistory !== undefined && !(Array.isArray(obs.voteHistory) && obs.voteHistory.every(isVoteDay))) {
+    add("observation.voteHistory", "phải là mảng VoteDaySummary", "schema");
+  }
   if (!isStringArray(obs.aliveIds)) add("observation.aliveIds", "phải là mảng chuỗi", "schema");
   if (!isStringArray(obs.legalActions)) {
     add("observation.legalActions", "phải là mảng chuỗi", "schema");

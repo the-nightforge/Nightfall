@@ -89,6 +89,14 @@ def main() -> None:
     # --side all: champion.other None → bỏ qua cổng phe kia.
     assert passes_gates([BenchRead(3.0, None, 5.0)], BenchRead(0.0, None, 5.8), 2.0, 1.0, 1.0)
 
+    # Cổng phe kia/cân bằng chỉ chấm bộ seed ĐẦU: champion chỉ được đo ở đó.
+    # (2026-09-21: b-village vòng 10 bị loại vì phe sói của BỘ XÁC NHẬN.)
+    conf_drop = [BenchRead(8.6, 5.1, 14.7), BenchRead(13.7, 2.6, 12.9)]
+    assert passes_gates(conf_drop, BenchRead(0.2, 5.8, 0.4), 2.0, -1.0, 1.0)
+    # Nhưng tụt ở chính bộ đầu thì vẫn chặn.
+    primary_drop = [BenchRead(8.6, 4.7, 14.7), BenchRead(13.7, 5.9, 12.9)]
+    assert not passes_gates(primary_drop, BenchRead(0.2, 5.8, 0.4), 2.0, -1.0, 1.0)
+
     # Champion mới lấy chiều bi quan trên mọi bộ seed.
     new = champion_of([BenchRead(3.0, -0.5, 6.5), BenchRead(2.5, 0.2, 6.0)])
     assert new == BenchRead(2.5, -0.5, 6.5), new
@@ -113,6 +121,10 @@ def main() -> None:
     assert roll[roll.index("--learned-seats") + 1] == "village", roll
     assert roll[roll.index("--seed") + 1] == "rl-3-village", roll
     assert roll[roll.index("--trace-games") + 1] == "1000", roll
+    assert "--opponent-policy" not in roll, roll
+    opp = rollout_cmd(Path("m.json"), "village", 3, Path("part"), 1000, 1.0, decisions, Path("ppo1.json"))
+    assert opp[opp.index("--opponent-policy") + 1] == "ppo1.json", opp
+    assert opp[opp.index("--learned-seats") + 1] == "village", opp
 
     # Điểm xuất phát vòng sau (2026-09-17): giai đoạn 1 train tiếp vòng 6–10 từ
     # model đã bị benchmark loại ở vòng 5 (−3,56) và kết thúc ở −7,0.

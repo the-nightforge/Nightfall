@@ -1,6 +1,6 @@
 import { roleWonOutcome, type Role } from "@masoi/shared";
 import type { LearnedPick } from "../policy/learned-policy";
-import type { BotDecisionTrace } from "../trace/trace";
+import type { BotDecisionTrace, VoteDaySummary } from "../trace/trace";
 import type { SelfPlayGame } from "./selfplay";
 import { shapingLabelFor } from "./shaping";
 
@@ -72,6 +72,8 @@ export interface BotTrajectory {
     lastNightDeaths: string[];
     voteCounts: { players: Record<string, number>; noElimination: number };
     trialAccusedId: string | null;
+    /** Lịch sử phiếu công khai (spec 2026-09-19). Vắng ở JSONL cũ. */
+    voteHistory?: VoteDaySummary[];
   };
   legalActions: string[];
   candidates: BotDecisionTrace["candidates"];
@@ -226,6 +228,14 @@ export function observationFromTrace(trace: TraceObservationSource): Observation
           }
         : { players: {}, noElimination: 0 },
       trialAccusedId: snapshot.trialAccusedId ?? null,
+      voteHistory: (snapshot.voteHistory ?? []).map((day) => ({
+        round: day.round,
+        ballots: { ...day.ballots },
+        changed: [...day.changed],
+        accusedId: day.accusedId,
+        guilty: [...day.guilty],
+        innocent: [...day.innocent],
+      })),
     },
     legalActions,
   };
@@ -239,6 +249,9 @@ export function observationFromTrace(trace: TraceObservationSource): Observation
 export function gameToTrajectories(game: SelfPlayGame): BotTrajectory[] {
   const lines: BotTrajectory[] = [];
   const seed = game.record.seed;
+  // PPO chỉ học từ nước của CHÍNH policy đang train: logProb của model đối thủ
+  // không phải xác suất của policy này (spec 2026-09-19 D4).
+  const opponents = new Set(game.opponentIds ?? []);
 
   for (const trace of game.traces) {
     const finalRole = game.roles[trace.botId];
@@ -283,7 +296,9 @@ export function gameToTrajectories(game: SelfPlayGame): BotTrajectory[] {
       finalWinner: game.winner ?? "draw",
       // Khoá VẮNG hẳn ở nước heuristic, không phải `undefined`: dòng này đi
       // thẳng ra JSONL và một ván heuristic phải cho ra đúng byte như trước.
-      ...(trace.chosen.learned ? { learned: { ...trace.chosen.learned } } : {}),
+      ...(trace.chosen.learned && !opponents.has(trace.botId)
+        ? { learned: { ...trace.chosen.learned } }
+        : {}),
     });
   }
 

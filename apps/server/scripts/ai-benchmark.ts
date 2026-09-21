@@ -38,8 +38,9 @@ import {
  * `packages/game-engine` không chạm đĩa, nên việc mở file trọng số nằm ở đây.
  */
 
-const SETUP_NAMES = ["baseline", "village", "wolves", "all", "teacher"] as const;
+const SETUP_NAMES = ["baseline", "village", "wolves", "all", "teacher", "h2h-village", "h2h-wolves", "opponent"] as const;
 type SetupName = (typeof SETUP_NAMES)[number];
+const OPPONENT_SETUPS: readonly SetupName[] = ["h2h-village", "h2h-wolves", "opponent"];
 
 interface Options {
   model: string;
@@ -54,6 +55,8 @@ interface Options {
   learnedDecisions: LearnedDecisions;
   /** Nhiệt độ lấy mẫu của policy; 0 = argmax (mặc định). Dự án con C. */
   temperature: number;
+  /** Model đối thủ cho h2h-village / h2h-wolves / opponent (spec 2026-09-19 D5). */
+  opponent: string | null;
 }
 
 function usage(): string {
@@ -68,6 +71,7 @@ function usage(): string {
     `  --setups <a,b,...>   Trong ${SETUP_NAMES.join(", ")} (mặc định: baseline,village,wolves)`,
     "  --learned-decisions  vote | night | final | hunter | both, hoặc danh sách cách nhau bằng dấu phẩy (mặc định both) — ablation theo lượt",
     "  --temperature <t>    Nhiệt độ lấy mẫu của policy: 0 = argmax (mặc định), > 0 = bớt tất định",
+    "  --opponent <path>    Model đối thủ cho h2h-village / h2h-wolves / opponent (spec 2026-09-19 D5)",
     "  --no-preset          Không dùng bộ bài chuẩn của số người đó",
     "  --no-defense         Tắt vòng bào chữa",
     "  --out <path>         Ghi kết quả thô ra JSON",
@@ -87,6 +91,7 @@ function parseArgs(argv: readonly string[]): Options {
     setups: ["baseline", "village", "wolves"],
     learnedDecisions: "both",
     temperature: 0,
+    opponent: null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -99,6 +104,7 @@ function parseArgs(argv: readonly string[]): Options {
     else if (a === "--no-preset") o.preset = false;
     else if (a === "--no-defense") o.defense = false;
     else if (a === "--out") o.out = next();
+    else if (a === "--opponent") o.opponent = next();
     else if (a === "--setups") {
       o.setups = next()
         .split(",")
@@ -125,6 +131,9 @@ function parseArgs(argv: readonly string[]): Options {
   }
   if (!o.model) throw new Error(usage());
   if (o.setups.length === 0) throw new Error("--setups rỗng");
+  if (o.setups.some((name) => OPPONENT_SETUPS.includes(name)) && !o.opponent) {
+    throw new Error(`setup ${OPPONENT_SETUPS.join("/")} cần --opponent`);
+  }
   for (const [name, value] of [
     ["--games", o.games],
     ["--repeat", o.repeat],
@@ -165,17 +174,66 @@ interface Setup {
   label: string;
   seats: LearnedSeats | null;
   weights: BotWeights;
+  model: "model" | "opponent";
+  withOpponent: boolean;
 }
 
 const SETUPS: Record<SetupName, Omit<Setup, "name">> = {
-  baseline: { label: "baseline (heuristic)", seats: null, weights: DEFAULT_BOT_WEIGHTS },
-  village: { label: "làng học được", seats: "village", weights: DEFAULT_BOT_WEIGHTS },
-  wolves: { label: "sói học được", seats: "wolves", weights: DEFAULT_BOT_WEIGHTS },
-  all: { label: "cả bàn học được", seats: "all", weights: DEFAULT_BOT_WEIGHTS },
+  baseline: {
+    label: "baseline (heuristic)",
+    seats: null,
+    weights: DEFAULT_BOT_WEIGHTS,
+    model: "model",
+    withOpponent: false,
+  },
+  village: {
+    label: "làng học được",
+    seats: "village",
+    weights: DEFAULT_BOT_WEIGHTS,
+    model: "model",
+    withOpponent: false,
+  },
+  wolves: {
+    label: "sói học được",
+    seats: "wolves",
+    weights: DEFAULT_BOT_WEIGHTS,
+    model: "model",
+    withOpponent: false,
+  },
+  all: {
+    label: "cả bàn học được",
+    seats: "all",
+    weights: DEFAULT_BOT_WEIGHTS,
+    model: "model",
+    withOpponent: false,
+  },
   teacher: {
     label: "teacher (không jitter)",
     seats: null,
     weights: withoutJitter(DEFAULT_BOT_WEIGHTS),
+    model: "model",
+    withOpponent: false,
+  },
+  "h2h-village": {
+    label: "làng model × sói đối thủ",
+    seats: "village",
+    weights: DEFAULT_BOT_WEIGHTS,
+    model: "model",
+    withOpponent: true,
+  },
+  "h2h-wolves": {
+    label: "làng đối thủ × sói model",
+    seats: "wolves",
+    weights: DEFAULT_BOT_WEIGHTS,
+    model: "model",
+    withOpponent: true,
+  },
+  opponent: {
+    label: "đối thủ cả bàn",
+    seats: "all",
+    weights: DEFAULT_BOT_WEIGHTS,
+    model: "opponent",
+    withOpponent: false,
   },
 };
 
@@ -191,6 +249,7 @@ function pairedStats(diffs: readonly number[]): { mean: number; se: number } {
 function main(): void {
   const o = parseArgs(process.argv.slice(2));
   const policy = loadMlpPolicy(JSON.parse(readFileSync(resolve(o.model), "utf8")));
+  const opponent = o.opponent ? loadMlpPolicy(JSON.parse(readFileSync(resolve(o.opponent), "utf8"))) : undefined;
   const config = o.preset ? PRESET_DECKS[o.players] : undefined;
   if (o.preset && !config) throw new Error(`Không có bộ bài chuẩn cho ${o.players} người`);
 
@@ -216,7 +275,8 @@ function main(): void {
         weights: setup.weights,
         defense: o.defense,
         speech: true,
-        learnedPolicy: setup.seats ? policy : undefined,
+        learnedPolicy: setup.seats ? (setup.model === "opponent" ? opponent : policy) : undefined,
+        opponentPolicy: setup.withOpponent ? opponent : undefined,
         learnedSeats: setup.seats ?? undefined,
         learnedDecisions: setup.seats ? o.learnedDecisions : undefined,
         learnedTemperature: setup.seats ? o.temperature : undefined,
@@ -293,10 +353,34 @@ function main(): void {
     );
   }
 
+  // Đối đầu (spec 2026-09-19 D5): cùng gặp phe kia của đối thủ, phe model hơn
+  // phe đối thủ bao nhiêu. Làng mạnh hơn đẩy villageWin LÊN, sói mạnh hơn đẩy XUỐNG.
+  if (o.setups.includes("opponent")) {
+    const ref = winsOf("opponent");
+    const h2h: Array<[SetupName, 1 | -1, string]> = [
+      ["h2h-village", 1, "(dương = làng model mạnh hơn làng đối thủ)"],
+      ["h2h-wolves", -1, "(dương = sói model mạnh hơn sói đối thủ)"],
+    ];
+    process.stdout.write("\n");
+    for (const [name, sign, note] of h2h) {
+      if (!o.setups.includes(name)) continue;
+      const stat = pairedStats(winsOf(name).map((v, i) => sign * (v - ref[i]!) * 100));
+      paired[name] = stat;
+      process.stdout.write(
+        `Δ ${SETUPS[name].label.padEnd(22)} ${stat.mean >= 0 ? "+" : ""}${stat.mean.toFixed(1)}` +
+          `${Number.isNaN(stat.se) ? "" : ` ± ${stat.se.toFixed(1)}`} điểm  ${note}\n`,
+      );
+    }
+  }
+
   if (o.out) {
     writeFileSync(
       resolve(o.out),
-      JSON.stringify({ model: policy.id, options: o, rows, summary, paired }, null, 2),
+      JSON.stringify(
+        { model: policy.id, opponent: opponent?.id ?? null, options: o, rows, summary, paired },
+        null,
+        2,
+      ),
     );
   }
   // Một vi phạm bất biến làm hỏng mọi con số ở trên: policy đã gửi một nước

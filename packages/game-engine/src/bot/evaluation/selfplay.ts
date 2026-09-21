@@ -126,6 +126,11 @@ export interface SelfPlayRecord {
   learnedTemperature?: number;
   /** Vắng = `"both"`. Xem `BotRuntimeOptions.learnedDecisions`. */
   learnedDecisions?: LearnedDecisions;
+  /**
+   * Id của policy chơi phe KIA (ghế ngoài `learnedSeats`); vắng = phe kia là
+   * heuristic. `replayGame` đòi đúng policy này, như `learnedPolicyId`.
+   */
+  opponentPolicyId?: string;
 }
 
 export interface SelfPlayInput {
@@ -163,6 +168,11 @@ export interface SelfPlayInput {
   learnedTemperature?: number;
   /** Xem `BotRuntimeOptions.learnedDecisions`. Mặc định `"both"`. */
   learnedDecisions?: LearnedDecisions;
+  /**
+   * Policy cho ghế NGOÀI `learnedSeats` (spec 2026-09-19 D4). Vắng = phe kia
+   * heuristic. Đòi `learnedPolicy` và `learnedSeats` là village/wolves.
+   */
+  opponentPolicy?: LearnedPolicy;
   /** Xem `SelfPlayRecord.humanSeats`. Mặc định 0. */
   humanSeats?: number;
 }
@@ -396,6 +406,8 @@ export interface SelfPlayGame {
    * vào một `BotDecisionContext`: BOT phải chơi mù đúng như người thật.
    */
   roles: Record<string, Role>;
+  /** Ghế chạy `opponentPolicy`. Trajectory không lấy nhãn PPO từ các ghế này. */
+  opponentIds?: string[];
   /**
    * Thắng lợi CÁ NHÂN mà engine đã ghi nhận trong ván này.
    *
@@ -557,6 +569,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
           ...(input.learnedDecisions && !isDefaultLearnedDecisions(input.learnedDecisions)
             ? { learnedDecisions: input.learnedDecisions }
             : {}),
+          ...(input.opponentPolicy ? { opponentPolicyId: input.opponentPolicy.id } : {}),
         }
       : {}),
   };
@@ -589,6 +602,13 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     engine.state.players.find((p) => p.id === playerId)?.name ?? playerId;
 
   const learnedSeats = input.learnedSeats ?? "all";
+  if (input.opponentPolicy) {
+    if (!input.learnedPolicy) throw new Error("opponentPolicy cần learnedPolicy");
+    if (learnedSeats === "all") {
+      throw new Error("opponentPolicy cần learnedSeats village|wolves: 'all' không còn ghế cho đối thủ");
+    }
+  }
+  const opponentIds: string[] = [];
   const runtimes = new Map<string, BotRuntime>();
   for (const player of engine.state.players) {
     // Ghế không thuộc phe được chọn nhận `undefined` chứ không nhận một policy
@@ -597,6 +617,8 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     const usesLearned =
       input.learnedPolicy !== undefined &&
       (learnedSeats === "all" || (learnedSeats === "wolves") === isWolfPack(player.role));
+    const usesOpponent = input.opponentPolicy !== undefined && !usesLearned;
+    if (usesOpponent) opponentIds.push(player.id);
     runtimes.set(
       player.id,
       new BotRuntime({
@@ -606,7 +628,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
         weights,
         trace: collector as BotTraceSink | undefined,
         traceLiveInput: input.traceLiveInput === true,
-        learnedPolicy: usesLearned ? input.learnedPolicy : undefined,
+        learnedPolicy: usesLearned ? input.learnedPolicy : usesOpponent ? input.opponentPolicy : undefined,
         learnedTemperature: input.learnedTemperature,
         learnedDecisions: input.learnedDecisions,
       }),
@@ -1479,6 +1501,7 @@ export function runSelfPlay(input: SelfPlayInput): SelfPlayGame {
     violations: auditor.violations,
     traces: collector?.traces ?? [],
     roles: finalTruth.roles,
+    opponentIds,
     // Bản SAO, không phải tham chiếu sống vào state của engine - cùng lý do
     // với mọi thứ khác đi ra khỏi một ván đã kết thúc.
     personalWins: engine.personalWins().map((win) => ({ ...win })),
@@ -1551,6 +1574,7 @@ export function replayGame(
   record: SelfPlayRecord,
   weights?: BotWeights,
   learnedPolicy?: LearnedPolicy,
+  opponentPolicy?: LearnedPolicy,
 ): SelfPlayGame {
   if (weights && weights.version !== record.weightsVersion) {
     throw new Error(
@@ -1571,6 +1595,16 @@ export function replayGame(
       );
     }
   }
+  if (record.opponentPolicyId !== undefined) {
+    if (!opponentPolicy) {
+      throw new Error(`Record cần opponentPolicy "${record.opponentPolicyId}" nhưng không được cấp`);
+    }
+    if (opponentPolicy.id !== record.opponentPolicyId) {
+      throw new Error(
+        `Record cần opponentPolicy "${record.opponentPolicyId}" nhưng nhận "${opponentPolicy.id}"`,
+      );
+    }
+  }
   return runSelfPlay({
     seed: record.seed,
     playerCount: record.playerCount,
@@ -1585,6 +1619,7 @@ export function replayGame(
     learnedSeats: record.learnedSeats,
     learnedTemperature: record.learnedTemperature,
     learnedDecisions: record.learnedDecisions,
+    opponentPolicy: record.opponentPolicyId !== undefined ? opponentPolicy : undefined,
   });
 }
 

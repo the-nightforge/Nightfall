@@ -5,6 +5,7 @@ import {
   FINAL_VOTE_GUILTY_LABEL,
   FINAL_VOTE_SPARE_LABEL,
 } from "../decision/trial-decision";
+import type { VoteDaySummary } from "../trace/trace";
 import type { NightActionKind } from "../types";
 
 /**
@@ -152,6 +153,21 @@ const ROLE_TEAM = Object.fromEntries(
   ROLES.map((role) => [role, ROLE_META[role].team]),
 ) as Record<Role, Team>;
 
+/**
+ * Tóm tắt lịch sử phiếu của MỘT ghế (spec 2026-09-19 D2), nối SAU khối theo
+ * ghế — không bao giờ chèn giữa: model cũ đọc tiền tố của vector (D1).
+ */
+export const HISTORY_SEAT_FEATURE_NAMES = [
+  "votesCast",
+  "votedRevealedWolf",
+  "votedRevealedVillage",
+  "votedWithMajority",
+  "voteChanges",
+  "guiltyBallots",
+  "innocentBallots",
+  "maxMutualAvoidance",
+] as const;
+
 export interface EncodedObservation {
   /** Vector đặc trưng, chiều cố định theo `maxSeats`. */
   features: number[];
@@ -185,7 +201,12 @@ export interface DecodedAction {
 
 /** Chiều của vector observation ứng với một `maxSeats`. */
 export function observationSize(maxSeats: number = DEFAULT_MAX_SEATS): number {
-  return globalFeatureNames().length + maxSeats * SEAT_FEATURE_NAMES.length;
+  return (
+    globalFeatureNames().length +
+    maxSeats * SEAT_FEATURE_NAMES.length +
+    maxSeats * HISTORY_SEAT_FEATURE_NAMES.length +
+    maxSeats * maxSeats
+  );
 }
 
 /** Số ô của MỘT loại hành động: mỗi ghế một ô, cộng "không mục tiêu". */
@@ -279,11 +300,100 @@ export function observationFeatureNames(maxSeats: number = DEFAULT_MAX_SEATS): s
   for (let seat = 0; seat < maxSeats; seat += 1) {
     for (const feature of SEAT_FEATURE_NAMES) names.push(`seat${seat}:${feature}`);
   }
+  for (let seat = 0; seat < maxSeats; seat += 1) {
+    for (const feature of HISTORY_SEAT_FEATURE_NAMES) names.push(`hist:seat${seat}:${feature}`);
+  }
+  for (let i = 0; i < maxSeats; i += 1) {
+    for (let j = 0; j < maxSeats; j += 1) names.push(`hist:vote:${i}>${j}`);
+  }
   return names;
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+/**
+ * 384 chiều lịch sử phiếu (spec 2026-09-19 D2). Mẫu số là số ngày đã có
+ * recap; mọi tỉ lệ kẹp [0, 1], mẫu số 0 → 0. Vai "đã lộ" chỉ từ `knownRoles`
+ * của chính bot.
+ */
+function encodeVoteHistory(
+  days: readonly VoteDaySummary[],
+  seats: readonly string[],
+  maxSeats: number,
+  knownRoles: Readonly<Record<string, string>>,
+  alive: ReadonlySet<string>,
+): number[] {
+  const n = days.length;
+  const ratio = (a: number, b: number): number => (b > 0 ? clamp(a / b, 0, 1) : 0);
+  const slot = new Map(seats.map((id, i) => [id, i]));
+  const teamOf = (id: string): Team | null => {
+    const role = knownRoles[id];
+    return role !== undefined && isRole(role) ? ROLE_TEAM[role] : null;
+  };
+
+  const matrix = new Array<number>(maxSeats * maxSeats).fill(0);
+  for (const day of days) {
+    for (const [voter, target] of Object.entries(day.ballots)) {
+      const i = slot.get(voter);
+      const j = target === null ? undefined : slot.get(target);
+      if (i !== undefined && j !== undefined) matrix[i * maxSeats + j]! += 1;
+    }
+    const j = day.accusedId === null ? undefined : slot.get(day.accusedId);
+    if (j === undefined) continue;
+    for (const voter of day.guilty) {
+      const i = slot.get(voter);
+      if (i !== undefined) matrix[i * maxSeats + j]! += 1;
+    }
+  }
+
+  const perSeat: number[] = [];
+  for (let s = 0; s < maxSeats; s += 1) {
+    const id = seats[s];
+    if (id === undefined) {
+      for (let k = 0; k < HISTORY_SEAT_FEATURE_NAMES.length; k += 1) perSeat.push(0);
+      continue;
+    }
+    let cast = 0, wolf = 0, village = 0, majority = 0, changes = 0, trials = 0, guilty = 0, innocent = 0;
+    for (const day of days) {
+      const target = day.ballots[id];
+      if (typeof target === "string") {
+        cast += 1;
+        const team = teamOf(target);
+        if (team === "wolves") wolf += 1;
+        if (team === "village") village += 1;
+        if (day.accusedId === target) majority += 1;
+      }
+      if (day.changed.includes(id)) changes += 1;
+      if (day.guilty.includes(id)) { trials += 1; guilty += 1; }
+      else if (day.innocent.includes(id)) { trials += 1; innocent += 1; }
+    }
+    let avoid = 0;
+    for (const other of seats) {
+      if (other === id || !alive.has(other)) continue;
+      let apart = 0;
+      for (const day of days) {
+        const mine = day.ballots[id];
+        const theirs = day.ballots[other];
+        if (typeof mine === "string" && typeof theirs === "string" && mine !== other && theirs !== id) {
+          apart += 1;
+        }
+      }
+      avoid = Math.max(avoid, apart);
+    }
+    perSeat.push(
+      ratio(cast, n),
+      ratio(wolf, cast),
+      ratio(village, cast),
+      ratio(majority, cast),
+      ratio(changes, n),
+      ratio(guilty, trials),
+      ratio(innocent, trials),
+      ratio(avoid, n),
+    );
+  }
+  return [...perSeat, ...matrix.map((count) => ratio(count, 2 * n))];
 }
 
 /**
@@ -465,6 +575,16 @@ export function encodeObservation(
       entry?.claimedPowerRole === true ? 1 : 0,
       entry?.guardedBefore === true ? 1 : 0,
     );
+  }
+
+  for (const value of encodeVoteHistory(
+    observation.voteHistory ?? [],
+    seats,
+    maxSeats,
+    observation.knownRoles,
+    alive,
+  )) {
+    features.push(value);
   }
 
   const slots = slotsPerKind(maxSeats);

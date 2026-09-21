@@ -72,6 +72,8 @@ interface Options {
   noJitter: boolean;
   /** `model.weights.json` (masoi-mlp-1/2) cắm vào bot; `null` = heuristic thuần. */
   policy: string | null;
+  /** Policy cho phe NGOÀI `--learned-seats` (spec 2026-09-19 D4); `null` = heuristic. */
+  opponentPolicy: string | null;
   /**
    * Nhiệt độ lấy mẫu của policy. 0 = argmax (đo), 1 = lấy mẫu (rollout RL).
    * Chỉ ở T > 0 thì trajectory mới mang `learned` — tức mới encode được
@@ -116,6 +118,7 @@ function usage(): string {
     `  --trace-games <số>  Số ván đầu được ghi trace (mặc định: ${DEFAULT_TRACE_GAMES})`,
     "  --no-jitter         Tắt term jitter (teacher tất định cho behavior cloning; xem BOT_SELF_LEARNING_TRAINING.md)",
     "  --policy <file>     model.weights.json (masoi-mlp-1/2) cắm vào bot; xem --learned-seats, --temperature",
+    "  --opponent-policy <file> model cho phe KIA của --learned-seats (village|wolves); mặc định heuristic",
     "  --temperature <t>   0 = argmax (mặc định); 1 = lấy mẫu cho rollout RL",
     "  --learned-seats <s> all | village | wolves (mặc định all)",
     "  --learned-decisions <d> both | CSV trong vote,night,final,hunter (mặc định both)",
@@ -146,6 +149,7 @@ function parseArgs(argv: readonly string[]): Options {
     speechDataset: null,
     noJitter: false,
     policy: null,
+    opponentPolicy: null,
     temperature: 0,
     learnedSeats: "all",
     learnedDecisions: "both",
@@ -218,6 +222,9 @@ function parseArgs(argv: readonly string[]): Options {
       case "--policy":
         options.policy = argv[++i] ?? "";
         break;
+      case "--opponent-policy":
+        options.opponentPolicy = argv[++i] ?? "";
+        break;
       case "--temperature": {
         // Không dùng `number()`: 0 là giá trị HỢP LỆ và là mặc định, còn
         // `number()` từ chối mọi số không dương.
@@ -254,6 +261,12 @@ function parseArgs(argv: readonly string[]): Options {
   }
 
   if (options.noJitter) options.weights = withoutJitter(options.weights);
+
+  if (options.opponentPolicy !== null) {
+    if (!options.policy) throw new Error("--opponent-policy cần --policy");
+    if (options.learnedSeats === "all") throw new Error("--opponent-policy cần --learned-seats village|wolves");
+  }
+
   return options;
 }
 
@@ -374,6 +387,9 @@ function main(): void {
   const learnedPolicy = options.policy
     ? loadMlpPolicy(JSON.parse(readFileSync(resolve(options.policy), "utf8")))
     : undefined;
+  const opponentPolicy = options.opponentPolicy
+    ? loadMlpPolicy(JSON.parse(readFileSync(resolve(options.opponentPolicy), "utf8")))
+    : undefined;
 
   const batch: SelfPlayBatchInput = {
     seedBase: options.seed,
@@ -407,6 +423,7 @@ function main(): void {
           learnedDecisions: options.learnedDecisions,
         }
       : {}),
+    ...(opponentPolicy ? { opponentPolicy } : {}),
   };
 
   const startedAt = performance.now();

@@ -162,13 +162,23 @@ def passes_gates(
     other_slack: float,
 ) -> bool:
     """Thăng hạng khi MỌI bộ seed qua CẢ BA cổng: điểm (`should_promote`), cân
-    bằng (D3) và phe kia (D4). Slack âm tắt cổng tương ứng."""
+    bằng (D3) và phe kia (D4). Slack âm tắt cổng tương ứng.
+
+    Cổng phe kia và cổng cân bằng chỉ chấm trên bộ seed ĐẦU — bộ duy nhất mà
+    champion cũng được đo. `champion.other`/`champion.imbalance` đến từ bench
+    của champion trên seed chính; đem chúng so với số của bộ xác nhận là so hai
+    bộ ván khác nhau, và riêng phe kia chênh vài điểm giữa hai bộ là bình
+    thường (2026-09-21: b-village vòng 10 bị loại vì 2,56 của bộ xác nhận so
+    với 5,78 của bộ chính, trong khi trên CÙNG bộ chính nó là 5,11 — tụt 0,7,
+    trong nhiễu). Cổng ĐIỂM vẫn đòi MỌI bộ seed: ở đó ngưỡng cao hơn chỉ làm
+    luật chặt hơn, không lệch."""
     if not should_promote([r.score for r in reads], champion.score, margin):
         return False
-    if balance_slack >= 0 and any(r.imbalance > champion.imbalance + balance_slack for r in reads):
+    primary = reads[0]
+    if balance_slack >= 0 and primary.imbalance > champion.imbalance + balance_slack:
         return False
     if other_slack >= 0 and champion.other is not None:
-        if any(r.other is None or r.other < champion.other - other_slack for r in reads):
+        if primary.other is None or primary.other < champion.other - other_slack:
             return False
     return True
 
@@ -252,9 +262,10 @@ def ppo_cmd(enc: Path, champion: Path, best: Path, model_dir: Path, model_id: st
 
 
 def rollout_cmd(
-    source: Path, seats: str, iteration: int, part: Path, games: int, temperature: float, decisions: str
+    source: Path, seats: str, iteration: int, part: Path, games: int, temperature: float, decisions: str,
+    opponent: Path | None = None,
 ) -> list[str]:
-    return [
+    cmd = [
         tool("npx"), "tsx", "apps/server/scripts/selfplay.ts",
         "--games", str(games), "--players", "8", "--preset", "--defense",
         "--seed", f"rl-{iteration}-{seats}", "--policy", str(source),
@@ -262,6 +273,10 @@ def rollout_cmd(
         "--learned-decisions", decisions,
         "--trajectories", str(part), "--trace-games", str(games), "--quiet",
     ]
+    # Spec 2026-09-19 D6: phe đang train gặp đối thủ thay cho heuristic.
+    if opponent is not None:
+        cmd += ["--opponent-policy", str(opponent)]
+    return cmd
 
 
 def main() -> None:
@@ -276,6 +291,8 @@ def main() -> None:
     p.add_argument("--out", default=".tmp/rl")
     p.add_argument("--promote-margin", type=float, default=2.0)
     p.add_argument("--temperature", type=float, default=1.0, help="policy logits: 1; residual: 5 (thang belief)")
+    p.add_argument("--opponent", type=Path, default=None,
+                   help="model cho phe KIA trong rollout của --side (spec 2026-09-19 D6); mặc định heuristic")
     p.add_argument("--baseline", default="role", help="Xem train_ppo.baseline_for")
     p.add_argument("--side", default="all", choices=("all", "wolves", "village"),
                    help="Train residual cho MỘT phe; điểm thăng hạng = Δ của phe đó")
@@ -301,6 +318,9 @@ def main() -> None:
                    help="Xoá roll-*/enc/trajectories.jsonl của vòng đã xong (giữ model, bench, .done)")
     p.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     a = p.parse_args()
+
+    if a.opponent is not None and a.side == "all":
+        raise SystemExit("--opponent cần --side village|wolves")
 
     out = (ROOT / a.out).resolve()
     champions = out / "champions"
@@ -361,7 +381,8 @@ def main() -> None:
             part = it / f"roll-{seats}"
             step(
                 done_marker(it, f"roll-{seats}"),
-                rollout_cmd(source, seats, iteration, part, a.games // 3, a.temperature, a.learned_decisions),
+                rollout_cmd(source, seats, iteration, part, a.games // 3, a.temperature, a.learned_decisions,
+                            a.opponent if seats == a.side else None),
             )
 
         with ThreadPoolExecutor(max_workers=3) as pool:

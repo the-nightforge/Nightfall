@@ -71,6 +71,24 @@ export interface BeliefSnapshotEntry {
 export type BeliefSnapshot = Record<string, BeliefSnapshotEntry>;
 
 /**
+ * Một ngày bầu, rút gọn từ `DayVoteRecap` còn đúng thứ encoder đọc (spec
+ * 2026-09-19 D2). Gọn vì nó đi vào MỌI dòng trajectory: bản đầy đủ mang
+ * timestamp của từng lần đổi phiếu, vô ích cho model và làm dataset phình.
+ */
+export interface VoteDaySummary {
+  round: number;
+  /** voterId → người bị bầu ở phiếu CHỐT; `null` = không treo ai. */
+  ballots: Record<string, string | null>;
+  /** Người đã đổi phiếu ít nhất một lần trong ngày, sort. */
+  changed: string[];
+  /** Bị cáo nếu ngày đó ra toà. */
+  accusedId: string | null;
+  /** Phiếu Treo / Tha ở phiên toà, sort. Rỗng khi chưa phán quyết. */
+  guilty: string[];
+  innocent: string[];
+}
+
+/**
  * Ảnh chụp knowledge ĐÃ LỌC.
  *
  * Mọi trường ở đây là bản sao của `BotKnowledgeView`, thứ engine đã lọc theo
@@ -115,6 +133,8 @@ export interface TraceKnowledgeSnapshot {
   voteCounts?: { players: Record<string, number>; noElimination: number };
   /** `trialAccusedId`: công khai. */
   trialAccusedId?: string | null;
+  /** `publicVoteHistory` rút gọn: công khai. Trace cũ không có → lịch sử rỗng. */
+  voteHistory?: VoteDaySummary[];
 }
 
 export interface BotDecisionTrace {

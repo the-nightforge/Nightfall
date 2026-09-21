@@ -292,7 +292,7 @@ async function main(): Promise<void> {
     // dataset-0004: thêm kind FINAL cho phiên toà (spec 2026-09-14) — model
     // dataset-0003 (obsSize 413, actionSize 187) hết load được, phải sinh
     // dataset và BC lại từ đầu, không transfer weights.
-    datasetVersion: options.rollout ? "rollout-0001" : "dataset-0004",
+    datasetVersion: options.rollout ? "rollout-0002" : "dataset-0005",
     rollout: options.rollout,
     temperature,
     // Loại policy đã sinh tập: `residual` (có `bases.f32.bin`, `beta`) hay

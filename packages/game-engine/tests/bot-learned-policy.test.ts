@@ -282,3 +282,50 @@ describe("learnedDecisions — model chỉ quyết một trong hai lượt", () 
     expect(replayGame(voteOnly.record, undefined, policy).actions).toBe(voteOnly.actions);
   });
 });
+
+describe("opponentPolicy — mỗi phe một model (spec 2026-09-19 D4)", () => {
+  const mine = preferring(actionIndexOf("CHOOSE", DEFAULT_MAX_SEATS));
+  const theirs = preferring(actionIndexOf("CHOOSE", 1));
+  const run = () =>
+    runSelfPlay({
+      seed: "opp-1",
+      playerCount: 8,
+      maxRounds: 6,
+      trace: true,
+      learnedPolicy: mine,
+      opponentPolicy: theirs,
+      learnedSeats: "village",
+      learnedTemperature: 1,
+    });
+
+  it("sói chạy đối thủ, nhưng trajectory chỉ mang `learned` ở ghế làng", () => {
+    const game = run();
+    const wolfPicks = game.traces.filter((t) => isWolfPack(game.roles[t.botId]!) && t.chosen.learned);
+    expect(wolfPicks.length).toBeGreaterThan(0);
+    const lines = gameToTrajectories(game);
+    expect(lines.some((l) => l.learned)).toBe(true);
+    for (const l of lines) if (l.learned) expect(isWolfPack(game.roles[l.playerId]!)).toBe(false);
+    expect(game.record.opponentPolicyId).toBe(theirs.id);
+  });
+
+  it("replay đòi đúng đối thủ và tái lập ván", () => {
+    const game = run();
+    expect(() => replayGame(game.record, undefined, mine)).toThrow(/opponentPolicy/);
+    expect(() => replayGame(game.record, undefined, mine, mine)).toThrow(/opponentPolicy/);
+    const again = replayGame(game.record, undefined, mine, theirs);
+    expect(again.winner).toBe(game.winner);
+    expect(again.actions).toBe(game.actions);
+  });
+
+  it("'all' kèm đối thủ, hoặc đối thủ không kèm policy → ném", () => {
+    expect(() =>
+      runSelfPlay({ seed: "opp-2", playerCount: 8, maxRounds: 2, learnedPolicy: mine, opponentPolicy: theirs, learnedSeats: "all" }),
+    ).toThrow(/opponentPolicy/);
+    expect(() => runSelfPlay({ seed: "opp-3", playerCount: 8, maxRounds: 2, opponentPolicy: theirs })).toThrow(/opponentPolicy/);
+  });
+
+  it("không có đối thủ thì record không mang opponentPolicyId", () => {
+    const game = runSelfPlay({ seed: "opp-4", playerCount: 8, maxRounds: 2, learnedPolicy: mine, learnedSeats: "village" });
+    expect(Object.keys(game.record)).not.toContain("opponentPolicyId");
+  });
+});

@@ -89,7 +89,9 @@ describe("loadMlpPolicy", () => {
   });
 
   it("TỪ CHỐI khi obsSize lệch, format lạ, hoặc ma trận sai chiều", () => {
-    expect(() => loadMlpPolicy({ ...zeroWeights(), obsSize: 5 })).toThrow(/obsSize/);
+    expect(() => loadMlpPolicy({ ...zeroWeights(), obsSize: observationSize() + 1 })).toThrow(
+      /obsSize/,
+    );
     expect(() => loadMlpPolicy({ ...zeroWeights(), format: "x" })).toThrow(/format/);
     const bad = zeroWeights();
     bad.layers[0]!.b = [0];
@@ -161,5 +163,55 @@ describe("loadMlpPolicy", () => {
     bad.valueLayers = [{ w: [[1]], b: [0] }, bad.valueLayers![1]!];
     expect(() => loadMlpPolicy(bad)).toThrow(/valueLayers/);
     expect(() => loadMlpPolicy({ ...sep(), valueTrunk: "split" })).toThrow(/valueTrunk/);
+  });
+});
+
+describe("loadMlpPolicy — model train trên observation TIỀN TỐ (spec 2026-09-19 D1)", () => {
+  /** zeroWeights nhưng chỉ `keep` chiều đầu, và một trọng số ≠ 0 để output phụ thuộc input. */
+  function prefixWeights(keep: number): MlpWeightsJson {
+    const w = zeroWeights();
+    const hidden = w.hidden;
+    return {
+      ...w,
+      modelId: "prefix",
+      obsSize: keep,
+      featureNames: observationFeatureNames().slice(0, keep),
+      layers: [
+        { w: Array.from({ length: hidden }, (_, r) => Array.from({ length: keep }, (_, c) => (r === 0 && c === 0 ? 1 : 0))), b: [0, 0] },
+        { w: [[1, 0], [0, 1]], b: [0, 0] },
+      ],
+      policyHead: { w: Array.from({ length: w.actionSize }, (_, r) => [r === 0 ? 1 : 0, 0]), b: new Array<number>(w.actionSize).fill(0) },
+    };
+  }
+
+  it("nạp được, nhận vector đủ chiều, và bỏ qua phần đuôi", () => {
+    const keep = observationSize() - 5;
+    const policy = loadMlpPolicy(prefixWeights(keep));
+    const x = new Array<number>(observationSize()).fill(0);
+    x[0] = 2;
+    const base = policy.logits(x);
+    expect(base[0]).toBeGreaterThan(0);
+    const tail = [...x];
+    for (let i = keep; i < tail.length; i += 1) tail[i] = 9;
+    expect(policy.logits(tail)).toEqual(base);
+  });
+
+  it("vẫn ném khi tên lệch TRONG phần tiền tố", () => {
+    const w = prefixWeights(observationSize() - 5);
+    w.featureNames = [...w.featureNames];
+    w.featureNames[3] = "khac";
+    expect(() => loadMlpPolicy(w)).toThrow(/featureNames/);
+  });
+
+  it("vẫn ném khi model dài hơn encoder", () => {
+    const w = zeroWeights();
+    w.obsSize = observationSize() + 1;
+    w.featureNames = [...observationFeatureNames(), "thua"];
+    expect(() => loadMlpPolicy(w)).toThrow(/obsSize/);
+  });
+
+  it("vẫn ném khi vector đưa vào không đủ chiều encoder", () => {
+    const policy = loadMlpPolicy(prefixWeights(observationSize() - 5));
+    expect(() => policy.logits(new Array<number>(observationSize() - 5).fill(0))).toThrow(/chiều/);
   });
 });
