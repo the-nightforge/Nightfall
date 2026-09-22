@@ -48,6 +48,9 @@ class Dataset:
     # 0 là sentinel "không nhãn" — nhãn không bao giờ có giá trị 0. Chỉ dataset
     # encode bằng bản mới có file; `None` là câu trả lời đúng khi vắng.
     shaping: np.ndarray | None = None  # (N,) int8, −1/0/+1
+    # Cỡ bàn (số người) của từng dòng (spec 2026-09-22 D3). `None` với dataset
+    # encode trước dataset-0006 — không có file thì không bịa cột.
+    table_sizes: np.ndarray | None = None  # (N,) uint8
 
     @property
     def obs_size(self) -> int:
@@ -93,6 +96,7 @@ class Dataset:
             scores=self.scores[keep] if self.scores is not None else None,
             bases=self.bases[keep] if self.bases is not None else None,
             shaping=self.shaping[keep] if self.shaping is not None else None,
+            table_sizes=self.table_sizes[keep] if self.table_sizes is not None else None,
         )
 
     def __len__(self) -> int:
@@ -132,6 +136,9 @@ def load(directory: str | Path) -> Dataset:
     shaping_path = root / "shaping.i8.bin"
     shaping = np.fromfile(shaping_path, dtype=np.int8) if shaping_path.exists() else None
 
+    table_path = root / "tableSize.u8.bin"
+    table_sizes = np.fromfile(table_path, dtype=np.uint8) if table_path.exists() else None
+
     # Kiểm kích thước trước khi reshape: một file cụt sẽ reshape ra ma trận lệch
     # hàng và train im lặng trên dữ liệu sai lệch một dòng.
     expected = {
@@ -155,6 +162,8 @@ def load(directory: str | Path) -> Dataset:
         expected["bases"] = (bases.size, rows * action_size)
     if shaping is not None:
         expected["shaping"] = (shaping.size, rows)
+    if table_sizes is not None:
+        expected["tableSizes"] = (table_sizes.size, rows)
     for name, (got, want) in expected.items():
         if got != want:
             raise ValueError(f"{name}: {got} phần tử, chờ {want} — dataset không khớp meta.json")
@@ -174,6 +183,7 @@ def load(directory: str | Path) -> Dataset:
         scores=scores.reshape(rows, action_size) if scores is not None else None,
         bases=bases.reshape(rows, action_size) if bases is not None else None,
         shaping=shaping,
+        table_sizes=table_sizes,
     )
 
 

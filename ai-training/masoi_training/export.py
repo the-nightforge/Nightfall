@@ -99,6 +99,10 @@ def export_weights_json(
                 payload["valueNormLayers"] = [
                     _norm(layer) for layer in value_norm_layers(model)
                 ]
+    # Cỡ bàn dataset đã có (spec 2026-09-22 D1). Vắng → engine coi là [8];
+    # script đóng gói ghi đè bằng tập cỡ ĐẠT confirm.
+    if meta.get("tableSizes"):
+        payload["tableSizes"] = [int(n) for n in meta["tableSizes"]]
     if residual is not None:
         payload["residual"] = {"beta": float(residual["beta"])}
     Path(path).write_text(json.dumps(payload), encoding="utf8")
