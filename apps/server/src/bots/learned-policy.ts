@@ -13,8 +13,9 @@ import { config, DEFAULT_BOT_POLICY_TEMPERATURE } from "../config";
  * Cấu hình nằm ở MỘT biến môi trường `BOT_POLICY_FILE`: không đặt là heuristic
  * thuần như mọi khi, đặt là CẢ BÀN (làng lẫn sói) dùng policy cho phiếu, hành
  * động đêm, phiên toà và phát bắn Thợ Săn. village-ppo-0001 (spec 2026-09-17) so
- * với village-bc-0002, cả bàn, bốn lượt: làng +4.0, sói +15.3 điểm. Rollout lẫn rollback đều
- * là việc của env, không phải của code.
+ * với village-bc-0002, cả bàn, bốn lượt: làng +4.0, sói +15.3 điểm. Chỉ bàn 8
+ * người (`LEARNED_TABLE_SIZE` trong BotRuntime): bàn khác chơi heuristic. Rollout
+ * lẫn rollback đều là việc của env, không phải của code.
  *
  * File đặt mà KHÔNG đọc được, KHÔNG phải JSON, hoặc LỆCH schema encoder thì
  * `resolveBotPolicy` ném ngay: gọi lúc boot, server không kịp lên là biết -

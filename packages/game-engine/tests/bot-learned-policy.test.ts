@@ -283,6 +283,86 @@ describe("learnedDecisions — model chỉ quyết một trong hai lượt", () 
   });
 });
 
+describe("model chỉ chơi bàn 8 người — cỡ bàn duy nhất nó được train", () => {
+  // 2026-09-21: bàn 17–20 người (MAX_PLAYERS_PER_ROOM = 20) làm encoder ném
+  // "observation có 17 ghế, vượt maxSeats=16"; server nuốt lỗi trong try/catch
+  // nên bot production không bầu, không hành động đêm, không bắn.
+  const policy = preferring(actionIndexOf("CHOOSE", DEFAULT_MAX_SEATS));
+  for (const size of [17, 20]) {
+    it(`${size} người: chạy hết ván, không vi phạm, bot vẫn bầu và hành động đêm`, () => {
+      const game = runSelfPlay({
+        seed: `big-${size}`,
+        playerCount: size,
+        config: PRESET_DECKS[size],
+        trace: true,
+        learnedPolicy: policy,
+        learnedDecisions: ["vote", "night", "final", "hunter"],
+      });
+      expect(game.violations).toEqual([]);
+      expect(game.traces.some((t) => t.decision === "VOTE")).toBe(true);
+      expect(game.traces.some((t) => t.decision === "NIGHT" && t.chosen.targetId !== null)).toBe(true);
+      // Không lượt nào mang `learned`: model không được hỏi ở bàn nó không mã hoá nổi.
+      expect(game.traces.some((t) => t.chosen.learned)).toBe(false);
+    });
+  }
+
+  // 2026-09-22, ppo-0001 ở T=0,5: bàn 9–12 người làng không hơn heuristic
+  // (−0,5 tới −3,0) mà sói mạnh hơn nhiều (+6,5 tới +16,2), phá cân bằng mà bộ
+  // bài chuẩn hiệu chỉnh bằng heuristic (bàn 12: làng thắng 38,8 % → 27,3 %).
+  for (const size of [9, 12, 16]) {
+    it(`${size} người: heuristic, model không được hỏi`, () => {
+      const game = runSelfPlay({
+        seed: `mid-${size}`,
+        playerCount: size,
+        config: PRESET_DECKS[size],
+        maxRounds: 3,
+        trace: true,
+        learnedPolicy: policy,
+        learnedTemperature: 1,
+      });
+      expect(game.traces.some((t) => t.chosen.learned)).toBe(false);
+    });
+  }
+
+  it("8 người: model được dùng", () => {
+    const game = runSelfPlay({
+      seed: "mid-8",
+      playerCount: 8,
+      config: PRESET_DECKS[8],
+      maxRounds: 3,
+      trace: true,
+      learnedPolicy: policy,
+      learnedTemperature: 1,
+    });
+    expect(game.traces.some((t) => t.chosen.learned)).toBe(true);
+  });
+});
+
+describe("hành động đêm hai mục tiêu (cắn đôi sau khi Sói Con chết)", () => {
+  // 2026-09-22: model thay mục tiêu CHÍNH nhưng mục tiêu phụ lấy nguyên của
+  // heuristic; trùng nhau thì engine ném "Không thể cắn cùng một người 2 lần" và
+  // lượt cắn mất trắng (11 vi phạm / 60 ván 9 người với village-ppo-0001).
+  // Bộ seed này tái hiện lỗi trên code cũ (đỏ đúng câu lỗi trên, 2026-09-22):
+  // đêm cắn đôi có xảy ra ở đây, nên "không vi phạm" là một khẳng định có nghĩa.
+  it("model cắn đúng người heuristic định cắn phụ: không bao giờ trùng hai mục tiêu", () => {
+    for (let seat = 1; seat < 8; seat += 1) {
+      for (let s = 0; s < 6; s += 1) {
+        const game = runSelfPlay({
+          seed: `cub-${seat}-${s}`,
+          // Bàn 8 (cỡ duy nhất model được chơi) nhưng có Sói Con: bộ bài 9
+          // người bỏ Kẻ Bị Nguyền.
+          playerCount: 8,
+          config: { ...PRESET_DECKS[9], cursed: false },
+          learnedPolicy: preferring(actionIndexOf("KILL", seat)),
+          learnedSeats: "wolves",
+          learnedDecisions: ["night"],
+        });
+        expect(game.violations.filter((v) => v.id === "ILLEGAL_ACTION")).toEqual([]);
+      }
+    }
+  });
+});
+
 describe("opponentPolicy — mỗi phe một model (spec 2026-09-19 D4)", () => {
   const mine = preferring(actionIndexOf("CHOOSE", DEFAULT_MAX_SEATS));
   const theirs = preferring(actionIndexOf("CHOOSE", 1));

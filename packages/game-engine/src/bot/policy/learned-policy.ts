@@ -391,11 +391,19 @@ export function selectLearnedNight(
     evidence: [],
   };
   report(needsTarget ? decoded.targetId : null);
+  const targetId = needsTarget ? decoded.targetId : null;
+  // Mục tiêu phụ lấy của heuristic, nhưng model vừa thay mục tiêu chính: nếu
+  // model chọn đúng người heuristic định làm mục tiêu PHỤ, hai mục tiêu trùng và
+  // engine ném ("Không thể cắn cùng một người 2 lần" — đêm cắn đôi sau khi Sói
+  // Con chết). Khi đó mục tiêu phụ là mục tiêu CHÍNH của heuristic: hợp lệ, và
+  // khác người model chọn.
+  const secondary =
+    heuristic && heuristic.action === kind ? heuristic.secondaryTargetId : undefined;
   return {
     ...base,
     action: kind,
-    targetId: needsTarget ? decoded.targetId : null,
+    targetId,
     secondaryTargetId:
-      heuristic && heuristic.action === kind ? heuristic.secondaryTargetId : undefined,
+      secondary !== undefined && secondary === targetId ? heuristic!.targetId : secondary,
   };
 }
