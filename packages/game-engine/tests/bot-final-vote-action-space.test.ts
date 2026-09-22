@@ -61,7 +61,12 @@ function context(over: Partial<BotKnowledgeView> = {}): BotDecisionContext {
       phaseStartedAt: 0,
       phaseEndsAt: 30_000,
       selfRole: "VILLAGER",
-      players: PLAYERS.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
+      // Bàn 8 ghế (4 người đã chết): model chỉ được hỏi ở bàn đúng cỡ nó được
+      // train (`LEARNED_TABLE_SIZE`); người chết không vào tập mục tiêu nào.
+      players: [
+        ...PLAYERS.map((id) => ({ id, name: id.toUpperCase(), alive: true })),
+        ...["x1", "x2", "x3", "x4"].map((id) => ({ id, name: id.toUpperCase(), alive: false })),
+      ],
       knownRoles: { me: "VILLAGER" },
       seerResult: null,
       sorcererResult: null,

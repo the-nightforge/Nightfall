@@ -50,7 +50,7 @@ import { deriveSpeechStyle, type BotSpeechStyle } from "./personality/speech-sty
 import { strategyFor } from "./roles/registry";
 import type { LearnedPolicy } from "./learning/mlp";
 import { buildLiveObservation } from "./learning/live-observation";
-import { DAY_ACTION_KIND, DEFAULT_MAX_SEATS, FINAL_ACTION_KIND } from "./learning/observation";
+import { DAY_ACTION_KIND, FINAL_ACTION_KIND } from "./learning/observation";
 import {
   learnedFinalVotePolicy,
   learnedPolicyModel,
@@ -182,6 +182,9 @@ export interface BotRuntimeOptions {
  * Xem `BotRuntimeOptions.learnedDecisions`.
  */
 export type LearnedDecision = "vote" | "night" | "final" | "hunter";
+
+/** Cỡ bàn duy nhất các model hiện có được train (preset 8 người). Xem `learnedFor`. */
+export const LEARNED_TABLE_SIZE = 8;
 /**
  * Tập lượt giao cho `learnedPolicy` (spec 2026-09-14 D6): một cờ, một mảng
  * cờ, hoặc `"both"` (= vote+night, alias tương thích — KHÔNG gồm final).
@@ -444,18 +447,22 @@ export class BotRuntime {
   }
 
   /**
-   * `learnedPolicy` nếu lượt này giao cho model VÀ bàn vừa encoder; không thì
-   * `undefined` — tức đường heuristic, byte một.
+   * `learnedPolicy` nếu lượt này giao cho model VÀ bàn đúng cỡ model được
+   * train; không thì `undefined` — tức đường heuristic, byte một.
    *
-   * Encoder chỉ mã hoá tối đa `DEFAULT_MAX_SEATS` ghế và NÉM khi vượt (cắt bớt
-   * người là hỏng dữ liệu train). Phòng production cho tới 20 người: trước bản
-   * này, bàn 17–20 người làm mọi lượt model ném lỗi, server nuốt lỗi, và bot
-   * không bầu, không hành động đêm, không bắn (2026-09-21). Bàn quá lớn chơi
-   * heuristic như trước khi có model.
+   * Mọi model hiện có chỉ train trên bàn `LEARNED_TABLE_SIZE` người. Hai lý do
+   * không cho nó chơi bàn khác:
+   * - bàn > `DEFAULT_MAX_SEATS` (17–20 người) làm encoder NÉM; server nuốt lỗi
+   *   nên bot không bầu, không hành động đêm, không bắn (2026-09-21);
+   * - bàn 9–12 người (đo 2026-09-22, ppo-0001, T=0,5): làng không hơn heuristic
+   *   (−0,5 tới −3,0) còn sói mạnh hơn hẳn (+6,5 tới +16,2), phá cân bằng mà
+   *   bộ bài chuẩn hiệu chỉnh bằng heuristic (bàn 12: làng thắng 38,8 % → 27,3 %).
+   *
+   * ponytail: một cỡ bàn cố định; đổi thành tập cỡ bàn khi có model train nhiều cỡ.
    */
   private learnedFor(decision: LearnedDecision, context: BotDecisionContext): LearnedPolicy | undefined {
     if (!this.learnedPolicy || !learnedHas(this.learnedDecisions, decision)) return undefined;
-    return context.knowledge.players.length <= DEFAULT_MAX_SEATS ? this.learnedPolicy : undefined;
+    return context.knowledge.players.length === LEARNED_TABLE_SIZE ? this.learnedPolicy : undefined;
   }
 
   /** Chốt phiếu deterministic từ belief hiện tại. */
