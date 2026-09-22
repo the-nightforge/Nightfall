@@ -5,13 +5,13 @@
 **A real-time multiplayer Werewolf (Mafia) game — 19 roles, 17 dynamic events, voice chat, and AI bots that actually reason.**
 
 [![CI](https://github.com/the-nightforge/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/the-nightforge/ma-soi-online/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-4739%20passing-brightgreen)](#testing)
+[![Tests](https://img.shields.io/badge/tests-8320%20passing-brightgreen)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-4.7-010101?logo=socket.io)](https://socket.io)
 
-[**▶ Play the demo**](https://ma-soi-online-nu.vercel.app) · [**Health check**](https://ma-soi-server-xzhv.onrender.com/api/health) · [**Design docs**](docs/)
+[**▶ Play the demo**](https://masoionline.duckdns.org) · [**Health check**](https://masoionline.duckdns.org/api/health) · [**Design docs**](docs/)
 
 </div>
 
@@ -143,7 +143,7 @@ All server configuration is environment-driven. [`.env.example`](.env.example) a
 |---|---|---|
 | `DATABASE_URL` | — | PostgreSQL connection string (**required**) |
 | `REDIS_URL` | `redis://127.0.0.1:6380` | Redis connection string |
-| `PORT` / `SERVER_PORT` | `4000` | `PORT` wins; platforms like Render set it automatically |
+| `PORT` / `SERVER_PORT` | `4000` | `PORT` wins; container platforms usually set it automatically |
 | `NODE_ENV` | `development` | |
 | `CORS_ORIGIN` | `*` | Comma-separated origins, or `*` |
 
@@ -156,7 +156,7 @@ All server configuration is environment-driven. [`.env.example`](.env.example) a
 | `CHAT_RATE_LIMIT_WINDOW_MS` | `5000` | Chat rate-limit window |
 | `SIGNUP_RATE_LIMIT_COUNT` | `10` | Guest registrations per IP per window |
 | `SIGNUP_RATE_LIMIT_WINDOW_MS` | `60000` | Signup rate-limit window |
-| `TRUST_PROXY` | `1` | Proxy hops to trust. Keep `1` behind Render; set `0` when self-hosting with the port exposed directly, where `X-Forwarded-For` is client-controlled |
+| `TRUST_PROXY` | `1` | Proxy hops to trust. Keep `1` behind a reverse proxy (the VPS runs Nginx); set `0` when self-hosting with the port exposed directly, where `X-Forwarded-For` is client-controlled |
 
 ### Error reporting (optional)
 
@@ -164,9 +164,9 @@ Both halves stay silent unless a DSN is present, so local development and CI nev
 
 | Variable | Where | Description |
 |---|---|---|
-| `SENTRY_DSN` | Render | Backend. Only programming errors are sent — rule violations (`RoomError`, `GameError`) and stale-client `ZodError`s are filtered by the same rule as the server log. No tracing, no IPs, no payloads, no chat. |
-| `NEXT_PUBLIC_SENTRY_DSN` | Vercel | Frontend. Render errors caught by `error.tsx` plus uncaught exceptions. No tracing and **no session replay** — replay records the screen, which in a hidden-role game must never leave the device. The CSP `connect-src` is widened to the DSN's ingest host at build time. |
-| `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` | Vercel | Optional. When all three are set, `next build` uploads source maps so stack traces are readable; otherwise the upload is skipped and the build is unchanged. |
+| `SENTRY_DSN` | Server | Backend. Only programming errors are sent — rule violations (`RoomError`, `GameError`) and stale-client `ZodError`s are filtered by the same rule as the server log. No tracing, no IPs, no payloads, no chat. |
+| `NEXT_PUBLIC_SENTRY_DSN` | Web | Frontend. Render errors caught by `error.tsx` plus uncaught exceptions. No tracing and **no session replay** — replay records the screen, which in a hidden-role game must never leave the device. The CSP `connect-src` is widened to the DSN's ingest host at build time. |
+| `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` | Web | Optional. When all three are set, `next build` uploads source maps so stack traces are readable; otherwise the upload is skipped and the build is unchanged. |
 
 ### Voice chat (optional)
 
@@ -216,7 +216,7 @@ by EXIF, crops to a centred square, resizes to 256×256 and encodes WebP under
 4. The token page also shows the S3 endpoint
    `https://<account-id>.r2.cloudflarestorage.com` — that is
    `OBJECT_STORAGE_ENDPOINT`. Set `OBJECT_STORAGE_REGION=auto`.
-5. Paste all six values into Render's environment variables and redeploy.
+5. Paste all six values into the server's environment variables and redeploy.
 
 The public URL and the endpoint are different hosts. Using the endpoint as the
 public base URL produces avatars that 403 in the browser.
@@ -226,7 +226,7 @@ The public host must also answer `GET` with CORS headers
 avatars load without it, but the 3D trial stage puts the accused's avatar on
 the dais as a WebGL texture, and browsers refuse to upload a cross-origin image
 into WebGL unless CORS allows it — the face silently falls back to the plain
-head. On R2: bucket **Settings → CORS policy**, allow your Vercel origin with
+head. On R2: bucket **Settings → CORS policy**, allow your web origin with
 method `GET`. MinIO from `npm run dev:infra` already allows it.
 
 #### MinIO for local development
@@ -249,6 +249,8 @@ Providers are tried top to bottom. A stage is skipped when any of its parts is m
 | `GEMINI_API_KEY` · `GEMINI_MODEL` | Google AI Studio |
 | `BOT_AI_ENABLED` | `false` disables generated speech instantly, no redeploy needed |
 | `BOT_AI_MAX_CALLS_PER_GAME` | Cost ceiling shared across the whole provider chain (default `180`) |
+| `BOT_POLICY_FILE` | Path to a learned-policy `weights.json` (behavior cloning / PPO). Empty = heuristic bots. A set-but-unreadable or schema-mismatched file **fails startup** rather than silently reverting. Two weights ship in `apps/server/assets/models/` — see `.env.example` |
+| `BOT_POLICY_TEMPERATURE` | Sampling temperature for the learned policy (default `0.5`; `0` = always pick the argmax move) |
 
 Each stage has its own cooldown after a `429`, so exhausting one provider's quota does not stall the others.
 
@@ -464,9 +466,9 @@ Operational details — keys, TTLs, log lines, deploy checklist, when to bump
 | `GET` | `/api/players/me/matches/:matchId/chat` | — | `{ messages: MatchChatEntry[] }` | The full stored transcript of one finished match, every channel included. `:matchId` accepts either the stored result id (match history) or the `gameId` from a `GAME_OVER` snapshot (the room's end screen). Bearer auth, and the authorisation is a condition of the SQL itself: the caller's id must appear in that match's stored roster, otherwise `404` — the same `404` whether the match exists or not. No further per-channel filtering, because `GAME_OVER` already opened the whole log to everyone in the room. |
 | `PUT` | `/api/players/me/avatar` | `multipart/form-data`, field `file` | `{ avatarUrl }` | Bearer auth. ≤ 5 MB. Format is decided by magic bytes (JPEG/PNG/WebP), never by the client-declared MIME type. The server auto-rotates by EXIF, crops to a centred square, resizes to 256×256 and encodes WebP under 200 KB. `503` when object storage is not configured. |
 | `DELETE` | `/api/players/me/avatar` | — | `204` | Bearer auth. Clears the avatar and deletes the stored object. Succeeds even when object storage is not configured — the database is the source of truth for "has an avatar". |
-| `GET` | `/api/health` | — | `{ ok, status, db, redis, version, startedAt }` | `503` when PostgreSQL is down. Redis trouble reports `status: "degraded"`, `redis: false` and still returns `200` — deliberately: Render restarts the service when this URL goes red, and a restart while Redis is down is exactly the moment in-memory rooms cannot be recovered. `status` is `ok`, `degraded` or `down`. |
+| `GET` | `/api/health` | — | `{ ok, status, db, redis, version, startedAt, botSpeech }` | `503` when PostgreSQL is down. Redis trouble reports `status: "degraded"`, `redis: false` and still returns `200` — deliberately: going red invites a restart, and a restart while Redis is down is exactly the moment in-memory rooms cannot be recovered. `status` is `ok`, `degraded` or `down`. `botSpeech` carries cumulative counters of the bot speech layer — counts and milliseconds only, no room codes or chat content. |
 
-`version` is the first 7 characters of the running commit (from `RENDER_GIT_COMMIT`), or `dev` outside a deploy environment — compare it against `git rev-parse --short HEAD` to confirm what is actually live.
+`version` is the first 7 characters of the running commit (from `GIT_COMMIT`, a Docker build arg on the VPS, falling back to `RENDER_GIT_COMMIT`), or `dev` outside a deploy environment — compare it against `git rev-parse --short HEAD` to confirm what is actually live.
 
 ### Socket.IO
 
@@ -482,6 +484,7 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `room:leave` | `{}` | Membership |
 | `room:set-ready` | `{ ready }` | Member, outside a match |
 | `room:kick` | `{ targetId }` | Host, before start |
+| `room:transfer-host` | `{ targetId }` | Host, in `LOBBY`; target must be a human member |
 | `room:update-config` | `{ config }` | Host, outside a match |
 | `room:add-bot` | `{}` | Host, outside a match |
 | `room:update-avatar` | `{ avatarUrl: null }` | Member; removal only. Uploads go through `PUT /api/players/me/avatar` — sending image data over Socket.IO is what bloated every room snapshot. Kept so older cached clients can still remove an avatar. |
@@ -498,7 +501,7 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `voice:token` | `{}` | Human member, voice enabled, LiveKit configured |
 | `voice:ready` | `{}` | Signals the LiveKit room was joined, so the server can grant phase-appropriate rights |
 
-`game:action` types: `KILL` · `SEE` · `GUARD` · `HEAL` · `POISON` · `SKIP` · `DETECTIVE_CHECK` · `GUARDIAN_PROTECT` · `HOLY_WATER` · `SERIAL_KILL`
+`game:action` types: `KILL` · `SEE` · `GUARD` · `HEAL` · `POISON` · `SKIP` · `DETECTIVE_CHECK` · `SORCERER_CHECK` · `TRACK` · `SERIAL_KILL`
 
 `SERIAL_KILL` is deliberately **not** `KILL`: one code for two abilities would force the resolver to disambiguate by the sender's role, and that is precisely the seam through which a wolf's bite could land in the Serial Killer's slot.
 
@@ -525,11 +528,17 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `npm run dev:web` | Next.js dev server |
 | `npm run build` | Build shared → engine → server → web |
 | `npm run build:deps` | Build only `shared` → `engine` (enough for tests and lint) |
-| `npm test` | Full suite across all three packages |
+| `npm test` | Full suite across all four workspaces |
 | `npm run lint` | Typecheck every workspace |
 | `npm run db:migrate` | `prisma migrate deploy` |
 | `npm run db:generate` | `prisma generate` |
 | `npm run selfplay` | Run bot self-play batches and print a report. Add `--traces <dir>` to dump per-decision JSONL for the first few games |
+| `npm run transcript` | Print a human-readable transcript of a self-play match — every speech and every action with its answer key |
+| `npm run ai:dataset` | Generate bot trajectory datasets via self-play (the `selfplay` runner used by the AI pipeline) |
+| `npm run ai:encode` | Encode trajectory JSONL into the training dataset consumed by `ai-training/` |
+| `npm run ai:validate-dataset` | Check a trajectory JSONL file *before* training — schema, coverage and label sanity |
+| `npm run ai:benchmark` | Benchmark a learned-policy weights file against heuristic bots in self-play |
+| `npm run prod-metrics` | Aggregate bot communication metrics (`GameResult.botMetrics`) from the real database — reads nothing else |
 | `npm run trace-view` | Read a self-play trace file as a per-bot timeline — what moved each belief, which scoring terms decided each vote, why a bot spoke. See [`docs/bot-tuning-workflow.md`](docs/bot-tuning-workflow.md) |
 | `npm run role-power` | Measure each role's marginal win-rate contribution by paired self-play, to recalibrate `ROLE_POWER` |
 | `npm run role-power:sweep` | The full 15-shard sweep across every preset, run locally in parallel and merged into one table. Results land in `.role-power/`; finished shards are skipped on a re-run, so an interrupted overnight sweep resumes instead of restarting. `-- --games 30` for a pipeline smoke test |
@@ -537,18 +546,18 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 | `npm run mine-aliases` | Read stored match chat and propose role aliases the claim parser does not understand yet. It writes a proposal for a human to approve; it never edits `ROLE_PHRASES` itself |
 | `npm run bot:probe` | One real LLM call against a fake match, to validate keys and prompts |
 | `npm run voice:probe` | One real LiveKit round trip, to validate credentials and token grants |
-| `npm run test:e2e` | Socket.IO smoke test; needs a running local server. Not yet a release gate |
+| `npm run test:e2e` | Socket.IO smoke test; needs a running local server. Also the e2e gate before every production deploy in CI |
 | `npm run test:e2e:recovery` | Starts a server, SIGKILLs it mid-match, restarts it, and asserts the match resumes. Needs `dev:infra` |
 
 ## Testing
 
 | Package | Runner | Tests |
 |---|---|---|
-| `@masoi/shared` | Vitest | **158** |
-| `@masoi/game-engine` | Vitest | **2228** |
-| `@masoi/server` | Vitest | **973** |
-| `@masoi/web` | `node:test` | **1380** |
-| | | **4739 total** |
+| `@masoi/shared` | Vitest | **216** |
+| `@masoi/game-engine` | Vitest | **5294** |
+| `@masoi/server` | Vitest | **1192** |
+| `@masoi/web` | `node:test` | **1618** |
+| | | **8320 total** |
 
 Every package typechecks its tests as well as its sources — `npm run lint` runs `tsc` over both. This matters more than it sounds: the server's tests were unchecked until recently, and in that gap more than forty fixtures drifted away from the types they claimed to build, several of them still setting engine fields that had been renamed away.
 
@@ -564,7 +573,7 @@ npm test --workspace @masoi/game-engine   # one package (run build:deps first)
 
 ## Deployment
 
-The live setup is **Vercel (web) → Render (server) → Neon (PostgreSQL) + Upstash (Redis)**.
+The live setup is a **single self-hosted VPS** behind Nginx: web and API share one origin at `https://masoionline.duckdns.org`, with `/api/*` and `/socket.io/*` routed to the server container and everything else to the web container. PostgreSQL and Redis run as Docker sidecars bound to `127.0.0.1` — never published to the Internet. The full runbook — bootstrap script, compose file, env template, backup cron, rebuild-from-scratch — is [`deploy/README.md`](deploy/README.md).
 
 > [!IMPORTANT]
 > Run the backend as a **single instance**. Live match state is held in memory, with Redis as a write-through copy used for room recovery. Scaling horizontally will split players across processes that cannot see each other's rooms.
@@ -572,28 +581,21 @@ The live setup is **Vercel (web) → Render (server) → Neon (PostgreSQL) + Ups
 <details>
 <summary><b>Step-by-step deployment</b></summary>
 
-**1 · Neon PostgreSQL** — create a project, copy the **pooled** connection string. It becomes `DATABASE_URL` on Render. Never commit it or add it to Vercel.
+**1 · VPS bootstrap** — run `deploy/bootstrap-vps.sh` once as root: updates, swap, UFW, fail2ban, Docker, Nginx, Certbot.
 
-**2 · Upstash Redis** — create a database in the region closest to the backend and copy the TLS string (`rediss://`). It becomes `REDIS_URL` on Render.
+**2 · Environment** — write `/opt/masoi/.env` from `deploy/env.production.example` and `chmod 600` it. `CORS_ORIGIN` must be an explicit origin in production — the server refuses to start on `*`.
 
-**3 · Render backend** — create a **Web Service** from this repository using the Docker environment, branch `main`, and `Dockerfile.server`. Use one instance and set the health check path to `/api/health`; Render provides `PORT` automatically. Set at minimum:
+**3 · Code** — clone this repository to `/opt/masoi/app`.
 
-```bash
-DATABASE_URL=<Neon pooled connection string>
-REDIS_URL=<Upstash rediss:// string>
-NODE_ENV=production
-CORS_ORIGIN=https://YOUR-PROJECT.vercel.app
-```
+**4 · Nginx** — install `deploy/nginx/masoi.conf` with the domain substituted, then `certbot --nginx -d <domain> --redirect`. Remove the stock `default_server` site first — it claims the same name and Nginx refuses to load.
 
-Container start runs `prisma migrate deploy` before opening the port. Note the resulting HTTPS origin.
+**5 · Deploy** — `deploy/deploy.sh` pulls, builds both images (`Dockerfile.server`, `Dockerfile.web`), brings the stack up, and waits up to 180 s for `/api/health` to go green, printing the last 100 log lines and exiting non-zero otherwise. `prisma migrate deploy` runs in the server container's entrypoint.
 
-**4 · Vercel frontend** — import the same repository, keep the root directory at the repo root (`vercel.json` already contains the monorepo build command), and set `NEXT_PUBLIC_SERVER_URL` to the Render origin **without** a trailing slash. Deploy, then go back to Render and set `CORS_ORIGIN` to the exact Vercel origin and redeploy.
-
-**5 · Verify** — `https://<backend>/api/health` should return `200` with `{ "ok": true, "db": true, "redis": true }`. Then open the frontend, create a room, add bots, and confirm the socket connects.
+**6 · Backups** — `deploy/backup.sh` runs a nightly `pg_dump` via cron and keeps 14 days.
 
 </details>
 
-CI runs three jobs in parallel on every push and pull request: `verify` (build → test → lint), `e2e` (a real eight-socket match to `GAME_OVER` plus the SIGKILL recovery scenario, against Postgres and Redis service containers) and `docker-server` (a build of `Dockerfile.server`, the image Render deploys). Pull requests get a Vercel preview after `verify`; the production deploy waits for all three, so a broken Dockerfile can no longer ship a new frontend against a backend that will never build. Render Free instances sleep when idle, so the first request after a quiet period is slow. Two things soften that: the home page fires `GET /api/health` on load so the server starts waking while the player is still typing a nickname, and after three seconds without an answer it says so under the button instead of spinning silently (giving up at 90 s). `.github/workflows/keep-alive.yml` also pings the health URL every 10 minutes; disable it in Actions if the Render account runs any other Free service, since 750 h/month covers exactly one. A backend restart no longer drops the match: the room is rebuilt from its Redis snapshot and resumed — see [Crash recovery](#crash-recovery).
+CI runs `verify` (build → test → lint) on every push and pull request, plus three heavier jobs gated by path filters: `e2e` (a real eight-socket match to `GAME_OVER` plus the SIGKILL recovery scenario, against Postgres and Redis service containers — only when the backend changes), `docker-server` (a build of `Dockerfile.server`, so a broken Dockerfile fails here rather than mid-deploy), and `ai-training` (a loader self-check plus real torch-CPU behavior-cloning and PPO smoke updates — only when `ai-training/**` changes). On pushes to `main`, `deploy-production` SSHes to the VPS with a key locked to a forced command that can only run `deploy/deploy.sh`, then verifies from the outside: health `{"ok":true}`, the home page returning `200`, a real WebSocket upgrade answering `101`, and the running commit matching the pushed SHA. A backend restart no longer drops the match: the room is rebuilt from its Redis snapshot and resumed — see [Crash recovery](#crash-recovery).
 
 ## Security model
 
