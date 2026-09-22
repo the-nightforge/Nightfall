@@ -122,6 +122,25 @@ def imbalance_of(bench_json: Path) -> float:
     return abs(by["all"] - 0.5) * 100
 
 
+def parse_players(raw: str) -> list[int]:
+    """`--players 8,9,10` → [8, 9, 10] (spec 2026-09-22 D4). Bàn < 8 không mở được
+    (`MIN_PLAYERS_TO_START`), > 16 vượt encoder."""
+    try:
+        sizes = sorted({int(x) for x in raw.split(",") if x.strip()})
+    except ValueError as error:
+        raise SystemExit(f"--players {raw!r}: cần số nguyên cách nhau dấu phẩy") from error
+    if not sizes or any(n < 8 or n > 16 for n in sizes):
+        raise SystemExit(f"--players {raw!r}: cỡ bàn trong 8..16")
+    return sizes
+
+
+def bench_paths(directory: Path, stem: str, sizes: list[int]) -> dict[int, Path]:
+    """File bench theo cỡ. Chỉ bàn 8 → đúng tên cũ, để run cũ resume được."""
+    if sizes == [8]:
+        return {8: directory / f"{stem}.json"}
+    return {n: directory / f"{stem}-p{n}.json" for n in sizes}
+
+
 @dataclass(frozen=True)
 class BenchRead:
     """Ba con số một lần benchmark quyết định thăng hạng."""
@@ -132,6 +151,16 @@ class BenchRead:
     """`score_of(bench, phe kia)`; None khi `--side all` (score đã gồm hai phe)."""
     imbalance: float
     """`imbalance_of(bench)`."""
+    base_imbalance: float = 0.0
+    """|làng thắng của heuristic (setup baseline) − 50 %| trên CÙNG file — mốc cân bằng theo cỡ."""
+    by_size: "dict[int, BenchRead] | None" = None
+    """Điểm từng cỡ bàn khi chấm nhiều cỡ (spec 2026-09-22 D5); None khi một cỡ."""
+
+
+def _baseline_imbalance(bench_json: Path) -> float:
+    b = json.loads(bench_json.read_text(encoding="utf8"))
+    by = {s.get("setup"): s["villageWinMean"] for s in b["summary"]}
+    return abs(by["baseline"] - 0.5) * 100
 
 
 def read_bench(bench_json: Path, side: str) -> BenchRead:
@@ -140,7 +169,46 @@ def read_bench(bench_json: Path, side: str) -> BenchRead:
         score=score_of(bench_json, side),
         other=score_of(bench_json, other) if other else None,
         imbalance=imbalance_of(bench_json),
+        base_imbalance=_baseline_imbalance(bench_json),
     )
+
+
+def read_sizes(paths: dict[int, Path], side: str) -> BenchRead:
+    """Một cỡ = `read_bench` (hành vi cũ). Nhiều cỡ = trung bình mọi con số, giữ
+    từng cỡ trong `by_size` cho cổng "không cỡ nào tụt" và cân bằng theo cỡ."""
+    reads = {n: read_bench(p, side) for n, p in sorted(paths.items())}
+    if len(reads) == 1:
+        return next(iter(reads.values()))
+
+    def mean(xs: list[float]) -> float:
+        return sum(xs) / len(xs)
+
+    others = [r.other for r in reads.values() if r.other is not None]
+    return BenchRead(
+        score=mean([r.score for r in reads.values()]),
+        other=mean(others) if others else None,
+        imbalance=mean([r.imbalance for r in reads.values()]),
+        base_imbalance=mean([r.base_imbalance for r in reads.values()]),
+        by_size=reads,
+    )
+
+
+def size_state(read: BenchRead) -> dict | None:
+    if read.by_size is None:
+        return None
+    return {
+        str(n): {"score": r.score, "other": r.other, "imbalance": r.imbalance, "baseImbalance": r.base_imbalance}
+        for n, r in read.by_size.items()
+    }
+
+
+def size_from_state(raw: dict | None) -> dict[int, BenchRead] | None:
+    if not raw:
+        return None
+    return {
+        int(n): BenchRead(v["score"], v.get("other"), v["imbalance"], v.get("baseImbalance", 0.0))
+        for n, v in raw.items()
+    }
 
 
 def champion_of(reads: list[BenchRead]) -> BenchRead:
@@ -151,6 +219,7 @@ def champion_of(reads: list[BenchRead]) -> BenchRead:
         score=min(r.score for r in reads),
         other=min(others) if others else None,
         imbalance=max(r.imbalance for r in reads),
+        base_imbalance=reads[0].base_imbalance, by_size=reads[0].by_size,
     )
 
 
@@ -160,6 +229,7 @@ def passes_gates(
     margin: float,
     balance_slack: float,
     other_slack: float,
+    size_drop: float = -1.0, size_balance_slack: float = -1.0,
 ) -> bool:
     """Thăng hạng khi MỌI bộ seed qua CẢ BA cổng: điểm (`should_promote`), cân
     bằng (D3) và phe kia (D4). Slack âm tắt cổng tương ứng.
@@ -180,6 +250,15 @@ def passes_gates(
     if other_slack >= 0 and champion.other is not None:
         if primary.other is None or primary.other < champion.other - other_slack:
             return False
+    # Theo cỡ bàn (spec 2026-09-22 D5), chỉ bộ seed chính — bộ duy nhất champion cũng được đo.
+    if size_drop >= 0 and primary.by_size and champion.by_size:
+        for n, r in primary.by_size.items():
+            if n in champion.by_size and r.score < champion.by_size[n].score - size_drop:
+                return False
+    # Cân bằng so với heuristic của CÙNG file bench: không so khác bộ seed.
+    if size_balance_slack >= 0 and primary.by_size:
+        if any(r.imbalance > r.base_imbalance + size_balance_slack for r in primary.by_size.values()):
+            return False
     return True
 
 
@@ -193,14 +272,16 @@ def champion_from_state(state: dict, initial: BenchRead) -> BenchRead:
         score=state["championScore"],
         other=state.get("championOther", initial.other),
         imbalance=state.get("championImbalance", initial.imbalance),
+        base_imbalance=initial.base_imbalance, by_size=size_from_state(state.get("championBySize")) or initial.by_size,
     )
 
 
-def bench_cmd(model: Path, seed: str, dest: Path, games: int, repeat: int, decisions: str) -> list[str]:
+def bench_cmd(model: Path, seed: str, dest: Path, games: int, repeat: int, decisions: str, players: int = 8) -> list[str]:
     """Lệnh benchmark DUY NHẤT của vòng lặp: champion-0000, mỗi challenger và bộ
     xác nhận đo đúng cùng cấu hình — kể cả lượt policy (D2)."""
     return [
         tool("npm"), "run", "ai:benchmark", "--", "--model", str(model),
+        *(["--players", str(players)] if players != 8 else []),
         "--games", str(games), "--repeat", str(repeat),
         "--setups", "baseline,village,wolves,all",
         "--learned-decisions", decisions,
@@ -263,12 +344,12 @@ def ppo_cmd(enc: Path, champion: Path, best: Path, model_dir: Path, model_id: st
 
 def rollout_cmd(
     source: Path, seats: str, iteration: int, part: Path, games: int, temperature: float, decisions: str,
-    opponent: Path | None = None,
+    opponent: Path | None = None, players: int = 8,
 ) -> list[str]:
     cmd = [
         tool("npx"), "tsx", "apps/server/scripts/selfplay.ts",
-        "--games", str(games), "--players", "8", "--preset", "--defense",
-        "--seed", f"rl-{iteration}-{seats}", "--policy", str(source),
+        "--games", str(games), "--players", str(players), "--preset", "--defense",
+        "--seed", f"rl-{iteration}-{seats}" if players == 8 else f"rl-{iteration}-{seats}-p{players}", "--policy", str(source),
         "--temperature", str(temperature), "--learned-seats", seats,
         "--learned-decisions", decisions,
         "--trajectories", str(part), "--trace-games", str(games), "--quiet",
@@ -293,6 +374,11 @@ def main() -> None:
     p.add_argument("--temperature", type=float, default=1.0, help="policy logits: 1; residual: 5 (thang belief)")
     p.add_argument("--opponent", type=Path, default=None,
                    help="model cho phe KIA trong rollout của --side (spec 2026-09-19 D6); mặc định heuristic")
+    p.add_argument("--players", default="8", help="cỡ bàn rollout/bench, vd 8,9,10,11,12 (spec 2026-09-22)")
+    p.add_argument("--size-drop", type=float, default=2.0, dest="size_drop",
+                   help="không cỡ nào được kém champion ở cỡ đó quá chừng này (âm = tắt)")
+    p.add_argument("--size-balance-slack", type=float, default=-1.0, dest="size_balance_slack",
+                   help="mỗi cỡ: lệch cân bằng ≤ heuristic cùng file + slack (âm = tắt; stage sói dùng 2)")
     p.add_argument("--baseline", default="role", help="Xem train_ppo.baseline_for")
     p.add_argument("--side", default="all", choices=("all", "wolves", "village"),
                    help="Train residual cho MỘT phe; điểm thăng hạng = Δ của phe đó")
@@ -318,6 +404,7 @@ def main() -> None:
                    help="Xoá roll-*/enc/trajectories.jsonl của vòng đã xong (giữ model, bench, .done)")
     p.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     a = p.parse_args()
+    sizes = parse_players(a.players)
 
     if a.opponent is not None and a.side == "all":
         raise SystemExit("--opponent cần --side village|wolves")
@@ -339,16 +426,20 @@ def main() -> None:
     def save_state() -> None:
         state_path.write_text(json.dumps(state, indent=2), encoding="utf8")
 
+    def bench_sizes(model: Path, seed: str, directory: Path, stem: str, marker: str) -> BenchRead:
+        paths = bench_paths(directory, stem, sizes)
+        for n, path in paths.items():
+            step(
+                done_marker(directory, marker if len(paths) == 1 else f"{marker}-p{n}"),
+                bench_cmd(model, seed, path, a.bench_games, a.bench_repeat, a.learned_decisions, n),
+            )
+        return read_sizes(paths, a.side)
+
     champion = champions / "champion-0000.weights.json"
     if not champion.exists():
         shutil.copy(a.champion, champion)
 
-    bench0 = out / "bench-champion-0000.json"
-    step(
-        done_marker(out, "bench-0000"),
-        bench_cmd(champion, "rl-bench", bench0, a.bench_games, a.bench_repeat, a.learned_decisions),
-    )
-    champ = read_bench(bench0, a.side)
+    champ = bench_sizes(champion, "rl-bench", out, "bench-champion-0000", "bench-0000")
     print(f"champion điểm {champ.score:+.1f}  lệch cân bằng {champ.imbalance:.1f}", flush=True)
 
     # Khôi phục champion đã thăng hạng ở lần chạy trước. Đặt SAU bench0 để lần
@@ -363,6 +454,7 @@ def main() -> None:
         "margin": a.promote_margin,
         "balance_slack": a.balance_slack,
         "other_slack": a.other_side_slack,
+        "size_drop": a.size_drop, "size_balance_slack": a.size_balance_slack,
     }
 
     for k in range(1, a.iterations + 1):
@@ -375,26 +467,30 @@ def main() -> None:
         it = out / f"iter-{k:04d}"
         it.mkdir(exist_ok=True)
 
-        # Ba phần seats độc lập nhau → chạy cùng lúc. ĐỪNG đưa lên GitHub
-        # Actions (runner 2 lõi, đã gỡ role-power.yml vì đúng lý do đó).
-        def rollout_one(seats: str, iteration: int = k, source: Path = champion) -> None:
-            part = it / f"roll-{seats}"
+        parts = [(seats, n) for seats in SEATS for n in sizes]
+
+        def part_name(seats: str, n: int) -> str:
+            return f"roll-{seats}" if sizes == [8] else f"roll-{seats}-p{n}"
+
+        def rollout_one(job: tuple[str, int], iteration: int = k, source: Path = champion) -> None:
+            seats, n = job
+            name = part_name(seats, n)
             step(
-                done_marker(it, f"roll-{seats}"),
-                rollout_cmd(source, seats, iteration, part, a.games // 3, a.temperature, a.learned_decisions,
-                            a.opponent if seats == a.side else None),
+                done_marker(it, name),
+                rollout_cmd(source, seats, iteration, it / name, a.games // len(parts), a.temperature,
+                            a.learned_decisions, a.opponent if seats == a.side else None, n),
             )
 
         with ThreadPoolExecutor(max_workers=3) as pool:
-            list(pool.map(rollout_one, SEATS))
+            list(pool.map(rollout_one, parts))
 
         # Gộp CHỈ sau khi cả ba xong, theo thứ tự cố định.
         merged = it / "trajectories.jsonl"
         merge_marker = done_marker(it, "merge")
         if not merge_marker.exists():
             with merged.open("w", encoding="utf8") as f:
-                for seats in SEATS:
-                    f.write((it / f"roll-{seats}" / "trajectories.jsonl").read_text(encoding="utf8"))
+                for seats, n in parts:
+                    f.write((it / part_name(seats, n) / "trajectories.jsonl").read_text(encoding="utf8"))
             merge_marker.write_text("ok", encoding="utf8")
 
         enc = it / "enc"
@@ -423,12 +519,7 @@ def main() -> None:
         if not should_bench:
             print(f"vòng {k}: bỏ benchmark (--bench-every)", flush=True)
         else:
-            bench = it / "bench.json"
-            step(
-                done_marker(it, "bench"),
-                bench_cmd(challenger, "rl-bench", bench, a.bench_games, a.bench_repeat, a.learned_decisions),
-            )
-            reads = [read_bench(bench, a.side)]
+            reads = [bench_sizes(challenger, "rl-bench", it, "bench", "bench")]
             print(
                 f"iteration {k}: challenger {reads[0].score:+.1f} vs champion {champ.score:+.1f}"
                 f"  | lệch cân bằng {reads[0].imbalance:.1f} vs {champ.imbalance:.1f}",
@@ -442,15 +533,11 @@ def main() -> None:
             }
             if reads[0].other is not None:
                 row["otherSide"] = round(reads[0].other, 2)
+            if reads[0].by_size: row["bySize"] = {str(n): round(r.score, 2) for n, r in reads[0].by_size.items()}
             # Bộ seed thứ hai chỉ chạy khi bộ thứ nhất đã qua MỌI cổng: nó tốn
             # thêm một lần benchmark, nhưng chỉ ở những vòng hiếm có ứng viên.
             if a.confirm_seed and passes_gates(reads, champ, **gates):
-                conf = it / "bench-confirm.json"
-                step(
-                    done_marker(it, "bench-confirm"),
-                    bench_cmd(challenger, a.confirm_seed, conf, a.bench_games, a.bench_repeat, a.learned_decisions),
-                )
-                reads.append(read_bench(conf, a.side))
+                reads.append(bench_sizes(challenger, a.confirm_seed, it, "bench-confirm", "bench-confirm"))
                 row["confirmScore"] = round(reads[-1].score, 2)
                 print(f"  xác nhận trên seed {a.confirm_seed}: {reads[-1].score:+.1f}", flush=True)
             state["scores"].append(row)
@@ -468,6 +555,7 @@ def main() -> None:
         state["championScore"] = champ.score
         state["championOther"] = champ.other
         state["championImbalance"] = champ.imbalance
+        state["championBySize"] = size_state(champ)
         save_state()
         if a.prune_rollouts:
             freed = prune_iteration(it)
