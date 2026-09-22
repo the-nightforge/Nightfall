@@ -1,6 +1,7 @@
 import {
   actionNames,
   actionSize,
+  DEFAULT_MAX_SEATS,
   observationFeatureNames,
   observationSize,
 } from "./observation";
@@ -73,7 +74,15 @@ export interface MlpWeightsJson {
    * số vô nghĩa, và cờ CLI là chỗ dễ quên nhất.
    */
   residual?: { beta: number };
+  /**
+   * Cỡ bàn (số người) model được train và đã đạt confirm (spec 2026-09-22 D1).
+   * Vắng = `DEFAULT_TABLE_SIZES`. Runtime không hỏi model ở bàn ngoài danh sách.
+   */
+  tableSizes?: number[];
 }
+
+/** Cỡ bàn model được chơi khi file KHÔNG khai (mọi model trước spec 2026-09-22). */
+export const DEFAULT_TABLE_SIZES: readonly number[] = [8];
 
 export interface LearnedPolicy {
   readonly id: string;
@@ -83,6 +92,8 @@ export interface LearnedPolicy {
   value(features: readonly number[]): number | null;
   /** Xem `MlpWeightsJson.residual`. Vắng = policy logits thuần. */
   readonly residual?: { beta: number };
+  /** Xem `MlpWeightsJson.tableSizes`. Vắng (policy dựng tay) = `DEFAULT_TABLE_SIZES`. */
+  readonly tableSizes?: readonly number[];
 }
 
 function linear(layer: MlpLinear, x: readonly number[]): number[] {
@@ -303,6 +314,16 @@ export function loadMlpPolicy(
     }
     residual = { beta };
   }
+  const maxSeats = options.maxSeats ?? DEFAULT_MAX_SEATS;
+  const rawSizes: unknown = w.tableSizes ?? DEFAULT_TABLE_SIZES;
+  if (
+    !Array.isArray(rawSizes) ||
+    rawSizes.length === 0 ||
+    rawSizes.some((n) => !Number.isInteger(n) || n < 1 || n > maxSeats)
+  ) {
+    throw new Error(`tableSizes phải là mảng số nguyên 1..${maxSeats}, không rỗng`);
+  }
+  const tableSizes = [...(rawSizes as number[])].sort((a, b) => a - b);
   const weights: MlpWeightsJson = {
     ...(w as MlpWeightsJson),
     layers,
@@ -323,6 +344,7 @@ export function loadMlpPolicy(
   };
   return {
     id,
+    tableSizes,
     ...(residual ? { residual } : {}),
     logits(features) {
       return mlpForward(weights, fit(features)).logits;

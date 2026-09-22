@@ -215,3 +215,17 @@ describe("loadMlpPolicy — model train trên observation TIỀN TỐ (spec 2026
     expect(() => policy.logits(new Array<number>(observationSize() - 5).fill(0))).toThrow(/chiều/);
   });
 });
+
+describe("loadMlpPolicy — tableSizes (spec 2026-09-22 D1)", () => {
+  it("vắng → [8]; có → giữ, sort tăng dần", () => {
+    expect(loadMlpPolicy(zeroWeights()).tableSizes).toEqual([8]);
+    const w = { ...zeroWeights(), tableSizes: [12, 8, 10, 9, 11] };
+    expect(loadMlpPolicy(w).tableSizes).toEqual([8, 9, 10, 11, 12]);
+  });
+
+  it("rỗng, không nguyên, ngoài 1..16 → ném", () => {
+    for (const bad of [[], [8.5], [0], [17], "8"]) {
+      expect(() => loadMlpPolicy({ ...zeroWeights(), tableSizes: bad as never })).toThrow(/tableSizes/);
+    }
+  });
+});

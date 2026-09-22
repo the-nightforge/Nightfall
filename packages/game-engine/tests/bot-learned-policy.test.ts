@@ -283,7 +283,7 @@ describe("learnedDecisions — model chỉ quyết một trong hai lượt", () 
   });
 });
 
-describe("model chỉ chơi bàn 8 người — cỡ bàn duy nhất nó được train", () => {
+describe("model chỉ chơi những cỡ bàn trong tableSizes (vắng = [8])", () => {
   // 2026-09-21: bàn 17–20 người (MAX_PLAYERS_PER_ROOM = 20) làm encoder ném
   // "observation có 17 ghế, vượt maxSeats=16"; server nuốt lỗi trong try/catch
   // nên bot production không bầu, không hành động đêm, không bắn.
@@ -335,6 +335,22 @@ describe("model chỉ chơi bàn 8 người — cỡ bàn duy nhất nó đượ
       learnedTemperature: 1,
     });
     expect(game.traces.some((t) => t.chosen.learned)).toBe(true);
+  });
+
+  it("model khai tableSizes [8..12]: chơi bàn 10, KHÔNG chơi bàn 13", () => {
+    const wide: LearnedPolicy = { ...preferring(actionIndexOf("CHOOSE", DEFAULT_MAX_SEATS)), tableSizes: [8, 9, 10, 11, 12] };
+    const at = (size: number) =>
+      runSelfPlay({
+        seed: `wide-${size}`,
+        playerCount: size,
+        config: PRESET_DECKS[size],
+        maxRounds: 3,
+        trace: true,
+        learnedPolicy: wide,
+        learnedTemperature: 1,
+      });
+    expect(at(10).traces.some((t) => t.chosen.learned)).toBe(true);
+    expect(at(13).traces.some((t) => t.chosen.learned)).toBe(false);
   });
 });
 
