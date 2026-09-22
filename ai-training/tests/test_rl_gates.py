@@ -18,16 +18,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from rl_loop import (  # noqa: E402
     BenchRead,
     bench_cmd,
+    bench_paths,
     champion_from_state,
     champion_of,
     imbalance_of,
     latest_champion_file,
     next_start,
+    parse_players,
     passes_gates,
     ppo_cmd,
     prune_iteration,
     read_bench,
+    read_sizes,
     rollout_cmd,
+    size_from_state,
+    size_state,
 )
 
 
@@ -170,6 +175,53 @@ def main() -> None:
         assert left == [".ppo.done", "bench-confirm.json", "bench.json", "model"], left
         assert (it / "model" / "data.bin").exists()
         assert prune_iteration(it) == 0  # chạy lại: không lỗi, không còn gì để xoá
+
+        # --- Dự án M (spec 2026-09-22 D4/D5): theo cỡ bàn ---
+        # (`root` của khối with đầu đã bị xoá khi ra khỏi khối: mở thư mục mới.)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            assert parse_players("12,8,10,8") == [8, 10, 12]
+            for bad in ("", "7", "17", "8,x"):
+                try:
+                    parse_players(bad)
+                    raise AssertionError(f"--players {bad!r} phải bị từ chối")
+                except (SystemExit, ValueError):
+                    pass
+
+            assert bench_paths(root, "bench", [8]) == {8: root / "bench.json"}
+            assert bench_paths(root, "bench", [8, 10]) == {8: root / "bench-p8.json", 10: root / "bench-p10.json"}
+
+            # Lệnh mặc định (8) giữ nguyên byte một: không có --players ở bench, seed rollout cũ.
+            assert "--players" not in bench_cmd(Path("m.json"), "rl-bench", Path("b.json"), 200, 3, decisions)
+            b10 = bench_cmd(Path("m.json"), "rl-bench", Path("b.json"), 200, 3, decisions, 10)
+            assert b10[b10.index("--players") + 1] == "10", b10
+            r10 = rollout_cmd(Path("m.json"), "wolves", 4, Path("part"), 200, 1.0, decisions, None, 10)
+            assert r10[r10.index("--players") + 1] == "10" and r10[r10.index("--seed") + 1] == "rl-4-wolves-p10", r10
+
+            # Trung bình theo cỡ; base_imbalance đọc setup baseline của CÙNG file.
+            p8 = write_bench(root / "p8.json", 0.50, 0.56, 0.44, 0.52)    # làng +6, sói +6, lệch 2, base 0
+            p10 = write_bench(root / "p10.json", 0.40, 0.44, 0.38, 0.30)  # làng +4, sói +2, lệch 20, base 10
+            multi = read_sizes({8: p8, 10: p10}, "village")
+            # (brief ghi `== 10.0`: (0.4 − 0.5) * 100 ra 9.999999999999998 ở số thực nhị
+            # phân — so sánh xấp xỉ như mọi assert số thực khác trong file này.)
+            assert abs(multi.score - 5.0) < 1e-9 and abs(multi.by_size[10].base_imbalance - 10.0) < 1e-9, multi
+            single = read_sizes({8: p8}, "village")
+            assert single.by_size is None and abs(single.score - 6.0) < 1e-9
+
+            champ_m = BenchRead(1.0, 0.0, 5.0, 0.0, {8: BenchRead(1.0, 0.0, 2.0, 0.0), 10: BenchRead(4.5, 0.0, 20.0, 10.0)})
+            # Tổng 5,0 > 1,0 + 2; bàn 10 là 4,0 so với champion 4,5 → tụt 0,5, qua.
+            assert passes_gates([multi], champ_m, 2.0, -1.0, -1.0, size_drop=2.0)
+            # Champion bàn 10 là 6,5 → tụt 2,5 > 2 → chặn.
+            champ_hi = BenchRead(1.0, 0.0, 5.0, 0.0, {8: BenchRead(1.0, 0.0, 2.0, 0.0), 10: BenchRead(6.5, 0.0, 20.0, 10.0)})
+            assert not passes_gates([multi], champ_hi, 2.0, -1.0, -1.0, size_drop=2.0)
+            # Cân bằng theo cỡ: bàn 10 lệch 20 so với heuristic 10 → chặn khi bật, qua khi tắt.
+            assert not passes_gates([multi], champ_m, 2.0, -1.0, -1.0, size_drop=2.0, size_balance_slack=2.0)
+            assert passes_gates([multi], champ_m, 2.0, -1.0, -1.0, size_drop=2.0, size_balance_slack=-1.0)
+
+            # State giữ được điểm theo cỡ qua resume.
+            restored = size_from_state(json.loads(json.dumps(size_state(multi))))
+            assert restored[10].score == multi.by_size[10].score and abs(restored[10].base_imbalance - 10.0) < 1e-9
+            assert size_state(single) is None and size_from_state(None) is None
 
     print("ok")
 

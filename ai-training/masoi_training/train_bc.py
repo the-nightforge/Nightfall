@@ -94,6 +94,14 @@ def _group_ece(
     return out
 
 
+def by_table_size(values: np.ndarray, sizes: np.ndarray | None) -> dict[str, float] | None:
+    """Trung bình `values` theo cỡ bàn (khoá chuỗi để JSON giữ được). `None`
+    khi dataset không có cột cỡ bàn (spec 2026-09-22 D3)."""
+    if sizes is None:
+        return None
+    return {str(int(n)): round(float(values[sizes == n].mean()), 4) for n in np.unique(sizes)}
+
+
 def evaluate(model: PolicyValueNet, data, device: torch.device) -> dict:
     """Độ khớp với bot heuristic: tổng thể, theo vai (§28) và theo loại quyết định.
 
@@ -123,9 +131,11 @@ def evaluate(model: PolicyValueNet, data, device: torch.device) -> dict:
     # `agreement` chấm oan mọi nước hoà điểm mà teacher phá hoà bằng id thô —
     # thông tin §9 cố tình giấu khỏi observation, nên model không thể học nó.
     tie_aware = None
+    tie_hits = None
     if data.optimal is not None:
         pred = predicted.cpu().numpy()
-        tie_aware = round(float(data.optimal[np.arange(len(pred)), pred].mean()), 4)
+        tie_hits = data.optimal[np.arange(len(pred)), pred].astype(float)
+        tie_aware = round(float(tie_hits.mean()), 4)
 
     return {
         "samples": len(data),
@@ -138,6 +148,10 @@ def evaluate(model: PolicyValueNet, data, device: torch.device) -> dict:
         "agreementByDecision": _group_means(
             correct, data.decisions, data.meta.get("decisions", [])
         ),
+        "agreementByTableSize": by_table_size(correct.astype(float), data.table_sizes),
+        "agreementTieAwareByTableSize": by_table_size(tie_hits, data.table_sizes)
+        if tie_hits is not None
+        else None,
         "ece": round(expected_calibration_error(confidences, correct), 4),
         "eceByDecision": _group_ece(
             confidences, correct, data.decisions, data.meta.get("decisions", [])

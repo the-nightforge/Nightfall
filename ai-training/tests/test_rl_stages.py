@@ -127,6 +127,43 @@ def main() -> None:
         rs.set_project("a")
     assert rs.STAGES["village"][0] == "bc-village-v3"
 
+    # Dự án M (spec 2026-09-22): năm cỡ bàn, cổng cân bằng theo cỡ ở stage sói.
+    rs.set_project("m")
+    try:
+        assert rs.CHAMPION0.name == "village-bc-0004.weights.json"
+        name, side, iterations, extra = rs.STAGES["village"]
+        assert name == "m-village" and side == "village" and iterations == 20
+        assert extra[extra.index("--players") + 1] == "8,9,10,11,12", extra
+        assert "--size-balance-slack" not in extra
+        wolves = rs.STAGES["wolves"][3]
+        assert wolves[wolves.index("--size-balance-slack") + 1] == "2", wolves
+        assert rs.STAGES["wolves"][0] == "m-wolves"
+    finally:
+        rs.set_project("a")
+
+    # judge_size: tiêu chí D7 trên một file bench dựng tay.
+    def bench(path: Path, base: float, village: float, wolves: float, all_: float, violations: int = 0,
+              paired: dict | None = None) -> Path:
+        summary = [{"setup": s, "villageWinMean": v} for s, v in
+                   (("baseline", base), ("village", village), ("wolves", wolves), ("all", all_))]
+        path.write_text(json.dumps({"summary": summary, "rows": [{"violations": violations}],
+                                    "paired": paired or {}}), encoding="utf8")
+        return path
+
+    with tempfile.TemporaryDirectory() as tmp:
+        t = Path(tmp)
+        ok, _ = rs.judge_size(bench(t / "a.json", 0.40, 0.45, 0.39, 0.41), 10)   # làng +5, sói +1, lệch 9 ≤ 10+2
+        assert ok
+        bad, detail = rs.judge_size(bench(t / "b.json", 0.40, 0.45, 0.43, 0.41), 10)  # sói −3
+        assert not bad and not detail["checks"]["không phe nào < heuristic − 1"]
+        unbal, _ = rs.judge_size(bench(t / "c.json", 0.50, 0.53, 0.47, 0.35), 10)   # lệch 15 > 0 + 2
+        assert not unbal
+        dirty, _ = rs.judge_size(bench(t / "d.json", 0.40, 0.45, 0.39, 0.41, violations=1), 10)
+        assert not dirty
+        h2h = {"h2h-village": {"mean": 0.5, "se": 1}, "h2h-wolves": {"mean": -1.5, "se": 1}}
+        eight, detail8 = rs.judge_size(bench(t / "e.json", 0.50, 0.55, 0.47, 0.51, paired=h2h), 8)
+        assert not eight and not detail8["checks"]["đối đầu ppo-0001 mỗi phe ≥ −1"]
+
     print("ok")
 
 

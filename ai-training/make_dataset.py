@@ -8,6 +8,7 @@ validate và encode.
 Chạy từ gốc repo:
 
     ai-training/.venv/Scripts/python.exe ai-training/make_dataset.py --out .tmp/traj-b --enc .tmp/enc-b
+    ai-training/.venv/Scripts/python.exe ai-training/make_dataset.py --players 8,9,10,11,12 --out .tmp/traj-m --enc .tmp/enc-m
 """
 
 from __future__ import annotations
@@ -31,13 +32,13 @@ def run(cmd: list[str]) -> None:
     subprocess.run(cmd, cwd=ROOT, check=True)
 
 
-def shard(out: Path, i: int, games: int, seed: str) -> Path:
-    part = out / f"shard-{i:02d}"
+def shard(out: Path, size: int, i: int, games: int, seed: str) -> Path:
+    part = out / f"p{size}-shard-{i:02d}"
     done = part / ".done"
     if not done.exists():
-        # Recipe của dataset-0004 (ai-training/README.md), chỉ khác seed theo shard.
-        run([npx(), "tsx", "apps/server/scripts/selfplay.ts", "--games", str(games), "--players", "8",
-             "--preset", "--defense", "--seed", f"{seed}-{i}", "--trajectories", str(part),
+        # Recipe của dataset-0004 (ai-training/README.md), chỉ khác cỡ bàn và seed.
+        run([npx(), "tsx", "apps/server/scripts/selfplay.ts", "--games", str(games), "--players", str(size),
+             "--preset", "--defense", "--seed", f"{seed}-p{size}-{i}", "--trajectories", str(part),
              "--trace-games", str(games), "--no-jitter", "--quiet"])
         done.write_text("ok")
     return part / "trajectories.jsonl"
@@ -47,16 +48,22 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--out", type=Path, required=True, help="thư mục trajectory (mỗi shard một thư mục con)")
     p.add_argument("--enc", type=Path, required=True, help="thư mục encode cho train_bc")
-    p.add_argument("--shards", type=int, default=10)
+    p.add_argument("--players", default="8", help="cỡ bàn, cách nhau dấu phẩy (vd 8,9,10,11,12)")
+    p.add_argument("--shards", type=int, default=None, help="số shard MỖI cỡ bàn (mặc định 10 ÷ số cỡ)")
     p.add_argument("--games", type=int, default=1000, help="số ván mỗi shard")
     p.add_argument("--jobs", type=int, default=3, help="số shard chạy cùng lúc (~4 GB RAM mỗi shard)")
     p.add_argument("--seed", default="bc")
     a = p.parse_args()
+    sizes = sorted({int(x) for x in a.players.split(",") if x.strip()})
+    if not sizes or any(n < 8 or n > 16 for n in sizes):
+        raise SystemExit("--players: cỡ bàn trong 8..16")
+    shards = a.shards if a.shards is not None else max(1, 10 // len(sizes))
+    jobs = [(n, i) for n in sizes for i in range(shards)]
     out, enc = (ROOT / a.out).resolve(), (ROOT / a.enc).resolve()
 
     run([shutil.which("npm") or "npm", "run", "build:deps", "--silent"])
     with ThreadPoolExecutor(a.jobs) as pool:
-        parts = list(pool.map(lambda i: shard(out, i, a.games, a.seed), range(a.shards)))
+        parts = list(pool.map(lambda job: shard(out, job[0], job[1], a.games, a.seed), jobs))
 
     merged = out / "trajectories.jsonl"
     with merged.open("wb") as dst:
