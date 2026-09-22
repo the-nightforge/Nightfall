@@ -24,13 +24,19 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         write_dataset(root)
-        assert load(root).table_sizes is None  # dataset cũ: không bịa cột
+        legacy = load(root)
+        assert legacy.table_sizes is None  # dataset cũ: không bịa cột
+        assert legacy.split("train").table_sizes is None  # split cũng không bịa
 
         np.array([8, 8, 10, 10, 12, 12], dtype=np.uint8).tofile(root / "tableSize.u8.bin")
         data = load(root)
         assert data.table_sizes.tolist() == [8, 8, 10, 10, 12, 12]
         kept = data.where(np.array([True, False, True, False, True, False]))
         assert kept.table_sizes.tolist() == [8, 10, 12]
+        # split() ủy thác cho where() nên phải giữ cột (train=hàng 0-2, val=3-4, test=5)
+        assert data.split("train").table_sizes.tolist() == [8, 8, 10]
+        assert data.split("validation").table_sizes.tolist() == [10, 12]
+        assert data.split("test").table_sizes.tolist() == [12]
 
         np.array([8, 8], dtype=np.uint8).tofile(root / "tableSize.u8.bin")
         try:
