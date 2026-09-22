@@ -135,6 +135,8 @@ async function main(): Promise<void> {
     splits: createWriteStream(join(outDir, "splits.u8.bin")),
     roles: createWriteStream(join(outDir, "roles.u8.bin")),
     decisions: createWriteStream(join(outDir, "decisions.u8.bin")),
+    // Cỡ bàn của từng dòng (spec 2026-09-22 D3): train_bc báo độ khớp theo cỡ.
+    tableSizes: createWriteStream(join(outDir, "tableSize.u8.bin")),
     optimal: createWriteStream(join(outDir, "optimal.u8.bin")),
     // Điểm teacher bỏ jitter theo ô hành động, NaN ở ô không phải ứng viên —
     // nhãn cho distillation (`train_bc --distill-alpha`).
@@ -163,6 +165,7 @@ async function main(): Promise<void> {
   let warnedMismatch = false;
   let warnedMixed = false;
   const games = new Set<string>();
+  const tableSizes = new Set<number>();
   const perSplit = { train: 0, validation: 0, test: 0 };
 
   const lines = createInterface({
@@ -257,6 +260,8 @@ async function main(): Promise<void> {
     streams.splits.write(Buffer.from(Uint8Array.of(SPLIT_CODE[split])));
     streams.roles.write(Buffer.from(Uint8Array.of(roleIndex.get(line.finalRole) ?? 255)));
     streams.decisions.write(Buffer.from(Uint8Array.of(decisionIndex.get(line.decision) ?? 255)));
+    streams.tableSizes.write(Buffer.from(Uint8Array.of(encoded.seats.length)));
+    tableSizes.add(encoded.seats.length);
     const optimal = optimalActionMask(line, encoded, options.maxSeats);
     streams.optimal.write(Buffer.from(Uint8Array.from(optimal, (ok) => (ok ? 1 : 0))));
     streams.scores.write(
@@ -292,7 +297,8 @@ async function main(): Promise<void> {
     // dataset-0004: thêm kind FINAL cho phiên toà (spec 2026-09-14) — model
     // dataset-0003 (obsSize 413, actionSize 187) hết load được, phải sinh
     // dataset và BC lại từ đầu, không transfer weights.
-    datasetVersion: options.rollout ? "rollout-0002" : "dataset-0005",
+    // dataset-0006: thêm tableSize.u8.bin + meta.tableSizes (spec 2026-09-22 D2).
+    datasetVersion: options.rollout ? "rollout-0003" : "dataset-0006",
     rollout: options.rollout,
     temperature,
     // Loại policy đã sinh tập: `residual` (có `bases.f32.bin`, `beta`) hay
@@ -309,6 +315,7 @@ async function main(): Promise<void> {
     obsSize,
     actionSize: actSize,
     maxSeats: options.maxSeats,
+    tableSizes: [...tableSizes].sort((a, b) => a - b),
     splitCounts: perSplit,
     splitCode: SPLIT_CODE,
     roles: [...ROLES],
