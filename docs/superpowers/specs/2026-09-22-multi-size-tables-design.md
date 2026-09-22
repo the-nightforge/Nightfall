@@ -156,3 +156,32 @@ hướng dẫn từng bước.
 - `rl_stages --project m`: tên thư mục, cờ; `confirm_m` in đạt/trượt theo cỡ và
   `tableSizes`.
 - Kaggle: phiên thử 2 vòng × 300 ván trước phiên thật.
+
+## Kết quả
+
+### BC `village-bc-0004` (2026-09-23) — cổng D3 trượt, người duyệt cho đi tiếp
+
+Dataset-0006: 10.000 ván, 1,6 triệu dòng (8: 212k … 12: 447k), đủ năm vai mới,
+7.577 dòng `TRACK`, 0 từ chối.
+
+| Cỡ | tieAware (test) | Làng so heuristic | Sói so heuristic |
+|---|---|---|---|
+| 8 | 0,966 | −6,3 ± 3,6 | +3,7 ± 1,6 |
+| 9 | 0,961 | +4,7 ± 2,9 | −1,3 ± 2,7 |
+| 10 | 0,957 | −3,7 ± 2,9 | +5,3 ± 2,5 |
+| 11 | 0,939 | −2,3 ± 1,5 | +2,3 ± 1,9 |
+| 12 | 0,944 | +1,2 ± 2,6 | +2,8 ± 1,6 |
+
+(T=0, 3 × 200 ván mỗi cỡ, 0 vi phạm.) Đối đầu với bc-0003 ở bàn 8 (5 × 300):
+làng −3,1 ± 1,4, sói +0,5 ± 1,2.
+
+- Cổng 1 (tieAware ≥ 0,92 mỗi cỡ): ĐẠT.
+- Cổng 2 (mỗi phe trong ±2): trượt nhiều ô, nhưng cổng thiết kế kém — với 3
+  seed, sai số chuẩn 1,5–3,6 ngang ngưỡng. Lần sau: 5 × 300 hoặc bỏ cổng này.
+- Cổng 3 (bàn 8 đối đầu bc-0003 ≥ −1): trượt ở làng (−3,1), là lệch thật: một
+  model cho năm cỡ bàn thiệt ở bàn 8.
+
+Quyết định (người duyệt, 2026-09-23): vẫn chạy RL từ bc-0004. BC chỉ là điểm
+xuất phát; stage làng nâng phe làng, stage sói có cổng cân bằng theo cỡ, và
+confirm D7 (5 seed, T=0,5, đối đầu ppo-0001 ở bàn 8) là phép thử thật — chỉ
+cỡ bàn ĐẠT vào `tableSizes`.
