@@ -249,8 +249,13 @@ export default function RoomPage() {
       default:
         return null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snapshot, isHost, liveStage]);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps --
+     * `room` và `leaveRoom` là tham chiếu MỚI mỗi render (`useRoomSocket` trả
+     * object + `emit` mới, `leaveRoom` là function declaration), nên đưa chúng
+     * vào deps sẽ bắt memo dựng lại mọi render - mất luôn nghĩa của useMemo.
+     * Mọi callback bên trong đều đi qua `room.emit`, hàm tự lấy socket mới nhất
+     * lúc bấm, nên closure cũ không gửi nhầm nơi nào. */
+  }, [snapshot, isHost, liveStage, code]);
 
   function leaveRoom() {
     room.emit("room:leave");

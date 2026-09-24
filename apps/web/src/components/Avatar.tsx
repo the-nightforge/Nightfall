@@ -32,7 +32,6 @@ export function Avatar({ avatar, tint, alive, className = "", isCustom }: Props)
       style={{ background: alive ? tint : "rgba(120, 130, 150, 0.10)" }}
     >
       {isCustomUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
         <img src={avatar as string} alt="" className="h-full w-full object-cover" />
       ) : (
         <svg

@@ -356,7 +356,6 @@ export function TrialStageCanvas({
      * StrictMode báo đúng số cũ và bị `consumeLiveTrialBeats` bỏ qua.
      */
     current.onBeatsTaken(current.beatsId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beats]);
 
   return (

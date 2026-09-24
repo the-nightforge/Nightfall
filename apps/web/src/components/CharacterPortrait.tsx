@@ -106,7 +106,6 @@ export function CharacterPortrait({
         } as React.CSSProperties
       }
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={sheetFor(avatar)!.src}
         alt=""

@@ -131,7 +131,6 @@ export function AvatarPicker({ currentUrl, onDone }: Props) {
       {previewUrl && (
         <div className="rounded-xl border border-white/10 bg-night-800 p-3">
           <p className="mb-1 text-xs text-mist-strong">Xem trước — máy chủ sẽ cắt vuông 256×256:</p>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={previewUrl}
             alt="Ảnh vừa chọn"

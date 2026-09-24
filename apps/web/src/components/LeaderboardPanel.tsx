@@ -98,7 +98,6 @@ function Row({ entry, mine }: { entry: LeaderboardEntry; mine: boolean }) {
           * trong ván là nội dung CHÍNH của màn hình đó, hoãn chúng lại là đổi
           * một khoảng trắng lấy vài kilobyte.
           */
-        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={entry.avatarUrl}
           alt=""
