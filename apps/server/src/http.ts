@@ -326,13 +326,13 @@ apiRouter.get("/health", async (_req, res) => {
     ok: dbOk,
     status: healthStatus(health),
     ...health,
-    // Envelope lớn nhất đã ghi từ lúc khởi động. Số này quyết định có cần gộp
-    // các lần ghi của một phòng hay không.
-    persistMaxBytes: persistStats().maxEnvelopeBytes,
     version: buildVersion(process.env),
     startedAt: new Date(STARTED_AT).toISOString(),
     // Thống kê tầng diễn đạt lời bot, cộng dồn từ lúc tiến trình khởi động.
     // Chỉ số đếm và mili giây - không có mã phòng, không có nội dung chat.
     botSpeech: speechStats.snapshot(),
+    // Envelope lớn nhất đã ghi từ lúc khởi động. Số này quyết định có cần gộp
+    // các lần ghi của một phòng hay không.
+    persistMaxBytes: persistStats().maxEnvelopeBytes,
   });
 });
