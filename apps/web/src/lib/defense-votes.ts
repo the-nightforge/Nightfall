@@ -9,9 +9,9 @@ export interface DefenseVoteSummary {
    * Có biết TÊN người bỏ phiếu hay không.
    *
    * false thì màn biện hộ chỉ in con số. Đây là trường hợp thật chứ không phải
-   * phòng thủ thừa: web và server deploy rời nhau (Vercel với Render), nên một
-   * client mới hoàn toàn có thể đang nói chuyện với một server chưa gửi
-   * `finalBallots`, và ván khôi phục từ bản lưu cũ cũng thiếu trường đó.
+   * phòng thủ thừa: web và server deploy rời nhau, nên một client mới hoàn
+   * toàn có thể đang nói chuyện với một server chưa gửi `finalBallots`, và ván
+   * khôi phục từ bản lưu cũ cũng thiếu trường đó.
    */
   hasVoters: boolean;
   /** Vòng của phiên bỏ phiếu đã đề cử ra bị cáo; null khi không có recap. */

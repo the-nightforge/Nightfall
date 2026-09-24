@@ -66,12 +66,11 @@ interface AuthedSocket extends Socket {
  *
  * ZodError nghĩa là payload không khớp schema hiện tại - client cũ đã cache
  * trong trình duyệt/PWA còn gửi hình dạng payload cũ (ví dụ room:update-avatar
- * kèm một
- * chuỗi base64, từ trước khi schema bị siết lại chỉ còn nhận payload rỗng) là
- * đường THẬT dẫn tới đây, không phải lỗi lập trình. "Có lỗi xảy ra, vui lòng
- * thử lại" đúng nhưng vô dụng ở đây: bấm lại gửi lại đúng payload cũ đó, lỗi
- * lặp lại y hệt. Chỉ có tải lại trang (lấy bundle mới, đi cùng schema mới) mới
- * sửa được, nên nói thẳng điều đó thay vì câu chung chung.
+ * kèm một chuỗi base64, từ trước khi schema bị siết lại chỉ còn nhận payload
+ * rỗng) là đường THẬT dẫn tới đây, không phải lỗi lập trình. "Có lỗi xảy ra,
+ * vui lòng thử lại" đúng nhưng vô dụng ở đây: bấm lại gửi lại đúng payload cũ
+ * đó, lỗi lặp lại y hệt. Chỉ có tải lại trang (lấy bundle mới, đi cùng schema
+ * mới) mới sửa được, nên nói thẳng điều đó thay vì câu chung chung.
  *
  * Nhận diện bằng err.name === "ZodError" thay vì instanceof ZodError: schema
  * (updateAvatarPayload,...) đến từ @masoi/shared, biên dịch/đóng gói riêng
@@ -111,8 +110,7 @@ const MAX_LOGGED_MESSAGE = 300;
  *  - `RoomError`/`GameError` là LUẬT CHƠI. "Phòng đã đầy" xảy ra hàng trăm lần
  *    mỗi ngày và là hành vi đúng; ghi lại là tự dìm chết log của mình.
  *  - `ZodError` là CLIENT CŨ còn cache trong trình duyệt/PWA gửi hình dạng
- *    payload cũ -
- *    khó chịu nhưng không phải bug của bản đang chạy.
+ *    payload cũ - khó chịu nhưng không phải bug của bản đang chạy.
  *  - Nhánh cuối là LỖI LẬP TRÌNH. Một `TypeError` trong `submitNightAction` đi
  *    qua đây, hoá thành "Có lỗi xảy ra, vui lòng thử lại" gửi cho người chơi,
  *    rồi biến mất. Nói cách khác, đúng loại lỗi cần biết nhất lại là loại duy

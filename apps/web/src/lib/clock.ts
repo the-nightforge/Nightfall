@@ -22,9 +22,9 @@ const samples: number[] = [];
 
 /**
  * Ghi nhận một mốc thời gian server. Bỏ qua giá trị không phải số hữu hạn:
- * web deploy trên Vercel còn server deploy trên Render, nên có cửa sổ mà client
- * mới nói chuyện với server cũ chưa gửi trường này. Không mẫu nào thì offset là
- * 0, tức là đúng bằng hành vi cũ.
+ * web và server deploy rời nhau, nên có cửa sổ mà client mới đang nói chuyện
+ * với server cũ chưa gửi trường này. Không mẫu nào thì offset là 0, tức là
+ * đúng bằng hành vi cũ.
  */
 export function recordServerTime(serverNow: unknown, receivedAt = Date.now()): void {
   if (typeof serverNow !== "number" || !Number.isFinite(serverNow)) return;

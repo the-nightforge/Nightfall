@@ -2,9 +2,9 @@
  * Phía server của Next (render RSC, route `manifest.ts`). Cùng luật với
  * `instrumentation-client.ts`: không có DSN thì không init.
  *
- * Bản Vercel của app này gần như tĩnh, nên phần này hiếm khi có việc; nó ở
+ * Bản self-host của app này gần như tĩnh, nên phần này hiếm khi có việc; nó ở
  * đây để một lỗi render server (một vai lạ trong metadata chẳng hạn) không
- * chỉ hiện ở log Vercel mà còn tới cùng chỗ với lỗi phía trình duyệt.
+ * chỉ nằm trong log container mà còn tới cùng chỗ với lỗi phía trình duyệt.
  */
 import * as Sentry from "@sentry/nextjs";
 

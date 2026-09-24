@@ -306,9 +306,9 @@ export const deadMessagePayload = z
 /**
  * Chỉ còn nhận null, tức là "xoá ảnh". Ảnh đi lên qua PUT /api/players/me/avatar.
  *
- * Không xoá hẳn sự kiện vì Vercel còn phục vụ bản client đã cache: client cũ
- * bấm "Xóa" vẫn phải chạy được, còn client cũ bấm "Lưu" thì phải nhận lỗi rõ
- * ràng thay vì im lặng hỏng.
+ * Không xoá hẳn sự kiện vì trình duyệt/PWA còn giữ bản client đã cache:
+ * client cũ bấm "Xóa" vẫn phải chạy được, còn client cũ bấm "Lưu" thì phải
+ * nhận lỗi rõ ràng thay vì im lặng hỏng.
  */
 /**
  * Lưu / xoá Phong thư sau cùng.
