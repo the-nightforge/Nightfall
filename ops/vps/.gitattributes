@@ -1,6 +1,0 @@
-# Keep Unix line endings for scripts/templates even on Windows checkouts
-# (core.autocrlf would otherwise produce CRLF working copies, and a CRLF
-# shell script fails on Ubuntu with `bash\r: No such file or directory`
-# after the documented `scp ... :/root/` flow).
-*.sh text eol=lf
-*.template text eol=lf

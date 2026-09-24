@@ -5,7 +5,7 @@ import { buildVersion, healthHttpStatus, healthStatus, redisConnectionHealthy } 
 import { resolveBotAiMaxCallsPerGame, resolvePort, resolveTrustProxy } from "../src/config";
 
 describe("resolveTrustProxy", () => {
-  it("mặc định 1: server chạy sau proxy của Render", () => {
+  it("mặc định 1: server chạy sau Nginx trên VPS", () => {
     expect(resolveTrustProxy({})).toBe(1);
   });
 
@@ -139,16 +139,15 @@ describe("ranh giới module giữa các workspace", () => {
 });
 
 describe("buildVersion", () => {
-  it("rút gọn SHA của Render thành 7 ký tự", () => {
-    expect(buildVersion({ RENDER_GIT_COMMIT: "05f3d3812ab4c9d0e1f2" })).toBe("05f3d38");
+  it("rút gọn GIT_COMMIT thành 7 ký tự", () => {
+    expect(buildVersion({ GIT_COMMIT: "05f3d3812ab4c9d0e1f2" })).toBe("05f3d38");
   });
 
-  it("ưu tiên GIT_COMMIT đặt tay hơn biến của Render", () => {
-    expect(buildVersion({ GIT_COMMIT: "abcdef1234", RENDER_GIT_COMMIT: "9999999" })).toBe("abcdef1");
+  it("không còn đọc biến của Render", () => {
+    expect(buildVersion({ RENDER_GIT_COMMIT: "05f3d3812ab4c9d0e1f2" })).toBe("dev");
   });
 
   it.each(["", "   "])("coi giá trị rỗng như không khai báo: %s", (value) => {
-    expect(buildVersion({ GIT_COMMIT: value, RENDER_GIT_COMMIT: "05f3d38" })).toBe("05f3d38");
     expect(buildVersion({ GIT_COMMIT: value })).toBe("dev");
   });
 

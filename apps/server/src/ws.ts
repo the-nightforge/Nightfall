@@ -65,7 +65,8 @@ interface AuthedSocket extends Socket {
  * io.on("connection", ...), không có cách nào import thẳng vào test.
  *
  * ZodError nghĩa là payload không khớp schema hiện tại - client cũ đã cache
- * trên Vercel còn gửi hình dạng payload cũ (ví dụ room:update-avatar kèm một
+ * trong trình duyệt/PWA còn gửi hình dạng payload cũ (ví dụ room:update-avatar
+ * kèm một
  * chuỗi base64, từ trước khi schema bị siết lại chỉ còn nhận payload rỗng) là
  * đường THẬT dẫn tới đây, không phải lỗi lập trình. "Có lỗi xảy ra, vui lòng
  * thử lại" đúng nhưng vô dụng ở đây: bấm lại gửi lại đúng payload cũ đó, lỗi
@@ -109,7 +110,8 @@ const MAX_LOGGED_MESSAGE = 300;
  *
  *  - `RoomError`/`GameError` là LUẬT CHƠI. "Phòng đã đầy" xảy ra hàng trăm lần
  *    mỗi ngày và là hành vi đúng; ghi lại là tự dìm chết log của mình.
- *  - `ZodError` là CLIENT CŨ còn cache trên Vercel gửi hình dạng payload cũ -
+ *  - `ZodError` là CLIENT CŨ còn cache trong trình duyệt/PWA gửi hình dạng
+ *    payload cũ -
  *    khó chịu nhưng không phải bug của bản đang chạy.
  *  - Nhánh cuối là LỖI LẬP TRÌNH. Một `TypeError` trong `submitNightAction` đi
  *    qua đây, hoá thành "Có lỗi xảy ra, vui lòng thử lại" gửi cho người chơi,
@@ -295,7 +297,8 @@ export function setupSocket(io: SocketServer): void {
      * Chỉ còn đường XOÁ. Ảnh đi lên qua PUT /api/players/me/avatar, nơi có
      * kiểm magic bytes và xử lý ảnh - gửi vài MB base64 qua socket thì snapshot
      * của cả phòng phình theo, đó chính là lỗi mà endpoint kia sinh ra để sửa.
-     * Giữ sự kiện lại vì client cũ đã cache trên Vercel vẫn phải bấm Xóa được.
+     * Giữ sự kiện lại vì client cũ đã cache trong trình duyệt/PWA vẫn phải bấm
+     * Xóa được.
      */
     handler(CLIENT_EVENTS.ROOM_UPDATE_AVATAR, async (payload) => {
       updateAvatarPayload.parse(payload);

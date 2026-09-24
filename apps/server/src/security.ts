@@ -5,7 +5,7 @@ import helmet, { type HelmetOptions } from "helmet";
  * phần lớn bộ header của helmet là "dựng rào ở chỗ không có đường" - nhưng
  * rào rẻ, và có hai cái thực sự đáng:
  *
- *  - `Strict-Transport-Security`: Render kết thúc TLS trước khi request tới
+ *  - `Strict-Transport-Security`: Nginx kết thúc TLS trước khi request tới
  *    đây, nên chỉ có ta mới nói được với trình duyệt "lần sau đừng thử http".
  *  - `X-Content-Type-Options: nosniff`: một endpoint lỗi trả JSON mang chuỗi
  *    do người chơi nhập (biệt danh) không bao giờ được trình duyệt đoán thành

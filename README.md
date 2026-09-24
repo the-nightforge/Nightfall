@@ -468,7 +468,7 @@ Operational details — keys, TTLs, log lines, deploy checklist, when to bump
 | `DELETE` | `/api/players/me/avatar` | — | `204` | Bearer auth. Clears the avatar and deletes the stored object. Succeeds even when object storage is not configured — the database is the source of truth for "has an avatar". |
 | `GET` | `/api/health` | — | `{ ok, status, db, redis, version, startedAt, botSpeech }` | `503` when PostgreSQL is down. Redis trouble reports `status: "degraded"`, `redis: false` and still returns `200` — deliberately: going red invites a restart, and a restart while Redis is down is exactly the moment in-memory rooms cannot be recovered. `status` is `ok`, `degraded` or `down`. `botSpeech` carries cumulative counters of the bot speech layer — counts and milliseconds only, no room codes or chat content. |
 
-`version` is the first 7 characters of the running commit (from `GIT_COMMIT`, a Docker build arg on the VPS, falling back to `RENDER_GIT_COMMIT`), or `dev` outside a deploy environment — compare it against `git rev-parse --short HEAD` to confirm what is actually live.
+`version` is the first 7 characters of the running commit (from `GIT_COMMIT`, a Docker build arg set by `deploy/deploy.sh`), or `dev` outside a deploy environment — compare it against `git rev-parse --short HEAD` to confirm what is actually live.
 
 ### Socket.IO
 

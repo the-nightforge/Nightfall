@@ -29,7 +29,7 @@ export function initObservability(env: NodeJS.ProcessEnv = process.env): boolean
     dsn,
     environment: env.NODE_ENV ?? "development",
     release: buildVersion(env),
-    // Chỉ lỗi, không tracing: server này chạy trên Render Free và mỗi span gửi
+    // Chỉ lỗi, không tracing: server này chạy trên một VPS 2GB và mỗi span gửi
     // đi là băng thông + hạn mức Sentry Free. Bật lại khi có lý do cụ thể.
     tracesSampleRate: 0,
     // Không gửi IP người chơi hay header request: game chỉ có biệt danh, và

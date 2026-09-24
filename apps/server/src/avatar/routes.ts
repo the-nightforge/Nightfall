@@ -9,7 +9,7 @@ export const avatarRouter = Router();
 
 /**
  * memoryStorage: ảnh chỉ sống trong RAM đủ lâu để sharp xử lý rồi đi thẳng lên
- * bucket - không có file tạm nào trên đĩa Render để mà quên dọn.
+ * bucket - không có file tạm nào trên đĩa container để mà quên dọn.
  *
  * Trần 5MB đặt ngay ở tầng parser: multer ngắt luồng khi vượt, nên một request
  * 500MB không bao giờ được cấp phát đủ bộ nhớ để trở thành vấn đề.

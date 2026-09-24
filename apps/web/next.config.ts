@@ -36,7 +36,7 @@ const nextConfig: NextConfig = {
 /*
  * withSentryConfig chỉ đáng giá khi có token để tải source map lên; không có
  * thì nó chỉ thêm tiếng ồn vào log build. `SENTRY_AUTH_TOKEN` + `SENTRY_ORG`
- * + `SENTRY_PROJECT` là ba biến của Vercel; thiếu bất kỳ cái nào thì bỏ qua
+ * + `SENTRY_PROJECT` là ba biến đặt lúc build image; thiếu bất kỳ cái nào thì bỏ qua
  * bước tải và build đúng như không có Sentry. SDK ở runtime (instrumentation*)
  * vẫn tự tắt khi không có NEXT_PUBLIC_SENTRY_DSN, độc lập với chỗ này.
  */

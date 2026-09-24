@@ -33,8 +33,8 @@ async function main(): Promise<void> {
   }
 
   const app = express();
-  // Rate limit của /api/players khoá theo req.ip, mà sau proxy của Render thì
-  // req.ip là IP load balancer nếu không khai báo - cả thiên hạ chung một rổ.
+  // Rate limit của /api/players khoá theo req.ip, mà sau Nginx thì
+  // req.ip là IP của Nginx nếu không khai báo - cả thiên hạ chung một rổ.
   app.set("trust proxy", config.trustProxy);
   // Trước cors: header an toàn phải có mặt cả trên phản hồi preflight.
   app.use(securityHeaders());

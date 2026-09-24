@@ -1,5 +1,4 @@
-# Web (Next.js) cho self-host trên VPS. Vercel không dùng file này — nó build
-# theo vercel.json.
+# Web (Next.js) cho self-host trên VPS.
 #
 # QUAN TRỌNG: NEXT_PUBLIC_SERVER_URL được nướng vào bundle LÚC BUILD
 # (apps/web/src/lib/socket.ts và 4 chỗ khác đọc process.env trực tiếp, không có

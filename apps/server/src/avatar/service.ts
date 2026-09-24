@@ -31,7 +31,7 @@ export function avatarObjectKey(playerId: string): string {
  * thử lại, và object thua cuộc do chính nó dọn.
  *
  * KHÔNG dùng withPlayerRoomLock: đó là khoá trong tiến trình nên nó sai ngay
- * khi Render chạy nhiều instance, và nó sẽ nối hàng thao tác avatar phía sau
+ * khi có hơn một instance, và nó sẽ nối hàng thao tác avatar phía sau
  * thao tác vào/ra phòng.
  *
  * Xoá object cũ luôn bọc catch: object mồ côi là rác đáng tiếc, còn ném lỗi ở

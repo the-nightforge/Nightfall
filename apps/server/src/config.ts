@@ -139,7 +139,7 @@ export function resolveCorsOrigin(env: NodeJS.ProcessEnv): string {
   if (env.NODE_ENV === "production" && value === "*") {
     throw new Error(
       "CORS_ORIGIN phải là danh sách origin cụ thể ở production, không được để `*`. " +
-        "Đặt nó bằng đúng origin của frontend, ví dụ https://ten-du-an.vercel.app",
+        "Đặt nó bằng đúng origin của frontend, ví dụ https://masoionline.duckdns.org",
     );
   }
   return value;
@@ -198,8 +198,8 @@ export const config = {
   /**
    * Số hop proxy tin được, truyền thẳng cho `app.set("trust proxy", ...)`.
    *
-   * Mặc định 1 vì server chạy sau proxy của Render: để 0 ở đó thì `req.ip` là
-   * IP của load balancer, cả thiên hạ dùng chung một rổ và người chơi thật chặn
+   * Mặc định 1 vì server chạy sau Nginx trên VPS: để 0 ở đó thì `req.ip` là
+   * IP của Nginx, cả thiên hạ dùng chung một rổ và người chơi thật chặn
    * lẫn nhau. Ngược lại, nếu bạn tự host và phơi cổng thẳng ra Internet thì đặt
    * 0, vì lúc đó client tự bịa được header X-Forwarded-For.
    *
