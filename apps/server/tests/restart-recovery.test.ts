@@ -23,10 +23,24 @@ vi.mock("../src/redis", () => ({
       store.data.set(key, value);
       return "OK";
     },
-    del: async (key: string) => (store.data.delete(key) ? 1 : 0),
+    del: async (...keys: string[]) => {
+      let removed = 0;
+      for (const key of keys) if (store.data.delete(key)) removed += 1;
+      return removed;
+    },
     exists: async (key: string) => (store.data.has(key) ? 1 : 0),
-    eval: async (_s: string, _n: number, key: string, value: string) => {
+    eval: async (
+      _s: string,
+      _n: number,
+      key: string,
+      seqKey: string,
+      value: string,
+      opSeq: string,
+    ) => {
+      const current = store.data.get(seqKey);
+      if (current !== undefined && Number(current) > Number(opSeq)) return 0;
       store.data.set(key, value);
+      store.data.set(seqKey, opSeq);
       return 1;
     },
   },
@@ -229,12 +243,13 @@ describe("restart giữa các pha", () => {
   });
 
   it("DEFENSE giữ nguyên bị cáo", async () => {
-    const { room: before } = await playUntil("RCDEF", "VOTING", (room) => {
+    const { room: before, modules } = await playUntil("RCDEF", "VOTING", (room) => {
       const alive = room.engine!.state.players.filter((p) => p.alive);
       for (const voter of alive) room.engine!.submitVote(voter.id, alive[0]!.id);
     });
-    const modules = await bootProcess();
-    // Chốt vote sơ bộ để phòng bước vào phiên toà, rồi mới lưu.
+    // Chốt vote sơ bộ để phòng bước vào phiên toà, rồi mới lưu. Lưu bằng chính
+    // process của `playUntil`: persist qua một process khác có `opSeqs` trống
+    // sẽ ghi opSeq 1 và CAS (đúng như Redis thật) sẽ bỏ lời ghi về muộn đó.
     before.engine!.resolveNomination(before.config.defenseSeconds * 1_000);
     expect(before.engine!.state.phase).toBe("DEFENSE");
     await modules.persistRoom(before);
@@ -246,7 +261,7 @@ describe("restart giữa các pha", () => {
   });
 
   it("FINAL_VOTE giữ nguyên phiếu Treo/Tha đã bỏ", async () => {
-    const { room: before } = await playUntil("RCFIN", "VOTING", (room) => {
+    const { room: before, modules } = await playUntil("RCFIN", "VOTING", (room) => {
       const alive = room.engine!.state.players.filter((p) => p.alive);
       for (const voter of alive) room.engine!.submitVote(voter.id, alive[0]!.id);
     });
@@ -257,7 +272,6 @@ describe("restart giữa các pha", () => {
     before.engine!.submitFinalVote(voters[1]!.id, false);
     const finalVotesBefore = { ...before.engine!.state.trial!.finalVotes };
 
-    const modules = await bootProcess();
     await modules.persistRoom(before);
     const { room: after } = await restartAndLoad("RCFIN");
 
@@ -268,7 +282,7 @@ describe("restart giữa các pha", () => {
   });
 
   it("giữ nguyên phản ứng Thợ Săn đang chờ bắn", async () => {
-    const { room: before } = await playUntil("RCHUN", "NIGHT");
+    const { room: before, modules } = await playUntil("RCHUN", "NIGHT");
     const hunter = before.engine!.state.players.find((p) => p.role === "HUNTER");
     // Không dùng `if (!hunter) return`: một test tự bỏ qua chính mình là một
     // test luôn xanh. Cấu hình ở `lobby()` bật `hunter`, nên thiếu vai này
@@ -282,7 +296,6 @@ describe("restart giữa các pha", () => {
     };
     before.engine!.beginHunterShot(15_000);
 
-    const modules = await bootProcess();
     await modules.persistRoom(before);
     const { room: after } = await restartAndLoad("RCHUN");
 

@@ -15,6 +15,7 @@ import { redis } from "./redis";
 import { config } from "./config";
 import { allowAction } from "./rate-limit";
 import { buildVersion, healthHttpStatus, healthStatus, redisConnectionHealthy } from "./health";
+import { persistStats } from "./persistence/redis-store";
 import { speechStats } from "./bots/speech-stats";
 import { avatarRouter } from "./avatar/routes";
 import { optionalPlayer, requirePlayer, type PlayerRequest } from "./auth";
@@ -325,6 +326,9 @@ apiRouter.get("/health", async (_req, res) => {
     ok: dbOk,
     status: healthStatus(health),
     ...health,
+    // Envelope lớn nhất đã ghi từ lúc khởi động. Số này quyết định có cần gộp
+    // các lần ghi của một phòng hay không.
+    persistMaxBytes: persistStats().maxEnvelopeBytes,
     version: buildVersion(process.env),
     startedAt: new Date(STARTED_AT).toISOString(),
     // Thống kê tầng diễn đạt lời bot, cộng dồn từ lúc tiến trình khởi động.

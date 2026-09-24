@@ -10,6 +10,13 @@ const QUARANTINE_TTL_SECONDS = 24 * 60 * 60;
 
 const roomKey = (code: string): string => `room:${code}`;
 
+/**
+ * `opSeq` của bản đang lưu, tách khỏi envelope để script CAS so một số nguyên
+ * thay vì `cjson.decode` cả ván (tới 2000 tin chat) trên luồng duy nhất của
+ * Redis ở MỖI thao tác. Sống và chết cùng khoá phòng: cùng TTL, xoá cùng lúc.
+ */
+const seqKey = (code: string): string => `room:${code}:seq`;
+
 export type LoadResult =
   | { status: "ok"; envelope: RoomEnvelopeV1 }
   | { status: "missing" }
@@ -23,18 +30,23 @@ export type LoadResult =
  * muộn - nó mô tả một tình thế đã cũ. Đè lên là làm mất những gì vừa xảy ra,
  * nên nó bị bỏ. So sánh phải nằm TRONG Redis chứ không phải đọc-rồi-ghi ở đây:
  * hai lời ghi chen nhau giữa hai bước đó sẽ lọt qua.
+ *
+ * Envelope ghi từ trước khi có khoá seq thì không có khoá đó: lời ghi đầu
+ * tiên sau deploy được nhận. Điều này đúng, vì `loadRoomSnapshot` gieo dãy số
+ * từ chính envelope đó nên lời ghi ấy luôn mang `opSeq` lớn hơn.
  */
 const CAS_SCRIPT = `
-local current = redis.call('GET', KEYS[1])
-if current then
-  local ok, parsed = pcall(cjson.decode, current)
-  if ok and parsed.opSeq and tonumber(parsed.opSeq) > tonumber(ARGV[2]) then
-    return 0
-  end
+local current = redis.call('GET', KEYS[2])
+if current and tonumber(current) > tonumber(ARGV[2]) then
+  return 0
 end
 redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[3])
+redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[3])
 return 1
 `;
+
+/** Envelope lớn nhất đã ghi từ lúc process khởi động, tính bằng byte UTF-8. */
+let maxEnvelopeBytes = 0;
 
 /**
  * Ghi snapshot. Best-effort có chủ đích: Redis là bản sao, RAM mới là nguồn
@@ -44,12 +56,16 @@ export async function saveEnvelope(
   envelope: RoomEnvelopeV1,
   ttlSeconds: number,
 ): Promise<void> {
+  const payload = JSON.stringify(envelope);
+  const bytes = Buffer.byteLength(payload);
+  if (bytes > maxEnvelopeBytes) maxEnvelopeBytes = bytes;
   try {
     await redis.eval(
       CAS_SCRIPT,
-      1,
+      2,
       roomKey(envelope.room.code),
-      JSON.stringify(envelope),
+      seqKey(envelope.room.code),
+      payload,
       String(envelope.opSeq),
       String(ttlSeconds),
     );
@@ -57,6 +73,14 @@ export async function saveEnvelope(
     // Không log ở đây: `redis.ts` đã có bộ gộp cảnh báo mất kết nối, và một lần
     // ghi hỏng mỗi hành động sẽ nhấn chìm log.
   }
+}
+
+/**
+ * Số đo cho `/api/health`: đủ để biết có cần gộp nhiều lần ghi của một phòng
+ * làm một hay không. Chưa gộp vì chưa có số nào nói rằng cần.
+ */
+export function persistStats(): { maxEnvelopeBytes: number } {
+  return { maxEnvelopeBytes };
 }
 
 /**
@@ -83,7 +107,7 @@ async function quarantine(code: string, raw: string, reason: string): Promise<vo
       "EX",
       QUARANTINE_TTL_SECONDS,
     );
-    await redis.del(roomKey(code));
+    await redis.del(roomKey(code), seqKey(code));
   } catch {
     /* Redis hỏng thì không cách ly được; lần đọc sau sẽ thử lại */
   }
@@ -133,7 +157,9 @@ export async function loadEnvelope(code: string): Promise<LoadResult> {
 /** Xoá hẳn snapshot của phòng. Dùng khi phòng bị xoá khỏi bộ nhớ. */
 export async function deleteEnvelope(code: string): Promise<void> {
   try {
-    await redis.del(roomKey(code));
+    // Khoá seq phải đi cùng: phòng mới trùng mã bắt đầu lại từ opSeq 1, và một
+    // khoá seq cũ còn sót sẽ từ chối mọi lời ghi của nó.
+    await redis.del(roomKey(code), seqKey(code));
   } catch {
     /* hết TTL thì nó cũng tự biến mất */
   }

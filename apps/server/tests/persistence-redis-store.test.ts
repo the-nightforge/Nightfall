@@ -19,31 +19,28 @@ vi.mock("../src/redis", () => ({
       store.ttl.set(key, seconds);
       return "OK";
     },
-    del: async (key: string) => {
+    del: async (...keys: string[]) => {
       if (store.down) throw new Error("ECONNREFUSED");
-      return store.data.delete(key) ? 1 : 0;
+      let removed = 0;
+      for (const key of keys) if (store.data.delete(key)) removed += 1;
+      return removed;
     },
     eval: async (
       _script: string,
       _keys: number,
       key: string,
+      seqKey: string,
       value: string,
-      _opSeq: string,
+      opSeq: string,
       seconds: string,
     ) => {
       if (store.down) throw new Error("ECONNREFUSED");
-      const existing = store.data.get(key);
-      if (existing) {
-        try {
-          const current = JSON.parse(existing) as { opSeq?: number };
-          const next = JSON.parse(value) as { opSeq?: number };
-          if ((current.opSeq ?? -1) > (next.opSeq ?? -1)) return 0;
-        } catch {
-          /* bản hỏng thì ghi đè được */
-        }
-      }
+      const current = store.data.get(seqKey);
+      if (current !== undefined && Number(current) > Number(opSeq)) return 0;
       store.data.set(key, value);
       store.ttl.set(key, Number(seconds));
+      store.data.set(seqKey, opSeq);
+      store.ttl.set(seqKey, Number(seconds));
       return 1;
     },
   },
@@ -53,6 +50,7 @@ const {
   ROOM_TTL_SECONDS,
   deleteEnvelope,
   loadEnvelope,
+  persistStats,
   saveEnvelope,
 } = await import("../src/persistence/redis-store");
 const { PERSISTENCE_VERSION } = await import("../src/persistence/schema");
@@ -174,6 +172,22 @@ describe("ghi snapshot", () => {
 
     await expect(saveEnvelope(envelope(), ROOM_TTL_SECONDS)).resolves.toBeUndefined();
   });
+
+  it("khoá seq mang opSeq và cùng TTL với khoá phòng", async () => {
+    await saveEnvelope(envelope(7), ROOM_TTL_SECONDS);
+
+    expect(store.data.get("room:ABCDE:seq")).toBe("7");
+    expect(store.ttl.get("room:ABCDE:seq")).toBe(ROOM_TTL_SECONDS);
+  });
+
+  it("ghi nhớ envelope lớn nhất tính bằng byte UTF-8", async () => {
+    const e = envelope(1);
+    await saveEnvelope(e, ROOM_TTL_SECONDS);
+
+    expect(persistStats().maxEnvelopeBytes).toBeGreaterThanOrEqual(
+      Buffer.byteLength(JSON.stringify(e)),
+    );
+  });
 });
 
 describe("xoá snapshot", () => {
@@ -183,5 +197,25 @@ describe("xoá snapshot", () => {
     await deleteEnvelope("ABCDE");
 
     expect(store.data.has("room:ABCDE")).toBe(false);
+  });
+
+  it("xoá cả khoá seq, nên phòng mới cùng mã ghi lại được từ opSeq 1", async () => {
+    await saveEnvelope(envelope(50), ROOM_TTL_SECONDS);
+    await deleteEnvelope("ABCDE");
+    await saveEnvelope(envelope(1), ROOM_TTL_SECONDS);
+
+    const result = await loadEnvelope("ABCDE");
+
+    expect(store.data.get("room:ABCDE:seq")).toBe("1");
+    expect(result.status === "ok" && result.envelope.opSeq).toBe(1);
+  });
+
+  it("cách ly bản hỏng cũng xoá khoá seq", async () => {
+    await saveEnvelope(envelope(50), ROOM_TTL_SECONDS);
+    store.data.set("room:ABCDE", "{ không phải json");
+
+    await loadEnvelope("ABCDE");
+
+    expect(store.data.has("room:ABCDE:seq")).toBe(false);
   });
 });

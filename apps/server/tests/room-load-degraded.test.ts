@@ -19,17 +19,29 @@ vi.mock("../src/redis", () => ({
       store.data.set(key, value);
       return "OK";
     },
-    del: async (key: string) => {
+    del: async (...keys: string[]) => {
       if (store.down) throw new Error("ECONNREFUSED");
-      return store.data.delete(key) ? 1 : 0;
+      let removed = 0;
+      for (const key of keys) if (store.data.delete(key)) removed += 1;
+      return removed;
     },
     exists: async (key: string) => {
       if (store.down) throw new Error("ECONNREFUSED");
       return store.data.has(key) ? 1 : 0;
     },
-    eval: async (_s: string, _n: number, key: string, value: string) => {
+    eval: async (
+      _s: string,
+      _n: number,
+      key: string,
+      seqKey: string,
+      value: string,
+      opSeq: string,
+    ) => {
       if (store.down) throw new Error("ECONNREFUSED");
+      const current = store.data.get(seqKey);
+      if (current !== undefined && Number(current) > Number(opSeq)) return 0;
       store.data.set(key, value);
+      store.data.set(seqKey, opSeq);
       return 1;
     },
   },

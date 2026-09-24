@@ -13,10 +13,24 @@ vi.mock("../src/redis", () => ({
       store.data.set(key, value);
       return "OK";
     },
-    del: async (key: string) => (store.data.delete(key) ? 1 : 0),
+    del: async (...keys: string[]) => {
+      let removed = 0;
+      for (const key of keys) if (store.data.delete(key)) removed += 1;
+      return removed;
+    },
     exists: async (key: string) => (store.data.has(key) ? 1 : 0),
-    eval: async (_s: string, _n: number, key: string, value: string) => {
+    eval: async (
+      _s: string,
+      _n: number,
+      key: string,
+      seqKey: string,
+      value: string,
+      opSeq: string,
+    ) => {
+      const current = store.data.get(seqKey);
+      if (current !== undefined && Number(current) > Number(opSeq)) return 0;
       store.data.set(key, value);
+      store.data.set(seqKey, opSeq);
       return 1;
     },
   },

@@ -233,6 +233,14 @@ jobs:
       - name: Migrate database
         run: npm run db:migrate
 
+      - name: CAS trên Redis thật
+        # Mọi test khác mock `redis.eval`; đây là chỗ duy nhất script Lua chạy
+        # trên Redis thật. REDIS_URL lấy từ env của job.
+        working-directory: apps/server
+        run: npx vitest run tests/persistence-cas-redis.test.ts
+        env:
+          REDIS_INTEGRATION: "1"
+
       - name: Start server
         # Chạy đúng artefact production (dist/), không phải tsx - cùng thứ mà
         # Dockerfile.server đóng gói. Log ra file để bước "Server log" in lại
