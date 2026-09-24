@@ -79,13 +79,13 @@ while :; do
 done
 
 echo "==> Khởi động stack"
-compose up -d --no-build
+compose up -d --no-build || rollback_and_fail "compose up thất bại"
 
 echo "==> Chờ health (tối đa 180s)"
 deadline=$((SECONDS + 180))
 until curl -fsS http://127.0.0.1:4100/api/health > /dev/null 2>&1; do
     if (( SECONDS > deadline )); then
-        docker logs masoi-server --tail 100 >&2
+        docker logs masoi-server --tail 100 >&2 || true
         rollback_and_fail "health check không xanh sau 180s"
     fi
     sleep 5
@@ -103,7 +103,7 @@ echo "==> Chờ web (tối đa 120s)"
 deadline=$((SECONDS + 120))
 until curl -fsS -o /dev/null http://127.0.0.1:3000/ 2>/dev/null; do
     if (( SECONDS > deadline )); then
-        docker logs masoi-web --tail 100 >&2
+        docker logs masoi-web --tail 100 >&2 || true
         rollback_and_fail "web không phục vụ sau 120s"
     fi
     sleep 5
