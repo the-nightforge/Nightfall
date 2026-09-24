@@ -5,7 +5,6 @@
 **A real-time multiplayer Werewolf (Mafia) game — 19 roles, 17 dynamic events, voice chat, and AI bots that actually reason.**
 
 [![CI](https://github.com/the-nightforge/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/the-nightforge/ma-soi-online/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-8320%20passing-brightgreen)](#testing)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
@@ -551,13 +550,12 @@ Connect with `io(SERVER_URL, { auth: { playerId, token } })`. Every payload is Z
 
 ## Testing
 
-| Package | Runner | Tests |
-|---|---|---|
-| `@masoi/shared` | Vitest | **216** |
-| `@masoi/game-engine` | Vitest | **5294** |
-| `@masoi/server` | Vitest | **1192** |
-| `@masoi/web` | `node:test` | **1618** |
-| | | **8320 total** |
+| Package | Runner |
+|---|---|
+| `@masoi/shared` | Vitest |
+| `@masoi/game-engine` | Vitest |
+| `@masoi/server` | Vitest |
+| `@masoi/web` | `node:test` |
 
 Every package typechecks its tests as well as its sources — `npm run lint` runs `tsc` over both. This matters more than it sounds: the server's tests were unchecked until recently, and in that gap more than forty fixtures drifted away from the types they claimed to build, several of them still setting engine fields that had been renamed away.
 
@@ -627,7 +625,7 @@ Stated plainly, because knowing where the edges are is more useful than pretendi
 
 ## Documentation
 
-Design specifications and verification reports live in [`docs/`](docs/) — including the bot AI phase reports, the roles and events balance design, the voice chat spec, and the [crash recovery runbook](docs/operations-recovery.md).
+Design specifications and verification reports live in [`docs/`](docs/) — including the bot AI phase reports, the roles and events balance design, the voice chat spec, and the [crash recovery runbook](docs/operations-recovery.md). Start from the index at [docs/README.md](docs/README.md).
 
 ---
 
