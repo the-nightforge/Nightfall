@@ -16,7 +16,7 @@
     "@aws-sdk/client-s3": "^3.1121.0",
     "@masoi/game-engine": "*",
     "@masoi/shared": "*",
-    "@prisma/client": "^5.18.0",
+    "@prisma/client": "^6.19.3",
     "@sentry/node": "^10.73.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -25,7 +25,7 @@
     "ioredis": "^5.4.1",
     "livekit-server-sdk": "^2.18.0",
     "multer": "^2.3.0",
-    "prisma": "^5.18.0",
+    "prisma": "^6.19.3",
     "sharp": "^0.35.4",
     "socket.io": "^4.7.5",
     "zod": "^3.23.8"
