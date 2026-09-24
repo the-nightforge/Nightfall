@@ -14,6 +14,7 @@ import {
 import { redis } from "./redis";
 import { config } from "./config";
 import { allowAction } from "./rate-limit";
+import { activeGameCount } from "./rooms/store";
 import { buildVersion, healthHttpStatus, healthStatus, redisConnectionHealthy } from "./health";
 import { speechStats } from "./bots/speech-stats";
 import { avatarRouter } from "./avatar/routes";
@@ -325,6 +326,8 @@ apiRouter.get("/health", async (_req, res) => {
     ok: dbOk,
     status: healthStatus(health),
     ...health,
+    // `deploy/deploy.sh` chờ số này về 0 trước khi thay container.
+    activeGames: activeGameCount(),
     version: buildVersion(process.env),
     startedAt: new Date(STARTED_AT).toISOString(),
     // Thống kê tầng diễn đạt lời bot, cộng dồn từ lúc tiến trình khởi động.

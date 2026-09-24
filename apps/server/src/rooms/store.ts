@@ -135,6 +135,23 @@ export function allRooms(): Room[] {
   return [...rooms.values()];
 }
 
+/**
+ * Số ván đang có người thật ngồi chơi. `deploy/deploy.sh` chờ số này về 0
+ * trước khi thay container, để một lần push không cắt ngang ván của ai.
+ *
+ * Phòng chỉ còn bot, hoặc mọi người thật đã rớt mạng, không tính: chờ chúng là
+ * chờ một thứ không ai đang xem.
+ */
+export function activeGameCount(list: readonly Room[] = allRooms()): number {
+  return list.filter(
+    (room) =>
+      room.status === "IN_GAME" &&
+      room.engine !== null &&
+      room.engine.state.phase !== "GAME_OVER" &&
+      room.members.some((m) => !m.isBot && m.connected),
+  ).length;
+}
+
 export function createRoom(code: string, host: RoomMember): Room {
   const room: Room = {
     code,
@@ -240,6 +257,17 @@ export async function persistRoom(room: Room): Promise<void> {
     room.engine?.state.phase === "GAME_OVER" ? FINISHED_ROOM_TTL_SECONDS : ROOM_TTL_SECONDS;
 
   await saveEnvelope(serializeRoom(room, nextOpSeq(room.code)), ttl);
+}
+
+/**
+ * Ghi mọi phòng trong RAM. Gọi lúc process sắp tắt (SIGTERM khi deploy).
+ *
+ * Mỗi thao tác đã tự `void persistRoom(...)`, nhưng lời ghi cuối có thể vẫn
+ * còn đang bay khi `redis.quit()` chạy. Đây là lưới an toàn, không thay chúng.
+ * `allSettled`: một phòng dựng envelope hỏng không được giữ các phòng khác lại.
+ */
+export async function flushAllRooms(): Promise<void> {
+  await Promise.allSettled(allRooms().map((room) => persistRoom(room)));
 }
 
 export async function deletePersistedRoom(code: string): Promise<void> {

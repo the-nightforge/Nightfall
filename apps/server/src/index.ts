@@ -18,6 +18,7 @@ import { apiErrorFallback } from "./error-middleware";
 import { securityHeaders } from "./security";
 import { attachExpressErrorReporter, flushObservability, observabilityEnabled } from "./observability";
 import { botPolicy } from "./bots/learned-policy";
+import { flushAllRooms } from "./rooms/store";
 
 async function main(): Promise<void> {
   const corsOrigin = config.corsOrigin === "*" ? true : config.corsOrigin.split(",");
@@ -97,6 +98,9 @@ async function main(): Promise<void> {
     console.log("[server] Đang tắt...");
     const forceExit = setTimeout(() => process.exit(1), 5_000);
     forceExit.unref();
+    // Ghi phòng TRƯỚC khi đóng socket: `io.close()` kích hoạt handler
+    // disconnect, còn thứ cần lưu là ván lúc người chơi vẫn đang ngồi đó.
+    await flushAllRooms();
     io.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await Promise.allSettled([prisma.$disconnect(), redis.quit(), flushObservability()]);
