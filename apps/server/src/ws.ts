@@ -28,9 +28,11 @@ import {
 import { config } from "./config";
 import { reportError } from "./observability";
 import { GameError } from "@masoi/game-engine";
+import type { GameEngine } from "@masoi/game-engine";
 import { roomService, RoomError, scheduleAbandonedRoomCheck } from "./rooms/service";
 import { getRoomSyncByPlayer } from "./rooms/index-helpers";
 import { getRoom, persistRoom } from "./rooms/store";
+import type { Room } from "./rooms/store";
 import { loadAndResumeRoom } from "./rooms/load";
 import {
   trackSocket,
@@ -143,6 +145,18 @@ export function socketErrorLog(
   };
 }
 
+/**
+ * Phòng đang có ván của người gửi, hoặc ném đúng câu lỗi người chơi vẫn thấy.
+ * Mọi handler hành động trong ván đều mở đầu bằng bốn dòng này.
+ */
+function requireGameRoom(playerId: string): Room & { engine: GameEngine } {
+  const roomCode = getRoomSyncByPlayer(playerId);
+  if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
+  const room = getRoom(roomCode);
+  if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
+  return room as Room & { engine: GameEngine };
+}
+
 export function setupSocket(io: SocketServer): void {
   // Xác thực ngay khi kết nối: playerId + token từ localStorage client
   io.use(async (socket, next) => {
@@ -193,6 +207,14 @@ export function setupSocket(io: SocketServer): void {
       socket.emit(SERVER_EVENTS.ERROR, { message: socketErrorMessage(err) });
     };
 
+    // Khoá `${action}:${playerId}` phải giữ nguyên từng chữ: `avatar:` dùng
+    // chung rổ với route HTTP (xem ROOM_UPDATE_AVATAR bên dưới).
+    const throttle = (action: string, limit: number, windowMs: number): void => {
+      if (!allowAction(`${action}:${playerId}`, limit, windowMs)) {
+        throw new RoomError("Thao tác quá nhanh");
+      }
+    };
+
     // Tự động rejo vào phòng cũ nếu còn session
     (async () => {
       const outcome = await reconnectPlayer(playerId, {
@@ -237,7 +259,7 @@ export function setupSocket(io: SocketServer): void {
 
     handler(CLIENT_EVENTS.ROOM_CREATE, async () => {
       createRoomPayload.parse({});
-      if (!allowAction(`create:${playerId}`, 3, 10_000)) throw new RoomError("Thao tác quá nhanh");
+      throttle("create", 3, 10_000);
       const player = await prisma.player.findUnique({ where: { id: playerId } });
       if (!player) throw new RoomError("Không tìm thấy người chơi");
       const room = await roomService.create(playerId, player.nickname);
@@ -246,7 +268,7 @@ export function setupSocket(io: SocketServer): void {
 
     handler(CLIENT_EVENTS.ROOM_JOIN, async (payload) => {
       const { code } = joinRoomPayload.parse(payload);
-      if (!allowAction(`join:${playerId}`, 5, 10_000)) throw new RoomError("Thao tác quá nhanh");
+      throttle("join", 5, 10_000);
       const player = await prisma.player.findUnique({ where: { id: playerId } });
       if (!player) throw new RoomError("Không tìm thấy người chơi");
       const room = await roomService.join(playerId, player.nickname, code);
@@ -267,13 +289,13 @@ export function setupSocket(io: SocketServer): void {
        * vòng lặp emit không nhân tải lên theo số thành viên. Chốt lại bằng log
        * thật hoặc một vòng test tải rồi sửa ở đây - đừng coi chúng là đã xác nhận.
        */
-      if (!allowAction(`ready:${playerId}`, 10, 3_000)) throw new RoomError("Thao tác quá nhanh");
+      throttle("ready", 10, 3_000);
       roomService.setReady(playerId, ready);
     });
 
     handler(CLIENT_EVENTS.ROOM_KICK, async (payload) => {
       const { targetId } = kickPayload.parse(payload);
-      if (!allowAction(`kick:${playerId}`, 5, 10_000)) throw new RoomError("Thao tác quá nhanh");
+      throttle("kick", 5, 10_000);
       await roomService.kick(playerId, targetId);
     });
 
@@ -281,13 +303,13 @@ export function setupSocket(io: SocketServer): void {
       // Cùng hình với kick (`{ targetId }`) nên dùng chung `kickPayload`:
       // thêm một schema mới chỉ để đặt tên khác là thêm chỗ phải giữ đồng bộ.
       const { targetId } = kickPayload.parse(payload);
-      if (!allowAction(`transfer-host:${playerId}`, 5, 10_000)) throw new RoomError("Thao tác quá nhanh");
+      throttle("transfer-host", 5, 10_000);
       roomService.transferHost(playerId, targetId);
     });
 
     handler(CLIENT_EVENTS.ROOM_UPDATE_CONFIG, async (payload) => {
       const { config: cfg } = updateConfigPayload.parse(payload);
-      if (!allowAction(`config:${playerId}`, 10, 3_000)) throw new RoomError("Thao tác quá nhanh");
+      throttle("config", 10, 3_000);
       roomService.updateConfig(playerId, cfg);
     });
 
@@ -304,35 +326,32 @@ export function setupSocket(io: SocketServer): void {
       // allowAction lọc theo cửa sổ truyền vào lúc GỌI, nên một cửa sổ ngắn
       // hơn ở đây cho phép khoảng 30 lượt clearAvatar/phút qua socket trong
       // khi đường HTTP chỉ cho 5 lượt/phút cho đúng việc đó.
-      if (!allowAction(`avatar:${playerId}`, 5, 60_000)) throw new RoomError("Thao tác quá nhanh");
+      throttle("avatar", 5, 60_000);
       await clearAvatar(playerId);
     });
 
     handler(CLIENT_EVENTS.ROOM_ADD_BOT, async (payload) => {
       addBotPayload.parse(payload);
-      if (!allowAction(`add-bot:${playerId}`, 10, 5_000)) throw new RoomError("Thao tác quá nhanh");
+      throttle("add-bot", 10, 5_000);
       roomService.addBot(playerId);
     });
 
     handler(CLIENT_EVENTS.ROOM_START, async (payload) => {
       startGamePayload.parse(payload);
-      if (!allowAction(`start:${playerId}`, 5, 10_000)) throw new RoomError("Thao tác quá nhanh");
+      throttle("start", 5, 10_000);
       roomService.start(playerId);
     });
 
     handler(CLIENT_EVENTS.ROOM_RESET, async (payload) => {
       resetGamePayload.parse(payload);
-      if (!allowAction(`reset:${playerId}`, 5, 10_000)) throw new RoomError("Thao tác quá nhanh");
+      throttle("reset", 5, 10_000);
       roomService.reset(playerId);
     });
 
     handler(CLIENT_EVENTS.GAME_ACTION, async (payload) => {
       const parsed = gameActionPayload.parse(payload);
-      if (!allowAction(`act:${playerId}`, 15, 3_000)) throw new RoomError("Thao tác quá nhanh");
-      const roomCode = getRoomSyncByPlayer(playerId);
-      if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
-      const room = getRoom(roomCode);
-      if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
+      throttle("act", 15, 3_000);
+      const room = requireGameRoom(playerId);
 
       const primaryTarget = parsed.targetId ?? parsed.targetId1 ?? null;
       const secondaryTarget = parsed.targetId2 ?? null;
@@ -351,46 +370,35 @@ export function setupSocket(io: SocketServer): void {
       // `wolvesLocked`.
       maybeLockWolvesEarly(room);
       maybeEndWitchWindow(room);
-      broadcastRoom(roomCode);
+      broadcastRoom(room.code);
       void persistRoom(room);
     });
 
     handler(CLIENT_EVENTS.GAME_VOTE, async (payload) => {
       const { targetId } = votePayload.parse(payload);
-      if (!allowAction(`vote:${playerId}`, 10, 3_000)) throw new RoomError("Thao tác quá nhanh");
-      const roomCode = getRoomSyncByPlayer(playerId);
-      if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
-      const room = getRoom(roomCode);
-      if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
+      throttle("vote", 10, 3_000);
+      const room = requireGameRoom(playerId);
 
       room.engine.submitVote(playerId, targetId);
-      broadcastRoom(roomCode);
+      broadcastRoom(room.code);
       void persistRoom(room);
     });
 
     handler(CLIENT_EVENTS.GAME_FINAL_VOTE, async (payload) => {
       const { guilty } = finalVotePayload.parse(payload);
-      if (!allowAction(`final-vote:${playerId}`, 10, 3_000)) throw new RoomError("Thao tác quá nhanh");
-      const roomCode = getRoomSyncByPlayer(playerId);
-      if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
-      const room = getRoom(roomCode);
-      if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
+      throttle("final-vote", 10, 3_000);
+      const room = requireGameRoom(playerId);
 
       room.engine.submitFinalVote(playerId, guilty);
       maybeEndFinalVoteEarly(room);
-      broadcastRoom(roomCode);
+      broadcastRoom(room.code);
       void persistRoom(room);
     });
 
     handler(CLIENT_EVENTS.GAME_SKIP_DISCUSSION, async (payload) => {
       const { skip } = skipDiscussionPayload.parse(payload);
-      if (!allowAction(`skip-discussion:${playerId}`, 10, 3_000)) {
-        throw new RoomError("Thao tác quá nhanh");
-      }
-      const roomCode = getRoomSyncByPlayer(playerId);
-      if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
-      const room = getRoom(roomCode);
-      if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
+      throttle("skip-discussion", 10, 3_000);
+      const room = requireGameRoom(playerId);
 
       const error = submitDiscussionSkip(room, playerId, skip);
       if (error) throw new RoomError(error);
@@ -398,24 +406,16 @@ export function setupSocket(io: SocketServer): void {
 
     handler(CLIENT_EVENTS.GAME_HUNTER_SHOT, async (payload) => {
       const { targetId } = hunterShotPayload.parse(payload);
-      if (!allowAction(`hunter-shot:${playerId}`, 3, 3_000)) {
-        throw new RoomError("Thao tác quá nhanh");
-      }
-      const roomCode = getRoomSyncByPlayer(playerId);
-      if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
-      const room = getRoom(roomCode);
-      if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
+      throttle("hunter-shot", 3, 3_000);
+      const room = requireGameRoom(playerId);
 
       submitHunterShot(room, playerId, targetId);
     });
 
     handler(CLIENT_EVENTS.GAME_DEAD_MESSAGE, async (payload) => {
       const { text } = deadMessagePayload.parse(payload);
-      if (!allowAction(`dead-message:${playerId}`, 3, 3_000)) throw new RoomError("Thao tác quá nhanh");
-      const roomCode = getRoomSyncByPlayer(playerId);
-      if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
-      const room = getRoom(roomCode);
-      if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
+      throttle("dead-message", 3, 3_000);
+      const room = requireGameRoom(playerId);
       // Cùng hàm mà BOT dùng: hai đường riêng sẽ trôi lệch, và ở đây trôi lệch
       // nghĩa là một cú lộ danh tính.
       submitGhostMessage(room, playerId, text);
@@ -437,18 +437,13 @@ export function setupSocket(io: SocketServer): void {
       // Rộng hơn `dead-message` (lượt duy nhất cả ván) và hẹp hơn chat: một
       // người sửa đi sửa lại thư trong một ngày là chuyện thường, nhưng mỗi lần
       // lưu vẫn là một lượt ghi Redis.
-      if (!allowAction(`last-letter:${playerId}`, 6, 5_000)) {
-        throw new RoomError("Thao tác quá nhanh");
-      }
-      const roomCode = getRoomSyncByPlayer(playerId);
-      if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
-      const room = getRoom(roomCode);
-      if (!room?.engine) throw new RoomError("Không có trận đấu đang chạy");
+      throttle("last-letter", 6, 5_000);
+      const room = requireGameRoom(playerId);
 
       const error = submitLastLetter(room, playerId, text);
       if (error) throw new RoomError(error);
 
-      broadcastToPlayer(roomCode, playerId);
+      broadcastToPlayer(room.code, playerId);
       void persistRoom(room);
     });
 
@@ -463,9 +458,7 @@ export function setupSocket(io: SocketServer): void {
 
     handler(CLIENT_EVENTS.VOICE_TOKEN, async (payload) => {
       voiceTokenPayload.parse(payload ?? {});
-      if (!allowAction(`voice:${playerId}`, 5, 10_000)) {
-        throw new RoomError("Thao tác quá nhanh");
-      }
+      throttle("voice", 5, 10_000);
       const roomCode = getRoomSyncByPlayer(playerId);
       if (!roomCode) throw new RoomError("Bạn chưa vào phòng nào");
       const room = getRoom(roomCode);
