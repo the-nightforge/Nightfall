@@ -33,16 +33,13 @@ let micCalls: boolean[] = [];
 /** Trả true để `setMic` hướng đó ném lỗi. */
 let micRejects: ((on: boolean) => boolean) | null = null;
 
-const mockModule = async (specifier: string, exports: Record<string, unknown>) => {
-  const tracker = mock as unknown as {
-    module: (s: string, o: Record<string, unknown>) => Promise<unknown>;
-  };
-  try {
-    return await tracker.module(specifier, { exports, namedExports: exports });
-  } catch {
-    return tracker.module(specifier, { exports });
-  }
-};
+/** Cùng dạng với `mockModule` trong `TrialStage.test.tsx`: Node 24, chỉ `exports`. */
+const mockModule = (specifier: string, exports: Record<string, unknown>): Promise<unknown> =>
+  (
+    mock as unknown as {
+      module: (s: string, o: { exports: Record<string, unknown> }) => Promise<unknown>;
+    }
+  ).module(specifier, { exports });
 
 before(async () => {
   await mockModule(new URL("./voice-room.ts", import.meta.url).href, {
