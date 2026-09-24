@@ -339,9 +339,11 @@ jobs:
     needs: [verify, e2e, docker-server]
     if: always() && github.event_name == 'push' && needs.verify.result == 'success' && (needs.e2e.result == 'success' || needs.e2e.result == 'skipped') && (needs.docker-server.result == 'success' || needs.docker-server.result == 'skipped')
     runs-on: ubuntu-latest
-    # Build web trên VPS 2GB mất ~10 phút khi apps/web đổi, cộng build server và
-    # chờ health. 30 phút là rộng rãi; vượt mốc đó là hỏng chứ không phải chậm.
-    timeout-minutes: 30
+    # Build web trên VPS 2GB mất ~10 phút khi apps/web đổi, cộng build server,
+    # tối đa 15 phút chờ ván đang chạy xong (DRAIN_MAX_SECONDS trong
+    # deploy.sh) và chờ health. 50 phút là rộng rãi; vượt mốc đó là hỏng chứ
+    # không phải chậm.
+    timeout-minutes: 50
 
     # Hai lần deploy chạy chồng lên nhau sẽ cùng `git pull` và cùng `up -d` trên
     # một máy. Xếp hàng thay vì huỷ: huỷ giữa chừng có thể bỏ máy lại ở trạng

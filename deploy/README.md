@@ -75,6 +75,24 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
   'https://masoionline.duckdns.org/socket.io/?EIO=4&transport=websocket'   # 101
 ```
 
+## Chờ ván và lùi bản
+
+`deploy.sh` build cả hai image TRƯỚC, rồi mới chờ các ván đang có người thật
+chơi kết thúc. Nó đọc trường `activeGames` của `/api/health`, chờ tối đa
+`DRAIN_MAX_SECONDS` giây (mặc định 900), quá mốc thì deploy tiếp. Ván bị cắt
+ngang vẫn được khôi phục từ Redis, như khi server restart.
+
+Nếu health của server (180 s) hoặc trang web (120 s) không xanh, script chạy
+lại image cũ (`masoi-server:<tag cũ>`, `masoi-web:<tag cũ>`) rồi thoát khác 0,
+nên job CI vẫn đỏ. Mỗi loại image chỉ giữ 3 tag mới nhất.
+
+**Migration phải chỉ-thêm** (thêm bảng, thêm cột nullable hoặc có default).
+Lúc lùi bản, migration đã chạy vẫn nằm lại trong DB, và code cũ phải chạy
+được trên schema mới. Muốn đổi tên hay xoá cột thì chia làm hai lần deploy:
+lần một ngừng dùng cột, lần hai mới xoá.
+
+Deploy tay mà không muốn chờ ván: `DRAIN_MAX_SECONDS=0 bash /opt/masoi/app/deploy/deploy.sh`.
+
 ## Những chỗ đã cắn một lần
 
 - **`NEXT_PUBLIC_SERVER_URL` nướng vào bundle lúc build.** Năm chỗ trong

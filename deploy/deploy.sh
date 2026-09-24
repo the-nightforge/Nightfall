@@ -35,19 +35,58 @@ GIT_COMMIT=$(git rev-parse HEAD)
 IMAGE_TAG=$(git rev-parse --short HEAD)
 export GIT_COMMIT IMAGE_TAG
 
-echo "==> Build image masoi-server:$IMAGE_TAG (commit $GIT_COMMIT)"
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build server
+compose() {
+    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"
+}
+
+# Tag đang chạy, để lùi về nếu bản mới không lên. Rỗng ở lần deploy đầu tiên.
+PREV_TAG=$(docker inspect --format '{{.Config.Image}}' masoi-server 2>/dev/null | sed 's/^masoi-server://' || true)
+
+# Lùi về image cũ rồi báo lỗi. Migration đã chạy thì KHÔNG lùi được: code cũ
+# phải chạy được trên schema mới, tức là migration phải chỉ-thêm (xem
+# deploy/README.md).
+rollback_and_fail() {
+    echo "LỖI: $1" >&2
+    if [[ -n "$PREV_TAG" && "$PREV_TAG" != "$IMAGE_TAG" ]]; then
+        echo "==> Lùi về masoi-server/masoi-web:$PREV_TAG" >&2
+        IMAGE_TAG="$PREV_TAG" compose up -d --no-build
+    fi
+    exit 1
+}
+
+echo "==> Build image masoi-server + masoi-web:$IMAGE_TAG (commit $GIT_COMMIT)"
+# Build CẢ HAI trước khi chờ: build web mất ~10 phút trên VPS 2GB, và khoảng
+# đó không được tính vào thời gian ván đang chạy phải đợi.
+compose build server web
+
+DRAIN_MAX_SECONDS="${DRAIN_MAX_SECONDS:-900}"
+echo "==> Chờ ván đang chạy kết thúc (tối đa ${DRAIN_MAX_SECONDS}s)"
+deadline=$((SECONDS + DRAIN_MAX_SECONDS))
+while :; do
+    active=$(curl -fsS --max-time 5 http://127.0.0.1:4100/api/health 2>/dev/null \
+        | grep -o '"activeGames":[0-9]*' | cut -d: -f2 || true)
+    # Không đọc được (server cũ chưa có trường này, hoặc đang chết) thì không
+    # có gì để chờ.
+    if [[ -z "$active" || "$active" == "0" ]]; then
+        break
+    fi
+    if (( SECONDS > deadline )); then
+        echo "    hết giờ chờ, còn $active ván - deploy tiếp, ván sẽ được khôi phục từ Redis"
+        break
+    fi
+    echo "    còn $active ván, chờ 30s"
+    sleep 30
+done
 
 echo "==> Khởi động stack"
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+compose up -d --no-build
 
 echo "==> Chờ health (tối đa 180s)"
 deadline=$((SECONDS + 180))
 until curl -fsS http://127.0.0.1:4100/api/health > /dev/null 2>&1; do
     if (( SECONDS > deadline )); then
-        echo "LỖI: health check không xanh sau 180s. Log 100 dòng cuối:" >&2
         docker logs masoi-server --tail 100 >&2
-        exit 1
+        rollback_and_fail "health check không xanh sau 180s"
     fi
     sleep 5
 done
@@ -64,15 +103,20 @@ echo "==> Chờ web (tối đa 120s)"
 deadline=$((SECONDS + 120))
 until curl -fsS -o /dev/null http://127.0.0.1:3000/ 2>/dev/null; do
     if (( SECONDS > deadline )); then
-        echo "LỖI: web không phục vụ sau 120s. Log 100 dòng cuối:" >&2
         docker logs masoi-web --tail 100 >&2
-        exit 1
+        rollback_and_fail "web không phục vụ sau 120s"
     fi
     sleep 5
 done
 echo "    web sẵn sàng"
 
-echo "==> Dọn image cũ"
+# `image prune` chỉ dọn image KHÔNG có tag, mà mỗi lần deploy lại gắn một tag
+# mới - không có bước dưới thì đĩa VPS đầy dần theo từng lần push. Giữ 3 bản
+# mới nhất: bản đang chạy, bản để lùi, và một bản dự phòng.
+echo "==> Dọn image cũ (giữ 3 bản mới nhất mỗi loại)"
+for repo in masoi-server masoi-web; do
+    docker images "$repo" --format '{{.Repository}}:{{.Tag}}' | tail -n +4 | xargs -r docker rmi || true
+done
 docker image prune -f
 
 echo "==> Deploy xong: masoi-server:$IMAGE_TAG"
