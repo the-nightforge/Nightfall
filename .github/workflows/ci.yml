@@ -81,26 +81,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # KHÔNG còn khớp với node:20.19-alpine của Dockerfile.server, và đó là
-          # một đánh đổi có ý thức chứ không phải sơ suất.
-          #
-          # `TrialStage.test.tsx` mount cây React thật và dùng module mocking của
-          # `node:test` - thứ còn đang thực nghiệm và hành xử khác nhau theo bản:
-          #
-          #   20.19  `mock.module` chưa có tuỳ chọn `exports`, và bỏ qua nó LẶNG
-          #          LẼ; mock cài vào một module rỗng.
-          #   22.x   mock module cục bộ nạp bằng `import()` động KHÔNG ăn (module
-          #          thật vẫn chạy), trong khi specifier trần như `three` thì ăn.
-          #          Đã đo trên cả Windows lẫn container linux: 931/937.
-          #   24.x   cả hai đều đúng: 937/937, đo trên Windows và trên
-          #          node:24-alpine.
-          #
-          # Nên đây là phiên bản THẤP NHẤT chạy được bộ test này, không phải một
-          # lựa chọn cho mới. Mã server không có phần nào phụ thuộc phiên bản,
-          # còn bộ test thì có.
-          #
-          # Dockerfile.server đã lên node:24-alpine để e2e ở dưới chạy đúng
-          # runtime production. Đổi dòng này thì đổi Dockerfile cùng lúc.
+          # Node 24 là sàn của repo (`engines`, `.nvmrc`, cả hai Dockerfile).
+          # Test web dùng `mock.module` của `node:test`, còn đang thực nghiệm
+          # và hành xử khác nhau giữa 20/22/24 - đổi dòng này thì đổi cả ba nơi
+          # kia cùng lúc.
           node-version: 24.x
           cache: npm
 

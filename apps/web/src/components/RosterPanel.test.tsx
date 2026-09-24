@@ -33,21 +33,13 @@ GlobalRegistrator.register();
  */
 let liveSpeakers: ReadonlySet<string> = new Set();
 
-/*
- * Cùng lý do và cùng cách xử lý với `mockModule` trong `TrialStage.test.tsx` -
- * xem chú thích dài ở đó: Node 20/22 đọc `namedExports`, Node 24 đổi sang
- * `exports` và ném nếu nhận cả hai. Nên THỬ cả hai trước rồi mới lui về một.
- */
-const mockModule = async (specifier: string, exports: Record<string, unknown>) => {
-  const tracker = mock as unknown as {
-    module: (s: string, o: Record<string, unknown>) => Promise<unknown>;
-  };
-  try {
-    return await tracker.module(specifier, { exports, namedExports: exports });
-  } catch {
-    return tracker.module(specifier, { exports });
-  }
-};
+/** Cùng dạng với `mockModule` trong `TrialStage.test.tsx`: Node 24, chỉ `exports`. */
+const mockModule = (specifier: string, exports: Record<string, unknown>): Promise<unknown> =>
+  (
+    mock as unknown as {
+      module: (s: string, o: { exports: Record<string, unknown> }) => Promise<unknown>;
+    }
+  ).module(specifier, { exports });
 
 before(async () => {
   /*

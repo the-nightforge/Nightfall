@@ -116,27 +116,6 @@ async function drainTurns(host: HTMLElement): Promise<void> {
 
 const opened = () => sceneCalls.filter((c) => c.name === "playOpening").length;
 
-/*
- * `mock.module` đổi tên tuỳ chọn giữa các bản Node, nên ở đây gửi CẢ HAI.
- *
- * Node 20 và 22 đọc `namedExports`; Node 24 đổi sang `exports` và đánh dấu
- * `namedExports` là deprecated. Bản trước chỉ gửi `exports` - đúng trên máy
- * người viết (Node 24), nhưng trên Node 20/22 tuỳ chọn đó bị bỏ qua LẶNG LẼ và
- * mock cài vào một module rỗng. Triệu chứng hiện ra cách chỗ sai vài lớp:
- * `hasWebgl2 is not a function` ở giữa một effect của React. CI ghim 20.19.x
- * nên đây không phải chuyện lý thuyết.
- *
- * Nhưng KHÔNG được gửi cả hai cùng lúc: từ Node 24 hai khoá loại trừ nhau và
- * `normalizeModuleMockOptions` ném thẳng `ERR_INVALID_ARG_VALUE` - "The property
- * 'options.exports' cannot be used with 'options.namedExports'". Node 22 nhận cả
- * hai (đã đo trên 22.23.2), Node 24 thì không, nên "bản nào cũng bỏ qua khoá nó
- * không biết" chỉ đúng một chiều.
- *
- * Vậy: THỬ cả hai trước, và chỉ khi runtime từ chối mới gửi riêng `exports`.
- * Cách này không đọc `process.version` - nó hỏi chính runtime đang chạy, nên một
- * bản Node sau này gỡ hẳn `namedExports` cũng rơi đúng vào nhánh thứ hai. Lần
- * thử đầu KHÔNG cài được mock nào khi nó ném, nên không có nguy cơ mock đôi.
- */
 type MockExports = Record<string, unknown>;
 type MockModuleFn = (s: string, o: Record<string, unknown>) => Promise<unknown>;
 
@@ -153,22 +132,14 @@ type MockModuleFn = (s: string, o: Record<string, unknown>) => Promise<unknown>;
  */
 const fromHere = (relative: string): string => new URL(relative, import.meta.url).href;
 
-const mockModule = async (specifier: string, options: { exports: MockExports }): Promise<unknown> => {
-  // Gọi qua chính đối tượng `mock`: `MockTracker#module` đọc một private field
-  // (`#mocks`), nên tách hàm ra biến rồi gọi trần là mất `this` và ném ngay.
-  const tracker = mock as unknown as { module: MockModuleFn };
-  try {
-    return await tracker.module(specifier, {
-      exports: options.exports,
-      namedExports: options.exports,
-    });
-  } catch {
-    // Bắt mọi lỗi chứ không riêng ERR_INVALID_ARG_VALUE: nếu lần hai cũng hỏng
-    // thì lỗi THẬT nổi lên từ đó, còn nếu chỉ là chuyện tên tuỳ chọn thì lần hai
-    // chạy được. Không nuốt lỗi nào cả.
-    return tracker.module(specifier, { exports: options.exports });
-  }
-};
+/**
+ * Node 24 là sàn của repo (`engines`, `.nvmrc`, CI, cả hai Dockerfile), nên
+ * chỉ còn một dạng tuỳ chọn: `exports`. Gọi qua chính đối tượng `mock` vì
+ * `MockTracker#module` đọc private field `#mocks`: tách hàm ra biến là mất
+ * `this`. Ép kiểu vì `@types/node` ^20 của repo chưa khai `module`.
+ */
+const mockModule = (specifier: string, options: { exports: MockExports }): Promise<unknown> =>
+  (mock as unknown as { module: MockModuleFn }).module(specifier, options);
 
 // ---------------------------------------------------------------------------
 

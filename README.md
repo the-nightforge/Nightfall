@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/the-nightforge/ma-soi-online/actions/workflows/ci.yml/badge.svg)](https://github.com/the-nightforge/ma-soi-online/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-8320%20passing-brightgreen)](#testing)
-[![Node](https://img.shields.io/badge/node-%E2%89%A520.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-%E2%89%A524-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-4.7-010101?logo=socket.io)](https://socket.io)
@@ -99,7 +99,7 @@ flowchart LR
 
 ## Quick start
 
-**Requirements:** Node.js ≥ 20.19 and Docker (for PostgreSQL + Redis).
+**Requirements:** Node.js ≥ 24 and Docker (for PostgreSQL + Redis).
 
 ```bash
 # 1. Install dependencies
@@ -564,7 +564,7 @@ Every package typechecks its tests as well as its sources — `npm run lint` run
 The engine suite includes seeded self-play runs that assert invariants across hundreds of full matches — no illegal move is ever accepted, no bot ever learns a role it should not know, and the same seed reproduces a match bit-for-bit.
 
 > [!NOTE]
-> The **web** suite needs **Node 24** to pass in full. It leans on `node:test` module mocking, which is still experimental and behaves differently per major: 20.19 ignores the `exports` option silently, and 22.x fails to mock local modules loaded through a dynamic `import()`. CI therefore pins 24.x, and `Dockerfile.server` runs `node:24-alpine` so the e2e job exercises the production runtime. Change both together.
+> The repo's floor is **Node 24** (`engines`, `.nvmrc`, CI, both Dockerfiles). The web suite relies on `node:test` module mocking, which is still experimental and behaves differently on 20 and 22.
 
 ```bash
 npm test                                  # everything
