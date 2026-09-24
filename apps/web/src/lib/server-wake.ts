@@ -1,8 +1,8 @@
 /**
- * Máy chủ trên Render gói miễn phí ngủ sau chừng 15 phút vắng người, và lần
- * gọi đầu tiên sau đó treo 30 đến 60 giây trong lúc nó thức dậy. Với người
- * chơi, đó là một cái nút "Đang vào..." quay mãi mà không nói gì - và họ
- * bấm lại, tải lại, rồi bỏ đi.
+ * Mỗi lần deploy hay khởi động lại, máy chủ có một khoảng container chưa
+ * sẵn sàng, và các request đầu tiên sau đó treo tới chừng một phút trong
+ * lúc nó thức dậy. Với người chơi, đó là một cái nút "Đang vào..." quay
+ * mãi mà không nói gì - và họ bấm lại, tải lại, rồi bỏ đi.
  *
  * Module này làm hai việc quanh chuyện đó:
  *
@@ -17,7 +17,7 @@
 
 /** Sau ngần này chưa có phản hồi thì coi là máy chủ đang thức dậy. */
 export const SLOW_AFTER_MS = 3_000;
-/** Render thức trong khoảng một phút; quá gấp rưỡi mức đó thì không phải ngủ. */
+/** Khởi động lại hay deploy mất khoảng một phút; quá gấp rưỡi mức đó thì là chuyện khác. */
 export const GIVE_UP_AFTER_MS = 90_000;
 
 export const GIVE_UP_MESSAGE =
@@ -71,7 +71,7 @@ export class WakeWatch {
 
 /** Dòng trạng thái dưới nút, cập nhật mỗi giây. */
 export function wakeStatusText(elapsedSec: number): string {
-  return `Máy chủ đang thức dậy sau lúc vắng người, thường mất 30 đến 60 giây. Đã chờ ${elapsedSec} giây.`;
+  return `Máy chủ đang thức dậy sau khi khởi động lại, thường mất đến một phút. Đã chờ ${elapsedSec} giây.`;
 }
 
 /**

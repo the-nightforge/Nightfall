@@ -37,7 +37,7 @@ describe("resolvePositiveInt", () => {
 
 /*
  * CORS_ORIGIN mặc định "*", và `isProd` cho tới nay chỉ được dùng đúng một chỗ:
- * tắt request logger. Quên đặt biến này khi dựng lại service trên Render là
+ * tắt request logger. Quên đặt biến này khi dựng lại service là
  * chuyện im lặng tuyệt đối - đúng kiểu hỏng mà `resolveVoiceConfig` đã chọn
  * cách ném ngay lúc khởi động thay vì bỏ qua.
  */
